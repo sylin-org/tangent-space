@@ -1,0 +1,139 @@
+/* ==========================================================================
+   Sylin — Colors · "Moonlit Ink"
+   The grounds at deep dusk: a cinematic near-black with a teal-green undertone,
+   cool moon-pale text, and one luminous jewel-teal lantern flame. Warm amber
+   glow and koi vermilion are the rarer, secondary lights. Palette anchored to
+   the mascot (night-indigo ground, teal flame) but pushed richer and moodier.
+   ========================================================================== */
+
+:root {
+  /* ---- Base palette ---------------------------------------------------- */
+
+  /* Ink — the night ground. Near-black, cool, with a faint teal-blue cast. */
+  --ink-950: #04060a;   /* the void behind everything */
+  --ink-900: #070c13;   /* page ground */
+  --ink-850: #0b1119;   /* sunken panel */
+  --ink-800: #0e1620;   /* raised surface / card */
+  --ink-750: #131d29;   /* card, one step up */
+  --ink-700: #1b2734;   /* strong hairline / inset border */
+  --ink-600: #2b3a49;   /* muted stroke on dark */
+
+  /* Moon — cool pale light for text on the dark ground. */
+  --moon-100: #eef5f5;  /* brightest — display headings */
+  --moon-200: #c8d3d6;  /* body text */
+  --moon-300: #aab8bd;  /* secondary text */
+  --moon-400: #7c8b93;  /* muted / captions */
+  --moon-500: #566571;  /* faint / disabled */
+
+  /* Flame — the luminous jewel-teal lantern flame. The one bright accent. */
+  --flame-200: #b8f5ee;
+  --flame-300: #7defdf;  /* highlight / link */
+  --flame-400: #4fe0d0;
+  --flame-500: #2fd4c6;  /* core accent */
+  --flame-600: #1fa89d;
+  --flame-700: #12756d;
+
+  /* Glow — warm amber of the lantern body. Secondary warmth. */
+  --glow-300: #f6d79a;
+  --glow-400: #edc06a;
+  --glow-500: #d9a343;
+
+  /* Koi — muted vermilion of the pond. Rare, for warmth / errors. */
+  --koi-300: #f0a184;
+  --koi-400: #e8794b;
+  --koi-500: #cf5f36;
+
+  /* Moss — quiet zen-garden green. Growth / "Growing" tier. */
+  --moss-300: #a6d6ba;
+  --moss-400: #79b691;
+  --moss-500: #549770;
+
+  /* Pure references */
+  --pure-white: #ffffff;
+  --pure-black: #000000;
+
+  /* ---- Semantic aliases (dusk / dark — the primary experience) --------- */
+
+  /* Surfaces (layered, ground → foreground) */
+  --surface-ground: var(--ink-900);
+  --surface-sunken: var(--ink-850);
+  --surface-card: var(--ink-800);
+  --surface-raised: var(--ink-750);
+  --surface-overlay: rgba(4, 6, 10, 0.74);
+
+  /* Text */
+  --text-strong: var(--moon-100);
+  --text-body: var(--moon-200);
+  --text-muted: var(--moon-400);
+  --text-faint: var(--moon-500);
+  --text-on-flame: #04211f;
+
+  /* Borders & hairlines — with a faint cool tint, not flat white. */
+  --border-hairline: rgba(120, 190, 200, 0.08);
+  --border-line: rgba(120, 190, 200, 0.13);
+  --border-strong: rgba(160, 210, 220, 0.24);
+
+  /* Accent (the flame) */
+  --accent: var(--flame-500);
+  --accent-bright: var(--flame-300);
+  --accent-hover: var(--flame-400);
+  --accent-press: var(--flame-600);
+  --accent-quiet: rgba(47, 212, 198, 0.12);
+  --accent-line: rgba(47, 212, 198, 0.38);
+
+  /* Link */
+  --link: var(--flame-300);
+  --link-hover: var(--flame-200);
+
+  /* Maturity tiers — honest, load-bearing. */
+  --tier-flagship: var(--flame-400);
+  --tier-growing: var(--moss-400);
+  --tier-research: var(--moon-400);
+
+  /* Feedback / warmth */
+  --warm: var(--glow-400);
+  --danger: var(--koi-400);
+
+  /* Focus ring */
+  --focus-ring: var(--flame-300);
+}
+
+/* ==========================================================================
+   Dawn — the same grounds at first light. A cool, misty morning: pale
+   blue-grey mist, ink-teal text, the flame deepened to hold contrast.
+   ========================================================================== */
+[data-theme="dawn"] {
+  --surface-ground: #e7edee;
+  --surface-sunken: #dde5e6;
+  --surface-card: #f3f7f7;
+  --surface-raised: #ffffff;
+  --surface-overlay: rgba(10, 20, 22, 0.34);
+
+  --text-strong: #0a1820;
+  --text-body: #26363d;
+  --text-muted: #566871;
+  --text-faint: #8a9aa1;
+  --text-on-flame: #04211f;
+
+  --border-hairline: rgba(10, 24, 28, 0.08);
+  --border-line: rgba(10, 24, 28, 0.14);
+  --border-strong: rgba(10, 24, 28, 0.24);
+
+  --accent: var(--flame-600);
+  --accent-bright: var(--flame-500);
+  --accent-hover: var(--flame-500);
+  --accent-press: var(--flame-700);
+  --accent-quiet: rgba(31, 168, 157, 0.12);
+  --accent-line: rgba(31, 168, 157, 0.32);
+
+  --link: var(--flame-700);
+  --link-hover: var(--flame-600);
+
+  --tier-flagship: var(--flame-600);
+  --tier-growing: var(--moss-500);
+  --tier-research: var(--moon-500);
+
+  --warm: var(--glow-500);
+  --danger: var(--koi-500);
+  --focus-ring: var(--flame-600);
+}

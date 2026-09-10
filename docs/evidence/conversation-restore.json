@@ -1,0 +1,70 @@
+{
+  "date": "2026-09-09T21:25:21.830Z",
+  "origin": "http://127.0.0.1:5223",
+  "run": "conversation-1788991100",
+  "passed": true,
+  "rooms": {
+    "primary": "conversation-1788991100-workshop",
+    "secondary": "conversation-1788991100-side"
+  },
+  "testNetworkRevision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "source": "Real Tangent HTTP API and actual local PDS records; existing real scoped OAuth sessions.",
+  "mode": "restart-check",
+  "secretsIncluded": false,
+  "checks": [
+    {
+      "name": "Real host is ready",
+      "passed": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Restart checkpoint is for this host",
+      "passed": true,
+      "observed": {
+        "origin": "http://127.0.0.1:5223"
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 1,
+        "responseBytes": 1047,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Durable acknowledgement resumes after restart",
+      "passed": true,
+      "observed": {
+        "count": 1,
+        "boundary": 27
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 2,
+        "responseBytes": 1693,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Protected resume cursor survives restart",
+      "passed": true,
+      "observed": {
+        "count": 2
+      }
+    }
+  ],
+  "limits": [
+    "The upstream credential lifetime is observed from the real issued credential; expiry-time denial was not waited through.",
+    "Actual process restart and backup restoration use the private checkpoint and separate receipts."
+  ],
+  "restartCheckpoint": "Private .local state contains room/source identifiers and protected read cursors. Existing private cookie files retain authentication."
+}

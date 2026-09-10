@@ -1,0 +1,26 @@
+name: tangent-space
+services:
+  tangent:
+    image: tangent-space:dev
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:5220:8080"
+    volumes:
+      - type: bind
+        source: ./.local/docker/site
+        target: /state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health/ready"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

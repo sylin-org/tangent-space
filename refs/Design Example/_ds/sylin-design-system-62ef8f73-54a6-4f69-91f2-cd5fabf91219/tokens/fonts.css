@@ -1,0 +1,65 @@
+/* ==========================================================================
+   Sylin — Webfonts (self-hosted, OFL). No third-party CDN: the binaries ship
+   with the design system, so the "self-contained / no external CDN" value
+   holds. Three roles + mono:
+     Cormorant Garamond — the brand display voice (wordmark, headings).
+     Space Grotesk      — the TOOLS voice (project names: Koan, Koi, Ghostlight).
+     IBM Plex Sans       — the working body voice.
+     IBM Plex Mono       — the technical register (versions, stats, labels).
+   Cormorant, Plex Sans and Space Grotesk are variable fonts (one file spans
+   the weight range). Files live in assets/fonts/.
+
+   NOTE (production): these are full TTF variable/static files (~2 MB total).
+   For the ~67 KB deployed sylin.org build, subset each to woff2 with the
+   used glyphs — that typically drops the type payload by ~10×.
+   ========================================================================== */
+
+/* Cormorant Garamond — display serif (variable 300–700) */
+@font-face {
+  font-family: "Cormorant Garamond";
+  src: url("../assets/fonts/CormorantGaramond.ttf") format("truetype-variations");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cormorant Garamond";
+  src: url("../assets/fonts/CormorantGaramond-Italic.ttf") format("truetype-variations");
+  font-weight: 300 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Space Grotesk — the tools voice (variable 300–700) */
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("../assets/fonts/SpaceGrotesk.ttf") format("truetype-variations");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* IBM Plex Sans — body (variable, wdth+wght; default width) */
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/IBMPlexSans.ttf") format("truetype-variations");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* IBM Plex Mono — technical register (static Regular + Medium) */
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/IBMPlexMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/IBMPlexMono-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}

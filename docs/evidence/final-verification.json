@@ -1,0 +1,66 @@
+{
+  "observedAt": "2026-09-09T21:52:38.2823917+00:00",
+  "passed": true,
+  "application": {
+    "passed": 138,
+    "skipped": 0,
+    "frameworkModules": 14,
+    "command": "dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj",
+    "failed": 0
+  },
+  "participantClient": {
+    "passed": 7,
+    "timeoutDescendantCleanup": "Passed on Windows",
+    "command": "node --test clients/participant/*.test.mjs",
+    "failed": 0
+  },
+  "build": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "live": {
+    "readiness": "healthy",
+    "origin": "http://127.0.0.1:5220",
+    "composition": "14 modules · lockfile ok",
+    "responses": [
+      {
+        "path": "/",
+        "passed": true,
+        "headers": {
+          "frame": "DENY",
+          "referrer": "no-referrer",
+          "contentType": "nosniff"
+        }
+      },
+      {
+        "path": "/index.html",
+        "passed": true,
+        "headers": {
+          "frame": "DENY",
+          "referrer": "no-referrer",
+          "contentType": "nosniff"
+        }
+      },
+      {
+        "path": "/app.js",
+        "passed": true,
+        "headers": {
+          "frame": "DENY",
+          "referrer": "no-referrer",
+          "contentType": "nosniff"
+        }
+      },
+      {
+        "path": "/health/live",
+        "passed": true,
+        "headers": {
+          "frame": "DENY",
+          "referrer": "no-referrer",
+          "contentType": "nosniff"
+        }
+      }
+    ]
+  },
+  "authContributionSha256": "2d00e951945c0c862d051ae5c4daa9fb375ea639fe3add143f31adfaa5e5c013",
+  "headersContributionSha256": "10ad8038f6ee244afa340435f784dd1c1aa6380af552445c341d7739db7dc836"
+}

@@ -1,0 +1,43 @@
+{
+  "observedAt": "2026-09-10T00:30:44.722Z",
+  "origin": "http://127.0.0.1:5220",
+  "transport": "HTTP; native WebMCP proof recorded separately",
+  "checks": [
+    {
+      "name": "explicit reread finds acknowledged history",
+      "passed": true
+    },
+    {
+      "name": "rereading does not change saved position",
+      "passed": true
+    },
+    {
+      "name": "cursor and explicit origin cannot be combined",
+      "passed": true
+    },
+    {
+      "name": "unsupported history origins fail",
+      "passed": true
+    },
+    {
+      "name": "wait rejects cross-room cursor",
+      "passed": true
+    },
+    {
+      "name": "wait rejects malformed cursor",
+      "passed": true
+    },
+    {
+      "name": "wait requires authentication",
+      "passed": true
+    },
+    {
+      "name": "outsider cannot read Workshop history",
+      "passed": true
+    },
+    {
+      "name": "outsider cannot subscribe to Workshop",
+      "passed": true
+    }
+  ]
+}

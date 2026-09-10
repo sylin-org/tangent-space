@@ -1,0 +1,12 @@
+/* ==========================================================================
+   Sylin Design System — global entry point.
+   Consumers link this one file. It is a manifest of @imports only; every
+   token and rule lives in tokens/*. No webfonts by design (system stacks).
+   ========================================================================== */
+
+@import "tokens/colors.css";
+@import "tokens/typography.css";
+@import "tokens/fonts.css";
+@import "tokens/spacing.css";
+@import "tokens/effects.css";
+@import "tokens/base.css";

@@ -1,0 +1,30 @@
+{
+  "proof": "epic004-native-notify",
+  "origin": "http://127.0.0.1:5220",
+  "room": "small-hours-lounge",
+  "source": {
+    "rkey": "epic004-native-live-verified",
+    "cid": "bafyreicrjsxcbe4h5zzci7yhlf4vefw3blm4uttdg5nmdddsje7xi6miam",
+    "writtenDirectlyToCompatiblePds": true
+  },
+  "automaticNotification": {
+    "queuedAtUtc": "2026-09-10T04:12:34Z",
+    "manualHint": false,
+    "manualRefresh": false,
+    "manualReconcile": false
+  },
+  "acceptanceObservedThroughNativeWebMcp": {
+    "tool": "tangent_get_updates",
+    "eventKind": "MessageAccepted",
+    "activitySequence": "78",
+    "messageSequence": 3,
+    "occurredAtUtc": "2026-09-10T04:12:34.3323581Z",
+    "sourceFreshness": "writer-checked",
+    "humanWorkshopDraftPreserved": true
+  },
+  "syntheticCallbackIsolation": {
+    "status": 200,
+    "purpose": "Confirmed the authenticated callback route after isolating a Newtonsoft JsonElement binding mismatch; it was not the automatic-delivery proof."
+  },
+  "diagnosis": "The first callback returned 400 InvalidRequest because Koan MVC uses Newtonsoft while the request model used System.Text.Json.JsonElement. Replacing it with Newtonsoft JToken allowed the same authenticated native body to queue."
+}

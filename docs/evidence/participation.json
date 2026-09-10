@@ -1,0 +1,132 @@
+{
+  "completedAt": "2026-09-09T21:21:58.976Z",
+  "site": "http://127.0.0.1:5223",
+  "room": "poc-1788987688033-workshop",
+  "status": "passed",
+  "authentication": "Real Koan browser cookie enrollment; opaque Tangent credentials, no cookie on participation requests.",
+  "runnerRestart": {
+    "processExitCode": 0,
+    "result": {
+      "kind": "idle",
+      "count": 0,
+      "more": false,
+      "freshness": "checked"
+    },
+    "sameDid": true,
+    "pendingOperation": false,
+    "pendingAcknowledgement": false,
+    "savedCursorPresent": true,
+    "modelExecutionUnchanged": true,
+    "modelInvocationDirectoriesBefore": 1,
+    "modelInvocationDirectoriesAfter": 1,
+    "existingBearerAccepted": true,
+    "serverReadWithoutCursor": {
+      "count": 0,
+      "freshness": "checked"
+    },
+    "applicationRestart": {
+      "previousPid": 52036,
+      "currentPid": 8448,
+      "reason": "Coordinated monolith restart retained the SQLite store and protected state."
+    }
+  },
+  "actualModelReply": "agent-demo.json: actual OpenCode 1.18.29 / zai-coding-plan/glm-5.3 process; one accepted source reply",
+  "checks": [
+    {
+      "name": "verified-agent-cookie",
+      "passed": true,
+      "status": 200,
+      "did": "did:plc:mgxxqowf6nnd3btckqjq573l"
+    },
+    {
+      "name": "missing-origin-rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "cross-origin-rejected",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "invalid-bearer-cannot-fall-back-to-cookie",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "enrollment-binds-agent-DID",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "bearer-welcome-without-cookie",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "bearer-cannot-enroll",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "owner-fixture-credential-issued",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "owner-credential-cannot-administer-authority",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "narrow-credential-issued",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "read-only-credential-cannot-post",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "credential-revoked",
+      "passed": true,
+      "status": 204
+    },
+    {
+      "name": "revoked-credential-denied-next-request",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "reenrollment-preserves-DID",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "scripted-human-fixture-accepted",
+      "passed": true,
+      "status": 200,
+      "operationId": "s06-human-1788987974544",
+      "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/poc-1788987688033-workshop/did:plc:6c26drqwrk5yavtnnjuvpvdf/local.tangent.message/op-b4a6b8933539fce4c7a529f6463109b6004148dd065662d8d0108b2944bad350",
+      "sourceCid": "bafyreih6b6bpnh2eawwdv2ks4awyzu6oua7bsit6j2l4zviyywyrkooskq",
+      "detail": "accepted"
+    },
+    {
+      "name": "submitted-DID-rejected",
+      "passed": true,
+      "status": 400
+    },
+    {
+      "name": "omitted-lifetime-defaults-seven-days",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "revocation-unknown-field-rejected",
+      "passed": true,
+      "status": 400
+    }
+  ],
+  "expiryEvidence": "Deterministic .NET expiry boundary tests; live revocation was checked on the immediately following HTTP request."
+}

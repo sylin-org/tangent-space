@@ -1,0 +1,90 @@
+Tangent Space — feasibility, desirability, overlap, and strategic opportunity
+
+Assessment date: 9 September 2026. Advisory research, not an adopted architecture or implementation plan. This review used current primary documentation, public repositories, issue reports, and research publications. It did not run upstream applications, test authenticated integrations, interview prospective users, or establish willingness to pay. Live documentation is a moving snapshot; implementation experiments should record exact versions.
+
+Tangent Space merits a focused prototype. Its basic application is technically feasible; the proposed combination of independent identity, room authority, distributed history, inexpensive participation, and simple recovery is substantially harder. Evidence supports problems with continuity and attention. Evidence that people want a new general conversation destination is much weaker. The feature overlap with existing products is high.
+
+The most promising product promise is: a place a community and its agents can return to, understand what changed, and continue together. Conversation, curiosity, and companionship can justify that return. No task completion requirement follows from this assessment.
+
+The current repository is a coherent product handoff, with an early simulated interface and no implemented backend. Its strongest choices are separating participants from runs, keeping conversation sufficient, preserving summary sources, distinguishing saving from watching, and assigning inference decisions to participants. Its main weakness is breadth: it combines a community application, an identity and delegation system, an attention/retrieval contract, several protocol interfaces, and an operational package before identifying a first community. The proposal explains how participation should work much better than why a particular group would switch from its present channel.
+
+| Area | Assessment | Practical consequence |
+| --- | --- | --- |
+| Rooms, threads, pins, topics, summaries, basic roles | High feasibility | These are ordinary application capabilities with substantial prior art. |
+| Consistent identity across runs and interfaces | Feasible, with careful enrollment and delegation | A persistent account must remain distinct from its credentials, controller, runtime, and concurrent sessions. |
+| AT-native permissioned storage | Credible experiment; production commitment premature | Evaluate the Spaces alpha using disposable data and pinned versions. |
+| Economical participation | Feasible to improve; savings unmeasured | Measure model activations, context transfer, relevance, and human attention against a competent alternative. |
+| Durable distributed history and easy recovery | Most consequential architectural uncertainty | Specify source retention and failure behavior before promising complete recovery. |
+| Small community adoption | Plausible, unvalidated | Start with people who already want to converse with one another. |
+| Broad public network or commercial scale | Unproven | Neither protocol adoption nor agent registrations establishes retained demand. |
+
+The preferred standards direction remains reasonable to investigate. The official Spaces announcement supplies an alpha PDS, SDKs, and a sample application, while warning about breaking changes, destructive migrations, incomplete security review, and eventual deletion of the hosted sandbox. This supports technical learning, not real community dependence. [Spaces announcement](https://atproto.com/blog/atproto-spaces-alpha)
+
+Bulletin is the closest technical reference for that experiment. Its deployment uses an application container, SQLite, and a persistent volume while participant data depends on compatible PDSes. Reusing its integration patterns could save time; adopting its product model wholesale would require separate justification. [Bulletin](https://github.com/bluesky-social/bulletin), [deployment guide](https://github.com/bluesky-social/bulletin/blob/main/DEPLOY.md)
+
+The current Spaces draft separates per-author repositories, room access authority, and the application's assembled view. It supplies basic membership through `simplespace`; Tangent still needs owner/admin delegation and application moderation. Access is not end-to-end encryption. Credentials default to two hours and can be verified independently by repository hosts. Inference: removal from Tangent cannot automatically be advertised as immediate revocation of every direct source read. Test previously issued credentials. [Permissioned-data proposal](https://github.com/bluesky-social/proposals/tree/main/0016-permissioned-data)
+
+For Tangent's own design, distinguish app backup, room authority recovery, source-account recovery, and authorized room export. Also distinguish preserving sources when generating a summary from retaining every author revision forever. Decide how edits, deletions, unavailable authors, and retention policy affect displayed history. A cached view can improve availability, but retaining and republishing it needs an explicit product policy.
+
+AT account migration can retain a DID; recovery also depends on access to identity keys and data. Stable identity is a useful account-level guarantee. It does not by itself move a model's memory, personality, preferences, or private working state. Multiple concurrent runs of the same participant also need attribution and duplicate-write handling. [Account migration](https://atproto.com/guides/account-migration), [account recovery](https://atproto.com/guides/account-recovery)
+
+WebMCP should be an additional interface. Its implementation status lists Chrome and Edge origin trials, while its explainer distinguishes browser interaction from backend autonomous access. HTTP/MCP can carry unattended operations. A2A supports direct message responses, so its adapter need not turn ordinary conversation into task state; specify and test the supported profile. [WebMCP implementation status](https://github.com/webmachinelearning/webmcp/blob/main/implementation-status.md), [WebMCP explainer](https://github.com/webmachinelearning/webmcp), [A2A specification](https://a2a-protocol.org/latest/specification/)
+
+Keep read positions and write receipts in the application contract. They should survive changes in transport or harness. The current MCP transport specification differs materially from older streaming/session behavior, which reinforces the value of independent room cursors. [MCP Streamable HTTP, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
+
+The relevant alternatives already cover much of the proposal:
+
+| Project or category | Documented overlap | Strategic implication |
+| --- | --- | --- |
+| [Universal Agent Forum](https://github.com/vishprometa/universal-agent-forum) | Public threads, HTTP/MCP, bounded reads, independent hosting, peer-origin discovery; identities and keys remain instance-specific and state is not federated. | Closest small application. Tangent needs to demonstrate value in permissioned community participation and continuity beyond this baseline. |
+| [Moltbook](https://www.moltbook.com/developers) | Agent social participation and an early-access cross-application identity verification offering. | Agent social identity alone is not novel. Operator independence and active human participation would be more meaningful distinctions. |
+| [Zulip](https://zulip.com/api/real-time-events) | Organized topics, bot participation, filtered event delivery, and existing conversation history. Its [AI documentation](https://zulip.readthedocs.io/en/latest/production/ai-integrations.html) describes self-hosted beta topic summaries. | Strong baseline for a human/agent pilot. Test whether an arrival and catch-up adapter captures most of Tangent's benefit. |
+| [Matrix](https://spec.matrix.org/latest/) | Federated rooms, membership, state, extensible events, synchronization, clients, and encryption facilities. | Serious foundation candidate if mature federation and encrypted conversation dominate. Mapping canonical participants and agent-friendly retrieval remains application work. |
+| [Discourse](https://meta.discourse.org/t/discourse-ai-summarize/262711) | Community forums and cached summaries with generation date/model. Its [MCP integration](https://meta.discourse.org/t/ai-bot-bring-your-own-mcp-server/399667) lets Discourse agents use external tools. | Summaries and MCP are already present elsewhere. MCP client functionality is distinct from exposing the forum as an MCP server. |
+| [NodeBB](https://docs.nodebb.org/activitypub/fep/1b12/) | ActivityPub forum/category federation and participation from remote accounts. | Worth considering when access to existing public communities matters more than AT-native records. |
+| [gptme-forum](https://github.com/gptme/gptme-contrib/tree/master/packages/gptme-forum) | Git-backed threads and mentions, checked at session start with batched writes. | An inexpensive substitute for trusted technical groups; a new service must earn its operational overhead. |
+| [real-a2a](https://github.com/eqtylab/real-a2a) | P2P rooms, locally persistent keys, and several coding-client integrations. | Cross-runner chat is already available. Its name alone does not establish compatibility with the A2A specification. |
+| [Slack](https://slack.com/intl/en-gb/ai-agents) | Agents participating in channels, DMs, and threads. | Existing communities can add agents where they already converse. Switching costs and distribution are major competitive constraints. |
+
+This is documented overlap, not a runtime certification or an exhaustive market map. A capability omitted from a README cannot be assumed impossible. Conversely, a repository or feature page does not establish adoption. The closest competitive question is whether people prefer Tangent's complete experience to a good existing forum plus a thin integration.
+
+There is concrete evidence for continuity problems. An Agent Mail user describes losing the reachable recipient when switching between Claude Code, OpenCode, and Codex, and requests project-addressed mail. That is an actionable problem report, although it supports stable addressing more directly than globally portable personal identity. Issue closure alone does not prove the requested behavior shipped. [Agent Mail issue 263](https://github.com/Dicklesworthstone/mcp_agent_mail/issues/263)
+
+Attention and delivery also deserve separate treatment. OpenClaw documents bot interaction controls, and an integration issue in Neo.mjs describes messages being persisted while wake-up delivery reached the wrong UI surface. These support explicit distinctions among stored, delivered, and processed messages. They are individual operational reports, not market-size estimates. [OpenClaw Discord documentation](https://github.com/openclaw/openclaw/blob/main/docs/channels/discord.md), [Neo.mjs issue 10649](https://github.com/neomjs/neo/issues/10649)
+
+A Moltbook preprint reports that original authors did not comment in 91.4% of sampled threads that had comments during its January-March observation window. Its public-data coverage, limited window, and model-based semantic measures limit generalization. The useful lesson is that automatically generated activity can coexist with little sustained exchange; it does not establish that all agent conversation lacks value. [Form Without Function](https://arxiv.org/html/2604.13052v1)
+
+Anthropic's August research used shared forums in multiagent experiments and found both useful coordination and substantial failures. Different conditions and resource budgets prevent treating this as proof that a forum improves every workload. It does make research environments an adjacent audience worth testing. [Patterns and problems in emerging multiagent systems](https://www.anthropic.com/research/multiagent-systems)
+
+My strongest initial-audience hypothesis is a few existing communities of independent operators: a technical reading group, creative circle, open-source community, or research collective. Include humans and agents from multiple harnesses, with a reason to reconvene over days. A single operator's swarm is a useful test fixture but exercises less of Tangent's independent governance. An empty public network would require solving discovery, trust, moderation, and motivation simultaneously.
+
+The first product experience should concentrate on return as much as arrival: current identity, actual permissions, relevant changes, a readable conversation preview, and explicit expansion. A person should enjoy reading and contributing directly. A room full of fast agents can still be unusable for humans. Quiet subscriptions, personal pacing, and understandable attribution belong in the core experience.
+
+Keeping model execution with participants controls the operator's inference exposure, but does not eliminate system costs. Participants still pay to read and respond; hosts still operate search, storage, delivery, moderation, and recovery. Compare useful retrieval with competent bounded alternatives, including missed-event rates. Saving input tokens by omitting necessary context is not an improvement. Automated clients should receive events without mandatory model turns, and operators should choose when those events merit attention.
+
+Treat identity as authority to act under an account, not proof of a unique intelligence or independent opinion. Account portability cannot prevent one operator creating many identities. Posts, pins, and summaries remain attributed content rather than authority over another participant's tools or budget. This matters to ordinary interaction design as much as security: author labels, administrative actions, and invitations should express different kinds of authority.
+
+The strategic options have different levels of support:
+
+| Opportunity | Assessment |
+| --- | --- |
+| Small open community application with optional managed hosting | Best alignment with the product. Can succeed with a modest number of communities; retention and operating effort still need validation. |
+| Reusable participation SDK/profile for existing forums | Credible fallback or complementary output if arrival, catch-up, and identity mapping provide most of the value. Publish abstractions after real clients expose the necessary semantics. |
+| Early AT Spaces reference application | Timely opportunity to contribute schemas and implementation feedback. Carries alpha maintenance cost and does not automatically bring an audience. |
+| Research environment for persistent mixed-model communities | Plausible niche with concrete experimental precedent. Demand for maintained infrastructure remains untested. |
+| Broad consumer agent social network or enterprise collaboration replacement | Weakest case today: strong substitutes, distribution barriers, and little evidence of willingness to move. |
+
+The likely durable advantage would come from communities, trust, dependable integrations, and reliable operation. Protocol choices, pins, and summarization are reproducible. Standards can still reduce adoption risk by making exit and interoperability credible. A managed service charging for operation, recovery, and support could fit the ethos; pricing, support economics, and willingness to pay are all open questions. Avoid treating cheap infrastructure as proof of a sustainable business.
+
+I recommend two bounded investigations before a broad build. First, test the participation experience with an existing community and a mature backend where practical. Second, separately test Spaces' technical boundaries with disposable identities. This is a comparison between a product hypothesis and a storage hypothesis, not a recommendation to maintain two production engines.
+
+| Experiment | Evidence to collect | What would change the recommendation |
+| --- | --- | --- |
+| Two-week pilot with roughly three existing small groups | Voluntary return after initial facilitation, continuation of earlier conversations, satisfaction, invitations, and preference versus the previous channel. Include a conversation-first group. | If participants only appear after prompting, rework the audience or experience before adding infrastructure. These are proposed learning criteria, not statistical benchmarks. |
+| Resume after absence through another runner | Identity, permissions, read position, source expansion, manual setup, and context copying required. | If users rarely need portability or a thin adapter handles it well, favor integration over a new platform. |
+| Equivalent activity through Tangent's proposed contract and an existing bounded API | Model calls, transferred/context tokens, unnecessary notifications, missed relevant events, latency, and human reading effort. | If cost or convenience does not improve, revise the contract; do not claim efficiency from design intent alone. |
+| Spaces failure experiment | Initial outsider denial, post-removal reads using issued credentials, independent client enrollment, interrupted-write retries, missed notifications, app restore, and unavailable author PDS. | Proceed AT-native only if the resulting guarantees and operational burden are acceptable and explainable. Otherwise stage the user pilot on mature storage and retain Spaces as research. |
+
+For the technical experiment, use one owner, one invited participant, and an outsider identity; exercise browser and unattended access. Demonstrate a summary with original-source expansion. Keep WebMCP and A2A within the intended design, but validate narrow adapters after core room semantics work. Defer a global directory, broad bridging, reputation systems, and a workflow engine until they resolve observed needs.
+
+The decision worth making next is whether a particular community values this participation contract enough to use it repeatedly, while the standards experiment establishes what the chosen foundation can honestly promise. Neither decision requires abandoning conversation as the product's purpose.

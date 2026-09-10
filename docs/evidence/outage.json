@@ -1,0 +1,113 @@
+{
+  "date": "2026-09-09T17:37:19.748054-04:00",
+  "passed": true,
+  "origin": "http://127.0.0.1:5223",
+  "run": "outage-1788992000",
+  "room": "a-outage-1788992000",
+  "mode": "real-pds-network-outage",
+  "networkResumed": true,
+  "pauseSeconds": 35.62,
+  "secretsIncluded": false,
+  "checks": [
+    {
+      "name": "The local projection contains the source-backed seed",
+      "passed": true,
+      "observed": {
+        "messages": 1,
+        "status": 200
+      }
+    },
+    {
+      "name": "The disposable PDS network is running before the experiment",
+      "passed": true,
+      "observed": {
+        "running": "true false"
+      }
+    },
+    {
+      "name": "The actual PDS network is paused",
+      "passed": true,
+      "observed": {
+        "paused": true
+      }
+    },
+    {
+      "name": "Authorized cached history remains readable while the PDS is paused",
+      "passed": true,
+      "observed": {
+        "noStore": true,
+        "messages": 1,
+        "status": 200
+      }
+    },
+    {
+      "name": "A timed-out source write returns a durable pending operation",
+      "passed": true,
+      "observed": {
+        "state": "pending",
+        "detail": "source-timeout-retry-same-operation",
+        "status": 202
+      }
+    },
+    {
+      "name": "Reconciliation reports unavailable freshness during the actual outage",
+      "passed": true,
+      "observed": {
+        "freshness": "unavailable",
+        "status": 200
+      }
+    },
+    {
+      "name": "The original PDS network is resumed without a restart",
+      "passed": true,
+      "observed": {
+        "resumed": true,
+        "pausedSeconds": 35.62
+      }
+    },
+    {
+      "name": "The periodic worker recovers the pending source without a manual write or sync",
+      "passed": true,
+      "observed": {
+        "observed": true,
+        "observationRequests": "local history GET only",
+        "waitSeconds": 3.03,
+        "modelExecution": "No model runtime is configured or invoked by this script or the periodic worker."
+      }
+    },
+    {
+      "name": "Retrying the identical operation returns the recovered real source",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "A subsequent retry preserves the same source URI and CID",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "sameSource": true
+      }
+    },
+    {
+      "name": "Recovered history contains one source version and no duplicate message",
+      "passed": true,
+      "observed": {
+        "recoveredVersions": 1,
+        "totalMessages": 2
+      }
+    }
+  ],
+  "limits": [
+    "Actual docker pause/unpause of the existing disposable PDS network; no fabricated credentials, firewall rules, source fault switches or network restart.",
+    "This outage may occur before the PDS accepts the write. It does not by itself prove failure after a remote commit; the earlier S06 pending/read-back case covers that separate condition.",
+    "Periodic recovery is observed through local history GETs before any manual retry or sync. No model execution is part of this path."
+  ],
+  "finalHealth": {
+    "application": "healthy",
+    "container": "true false 0",
+    "network": "passed"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "BouncyCastle.Cryptography": {
+        "type": "Direct",
+        "requested": "[2.7.0, )",
+        "resolved": "2.7.0",
+        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
+      },
+      "CarpaNet": {
+        "type": "Direct",
+        "requested": "[1.1.0-alpha.5, )",
+        "resolved": "1.1.0-alpha.5",
+        "contentHash": "WWX7MflMMbZsdgYt6Z7PDQtqSyDDC9sBvPN4gIEoA8JsiR7VVxCmHG/SkZDeBend7JWT/LC9elZJ39wK7nnYAw==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.5",
+          "System.Formats.Cbor": "10.0.5"
+        }
+      },
+      "System.Formats.Cbor": {
+        "type": "Direct",
+        "requested": "[10.0.5, )",
+        "resolved": "10.0.5",
+        "contentHash": "9Zk1wBawwHQ8uRTJPhlksc8hrY7ho4F/4GKSA/0v3iRJ0zQDpCHbZGlPl06kv0raPtBuy1dO14Yz1yrNXNZv/Q=="
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.5",
+        "contentHash": "iVMtq9eRvzyhx8949EGT0OCYJfXi737SbRVzWXE5GrOgGj5AaZ9eUuxA/BSUfmOMALKn/g8KfFaNQw0eiB3lyA=="
+      },
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.5",
+        "contentHash": "9HOdqlDtPptVcmKAjsQ/Nr5Rxfq6FMYLdhvZh1lVmeKR738qeYecQD7+ldooXf+u2KzzR1kafSphWngIM3C6ug==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.5"
+        }
+      }
+    }
+  }
+}

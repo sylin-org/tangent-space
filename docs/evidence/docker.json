@@ -1,0 +1,74 @@
+{
+  "observedAt": "2026-09-09T22:55:36.9444142+00:00",
+  "passed": true,
+  "project": "tangent-space",
+  "service": "tangent",
+  "origin": "http://127.0.0.1:5220",
+  "image": "tangent-space:dev",
+  "stateDirectory": ".local/docker/site",
+  "bootstrap": {
+    "visibleOnStdout": true,
+    "composition": "14 modules · lockfile ok",
+    "entryPoint": "builder.Services.AddKoan(); app.RunAsync()"
+  },
+  "migration": {
+    "noAdditionalModelReply": true,
+    "windowsProcessStopped": true,
+    "networkRestartCount": 0,
+    "fixtureOAuthReauthorized": true,
+    "copiedSqlite": true,
+    "dpapiKeysRetainedInWindowsBackup": true,
+    "stoppedWindowsBackupCreated": true,
+    "freshLinuxKeyRing": true
+  },
+  "restart": {
+    "joinedAt": "2026-09-09T16:31:05.4044352-04:00",
+    "originalAgentDid": "did:plc:mgxxqowf6nnd3btckqjq573l",
+    "bearerCredentialRetained": true,
+    "browserCookieRetained": true,
+    "originalOwnerDid": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+    "sourceSync": "checked",
+    "verified": true,
+    "sources": [
+      {
+        "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-workshop/did:plc:6c26drqwrk5yavtnnjuvpvdf/local.tangent.message/op-489060ccddd2bdee8ff2e41cc8e36f2eac89227db4c8d15d99be2092b60811ad",
+        "cid": "bafyreieu5hkiljchkxp2l6lghteaxp23z6fwvqgufkdtfbtbmvun7oo7nq"
+      },
+      {
+        "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/op-205a3d99d87e981e0886ca0c370ca8abea6d40a2e91fb9d0dcd03b20684383e3",
+        "cid": "bafyreibg37p4wnlavb2vvcpsgeljzwxrt2exi3sn2ikq56iepk2zqmj7cu"
+      }
+    ]
+  },
+  "challenges": [
+    {
+      "status": 302,
+      "destination": "https://bsky.social/oauth/authorize",
+      "kind": "public handle",
+      "consentCompleted": false
+    },
+    {
+      "status": 302,
+      "destination": "http://localhost:2583/oauth/authorize",
+      "kind": "fixture owner"
+    },
+    {
+      "status": 400,
+      "kind": "empty identifier",
+      "sanitizedRetryPage": true
+    },
+    {
+      "status": 400,
+      "kind": "unresolvable public DID",
+      "sanitizedRetryPage": true
+    }
+  ],
+  "regressions": {
+    "authHttpPassed": 9,
+    "genericAuthPassed": 57,
+    "optInLifecycleSkipped": 1,
+    "staticHeadersPassed": 3,
+    "connectorPassed": 24,
+    "freshPatchApplied": true
+  }
+}

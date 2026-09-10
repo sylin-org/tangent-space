@@ -1,0 +1,825 @@
+{
+  "date": "2026-09-09T21:52:22.010Z",
+  "origin": "http://127.0.0.1:5223",
+  "run": "conversation-final-1788990729692",
+  "passed": true,
+  "rooms": {
+    "primary": "conversation-final-1788990729692-workshop",
+    "secondary": "conversation-final-1788990729692-side"
+  },
+  "testNetworkRevision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "source": "Real Tangent HTTP API and actual local PDS records; existing real scoped OAuth sessions.",
+  "mode": "conversation",
+  "secretsIncluded": false,
+  "checks": [
+    {
+      "name": "Real host is ready",
+      "passed": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Create isolated primary room",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Provision real primary Space",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Set manager Manager in conversation-final-1788990729692-workshop",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Set agent Member in conversation-final-1788990729692-workshop",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Create isolated secondary room",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Provision real secondary Space",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Set manager Manager in conversation-final-1788990729692-side",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Set agent Member in conversation-final-1788990729692-side",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Accepted source post first",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post reply",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Real posts carry distinct author repos and exact Space",
+      "passed": true,
+      "observed": {
+        "crossPds": true
+      }
+    },
+    {
+      "name": "Repeated operation returns the same source URI and CID",
+      "passed": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Operation reuse with conflicting payload is rejected",
+      "passed": true,
+      "observed": {
+        "status": 400
+      }
+    },
+    {
+      "name": "A supplied author field is rejected",
+      "passed": true,
+      "observed": {
+        "status": 400
+      }
+    },
+    {
+      "name": "A reply cannot reference another room",
+      "passed": true,
+      "observed": {
+        "status": 400
+      }
+    },
+    {
+      "name": "Cookie posting requires the same browser origin",
+      "passed": true,
+      "observed": {
+        "missing": 403,
+        "crossOrigin": 403
+      }
+    },
+    {
+      "name": "Message size is bounded in UTF-8 bytes",
+      "passed": true,
+      "observed": {
+        "status": 400
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 2,
+        "responseBytes": 2047,
+        "noStore": true
+      }
+    },
+    {
+      "name": "History contains exactly the original and the cross-PDS reply",
+      "passed": true,
+      "observed": {
+        "count": 2
+      }
+    },
+    {
+      "name": "A populated local projection still denies an outsider",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Accepted source post page-3",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-4",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-5",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-6",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-7",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-8",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-9",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-10",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-11",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-12",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-13",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-14",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-15",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-16",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-17",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-18",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-19",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-20",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-21",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-22",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-23",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-24",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Accepted source post page-25",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 20,
+        "responseBytes": 14060,
+        "noStore": true
+      }
+    },
+    {
+      "name": "A full page contains 20 messages and an opaque continuation",
+      "passed": true,
+      "observed": {
+        "count": 20,
+        "boundary": 25
+      }
+    },
+    {
+      "name": "Accepted source post concurrent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 5,
+        "responseBytes": 3663,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Concurrent insertion does not enter an already captured read window",
+      "passed": true,
+      "observed": {
+        "captured": 25,
+        "secondPage": 5,
+        "boundary": 25
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 1,
+        "responseBytes": 1088,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Resume observes the later insertion once",
+      "passed": true,
+      "observed": {
+        "count": 1,
+        "boundary": 26
+      }
+    },
+    {
+      "name": "Tampered and cross-identity or cross-room cursors are rejected",
+      "passed": true,
+      "observed": {
+        "tampered": 400,
+        "differentActor": 400,
+        "differentRoom": 400
+      }
+    },
+    {
+      "name": "Acknowledgement stores the observed read position",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "sequence": 26
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 0,
+        "responseBytes": 424,
+        "noStore": true
+      }
+    },
+    {
+      "name": "A subsequent read resumes from durable acknowledgement",
+      "passed": true,
+      "observed": {
+        "count": 0,
+        "boundary": 26
+      }
+    },
+    {
+      "name": "A stale acknowledgement cannot move the read position backwards",
+      "passed": true,
+      "observed": {
+        "sequence": 26
+      }
+    },
+    {
+      "name": "Accepted source post after-ack",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Bounded authorized history agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 1,
+        "responseBytes": 1090,
+        "noStore": true
+      }
+    },
+    {
+      "name": "New content appears after the acknowledged position",
+      "passed": true,
+      "observed": {
+        "count": 1,
+        "boundary": 27
+      }
+    },
+    {
+      "name": "Independent disposable agent authentication",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "authentication": "legacy-createSession-disposable-fixture"
+      }
+    },
+    {
+      "name": "Independent disposable outsider authentication",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "authentication": "legacy-createSession-disposable-fixture"
+      }
+    },
+    {
+      "name": "Accepted source post external-seed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "detail": "accepted"
+      }
+    },
+    {
+      "name": "Admitted member receives a real Space credential",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "stage": null,
+        "error": null,
+        "lifetimeSeconds": 7200
+      }
+    },
+    {
+      "name": "Independent credential reads the other PDS source",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "sameCid": true
+      }
+    },
+    {
+      "name": "Provider denies a new credential to an outsider",
+      "passed": true,
+      "observed": {
+        "status": 400,
+        "error": "UserNotAuthorized"
+      }
+    },
+    {
+      "name": "Set agent Reader in conversation-final-1788990729692-side",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Read-only membership denies application posting",
+      "passed": true,
+      "observed": {
+        "status": 403
+      }
+    },
+    {
+      "name": "Independent PDS accepts source external-readonly",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "stage": null,
+        "error": null
+      }
+    },
+    {
+      "name": "Real source reconciliation completed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "freshness": "catching-up"
+      }
+    },
+    {
+      "name": "Bounded authorized history owner",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 1,
+        "responseBytes": 1078,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Current read-only policy rejects an independently written source",
+      "passed": true,
+      "observed": {
+        "visible": 1
+      }
+    },
+    {
+      "name": "Set agent Member in conversation-final-1788990729692-side",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Real source reconciliation completed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "freshness": "checked"
+      }
+    },
+    {
+      "name": "Bounded authorized history owner",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 1,
+        "responseBytes": 1126,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Restoring membership does not re-admit a previously rejected version",
+      "passed": true,
+      "observed": {
+        "visible": 1
+      }
+    },
+    {
+      "name": "Independent PDS accepts source z-external-parent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "stage": null,
+        "error": null
+      }
+    },
+    {
+      "name": "Independent PDS accepts source a-external-reply",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "stage": null,
+        "error": null
+      }
+    },
+    {
+      "name": "Real source reconciliation completed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "freshness": "catching-up"
+      }
+    },
+    {
+      "name": "Real source reconciliation completed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "freshness": "checked"
+      }
+    },
+    {
+      "name": "Bounded authorized history owner",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 3,
+        "responseBytes": 2618,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Independent parent and reply survive discovery-order differences",
+      "passed": true,
+      "observed": {
+        "visible": 3
+      }
+    },
+    {
+      "name": "Set agent Removed in conversation-final-1788990729692-side",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Removal immediately denies cached application history",
+      "passed": true,
+      "observed": {
+        "status": 403
+      }
+    },
+    {
+      "name": "Removal denies a newly requested upstream credential",
+      "passed": true,
+      "observed": {
+        "status": 400,
+        "error": "UserNotAuthorized"
+      }
+    },
+    {
+      "name": "An already issued upstream credential retains its documented validity window",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "expiresInSeconds": 7200,
+        "lifetimeSeconds": 7200,
+        "observed": "Application history and new credential issuance are denied; the existing credential still reads immediately after removal. Its declared expiry was recorded, not waited through."
+      }
+    },
+    {
+      "name": "Independent PDS accepts source external-delayed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "stage": null,
+        "error": null
+      }
+    },
+    {
+      "name": "Real source reconciliation completed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "freshness": "catching-up"
+      }
+    },
+    {
+      "name": "Bounded authorized history owner",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 3,
+        "responseBytes": 2622,
+        "noStore": true
+      }
+    },
+    {
+      "name": "A newly observed backdated record is rejected after removal",
+      "passed": true,
+      "observed": {
+        "visible": 3,
+        "backdated": true
+      }
+    },
+    {
+      "name": "Previously accepted author messages remain after removal",
+      "passed": true,
+      "observed": {
+        "retained": true
+      }
+    },
+    {
+      "name": "Owner rebuild reconstructs the accepted projection",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "rebuilt": 3
+      }
+    },
+    {
+      "name": "Set agent Member in conversation-final-1788990729692-side",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Real source reconciliation completed",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "freshness": "checked"
+      }
+    },
+    {
+      "name": "Bounded authorized history owner",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 3,
+        "responseBytes": 2618,
+        "noStore": true
+      }
+    },
+    {
+      "name": "Rebuild and re-admission preserve rejected source decisions",
+      "passed": true,
+      "observed": {
+        "visible": 3
+      }
+    }
+  ],
+  "limits": [
+    "The upstream credential lifetime is observed from the real issued credential; expiry-time denial was not waited through.",
+    "Actual process restart and backup restoration use the private checkpoint and separate receipts."
+  ],
+  "restartCheckpoint": "Private .local state contains room/source identifiers and protected read cursors. Existing private cookie files retain authentication."
+}

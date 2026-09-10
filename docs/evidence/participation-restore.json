@@ -1,0 +1,108 @@
+{
+  "status": "passed",
+  "completedAt": "2026-09-09T21:27:28.05Z",
+  "site": "http://127.0.0.1:5223",
+  "room": "poc-1788987688033-workshop",
+  "restore": {
+    "instance": "restore-proof-1788989108487",
+    "pid": 42688,
+    "sameOrigin": true,
+    "newStateDirectory": true
+  },
+  "baseline": "agent-demo.json",
+  "existingCredentialReused": true,
+  "newEnrollment": false,
+  "newOAuthAuthorization": false,
+  "continuation": {
+    "kind": "posted",
+    "operationId": "f530d6c9-240e-45dd-902b-a1f622d48042",
+    "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/poc-1788987688033-workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/op-aeffee1ccc2826df4a383f3575068948c1779dbab15478b22ff0cd11c98dfc4a",
+    "sourceCid": "bafyreib2udot4aaluzyq4qyyc5luqswr5eeyk7hpqrnezbsfsj5gs5vk3m",
+    "origin": "scripted restoration fixture; not a new model reply"
+  },
+  "checks": [
+    {
+      "name": "existing-bearer-restored-with-same-DID",
+      "passed": true,
+      "did": "did:plc:mgxxqowf6nnd3btckqjq573l"
+    },
+    {
+      "name": "restored-server-read-position-without-client-cursor",
+      "passed": true,
+      "count": 0
+    },
+    {
+      "name": "restored-browser-session-reads-history",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "original-model-source-retained",
+      "passed": true,
+      "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/poc-1788987688033-workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/op-39725df245a4ccc34dcefe09bfdc4e6d6d4bdc38ae7f7dd070028859cf79f256",
+      "sourceCid": "bafyreidvmsh4woms3l3flgzzn6763qlrl7hrirx2hbzbnxs2oxyhtfdegy"
+    },
+    {
+      "name": "fresh-runner-resumes-idle-after-restore",
+      "passed": true,
+      "result": {
+        "kind": "idle",
+        "count": 0,
+        "more": false,
+        "freshness": "catching-up"
+      }
+    },
+    {
+      "name": "new-scripted-source-write-accepted-after-restore",
+      "passed": true,
+      "operationId": "f530d6c9-240e-45dd-902b-a1f622d48042",
+      "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/poc-1788987688033-workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/op-aeffee1ccc2826df4a383f3575068948c1779dbab15478b22ff0cd11c98dfc4a",
+      "sourceCid": "bafyreib2udot4aaluzyq4qyyc5luqswr5eeyk7hpqrnezbsfsj5gs5vk3m"
+    },
+    {
+      "name": "new-source-projects-with-agent-authorship",
+      "passed": true,
+      "authorDid": "did:plc:mgxxqowf6nnd3btckqjq573l",
+      "sourceCid": "bafyreib2udot4aaluzyq4qyyc5luqswr5eeyk7hpqrnezbsfsj5gs5vk3m"
+    },
+    {
+      "name": "own-scripted-continuation-needs-no-model",
+      "passed": true,
+      "result": {
+        "kind": "read",
+        "count": 1,
+        "more": false,
+        "freshness": "catching-up"
+      }
+    },
+    {
+      "name": "runner-remains-idle-after-acknowledgement",
+      "passed": true,
+      "result": {
+        "kind": "idle",
+        "count": 0,
+        "more": false,
+        "freshness": "catching-up"
+      }
+    },
+    {
+      "name": "restored-server-and-client-acknowledge-new-source",
+      "passed": true,
+      "count": 0,
+      "sameDid": true,
+      "pending": false,
+      "ackPending": false
+    },
+    {
+      "name": "no-additional-model-invocation",
+      "passed": true,
+      "invocationDirectoriesBefore": 1,
+      "invocationDirectoriesAfter": 1
+    },
+    {
+      "name": "original-model-evidence-unchanged",
+      "passed": true
+    }
+  ],
+  "interpretation": "A fresh operation received an accepted verified Spaces source reference after backup restoration, exercising the restored upstream OAuth connection rather than only a cached browser identity."
+}

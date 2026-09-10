@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html,body{margin:0;background:#0f0e12;overflow-x:hidden;font-family:'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif}
+*{box-sizing:border-box}
+img.px{image-rendering:pixelated;image-rendering:crisp-edges}
+a{color:#a1a1aa;text-decoration:none;transition:color .3s cubic-bezier(.4,0,.2,1)}
+a:hover{color:#fbbf24}
+:focus-visible{outline:2px solid #fbbf24;outline-offset:3px;border-radius:2px}
+@keyframes ts-halo{0%,100%{opacity:.45;transform:scale(.9)}50%{opacity:.95;transform:scale(1.08)}}
+@keyframes ts-twinkle{0%,100%{opacity:.12;transform:scale(.7)}50%{opacity:.95;transform:scale(1.15)}}
+@keyframes ts-rise{0%{opacity:0;transform:translateY(9px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes ts-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none !important;transition:none !important}}
+</style>
+</helmet>
+
+<div style="--a:#fbbf24;--al:#fcd34d;--argb:251,191,36;min-height:100vh;background:#0f0e12;color:#c9c9d1;font-family:'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased">
+
+<div aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">{{ announce }}</div>
+
+<div style="position:sticky;top:0;z-index:60;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(15,14,18,.94);backdrop-filter:blur(8px)">
+  <div style="display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;max-width:1500px;margin:0 auto;padding:11px 22px">
+    <span style="display:flex;align-items:center;gap:9px;flex:none">
+      <span style="width:9px;height:9px;border-radius:50%;background:#fbbf24;box-shadow:0 0 11px rgba(251,191,36,.85)"></span>
+      <span style="font-weight:600;font-size:13px;letter-spacing:.3em;color:#f4f4f5">TANGENT SPACE</span>
+    </span>
+    <nav aria-label="Prototype chapters" style="display:flex;gap:4px;flex-wrap:wrap;min-width:0">
+      <sc-for list="{{ chapters }}" as="c" hint-placeholder-count="7">
+        <button type="button" onClick="{{ c.onClick }}" aria-current="{{ c.current }}" title="{{ c.hint }}" style="display:inline-flex;align-items:baseline;gap:6px;min-height:30px;padding:4px 10px;border:1px solid {{ c.border }};border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font:500 12px/1 inherit;cursor:pointer;transition:all .2s cubic-bezier(.4,0,.2,1)" style-hover="border-color:rgba(251,191,36,.5);color:#f4f4f5">
+          <span style="font-family:'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;font-size:9px;opacity:.6">{{ c.num }}</span>
+          <span>{{ c.label }}</span>
+        </button>
+      </sc-for>
+    </nav>
+  </div>
+
+  <div style="border-top:1px solid rgba(255,255,255,.05);background:rgba(0,0,0,.28)">
+    <div style="display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;max-width:1500px;margin:0 auto;padding:8px 22px">
+      <span style="font-family:'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;font-weight:600;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#8f8f99;flex:none">Stage</span>
+      <button type="button" onClick="{{ onPlayScene }}" style="display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:4px 12px;border:1px solid rgba(251,191,36,.42);border-radius:5px;background:rgba(251,191,36,.1);color:#fcd34d;font:600 10.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.06em;cursor:pointer" style-hover="background:rgba(251,191,36,.2)">{{ sceneLabel }}</button>
+      <button type="button" onClick="{{ onToggleAmbient }}" aria-pressed="{{ ambientOn }}" style="display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:4px 11px;border:1px solid rgba(255,255,255,.14);border-radius:5px;background:transparent;color:#a1a1aa;font:500 10.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.06em;cursor:pointer" style-hover="border-color:rgba(255,255,255,.3);color:#f4f4f5">
+        <span style="width:7px;height:7px;border-radius:50%;background:{{ ambientDot }}"></span>{{ ambientLabel }}
+      </button>
+      <span style="width:1px;height:18px;background:rgba(255,255,255,.1)"></span>
+      <sc-for list="{{ triggers }}" as="t" hint-placeholder-count="6">
+        <button type="button" onClick="{{ t.onClick }}" style="min-height:28px;padding:4px 10px;border:1px solid rgba(255,255,255,.12);border-radius:5px;background:transparent;color:#8f8f99;font:500 10.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.04em;cursor:pointer" style-hover="border-color:rgba(255,255,255,.3);color:#f4f4f5">{{ t.label }}</button>
+      </sc-for>
+      <span style="flex:1"></span>
+      <span style="font:500 9.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.05em;color:#8f8f99">Simulated traffic · no network</span>
+    </div>
+  </div>
+</div>
+
+<sc-if value="{{ isArrival }}" hint-placeholder-val="{{ true }}">
+<main style="position:relative;overflow:hidden;background:radial-gradient(ellipse 80% 62% at 22% -8%,#211a2a 0%,#141218 52%,#0f0e12 100%)">
+  <div style="position:relative;max-width:1180px;margin:0 auto;padding:52px 26px 70px">
+    <p style="margin:0 0 14px;font:500 11px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase;color:#fbbf24">You followed a link to a reply</p>
+    <div style="display:flex;gap:46px;flex-wrap:wrap;align-items:flex-start">
+
+      <div style="position:relative;width:300px;height:430px;flex:none;border-radius:18px;overflow:hidden;background:#0e0e11;border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 46px -22px rgba(0,0,0,.9);--a:#fb923c;--al:#fdba74;--argb:251,146,60">
+        <span style="position:relative;display:flex;align-items:center;justify-content:center;height:224px;overflow:hidden;background:radial-gradient(ellipse 90% 82% at 50% 32%,rgba(251,146,60,.22) 0%,rgba(251,146,60,.06) 58%,#0d0d11 100%)">
+          <span style="position:absolute;width:196px;height:196px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.3),transparent 64%);animation:ts-halo 5s ease-in-out infinite"></span>
+          <img class="px" src="assets/face-kintsugi.png" alt="" aria-hidden="true" width="196" height="196" style="position:relative;z-index:1;width:196px;height:196px">
+        </span>
+        <span style="display:block;position:relative;height:4px;background:#fb923c"></span>
+        <span style="position:absolute;left:20px;top:226px;transform:translateY(-50%);z-index:6;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:#0e0e11;border:2px solid #fb923c;box-shadow:0 0 14px rgba(251,146,60,.4)">
+          <span style="font:600 13px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#fdba74">34</span>
+        </span>
+        <span style="position:absolute;right:18px;top:226px;transform:translateY(-50%) rotate(45deg);z-index:6;width:11px;height:11px;background:#fb923c"></span>
+        <span style="position:relative;z-index:5;display:flex;flex-direction:column;height:202px;padding:22px 18px 0;background:linear-gradient(180deg,rgba(20,20,26,.6),rgba(9,9,13,.78));backdrop-filter:blur(13px) saturate(1.15)">
+          <span style="display:block;font-size:19px;font-weight:700;color:#f4f4f5;line-height:1.25">Kintsugi Architecture</span>
+          <span style="display:block;margin-top:2px;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">· a tangent · public reading</span>
+          <span style="display:flex;gap:12px;margin-top:11px;flex:1">
+            <span style="flex:none;display:flex;flex-direction:column;gap:7px">
+              <span title="Reading is public" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:1.5px solid currentColor;color:#fbbf24"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"></path><circle cx="12" cy="12" r="2.2"></circle></svg></span>
+              <span title="Humans and agents" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:1.5px solid currentColor;color:#5eead4"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="4" y="9" width="16" height="11" rx="3"></rect><path d="M12 9V5"></path><circle cx="12" cy="4" r="1.2"></circle><path d="M9.6 14h.01M14.4 14h.01"></path></svg></span>
+            </span>
+            <span style="margin:0;font-size:12px;line-height:1.5;color:#a1a1aa">Repair over replacement, for the systems we inherit. Four channels, one of them private. Thirty-four people and one agent.</span>
+          </span>
+          <span style="display:flex;align-items:center;gap:8px;padding:7px 0 9px;border-top:1px solid rgba(255,255,255,.1)">
+            <span style="font-size:9.5px;font-style:italic;color:#6a6f80">"Name the seam before you touch it."</span>
+          </span>
+        </span>
+      </div>
+
+      <div style="flex:1 1 420px;min-width:300px">
+        <h1 style="margin:0;font-size:clamp(31px,4.6vw,46px);font-weight:300;letter-spacing:-.035em;line-height:1.08;color:#f4f4f5;text-wrap:pretty">You're at <em style="font-style:italic;color:#fb923c">Workshop</em>, three replies deep.</h1>
+        <p style="margin:18px 0 0;max-width:540px;font-size:16.5px;color:#c9c9d1">This channel reads publicly, so you can follow the whole conversation before deciding anything. Replying needs an account the community recognises.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin-top:26px">
+          <div style="padding:13px 15px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.015)">
+            <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">Where you are</p>
+            <p style="margin:5px 0 0;font-size:13px;color:#e4e4e7">Kintsugi Architecture › Workshop</p>
+          </div>
+          <div style="padding:13px 15px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.015)">
+            <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">You can</p>
+            <p style="margin:5px 0 0;font-size:13px;color:#e4e4e7">Read everything here</p>
+          </div>
+          <div style="padding:13px 15px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.015)">
+            <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">You can't yet</p>
+            <p style="margin:5px 0 0;font-size:13px;color:#e4e4e7">Reply, or watch a thread</p>
+          </div>
+        </div>
+
+        <div style="margin-top:24px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:#0e0e11;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)">
+            <span style="width:7px;height:7px;border-radius:50%;background:#4ade80;animation:ts-pulse 2.6s ease-in-out infinite"></span>
+            <span style="font:600 9.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#a1a1aa">Live · read only</span>
+          </div>
+          <div style="padding:6px 0">
+            <sc-for list="{{ arrivalMsgs }}" as="m" hint-placeholder-count="3">
+              <div style="display:flex;gap:11px;padding:11px 16px">
+                <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba({{ m.argb }},.16);border:1px solid rgba({{ m.argb }},.4);color:{{ m.accent }};font:600 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace">{{ m.init }}</span>
+                <div style="min-width:0">
+                  <p style="margin:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;line-height:1.4">
+                    <span style="font-size:13.5px;font-weight:600;color:#f4f4f5">{{ m.author }}</span>
+                    <span style="font:400 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">{{ m.handle }}</span>
+                  </p>
+                  <p style="margin:3px 0 0;font-size:14px;line-height:1.6;color:#c9c9d1">{{ m.body }}</p>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:16px;border-top:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(251,191,36,.04),rgba(0,0,0,.16))">
+            <p style="margin:0 0 13px;font-size:13.5px;color:#a1a1aa">Nine more replies above. Sign in and we'll bring you back to this exact spot.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button type="button" onClick="{{ goSignin }}" style="min-height:42px;padding:11px 20px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer;transition:all .25s" style-hover="background:#fcd34d;transform:translateY(-2px)">Sign in to reply</button>
+              <button type="button" onClick="{{ goSignin }}" style="min-height:42px;padding:11px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer" style-hover="border-color:rgba(255,255,255,.4)">Keep reading</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:22px;padding:6px 0 6px 18px;border-left:2px solid rgba(251,191,36,.42);max-width:560px">
+          <p style="margin:0;font-size:13.5px;color:#a1a1aa"><strong style="color:#e4e4e7;font-weight:500">A private channel exists here.</strong> We don't name it, list it, or hint at its traffic. If you're admitted later, it simply appears.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isSignin }}">
+<main style="max-width:560px;margin:0 auto;padding:58px 26px 80px">
+  <p style="margin:0 0 12px;font:500 11px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase;color:#fbbf24">Sign in</p>
+  <h1 style="margin:0;font-size:clamp(28px,4vw,38px);font-weight:300;letter-spacing:-.03em;line-height:1.12;color:#f4f4f5">We remember why you came.</h1>
+
+  <div style="display:flex;align-items:center;gap:11px;margin:22px 0 0;padding:13px 16px;border:1px solid rgba(251,146,60,.28);border-radius:10px;background:rgba(251,146,60,.05)">
+    <img class="px" src="assets/face-kintsugi.png" alt="" aria-hidden="true" width="34" height="34" style="width:34px;height:34px;flex:none">
+    <div style="min-width:0">
+      <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">Taking you back to</p>
+      <p style="margin:2px 0 0;font-size:13.5px;color:#f4f4f5">Kintsugi Architecture › Workshop › Mira's reply</p>
+    </div>
+  </div>
+
+  <sc-if value="{{ signinIdle }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-top:20px;padding:22px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:#0e0e11">
+      <label for="ts-handle" style="display:block;font-size:13.5px;color:#c9c9d1">Your AT Protocol handle</label>
+      <input id="ts-handle" type="text" value="{{ handleDraft }}" onChange="{{ onHandle }}" placeholder="you.bsky.social" style="display:block;width:100%;margin-top:8px;min-height:44px;padding:11px 13px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(0,0,0,.3);color:#f4f4f5;font:400 14px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+        <button type="button" onClick="{{ onSigninVisitor }}" style="min-height:42px;padding:11px 20px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer" style-hover="background:#fcd34d">Continue</button>
+        <button type="button" onClick="{{ onSigninOwner }}" style="min-height:42px;padding:11px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer" style-hover="border-color:rgba(255,255,255,.4)">Continue as Leo (owner)</button>
+      </div>
+      <p style="margin:18px 0 0;padding-top:15px;border-top:1px solid rgba(255,255,255,.07);font-size:12.5px;line-height:1.65;color:#8f8f99">This prototype accepts compatible test accounts. Native AT Spaces is still experimental, so account readiness is real here — some accounts can read before they can post. <button type="button" onClick="{{ onDiagnostics }}" style="display:inline-block;padding:7px 3px;margin:-7px -3px;border:0;background:none;color:#fcd34d;font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer">Protocol details</button></p>
+      <sc-if value="{{ diagOpen }}">
+        <pre style="margin:12px 0 0;padding:13px;border-radius:8px;background:rgba(0,0,0,.45);box-shadow:inset 0 1px 0 rgba(255,255,255,.04),inset 0 0 0 1px rgba(0,0,0,.2);font:400 11px/1.7 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99;white-space:pre-wrap">pds        bsky.social (delegated)
+did        did:plc:7k2q… verified 4s ago
+lexicon    space.tangent.channel  v0.4 draft
+spaces     experimental — falling back to app-managed rooms</pre>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ signinBlocked }}">
+    <div style="margin-top:20px;padding:22px;border:1px solid rgba(251,146,60,.3);border-radius:14px;background:rgba(251,146,60,.045)">
+      <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#fb923c">Before you write</p>
+      <h2 style="margin:9px 0 0;font-size:21px;font-weight:400;letter-spacing:-.01em;color:#f4f4f5">You're in as hana.bsky.social — reading, not posting yet.</h2>
+      <p style="margin:10px 0 0;font-size:14px;color:#c9c9d1">Kintsugi Architecture approves new accounts before they can post. Mira usually answers within a day. Nothing you write would be lost — but we'd rather you knew first.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+        <button type="button" onClick="{{ onAskToJoin }}" style="min-height:42px;padding:11px 20px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer" style-hover="background:#fcd34d">Ask to join</button>
+        <button type="button" onClick="{{ onSigninOwner }}" style="min-height:42px;padding:11px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer" style-hover="border-color:rgba(255,255,255,.4)">Switch to Leo (owner)</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ signinAsked }}">
+    <div style="margin-top:20px;padding:22px;border:1px solid rgba(74,222,128,.3);border-radius:14px;background:rgba(74,222,128,.04)">
+      <p style="margin:0;font-size:15px;color:#f4f4f5">Asked. You'll get a reply from Mira — and you keep your place in Workshop while you wait.</p>
+      <button type="button" onClick="{{ onSigninOwner }}" style="margin-top:16px;min-height:42px;padding:11px 20px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer">Continue the story as Leo</button>
+    </div>
+  </sc-if>
+</main>
+</sc-if>
+
+<sc-if value="{{ isFirstrun }}">
+<main style="position:relative;overflow:hidden;background:radial-gradient(ellipse 74% 58% at 50% -10%,#231c2e 0%,#141218 54%,#0f0e12 100%)">
+  <div style="max-width:720px;margin:0 auto;padding:52px 26px 80px">
+    <sc-if value="{{ frResumed }}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding:11px 15px;border:1px solid rgba(251,191,36,.3);border-radius:8px;background:rgba(251,191,36,.06)">
+        <span style="width:8px;height:8px;transform:rotate(45deg);background:#fbbf24;flex:none"></span>
+        <p style="margin:0;font-size:13px;color:#e4e4e7">You left off naming your first channel. Nothing you finished has been undone.</p>
+      </div>
+    </sc-if>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:26px">
+      <sc-for list="{{ frDots }}" as="d" hint-placeholder-count="5">
+        <span aria-hidden="true" style="height:3px;flex:1;border-radius:2px;background:{{ d.bg }}"></span>
+      </sc-for>
+      <span style="font:600 9.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.12em;color:#8f8f99;flex:none">{{ frCount }}</span>
+    </div>
+
+    <sc-if value="{{ frIs0 }}" hint-placeholder-val="{{ true }}">
+      <div style="text-align:center">
+        <div style="position:relative;display:inline-block;margin-bottom:8px">
+          <span aria-hidden="true" style="position:absolute;inset:-30px;border-radius:50%;background:radial-gradient(circle,rgba(251,191,36,.17),transparent 68%);animation:ts-halo 5s ease-in-out infinite"></span>
+          <img class="px" src="assets/face-host.png" alt="" aria-hidden="true" width="150" height="150" style="position:relative;width:150px;height:150px">
+        </div>
+        <h1 style="margin:0;font-size:clamp(30px,4.6vw,44px);font-weight:300;letter-spacing:-.035em;line-height:1.1;color:#f4f4f5">Welcome, Leo! This is your own Tangent space.</h1>
+        <p style="margin:16px auto 0;max-width:440px;font-size:17px;color:#c9c9d1">Make yourself at home. We'll set up one community together — three short steps, and you can stop anywhere.</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:28px">
+          <button type="button" onClick="{{ frNext }}" style="min-height:44px;padding:12px 22px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer" style-hover="background:#fcd34d;transform:translateY(-2px)">Make a place</button>
+        </div>
+        <p style="margin:22px 0 0;font:400 11px/1.6 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">You are the owner of this installation · claimed by installer at first boot</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ frIs1 }}">
+      <div>
+        <h1 style="margin:0;font-size:clamp(27px,4vw,36px);font-weight:300;letter-spacing:-.03em;color:#f4f4f5">What would you like to call it?</h1>
+        <p style="margin:12px 0 0;font-size:16px;color:#a1a1aa">You can make more Tangents later. This one is just the first.</p>
+        <input id="ts-tname" type="text" value="{{ frName }}" onChange="{{ onFrName }}" placeholder="Kintsugi Architecture" aria-label="Tangent name" style="display:block;width:100%;margin-top:22px;min-height:56px;padding:14px 16px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(0,0,0,.3);color:#f4f4f5;font:300 24px/1.3 inherit;letter-spacing:-.02em">
+        <div style="margin-top:20px;padding:16px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.015)">
+          <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">Who can see it</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px">
+            <sc-for list="{{ frAudiences }}" as="a" hint-placeholder-count="3">
+              <button type="button" onClick="{{ a.onClick }}" aria-pressed="{{ a.on }}" style="min-height:36px;padding:8px 13px;border:1px solid {{ a.border }};border-radius:999px;background:{{ a.bg }};color:{{ a.fg }};font:500 12.5px/1 inherit;cursor:pointer">{{ a.label }}</button>
+            </sc-for>
+          </div>
+          <p style="margin:11px 0 0;font-size:12.5px;color:#8f8f99">{{ frAudienceNote }}</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:24px">
+          <button type="button" onClick="{{ frNext }}" disabled="{{ frNameEmpty }}" style="min-height:44px;padding:12px 22px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer;opacity:{{ frNameOpacity }}">Next</button>
+          <button type="button" onClick="{{ frBack }}" style="min-height:44px;padding:12px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer">Back</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ frIs2 }}">
+      <div>
+        <h1 style="margin:0;font-size:clamp(27px,4vw,36px);font-weight:300;letter-spacing:-.03em;color:#f4f4f5">A couple of rooms to start with?</h1>
+        <p style="margin:12px 0 0;font-size:16px;color:#a1a1aa">Pick what sounds useful. You don't have to design the whole community now — channels are cheap and renameable.</p>
+        <div style="display:grid;gap:9px;margin-top:22px">
+          <sc-for list="{{ frSuggestions }}" as="s" hint-placeholder-count="4">
+            <button type="button" onClick="{{ s.onClick }}" aria-pressed="{{ s.on }}" style="display:flex;align-items:center;gap:13px;width:100%;text-align:left;padding:14px 16px;border:1px solid {{ s.border }};border-radius:10px;background:{{ s.bg }};color:inherit;font:inherit;cursor:pointer;transition:border-color .2s" style-hover="border-color:rgba(251,191,36,.4)">
+              <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;border:1.5px solid {{ s.mark }};background:{{ s.markBg }};color:#18181b;font:700 11px/1 inherit">{{ s.tick }}</span>
+              <span style="min-width:0">
+                <span style="display:block;font-size:14.5px;font-weight:500;color:#f4f4f5">{{ s.name }}</span>
+                <span style="display:block;margin-top:2px;font-size:12.5px;color:#8f8f99">{{ s.why }}</span>
+              </span>
+              <span style="margin-left:auto;flex:none;font:500 9.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:{{ s.audFg }}">{{ s.aud }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:24px">
+          <button type="button" onClick="{{ frNext }}" style="min-height:44px;padding:12px 22px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer">Next</button>
+          <button type="button" onClick="{{ frBack }}" style="min-height:44px;padding:12px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer">Back</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ frIs3 }}">
+      <div>
+        <h1 style="margin:0;font-size:clamp(27px,4vw,36px);font-weight:300;letter-spacing:-.03em;color:#f4f4f5">Want someone to help you look after things?</h1>
+        <p style="margin:12px 0 0;font-size:16px;color:#a1a1aa">You can do this later. An administrator can make channels and manage members; they can't remove you.</p>
+        <div style="margin-top:22px;padding:18px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:#0e0e11">
+          <label for="ts-helper" style="display:block;font-size:13.5px;color:#c9c9d1">Their handle</label>
+          <input id="ts-helper" type="text" value="{{ frHelper }}" onChange="{{ onFrHelper }}" placeholder="mira.bsky.social" style="display:block;width:100%;margin-top:8px;min-height:44px;padding:11px 13px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(0,0,0,.3);color:#f4f4f5;font:400 14px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)">
+            <div style="min-width:0">
+              <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">They'll receive</p>
+              <p style="margin:3px 0 0;font-size:13px;color:#e4e4e7">Administrator of {{ frNameShown }} · all channels</p>
+            </div>
+            <button type="button" onClick="{{ onCopyInvite }}" style="flex:none;min-height:38px;padding:9px 15px;border:1px solid rgba(251,191,36,.42);border-radius:6px;background:rgba(251,191,36,.09);color:#fcd34d;font:500 12.5px/1 inherit;cursor:pointer">{{ copyLabel }}</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:24px">
+          <button type="button" onClick="{{ frNext }}" style="min-height:44px;padding:12px 22px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer">Send the invitation</button>
+          <button type="button" onClick="{{ frNext }}" style="min-height:44px;padding:12px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer">Skip for now</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ frIs4 }}">
+      <div style="text-align:center">
+        <div style="position:relative;display:inline-block;margin-bottom:10px">
+          <span aria-hidden="true" style="position:absolute;inset:-34px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.22),transparent 68%);animation:ts-halo 5s ease-in-out infinite"></span>
+          <img class="px" src="assets/face-kintsugi.png" alt="" aria-hidden="true" width="160" height="160" style="position:relative;width:160px;height:160px">
+        </div>
+        <p style="margin:0 0 10px;font:500 11px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase;color:#fbbf24">Your place exists</p>
+        <h1 style="margin:0;font-size:clamp(29px,4.4vw,42px);font-weight:300;letter-spacing:-.035em;line-height:1.1;color:#f4f4f5">{{ frNameShown }} is yours.</h1>
+        <p style="margin:16px auto 0;max-width:430px;font-size:17px;color:#c9c9d1">{{ frDoneNote }}</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:28px">
+          <button type="button" onClick="{{ goLive }}" style="min-height:44px;padding:12px 22px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer" style-hover="background:#fcd34d;transform:translateY(-2px)">Say the first thing in Workshop</button>
+          <button type="button" onClick="{{ goReturn }}" style="min-height:44px;padding:12px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer">Look around first</button>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isLive }}">
+<main style="display:flex;flex-wrap:wrap;align-items:stretch;gap:0;max-width:1500px;margin:0 auto;min-height:calc(100vh - 96px)">
+
+  <nav aria-label="Tangents" style="flex:none;display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;width:100%;padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.2)">
+    <sc-for list="{{ tangents }}" as="t" hint-placeholder-count="3">
+      <button type="button" onClick="{{ t.onClick }}" aria-current="{{ t.current }}" style="position:relative;display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 14px 6px 7px;border:1px solid {{ t.border }};border-radius:999px;background:{{ t.bg }};color:inherit;font:inherit;cursor:pointer;transition:border-color .2s" style-hover="border-color:rgba(255,255,255,.32)">
+        <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;overflow:hidden;background:radial-gradient(circle,rgba({{ t.argb }},.3),transparent 70%);border:1px solid rgba({{ t.argb }},.45);color:{{ t.a }};font:700 12px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace">{{ t.faceNode }}</span>
+        <span style="font-size:13.5px;font-weight:500;color:{{ t.fg }}">{{ t.name }}</span>
+        <sc-if value="{{ t.addressed }}"><span title="Someone replied to you" style="flex:none;width:9px;height:9px;transform:rotate(45deg);background:{{ t.a }};box-shadow:0 0 8px rgba({{ t.argb }},.8)"></span></sc-if>
+        <sc-if value="{{ t.showRing }}"><span title="New activity" style="flex:none;width:9px;height:9px;border-radius:50%;border:1.5px solid #a1a1aa"></span></sc-if>
+        <sc-if value="{{ t.showCount }}"><span style="flex:none;font:600 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#a1a1aa">{{ t.countLabel }}</span></sc-if>
+      </button>
+    </sc-for>
+  </nav>
+
+  <div style="flex:1 1 236px;min-width:210px;max-width:290px;border-right:1px solid rgba(255,255,255,.07);padding:20px 16px">
+    <div style="display:flex;align-items:flex-start;gap:11px">
+      <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;overflow:hidden;background:radial-gradient(circle,rgba({{ curArgb }},.28),transparent 70%);border:1px solid rgba({{ curArgb }},.4)">{{ curFaceNode }}</span>
+      <div style="min-width:0">
+        <h2 style="margin:0;font-size:15px;font-weight:600;color:#f4f4f5;line-height:1.3">{{ curTangentName }}</h2>
+        <p style="margin:2px 0 0;font:500 9.5px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#8f8f99">{{ curTangentRole }}</p>
+      </div>
+    </div>
+
+    <sc-if value="{{ curEmpty }}">
+      <div style="margin-top:20px;padding:18px 16px;border:1px dashed rgba(74,222,128,.35);border-radius:12px;background:rgba(74,222,128,.03);text-align:center">
+        <p style="margin:0;font-size:13.5px;color:#e4e4e7">Nothing here yet — and that's fine.</p>
+        <p style="margin:7px 0 0;font-size:12.5px;color:#8f8f99">A Tangent with no channels is a room you haven't furnished.</p>
+        <button type="button" onClick="{{ onMakeChannel }}" style="margin-top:14px;min-height:38px;padding:9px 15px;border:1px solid rgba(74,222,128,.4);border-radius:6px;background:rgba(74,222,128,.08);color:#86efac;font:500 12.5px/1 inherit;cursor:pointer">Make the first channel</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ curHasChannels }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-top:18px">
+        <p style="margin:0 0 8px;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8f8f99">Channels</p>
+        <div style="display:grid;gap:2px">
+          <sc-for list="{{ channels }}" as="ch" hint-placeholder-count="3">
+            <button type="button" onClick="{{ ch.onClick }}" aria-current="{{ ch.current }}" style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;min-height:38px;padding:7px 10px;border:0;border-left:2px solid {{ ch.mark }};border-radius:0 6px 6px 0;background:{{ ch.bg }};color:inherit;font:inherit;cursor:pointer;transition:background .18s" style-hover="background:rgba(255,255,255,.045)">
+              <span aria-hidden="true" style="flex:none;font:400 12px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">{{ ch.sigil }}</span>
+              <span style="min-width:0;flex:1;font-size:13.5px;font-weight:{{ ch.weight }};color:{{ ch.fg }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ch.name }}</span>
+              <sc-if value="{{ ch.addressed }}"><span title="A reply to you" style="flex:none;width:8px;height:8px;transform:rotate(45deg);background:#fbbf24"></span></sc-if>
+              <sc-if value="{{ ch.watchedNew }}"><span title="New in a thread you watch" style="flex:none;width:7px;height:7px;border-radius:50%;background:#a1a1aa"></span></sc-if>
+              <sc-if value="{{ ch.showRing }}"><span title="New activity" style="flex:none;width:8px;height:8px;border-radius:50%;border:1.5px solid #71717a"></span></sc-if>
+              <sc-if value="{{ ch.showCount }}"><span style="flex:none;font:600 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">{{ ch.countLabel }}</span></sc-if>
+              <sc-if value="{{ ch.muted }}"><span title="You muted notifications here" aria-label="muted" style="flex:none;font:400 9px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">muted</span></sc-if>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <p style="margin:0 0 8px;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8f8f99">Posts</p>
+        <button type="button" onClick="{{ onOpenPost }}" style="display:flex;align-items:flex-start;gap:9px;width:100%;text-align:left;padding:11px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(255,255,255,.015);color:inherit;font:inherit;cursor:pointer" style-hover="border-color:rgba(251,191,36,.4)">
+          <span style="min-width:0">
+            <span style="display:block;font-size:13px;font-weight:500;color:#f4f4f5">The Gold Seam</span>
+            <span style="display:inline-block;margin-top:5px;padding:2px 7px;border-radius:3px;border:1px solid rgba(251,146,60,.4);font:600 8.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#fdba74">Draft · not published</span>
+          </span>
+        </button>
+      </div>
+
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)">
+        <button type="button" onClick="{{ onOpenInvite }}" style="width:100%;min-height:38px;padding:9px 12px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:transparent;color:#c9c9d1;font:500 12.5px/1 inherit;cursor:pointer;text-align:left" style-hover="border-color:rgba(251,191,36,.4);color:#f4f4f5">Invite someone…</button>
+      </div>
+    </sc-if>
+  </div>
+
+  <section aria-label="Conversation" style="flex:999 1 460px;min-width:min(100%,320px);display:flex;flex-direction:column">
+    <header style="padding:16px 22px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <h1 style="margin:0;font-size:19px;font-weight:500;letter-spacing:-.01em;color:#f4f4f5">{{ chanName }}</h1>
+        <span style="padding:2px 8px;border-radius:999px;border:1px solid {{ audBorder }};font:600 8.5px/1.6 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;color:{{ audFg }}">{{ audLabel }}</span>
+        <span style="flex:1"></span>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button type="button" onClick="{{ onToggleWatch }}" aria-pressed="{{ watching }}" style="min-height:32px;padding:6px 11px;border:1px solid {{ watchBorder }};border-radius:6px;background:{{ watchBg }};color:{{ watchFg }};font:500 11.5px/1 inherit;cursor:pointer">{{ watchLabel }}</button>
+          <button type="button" onClick="{{ onToggleMute }}" aria-pressed="{{ muted }}" style="min-height:32px;padding:6px 11px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:transparent;color:#a1a1aa;font:500 11.5px/1 inherit;cursor:pointer" style-hover="color:#f4f4f5">{{ muteLabel }}</button>
+          <button type="button" onClick="{{ onOpenManage }}" style="min-height:32px;padding:6px 11px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:transparent;color:#a1a1aa;font:500 11.5px/1 inherit;cursor:pointer" style-hover="color:#f4f4f5">People</button>
+        </div>
+      </div>
+      <p style="margin:9px 0 0;font-size:13px;color:#8f8f99;max-width:640px">{{ chanTopic }}</p>
+    </header>
+
+    <sc-if value="{{ accessChanged }}">
+      <div role="status" style="display:flex;align-items:flex-start;gap:11px;margin:14px 22px 0;padding:13px 15px;border:1px solid rgba(251,146,60,.34);border-radius:10px;background:rgba(251,146,60,.06)">
+        <span aria-hidden="true" style="flex:none;margin-top:6px;width:8px;height:8px;transform:rotate(45deg);background:#fb923c"></span>
+        <p style="margin:0;font-size:13.5px;color:#e4e4e7"><strong style="font-weight:600;color:#f4f4f5">Posting in {{ chanName }} is paused for you.</strong> Mira set this 20 minutes ago; it lifts in 40. You can still read, save and search everything you could before.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ sessionExpired }}">
+      <div role="alertdialog" aria-label="Session expired" style="margin:14px 22px 0;padding:17px;border:1px solid rgba(251,191,36,.4);border-radius:12px;background:rgba(251,191,36,.07)">
+        <p style="margin:0;font-size:14.5px;color:#f4f4f5"><strong style="font-weight:600">Your session expired while you were typing.</strong></p>
+        <p style="margin:7px 0 0;font-size:13.5px;color:#c9c9d1">Your draft is safe, held under leo.tangent.space. Sign in again and we'll send it as you — not as whoever signs in next.</p>
+        <button type="button" onClick="{{ onResumeSession }}" style="margin-top:14px;min-height:40px;padding:10px 18px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 13.5px/1 inherit;cursor:pointer">Sign in again</button>
+      </div>
+    </sc-if>
+
+    <div style="flex:1;padding:8px 0 4px">
+      <sc-for list="{{ msgs }}" as="m" hint-placeholder-count="5">
+        <div>
+          <sc-if value="{{ m.divider }}">
+            <div role="separator" style="display:flex;align-items:center;gap:11px;padding:12px 22px 6px">
+              <span style="height:1px;flex:1;background:rgba(251,191,36,.34)"></span>
+              <span style="font:600 9px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#fcd34d">New since you looked</span>
+              <span style="height:1px;flex:1;background:rgba(251,191,36,.34)"></span>
+            </div>
+          </sc-if>
+          <article style="display:flex;gap:12px;padding:9px 22px;background:{{ m.rowBg }};border-left:2px solid {{ m.rowMark }};animation:{{ m.anim }}">
+            <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;overflow:hidden;background:rgba({{ m.argb }},.14);border:1px solid rgba({{ m.argb }},.38);color:{{ m.accent }};font:600 11.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace">{{ m.avatarNode }}</span>
+            <div style="min-width:0;flex:1">
+              <sc-if value="{{ m.hasReply }}">
+                <button type="button" onClick="{{ m.onSeeContext }}" style="display:flex;align-items:center;gap:7px;max-width:100%;margin:0 0 4px;padding:3px 8px 3px 6px;border:0;border-left:2px solid rgba(255,255,255,.18);border-radius:0 4px 4px 0;background:rgba(255,255,255,.03);color:inherit;font:inherit;cursor:pointer;text-align:left" style-hover="background:rgba(255,255,255,.06)">
+                  <span style="font:500 10.5px/1.4 inherit;color:#8f8f99;flex:none">{{ m.replyName }}</span>
+                  <span style="font-size:11.5px;color:#a1a1aa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.replyBody }}</span>
+                </button>
+              </sc-if>
+              <p style="margin:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;line-height:1.4">
+                <span style="font-size:13.5px;font-weight:600;color:#f4f4f5">{{ m.author }}</span>
+                <sc-if value="{{ m.isAgent }}">
+                  <span style="display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:999px;border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.08);font:600 8.5px/1.6 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#5eead4">Agent</span>
+                </sc-if>
+                <span style="font:400 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">{{ m.handle }}</span>
+                <span style="font:400 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">{{ m.time }}</span>
+                <sc-if value="{{ m.pinned }}">
+                  <span style="display:inline-flex;align-items:center;gap:5px;font:600 8.5px/1.6 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#fbbf24"><span aria-hidden="true" style="width:6px;height:6px;transform:rotate(45deg);background:#fbbf24"></span>Pinned</span>
+                </sc-if>
+              </p>
+              <p style="margin:3px 0 0;font-size:14.5px;line-height:1.62;color:#c9c9d1;text-wrap:pretty">{{ m.body }}</p>
+              <sc-if value="{{ m.statusShown }}">
+                <p style="margin:6px 0 0;display:flex;align-items:center;gap:7px;font:500 10.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.04em;color:{{ m.statusFg }}">
+                  <span aria-hidden="true" style="width:7px;height:7px;border-radius:{{ m.statusRadius }};background:{{ m.statusDot }};border:1px solid {{ m.statusFg }}"></span>
+                  <span>{{ m.statusLabel }}</span>
+                  <sc-if value="{{ m.retryable }}">
+                    <button type="button" onClick="{{ m.onRetry }}" style="padding:2px 8px;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;font:inherit;cursor:pointer">Retry</button>
+                  </sc-if>
+                </p>
+              </sc-if>
+              <div style="display:flex;gap:12px;margin-top:6px">
+                <button type="button" onClick="{{ m.onReply }}" style="display:inline-flex;align-items:center;min-height:30px;padding:7px 3px;margin:-7px -3px;border:0;background:none;color:#a1a1aa;font:500 11.5px/1 inherit;cursor:pointer" style-hover="color:#fbbf24">Reply</button>
+                <button type="button" onClick="{{ m.onPin }}" style="display:inline-flex;align-items:center;min-height:30px;padding:7px 3px;margin:-7px -3px;border:0;background:none;color:#a1a1aa;font:500 11.5px/1 inherit;cursor:pointer" style-hover="color:#fbbf24">{{ m.pinLabel }}</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ hasNewBelow }}">
+        <div style="position:sticky;bottom:8px;display:flex;justify-content:center;padding:10px 22px">
+          <button type="button" onClick="{{ onJumpLatest }}" style="display:inline-flex;align-items:center;gap:9px;min-height:38px;padding:9px 16px;border:1px solid rgba(251,191,36,.5);border-radius:999px;background:rgba(25,22,16,.94);backdrop-filter:blur(8px);color:#fcd34d;font:500 12.5px/1 inherit;cursor:pointer;box-shadow:0 10px 26px -12px rgba(0,0,0,.9)" style-hover="background:rgba(251,191,36,.16)">
+            <span aria-hidden="true" style="width:8px;height:8px;transform:rotate(45deg);background:#fbbf24"></span>
+            {{ newBelowLabel }}
+          </button>
+        </div>
+      </sc-if>
+    </div>
+
+    <footer style="padding:14px 22px 20px;border-top:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.18)">
+      <sc-if value="{{ canPost }}" hint-placeholder-val="{{ true }}">
+        <div>
+          <sc-if value="{{ hasReplyTarget }}">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;padding:7px 11px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(255,255,255,.025)">
+              <span style="font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;color:#8f8f99;flex:none">Replying to</span>
+              <span style="min-width:0;flex:1;font-size:12.5px;color:#c9c9d1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ replyTargetLabel }}</span>
+              <button type="button" onClick="{{ onClearReply }}" aria-label="Stop replying" style="flex:none;width:26px;height:26px;border:0;border-radius:5px;background:transparent;color:#8f8f99;font:400 15px/1 inherit;cursor:pointer" style-hover="color:#f4f4f5;background:rgba(255,255,255,.06)">×</button>
+            </div>
+          </sc-if>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <textarea aria-label="Write a message" value="{{ draft }}" onChange="{{ onDraft }}" placeholder="{{ composerPlaceholder }}" rows="2" style="flex:1 1 240px;min-width:0;min-height:52px;padding:12px 14px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:rgba(0,0,0,.32);color:#f4f4f5;font:400 14.5px/1.55 inherit;resize:vertical"></textarea>
+            <button type="button" onClick="{{ onSend }}" style="flex:none;min-height:44px;padding:12px 20px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer" style-hover="background:#fcd34d">{{ sendLabel }}</button>
+          </div>
+          <p style="margin:9px 0 0;display:flex;align-items:center;gap:8px;font:500 10.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.04em;color:{{ connFg }}">
+            <span aria-hidden="true" style="width:7px;height:7px;border-radius:50%;background:{{ connFg }}"></span>{{ connLabel }}
+          </p>
+        </div>
+      </sc-if>
+      <sc-if value="{{ cannotPost }}">
+        <div style="display:flex;align-items:flex-start;gap:11px;padding:14px 15px;border:1px solid rgba(255,255,255,.12);border-radius:9px;background:rgba(255,255,255,.02)">
+          <span aria-hidden="true" style="flex:none;margin-top:6px;width:8px;height:8px;border-radius:50%;border:1.5px solid #71717a"></span>
+          <p style="margin:0;font-size:13.5px;color:#a1a1aa">{{ cannotPostNote }}</p>
+        </div>
+      </sc-if>
+    </footer>
+  </section>
+
+  <sc-if value="{{ manageOpen }}">
+    <div role="dialog" aria-label="People and access" style="position:fixed;inset:0;z-index:80;display:flex;justify-content:flex-end;background:rgba(4,4,6,.6);backdrop-filter:blur(3px)">
+      <div style="width:min(430px,100%);height:100%;overflow-y:auto;border-left:1px solid rgba(255,255,255,.12);background:#0e0e11;box-shadow:-18px 0 48px -12px rgba(0,0,0,.8)">
+        <div style="display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid rgba(255,255,255,.08)">
+          <div style="min-width:0;flex:1">
+            <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">Kintsugi Architecture › {{ chanName }}</p>
+            <h2 style="margin:3px 0 0;font-size:18px;font-weight:500;color:#f4f4f5">People and access</h2>
+          </div>
+          <button type="button" onClick="{{ onCloseManage }}" aria-label="Close" style="flex:none;width:34px;height:34px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:transparent;color:#a1a1aa;font:400 17px/1 inherit;cursor:pointer" style-hover="color:#f4f4f5">×</button>
+        </div>
+
+        <sc-if value="{{ manageDone }}">
+          <div role="status" style="display:flex;align-items:center;gap:11px;margin:18px 22px 0;padding:14px 15px;border:1px solid rgba(74,222,128,.35);border-radius:10px;background:rgba(74,222,128,.05)">
+            <span aria-hidden="true" style="flex:none;color:#4ade80"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"></path></svg></span>
+            <p style="margin:0;font-size:14px;color:#f4f4f5">{{ manageDoneMsg }}</p>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ manageList }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:18px 22px 26px">
+            <p style="margin:0 0 10px;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8f8f99">Here now · {{ peopleCount }}</p>
+            <div style="display:grid;gap:6px">
+              <sc-for list="{{ people }}" as="p" hint-placeholder-count="5">
+                <button type="button" onClick="{{ p.onClick }}" style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:10px 12px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.015);color:inherit;font:inherit;cursor:pointer" style-hover="border-color:rgba(251,191,36,.4)">
+                  <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;overflow:hidden;background:rgba({{ p.argb }},.14);border:1px solid rgba({{ p.argb }},.38);color:{{ p.accent }};font:600 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace">{{ p.avatarNode }}</span>
+                  <span style="min-width:0;flex:1">
+                    <span style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+                      <span style="font-size:13.5px;font-weight:500;color:#f4f4f5">{{ p.name }}</span>
+                      <sc-if value="{{ p.isAgent }}"><span style="padding:1px 6px;border-radius:999px;border:1px solid rgba(94,234,212,.4);font:600 8px/1.6 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#5eead4">Agent</span></sc-if>
+                    </span>
+                    <span style="display:block;margin-top:1px;font:400 10px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">{{ p.handle }} · {{ p.role }}</span>
+                  </span>
+                  <span aria-hidden="true" style="flex:none;color:#8f8f99"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l6 6-6 6"></path></svg></span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="margin-top:20px;padding:14px 15px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.015)">
+              <p style="margin:0;font-size:12.5px;line-height:1.65;color:#8f8f99"><strong style="color:#c9c9d1;font-weight:500">Muting is yours; restricting is theirs.</strong> Muting a channel quiets it for you alone. Restricting posting stops someone else writing here. The two never share a control.</p>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ manageActions }}">
+          <div style="padding:18px 22px 26px">
+            <button type="button" onClick="{{ onBackToList }}" style="display:inline-flex;align-items:center;min-height:32px;margin:0 0 8px -8px;padding:7px 8px;border:0;background:none;color:#8f8f99;font:500 12px/1 inherit;cursor:pointer" style-hover="color:#fbbf24">← Everyone</button>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:rgba(255,255,255,.02)">
+              <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:10px;background:rgba({{ tgtArgb }},.14);border:1px solid rgba({{ tgtArgb }},.38);color:{{ tgtAccent }};font:600 13px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace">{{ tgtInit }}</span>
+              <div style="min-width:0">
+                <p style="margin:0;font-size:15px;font-weight:500;color:#f4f4f5">{{ tgtName }}</p>
+                <p style="margin:1px 0 0;font:400 10.5px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">{{ tgtHandle }} · {{ tgtRole }}</p>
+              </div>
+            </div>
+            <p style="margin:20px 0 9px;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8f8f99">In {{ chanName }}</p>
+            <div style="display:grid;gap:5px">
+              <sc-for list="{{ actions }}" as="ac" hint-placeholder-count="5">
+                <button type="button" onClick="{{ ac.onClick }}" style="display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;padding:12px 13px;border:1px solid {{ ac.border }};border-radius:9px;background:{{ ac.bg }};color:inherit;font:inherit;cursor:pointer" style-hover="border-color:rgba(251,191,36,.45)">
+                  <span style="min-width:0">
+                    <span style="display:block;font-size:13.5px;font-weight:500;color:{{ ac.fg }}">{{ ac.label }}</span>
+                    <span style="display:block;margin-top:2px;font-size:12px;color:#8f8f99">{{ ac.note }}</span>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ manageConfirm }}">
+          <div style="padding:18px 22px 26px">
+            <div style="padding:18px;border:1px solid rgba(251,191,36,.4);border-radius:12px;background:rgba(251,191,36,.055)">
+              <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#fbbf24">Confirm</p>
+              <h3 style="margin:9px 0 0;font-size:19px;font-weight:400;line-height:1.35;color:#f4f4f5">{{ confirmTitle }}</h3>
+              <p style="margin:10px 0 0;font-size:13.5px;color:#c9c9d1">{{ confirmBody }}</p>
+              <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:18px">
+                <button type="button" onClick="{{ onConfirm }}" style="min-height:42px;padding:11px 18px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 13.5px/1 inherit;cursor:pointer">{{ confirmCta }}</button>
+                <button type="button" onClick="{{ onBackToActions }}" style="min-height:42px;padding:11px 18px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 13.5px/1 inherit;cursor:pointer">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ inviteOpen }}">
+    <div role="dialog" aria-label="Invite someone" style="position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(4,4,6,.66);backdrop-filter:blur(3px)">
+      <div style="width:min(520px,100%);max-height:100%;overflow-y:auto;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:#0e0e11;box-shadow:0 30px 70px -20px rgba(0,0,0,.9)">
+        <div style="display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid rgba(255,255,255,.08)">
+          <h2 style="margin:0;flex:1;font-size:18px;font-weight:500;color:#f4f4f5">Invite someone</h2>
+          <button type="button" onClick="{{ onCloseInvite }}" aria-label="Close" style="flex:none;width:34px;height:34px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:transparent;color:#a1a1aa;font:400 17px/1 inherit;cursor:pointer">×</button>
+        </div>
+        <div style="padding:20px 22px 26px">
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <sc-for list="{{ inviteKinds }}" as="k" hint-placeholder-count="2">
+              <button type="button" onClick="{{ k.onClick }}" aria-pressed="{{ k.on }}" style="min-height:36px;padding:8px 14px;border:1px solid {{ k.border }};border-radius:999px;background:{{ k.bg }};color:{{ k.fg }};font:500 12.5px/1 inherit;cursor:pointer">{{ k.label }}</button>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;gap:11px;margin-top:18px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(255,255,255,.015)">
+              <span style="font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">Destination</span>
+              <span style="font-size:13px;color:#f4f4f5;text-align:right">Kintsugi Architecture › {{ chanName }}</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(255,255,255,.015)">
+              <span style="font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">They receive</span>
+              <span style="font-size:13px;color:#f4f4f5;text-align:right">{{ inviteRole }}</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(255,255,255,.015)">
+              <span style="font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">Identity</span>
+              <span style="font-size:13px;color:#f4f4f5;text-align:right">{{ inviteIdentity }}</span>
+            </div>
+          </div>
+
+          <p style="margin:16px 0 0;font-size:13px;line-height:1.65;color:#8f8f99">{{ inviteNote }}</p>
+
+          <div style="margin-top:18px;padding:13px;border-radius:9px;background:rgba(0,0,0,.42);box-shadow:inset 0 1px 0 rgba(255,255,255,.04),inset 0 0 0 1px rgba(0,0,0,.2)">
+            <p style="margin:0;font:400 11.5px/1.7 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#a1a1aa;word-break:break-all">{{ inviteUrl }}</p>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+            <button type="button" onClick="{{ onCopyInvite }}" style="min-height:42px;padding:11px 18px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 13.5px/1 inherit;cursor:pointer">{{ copyLabel }}</button>
+            <button type="button" onClick="{{ onCloseInvite }}" style="min-height:42px;padding:11px 18px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 13.5px/1 inherit;cursor:pointer">Done</button>
+          </div>
+          <p style="margin:15px 0 0;font-size:12px;color:#8f8f99">Sending it through another network is a future extension. A link you can paste is the whole baseline.</p>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</main>
+</sc-if>
+
+<sc-if value="{{ isReturn }}">
+<main style="max-width:920px;margin:0 auto;padding:46px 26px 80px">
+  <p style="margin:0 0 12px;font:500 11px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase;color:#fbbf24">Since Tuesday, 21:40</p>
+  <h1 style="margin:0;font-size:clamp(28px,4.2vw,40px);font-weight:300;letter-spacing:-.035em;line-height:1.12;color:#f4f4f5">Welcome back, Leo. Here's what happened while you were away.</h1>
+  <p style="margin:14px 0 0;max-width:560px;font-size:16px;color:#a1a1aa">Four things want you specifically. Everything else is just the place carrying on.</p>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:24px;padding:13px 15px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.015)">
+    <span style="font:600 9px/1.6 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99;width:100%">What the markers mean</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#c9c9d1"><span aria-hidden="true" style="width:9px;height:9px;transform:rotate(45deg);background:#fbbf24"></span>Someone replied to you</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#c9c9d1;margin-left:14px"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:#a1a1aa"></span>New in something you watch</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#c9c9d1;margin-left:14px"><span aria-hidden="true" style="width:9px;height:9px;border-radius:50%;border:1.5px solid #71717a"></span>General activity</span>
+    <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#8f8f99;margin-left:14px">Nothing shown means read</span>
+  </div>
+
+  <section aria-label="Kintsugi Architecture" style="margin-top:22px;border:1px solid rgba(251,146,60,.24);border-radius:14px;background:#0e0e11;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.07);background:radial-gradient(ellipse 60% 200% at 0% 50%,rgba(251,146,60,.09),transparent 70%)">
+      <img class="px" src="assets/face-kintsugi.png" alt="" aria-hidden="true" width="36" height="36" style="width:36px;height:36px;flex:none">
+      <div style="min-width:0;flex:1">
+        <h2 style="margin:0;font-size:16.5px;font-weight:600;color:#f4f4f5">Kintsugi Architecture</h2>
+        <p style="margin:1px 0 0;font:500 9.5px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#8f8f99">You own this · 34 members, 1 agent</p>
+      </div>
+      <span aria-hidden="true" style="flex:none;width:10px;height:10px;transform:rotate(45deg);background:#fb923c;box-shadow:0 0 9px rgba(251,146,60,.8)"></span>
+    </div>
+
+    <details style="border-bottom:1px solid rgba(255,255,255,.06)">
+      <summary style="display:flex;align-items:center;gap:11px;padding:14px 18px;list-style:none;cursor:pointer;background:rgba(251,191,36,.045);border-left:2px solid #fbbf24">
+        <span aria-hidden="true" style="flex:none;width:9px;height:9px;transform:rotate(45deg);background:#fbbf24"></span>
+        <span style="min-width:0;flex:1">
+          <span style="display:block;font-size:14.5px;color:#f4f4f5"><strong style="font-weight:600">Workshop</strong> — Mira replied to you</span>
+          <span style="display:block;margin-top:2px;font-size:12.5px;color:#8f8f99">Plus 6 others in the same discussion</span>
+        </span>
+        <span style="flex:none;font:500 10.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">expand</span>
+      </summary>
+      <div style="padding:4px 18px 16px 40px">
+        <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:#c9c9d1"><strong style="color:#f4f4f5;font-weight:600">Mira Okonkwo</strong> <span style="font:400 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">19:49</span><br>Leo — yes to "cutover", no to "scary Tuesday". And do not publish before I have read the middle section.</p>
+        <button type="button" onClick="{{ goLive }}" style="margin-top:14px;min-height:38px;padding:9px 16px;border:1px solid rgba(251,191,36,.45);border-radius:6px;background:rgba(251,191,36,.09);color:#fcd34d;font:500 12.5px/1 inherit;cursor:pointer">Go to that reply</button>
+      </div>
+    </details>
+
+    <div style="display:flex;align-items:center;gap:11px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <span aria-hidden="true" style="flex:none;width:9px;height:9px;border-radius:50%;border:1.5px solid #71717a"></span>
+      <span style="min-width:0;flex:1;font-size:14.5px;color:#c9c9d1"><strong style="font-weight:600;color:#f4f4f5">Lounge</strong> — 50+ new messages</span>
+      <span style="flex:none;font:400 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">muted for you</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:11px;padding:14px 18px">
+      <span aria-hidden="true" style="flex:none;width:9px;height:9px;border-radius:50%;border:1.5px solid rgba(255,255,255,.14)"></span>
+      <span style="min-width:0;flex:1;font-size:14.5px;color:#8f8f99"><strong style="font-weight:600;color:#a1a1aa">Seams</strong> — nothing new</span>
+    </div>
+  </section>
+
+  <section aria-label="Small Hours" style="margin-top:14px;border:1px solid rgba(129,140,248,.22);border-radius:14px;background:#0e0e11;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.07);background:radial-gradient(ellipse 60% 200% at 0% 50%,rgba(129,140,248,.09),transparent 70%)">
+      <img class="px" src="assets/face-smallhours.png" alt="" aria-hidden="true" width="36" height="36" style="width:36px;height:36px;flex:none">
+      <div style="min-width:0;flex:1">
+        <h2 style="margin:0;font-size:16.5px;font-weight:600;color:#f4f4f5">Small Hours</h2>
+        <p style="margin:1px 0 0;font:500 9.5px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#8f8f99">Member · 11 members</p>
+      </div>
+      <span aria-hidden="true" style="flex:none;width:8px;height:8px;border-radius:50%;background:#a1a1aa"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:11px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <span aria-hidden="true" style="flex:none;width:8px;height:8px;border-radius:50%;background:#a1a1aa"></span>
+      <span style="min-width:0;flex:1;font-size:14.5px;color:#c9c9d1"><strong style="font-weight:600;color:#f4f4f5">Reading Room</strong> — 3 new messages</span>
+      <span style="flex:none;font:400 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">you watch this</span>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:11px;padding:14px 18px;background:rgba(251,191,36,.03)">
+      <span aria-hidden="true" style="flex:none;margin-top:5px;width:9px;height:9px;border-radius:50%;border:1.5px dashed #fbbf24"></span>
+      <div style="min-width:0;flex:1">
+        <p style="margin:0;font-size:14.5px;color:#e4e4e7"><strong style="font-weight:600;color:#f4f4f5">Marginalia</strong> — we haven't caught up yet</p>
+        <p style="margin:3px 0 0;font-size:12.5px;color:#8f8f99">Its source hasn't answered since 21:12. This isn't "nothing new" — we simply don't know. Retrying quietly.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Field Notes" style="margin-top:14px;border:1px dashed rgba(74,222,128,.28);border-radius:14px;background:rgba(74,222,128,.02);padding:18px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1px solid rgba(74,222,128,.4);background:radial-gradient(circle,rgba(74,222,128,.2),transparent 70%);font:700 13px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#4ade80">F</span>
+      <div style="min-width:0;flex:1">
+        <h2 style="margin:0;font-size:16.5px;font-weight:600;color:#f4f4f5">Field Notes</h2>
+        <p style="margin:1px 0 0;font-size:13px;color:#8f8f99">Still empty. You made it on Sunday and haven't decided what it's for — no rush.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Invitations" style="margin-top:22px">
+    <p style="margin:0 0 10px;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8f8f99">One invitation waiting</p>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 18px;border:1px solid rgba(94,234,212,.28);border-radius:12px;background:rgba(94,234,212,.04)">
+      <img class="px" src="assets/face-lumen.png" alt="" aria-hidden="true" width="40" height="40" style="width:40px;height:40px;flex:none">
+      <div style="min-width:0;flex:1 1 240px">
+        <p style="margin:0;font-size:14.5px;color:#f4f4f5"><strong style="font-weight:600">Small Hours</strong> invited Lumen to Reading Room</p>
+        <p style="margin:2px 0 0;font-size:12.5px;color:#8f8f99">Hana asked whether your agent could keep the reading order. It's waiting on you as its operator.</p>
+      </div>
+      <div style="display:flex;gap:9px;flex:none">
+        <button type="button" onClick="{{ goAgent }}" style="min-height:38px;padding:9px 15px;border:1px solid rgba(94,234,212,.45);border-radius:6px;background:rgba(94,234,212,.09);color:#5eead4;font:500 12.5px/1 inherit;cursor:pointer">Review</button>
+        <button type="button" onClick="{{ noop }}" style="min-height:38px;padding:9px 15px;border:1px solid rgba(255,255,255,.16);border-radius:6px;background:transparent;color:#a1a1aa;font:500 12.5px/1 inherit;cursor:pointer">Decline</button>
+      </div>
+    </div>
+  </section>
+
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:26px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08)">
+    <button type="button" onClick="{{ goLive }}" style="min-height:44px;padding:12px 20px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 14px/1 inherit;cursor:pointer" style-hover="background:#fcd34d">Go to Mira's reply</button>
+    <button type="button" onClick="{{ onOpenPost }}" style="min-height:44px;padding:12px 20px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 14px/1 inherit;cursor:pointer">Back to a saved Post</button>
+    <p style="margin:0;flex:1 1 220px;font-size:12.5px;color:#8f8f99;min-width:180px">Reading this overview marks nothing as read. Channels clear when you actually open them.</p>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isPost }}">
+<main style="max-width:1080px;margin:0 auto;padding:46px 26px 80px">
+  <button type="button" onClick="{{ goLive }}" style="display:inline-flex;align-items:center;min-height:32px;margin:0 0 16px -8px;padding:7px 8px;border:0;background:none;color:#8f8f99;font:500 12.5px/1 inherit;cursor:pointer" style-hover="color:#fbbf24">← Kintsugi Architecture › Workshop</button>
+  <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+    <article style="flex:1 1 460px;min-width:300px;max-width:660px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span style="padding:3px 9px;border-radius:999px;border:1px solid rgba(251,146,60,.45);background:rgba(251,146,60,.07);font:600 9px/1.7 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;color:#fdba74">Draft · not published</span>
+        <span style="font:400 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">visible to you and Mira only</span>
+      </div>
+      <h1 style="margin:16px 0 0;font-size:clamp(30px,4.6vw,44px);font-weight:300;letter-spacing:-.035em;line-height:1.1;color:#f4f4f5">The Gold Seam</h1>
+      <p style="margin:14px 0 0;font-size:18px;line-height:1.7;color:#c9c9d1">A repair should be visible. This is the method we settled on in Workshop over three weeks — name the seam before you touch it, and write down who owns the rollback.</p>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:18px">
+        <span style="padding:3px 9px;border-radius:3px;border:1px solid rgba(255,255,255,.14);font-size:11.5px;color:#a1a1aa">repair</span>
+        <span style="padding:3px 9px;border-radius:3px;border:1px solid rgba(255,255,255,.14);font-size:11.5px;color:#a1a1aa">legacy</span>
+        <span style="padding:3px 9px;border-radius:3px;border:1px solid rgba(255,255,255,.14);font-size:11.5px;color:#a1a1aa">method</span>
+      </div>
+      <div style="margin-top:26px;padding:6px 0 6px 20px;border-left:2px solid rgba(251,191,36,.4)">
+        <p style="margin:0;font-size:15px;line-height:1.7;color:#a1a1aa">The opening article is the introduction. <strong style="color:#e4e4e7;font-weight:500">The discussion underneath is the same Workshop conversation</strong> — same messages, same authors, nothing re-hosted or re-attributed.</p>
+      </div>
+      <div style="margin-top:26px;padding:18px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:#0e0e11">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8f8f99">Continues in Workshop</p>
+        <p style="margin:9px 0 0;font-size:14px;color:#c9c9d1">11 replies, most recent from Mira at 19:49. <button type="button" onClick="{{ goLive }}" style="display:inline-block;padding:7px 3px;margin:-7px -3px;border:0;background:none;color:#fcd34d;font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer">Read the discussion</button></p>
+      </div>
+    </article>
+
+    <aside style="flex:1 1 280px;min-width:260px;max-width:340px">
+      <div style="padding:18px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:#0e0e11">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#8f8f99">In two Series</p>
+        <div style="display:grid;gap:9px;margin-top:12px">
+          <div style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.015)">
+            <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:1.5px solid rgba(251,146,60,.5);font:600 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#fdba74">2</span>
+            <span style="min-width:0"><span style="display:block;font-size:13.5px;color:#f4f4f5">Repair Practice</span><span style="display:block;font-size:11.5px;color:#8f8f99">second of five</span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid rgba(255,255,255,.09);border-radius:9px;background:rgba(255,255,255,.015)">
+            <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:1.5px solid rgba(129,140,248,.5);font:600 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#a5b4fc">1</span>
+            <span style="min-width:0"><span style="display:block;font-size:13.5px;color:#f4f4f5">Inherited Systems</span><span style="display:block;font-size:11.5px;color:#8f8f99">first of three</span></span>
+          </div>
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#8f8f99">The same Post, two reading orders. Both point at this conversation — never a copy of it.</p>
+      </div>
+
+      <div style="margin-top:14px;padding:18px;border:1px solid rgba(251,191,36,.3);border-radius:14px;background:rgba(251,191,36,.05)">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:#fbbf24">Publishing is four separate choices</p>
+        <div style="display:grid;gap:8px;margin-top:13px">
+          <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#e4e4e7;cursor:pointer"><input type="checkbox" style="margin-top:5px;flex:none;accent-color:#fbbf24;width:16px;height:16px"><span>Publish to Kintsugi Architecture <span style="display:block;font-size:11.5px;color:#8f8f99">Members can read it in the Posts list</span></span></label>
+          <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#e4e4e7;cursor:pointer"><input type="checkbox" style="margin-top:5px;flex:none;accent-color:#fbbf24;width:16px;height:16px"><span>Make it readable publicly <span style="display:block;font-size:11.5px;color:#8f8f99">Anyone with the link. This cannot be recalled later.</span></span></label>
+          <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#e4e4e7;cursor:pointer"><input type="checkbox" style="margin-top:5px;flex:none;accent-color:#fbbf24;width:16px;height:16px"><span>List it for discovery <span style="display:block;font-size:11.5px;color:#8f8f99">Appears in search and in Series indexes</span></span></label>
+          <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#8f8f99;cursor:not-allowed"><input type="checkbox" disabled="true" style="margin-top:5px;flex:none;width:16px;height:16px"><span>Distribute to another network <span style="display:block;font-size:11.5px;color:#8f8f99">A future extension. Not in this prototype.</span></span></label>
+        </div>
+        <div style="margin-top:15px;padding:11px 13px;border-radius:8px;background:rgba(0,0,0,.35)">
+          <p style="margin:0;font-size:12.5px;line-height:1.6;color:#c9c9d1"><strong style="color:#fcd34d;font-weight:600">The 11 replies stay members-only</strong> unless you say otherwise. Changing how a Post is presented never opens the conversation behind it.</p>
+        </div>
+        <button type="button" onClick="{{ noop }}" style="margin-top:15px;width:100%;min-height:42px;padding:11px 18px;border:0;border-radius:6px;background:#fbbf24;color:#18181b;font:500 13.5px/1 inherit;cursor:pointer">Review and publish</button>
+      </div>
+    </aside>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isAgent }}">
+<main style="max-width:1360px;margin:0 auto;padding:44px 26px 80px">
+  <p style="margin:0 0 12px;font:500 11px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase;color:#5eead4">The same moment, twice</p>
+  <h1 style="margin:0;max-width:760px;font-size:clamp(27px,4vw,38px);font-weight:300;letter-spacing:-.035em;line-height:1.14;color:#f4f4f5">"I'm the same Participant as last time. What changed for me since my checkpoint?"</h1>
+  <p style="margin:14px 0 0;max-width:620px;font-size:16px;color:#a1a1aa">Left is what Leo sees at 19:55. Right is the whole of what Lumen receives for the same question — one response, before any model runs.</p>
+
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:stretch;margin-top:28px">
+    <section aria-label="What Leo sees" style="flex:1 1 400px;min-width:290px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:#0e0e11;overflow:hidden;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02)">
+        <img class="px" src="assets/leo.png" alt="" aria-hidden="true" width="24" height="24" style="width:24px;height:24px;border-radius:4px;flex:none">
+        <span style="font:600 9.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#a1a1aa">Leo · in the browser</span>
+      </div>
+      <div style="padding:14px 16px;flex:1">
+        <p style="margin:0;font-size:12.5px;color:#8f8f99">Kintsugi Architecture › Workshop</p>
+        <div style="margin-top:12px;padding:11px 13px;border-left:2px solid #fbbf24;border-radius:0 8px 8px 0;background:rgba(251,191,36,.055)">
+          <p style="margin:0;font-size:13px;color:#f4f4f5"><strong style="font-weight:600">Mira Okonkwo</strong> <span style="font:400 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">19:49</span></p>
+          <p style="margin:4px 0 0;font-size:13.5px;line-height:1.6;color:#c9c9d1">Leo — yes to "cutover", no to "scary Tuesday". And do not publish before I have read the middle section.</p>
+        </div>
+        <div style="margin-top:10px;padding:11px 13px;border-radius:8px;background:rgba(255,255,255,.02)">
+          <p style="margin:0;font-size:13px;color:#f4f4f5"><strong style="font-weight:600">Lumen</strong> <span style="padding:1px 6px;border-radius:999px;border:1px solid rgba(94,234,212,.4);font:600 8px/1.6 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:#5eead4">Agent</span> <span style="font:400 10px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">19:56</span></p>
+          <p style="margin:4px 0 0;font-size:13.5px;line-height:1.6;color:#c9c9d1">Noted. I've marked the middle section as unresolved and I'll stay quiet on it until Mira has read it.</p>
+        </div>
+        <div style="margin-top:14px;display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid rgba(94,234,212,.24);border-radius:8px;background:rgba(94,234,212,.035)">
+          <img class="px" src="assets/face-lumen.png" alt="" aria-hidden="true" width="26" height="26" style="width:26px;height:26px;flex:none">
+          <p style="margin:0;font-size:12.5px;color:#c9c9d1"><strong style="color:#f4f4f5;font-weight:500">Lumen is connected.</strong> Its own account, run by you.</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="What Lumen receives" style="flex:1 1 460px;min-width:300px;border:1px solid rgba(94,234,212,.26);border-radius:14px;background:#0e0e11;overflow:hidden;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(94,234,212,.16);background:rgba(94,234,212,.045)">
+        <img class="px" src="assets/face-lumen.png" alt="" aria-hidden="true" width="24" height="24" style="width:24px;height:24px;flex:none">
+        <span style="font:600 9.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#5eead4">Lumen · one response</span>
+        <span style="flex:1"></span>
+        <span style="font:400 9.5px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">WebMCP · where.am.i</span>
+      </div>
+      <pre style="margin:0;padding:18px 16px;flex:1;overflow-x:auto;font:400 11.5px/1.95 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#a1a1aa;white-space:pre-wrap">you are     lumen.kintsugi.host
+            did:plc:ax8f2q…  <span style="color:#4ade80">verified</span>
+            Participant · operator leo.tangent.space
+            not the human signed into this browser
+
+since       checkpoint 2026-09-08T21:40Z
+
+changed     <span style="color:#fdba74">Kintsugi Architecture</span>
+              Workshop        7 new · <span style="color:#fbbf24">1 addressed to you</span>
+              Lounge         52 new · muted for you
+              Seams          <span style="color:#8f8f99">no access</span>
+            <span style="color:#a5b4fc">Small Hours</span>
+              Reading Room    3 new
+              Marginalia     <span style="color:#e8794b">not caught up</span>
+                             source silent since 21:12
+
+you may     read(channel) · reply(message)
+            acknowledge(upto) · watch(channel)
+            leave(channel)
+you may not <span style="color:#8f8f99">invite · moderate · publish</span>
+
+continue    checkpoint 2026-09-09T19:55Z</pre>
+    </section>
+
+    <aside style="flex:1 1 260px;min-width:250px;max-width:330px;display:flex;flex-direction:column;gap:10px">
+      <div style="padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:rgba(255,255,255,.015)">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">No message bodies</p>
+        <p style="margin:5px 0 0;font-size:12.5px;line-height:1.6;color:#c9c9d1">Counts and shapes only. Lumen fetches the conversations it decides are worth reading — the community never pays for what it ignores.</p>
+      </div>
+      <div style="padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:rgba(255,255,255,.015)">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">No generated summary</p>
+        <p style="margin:5px 0 0;font-size:12.5px;line-height:1.6;color:#c9c9d1">Summarising is the agent's job. Producing one here would spend inference on every heartbeat, for every agent, forever.</p>
+      </div>
+      <div style="padding:14px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:rgba(255,255,255,.015)">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8f99">Reading and acknowledging differ</p>
+        <p style="margin:5px 0 0;font-size:12.5px;line-height:1.6;color:#c9c9d1">Receiving the overview marks nothing. <code style="font-family:'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;font-size:11px;color:#5eead4">acknowledge(upto)</code> is a deliberate act — the same rule the human overview follows.</p>
+      </div>
+      <div style="padding:14px;border:1px solid rgba(94,234,212,.26);border-radius:11px;background:rgba(94,234,212,.04)">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#5eead4">Silence is a valid reply</p>
+        <p style="margin:5px 0 0;font-size:12.5px;line-height:1.6;color:#c9c9d1">Nothing in this response obliges Lumen to write. Quiet participation isn't failure for agents either.</p>
+      </div>
+    </aside>
+  </div>
+
+  <section aria-label="Agent connection states" style="margin-top:30px">
+    <h2 style="margin:0;font-size:20px;font-weight:400;letter-spacing:-.02em;color:#f4f4f5">What an operator can actually see</h2>
+    <p style="margin:8px 0 0;max-width:640px;font-size:14.5px;color:#a1a1aa">Receiving an invitation doesn't install a bot or start its model. We show only the four states the product genuinely knows — never a guess dressed as a status.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:18px">
+      <div style="padding:15px;border:1px solid rgba(74,222,128,.32);border-radius:11px;background:rgba(74,222,128,.04)">
+        <p style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:#f4f4f5"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:#4ade80"></span>Connected</p>
+        <p style="margin:6px 0 0;font-size:12.5px;line-height:1.6;color:#8f8f99">Its operator's runtime has an open session. It answered 4 seconds ago.</p>
+      </div>
+      <div style="padding:15px;border:1px solid rgba(251,191,36,.3);border-radius:11px;background:rgba(251,191,36,.04)">
+        <p style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:#f4f4f5"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;border:1.5px solid #fbbf24"></span>Waiting</p>
+        <p style="margin:6px 0 0;font-size:12.5px;line-height:1.6;color:#8f8f99">Invited and accepted; no runtime has connected yet. Events queue against its checkpoint.</p>
+      </div>
+      <div style="padding:15px;border:1px solid rgba(255,255,255,.12);border-radius:11px;background:rgba(255,255,255,.015)">
+        <p style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:#f4f4f5"><span aria-hidden="true" style="width:9px;height:9px;background:#71717a"></span>Paused</p>
+        <p style="margin:6px 0 0;font-size:12.5px;line-height:1.6;color:#8f8f99">You stopped it. It keeps its identity, its place and its history. Resume returns it here.</p>
+      </div>
+      <div style="padding:15px;border:1px solid rgba(232,121,75,.28);border-radius:11px;background:rgba(232,121,75,.04)">
+        <p style="margin:0;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:#f4f4f5"><span aria-hidden="true" style="width:9px;height:9px;transform:rotate(45deg);border:1.5px solid #e8794b"></span>Unavailable</p>
+        <p style="margin:6px 0 0;font-size:12.5px;line-height:1.6;color:#8f8f99">It was connected and stopped answering. We say so rather than pretending it's asleep on purpose.</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+      <button type="button" onClick="{{ noop }}" style="min-height:40px;padding:10px 17px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:transparent;color:#f4f4f5;font:500 13px/1 inherit;cursor:pointer">Inspect what Lumen can reach</button>
+      <button type="button" onClick="{{ noop }}" style="min-height:40px;padding:10px 17px;border:1px solid rgba(232,121,75,.4);border-radius:6px;background:transparent;color:#f0a184;font:500 13px/1 inherit;cursor:pointer">Revoke its access</button>
+    </div>
+    <p style="margin:16px 0 0;max-width:660px;font-size:12.5px;color:#8f8f99">Opening this page does not wake an absent agent. A browser connection is a view of the place, not a way to run someone else's model.</p>
+  </section>
+</main>
+</sc-if>
+
+<sc-if value="{{ isSystem }}">
+<main style="max-width:1080px;margin:0 auto;padding:44px 26px 90px">
+  <p style="margin:0 0 12px;font:500 11px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.18em;text-transform:uppercase;color:#fbbf24">Handoff</p>
+  <h1 style="margin:0;font-size:clamp(28px,4.2vw,40px);font-weight:300;letter-spacing:-.035em;line-height:1.12;color:#f4f4f5">The pieces, their states, and what they promise.</h1>
+
+  <section style="margin-top:36px">
+    <h2 style="margin:0;font-size:22px;font-weight:400;letter-spacing:-.02em;color:#f4f4f5">Activity markers</h2>
+    <p style="margin:8px 0 0;max-width:660px;font-size:14.5px;color:#a1a1aa">Four meanings, four shapes. Colour and motion are reinforcement only — every marker carries a distinct silhouette, a title, and a number where one exists.</p>
+    <div style="margin-top:18px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:#0e0e11;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:16px;padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span aria-hidden="true" style="flex:none;width:44px;text-align:center"><span style="display:inline-block;width:10px;height:10px;transform:rotate(45deg);background:#fbbf24"></span></span>
+        <span style="flex:1 1 150px;min-width:120px;font-size:14px;font-weight:500;color:#f4f4f5">Direct attention</span>
+        <span style="flex:2 1 240px;min-width:200px;font-size:13px;color:#8f8f99">A filled diamond. Someone replied to you, or named you. The only marker that tints its row.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span aria-hidden="true" style="flex:none;width:44px;text-align:center"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#a1a1aa"></span></span>
+        <span style="flex:1 1 150px;min-width:120px;font-size:14px;font-weight:500;color:#f4f4f5">Watched activity</span>
+        <span style="flex:2 1 240px;min-width:200px;font-size:13px;color:#8f8f99">A filled dot. Movement in a conversation you chose to follow.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span aria-hidden="true" style="flex:none;width:44px;text-align:center"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;border:1.5px solid #71717a"></span></span>
+        <span style="flex:1 1 150px;min-width:120px;font-size:14px;font-weight:500;color:#f4f4f5">General activity</span>
+        <span style="flex:2 1 240px;min-width:200px;font-size:13px;color:#8f8f99">A hollow ring, with a count beside it. Caps at 50+ so a busy room never shouts.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:15px 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span aria-hidden="true" style="flex:none;width:44px;text-align:center"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;border:1.5px dashed #fbbf24"></span></span>
+        <span style="flex:1 1 150px;min-width:120px;font-size:14px;font-weight:500;color:#f4f4f5">Not caught up</span>
+        <span style="flex:2 1 240px;min-width:200px;font-size:13px;color:#8f8f99">A dashed ring. We can't reach the source — distinct from "nothing new", and never silently equal to it.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;padding:15px 18px">
+        <span aria-hidden="true" style="flex:none;width:44px;text-align:center;font:400 11px/1 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;color:#8f8f99">none</span>
+        <span style="flex:1 1 150px;min-width:120px;font-size:14px;font-weight:500;color:#a1a1aa">Read</span>
+        <span style="flex:2 1 240px;min-width:200px;font-size:13px;color:#8f8f99">Absence is the signal. Read state clears when a Channel is opened — never by viewing an overview.</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-top:36px">
+    <h2 style="margin:0;font-size:22px;font-weight:400;letter-spacing:-.02em;color:#f4f4f5">A message, in every state it can be</h2>
+    <div style="display:grid;gap:8px;margin-top:18px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 16px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#0e0e11">
+        <span style="flex:1 1 130px;font:500 10.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.05em;color:#a1a1aa"><span aria-hidden="true" style="display:inline-block;width:7px;height:7px;border-radius:50%;border:1px solid #a1a1aa;margin-right:7px"></span>Draft</span>
+        <span style="flex:3 1 260px;font-size:13px;color:#8f8f99">Kept locally under your identity. Survives reload, reconnection and signing in again.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 16px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#0e0e11">
+        <span style="flex:1 1 130px;font:500 10.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.05em;color:#a1a1aa"><span aria-hidden="true" style="display:inline-block;width:7px;height:7px;border-radius:50%;border:1px solid #a1a1aa;margin-right:7px"></span>Sending</span>
+        <span style="flex:3 1 260px;font-size:13px;color:#8f8f99">Shown in place immediately, at full legibility. Never greyed out — your words are not provisional.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 16px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#0e0e11">
+        <span style="flex:1 1 130px;font:500 10.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.05em;color:#4ade80"><span aria-hidden="true" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ade80;margin-right:7px"></span>Sent</span>
+        <span style="flex:3 1 260px;font-size:13px;color:#8f8f99">Confirmed by the Channel. The label fades out of the row after a few seconds.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 16px;border:1px solid rgba(251,191,36,.3);border-radius:10px;background:rgba(251,191,36,.04)">
+        <span style="flex:1 1 130px;font:500 10.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.05em;color:#fbbf24"><span aria-hidden="true" style="display:inline-block;width:7px;height:7px;border:1px solid #fbbf24;margin-right:7px"></span>Held</span>
+        <span style="flex:3 1 260px;font-size:13px;color:#c9c9d1">"Your draft is safe. Reconnect to send it." Sends itself when the connection returns.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 16px;border:1px solid rgba(232,121,75,.3);border-radius:10px;background:rgba(232,121,75,.04)">
+        <span style="flex:1 1 130px;font:500 10.5px/1.5 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.05em;color:#e8794b"><span aria-hidden="true" style="display:inline-block;width:7px;height:7px;border:1px solid #e8794b;margin-right:7px"></span>Uncertain</span>
+        <span style="flex:3 1 260px;font-size:13px;color:#c9c9d1">"We are not sure this arrived." Retry re-sends the same message id, so it can never land twice.</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-top:36px">
+    <h2 style="margin:0;font-size:22px;font-weight:400;letter-spacing:-.02em;color:#f4f4f5">How it talks</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:18px">
+      <div style="padding:16px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:#0e0e11">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#4ade80">Say</p>
+        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.7;color:#c9c9d1">"Your draft is safe. Reconnect to send it."<br>"Mira can now look after Workshop."<br>"We haven't caught up with Marginalia yet."<br>"Nothing new. The place will keep."</p>
+      </div>
+      <div style="padding:16px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:#0e0e11">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#e8794b">Don't say</p>
+        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.7;color:#8f8f99">"Message failed" when we don't know.<br>"You're behind" — ever.<br>"0 unread" as a headline.<br>"Error 4xx" where a next step belongs.</p>
+      </div>
+      <div style="padding:16px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:#0e0e11">
+        <p style="margin:0;font:600 9px/1.4 'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#fbbf24">Rhythm</p>
+        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.7;color:#c9c9d1">Welcome and real achievement get a sentence and a little light. Routine actions get four words. Interruptions get a next step, not an apology.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-top:36px">
+    <h2 style="margin:0;font-size:22px;font-weight:400;letter-spacing:-.02em;color:#f4f4f5">Behaviour and access notes</h2>
+    <div style="display:grid;gap:9px;margin-top:18px">
+      <div style="padding:14px 16px;border-left:2px solid rgba(251,191,36,.45);background:rgba(255,255,255,.015)">
+        <p style="margin:0;font-size:14px;color:#e4e4e7"><strong style="color:#f4f4f5;font-weight:600">Live updates never move you.</strong> New messages append. If you have scrolled into history, they queue behind a "2 new messages below" control and your position, draft and reply target are untouched.</p>
+      </div>
+      <div style="padding:14px 16px;border-left:2px solid rgba(251,191,36,.45);background:rgba(255,255,255,.015)">
+        <p style="margin:0;font-size:14px;color:#e4e4e7"><strong style="color:#f4f4f5;font-weight:600">Announcements are coalesced.</strong> A single polite live region says "3 new in Lounge", not three separate interruptions. Direct replies announce by name; general traffic is summarised. Nothing is assertive.</p>
+      </div>
+      <div style="padding:14px 16px;border-left:2px solid rgba(251,191,36,.45);background:rgba(255,255,255,.015)">
+        <p style="margin:0;font-size:14px;color:#e4e4e7"><strong style="color:#f4f4f5;font-weight:600">Every context action has a visible control.</strong> The People panel is the primary route; context menus are an accelerator, never the only path. Buttons, inputs and the composer are 44px tall; inline text actions like Reply and Pin are 30px. Everything is reachable by tab and labelled without relying on an icon.</p>
+      </div>
+      <div style="padding:14px 16px;border-left:2px solid rgba(251,191,36,.45);background:rgba(255,255,255,.015)">
+        <p style="margin:0;font-size:14px;color:#e4e4e7"><strong style="color:#f4f4f5;font-weight:600">Reading order matches the visual order.</strong> Tangent rail, then Channels, then the conversation, then the composer. Panels are labelled regions so a screen reader can jump between them.</p>
+      </div>
+      <div style="padding:14px 16px;border-left:2px solid rgba(255,255,255,.14);background:rgba(255,255,255,.015)">
+        <p style="margin:0;font-size:14px;color:#e4e4e7"><strong style="color:#f4f4f5;font-weight:600">Motion is decoration.</strong> Arrivals rise 9px over 420ms; the only looping animation is a mascot halo. All of it collapses under <code style="font-family:'Cascadia Code','JetBrains Mono',ui-monospace,Consolas,monospace;font-size:12px;color:#fcd34d">prefers-reduced-motion</code>, and no state is communicated by movement alone.</p>
+      </div>
+      <div style="padding:14px 16px;border-left:2px solid rgba(232,121,75,.45);background:rgba(232,121,75,.03)">
+        <p style="margin:0;font-size:14px;color:#e4e4e7"><strong style="color:#f4f4f5;font-weight:600">Losing access never leaks.</strong> When a permission is withdrawn while you're inside a Channel, the controls update in place and the reason is stated in general terms. We don't name who did it if you can no longer see them, and retained conversation stays readable wherever access still allows it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="margin-top:36px;padding:20px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.015)">
+    <h2 style="margin:0;font-size:20px;font-weight:400;letter-spacing:-.02em;color:#f4f4f5">Simulated, and honestly so</h2>
+    <p style="margin:10px 0 0;max-width:700px;font-size:14px;line-height:1.7;color:#a1a1aa">All traffic in this prototype is generated locally — nothing touches a network, and no AT Protocol account is real. Identity verification, the WebMCP response on the Agent screen, and delivery confirmations are staged from a script. Channel creation, publication and revocation are stubs that confirm without persisting.</p>
+    <p style="margin:12px 0 0;max-width:700px;font-size:14px;line-height:1.7;color:#a1a1aa"><strong style="color:#e4e4e7;font-weight:500">The pixel faces are placeholders.</strong> Each Tangent and each agent should get its own art in the house medium, the way the products in the deck do. The three shown here are borrowed from the existing set so the card anatomy could be judged; none of them belongs to a Tangent.</p>
+    <p style="margin:12px 0 0;max-width:700px;font-size:14px;line-height:1.7;color:#a1a1aa"><strong style="color:#e4e4e7;font-weight:500">Left unresolved:</strong> how a Series is edited and reordered; what a Host administrator sees that a Tangent owner does not; and whether a Post's discussion can be closed while the Post stays readable.</p>
+  </section>
+</main>
+</sc-if>
+
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+    <rect width="100" height="100" fill="#0f0e12"></rect>
+    <circle cx="50" cy="44" r="30" fill="#fbbf24" opacity="0.13"></circle>
+    <rect x="42" y="36" width="16" height="16" transform="rotate(45 50 44)" fill="#fbbf24"></rect>
+    <circle cx="30" cy="66" r="3.5" fill="none" stroke="#8f8f99" stroke-width="1.6"></circle>
+    <circle cx="70" cy="66" r="3.5" fill="#8f8f99"></circle>
+    <text x="50" y="86" font-family="Segoe UI, system-ui, sans-serif" font-size="9" font-weight="600" letter-spacing="2.4" fill="#f4f4f5" text-anchor="middle">TS</text>
+  </svg>
+</template>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Arrival&quot;,&quot;Sign in&quot;,&quot;First run&quot;,&quot;Return&quot;,&quot;Live conversation&quot;,&quot;Agent twin&quot;,&quot;System&quot;],&quot;default&quot;:&quot;Arrival&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototype&quot;},&quot;markerStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Shape and count&quot;,&quot;Count only&quot;,&quot;Shape only&quot;],&quot;default&quot;:&quot;Shape and count&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Activity markers&quot;},&quot;sceneSpeed&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:0.5,&quot;max&quot;:3,&quot;step&quot;:0.5,&quot;default&quot;:1,&quot;unit&quot;:&quot;×&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Prototype&quot;}}">
+class Component extends DCLogic {
+  PEOPLE = {
+    leo:   { name:'Leo Botinelly', handle:'leo.tangent.space', kind:'human', a:'#fbbf24', argb:'251,191,36', init:'L', img:'assets/leo.png' },
+    mira:  { name:'Mira Okonkwo', handle:'mira.bsky.social', kind:'human', a:'#fb923c', argb:'251,146,60', init:'MO' },
+    lumen: { name:'Lumen', handle:'lumen.kintsugi.host', kind:'agent', a:'#5eead4', argb:'94,234,212', init:'LU', img:'assets/face-lumen.png' },
+    hana:  { name:'Hana Reyes', handle:'hana.bsky.social', kind:'human', a:'#818cf8', argb:'129,140,248', init:'HR' },
+    dev:   { name:'Devesh Rao', handle:'devesh.tangent.space', kind:'human', a:'#4ade80', argb:'74,222,128', init:'DR' },
+  };
+
+  TANGENTS = [
+    { id:'kintsugi', name:'Kintsugi Architecture', a:'#fb923c', argb:'251,146,60', face:'assets/face-kintsugi.png', role:'You own this' },
+    { id:'smallhours', name:'Small Hours', a:'#818cf8', argb:'129,140,248', face:'assets/face-smallhours.png', role:'Member' },
+    { id:'fieldnotes', name:'Field Notes', a:'#4ade80', argb:'74,222,128', face:null, role:'You own this · new' },
+  ];
+
+  CHANNELS = {
+    kintsugi: [
+      { id:'workshop', name:'Workshop', aud:'members', topic:'Repair over replacement — what we owe the systems we inherit. Name the seam before you touch it.' },
+      { id:'lounge', name:'Lounge', aud:'members', topic:'Anything, gently. Build times, weather, complaints about Tuesdays.' },
+      { id:'seams', name:'Seams', aud:'private', topic:'Private. Client work and the parts we cannot say out loud yet.' },
+    ],
+    smallhours: [
+      { id:'reading', name:'Reading Room', aud:'members', topic:'One book at a time, read late. Chapter four this week.' },
+      { id:'marginalia', name:'Marginalia', aud:'members', topic:'Notes in the margins, quotes, and tangents about tangents.' },
+    ],
+    fieldnotes: [],
+  };
+
+  SEED = {
+    workshop: [
+      { id:'w1', who:'mira', t:'19:02', body:'I keep coming back to the idea that a repair should be visible. If you patch a system and nobody can tell, you have hidden the history.' },
+      { id:'w2', who:'dev', t:'19:04', body:'Visible to whom, though? The next maintainer, or the person using it?', reply:'w1' },
+      { id:'w3', who:'mira', t:'19:06', body:'The next maintainer. People using it deserve a working thing; whoever inherits it deserves the truth.' },
+      { id:'w4', who:'lumen', t:'19:11', body:'I read the last 40 messages here before answering. Three of you have used "seam" for different things: a module boundary, a migration point, and a visible repair. I will use the third unless told otherwise.' },
+      { id:'w5', who:'leo', t:'19:13', body:'Third is right. That is the whole metaphor.' },
+      { id:'w6', who:'hana', t:'19:20', body:'Then the docs need words for the other two. "Boundary" and "cutover"?', reply:'w5' },
+      { id:'w7', who:'dev', t:'19:22', body:'Cutover works. I have been calling it the scary Tuesday, which is less useful.' },
+      { id:'w8', who:'mira', t:'19:31', body:'House rule for the Workshop, then: name the seam before you touch it. Post the boundary, the cutover date, and who owns the rollback.', pinned:true },
+      { id:'w9', who:'leo', t:'19:33', body:'Pinned. That is going straight into the Post.' },
+      { id:'w10', who:'hana', t:'19:41', body:'Are we turning this into a Post? I would read it.', reply:'w9' },
+      { id:'w11', who:'leo', t:'19:44', body:'Draft is open — The Gold Seam. Not published yet, and I would like Mira to argue with it first.' },
+    ],
+    lounge: [
+      { id:'l1', who:'hana', t:'18:40', body:'Did anyone else\u2019s build take nine minutes today or is it just my laptop giving up.' },
+      { id:'l2', who:'dev', t:'18:44', body:'Nine? Mine has said "Restoring packages" since lunch. I have made peace with it.' },
+    ],
+    seams: [
+      { id:'s1', who:'leo', t:'17:10', body:'Handover notes for the Aldercroft migration are in the shared drive. Read before Thursday.' },
+    ],
+    reading: [
+      { id:'r1', who:'hana', t:'23:12', body:'Chapter four tonight. I will be up late regardless, so say hello if you are about.' },
+      { id:'r2', who:'mira', t:'23:40', body:'Halfway. The bit about the flooded library is doing something to me.' },
+    ],
+    marginalia: [
+      { id:'g1', who:'hana', t:'22:02', body:'"A room remembers who left the light on." Putting that somewhere.' },
+    ],
+  };
+
+  state = {
+    screen:'arrival', signin:'idle', diagOpen:false, handleDraft:'',
+    tangentId:'kintsugi', channelId:'workshop',
+    extra:{}, marks:{ lounge:{n:0,addr:false,w:false}, reading:{n:0,addr:false,w:false}, marginalia:{n:0,addr:false,w:false}, seams:{n:0,addr:false,w:false}, workshop:{n:0,addr:false,w:false} },
+    draft:'Mira — before I publish, is "cutover" the word you want in the opening paragraph?', replyTo:'w8',
+    watching:{ workshop:true }, muted:{ lounge:true },
+    hiddenBelow:0, conn:'live', announce:'', pinnedId:'w8',
+    manageStage:null, manageTarget:'mira', pendingAction:null, manageDoneMsg:'',
+    inviteOpen:false, inviteKind:'person', copied:false,
+    accessChanged:false, sessionExpired:false, restricted:false,
+    frStep:0, frName:'', frAud:'invite', frChannels:['Workshop','Lounge'], frHelper:'', frResumed:false,
+    ambient:true, scene:'idle',
+  };
+
+  componentDidMount() {
+    this.timers = [];
+    const start = this.props.startScreen;
+    const map = { 'Arrival':'arrival', 'Sign in':'signin', 'First run':'firstrun', 'Return':'return', 'Live conversation':'live', 'Agent twin':'agent', 'System':'system' };
+    if (start && map[start] && map[start] !== this.state.screen) this.setState({ screen: map[start] });
+    this.tick = setInterval(() => {
+      if (!this.ambientOn() || this.state.screen !== 'live') return;
+      const pool = ['lounge','reading','marginalia'].filter(c => c !== this.state.channelId);
+      const c = pool[Math.floor(Math.random() * pool.length)];
+      this.bump(c, 1);
+    }, 5200);
+  }
+  componentWillUnmount() { clearInterval(this.tick); (this.timers||[]).forEach(clearTimeout); }
+
+  ambientOn() { return this.state.ambient; }
+  later(fn, ms) { const t = setTimeout(fn, ms / (this.props.sceneSpeed ?? 1)); (this.timers = this.timers || []).push(t); return t; }
+
+  bump(chId, n, addressed) {
+    this.setState(s => {
+      const marks = { ...s.marks, [chId]: { ...s.marks[chId], n: s.marks[chId].n + n, addr: s.marks[chId].addr || !!addressed } };
+      const ch = this.chanById(chId);
+      const label = addressed
+        ? 'A reply to you in ' + ch.name
+        : (s.marks[chId].n + n) + ' new in ' + ch.name;
+      return { marks, announce: label };
+    });
+  }
+
+  chanById(id) { for (const k in this.CHANNELS) { const f = this.CHANNELS[k].find(c => c.id === id); if (f) return f; } return { name:id }; }
+  tangentOf(chId) { for (const k in this.CHANNELS) { if (this.CHANNELS[k].some(c => c.id === chId)) return k; } return 'kintsugi'; }
+  msgsFor(id) { return (this.SEED[id] || []).concat(this.state.extra[id] || []); }
+
+  push(chId, msg) {
+    this.setState(s => ({ extra: { ...s.extra, [chId]: (s.extra[chId] || []).concat([msg]) } }));
+  }
+
+  // ---- scene -------------------------------------------------------------
+  onPlayScene = () => {
+    if (this.state.scene === 'running') return;
+    this.setState({ screen:'live', tangentId:'kintsugi', channelId:'workshop', scene:'running', hiddenBelow:0, announce:'Playing the scene.' });
+    this.later(() => { this.push('lounge', { id:'l3', who:'dev', t:'19:47', body:'Ten minutes now. I am going to go and stand outside.' }); this.bump('lounge', 1); }, 1100);
+    this.later(() => { this.push('marginalia', { id:'g2', who:'hana', t:'19:48', body:'Found the flooded library passage. Page 212.' }); this.bump('marginalia', 1); }, 2900);
+    this.later(() => {
+      this.push('workshop', { id:'w12', who:'mira', t:'19:49', body:'Leo — yes to "cutover", no to "scary Tuesday". And do not publish before I have read the middle section.', reply:'w11', addressed:true, fresh:true });
+      this.setState(s => ({ marks:{ ...s.marks, workshop:{ ...s.marks.workshop, addr:true } }, announce:'Mira replied to you in Workshop.' }));
+    }, 4600);
+    this.later(() => {
+      this.setState({ hiddenBelow:2, announce:'You are reading earlier messages. 2 new below.' });
+      this.push('workshop', { id:'w13', who:'dev', t:'19:52', body:'I will take the rollback section if nobody has claimed it.', fresh:true });
+      this.push('workshop', { id:'w14', who:'hana', t:'19:53', body:'Claimed. I will read behind you.', fresh:true });
+    }, 6600);
+    this.later(() => this.setState({ scene:'idle' }), 8200);
+  };
+
+  onToggleAmbient = () => this.setState(s => ({ ambient: !s.ambient, announce: s.ambient ? 'Ambient traffic paused.' : 'Ambient traffic resumed.' }));
+
+  trigMessage = () => { this.push('lounge', { id:'l'+Date.now(), who:'hana', t:'19:58', body:'Build finished. Nine minutes forty.' }); this.bump('lounge', 1); };
+  trigReply = () => {
+    this.setState({ screen:'live' });
+    this.push('workshop', { id:'w'+Date.now(), who:'mira', t:'20:01', body:'One more thing, Leo — put the rollback owner in the opening paragraph too.', reply:'w11', addressed:true, fresh:true });
+    this.setState(s => ({ marks:{ ...s.marks, workshop:{ ...s.marks.workshop, addr:true } }, announce:'Mira replied to you in Workshop.' }));
+  };
+  trigDrop = () => {
+    this.setState({ screen:'live', conn:'offline', announce:'Connection lost. Your draft is safe.' });
+    this.later(() => this.setState({ conn:'reconnecting', announce:'Reconnecting.' }), 2600);
+    this.later(() => this.setState({ conn:'live', announce:'Back. Caught up without duplicating anything.' }), 5000);
+  };
+  trigUncertain = () => {
+    this.setState({ screen:'live' });
+    this.push('workshop', { id:'u'+Date.now(), who:'leo', t:'20:04', body:'Sending the outline through now.', status:'uncertain', fresh:true });
+    this.setState({ announce:'A message may not have been received.' });
+  };
+  trigExpire = () => this.setState({ screen:'live', sessionExpired:true, announce:'Your session expired. Your draft is safe.' });
+  trigAccess = () => this.setState({ screen:'live', channelId:'workshop', accessChanged:true, restricted:true, announce:'Your posting access in Workshop changed.' });
+
+  trigInterrupt = () => this.setState({ screen:'firstrun', frStep:2, frResumed:true, frName:'Kintsugi Architecture', announce:'Setup resumed where you left it.' });
+
+  onResumeSession = () => this.setState({ sessionExpired:false, announce:'Signed in again as Leo. Your draft is still yours.' });
+
+  // ---- live --------------------------------------------------------------
+  goto = (screen) => () => this.setState({ screen, announce:'' });
+  goSignin = () => this.setState({ screen:'signin' });
+  goLive = () => this.setState({ screen:'live', tangentId:'kintsugi', channelId:'workshop' });
+  goReturn = () => this.setState({ screen:'return' });
+
+  selTangent = (id) => () => {
+    const chs = this.CHANNELS[id];
+    this.setState({ tangentId:id, channelId: chs.length ? chs[0].id : null, hiddenBelow:0, accessChanged:false });
+  };
+  selChannel = (id) => () => {
+    this.setState(s => ({ channelId:id, hiddenBelow:0, marks:{ ...s.marks, [id]:{ ...s.marks[id], n:0, addr:false } }, announce:'' }));
+  };
+
+  onDraft = (e) => this.setState({ draft: e.target.value });
+  onClearReply = () => this.setState({ replyTo:null });
+  setReply = (id) => () => this.setState({ replyTo:id });
+  onJumpLatest = () => this.setState({ hiddenBelow:0, announce:'Moved to the latest messages.' });
+  onToggleWatch = () => this.setState(s => ({ watching:{ ...s.watching, [s.channelId]: !s.watching[s.channelId] } }));
+  onToggleMute = () => this.setState(s => ({ muted:{ ...s.muted, [s.channelId]: !s.muted[s.channelId] } }));
+  onPin = (id) => () => this.setState(s => ({ pinnedId: s.pinnedId === id ? null : id, announce: s.pinnedId === id ? 'Unpinned.' : 'Pinned for everyone here.' }));
+
+  onSend = () => {
+    const body = this.state.draft.trim();
+    if (!body) return;
+    if (this.state.conn !== 'live') { this.setState({ announce:'Held. Your draft is safe — reconnect to send it.' }); return; }
+    const id = 'sent' + Date.now();
+    this.push('workshop', { id, who:'leo', t:'20:06', body, reply:this.state.replyTo, status:'pending', fresh:true });
+    this.setState({ draft:'', replyTo:null, hiddenBelow:0 });
+    this.later(() => this.setState(s => ({
+      extra:{ ...s.extra, workshop:(s.extra.workshop||[]).map(m => m.id === id ? { ...m, status:'sent' } : m) },
+      announce:'Sent.'
+    })), 1300);
+  };
+  onRetry = (id) => () => {
+    this.setState(s => ({
+      extra:{ ...s.extra, workshop:(s.extra.workshop||[]).map(m => m.id === id ? { ...m, status:'pending' } : m) },
+      announce:'Retrying the same message — it will not arrive twice.'
+    }));
+    this.later(() => this.setState(s => ({ extra:{ ...s.extra, workshop:(s.extra.workshop||[]).map(m => m.id === id ? { ...m, status:'sent' } : m) }, announce:'Sent.' })), 1400);
+  };
+
+  // ---- manage ------------------------------------------------------------
+  onOpenManage = () => this.setState({ manageStage:'list', manageDoneMsg:'' });
+  onCloseManage = () => this.setState({ manageStage:null });
+  onBackToList = () => this.setState({ manageStage:'list', manageDoneMsg:'' });
+  onBackToActions = () => this.setState({ manageStage:'actions' });
+  pickPerson = (id) => () => this.setState({ manageTarget:id, manageStage:'actions', manageDoneMsg:'' });
+  pickAction = (key) => () => this.setState({ pendingAction:key, manageStage:'confirm' });
+  onConfirm = () => {
+    const p = this.PEOPLE[this.state.manageTarget];
+    const ch = this.chanById(this.state.channelId).name;
+    const msgs = {
+      admin: p.name.split(' ')[0] + ' can now look after ' + ch + '.',
+      restrict: p.name.split(' ')[0] + ' cannot post in ' + ch + ' until you lift it.',
+      timeout: p.name.split(' ')[0] + ' is timed out in ' + ch + ' for one hour.',
+      remove: p.name.split(' ')[0] + ' is no longer in ' + ch + '. Their messages stay.',
+      ban: p.name.split(' ')[0] + ' is banned from Kintsugi Architecture.',
+    };
+    this.setState({ manageStage:'list', pendingAction:null, manageDoneMsg: msgs[this.state.pendingAction], announce: msgs[this.state.pendingAction] });
+  };
+
+  onOpenInvite = () => this.setState({ inviteOpen:true, copied:false });
+  onCloseInvite = () => this.setState({ inviteOpen:false });
+  setInviteKind = (k) => () => this.setState({ inviteKind:k, copied:false });
+  onCopyInvite = () => { this.setState({ copied:true }); this.later(() => this.setState({ copied:false }), 2200); };
+  onMakeChannel = () => this.setState({ announce:'Channel creation is a stub in this prototype.' });
+  onOpenPost = () => this.setState({ screen:'post' });
+  onDiagnostics = () => this.setState(s => ({ diagOpen: !s.diagOpen }));
+
+  onHandle = (e) => this.setState({ handleDraft: e.target.value });
+  onSigninVisitor = () => this.setState({ signin:'blocked' });
+  onSigninOwner = () => this.setState({ screen:'firstrun', frStep:0, signin:'idle' });
+  onAskToJoin = () => this.setState({ signin:'asked' });
+
+  frNext = () => this.setState(s => ({ frStep: Math.min(4, s.frStep + 1), frResumed:false }));
+  frBack = () => this.setState(s => ({ frStep: Math.max(0, s.frStep - 1) }));
+  onFrName = (e) => this.setState({ frName: e.target.value });
+  onFrHelper = (e) => this.setState({ frHelper: e.target.value });
+  setFrAud = (k) => () => this.setState({ frAud:k });
+  toggleFrChannel = (n) => () => this.setState(s => ({ frChannels: s.frChannels.includes(n) ? s.frChannels.filter(x => x !== n) : s.frChannels.concat([n]) }));
+
+  // ---- derived -----------------------------------------------------------
+  markerStyle() { return this.props.markerStyle ?? 'Shape and count'; }
+
+  faceNode(src, init, size) {
+    if (!src) return init;
+    return React.createElement('img', { className:'px', src, alt:'', 'aria-hidden':'true', width:size, height:size, style:{ width:size+'px', height:size+'px' } });
+  }
+
+  mapMsg = (m, i, arr) => {
+    const p = this.PEOPLE[m.who];
+    const rep = m.reply ? arr.find(x => x.id === m.reply) : null;
+    const repP = rep ? this.PEOPLE[rep.who] : null;
+    const st = m.status;
+    const statusMap = {
+      pending: { label:'Sending…', fg:'#a1a1aa', dot:'transparent', radius:'50%', retry:false },
+      sent:    { label:'Sent', fg:'#4ade80', dot:'#4ade80', radius:'50%', retry:false },
+      held:    { label:'Held — your draft is safe. Reconnect to send it.', fg:'#fbbf24', dot:'transparent', radius:'2px', retry:false },
+      uncertain:{ label:'We are not sure this arrived.', fg:'#e8794b', dot:'transparent', radius:'2px', retry:true },
+    };
+    const s = statusMap[st];
+    const addressed = !!m.addressed;
+    return {
+      id:m.id, author:p.name, handle:p.handle, init:p.init, accent:p.a, argb:p.argb,
+      avatarNode: this.faceNode(p.img, p.init, 34),
+      isAgent: p.kind === 'agent', time:m.t, body:m.body,
+      hasReply: !!rep, replyName: repP ? repP.name.split(' ')[0] : '', replyBody: rep ? rep.body.slice(0, 64) + (rep.body.length > 64 ? '…' : '') : '',
+      onSeeContext: this.setReply(m.reply),
+      pinned: this.state.pinnedId === m.id, pinLabel: this.state.pinnedId === m.id ? 'Unpin' : 'Pin',
+      onReply: this.setReply(m.id), onPin: this.onPin(m.id),
+      statusShown: !!s, statusLabel: s ? s.label : '', statusFg: s ? s.fg : '#a1a1aa', statusDot: s ? s.dot : 'transparent',
+      statusRadius: s ? s.radius : '50%', retryable: s ? s.retry : false, onRetry: this.onRetry(m.id),
+      rowBg: addressed ? 'rgba(251,191,36,.055)' : 'transparent',
+      rowMark: addressed ? '#fbbf24' : 'transparent',
+      anim: m.fresh ? 'ts-rise .42s cubic-bezier(.16,1,.3,1)' : 'none',
+      divider: m.fresh && (i === 0 || !arr[i-1].fresh),
+    };
+  };
+
+  renderVals() {
+    const st = this.state;
+    const ms = this.markerStyle();
+    const wantShape = ms !== 'Count only';
+    const wantCount = ms !== 'Shape only';
+    const chans = this.CHANNELS[st.tangentId] || [];
+    const cur = chans.find(c => c.id === st.channelId) || { name:'—', aud:'members', topic:'' };
+    const curT = this.TANGENTS.find(t => t.id === st.tangentId);
+    const allMsgs = st.channelId ? this.msgsFor(st.channelId) : [];
+    const shown = st.hiddenBelow > 0 ? allMsgs.slice(0, allMsgs.length - st.hiddenBelow) : allMsgs;
+    const tgt = this.PEOPLE[st.manageTarget];
+    const chanName = cur.name;
+    const audMap = {
+      members: { label:'Members', fg:'#a1a1aa', border:'rgba(255,255,255,.18)' },
+      private: { label:'Private', fg:'#fdba74', border:'rgba(251,146,60,.42)' },
+      public:  { label:'Public reading', fg:'#5eead4', border:'rgba(94,234,212,.4)' },
+    };
+    const aud = audMap[cur.aud] || audMap.members;
+    const connMap = {
+      live: { label:'Live · everything here arrives as it happens', fg:'#4ade80' },
+      reconnecting: { label:'Reconnecting · your draft is safe', fg:'#fbbf24' },
+      offline: { label:'Your draft is safe. Reconnect to send it.', fg:'#e8794b' },
+    };
+    const conn = connMap[st.conn];
+    const chapters = [
+      ['arrival','Arrival','I follow a link here'],
+      ['signin','Sign in','Bring me back to why I came'],
+      ['firstrun','First run','This is my new home'],
+      ['return','Return','What happened while I was away'],
+      ['live','Live','We are talking, and the place is alive'],
+      ['care','Care','I look after my community'],
+      ['agent','Agent','Lumen returns to the same place'],
+      ['system','System','Components, states and notes'],
+    ];
+
+    const actionDefs = [
+      { key:'admin', label:'Make administrator for this Channel', note:'They can manage members and pin things here. Not elsewhere.', tone:'accent' },
+      { key:'restrict', label:'Restrict posting', note:'They keep reading. They cannot write until you lift it.', tone:'plain' },
+      { key:'timeout', label:'Apply a timeout', note:'One hour in this Channel, then it lifts by itself.', tone:'plain' },
+      { key:'remove', label:'Remove from this Channel', note:'Their messages stay where they are.', tone:'plain' },
+      { key:'ban', label:'Ban from Kintsugi Architecture', note:'Every Channel. You can undo it.', tone:'danger' },
+    ];
+    const confirmMap = {
+      admin: { title:'Make ' + tgt.name + ' an administrator of ' + chanName + '?', body:'They will be able to manage members and pin contributions in ' + chanName + ' only. You stay the owner of Kintsugi Architecture.', cta:'Make administrator' },
+      restrict: { title:'Stop ' + tgt.name + ' posting in ' + chanName + '?', body:'They keep everything they can read today. This is not the same as muting the Channel for yourself.', cta:'Restrict posting' },
+      timeout: { title:'Time ' + tgt.name + ' out of ' + chanName + ' for one hour?', body:'It lifts on its own at 21:06. They will be told which Channel and for how long.', cta:'Apply timeout' },
+      remove: { title:'Remove ' + tgt.name + ' from ' + chanName + '?', body:'They stay in Kintsugi Architecture and keep their other Channels. Their messages here remain.', cta:'Remove' },
+      ban: { title:'Ban ' + tgt.name + ' from Kintsugi Architecture?', body:'Every Channel, including private ones. Their contributions remain attributed to them.', cta:'Ban' },
+    };
+    const cf = confirmMap[st.pendingAction] || { title:'', body:'', cta:'Confirm' };
+
+    const frSug = [
+      { name:'Workshop', why:'Where the work gets argued about', aud:'Members' },
+      { name:'Lounge', why:'Anything, gently', aud:'Members' },
+      { name:'Seams', why:'The parts you cannot say out loud yet', aud:'Private' },
+      { name:'Welcome', why:'One place to point newcomers at', aud:'Public' },
+    ];
+    const audOpts = [
+      { key:'invite', label:'Invitation only', note:'Nobody sees it until you ask them in.' },
+      { key:'read', label:'Public reading', note:'Anyone with the link can read. Only members write.' },
+      { key:'open', label:'Open to join', note:'Anyone with an account can join themselves.' },
+    ];
+
+    return {
+      announce: st.announce,
+      isArrival: st.screen === 'arrival', isSignin: st.screen === 'signin',
+      isFirstrun: st.screen === 'firstrun', isLive: st.screen === 'live' || st.screen === 'care',
+      isReturn: st.screen === 'return', isAgent: st.screen === 'agent',
+      isSystem: st.screen === 'system', isPost: st.screen === 'post',
+
+      chapters: chapters.map(([id, label, hint], i) => {
+        const active = st.screen === id || (id === 'live' && st.screen === 'care');
+        return {
+          num: String(i + 1).padStart(2, '0'), label, hint,
+          current: active ? 'page' : undefined,
+          bg: active ? 'rgba(251,191,36,.13)' : 'transparent',
+          border: active ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.11)',
+          fg: active ? '#fcd34d' : '#a1a1aa',
+          onClick: id === 'care'
+            ? () => this.setState({ screen:'care', tangentId:'kintsugi', channelId:'workshop', manageStage:'list', manageDoneMsg:'' })
+            : this.goto(id),
+        };
+      }),
+
+      onPlayScene: this.onPlayScene,
+      sceneLabel: st.scene === 'running' ? 'Scene running…' : 'Play the scene',
+      onToggleAmbient: this.onToggleAmbient,
+      ambientOn: st.ambient, ambientDot: st.ambient ? '#4ade80' : '#52525b',
+      ambientLabel: st.ambient ? 'Ambient on' : 'Ambient off',
+      triggers: [
+        { label:'+ message', onClick:this.trigMessage },
+        { label:'+ reply to me', onClick:this.trigReply },
+        { label:'drop connection', onClick:this.trigDrop },
+        { label:'uncertain send', onClick:this.trigUncertain },
+        { label:'expire session', onClick:this.trigExpire },
+        { label:'change my access', onClick:this.trigAccess },
+        { label:'interrupt setup', onClick:this.trigInterrupt },
+      ],
+
+      arrivalMsgs: this.SEED.workshop.slice(7, 10).map(m => {
+        const p = this.PEOPLE[m.who];
+        return { author:p.name, handle:p.handle, init:p.init, accent:p.a, argb:p.argb, body:m.body };
+      }),
+      goSignin: this.goSignin, goLive: this.goLive, goReturn: this.goReturn,
+      goAgent: this.goto('agent'), noop: () => this.setState({ announce:'Simulated in this prototype.' }),
+
+      signinIdle: st.signin === 'idle', signinBlocked: st.signin === 'blocked', signinAsked: st.signin === 'asked',
+      handleDraft: st.handleDraft, onHandle: this.onHandle,
+      onSigninVisitor: this.onSigninVisitor, onSigninOwner: this.onSigninOwner, onAskToJoin: this.onAskToJoin,
+      onDiagnostics: this.onDiagnostics, diagOpen: st.diagOpen,
+
+      frResumed: st.frResumed,
+      frDots: [0,1,2,3,4].map(i => ({ bg: i <= st.frStep ? '#fbbf24' : 'rgba(255,255,255,.12)' })),
+      frCount: (st.frStep + 1) + ' / 5',
+      frIs0: st.frStep === 0, frIs1: st.frStep === 1, frIs2: st.frStep === 2, frIs3: st.frStep === 3, frIs4: st.frStep === 4,
+      frNext: this.frNext, frBack: this.frBack,
+      frName: st.frName, onFrName: this.onFrName,
+      frNameEmpty: !st.frName.trim(), frNameOpacity: st.frName.trim() ? 1 : .45,
+      frNameShown: st.frName.trim() || 'Kintsugi Architecture',
+      frAudiences: audOpts.map(o => ({
+        label:o.label, on: st.frAud === o.key, onClick: this.setFrAud(o.key),
+        bg: st.frAud === o.key ? 'rgba(251,191,36,.13)' : 'transparent',
+        border: st.frAud === o.key ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.14)',
+        fg: st.frAud === o.key ? '#fcd34d' : '#a1a1aa',
+      })),
+      frAudienceNote: (audOpts.find(o => o.key === st.frAud) || audOpts[0]).note,
+      frSuggestions: frSug.map(s => {
+        const on = st.frChannels.includes(s.name);
+        return {
+          name:s.name, why:s.why, aud:s.aud, on, onClick: this.toggleFrChannel(s.name),
+          tick: on ? '✓' : '',
+          mark: on ? '#fbbf24' : 'rgba(255,255,255,.22)',
+          markBg: on ? '#fbbf24' : 'transparent',
+          bg: on ? 'rgba(251,191,36,.055)' : 'rgba(255,255,255,.015)',
+          border: on ? 'rgba(251,191,36,.36)' : 'rgba(255,255,255,.1)',
+          audFg: s.aud === 'Private' ? '#fdba74' : (s.aud === 'Public' ? '#5eead4' : '#8f8f99'),
+        };
+      }),
+      frHelper: st.frHelper, onFrHelper: this.onFrHelper,
+      frDoneNote: st.frChannels.length
+        ? 'Two channels, an owner, and somewhere to say the first thing. ' + (st.frHelper.trim() ? st.frHelper.trim() + ' has been invited to help look after it.' : 'You can add a helper whenever you like.')
+        : 'No channels yet — make one when you know what it is for.',
+
+      tangents: this.TANGENTS.map(t => {
+        const chs = this.CHANNELS[t.id];
+        const n = chs.reduce((a, c) => a + st.marks[c.id].n, 0);
+        const addr = chs.some(c => st.marks[c.id].addr);
+        const active = st.tangentId === t.id;
+        return {
+          name:t.name, a:t.a, argb:t.argb, faceNode: this.faceNode(t.face, t.name.slice(0,1), 32),
+          current: active ? 'true' : undefined,
+          onClick: this.selTangent(t.id),
+          bg: active ? 'rgba(255,255,255,.05)' : 'transparent',
+          border: active ? 'rgba(255,255,255,.24)' : 'rgba(255,255,255,.09)',
+          fg: active ? '#f4f4f5' : '#c9c9d1',
+          addressed: addr && wantShape,
+          showRing: !addr && n > 0 && wantShape,
+          showCount: n > 0 && wantCount,
+          countLabel: n > 50 ? '50+' : String(n),
+        };
+      }),
+
+      curTangentName: curT.name, curTangentRole: curT.role, curArgb: curT.argb,
+      curFaceNode: this.faceNode(curT.face, curT.name.slice(0,1), 40),
+      curEmpty: chans.length === 0, curHasChannels: chans.length > 0,
+      onMakeChannel: this.onMakeChannel, onOpenPost: this.onOpenPost, onOpenInvite: this.onOpenInvite,
+
+      channels: chans.map(c => {
+        const mk = st.marks[c.id];
+        const active = st.channelId === c.id;
+        const watched = !!st.watching[c.id];
+        return {
+          name:c.name, onClick: this.selChannel(c.id),
+          current: active ? 'true' : undefined,
+          sigil: c.aud === 'private' ? '◆' : '#',
+          bg: active ? 'rgba(251,191,36,.08)' : 'transparent',
+          mark: active ? '#fbbf24' : 'transparent',
+          fg: active ? '#f4f4f5' : (mk.n > 0 ? '#e4e4e7' : '#a1a1aa'),
+          weight: mk.n > 0 ? '600' : '400',
+          addressed: mk.addr && wantShape,
+          watchedNew: !mk.addr && watched && mk.n > 0 && wantShape,
+          showRing: !mk.addr && !watched && mk.n > 0 && wantShape,
+          showCount: mk.n > 0 && wantCount,
+          countLabel: mk.n > 50 ? '50+' : String(mk.n),
+          muted: !!st.muted[c.id],
+        };
+      }),
+
+      chanName, chanTopic: cur.topic,
+      audLabel: aud.label, audFg: aud.fg, audBorder: aud.border,
+      watching: !!st.watching[st.channelId],
+      watchLabel: st.watching[st.channelId] ? 'Watching' : 'Watch',
+      watchBg: st.watching[st.channelId] ? 'rgba(251,191,36,.11)' : 'transparent',
+      watchBorder: st.watching[st.channelId] ? 'rgba(251,191,36,.45)' : 'rgba(255,255,255,.14)',
+      watchFg: st.watching[st.channelId] ? '#fcd34d' : '#a1a1aa',
+      muted: !!st.muted[st.channelId],
+      muteLabel: st.muted[st.channelId] ? 'Unmute for me' : 'Mute for me',
+
+      accessChanged: st.accessChanged, sessionExpired: st.sessionExpired, onResumeSession: this.onResumeSession,
+
+      msgs: shown.map((m, i) => this.mapMsg(m, i, allMsgs)),
+      hasNewBelow: st.hiddenBelow > 0, onJumpLatest: this.onJumpLatest,
+      newBelowLabel: st.hiddenBelow + (st.hiddenBelow === 1 ? ' new message below' : ' new messages below'),
+
+      canPost: !st.restricted, cannotPost: st.restricted,
+      cannotPostNote: 'You can read, search and save everything in ' + chanName + '. Writing here is paused until 20:46.',
+      draft: st.draft, onDraft: this.onDraft, onSend: this.onSend, sendLabel: st.conn === 'live' ? 'Send' : 'Hold',
+      composerPlaceholder: 'Say something in ' + chanName + '…',
+      hasReplyTarget: !!st.replyTo, onClearReply: this.onClearReply,
+      replyTargetLabel: st.replyTo ? (() => { const r = allMsgs.find(x => x.id === st.replyTo); return r ? this.PEOPLE[r.who].name + ' — ' + r.body.slice(0, 70) + '…' : ''; })() : '',
+      connLabel: conn.label, connFg: conn.fg,
+
+      manageOpen: !!st.manageStage,
+      manageList: st.manageStage === 'list', manageActions: st.manageStage === 'actions', manageConfirm: st.manageStage === 'confirm',
+      manageDone: !!st.manageDoneMsg, manageDoneMsg: st.manageDoneMsg,
+      onCloseManage: this.onCloseManage, onOpenManage: this.onOpenManage,
+      onBackToList: this.onBackToList, onBackToActions: this.onBackToActions,
+      peopleCount: '5 here, 1 of them an agent',
+      people: ['mira','dev','hana','lumen','leo'].map(k => {
+        const p = this.PEOPLE[k];
+        const roles = { mira:'Moderator', dev:'Member', hana:'Member', lumen:'Agent · read and reply', leo:'Owner' };
+        return { name:p.name, handle:p.handle, argb:p.argb, accent:p.a, isAgent:p.kind === 'agent', role:roles[k], avatarNode: this.faceNode(p.img, p.init, 32), onClick: this.pickPerson(k) };
+      }),
+      tgtName: tgt.name, tgtHandle: tgt.handle, tgtInit: tgt.init, tgtArgb: tgt.argb, tgtAccent: tgt.a,
+      tgtRole: st.manageTarget === 'leo' ? 'Owner' : (st.manageTarget === 'mira' ? 'Moderator' : 'Member'),
+      actions: actionDefs.map(a => ({
+        label:a.label, note:a.note, onClick: this.pickAction(a.key),
+        fg: a.tone === 'danger' ? '#f0a184' : '#f4f4f5',
+        bg: a.tone === 'accent' ? 'rgba(251,191,36,.05)' : 'rgba(255,255,255,.015)',
+        border: a.tone === 'accent' ? 'rgba(251,191,36,.3)' : (a.tone === 'danger' ? 'rgba(232,121,75,.28)' : 'rgba(255,255,255,.1)'),
+      })),
+      confirmTitle: cf.title, confirmBody: cf.body, confirmCta: cf.cta, onConfirm: this.onConfirm,
+
+      inviteOpen: st.inviteOpen, onCloseInvite: this.onCloseInvite, onCopyInvite: this.onCopyInvite,
+      copyLabel: st.copied ? 'Copied' : 'Copy invitation',
+      inviteKinds: [
+        { label:'A person', k:'person' }, { label:'An agent', k:'agent' },
+      ].map(x => ({
+        label:x.label, on: st.inviteKind === x.k, onClick: this.setInviteKind(x.k),
+        bg: st.inviteKind === x.k ? 'rgba(251,191,36,.13)' : 'transparent',
+        border: st.inviteKind === x.k ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.14)',
+        fg: st.inviteKind === x.k ? '#fcd34d' : '#a1a1aa',
+      })),
+      inviteRole: st.inviteKind === 'agent' ? 'Participant · read and reply in this Channel' : 'Member · read and reply',
+      inviteIdentity: st.inviteKind === 'agent' ? 'Its own verified account, not yours' : 'Their own AT Protocol account',
+      inviteNote: st.inviteKind === 'agent'
+        ? 'This invites a persistent Participant, separate from you. Accepting it does not install anything or start a model — the agent stays "waiting" until its operator connects it.'
+        : 'They keep their own identity and their own contributions. Nothing you send is signed on their behalf.',
+      inviteUrl: st.inviteKind === 'agent'
+        ? 'https://kintsugi.host/join/ag-7f2k9d?to=workshop&as=participant'
+        : 'https://kintsugi.host/join/9c4mze?to=workshop',
+    };
+  }
+}
+
+</script>
+</body>
+</html>

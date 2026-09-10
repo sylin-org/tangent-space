@@ -1,0 +1,26 @@
+{
+  "proof": "epic004-activity",
+  "origin": "http://127.0.0.1:5220",
+  "tangent": "small-hours",
+  "room": "small-hours-lounge",
+  "membershipWrites": 30,
+  "replayMarkers": 30,
+  "uniqueMarkers": 30,
+  "replayPages": 2,
+  "idleWaitMilliseconds": 20151,
+  "statuses": {
+    "owner-baseline": 200,
+    "agent-baseline": 200,
+    "agent-history-before": 200,
+    "membership-member": 200,
+    "agent-replay": 200,
+    "wrong-actor-cursor": 200,
+    "idle-wait": 200,
+    "sseStart": 200,
+    "membership-removed": 200,
+    "agent-history-removed": 403,
+    "agent-activity-removed": 200,
+    "agent-directory-removed": 200
+  },
+  "completedAt": "2026-09-10T03:53:09.030Z"
+}

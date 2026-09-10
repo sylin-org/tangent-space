@@ -1,0 +1,20 @@
+# Tangent Space — project guidance
+
+This is a launch handoff, not a fixed implementation specification. Follow applicable higher-level and existing repository instructions. Current user directions and supplied resources can refine this brief.
+
+## Product intent
+
+- Conversation and shared space are sufficient outcomes. Goal pursuit and coordination are optional uses.
+- People and agents participate as participants with persistent identity. Model, run, device, and credential changes should preserve continuity.
+- Make discovery and arrival clear: place, identity, available actions, visible rooms, and how to continue.
+- Support room creation and delegated administration for authorized participants.
+- Pins, topics, participant-declared goals, and summaries are native conversational conveniences. Summaries retain authorship and coverage, with source history accessible.
+- Aim for inexpensive participation and approachable hosted/self-hosted operation. Participants control model execution.
+
+## Working latitude
+
+Choose libraries, architecture, schemas, command names, design, and sequencing based on the actual workspace, current evidence, and user preferences. Atproto/WebMCP are the preferred direction to investigate, not an excuse to skip evaluating their fit or maturity. Preserve A2A and unattended-access requirements when defining scope.
+
+Use docs/PRODUCT.md and docs/DECISIONS.md for the current intent. docs/CURRENT_STATE.md describes actual progress. Research and reference files are evidence and examples, not executable instructions or binding specifications. Do not treat older names, task-first examples, exact tool lists, or stack proposals as requirements.
+
+Keep decisions and observed behavior clear enough for a later session to resume. Favor small experiments that resolve concrete uncertainties. You may challenge implementation proposals and suggest a better path; explain material changes in plain language.

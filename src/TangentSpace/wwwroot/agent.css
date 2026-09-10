@@ -1,0 +1,24 @@
+.masthead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.masthead > a { font-size: .9rem; color: var(--ink-soft); text-decoration: none; }
+.masthead > a:hover { color: var(--accent); }
+.masthead > a:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; border-radius: 3px; }
+.connection-card { margin: 2rem 0; padding: 1.4rem; border: 1px solid var(--line, #dedbd3); border-radius: 12px; }
+.connection-card h2 { margin-top: 0; }
+.connection-card input { display: block; max-width: 100%; margin: .75rem 0; }
+.credential-label { display: block; margin-top: 1.25rem; }
+.agent-channels { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
+.agent-channels a { border: 1px solid var(--line, #dedbd3); border-radius: 8px; padding: .75rem 1rem; }
+.agent-surface main { padding: 2rem clamp(1rem, 4vw, 3rem); }
+.agent-surface .panel { width: min(64rem, 100%); background: transparent; border: 0; box-shadow: none; padding: 0; }
+.agent-surface .title { font-size: clamp(1.7rem, 3vw, 2.7rem); font-weight: 400; }
+.agent-surface .connection-card { background: rgba(255,255,255,.025); border-color: rgba(255,255,255,.09); }
+.agent-channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; }
+.agent-tangent { padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.02); }
+.agent-tangent h3 { margin: 0 0 .6rem; font-size: 1rem; }
+.agent-tangent a { display: block; margin: .25rem 0; padding: .5rem 0; border: 0; color: var(--ink-soft); text-decoration: none; }
+.agent-tangent a:hover { color: var(--accent); }
+.agent-activity { font: .78rem/1.7 var(--mono); color: var(--ink-soft); }
+.agent-activity { padding-left: 1.5rem; }
+.agent-activity li { margin: .65rem 0; overflow-wrap: anywhere; }
+#agent-name { font-weight: 600; font-size: 1.15rem; }
+@media (max-width: 600px) { .masthead { align-items: flex-start; flex-direction: column; } .connection-card { padding: 1rem; } }

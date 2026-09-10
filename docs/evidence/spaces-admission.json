@@ -1,0 +1,116 @@
+{
+  "observedAt": "2026-09-09T21:18:47.2551592+00:00",
+  "passed": true,
+  "origin": "http://127.0.0.1:5223",
+  "roomKey": "poc-1788987688033-workshop",
+  "upstreamRevision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "driver": "probes/scripts/direct-spaces.mjs",
+  "invocation": "docker exec -i tangent-spaces-network node /atproto/tangent-client/direct-spaces.mjs",
+  "authentication": "Real legacy createSession for disposable fixture accounts; provider getServiceAuth signatures; official JoseKey/createDpopProof for Space credentials",
+  "checks": [
+    {
+      "name": "Current member accepted by real provider-signed authority callback",
+      "passed": true,
+      "observed": {
+        "command": "check",
+        "status": 200,
+        "stage": "callback",
+        "body": {
+          "authorized": true
+        }
+      }
+    },
+    {
+      "name": "Removed outsider denied by current room policy",
+      "passed": true,
+      "observed": {
+        "command": "check",
+        "status": 200,
+        "stage": "callback",
+        "body": {
+          "authorized": false
+        }
+      }
+    },
+    {
+      "name": "Real provider-signed wrong issuer rejected",
+      "passed": true,
+      "observed": {
+        "command": "check",
+        "status": 401,
+        "stage": "callback",
+        "body": {
+          "error": "InvalidServiceAuthentication"
+        }
+      }
+    },
+    {
+      "name": "Real provider-signed wrong audience rejected",
+      "passed": true,
+      "observed": {
+        "command": "check",
+        "status": 401,
+        "stage": "callback",
+        "body": {
+          "error": "InvalidServiceAuthentication"
+        }
+      }
+    },
+    {
+      "name": "Real provider-signed wrong method rejected",
+      "passed": true,
+      "observed": {
+        "command": "check",
+        "status": 401,
+        "stage": "callback",
+        "body": {
+          "error": "InvalidServiceAuthentication"
+        }
+      }
+    },
+    {
+      "name": "Tampered provider signature rejected",
+      "passed": true,
+      "observed": {
+        "command": "check",
+        "status": 401,
+        "stage": "callback",
+        "body": {
+          "error": "InvalidServiceAuthentication"
+        }
+      }
+    },
+    {
+      "name": "Unknown room denied with valid authority service authentication",
+      "passed": true,
+      "observed": {
+        "command": "check",
+        "status": 200,
+        "stage": "callback",
+        "body": {
+          "authorized": false
+        }
+      }
+    },
+    {
+      "name": "Independent member client obtains a native Space credential",
+      "passed": true,
+      "observed": {
+        "command": "issue",
+        "name": "admission_receipt_member",
+        "status": 200,
+        "issued": true,
+        "expiresAt": "2026-09-09T23:18:47Z",
+        "expiresInSeconds": 7200,
+        "lifetimeSeconds": 7200
+      }
+    }
+  ],
+  "limits": [
+    "All callbacks reached the real Tangent host; no unsigned or local validation substitute was used.",
+    "The observed native credential lifetime is exactly 7200 seconds. This receipt does not remove a participant or measure reads with an older credential after removal.",
+    "The separate conversation proof owns fresh credential denial, old credential read behavior, and observed remaining lifetime after removal.",
+    "No governance or source records were mutated. Tokens, keys, passwords, and sessions were retained only by the disposable client process and are absent from this receipt.",
+    "Only the known registered local callback destination is allowed; audience and method overrides change signed claims only."
+  ]
+}

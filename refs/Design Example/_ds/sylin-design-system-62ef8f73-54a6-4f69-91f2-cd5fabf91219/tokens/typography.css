@@ -1,0 +1,63 @@
+/* ==========================================================================
+   Sylin — Typography
+   No webfonts. The site practices its values: extremely light, self-contained,
+   no third-party fonts. Type is built on system stacks chosen for a serene,
+   storybook register — a literary serif for display, a humanist sans for
+   text, a clean mono for the technical voice.
+   ========================================================================== */
+
+:root {
+  /* ---- Font families --------------------------------------------------- */
+
+  /* Display — the brand's voice: Cormorant Garamond, a dramatic high-contrast
+     literary serif. Wordmark, hero, section headings. Self-hosted (OFL). */
+  --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+
+  /* Tools — the products' voice: Space Grotesk. Project names (Koan, Koi,
+     Ghostlight) and other machine-adjacent labels. A person-vs-tools
+     distinction: the org speaks in serif, the tools in grotesk. */
+  --font-grotesk: "Space Grotesk", system-ui, -apple-system, sans-serif;
+
+  /* Sans — the working body voice: IBM Plex Sans. */
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Mono — code, versions, stats, eyebrow labels: IBM Plex Mono. */
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- Type scale (rem, 1rem = 16px). A gentle, calm progression. ------ */
+  --text-2xs: 0.6875rem;  /* 11px — micro labels, colophon */
+  --text-xs: 0.75rem;     /* 12px — meta, tags */
+  --text-sm: 0.875rem;    /* 14px — captions, secondary */
+  --text-base: 1rem;      /* 16px — body */
+  --text-md: 1.125rem;    /* 18px — lead body */
+  --text-lg: 1.375rem;    /* 22px — small headings */
+  --text-xl: 1.75rem;     /* 28px — card titles */
+  --text-2xl: 2.25rem;    /* 36px — section headings */
+  --text-3xl: 3rem;       /* 48px — page titles */
+  --text-4xl: 4rem;       /* 64px — hero */
+  --text-5xl: 5.5rem;     /* 88px — grand hero display */
+
+  /* ---- Weights --------------------------------------------------------- */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- Line heights ---------------------------------------------------- */
+  --leading-tight: 1.08;   /* display headings */
+  --leading-snug: 1.28;    /* subheads */
+  --leading-normal: 1.6;   /* body prose */
+  --leading-relaxed: 1.75; /* long-form reading */
+
+  /* ---- Letter spacing -------------------------------------------------- */
+  --tracking-tight: -0.02em;  /* large serif display */
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-label: 0.14em;   /* uppercase micro-labels / eyebrows */
+
+  /* ---- Semantic roles -------------------------------------------------- */
+  --font-display: var(--font-serif);
+  --font-tool: var(--font-grotesk);
+  --font-body: var(--font-sans);
+  --font-code: var(--font-mono);
+}

@@ -1,0 +1,263 @@
+{
+  "completedAt": "2026-09-09T20:16:54.1949299+00:00",
+  "upstreamRevision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "runtime": ".NET 10.0.12",
+  "native": true,
+  "primitiveChecks": {
+    "ltHashLanesMatch": true,
+    "ltHashDigestMatches": true,
+    "encodedContextMatches": true
+  },
+  "cases": 31,
+  "failures": 0,
+  "results": [
+    {
+      "name": "secp256k1-valid",
+      "expected": true,
+      "accepted": true,
+      "passed": true,
+      "records": 2,
+      "error": null
+    },
+    {
+      "name": "secp256k1-wrong-space",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit MAC mismatch"
+    },
+    {
+      "name": "secp256k1-wrong-author",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit MAC mismatch"
+    },
+    {
+      "name": "secp256k1-wrong-key",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit signature mismatch"
+    },
+    {
+      "name": "secp256k1-bad-mac",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit MAC mismatch"
+    },
+    {
+      "name": "secp256k1-bad-signature",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit signature mismatch"
+    },
+    {
+      "name": "secp256k1-record-deletion",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Index set hash mismatch"
+    },
+    {
+      "name": "secp256k1-record-addition",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Index set hash mismatch"
+    },
+    {
+      "name": "secp256k1-missing-records",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Record completeness mismatch"
+    },
+    {
+      "name": "secp256k1-index-only",
+      "expected": true,
+      "accepted": true,
+      "passed": true,
+      "records": 0,
+      "error": null
+    },
+    {
+      "name": "secp256k1-tampered-block",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Block CID mismatch"
+    },
+    {
+      "name": "secp256k1-truncated",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Frame exceeds available data"
+    },
+    {
+      "name": "secp256k1-extra-block",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Record completeness mismatch"
+    },
+    {
+      "name": "secp256k1-empty",
+      "expected": true,
+      "accepted": true,
+      "passed": true,
+      "records": 0,
+      "error": null
+    },
+    {
+      "name": "secp256k1-unsupported-version",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Unsupported or malformed commit"
+    },
+    {
+      "name": "P-256-valid",
+      "expected": true,
+      "accepted": true,
+      "passed": true,
+      "records": 2,
+      "error": null
+    },
+    {
+      "name": "P-256-wrong-space",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit MAC mismatch"
+    },
+    {
+      "name": "P-256-wrong-author",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit MAC mismatch"
+    },
+    {
+      "name": "P-256-wrong-key",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit signature mismatch"
+    },
+    {
+      "name": "P-256-bad-mac",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit MAC mismatch"
+    },
+    {
+      "name": "P-256-bad-signature",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Commit signature mismatch"
+    },
+    {
+      "name": "P-256-record-deletion",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Index set hash mismatch"
+    },
+    {
+      "name": "P-256-record-addition",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Index set hash mismatch"
+    },
+    {
+      "name": "P-256-missing-records",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Record completeness mismatch"
+    },
+    {
+      "name": "P-256-index-only",
+      "expected": true,
+      "accepted": true,
+      "passed": true,
+      "records": 0,
+      "error": null
+    },
+    {
+      "name": "P-256-tampered-block",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Block CID mismatch"
+    },
+    {
+      "name": "P-256-truncated",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Frame exceeds available data"
+    },
+    {
+      "name": "P-256-extra-block",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Record completeness mismatch"
+    },
+    {
+      "name": "P-256-empty",
+      "expected": true,
+      "accepted": true,
+      "passed": true,
+      "records": 0,
+      "error": null
+    },
+    {
+      "name": "P-256-unsupported-version",
+      "expected": false,
+      "accepted": false,
+      "passed": true,
+      "records": null,
+      "error": "Unsupported or malformed commit"
+    },
+    {
+      "name": "actual-pds-repository",
+      "expected": true,
+      "accepted": true,
+      "passed": true,
+      "records": 3,
+      "error": null
+    }
+  ]
+}

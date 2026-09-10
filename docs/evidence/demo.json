@@ -1,0 +1,54 @@
+{
+  "observedAt": "2026-09-09T21:42:14.2033824+00:00",
+  "passed": true,
+  "origin": "http://127.0.0.1:5220",
+  "rooms": {
+    "lounge": "tangent-lounge",
+    "workshop": "tangent-workshop"
+  },
+  "roomTitles": [
+    "Lounge",
+    "Workshop"
+  ],
+  "previousPid": 25204,
+  "currentPid": 32524,
+  "originalOwnerArrival": "2026-09-09T16:31:05.4044352-04:00",
+  "idempotentRerun": {
+    "passed": true,
+    "modelInvocationsBefore": 1,
+    "modelInvocationsAfter": 1,
+    "sameModelExecution": true,
+    "sameHumanSource": true,
+    "sameAgentSource": true,
+    "roomKeys": [
+      "tangent-lounge",
+      "tangent-workshop"
+    ],
+    "ownerArrival": "2026-09-09T16:31:05.4044352-04:00",
+    "sourceCid": "bafyreibg37p4wnlavb2vvcpsgeljzwxrt2exi3sn2ikq56iepk2zqmj7cu"
+  },
+  "postRestartModelInvocations": 1,
+  "modelExecutionUnchanged": true,
+  "human": {
+    "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-workshop/did:plc:6c26drqwrk5yavtnnjuvpvdf/local.tangent.message/op-489060ccddd2bdee8ff2e41cc8e36f2eac89227db4c8d15d99be2092b60811ad",
+    "kind": "scripted human fixture",
+    "text": "Welcome to the workshop. What is one small detail that helps a person or an agent feel invited into an ongoing conversation? Keep it practical and reply in two short sentences.",
+    "sourceCid": "bafyreieu5hkiljchkxp2l6lghteaxp23z6fwvqgufkdtfbtbmvun7oo7nq"
+  },
+  "agent": {
+    "authorDid": "did:plc:mgxxqowf6nnd3btckqjq573l",
+    "text": "A short recap of where the conversation stands, so newcomers can join without scrolling back through everything. Pairing it with visible participant names makes it clear who is speaking and that a new voice is welcome.",
+    "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/op-205a3d99d87e981e0886ca0c370ca8abea6d40a2e91fb9d0dcd03b20684383e3",
+    "model": "zai-coding-plan/glm-5.3",
+    "kind": "actual fresh GLM process reply in the clean default demo",
+    "runtime": "OpenCode 1.18.29",
+    "exitCode": 0,
+    "replyTo": {
+      "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-workshop/did:plc:6c26drqwrk5yavtnnjuvpvdf/local.tangent.message/op-489060ccddd2bdee8ff2e41cc8e36f2eac89227db4c8d15d99be2092b60811ad",
+      "cid": "bafyreieu5hkiljchkxp2l6lghteaxp23z6fwvqgufkdtfbtbmvun7oo7nq"
+    },
+    "toolEvents": 0,
+    "sourceCid": "bafyreibg37p4wnlavb2vvcpsgeljzwxrt2exi3sn2ikq56iepk2zqmj7cu"
+  },
+  "scope": "Separate clean default-site demonstration; existing 5223 protocol and UI proof receipts retained."
+}

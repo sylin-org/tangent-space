@@ -1,0 +1,71 @@
+{
+  "status": "passed",
+  "observedAtUtc": "2026-09-09T19:49:28.0863886+00:00",
+  "runId": "20260909T194848766Z",
+  "frameworkReferenceCommit": "e07a84cc3f71a0867f1122b03b723cc80727e772",
+  "templatePackage": "Sylin.Koan.Templates/1.0.21",
+  "directPackages": [
+    "Sylin.Koan.App/1.0.38",
+    "Sylin.Koan.Data.Connector.Sqlite/1.0.46"
+  ],
+  "sdk": "10.0.401",
+  "port": 5210,
+  "checks": [
+    {
+      "check": "Initial liveness returns HTTP 200",
+      "passed": true
+    },
+    {
+      "check": "Initial readiness returns HTTP 200",
+      "passed": true
+    },
+    {
+      "check": "Readiness reports a healthy composition",
+      "passed": true
+    },
+    {
+      "check": "EntityController accepts one Todo write",
+      "passed": true
+    },
+    {
+      "check": "Entity read returns the saved identity and title",
+      "passed": true
+    },
+    {
+      "check": "Runtime facts identify SQLite as the default data provider",
+      "passed": true
+    },
+    {
+      "check": "The configured SQLite database exists",
+      "passed": true
+    },
+    {
+      "check": "Build emits koan.lock.json",
+      "passed": true
+    },
+    {
+      "check": "Composition lock includes one SQLite connector",
+      "passed": true
+    },
+    {
+      "check": "Composition lock records the web bundle as direct intent",
+      "passed": true
+    },
+    {
+      "check": "A new host process reads the unchanged SQLite Entity",
+      "passed": true
+    },
+    {
+      "check": "Invalid explicit adapter intent fails host startup",
+      "passed": true
+    },
+    {
+      "check": "Failure names the rejected adapter intent",
+      "passed": true
+    }
+  ],
+  "limits": [
+    "Loopback Development probe; no product identity or authorization policy.",
+    "One host and local SQLite; no multi-node, federation, backup, or durable notification claim."
+  ]
+}

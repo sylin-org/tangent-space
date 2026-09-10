@@ -1,0 +1,542 @@
+{
+  "observedAt": "2026-09-09T21:01:41.4300687+00:00",
+  "passed": true,
+  "roomKeys": [
+    "poc-1788987688033-lounge",
+    "poc-1788987688033-workshop"
+  ],
+  "checks": [
+    {
+      "name": "Real OAuth: owner ",
+      "passed": true,
+      "observed": {
+        "account": "owner",
+        "connection": "",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: manager ",
+      "passed": true,
+      "observed": {
+        "account": "manager",
+        "connection": "",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: agent ",
+      "passed": true,
+      "observed": {
+        "account": "agent",
+        "connection": "",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: outsider ",
+      "passed": true,
+      "observed": {
+        "account": "outsider",
+        "connection": "",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: owner rooms",
+      "passed": true,
+      "observed": {
+        "account": "owner",
+        "connection": "rooms",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: manager rooms",
+      "passed": true,
+      "observed": {
+        "account": "manager",
+        "connection": "rooms",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: agent rooms",
+      "passed": true,
+      "observed": {
+        "account": "agent",
+        "connection": "rooms",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: outsider rooms",
+      "passed": true,
+      "observed": {
+        "account": "outsider",
+        "connection": "rooms",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "Real OAuth: authority authority",
+      "passed": true,
+      "observed": {
+        "account": "authority",
+        "connection": "authority",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID"
+        ]
+      }
+    },
+    {
+      "name": "The configured verified owner is established",
+      "passed": true,
+      "observed": {
+        "established": true,
+        "isOwner": true
+      }
+    },
+    {
+      "name": "Unsigned managing-app callback is rejected",
+      "passed": true,
+      "observed": {
+        "status": 401
+      }
+    },
+    {
+      "name": "A non-owner cannot create a room",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner creates Lounge",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 1,
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner creates Workshop",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 1,
+        "audited": true
+      }
+    },
+    {
+      "name": "A new room remains pending before real provisioning",
+      "passed": true,
+      "observed": {
+        "canWrite": false,
+        "canRead": false,
+        "spaceState": "Pending"
+      }
+    },
+    {
+      "name": "Cookie mutations require same-origin JSON and cannot fall back from a bearer header",
+      "passed": true,
+      "observed": {
+        "foreignOrigin": 403,
+        "missingOrigin": 403,
+        "bearerHeader": 401,
+        "nonJson": 415
+      }
+    },
+    {
+      "name": "A manager cannot provision a room before delegation",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "Real authority OAuth provisions Lounge",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 2,
+        "audited": true
+      }
+    },
+    {
+      "name": "Real authority OAuth provisions Workshop",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 2,
+        "audited": true
+      }
+    },
+    {
+      "name": "Ready mappings identify two distinct verified Spaces",
+      "passed": true,
+      "observed": {
+        "distinct": true
+      }
+    },
+    {
+      "name": "Provisioning retry reconciles the same Space without changing room revision",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 2
+      }
+    },
+    {
+      "name": "The owner delegates Workshop administration",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 3,
+        "audited": true
+      }
+    },
+    {
+      "name": "The manager admits the agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 4,
+        "audited": true
+      }
+    },
+    {
+      "name": "An admitted agent can read and write",
+      "passed": true,
+      "observed": {
+        "canManage": false,
+        "canRead": true,
+        "canWrite": true
+      }
+    },
+    {
+      "name": "The outsider sees both descriptions but only Lounge admits content",
+      "passed": true,
+      "observed": {
+        "lounge": "allowed",
+        "workshop": "invitation-required"
+      }
+    },
+    {
+      "name": "The manager changes the topic",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 5,
+        "audited": true
+      }
+    },
+    {
+      "name": "A manager cannot appoint another manager",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner can appoint a second manager",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 6,
+        "audited": true
+      }
+    },
+    {
+      "name": "A manager cannot demote another manager",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner restores the outsider to denied membership",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 7,
+        "audited": true
+      }
+    },
+    {
+      "name": "A manager cannot remove the owner",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "A manager cannot change admission policy",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "The manager restricts the agent to reader",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 8,
+        "audited": true
+      }
+    },
+    {
+      "name": "Current reader policy allows reads and denies writes",
+      "passed": true,
+      "observed": {
+        "revision": 8,
+        "canRead": true,
+        "canWrite": false
+      }
+    },
+    {
+      "name": "The manager removes the agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 9,
+        "audited": true
+      }
+    },
+    {
+      "name": "Removal changes the next request without replacing the cookie",
+      "passed": true,
+      "observed": {
+        "revision": 9,
+        "canRead": false,
+        "canWrite": false
+      }
+    },
+    {
+      "name": "The owner explicitly removes the agent from signed-in Lounge",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 3,
+        "audited": true
+      }
+    },
+    {
+      "name": "Removal overrides signed-in admission",
+      "passed": true,
+      "observed": {
+        "accessState": "removed",
+        "admission": "SignedIn"
+      }
+    },
+    {
+      "name": "The manager restores Workshop membership",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 10,
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner suspends the agent site-wide",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 2,
+        "audited": true
+      }
+    },
+    {
+      "name": "Suspension overrides retained membership on the next request",
+      "passed": true,
+      "observed": {
+        "sitePolicyRevision": 2,
+        "canRead": false
+      }
+    },
+    {
+      "name": "The owner restores the agent",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 3,
+        "audited": true
+      }
+    },
+    {
+      "name": "Restoration preserves the existing room grant and advances site revision",
+      "passed": true,
+      "observed": {
+        "canRead": true,
+        "canWrite": true,
+        "sitePolicyRevision": 3
+      }
+    },
+    {
+      "name": "The owner suspends the manager",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 4,
+        "audited": true
+      }
+    },
+    {
+      "name": "A suspended manager cannot administer rooms",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner restores the manager",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 5,
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner demotes the manager",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 11,
+        "audited": true
+      }
+    },
+    {
+      "name": "A demoted manager cannot reuse cookie authority",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "A non-owner cannot change site suspension",
+      "passed": true,
+      "observed": {
+        "status": 403,
+        "denial": "Forbidden",
+        "audited": true
+      }
+    },
+    {
+      "name": "The owner can change room admission",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "policyRevision": 4,
+        "audited": true
+      }
+    },
+    {
+      "name": "Accepted and denied administrative receipts are durably attributed in SQLite",
+      "passed": true,
+      "observed": {
+        "requested": 29,
+        "persisted": 29,
+        "accepted": 20,
+        "denied": 9,
+        "attributed": true,
+        "hasSiteRevision": true
+      }
+    }
+  ],
+  "limits": [
+    "Disposable loopback accounts and real OAuth/Spaces provisioning",
+    "HTTP permissions and durable audit verified; this script does not fetch conversation records or signed Space credentials",
+    "Existing running host retained; process restart is covered by separate integration evidence",
+    "Cookies and credentials remain under ignored .local and are absent from this receipt"
+  ]
+}

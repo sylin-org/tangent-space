@@ -1,0 +1,3074 @@
+diff --git a/docs/guides/authentication-setup.md b/docs/guides/authentication-setup.md
+index b6bed595a..6651579f2 100644
+--- a/docs/guides/authentication-setup.md
++++ b/docs/guides/authentication-setup.md
+@@ -4,12 +4,12 @@ domain: web
+ title: "Authentication Setup with Koan"
+ audience: [developers, security-engineers, ai-agents]
+ status: current
+-last_updated: 2026-07-18
++last_updated: 2026-09-09
+ framework_version: v1.0.0
+ validation:
+-  date_last_tested: 2026-07-18
++  date_last_tested: 2026-09-09
+   status: verified
+-  scope: provider-plan unit tests, local OAuth/OIDC HTTP tests, authorization-server integration tests
++  scope: provider-plan and scheme unit tests, local OAuth/OIDC HTTP tests, synthetic custom-protocol HTTP composition tests
+ related_guides:
+   - auth-howto.md
+   - authorization-howto.md
+@@ -120,6 +120,20 @@ The protocol engines live in Web Auth, so a generic connector package is unneces
+ OIDC requires `Authority`, `ClientId`, and `ClientSecret`. OAuth2 requires `AuthorizationEndpoint`, `TokenEndpoint`,
+ `UserInfoEndpoint`, `ClientId`, and `ClientSecret`. SAML is not supported.
+ 
++## Protocol-specific connectors
++
++A connector for another protocol uses the same discovery, challenge route, provider election, runtime facts, and
++application cookie. Reference the connector and follow its configuration contract; changing `Type` to an unsupported
++protocol does not supply a handler. Startup names the missing connector or named scheme when protocol intent cannot
++be realized. OAuth2 and OIDC remain built into Web Auth.
++
++Connector authors register an `IAuthProtocol` validator alongside their `AuthProviderDefinition` and normal ASP.NET
++authentication scheme inside the connector module. The validator receives the merged `ProviderOptions`; it must
++honor those values or return corrections with full setting paths. It cannot silently ignore a configured callback or
++scope. The framework keeps eligibility, election, and cookie policy; the connector owns remote protocol validation,
++identity linkage, and any credentials or tokens needed for that protocol. See the
++[Web Auth technical contract](../../src/Koan.Web.Auth/TECHNICAL.md) for this contribution boundary.
++
+ ## Multiple providers and default election
+ 
+ Every eligible provider appears in discovery and can be challenged by ID. Default election is deterministic:
+diff --git a/docs/workcards/tangent-atproto-auth-seam.md b/docs/workcards/tangent-atproto-auth-seam.md
+new file mode 100644
+index 000000000..ab4b826bc
+--- /dev/null
++++ b/docs/workcards/tangent-atproto-auth-seam.md
+@@ -0,0 +1,213 @@
++# Tangent AT authentication protocol seam
++
++Status: implemented and locally validated; reduced contract approved by coordinator; not published.
++
++Prepared 9 September 2026 against `e07a84cc3f71a0867f1122b03b723cc80727e772` in the isolated Tangent worktree. This card owns only the generic Web Auth seam. The AT connector, its native client/session implementation, and Tangent policy belong to subsequent work.
++
++**Task:** Admit a connector-owned authentication protocol into Koan's existing provider plan and standard ASP.NET authentication scheme path without rewriting OAuth2/OIDC or creating another authentication runtime.
++
++**Application intent:** A person can reference an AT sign-in connector, enter their account identifier, and receive the application's ordinary authenticated session while existing OAuth2/OIDC sign-in continues to work.
++
++**Public expression:** The application still uses its existing Koan application/Web Auth packages and a real connector package, configures that connector's documented deployment values, and calls `AddKoan()` once:
++
++```csharp
++var builder = WebApplication.CreateBuilder(args);
++builder.Services.AddKoan();
++var app = builder.Build();
++await app.RunAsync();
++```
++
++The application does not register a scheme, authentication middleware, callback route, or protocol validator. The new cross-module contract is for connector authors, not an application ceremony:
++
++```csharp
++// Implemented in this worktree; not yet a published API.
++public interface IAuthProtocol
++{
++    string Protocol { get; }
++    IReadOnlyList<string> Validate(string providerId, ProviderOptions options);
++}
++```
++
++`Validate` is synchronous, composition-time configuration validation with no network I/O. An empty result means the effective configuration is complete; every nonempty entry is a secret-free corrective diagnostic identifying the relevant setting, including its full configuration path when it lives outside the ordinary provider overlay. It does not choose activation, priority, default provider, identity, or authorization. A connector may inject its own typed options into its validator. There is no `IServiceProvider` parameter or scheme-creation method on this contract.
++
++The connector module registers its immutable provider definition, singleton validator, and standard ASP.NET named handler/options through ordinary DI and `AddAuthentication().AddScheme<TOptions,THandler>(providerId, ...)`. That is connector-owned registration; it never appears in application `Program.cs`. The connector's handler uses `Koan.cookie` as its sign-in scheme and the existing `/auth/{provider}/callback` convention. The generic seam fixture supplies those connector-shaped registrations locally in a real `AddKoan()` host, without an automatically discovered test module that would change the existing OAuth/OIDC fixtures' provider set. Its handler is deliberately synthetic and carries no AT dependency.
++
++Existing `Koan:Web:Auth:Providers:<id>` configuration still overlays provider presentation/intent. Connector-specific options remain with that connector. This card introduces no published connector package ID and does not claim that generic AT deployment settings have already been implemented. The next connector workcard must name its exact package, configuration, persistent key/session storage, metadata/callback URLs, and network prerequisites before its production implementation.
++
++**Guarantee/correction:** A known, configured custom protocol can participate in the same immutable availability/eligibility/default plan, discovery, facts, challenge route, and cookie lifecycle as the existing providers. An enabled explicit unknown protocol fails during plan compilation with a supported-protocol/connector correction. Incomplete contributed configuration fails before challenge. An eligible route lacking an actual ASP.NET scheme fails startup instead of advertising a nonexistent handler. Existing explicit/default-provider failure behavior stays intact. This does not certify the connector's protocol exchange or persistent sessions.
++
++**Complete intent surface:** No new application action exists beyond referencing/configuring the actual connector and the existing `AddKoan()` bootstrap. A protocol that needs an account identifier reads its connector-owned query parameter directly from the initiating request in its standard authentication handler. The connector validates syntax, length, resolution and protocol meaning and binds the validated subject into its protected protocol state. It is never an identity claim merely because it appeared in the query. The generic controller, existing `return` allow-list, `prompt` handling and OAuth2/OIDC behavior remain unchanged. Connectors register named schemes before `AuthModule.Start`; adding an unrecognized Type to configuration alone cannot manufacture a custom protocol or handler. The effective, merged `ProviderOptions` remains the plan's authority; connectors must consume its scopes/callback settings or reject unsupported intent explicitly, never silently ignore overlays.
++
++**Public concepts:**
++
++- `IAuthProtocol`: one connector-author contract expressing configuration eligibility for a new protocol; kept in inert Auth.Abstractions because another module consumes it.
++- Identifier query names and validation remain connector-owned; no new generic challenge property or controller forwarding concept is introduced.
++- Ordinary ASP.NET `AuthenticationScheme`, options and handler: existing standard concepts reused for realization; no Koan substitute is introduced.
++- No new application registry, factory, result hierarchy, builder, service locator, middleware, or credential abstraction.
++
++**Docs read:**
++
++- [AGENTS.md](../../AGENTS.md), [CLAUDE.md](../../CLAUDE.md), and [explore skill](../../.codex/skills/explore/SKILL.md) establish the mandatory ownership, constant, module, exploration, and evidence requirements; all apply.
++- [Engineering index](../engineering/README.md) establishes instruction-first operational documentation and named failure/recovery guidance; relevant to the resulting auth guidance.
++- [Architecture principles](../architecture/principles.md) places immutable eligibility at the pillar and mechanics at adapters, preferring standard .NET; directly determines this seam.
++- [Documentation navigation](../toc.yml) already reaches authentication setup and identity reference; update the existing linked pages instead of creating a parallel user guide.
++- [Root README](../../README.md) establishes package-reference intent, singular `AddKoan()`, and the distinction between availability and selected behavior; the application expression must preserve it.
++- [Web Auth technical contract](../../src/Koan.Web.Auth/TECHNICAL.md) identifies the one provider plan, maintained handler path, cookie lifecycle and unsupported token-persistence boundary; directly relevant.
++- [Authentication setup](../guides/authentication-setup.md) supplies current user configuration and configuration-only OAuth2/OIDC behavior; those paths are regressions to preserve.
++
++**Code read:**
++
++- [AuthProviderPlan](../../src/Koan.Web.Auth/Providers/AuthProviderPlan.cs) compiles activation, overlay, eligibility and default election; its hardcoded protocol validation/challenge eligibility is the current admission gate.
++- [AuthSchemeSeeder](../../src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs) realizes OAuth2/OIDC and already respects an existing named ASP.NET scheme; extend its terminal assurance, not its protocol engine collection.
++- [AuthController](../../src/Koan.Web.Auth/Controllers/AuthController.cs) validates the return URL before issuing a named challenge; its handler receives the original initiating request, so no identifier forwarding edit is needed.
++- [ServiceCollectionExtensions](../../src/Koan.Web.Auth/Extensions/ServiceCollectionExtensions.cs) owns the cookie and discovered auth lifecycle handlers; no cookie event replacement is required.
++- [AuthModule](../../src/Koan.Web.Auth/Initialization/AuthModule.cs) resolves the plan and seeds schemes at startup before reporting the host's authentication story; preserve that lifecycle.
++- [AuthProviderDefinition](../../src/Koan.Web.Auth.Abstractions/Providers/AuthProviderDefinition.cs), [ProviderOptions](../../src/Koan.Web.Auth.Abstractions/Options/ProviderOptions.cs), and [IAuthProviderCatalog](../../src/Koan.Web.Auth.Abstractions/Providers/IAuthProviderCatalog.cs) already supply provider metadata, overlay and credential-free output; reuse their roles.
++- [AuthConstants](../../src/Koan.Web.Auth/Infrastructure/AuthConstants.cs) owns existing controller routes; no new route is needed.
++- [AuthCompositionFacts](../../src/Koan.Web.Auth/Composition/AuthCompositionFacts.cs) reads the same plan; successful custom eligibility needs no second facts registry.
++- [TestAuthModule](../../src/Connectors/Web/Auth/Test/Initialization/TestAuthModule.cs) contributes immutable provider definitions while Web Auth owns eligibility/reporting; its module pattern is the closest connector example.
++- [ProviderCatalog](../../src/Koan.Core/Providers/ProviderCatalog.cs) supplies normalized, duplicate-rejecting, host-owned lookup; reuse it for protocol contributions without adding Core policy.
++- [AuthProviderPlanTests](../../tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs), [AuthEngineSwapSpec](../../tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/AuthEngineSwapSpec.cs), and [AuthSwapFixture](../../tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/AuthSwapFixture.cs) supply focused plan tests and real loopback OAuth2/OIDC flows; extend rather than replace them.
++
++**Reusing:**
++
++The required explicit searches were run over `src/` and `samples/`, with displayed results narrowed to authentication:
++
++```text
++rg "\bconst\b" src/ samples/ -g "*.cs"
++rg "\bConstants\b" src/ samples/ -g "*.cs"
++rg "\bOptions\b" src/ samples/ -g "*.cs"
++rg "record|class .*Dto|class .*Request|class .*Response" src/ samples/ -g "*.cs"
++```
++
++- **Already exists:** `AuthProviderProtocols.Oidc/OAuth2`, provider definition/options/catalog, `AuthConstants.Routes.Challenge/Callback`, `AuthenticationExtensions.CookieScheme`, current return-URL policy and provider facts.
++- **Already exists:** normal ASP.NET scheme registration and handler/options contracts; the seeder's pre-existing-scheme skip permits connector-owned mechanics.
++- **Already exists:** `ChallengeOptions` controls JSON/API challenge classification, not protocol-specific identifier grammar; do not overload it with AT options.
++- **Already exists:** cross-module contracts belong in `Sylin.Koan.Web.Auth.Abstractions`, which already references `Microsoft.AspNetCore.App` and Core.
++- **Needs to be created:** a custom-protocol configuration-validator contract; no current equivalent was found. Connector-specific identifier constants belong to the AT follow-up.
++- **Needs to be created:** post-seeding verification that each eligible route has an actual named handler, plus focused custom-protocol tests.
++
++**Creating new:**
++
++| New or changed code | Exact location | Justification |
++| --- | --- | --- |
++| `IAuthProtocol` interface | `src/Koan.Web.Auth.Abstractions/Providers/IAuthProtocol.cs` | Inert cross-module protocol validation contract; no runtime module or ASP.NET substitute. |
++| Compile contributed protocol lookup; use validator for custom protocols; preserve built-in validators | `src/Koan.Web.Auth/Providers/AuthProviderPlan.cs` | One host plan remains the sole eligibility/election owner. Reject duplicate protocol contributions and contributions attempting to replace reserved OAuth2/OIDC mechanics. |
++| Verify each eligible named scheme exists after realization | `src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs` | Assurance belongs where the plan becomes handlers; missing mechanics must not silently pass startup. |
++| Contributed-protocol plan cases | `tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs` | Exercise normalized lookup, missing/duplicate protocol, invalid configuration and host isolation at the existing decision owner. |
++| Scheme assurance tests | `tests/Koan.Web.Auth.Tests/AuthSchemeSeederTests.cs` | Exercise eligible-missing-handler failure and preservation of a pre-registered standard scheme. |
++| Connector-shaped custom protocol/handler fixture and challenge cases | `tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/` with one top-level type per file | Exercise real `AddKoan()` composition, unmodified controller challenge, original-request identifier access, cookie lifecycle and plan/facts alignment without an AT SDK dependency. |
++| Contributor contract and registration boundary docs | `src/Koan.Web.Auth.Abstractions/README.md`, `src/Koan.Web.Auth.Abstractions/TECHNICAL.md`, `src/Koan.Web.Auth/README.md`, `src/Koan.Web.Auth/TECHNICAL.md`, `docs/guides/authentication-setup.md` | Keep the existing linked application and connector-author story accurate; navigation already reaches the relevant guide. |
++
++The existing `AuthProviderProtocols` built-in constants remain; do not add `Atproto` there in the generic seam. Its stable protocol ID belongs to the future connector. This workcard records the additive design decision; existing dated ADRs remain unchanged. Add an ADR/navigation entry only if review requires a lasting framework-wide policy change beyond this owned extension.
++
++**Coalescence:**
++
++Closest pattern: `AuthSchemeSeeder` plus `TestAuthModule`. The current decision owner is `AuthProviderPlan`; its consumers are startup realization, discovery/controller, cookie challenge selection and facts. State lifetime is one host composition, with request operations consuming the retained result. Existing OAuth2/OIDC option/handler construction is already centralized and must stay there.
++
++Chosen specificity: **Web Auth pillar eligibility with connector-owned protocol mechanics**. Disposition: **keep** the plan, built-in validation, seeder, cookie and controller; **extend** protocol admission; **reuse** standard ASP.NET registration. Core is too wide because protocol requirements are authentication semantics. The application is too narrow because every AT-enabled app would otherwise repeat handler/diagnostic wiring. The connector is too narrow to elect itself as the site's default outside the shared plan.
++
++Compared alternatives:
++
++| Shape | Benefit | Cost and decision |
++| --- | --- | --- |
++| Eligibility-only contribution plus ordinary registered ASP.NET scheme | Small cross-module contract; standard named options/handlers; seeder already supports existing schemes | Requires explicit eligible-route-to-scheme verification. **Chosen.** A contributor declaring a protocol is insufficient without its actual handler. |
++| One protocol interface with both validation and `Seed(IServiceProvider, ...)` | Can realize arbitrary configuration-only provider IDs after the plan is compiled | Introduces a parallel custom lifecycle and service-provider plumbing, duplicates ASP.NET registration, and invites moving existing OAuth2/OIDC into an unnecessary new framework. **Rejected for this slice.** Reconsider only if a real connector requires dynamic post-plan scheme creation that normal module/named-options registration cannot express. |
++| Treat AT as generic OAuth2 with dummy endpoints/secret | No new protocol contract | Misstates eligibility and routes exchanges through mechanics whose behavior differs from the selected native client. **Rejected.** |
++| Application registers its handler and bypasses provider catalog | Small local patch | Breaks reference intent, default challenge, availability/facts, and repeated-app simplicity. **Rejected.** |
++
++No old production path needs deletion: this is additive. Do not preserve a temporary app-side provider bypass, fake OAuth endpoint configuration, or custom cookie path if one appears during connector experimentation.
++
++**Ergonomics:** A person still chooses an account provider and, when that provider needs it, an identifier; the normal callback returns to the allow-listed destination. A Koan application author keeps one reference/configuration decision and one bootstrap. A connector author sees one protocol validation contract beside existing provider metadata and familiar ASP.NET registration. IntelliSense discovery stays in the existing `Providers` namespace; no additional builder or operation hierarchy is introduced. Coding agents can trace definition -> plan -> named scheme -> handler -> Koan cookie, and startup rejects the otherwise easy-to-miss gap between a declared provider and a real scheme.
++
++**Constraints satisfied:**
++
++- [x] No inline HTTP endpoints; the existing attribute-routed controller remains unchanged.
++- [x] No empty placeholder or commented-out production scaffolding; only this workcard is written at exploration time.
++- [x] New stable keys use project-owned constants where introduced; AT identifier keys and tunables remain in the connector.
++- [x] No new raw environment checks; existing named Koan environment posture remains intact.
++- [x] No data repository or store is added; Entity-first persistence is unaffected.
++- [x] No large data path is added; bounded host configuration enumerations are not Entity streaming.
++- [x] Cross-module contract lives in inert Auth.Abstractions; Web Auth alone owns eligibility/election.
++- [x] Structural compilation occurs once per host; no request-time module discovery or global state.
++- [x] Existing public documentation will describe the actual admitted path and its corrective failures; dated ADRs are not silently rewritten.
++- [x] No production code changes occur before this plan is reviewed by the coordinator. The accepted epic already authorizes implementation; this is coordination review, not another user permission request.
++
++**Risks:**
++
++- Normal ASP.NET registration must happen before `AuthModule.Start`. The generic seam must prove that this works through a real `AddKoan()` host, not just a hand-built service provider.
++- A custom protocol can have connector-owned settings outside the provider overlay. Validation diagnostics must retain the correct setting path instead of blindly prefixing every error with `Providers:<id>`.
++- Configuration-only custom provider IDs are not automatically implemented. They work only when the real connector supplies validation and registers the corresponding named handler; otherwise startup correctively fails. Existing configuration-only OAuth2/OIDC remains supported.
++- The connector-owned identifier query is untrusted input. Its handler must validate it before discovery/network use; this seam neither resolves it nor promotes it into a subject. Do not log the supplied identifier by default.
++- A registered scheme proves wiring, not protocol correctness. Real AT state/issuer/replay/DID validation, refresh and encrypted session/key persistence remain the connector's separate acceptance gate.
++- The existing cookie pipeline derives provider identity from `/auth/{id}/callback`; a connector choosing another callback convention could lose that lifecycle attribution. Preserve the convention for the first connector.
++
++Focused proof plan before declaring the seam done:
++
++1. Run the existing `tests/Koan.Web.Auth.Tests` suite, adding known/unknown/custom-incomplete/duplicate/reserved-protocol and separate-host cases.
++2. Prove custom eligibility plus missing named handler fails host startup with provider ID, protocol and registration correction.
++3. Through a real loopback `AddKoan()` host, prove a pre-registered custom scheme survives seeding, can read its identifier from the original challenge request, and observes the existing allow-listed return handling and cookie lifecycle rejection.
++4. Run the existing `tests/Suites/Auth/Koan.Web.Auth.Integration.Tests` suite unchanged for actual OAuth2/OIDC discovery, challenge/callback, claims/linking and plan/facts parity.
++5. Assert custom discovery/facts come from the same plan and reveal no options secrets. Build the two affected Auth projects and focused suites; do not run a full release certification or publish packages for this slice.
++
++## Implementation evidence — 9 September 2026
++
++Implemented only the inert validator contract and the existing Web Auth plan/seeder extension. No auth controller,
++cookie events, identity stores, package versions, solution composition, or original sibling checkout were changed by
++this seam work. The seeder now consumes the already-normalized protocol from the plan, including whitespace/case
++normalization for existing OAuth2/OIDC providers.
++
++Commands run from the isolated Koan root with `C:/Tools/DotNet/dotnet.exe` (SDK 10.0.401, .NET 10.0.12):
++
++```powershell
++& 'C:/Tools/DotNet/dotnet.exe' test tests/Koan.Web.Auth.Tests/Koan.Web.Auth.Tests.csproj --no-restore -v minimal
++& 'C:/Tools/DotNet/dotnet.exe' test tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/Koan.Web.Auth.Integration.Tests.csproj -v minimal
++git diff --check
++```
++
++- Unit suite: **57 passed, 0 failed, 0 skipped**. Includes effective option overlay, exactly-once validation,
++  inactive-provider handling, connector correction paths, unknown/duplicate/reserved protocols, separate-host
++  isolation, eligible-without-handler failure at the startup seeder, retained custom scheme, and maintained builtin
++  handler identity across repeated seeding.
++- HTTP integration suite: **9 passed, 0 failed, 0 skipped**. The existing six OAuth2/OIDC tests remain intact and pass
++  real local challenge/callback, discovery/JWKS, validated ID token, claims/linkage, and provider/facts checks. Three
++  new cases run a real loopback `AddKoan()` host with connector-shaped contributions, proving custom discovery/facts
++  and election, standard scheme preservation, existing return-URL policy, ordinary Koan cookie issuance, and sign-in
++  rejection before cookie issuance. A callback query replacement cannot override the initiating request value bound
++  into protected fixture state.
++- Both affected production Auth assemblies compiled as test dependencies; successful runs emitted no build warnings
++  or errors. `git diff --check` passed; Git only reported Windows line-ending conversion notices.
++
++The initial `--no-restore` attempt found the new checkout's missing assets; a normal restore supplied them. The first
++test compile exposed a namespace ambiguity in newly added test code, corrected to fully qualify `Options.Create`.
++The successful runs above followed those corrections.
++
++The custom HTTP handler is intentionally a synthetic local fixture. It proves the generic contribution boundary and
++cookie policy, not AT discovery, issuer validation, network safety, replay protection, credential storage, or refresh.
++Those belong to the actual connector's separate tests and native protocol acceptance evidence. No full release
++certification, package publication, or remote deployment was performed.
++
++## Callback permission correction — 10 September 2026
++
++**Task:** Reject callback grants that silently omit an explicitly requested permission before replacing a working session.
++**Application intent:** When a participant connects the access needed for an action, report whether that access was actually granted.
++**Public expression:** Keep the existing connector reference, `AddKoan()`, declared `Providers:atproto:Scopes` ceiling, and trusted `AtprotoChallenge.WithScopes(properties, ...)` action. No additional application code or configuration is required.
++**Guarantee/correction:** Every exact scope protected in the pending callback binding must occur in the returned token grant. Missing access produces a sanitized corrective HTTP 400 page and retains the previous durable/cached session. Restores and refreshes still check only the declared ceiling; they do not demand every optional client permission.
++**Complete intent surface:** The application still declares and requests concrete provider-canonical strings; the user completes the provider's consent flow. No additional user action is introduced.
++**Public concepts:** None. A new internal exception distinguishes missing requested access from untrusted provider failures without exposing provider bodies, credentials, or scope values.
++**Docs read:** `docs/engineering/README.md` establishes executable, corrective instructions; `docs/architecture/principles.md` places protocol mechanics in the adapter; root `README.md` preserves reference-and-bootstrap intent; `docs/toc.yml` identifies the existing auth guide; connector `README.md` and `TECHNICAL.md` own exact-grant and session guarantees.
++**Code read:** `AtprotoSessions` owns callback validation and current scope ceilings; `VerifiedSessionStore` stages SDK writes and commits under the per-DID gate; `AtprotoAuthenticationHandler` owns browser failure sanitization; `AtprotoAuthModule` composes the ordinary ASP.NET scheme; `ProtocolGuards` tests scope policy and durable staging.
++**Reusing:** Existing scope constants, allowed-scope catalog, protected Binding, staged store, per-DID gate, and handler failure page pattern. Explicit constants/options/DTO searches found no missing-scope failure type or requested-grant validator to reuse.
++**Creating new:**
++
++| New code | Location | Justification |
++| --- | --- | --- |
++| `RequireRequestedScopes` | `Protocol/AtprotoSessions.cs` | The callback owner compares the protected request with the returned grant before session replacement. |
++| `AtprotoMissingScopesException` | `Protocol/AtprotoMissingScopesException.cs` | Internal typed, sanitized failure; neither application authorization nor generic auth owns AT grant mechanics. |
++| Missing-access failure page | `Hosting/AtprotoAuthenticationHandler.cs` | Reuses the handler's existing corrective HTTP 400 page boundary. |
++| Scope and session-retention regressions | `tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs` | Proves silent downscope rejection and keeps ordinary sign-in/restore optionality intact. |
++
++**Coalescence:** Closest pattern is `AtprotoSessions.RequireScopes`. Keep it as the ceiling-only check for restoration/refresh and absorb the callback's second ceiling check into the requested-grant validator. This adapter is the single owner; moving it into generic Auth would invent AT policy there, and moving it into Tangent would duplicate security checks for every application. No new request-time discovery or persistent state is added.
++**Ergonomics:** Existing C# intent remains unchanged. Internal method names make the ceiling-versus-request distinction readable in one callback path. Browser correction says access was not granted and prior sign-in remains, without presenting raw protocol fields.
++**Constraints satisfied:** No new endpoint, module, environment switch, public API, data abstraction, unbounded data path, or package version. Existing module docs are updated in place; no ADR or TOC entry is needed for this correction. The accepted implementation and continuation authorize this scope.
++**Risks:** Exact scope matching deliberately rejects provider normalization or expansion; callers must continue requesting canonical scope strings. A rejected newly issued grant is not installed locally; no automatic revocation is attempted because provider revocation could affect a pre-existing authorization.
+diff --git a/samples/AtprotoIdentity/.gitignore b/samples/AtprotoIdentity/.gitignore
+new file mode 100644
+index 000000000..a77ff4f98
+--- /dev/null
++++ b/samples/AtprotoIdentity/.gitignore
+@@ -0,0 +1,4 @@
++.state/
++.koan/
++data/
++*.sqlite*
+diff --git a/samples/AtprotoIdentity/AtprotoIdentity.csproj b/samples/AtprotoIdentity/AtprotoIdentity.csproj
+new file mode 100644
+index 000000000..4deb9fd59
+--- /dev/null
++++ b/samples/AtprotoIdentity/AtprotoIdentity.csproj
+@@ -0,0 +1,14 @@
++<Project Sdk="Microsoft.NET.Sdk.Web">
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <IsPackable>false</IsPackable>
++  </PropertyGroup>
++  <ItemGroup>
++    <ProjectReference Include="../../src/Koan.Web/Koan.Web.csproj" />
++    <ProjectReference Include="../../src/Koan.Identity/Koan.Identity.csproj" />
++    <ProjectReference Include="../../src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
++    <ProjectReference Include="../../src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj" />
++  </ItemGroup>
++</Project>
+diff --git a/samples/AtprotoIdentity/Program.cs b/samples/AtprotoIdentity/Program.cs
+new file mode 100644
+index 000000000..3f1ae7cd4
+--- /dev/null
++++ b/samples/AtprotoIdentity/Program.cs
+@@ -0,0 +1,6 @@
++using Koan.Core;
++
++var builder = WebApplication.CreateBuilder(args);
++builder.Services.AddKoan();
++var app = builder.Build();
++await app.RunAsync();
+diff --git a/samples/AtprotoIdentity/README.md b/samples/AtprotoIdentity/README.md
+new file mode 100644
+index 000000000..474eae99d
+--- /dev/null
++++ b/samples/AtprotoIdentity/README.md
+@@ -0,0 +1,63 @@
++# Sign in as an AT identity
++
++This generic sample references Web, Identity, SQLite, and the native AT
++authentication connector. `Program.cs` contains only `AddKoan()` and normal host
++startup. The form asks for a handle or DID; `/sample/identity` returns the verified
++protocol claims after sign-in. No Bluesky profile, email, or application-specific
++domain model is involved.
++
++For the local protocol test network on PLC2582/PDS2583/PDS2584:
++
++```powershell
++$env:DOTNET_ENVIRONMENT = 'Development'
++dotnet run --project samples/AtprotoIdentity --no-launch-profile
++```
++
++Open `http://127.0.0.1:5211`. The development settings use the AT profile's
++loopback-client exception, an identity-only scope, and explicit local origins.
++Supply a disposable test DID. To exercise a local handle without public DNS,
++configure `Koan:Web:Auth:Atproto:DevelopmentHandles:<handle>` with its actual test
++DID; the real DID document must reverse-bind that handle. Do not copy a test map
++or local allowed-origin list into a public deployment.
++
++For a public host, set the provider ClientId to its canonical HTTPS metadata URL,
++remove the development exceptions, use the public PLC directory, and persist and
++protect both the session directory and ASP.NET Data Protection key ring. Reuse
++the module README's complete configuration/custody contract.
++
++Inspect `/health/ready`, the startup provider election and
++`/.well-known/Koan/facts`. Cookie logout and upstream disconnection are separate
++actions; this sample's read-only identity page does not add a disconnect API.
++
++## Explicit disposable-provider lifecycle proof
++
++After completing ordinary browser sign-in with the disposable fixture's `owner`
++account, stop this sample so its process-exclusive protected store can be opened
++by the test. Run from the repository root, under the same OS account and with the
++same ASP.NET Data Protection key ring used by the sample:
++
++```powershell
++$env:KOAN_ATPROTO_LIFECYCLE = 'disconnect'
++$env:KOAN_ATPROTO_SAMPLE = (Resolve-Path samples/AtprotoIdentity).Path
++$env:KOAN_ATPROTO_FIXTURES = 'C:/absolute/path/to/disposable-fixtures.json'
++$env:KOAN_ATPROTO_RECEIPT = 'C:/absolute/path/to/disconnect-receipt.json'
++dotnet test tests/Koan.Web.Auth.Atproto.Tests --filter FullyQualifiedName~LocalProviderLifecycle
++```
++
++The fixture shape is `{ "accounts": [{ "role": "owner", "did": "did:plc:...",
++"handle": "local.test", "pds": "http://localhost:2583" }] }`. Include the other
++local accounts when their handle mappings are needed. This test never reads
++passwords, accepts only a loopback provider, and intentionally revokes that
++account's grant for this sample client. It expires only local access-token
++metadata, proves a real provider refresh rotates both tokens, performs an
++authenticated `getSession`, calls checked upstream revocation, and verifies the
++retained refresh credential now fails with `invalid_grant`. Credentials remain
++in memory or the existing protected store; the receipt contains only booleans,
++status codes and the disposable DID.
++
++Start the sample again and explicitly complete browser authentication and
++consent. Stop it, change `KOAN_ATPROTO_LIFECYCLE` to `reauthorized`, choose a new
++receipt path, and run the same filtered test. It proves the new persisted grant
++restores, refreshes, and authenticates as the same DID. Clear the lifecycle
++environment variable afterward. The normal test suite skips this destructive
++local-provider proof unless the mode is explicitly set.
+diff --git a/samples/AtprotoIdentity/Web/IdentityController.cs b/samples/AtprotoIdentity/Web/IdentityController.cs
+new file mode 100644
+index 000000000..833b82651
+--- /dev/null
++++ b/samples/AtprotoIdentity/Web/IdentityController.cs
+@@ -0,0 +1,23 @@
++using Koan.Web.Auth.Connector.Atproto;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++
++namespace AtprotoIdentity.Web;
++
++[ApiController]
++public sealed class IdentityController : ControllerBase
++{
++    [HttpGet("/")]
++    public ContentResult Home() => Content("""
++        <!doctype html><html lang="en"><meta charset="utf-8"><title>AT identity</title>
++        <h1>Sign in with your AT identity</h1>
++        <form action="/auth/atproto/challenge" method="get">
++          <label>Handle or DID <input name="identifier" required autocomplete="username"></label>
++          <input type="hidden" name="return" value="/sample/identity"><button>Continue</button>
++        </form><p>Your account provider handles authentication. This sample requests only identity access.</p>
++        </html>
++        """, "text/html");
++
++    [Authorize, HttpGet("/sample/identity")]
++    public object Me() => new { did = User.FindFirst(AtprotoClaimTypes.Did)?.Value, handle = User.FindFirst(AtprotoClaimTypes.Handle)?.Value };
++}
+diff --git a/samples/AtprotoIdentity/appsettings.Development.json b/samples/AtprotoIdentity/appsettings.Development.json
+new file mode 100644
+index 000000000..3a4357181
+--- /dev/null
++++ b/samples/AtprotoIdentity/appsettings.Development.json
+@@ -0,0 +1,23 @@
++{
++  "Urls": "http://127.0.0.1:5211",
++  "Koan": {
++    "Identity": { "Posture": "Closed", "SeedDevUsers": false },
++    "Data": { "Sqlite": { "ConnectionString": "Data Source=identity.sqlite" } },
++    "Web": {
++      "Auth": {
++        "PreferredProviderId": "atproto",
++        "Providers": {
++          "atproto": {
++            "ClientId": "http://localhost?redirect_uri=http%3A%2F%2F127.0.0.1%3A5211%2Fauth%2Fatproto%2Fcallback&scope=atproto",
++            "Scopes": ["atproto"]
++          }
++        },
++        "Atproto": {
++          "PlcDirectory": "http://localhost:2582",
++          "SessionDirectory": ".state/atproto",
++          "DevelopmentAllowedOrigins": ["http://localhost:2582", "http://localhost:2583", "http://localhost:2584"]
++        }
++      }
++    }
++  }
++}
+diff --git a/samples/AtprotoIdentity/koan.lock.json b/samples/AtprotoIdentity/koan.lock.json
+new file mode 100644
+index 000000000..ddceaa16b
+--- /dev/null
++++ b/samples/AtprotoIdentity/koan.lock.json
+@@ -0,0 +1,84 @@
++{
++  "schema": 2,
++  "app": {
++    "name": "AtprotoIdentity",
++    "koan": "1.0",
++    "tfm": "net10.0"
++  },
++  "modules": [
++    {
++      "id": "Koan.Cache.Abstractions",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Core",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Data.Abstractions",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Data.Analytics",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Data.Connector.Sqlite",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Data.Core",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Data.Relational",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Data.Relational.Abstractions",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Identity",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Security.Trust",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Web",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Web.Auth",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Web.Auth.Abstractions",
++      "version": "1.0"
++    },
++    {
++      "id": "Koan.Web.Auth.Connector.Atproto",
++      "version": "1.0"
++    }
++  ],
++  "directReferences": [
++    {
++      "kind": "project",
++      "id": "Koan.Data.Connector.Sqlite"
++    },
++    {
++      "kind": "project",
++      "id": "Koan.Identity"
++    },
++    {
++      "kind": "project",
++      "id": "Koan.Web"
++    },
++    {
++      "kind": "project",
++      "id": "Koan.Web.Auth.Connector.Atproto"
++    }
++  ]
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Controllers/AtprotoMetadataController.cs b/src/Connectors/Web/Auth/Atproto/Controllers/AtprotoMetadataController.cs
+new file mode 100644
+index 000000000..4d6a1f147
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Controllers/AtprotoMetadataController.cs
+@@ -0,0 +1,27 @@
++using Koan.Web.Auth.Connector.Atproto.Infrastructure;
++using Koan.Web.Auth.Connector.Atproto.Protocol;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++
++namespace Koan.Web.Auth.Connector.Atproto.Controllers;
++
++[ApiController, AllowAnonymous]
++public sealed class AtprotoMetadataController(AtprotoSessions sessions) : ControllerBase
++{
++    [HttpGet(Constants.Metadata)]
++    public IActionResult Metadata()
++    {
++        if (!sessions.Enabled) return NotFound();
++        return Ok(new
++        {
++            client_id = sessions.ClientId,
++            application_type = "web",
++            grant_types = new[] { "authorization_code", "refresh_token" },
++            scope = string.Join(' ', sessions.AllowedScopes),
++            response_types = new[] { "code" },
++            redirect_uris = new[] { sessions.RedirectUri },
++            token_endpoint_auth_method = "none",
++            dpop_bound_access_tokens = true
++        });
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/EXPLORATION.md b/src/Connectors/Web/Auth/Atproto/EXPLORATION.md
+new file mode 100644
+index 000000000..48cfbf94b
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/EXPLORATION.md
+@@ -0,0 +1,129 @@
++# AT Protocol connector exploration — 9 September 2026
++
++Follow-up: Docker development and public sign-in. The runtime failure for a real
++handle resolved its public DID through the fixture PLC (404) and escaped the
++challenge as 500. Keep resolution in AtprotoSessions, routing in AtprotoHttp and
++corrective failures in the handler. Typed DevelopmentPlcDirectory selects only
++explicit fixture identities; DevelopmentConnectHost applies only to exact allowed
++origins, preserving protocol URLs. Tests cover public/fixture separation, strict
++origin matching and production rejection. The application retains AddKoan and
++its existing domain/data behavior. User-authorized Docker migration uses fresh
++Linux keys with genuine reauthorization; DPAPI backups remain unchanged.
++
++Status: exploration complete; public contract approved by the coordinating agent before production edits. The accepted Tangent EPIC-001 explicitly authorizes this generic connector contribution. This card owns no Tangent application policy.
++
++**Task:** Add generic AT Protocol browser authentication to Koan through the standard ASP.NET authentication lifecycle and the existing Web Auth provider plan.
++
++**Application intent:** A person signs in with their existing AT identity, and returns as the same verified DID after an application restart; an application can later use the separately authorized PDS session without receiving tokens in its browser cookie.
++
++**Public expression:** Reference the proposed `Sylin.Koan.Web.Auth.Connector.Atproto` package and keep the ordinary host:
++
++```csharp
++builder.Services.AddKoan();
++```
++
++Configure `Koan:Web:Auth:Providers:atproto:ClientId` to the public HTTPS URL of `/auth/atproto/client-metadata.json`. `Scopes` defaults to `["atproto"]`. The challenge is the existing `/auth/atproto/challenge?identifier=<handle-or-DID>&return=<destination>`. The connector uses `/auth/atproto/callback`; an incompatible `CallbackPath` is rejected. Operators persist the session directory and the host's ASP.NET Data Protection key ring. The default PLC directory is the public protocol directory. A dedicated development configuration may use the profile's special localhost client ID and exact allowed local origins, only through `KoanEnv.Gate.DevelopmentOnly`.
++
++**Guarantee/correction:** A successful authentication ticket binds the initiating browser's correlation cookie, one-use protected authorization state, expected account DID, discovered PDS, callback issuer, and token subject. Standard Koan cookie sign-in, return-URL validation, user claims, and external-identity linkage remain the owning lifecycle. Discovery cannot connect to nonglobal addresses except explicitly allowed development origins. Unsupported or incomplete configuration fails with the precise setting to correct; missing correlation, issuer mismatch, DID mismatch, invalid state, unusable refresh, or unsafe destination never creates a signed-in principal.
++
++**Complete intent surface:** Package reference; existing `AddKoan()`; explicit provider ClientId; optional provider Scopes; a handle/DID submitted to the existing challenge endpoint; publicly reachable client metadata and fixed callback; durable session directory and Data Protection keys. Optional development-network settings are test topology, not production fallback. Additional resource permissions are application authorization decisions and are never added to minimal sign-in automatically. No manual provider registration or custom middleware ordering is required of the application.
++
++The approved scope refinement keeps provider `Scopes` as the declared client-metadata upper bound. A first ordinary sign-in requests only `atproto`; when a validated durable session for the same DID/PDS/issuer/client already has a broader grant within that ceiling, ordinary sign-in requests that established grant again rather than silently downscoping it. Trusted server code uses `AtprotoChallenge.WithScopes(AuthenticationProperties, params string[])` to request an exact declared subset. Raw query scopes never grant access. This AT-specific meaning is documented rather than silently importing generic OAuth scope behavior.
++
++**Public concepts:**
++
++- Existing provider ClientId identifies the application's published metadata; existing Scopes express the access being requested.
++- Identifier is the account a person chose; verified DID is the identity key.
++- Connector options configure PLC discovery, custody directory, and an explicitly local development topology.
++- A guarded native session client permits authorized application-server XRPC requests and explicit upstream disconnect. It exposes no raw OAuth secret or unguarded SDK HTTP client. Local logout remains local logout.
++
++**Docs read:**
++
++- `AGENTS.md` routes framework changes through contributor law and mandatory exploration.
++- `CLAUDE.md` establishes reference-as-intent composition, adapter ownership, plain async verbs, environment gates, and current-source authority.
++- `docs/MEMORY.md` requires actual provider evidence and durable workcards, and warns against asserting compatibility from source alone.
++- `docs/engineering/README.md` defines corrective operational documentation.
++- `docs/architecture/principles.md` places protocol mechanics in the adapter and semantic activation in Web Auth.
++- `README.md` establishes the ordinary `AddKoan()` application expression.
++- `docs/toc.yml` identifies the current identity and authentication guidance routes.
++- `docs/guides/auth-howto.md` describes provider configuration and the existing authentication action surface.
++- `docs/engineering/adding-a-connector.md` supplies connector project/module/documentation conventions; current package-local versioning in CLAUDE overrides its older release-train prose.
++- `docs/reference/capability-map.md` gives exact current Web Auth and connector package names; Atproto is a newly proposed family sibling, not an existing published package claim.
++- [AT OAuth profile](https://atproto.com/specs/oauth) defines metadata, localhost development, account binding, PKCE/PAR/DPoP and the public/confidential client distinction. This first connector is explicitly a public client; a web server may use that profile.
++- [AT DID specification](https://atproto.com/specs/did) defines identity and PDS resolution; handles never become the persistent identity key.
++
++**Code read:**
++
++- `src/Connectors/Web/Auth/Google/Initialization/GoogleAuthModule.cs`: contributes defaults, allowing Web Auth to own eligibility and election; it supplies no protocol implementation.
++- `src/Connectors/Web/Auth/Test/Initialization/TestAuthModule.cs`: registers controller discovery, typed options and provenance through a real functional module.
++- `src/Koan.Web.Auth/Providers/AuthProviderPlan.cs`: compiles effective provider options and election once; the concurrent generic protocol seam retains this owner.
++- `src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs`: realizes standard ASP.NET schemes and links external identities. A registered AT scheme must use the same public provider ID.
++- `src/Koan.Web.Auth/Controllers/AuthController.cs`: validates return destinations then invokes an ASP.NET challenge; logout remains cookie-only.
++- `src/Koan.Web.Auth.Abstractions/Options/ProviderOptions.cs`: owns the canonical merge, existing ClientId/Scopes/CallbackPath, and avoids a second generic provider model.
++- `src/Koan.Web.Auth.Abstractions/Providers/AuthProviderDefinition.cs` and `IAuthProviderCatalog.cs`: expose availability and redacted effective scope/eligibility; no credentials are added to the public catalog.
++- `src/Koan.Web.Auth.Abstractions/Domain/IExternalIdentityStore.cs` and `ExternalIdentity.cs`: own external identity linkage using a hashed provider key.
++- `src/Koan.Web.Auth/Hosting/RequestSchemeAdaptiveCookieBuilder.cs`: explains browser cookie storability; this internal OAuth/OIDC helper is not copied. AT uses GET callbacks, SameSite=Lax and explicit production Secure policy.
++- `src/Koan.Core/KoanEnv.cs` and existing auth development-gate uses: establish the named environment decision surface.
++- `tests/Koan.Web.Auth.Tests/Koan.Web.Auth.Tests.csproj`: supplies current framework-reference/xunit v3 project shape.
++- Pinned CarpaNet OAuth source at `a24d54bf6a9ce3bbf7c1961d37ab099abe1d1a65`: real tested PKCE/PAR/DPoP/refresh and storage interfaces; callback issuer and subject consistency checks need the adapter validation layer.
++
++**Reusing:**
++
++- Already exists: one provider plan, generic `IAuthProtocol` validation seam, provider defaults, immutable effective scopes, standard AuthenticationProperties and RemoteAuthenticationHandler, Koan cookie scheme, return-URL policy, external identity store, controller/module discovery, typed options, environment gate, Data Protection, SDK identity resolver, SDK OAuth/state/session interfaces, SDK DPoP proof and token-refresh machinery.
++- Already exists: real S01 provider/browser-API evidence across two PDSes, token rotation after actual process restart, replay rejection, and narrow grant enforcement. This proves SDK mechanics, not the forthcoming browser-cookie handler.
++- Needs to be created: protocol options/validation, a correlated remote handler, public metadata controller, protected single-process protocol storage, guarded discovery/XRPC transport, generic sample and focused tests.
++- Explicit constants/options/shared-type searches found the existing AuthConstants/ProviderOptions/ExternalIdentity and test connector constants; no current AT-specific equivalents.
++- Searches for SSRF/ConnectCallback/private-address protection found only unrelated loopback helpers and ZenGarden address checks. There is no reusable Web Auth DNS-pinning transport. A connector-local implementation is the narrow owner until another protocol demonstrates identical requirements.
++
++**Creating new:**
++
++| New code | Exact location | Justification |
++| --- | --- | --- |
++| Package project | `src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj` | A real protocol adapter with activation and I/O mechanics; same family as existing sign-in connectors |
++| Module | `Initialization/AtprotoAuthModule.cs` under that project | Own registrations/options/controller discovery and redacted provenance once |
++| Stable names | `Infrastructure/Constants.cs` | Canonical scheme, protocol, routes, claim/property names and config section keys |
++| Typed network/session options | `Options/AtprotoOptions.cs` | Operator topology and custody choices; common ClientId/Scopes remain ProviderOptions |
++| ASP.NET handler options | `Options/AtprotoAuthenticationOptions.cs` | Standard RemoteAuthenticationOptions, callback/sign-in/state-format/correlation setup |
++| Protocol validator | `Hosting/AtprotoProtocol.cs` | Implements the inert generic validation contract and rejects unsupported overlay fields |
++| Browser handler | `Hosting/AtprotoAuthenticationHandler.cs` | Framework remote-handler entry points own correlation and ticket production; SDK owns OAuth mechanics |
++| Guarded network owner | `Protocol/AtprotoHttp.cs` | Validates scheme/origin, resolves and pins vetted DNS addresses, disables redirects and bounds responses |
++| Protocol session orchestration | `Protocol/AtprotoSessions.cs` | One native SDK/session owner for discovery, identity binding, refresh, guarded XRPC and disconnect |
++| Maintained DNS adapter | `Protocol/AtprotoDns.cs` | DnsClient 1.8.0 owns DNS wire validation over TCP; replaces the SDK's unchecked raw UDP TXT parser |
++| Protected store | `Storage/ProtectedAtprotoStore.cs` | SDK state/session interfaces with encrypted payloads, atomic consumption and process exclusivity |
++| Callback staging store | `Storage/VerifiedSessionStore.cs` | Prevents SDK callback persistence before browser/subject/issuer validation |
++| Stable protocol claims | `Infrastructure/AtprotoClaimTypes.cs` | Protocol DID survives local identity reconciliation; handle is optional and bidirectionally verified |
++| Trusted permission helper | `Hosting/AtprotoChallenge.cs` | Server-owned additional authorization without query-driven scope escalation |
++| Metadata controller | `Controllers/AtprotoMetadataController.cs` | Attribute-routed public metadata, derived from validated fixed client identity and effective scopes |
++| README and technical contract | `README.md`, `TECHNICAL.md` | Public configuration/correction plus implementation/security/lifecycle boundaries |
++| Generic sample | `samples/AtprotoIdentity/*` | Ordinary AddKoan host, handle/DID form and authenticated who-am-I; no room/participant/Spaces model |
++| Focused integration tests | `tests/Koan.Web.Auth.Atproto.Tests/*` | Actual host composition, correlation/issuer/subject denial, durable state/refresh, SSRF/environment guard tests |
++
++All paths in the table after the project row are relative to that connector unless fully qualified. One top-level class per source file; classes are grouped in responsibility folders. No generic Web Auth files are owned by this slice.
++
++**Coalescence:** Closest pattern is `GoogleAuthModule` for activation plus `AuthSchemeSeeder` for the standard ASP.NET lifecycle. Keep Web Auth as plan/election/return-URL/cookie owner. Add only AT protocol mechanics in this adapter. The concurrent `IAuthProtocol` seam absorbs the fixed OIDC/OAuth2 validation restriction; no AT branch enters the generic controller. A wider networking framework is premature; application-owned PKCE/DPoP or per-application login handlers would duplicate the same security lifecycle. The disposable Tangent probe remains evidence and is not a production implementation path. No legacy production AT path exists to delete.
++
++**Ergonomics:** An operator adds one connector, one client metadata URL and an account input, then uses existing Koan auth routes and claims. Resource authorization uses existing Scopes. The session service has business-neutral, plain async verbs and no separate service process. Security-relevant development settings are explicit; public behavior is not guessed from the HTTP request Host header. Discovery machinery, key material and metadata fields do not leak into the sign-in UI.
++
++**Constraints satisfied:**
++
++- No new inline HTTP endpoints; the metadata route is a controller. Callback interception is the existing ASP.NET RemoteAuthenticationHandler pattern documented by WEB-0071 and AuthController.
++- No empty placeholder types; every new type has a distinct lifecycle or semantic owner.
++- Stable literals are centralized; network limits and custody paths are typed options.
++- Protocol state is mechanical SDK custody, not an application domain entity or a competing repository abstraction.
++- No unbounded entity reads; no public credential/session enumeration endpoint.
++- Development origin exceptions require `KoanEnv.Gate.DevelopmentOnly` and exact configured origins, with guard tests proving every exception.
++- Reusable module README/TECHNICAL and generic sample/test evidence are part of the slice. Parent integration owns generated inventory/TOC publication and contribution packaging.
++
++**Risks:**
++
++- CarpaNet is an experimental alpha. Successful real exchanges do not certify arbitrary PDS implementations; callback/subject and transport guards need negative tests.
++- Initial server client is the supported public OAuth profile, so it does not claim confidential-client revocation/JWKS or longer refresh lifetimes.
++- Protected local files support a single process; a second process must fail ownership rather than race token rotation. Multi-instance session storage is outside this first connector.
++- Linux/container operators must deliberately persist/protect the host key ring. Encrypted session payloads do not secure a compromised application process.
++- Rebinding protection must occur at connection establishment, including IPv4-mapped IPv6 and non-global special-use ranges; preflight DNS checking alone is insufficient.
++- SDK raw ATProtoOAuthClient creates its own HTTP client. Returning it publicly would bypass the guarded transport, so the integration must expose guarded requests instead.
++- Full Spaces repository verification is outside generic identity and remains a separate bounded in-process extension; no verifier claim is made here.
++
++Approved concrete coalescence refinement: the application now needs non-OAuth credential exchange on independently resolved participant PDSes. `AtprotoHttp.Send(HttpRequestMessage, ct)` is public, while its raw HttpClient remains internal. `AtprotoSessions.ResolveDid(did, ct)` returns the SDK document only after the exact identifier check. This reuses the existing guarded transport without placing Spaces policy, credentials, or key selection in the generic connector.
++
++Review-driven correctness work retains one native path: require PAR rather than accept the SDK's direct-authorization fallback; check current permission ceilings before session restoration and after token refresh; serialize callback session replacement with refresh/disconnect; and issue checked revocation with required client_id and SDK DPoP/nonce handling. These fixes are application integration/SDK contribution candidates, not new OAuth cryptography.
+diff --git a/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoAuthenticationHandler.cs b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoAuthenticationHandler.cs
+new file mode 100644
+index 000000000..7d8dc5615
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoAuthenticationHandler.cs
+@@ -0,0 +1,77 @@
++using System.Security.Cryptography;
++using System.Text;
++using System.Text.Encodings.Web;
++using System.Text.Json;
++using Koan.Web.Auth.Connector.Atproto.Infrastructure;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Koan.Web.Auth.Connector.Atproto.Protocol;
++using Koan.Web.Auth.Domain;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Logging;
++using Microsoft.Extensions.Options;
++
++namespace Koan.Web.Auth.Connector.Atproto.Hosting;
++
++internal sealed class AtprotoAuthenticationHandler(IOptionsMonitor<AtprotoAuthenticationOptions> options,
++    ILoggerFactory logger, UrlEncoder encoder, AtprotoSessions sessions, IExternalIdentityStore? identities = null)
++    : RemoteAuthenticationHandler<AtprotoAuthenticationOptions>(options, logger, encoder)
++{
++    protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
++    {
++      try
++      {
++        if (!sessions.Enabled) throw new InvalidOperationException("AT provider is inactive.");
++        var identifier = Request.Query["identifier"];
++        if (identifier.Count != 1 || string.IsNullOrWhiteSpace(identifier) || identifier.ToString().Length > 2048)
++            throw new InvalidOperationException("Supply one account handle or DID as identifier.");
++        GenerateCorrelationId(properties);
++        var protectedProperties = Options.StateDataFormat.Protect(properties);
++        var authorization = await sessions.Start(identifier.ToString().Trim(), properties, protectedProperties, Context.RequestAborted);
++        Response.Redirect(authorization);
++      }
++      catch (Exception exception) when (exception is not OperationCanceledException || !Context.RequestAborted.IsCancellationRequested)
++      {
++        // Expected discovery/PAR failures must not disclose provider bodies or escape as HTTP 500.
++        Logger.LogWarning("AT sign-in could not start ({FailureType}).", exception.GetType().Name);
++        Response.StatusCode = StatusCodes.Status400BadRequest;
++        Response.Headers.CacheControl = "no-store";
++        Response.ContentType = "text/html; charset=utf-8";
++        await Response.WriteAsync("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Sign-in unavailable</title><h1>Sign-in could not be started</h1><p>Check your account handle and try again. Your provider may be unavailable or may not support the requested connection.</p><p><a href=\"/\">Return to sign-in</a></p></html>", Context.RequestAborted);
++      }
++    }
++
++    protected override async Task<HandleRequestResult> HandleRemoteAuthenticateAsync()
++    {
++        try
++        {
++            if (!sessions.Enabled || Request.Query["state"].Count != 1) return HandleRequestResult.Fail("Invalid AT callback.");
++            var properties = Options.StateDataFormat.Unprotect(sessions.BrowserProperties(Request.Query["state"].ToString()));
++            if (properties is null || !ValidateCorrelationId(properties)) return HandleRequestResult.Fail("AT browser correlation failed.");
++            var principal = await sessions.Complete(Request.QueryString.ToString(), Context.RequestAborted);
++            var did = principal.FindFirst(AtprotoClaimTypes.Did)!.Value;
++            if (identities is not null)
++                await identities.Link(new ExternalIdentity
++                {
++                    UserId = did, Provider = Constants.Provider,
++                    ProviderKeyHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(did))),
++                    ClaimsJson = JsonSerializer.Serialize(new { did, handle = principal.FindFirst(AtprotoClaimTypes.Handle)?.Value })
++                }, Context.RequestAborted);
++            properties.Items.Remove(Constants.RequestedScopes);
++            return HandleRequestResult.Success(new AuthenticationTicket(principal, properties, Scheme.Name));
++        }
++        catch (AtprotoMissingScopesException)
++        {
++            Response.StatusCode = StatusCodes.Status400BadRequest;
++            Response.Headers.CacheControl = "no-store";
++            Response.ContentType = "text/html; charset=utf-8";
++            await Response.WriteAsync("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>More access is needed</title><h1>Your account could not connect this access</h1><p>Your account provider did not grant the access needed for this connection. Your previous sign-in has been kept.</p><p>Try an account whose provider supports the requested access, or check the connection settings.</p><p><a href=\"/\">Return to the app</a></p></html>", Context.RequestAborted);
++            return HandleRequestResult.Handle();
++        }
++        catch (Exception exception) when (exception is not OperationCanceledException)
++        {
++            // SDK exceptions can include provider response bodies. Never reflect them into browser output/logs.
++            return HandleRequestResult.Fail("AT authentication could not be verified; start sign-in again.");
++        }
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoChallenge.cs b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoChallenge.cs
+new file mode 100644
+index 000000000..a1cbf06db
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoChallenge.cs
+@@ -0,0 +1,17 @@
++using System.Text.Json;
++using Koan.Web.Auth.Connector.Atproto.Infrastructure;
++using Microsoft.AspNetCore.Authentication;
++
++namespace Koan.Web.Auth.Connector.Atproto;
++
++public static class AtprotoChallenge
++{
++    /// <summary>Request additional declared permissions from trusted server code. Ordinary sign-in requests only atproto.</summary>
++    public static AuthenticationProperties WithScopes(AuthenticationProperties properties, params string[] scopes)
++    {
++        ArgumentNullException.ThrowIfNull(properties);
++        ArgumentNullException.ThrowIfNull(scopes);
++        properties.Items[Constants.RequestedScopes] = JsonSerializer.Serialize(scopes);
++        return properties;
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoProtocol.cs b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoProtocol.cs
+new file mode 100644
+index 000000000..686aeee8d
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoProtocol.cs
+@@ -0,0 +1,67 @@
++using System.Web;
++using Koan.Core;
++using Koan.Web.Auth.Connector.Atproto.Infrastructure;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Options;
++
++namespace Koan.Web.Auth.Connector.Atproto.Hosting;
++
++internal sealed class AtprotoProtocol(IOptions<AtprotoOptions> settings, IHostEnvironment environment) : IAuthProtocol
++{
++    public string Protocol => Constants.Protocol;
++
++    public IReadOnlyList<string> Validate(string providerId, ProviderOptions options)
++    {
++        var errors = new List<string>();
++        if (providerId != Constants.Provider) errors.Add($"AT Protocol currently owns provider '{Constants.Provider}'; use {Constants.ProviderSection}.");
++        if (options.CallbackPath is not null && options.CallbackPath != Constants.Callback)
++            errors.Add($"{Constants.ProviderSection}:CallbackPath must be {Constants.Callback}.");
++        if (!string.IsNullOrEmpty(options.ClientSecret) || !string.IsNullOrEmpty(options.Authority) ||
++            !string.IsNullOrEmpty(options.AuthorizationEndpoint) || !string.IsNullOrEmpty(options.TokenEndpoint) || !string.IsNullOrEmpty(options.UserInfoEndpoint))
++            errors.Add($"Remove fixed issuer, endpoint and secret settings from {Constants.ProviderSection}; AT identity discovers its issuer and this connector is a public client.");
++        var configured = settings.Value;
++        var development = KoanEnv.Gate.DevelopmentOnly(environment);
++        if ((!development) && (configured.DevelopmentAllowedOrigins.Length > 0 || configured.DevelopmentHandles.Count > 0 || configured.DevelopmentPlcDirectory is not null || configured.DevelopmentConnectHost is not null))
++            errors.Add($"{Constants.Section}:DevelopmentAllowedOrigins and DevelopmentHandles require Development; remove them outside that environment.");
++        if (configured.MaximumResponseBytes is < 1024 or > 64 * 1024 * 1024 || configured.RequestTimeoutSeconds is < 1 or > 120)
++            errors.Add($"{Constants.Section}:MaximumResponseBytes must be 1024..67108864 and RequestTimeoutSeconds 1..120.");
++        if (string.IsNullOrWhiteSpace(configured.SessionDirectory)) errors.Add($"Set {Constants.Section}:SessionDirectory to durable private storage.");
++        foreach (var origin in configured.DevelopmentAllowedOrigins)
++            if (!Uri.TryCreate(origin, UriKind.Absolute, out var parsed) || parsed.GetLeftPart(UriPartial.Authority) != origin ||
++                parsed.UserInfo.Length > 0 || parsed.Scheme is not ("http" or "https"))
++                errors.Add($"{Constants.Section}:DevelopmentAllowedOrigins entries must be exact HTTP(S) origins without paths or credentials.");
++        var scopes = options.Scopes ?? [Constants.BaseScope];
++        if (configured.DevelopmentConnectHost is { } connectHost && Uri.CheckHostName(connectHost) == UriHostNameType.Unknown)
++            errors.Add($"{Constants.Section}:DevelopmentConnectHost must be a hostname or IP address without a scheme, path or port.");
++        if (configured.DevelopmentPlcDirectory is { } fixturePlc &&
++            (!Uri.TryCreate(fixturePlc, UriKind.Absolute, out var fixtureUri) || fixtureUri.UserInfo.Length > 0 || fixtureUri.Query.Length > 0 || fixtureUri.Fragment.Length > 0 ||
++             !configured.DevelopmentAllowedOrigins.Contains(fixtureUri.GetLeftPart(UriPartial.Authority), StringComparer.Ordinal)))
++            errors.Add($"{Constants.Section}:DevelopmentPlcDirectory must use an exact allowed Development origin.");
++        if (!scopes.Contains(Constants.BaseScope, StringComparer.Ordinal) || scopes.Any(x => string.IsNullOrWhiteSpace(x) || x.Any(char.IsWhiteSpace)))
++            errors.Add($"{Constants.ProviderSection}:Scopes must include atproto and contain one scope token per array entry.");
++        if (!Uri.TryCreate(options.ClientId, UriKind.Absolute, out var clientId) || clientId.UserInfo.Length != 0 || clientId.Fragment.Length != 0)
++            errors.Add($"Set {Constants.ProviderSection}:ClientId to this application's absolute client-metadata URL.");
++        else if (clientId.Scheme == "https")
++        {
++            if (!clientId.IsDefaultPort || clientId.Query.Length > 0 || clientId.AbsolutePath != Constants.Metadata)
++                errors.Add($"{Constants.ProviderSection}:ClientId must be HTTPS on the default port at {Constants.Metadata}, without a query.");
++        }
++        else
++        {
++            var query = HttpUtility.ParseQueryString(clientId.Query);
++            if (!development || clientId.Scheme != "http" || clientId.Host != "localhost" || !clientId.IsDefaultPort || clientId.AbsolutePath != "/" ||
++                query.GetValues("redirect_uri")?.Length != 1 || !Uri.TryCreate(query["redirect_uri"], UriKind.Absolute, out var redirect) ||
++                redirect.Scheme != "http" || !redirect.IsLoopback || redirect.Host == "localhost" || redirect.AbsolutePath != Constants.Callback ||
++                redirect.Query.Length > 0 || redirect.Fragment.Length > 0 || redirect.UserInfo.Length > 0 ||
++                query.GetValues("scope")?.Length != 1 || query["scope"] != string.Join(' ', scopes))
++                errors.Add($"{Constants.ProviderSection}:ClientId may use the special localhost profile only in Development, with one IP-loopback redirect_uri at {Constants.Callback} and scope equal to the declared Scopes.");
++        }
++        if (!Uri.TryCreate(configured.PlcDirectory, UriKind.Absolute, out var plc) || plc.UserInfo.Length > 0 || plc.Query.Length > 0 || plc.Fragment.Length > 0 ||
++            (plc.Scheme != "https" && !(development && configured.DevelopmentAllowedOrigins.Contains(plc.GetLeftPart(UriPartial.Authority), StringComparer.Ordinal))))
++            errors.Add($"{Constants.Section}:PlcDirectory must be HTTPS, or an explicitly allowed Development origin.");
++        return errors;
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Infrastructure/AtprotoClaimTypes.cs b/src/Connectors/Web/Auth/Atproto/Infrastructure/AtprotoClaimTypes.cs
+new file mode 100644
+index 000000000..11a70b4a0
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Infrastructure/AtprotoClaimTypes.cs
+@@ -0,0 +1,8 @@
++namespace Koan.Web.Auth.Connector.Atproto;
++
++/// <summary>Protocol identity claims retained independently of an application's canonical local user identifier.</summary>
++public static class AtprotoClaimTypes
++{
++    public const string Did = "atproto:did";
++    public const string Handle = "atproto:handle";
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Infrastructure/Constants.cs b/src/Connectors/Web/Auth/Atproto/Infrastructure/Constants.cs
+new file mode 100644
+index 000000000..dba34f180
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Infrastructure/Constants.cs
+@@ -0,0 +1,16 @@
++namespace Koan.Web.Auth.Connector.Atproto.Infrastructure;
++
++internal static class Constants
++{
++    internal const string Provider = "atproto";
++    internal const string Protocol = "atproto";
++    internal const string Section = "Koan:Web:Auth:Atproto";
++    internal const string ProviderSection = "Koan:Web:Auth:Providers:atproto";
++    internal const string Callback = "/auth/atproto/callback";
++    internal const string Metadata = "/auth/atproto/client-metadata.json";
++    internal const string RequestedScopes = ".atproto.requested_scopes";
++    internal const string ProtectionPurpose = "Koan.Web.Auth.Atproto.Protocol.v1";
++    internal const string PropertiesPurpose = "Koan.Web.Auth.Atproto.Browser.v1";
++    internal const string BaseScope = "atproto";
++    internal const string PdsServiceType = "AtprotoPersonalDataServer";
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Initialization/AtprotoAuthModule.cs b/src/Connectors/Web/Auth/Atproto/Initialization/AtprotoAuthModule.cs
+new file mode 100644
+index 000000000..6e50d1687
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Initialization/AtprotoAuthModule.cs
+@@ -0,0 +1,69 @@
++using Koan.Core;
++using Koan.Core.Hosting.Bootstrap;
++using Koan.Core.Modules;
++using Koan.Core.Provenance;
++using Koan.Web.Auth.Connector.Atproto.Controllers;
++using Koan.Web.Auth.Connector.Atproto.Hosting;
++using Koan.Web.Auth.Connector.Atproto.Infrastructure;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Koan.Web.Auth.Connector.Atproto.Protocol;
++using Koan.Web.Auth.Connector.Atproto.Storage;
++using Koan.Web.Auth.Extensions;
++using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++using Koan.Web.Extensions;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.DataProtection;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Options;
++
++namespace Koan.Web.Auth.Connector.Atproto.Initialization;
++
++public sealed class AtprotoAuthModule : KoanModule
++{
++    public override void Register(IServiceCollection services)
++    {
++        services.AddKoanOptions<AtprotoOptions>(Constants.Section);
++        services.AddSingleton<IAuthProtocol, AtprotoProtocol>();
++        services.AddSingleton(new AuthProviderDefinition(Constants.Provider, new ProviderOptions
++        { Type = Constants.Protocol, DisplayName = "AT Protocol", Scopes = [Constants.BaseScope], Priority = 200 }));
++        services.AddSingleton<AtprotoHttp>();
++        services.AddSingleton<ProtectedAtprotoStore>();
++        services.AddSingleton(sp => new AtprotoSessions(sp.GetRequiredService<ProtectedAtprotoStore>(), sp.GetRequiredService<AtprotoHttp>(),
++            sp.GetRequiredService<IOptions<AtprotoOptions>>(), sp.GetRequiredService<IOptions<AuthOptions>>(),
++            sp.GetRequiredService<IAuthProviderCatalog>(), sp.GetRequiredService<IHostEnvironment>()));
++        services.AddKoanControllersFrom<AtprotoMetadataController>();
++        services.AddAuthentication().AddScheme<AtprotoAuthenticationOptions, AtprotoAuthenticationHandler>(Constants.Provider, options =>
++        {
++            options.SignInScheme = AuthenticationExtensions.CookieScheme;
++            options.CallbackPath = Constants.Callback;
++            options.CorrelationCookie.Path = "/";
++            options.CorrelationCookie.SameSite = SameSiteMode.Lax;
++            options.CorrelationCookie.HttpOnly = true;
++            options.Events = new RemoteAuthenticationEvents
++            {
++                OnRemoteFailure = context =>
++                {
++                    context.HandleResponse();
++                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
++                    return context.Response.WriteAsJsonAsync(new { error = "atproto_authentication_failed" });
++                }
++            };
++        });
++        services.AddOptions<AtprotoAuthenticationOptions>(Constants.Provider)
++            .Configure<IDataProtectionProvider, IHostEnvironment>((options, protection, environment) =>
++            {
++                options.StateDataFormat = new PropertiesDataFormat(protection.CreateProtector(Constants.PropertiesPurpose));
++                options.CorrelationCookie.SecurePolicy = KoanEnv.Gate.DevelopmentOnly(environment) ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
++            });
++    }
++
++    public override void Report(Koan.Core.Provenance.ProvenanceModuleWriter module, IConfiguration cfg, IHostEnvironment env)
++    {
++        module.Describe(Version);
++        module.AddNote("Native AT Protocol public-client OAuth; verified DID identity, guarded discovery, protected single-process sessions. Web Auth owns provider eligibility and browser cookie lifecycle.");
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj b/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj
+new file mode 100644
+index 000000000..7804fb829
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj
+@@ -0,0 +1,17 @@
++<Project Sdk="Microsoft.NET.Sdk">
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Description>Native AT Protocol identity and authorized session connector for Koan Web Auth.</Description>
++    <PackageTags>$(CommonPackageTags);auth;atproto;oauth;provider</PackageTags>
++  </PropertyGroup>
++  <ItemGroup>
++    <FrameworkReference Include="Microsoft.AspNetCore.App" />
++    <ProjectReference Include="../../../../Koan.Core/Koan.Core.csproj" />
++    <ProjectReference Include="../../../../Koan.Web.Auth.Abstractions/Koan.Web.Auth.Abstractions.csproj" />
++    <ProjectReference Include="../../../../Koan.Web.Auth/Koan.Web.Auth.csproj" />
++    <PackageReference Include="CarpaNet.OAuth" VersionOverride="1.1.0-alpha.5" />
++    <PackageReference Include="DnsClient" VersionOverride="1.8.0" />
++  </ItemGroup>
++</Project>
+diff --git a/src/Connectors/Web/Auth/Atproto/Options/AtprotoAuthenticationOptions.cs b/src/Connectors/Web/Auth/Atproto/Options/AtprotoAuthenticationOptions.cs
+new file mode 100644
+index 000000000..e453480c1
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Options/AtprotoAuthenticationOptions.cs
+@@ -0,0 +1,8 @@
++using Microsoft.AspNetCore.Authentication;
++
++namespace Koan.Web.Auth.Connector.Atproto.Options;
++
++public sealed class AtprotoAuthenticationOptions : RemoteAuthenticationOptions
++{
++    public ISecureDataFormat<AuthenticationProperties> StateDataFormat { get; set; } = null!;
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Options/AtprotoOptions.cs b/src/Connectors/Web/Auth/Atproto/Options/AtprotoOptions.cs
+new file mode 100644
+index 000000000..b5df5159e
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Options/AtprotoOptions.cs
+@@ -0,0 +1,22 @@
++namespace Koan.Web.Auth.Connector.Atproto.Options;
++
++public sealed class AtprotoOptions
++{
++    public string PlcDirectory { get; set; } = "https://plc.directory";
++    /// <summary>Alternate PLC only for identities explicitly listed in DevelopmentHandles.</summary>
++    public string? DevelopmentPlcDirectory { get; set; }
++    /// <summary>Socket destination for exact allowed development origins; URLs and DPoP audiences remain unchanged.</summary>
++    public string? DevelopmentConnectHost { get; set; }
++    public string SessionDirectory { get; set; } = ".koan/atproto";
++    public int MaximumResponseBytes { get; set; } = 4 * 1024 * 1024;
++    public int RequestTimeoutSeconds { get; set; } = 30;
++    /// <summary>Exact local origins admitted only in Development. There is no production override.</summary>
++    public string[] DevelopmentAllowedOrigins { get; set; } = [];
++    /// <summary>Explicit local DNS fixtures; real DID documents must still reverse-bind the supplied handle.</summary>
++    public Dictionary<string, string> DevelopmentHandles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
++
++    internal string DirectoryFor(string identifier, bool development)
++        => development && DevelopmentPlcDirectory is not null
++           && (DevelopmentHandles.ContainsKey(identifier) || DevelopmentHandles.Values.Contains(identifier, StringComparer.Ordinal))
++            ? DevelopmentPlcDirectory : PlcDirectory;
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Properties/AssemblyInfo.cs b/src/Connectors/Web/Auth/Atproto/Properties/AssemblyInfo.cs
+new file mode 100644
+index 000000000..d2742dcbc
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Properties/AssemblyInfo.cs
+@@ -0,0 +1,2 @@
++using System.Runtime.CompilerServices;
++[assembly: InternalsVisibleTo("Koan.Web.Auth.Atproto.Tests")]
+diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoDns.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoDns.cs
+new file mode 100644
+index 000000000..636b77a33
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoDns.cs
+@@ -0,0 +1,19 @@
++using CarpaNet.Identity;
++using DnsClient;
++
++namespace Koan.Web.Auth.Connector.Atproto.Protocol;
++
++// The maintained resolver owns DNS wire parsing, transaction matching, retries and TCP fallback.
++internal sealed class AtprotoDns : IDnsResolver
++{
++    private readonly LookupClient client = new(new LookupClientOptions
++    { UseCache = true, Timeout = TimeSpan.FromSeconds(5), Retries = 1, UseTcpOnly = true });
++
++    public async Task<IReadOnlyList<string>> GetTxtRecordsAsync(string name, CancellationToken cancellationToken = default)
++    {
++        var response = await client.QueryAsync(name, QueryType.TXT, QueryClass.IN, cancellationToken);
++        return response.Answers.TxtRecords()
++            .Where(x => x.DomainName.Value.TrimEnd('.').Equals(name.TrimEnd('.'), StringComparison.OrdinalIgnoreCase))
++            .Select(x => string.Concat(x.Text)).ToArray();
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoHttp.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoHttp.cs
+new file mode 100644
+index 000000000..8ca4f1685
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoHttp.cs
+@@ -0,0 +1,97 @@
++using System.Net;
++using System.Net.Sockets;
++using Koan.Core;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Options;
++
++namespace Koan.Web.Auth.Connector.Atproto.Protocol;
++
++/// <summary>Connection-time address validation: DNS results are vetted and that exact address is connected.</summary>
++public sealed class AtprotoHttp : IDisposable
++{
++    private readonly AtprotoOptions options;
++    private readonly bool development;
++    internal HttpClient Client { get; }
++    private static readonly IPNetwork[] NonPublicV4 = [
++        IPNetwork.Parse("0.0.0.0/8"), IPNetwork.Parse("10.0.0.0/8"), IPNetwork.Parse("100.64.0.0/10"),
++        IPNetwork.Parse("127.0.0.0/8"), IPNetwork.Parse("169.254.0.0/16"), IPNetwork.Parse("172.16.0.0/12"),
++        IPNetwork.Parse("192.0.0.0/24"), IPNetwork.Parse("192.0.2.0/24"), IPNetwork.Parse("192.88.99.0/24"),
++        IPNetwork.Parse("192.168.0.0/16"), IPNetwork.Parse("198.18.0.0/15"), IPNetwork.Parse("198.51.100.0/24"),
++        IPNetwork.Parse("203.0.113.0/24"), IPNetwork.Parse("224.0.0.0/3")];
++    private static readonly IPNetwork[] NonPublicV6 = [IPNetwork.Parse("2001::/23"), IPNetwork.Parse("2001:db8::/32"), IPNetwork.Parse("2002::/16"), IPNetwork.Parse("3fff::/20")];
++
++    public AtprotoHttp(IOptions<AtprotoOptions> configured, IHostEnvironment environment)
++    {
++        options = configured.Value;
++        development = KoanEnv.Gate.DevelopmentOnly(environment);
++        var sockets = new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false, ConnectCallback = Connect };
++        Client = new HttpClient(new BoundedHandler(this, sockets)) { Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds) };
++    }
++
++    internal bool DevelopmentOrigin(Uri uri) => development && options.DevelopmentAllowedOrigins.Contains(uri.GetLeftPart(UriPartial.Authority), StringComparer.Ordinal);
++    internal string ConnectionHost(Uri uri) => DevelopmentOrigin(uri) && options.DevelopmentConnectHost is { } host ? host : uri.Host;
++
++    internal void Validate(Uri uri)
++    {
++        if (!uri.IsAbsoluteUri || uri.UserInfo.Length > 0 || uri.Fragment.Length > 0 ||
++            (uri.Scheme != "https" && !DevelopmentOrigin(uri))) throw new InvalidOperationException("Unsafe AT Protocol destination.");
++        if (!DevelopmentOrigin(uri) && (uri.Scheme != "https" || !uri.IsDefaultPort))
++            throw new InvalidOperationException("Public AT Protocol discovery requires HTTPS on the default port.");
++    }
++
++    internal static bool PublicAddress(IPAddress address)
++    {
++        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
++        if (address.AddressFamily == AddressFamily.InterNetwork) return !NonPublicV4.Any(x => x.Contains(address));
++        return address.AddressFamily == AddressFamily.InterNetworkV6 && IPNetwork.Parse("2000::/3").Contains(address) && !NonPublicV6.Any(x => x.Contains(address));
++    }
++
++    private async ValueTask<Stream> Connect(SocketsHttpConnectionContext context, CancellationToken ct)
++    {
++        var uri = context.InitialRequestMessage.RequestUri!;
++        Validate(uri);
++        var addresses = await Dns.GetHostAddressesAsync(ConnectionHost(uri), ct);
++        if (addresses.Length == 0 || (!DevelopmentOrigin(uri) && addresses.Any(x => !PublicAddress(x))))
++            throw new InvalidOperationException("AT Protocol destination resolves to a non-public or unavailable address.");
++        foreach (var address in addresses)
++        {
++            var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
++            try { await socket.ConnectAsync(new IPEndPoint(address, context.DnsEndPoint.Port), ct); return new NetworkStream(socket, ownsSocket: true); }
++            catch { socket.Dispose(); if (ct.IsCancellationRequested) throw; }
++        }
++        throw new HttpRequestException("Unable to connect to the verified AT Protocol destination.");
++    }
++
++    public void Dispose() => Client.Dispose();
++
++    /// <summary>Send a caller-owned protocol request through the same address/redirect/size guards. The caller owns authentication context and response disposal.</summary>
++    public Task<HttpResponseMessage> Send(HttpRequestMessage request, CancellationToken ct = default) => Client.SendAsync(request, ct);
++
++    private sealed class BoundedHandler(AtprotoHttp owner, HttpMessageHandler inner) : DelegatingHandler(inner)
++    {
++        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
++        {
++            owner.Validate(request.RequestUri!);
++            var response = await base.SendAsync(request, ct);
++            try
++            {
++                await using var stream = await response.Content.ReadAsStreamAsync(ct);
++                using var output = new MemoryStream();
++                var buffer = new byte[8192];
++                int read;
++                while ((read = await stream.ReadAsync(buffer, ct)) > 0)
++                {
++                    if (output.Length + read > owner.options.MaximumResponseBytes) throw new HttpRequestException("AT Protocol response exceeded the configured byte bound.");
++                    output.Write(buffer, 0, read);
++                }
++                var replacement = new ByteArrayContent(output.ToArray());
++                foreach (var header in response.Content.Headers) replacement.Headers.TryAddWithoutValidation(header.Key, header.Value);
++                response.Content.Dispose();
++                response.Content = replacement;
++                return response;
++            }
++            catch { response.Dispose(); throw; }
++        }
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoMissingScopesException.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoMissingScopesException.cs
+new file mode 100644
+index 000000000..ada6580be
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoMissingScopesException.cs
+@@ -0,0 +1,5 @@
++namespace Koan.Web.Auth.Connector.Atproto.Protocol;
++
++/// <summary>The returned callback grant omitted access protected in the authorization request.</summary>
++internal sealed class AtprotoMissingScopesException()
++    : InvalidOperationException("The account provider did not grant all access required for this connection.");
+diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoSessions.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoSessions.cs
+new file mode 100644
+index 000000000..910934f89
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoSessions.cs
+@@ -0,0 +1,324 @@
++using System.Collections.Concurrent;
++using System.Net;
++using System.Security.Claims;
++using System.Security.Cryptography;
++using System.Text;
++using System.Text.Json;
++using System.Web;
++using CarpaNet.Identity;
++using CarpaNet.OAuth;
++using CarpaNet.OAuth.Storage;
++using Koan.Core;
++using Koan.Web.Auth.Connector.Atproto.Infrastructure;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Koan.Web.Auth.Connector.Atproto.Storage;
++using Koan.Web.Auth.Domain;
++using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Options;
++
++namespace Koan.Web.Auth.Connector.Atproto.Protocol;
++
++/// <summary>Native, guarded PDS requests from an authorized server-side session. Never returns credentials.</summary>
++public sealed class AtprotoSessions
++{
++    private readonly ProtectedAtprotoStore store;
++    private readonly AtprotoHttp network;
++    private readonly AtprotoOptions options;
++    private readonly IOptions<AuthOptions> auth;
++    private readonly IAuthProviderCatalog catalog;
++    private readonly bool development;
++    private readonly ConcurrentDictionary<string, ATProtoOAuthClient> clients = new();
++    private readonly ConcurrentDictionary<string, SemaphoreSlim> locks = new();
++    private readonly AtprotoDns dns = new();
++
++    internal AtprotoSessions(ProtectedAtprotoStore store, AtprotoHttp network, IOptions<AtprotoOptions> options,
++        IOptions<AuthOptions> auth, IAuthProviderCatalog catalog, IHostEnvironment environment)
++    { this.store = store; this.network = network; this.options = options.Value; this.auth = auth; this.catalog = catalog; development = KoanEnv.Gate.DevelopmentOnly(environment); }
++
++    internal string ClientId => auth.Value.Providers.GetValueOrDefault(Constants.Provider)?.ClientId ?? throw new InvalidOperationException("AT provider ClientId is not configured.");
++    internal string[] AllowedScopes => catalog.Find(Constants.Provider)?.Scopes.ToArray() ?? [Constants.BaseScope];
++    internal string RedirectUri => new Uri(ClientId).Scheme == "https"
++        ? new Uri(ClientId).GetLeftPart(UriPartial.Authority) + Constants.Callback
++        : HttpUtility.ParseQueryString(new Uri(ClientId).Query)["redirect_uri"]!;
++    internal bool Enabled => catalog.Find(Constants.Provider)?.Eligible == true;
++
++    /// <summary>Validated, non-secret information about a durable AT session.</summary>
++    public sealed record SessionMetadata(string Did, string Pds, string Issuer, IReadOnlyList<string> Scopes);
++
++    private IdentityResolver Resolver(string identifier) => new(network.Client, options.DirectoryFor(identifier, development), dnsResolver: dns);
++
++    /// <summary>Resolve a DID document through guarded protocol transport and require the document's exact identifier.</summary>
++    public async Task<DidDocument> ResolveDid(string did, CancellationToken ct = default)
++    {
++        if (!IdentityResolver.IsValidDid(did)) throw new ArgumentException("A valid DID is required.", nameof(did));
++        using var resolver = Resolver(did);
++        var document = await resolver.ResolveAsync(did, ct);
++        if (document.Id != did) throw new InvalidOperationException("Resolved AT DID document identifier mismatch.");
++        return document;
++    }
++    private OAuthSession OAuth(string scope, string did, IOAuthSessionStore? sessions = null) => new(new OAuthClientConfig
++    { ClientId = ClientId, RedirectUri = RedirectUri, Scope = scope, HttpClient = network.Client,
++        StateStore = store, SessionStore = sessions ?? store, IdentityResolver = Resolver(did) });
++
++    private async Task<(string Did, string? Handle, string Pds, string Issuer)> Resolve(string identifier, CancellationToken ct)
++    {
++        using var resolver = Resolver(identifier);
++        var input = identifier;
++        if (development && options.DevelopmentHandles.TryGetValue(identifier, out var mapped)) input = mapped;
++        var document = await resolver.ResolveAsync(input, ct);
++        if (input.StartsWith("did:", StringComparison.Ordinal) && input != document.Id) throw new InvalidOperationException("Resolved AT identity is inconsistent.");
++        if (!identifier.StartsWith("did:", StringComparison.Ordinal) && !document.AlsoKnownAs.Any(x => x.Equals("at://" + identifier, StringComparison.OrdinalIgnoreCase)))
++            throw new InvalidOperationException("AT handle does not reverse-bind to the resolved DID.");
++        var pds = document.PdsEndpoint ?? throw new InvalidOperationException("AT identity has no PDS service.");
++        network.Validate(new Uri(pds));
++        using var discovery = new AuthorizationServerDiscovery(network.Client, TimeSpan.Zero);
++        var issuer = await discovery.DiscoverAuthorizationServerAsync(pds, ct);
++        network.Validate(new Uri(issuer));
++        var metadata = await discovery.GetMetadataAsync(issuer, ct);
++        if (metadata.Issuer != issuer || string.IsNullOrWhiteSpace(metadata.PushedAuthorizationRequestEndpoint))
++            throw new InvalidOperationException("AT authorization server metadata is inconsistent or lacks required PAR.");
++        foreach (var endpoint in new[] { metadata.AuthorizationEndpoint, metadata.TokenEndpoint, metadata.PushedAuthorizationRequestEndpoint }) network.Validate(new Uri(endpoint!));
++        string? verifiedHandle = null;
++        if (document.Handle is { } handle)
++        {
++            if (development && options.DevelopmentHandles.TryGetValue(handle, out var mappedHandle))
++            { if (mappedHandle == document.Id) verifiedHandle = handle; }
++            else
++            {
++                try { if ((await resolver.ResolveAsync(handle, ct)).Id == document.Id) verifiedHandle = handle; }
++                catch (Exception error) when (error is not OperationCanceledException) { /* DID sign-in does not depend on an optional display handle. */ }
++            }
++        }
++        return (document.Id, verifiedHandle, pds.TrimEnd('/'), issuer);
++    }
++
++    internal async Task<string> Start(string identifier, AuthenticationProperties properties, string protectedProperties, CancellationToken ct)
++    {
++        if (!Enabled) throw new InvalidOperationException("AT provider is inactive.");
++        var explicitlyRequested = properties.Items.TryGetValue(Constants.RequestedScopes, out var requested);
++        var scopes = explicitlyRequested
++            ? JsonSerializer.Deserialize<string[]>(requested!)! : [Constants.BaseScope];
++        scopes = ScopesForSignIn(explicitlyRequested, scopes, null, AllowedScopes);
++        var identity = await Resolve(identifier, ct);
++        if (!explicitlyRequested)
++        {
++            var gate = locks.GetOrAdd(identity.Did, _ => new SemaphoreSlim(1));
++            await gate.WaitAsync(ct);
++            try
++            {
++                var saved = await store.GetAsync(identity.Did, ct);
++                if (saved is not null && HasBroaderScopes(saved.TokenSet.Scope))
++                {
++                    ValidateSaved(saved, identity);
++                    scopes = ScopesForSignIn(false, scopes, saved.TokenSet.Scope, AllowedScopes);
++                }
++            }
++            finally { gate.Release(); }
++        }
++        var scope = string.Join(' ', scopes.Distinct(StringComparer.Ordinal));
++        var binding = new Binding(identity.Did, identity.Pds, identity.Issuer, scope, protectedProperties);
++        using var oauth = OAuth(scope, identity.Did);
++        var authorization = await oauth.AuthorizeAsync(identity.Did, JsonSerializer.Serialize(binding), ct);
++        RequirePar(authorization, ClientId);
++        return authorization;
++    }
++
++    internal static void RequirePar(string authorization, string clientId)
++    {
++        var query = HttpUtility.ParseQueryString(new Uri(authorization).Query);
++        if (query.Count != 2 || query.GetValues("client_id")?.Length != 1 || query["client_id"] != clientId ||
++            query.GetValues("request_uri")?.Length != 1 || string.IsNullOrWhiteSpace(query["request_uri"]))
++            throw new InvalidOperationException("AT authorization requires successful PAR; direct authorization fallback is rejected.");
++    }
++
++    internal static void RequireScopes(string? granted, IEnumerable<string> allowed)
++    {
++        var ceiling = allowed.ToHashSet(StringComparer.Ordinal);
++        var actual = (granted ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
++        if (!actual.Contains(Constants.BaseScope, StringComparer.Ordinal) || actual.Any(x => !ceiling.Contains(x)))
++            throw new InvalidOperationException("AT session permissions exceed the current declared ceiling; reauthorize with supported scopes.");
++    }
++
++    internal static void RequireRequestedScopes(string? granted, IEnumerable<string> requested)
++    {
++        var expected = requested.ToHashSet(StringComparer.Ordinal);
++        RequireScopes(granted, expected);
++        var actual = (granted ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
++        if (!expected.IsSubsetOf(actual)) throw new AtprotoMissingScopesException();
++    }
++
++    internal static string[] ScopesForSignIn(bool explicitlyRequested, IEnumerable<string> requested, string? preserved, IEnumerable<string> allowed)
++    {
++        var ceiling = allowed.ToArray();
++        var selected = requested.Distinct(StringComparer.Ordinal).ToArray();
++        if (!selected.Contains(Constants.BaseScope, StringComparer.Ordinal) || selected.Any(x => !ceiling.Contains(x, StringComparer.Ordinal)))
++            throw new InvalidOperationException("Requested AT permissions exceed this client's declared scopes.");
++        if (explicitlyRequested || !HasBroaderScopes(preserved)) return selected;
++        RequireScopes(preserved, ceiling);
++        return preserved!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.Ordinal).ToArray();
++    }
++
++    /// <summary>Returns durable session metadata only after its scope ceiling and current DID/PDS/issuer binding pass.</summary>
++    public async Task<SessionMetadata?> GetSessionMetadata(string did, CancellationToken ct = default)
++    {
++        if (!IdentityResolver.IsValidDid(did)) throw new ArgumentException("A valid DID is required.", nameof(did));
++        var gate = locks.GetOrAdd(did, _ => new SemaphoreSlim(1));
++        await gate.WaitAsync(ct);
++        try
++        {
++            var saved = await store.GetAsync(did, ct);
++            if (saved is null) return null;
++            var identity = await Resolve(did, ct);
++            ValidateSaved(saved, identity);
++            // Restore/refresh the OAuth session without issuing a source operation. Scope presence is not source freshness.
++            await Client(did, ct);
++            saved = await store.GetAsync(did, ct) ?? throw new InvalidOperationException("AT session disappeared during restoration; reauthorize.");
++            ValidateSaved(saved, identity);
++            return new SessionMetadata(did, identity.Pds, identity.Issuer,
++                saved.TokenSet.Scope!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
++        }
++        finally { gate.Release(); }
++    }
++
++    internal string BrowserProperties(string state)
++    {
++        var pending = store.Peek(state) ?? throw new InvalidOperationException("Invalid or expired AT authorization state.");
++        return JsonSerializer.Deserialize<Binding>(pending.AppState!)!.Properties;
++    }
++
++    internal async Task<ClaimsPrincipal> Complete(string query, CancellationToken ct)
++    {
++        var parameters = HttpUtility.ParseQueryString(query);
++        var state = parameters["state"] ?? "";
++        var pending = store.Peek(state) ?? throw new InvalidOperationException("Invalid or expired AT authorization state.");
++        var binding = JsonSerializer.Deserialize<Binding>(pending.AppState!)!;
++        if (parameters.GetValues("state")?.Length != 1 || parameters.GetValues("iss")?.Length != 1 || parameters["iss"] != binding.Issuer || pending.Issuer != binding.Issuer)
++        { await store.ConsumeAsync(state, ct); throw new InvalidOperationException("AT callback issuer mismatch."); }
++        var staging = new VerifiedSessionStore(store);
++        var oauth = OAuth(binding.Scope, binding.Did, staging);
++        ATProtoOAuthClient? client = null;
++        try
++        {
++            client = await oauth.CallbackAsync(RedirectUri + query, ct);
++            var identity = await Resolve(client.Did, ct);
++            if (identity.Did != binding.Did || identity.Pds != binding.Pds || identity.Issuer != binding.Issuer || client.BaseUrl.ToString().TrimEnd('/') != binding.Pds)
++                throw new InvalidOperationException("AT authenticated subject/PDS/issuer mismatch.");
++            RequireScopes(staging.GrantedScope, AllowedScopes);
++            RequireRequestedScopes(staging.GrantedScope, binding.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries));
++            var gate = locks.GetOrAdd(client.Did, _ => new SemaphoreSlim(1));
++            await gate.WaitAsync(ct);
++            try
++            {
++                await staging.Commit(client.Did, ct);
++                clients.TryGetValue(client.Did, out var replaced);
++                clients[client.Did] = client;
++                replaced?.Dispose();
++            }
++            finally { gate.Release(); }
++            var claims = new ClaimsIdentity(Constants.Provider);
++            claims.AddClaim(new Claim(ClaimTypes.NameIdentifier, client.Did));
++            claims.AddClaim(new Claim("sub", client.Did));
++            claims.AddClaim(new Claim(AtprotoClaimTypes.Did, client.Did));
++            if (identity.Handle is { } handle) { claims.AddClaim(new Claim(AtprotoClaimTypes.Handle, handle)); claims.AddClaim(new Claim(ClaimTypes.Name, handle)); }
++            return new ClaimsPrincipal(claims);
++        }
++        catch { client?.Dispose(); oauth.Dispose(); throw; }
++    }
++
++    private async Task<ATProtoOAuthClient> Client(string did, CancellationToken ct)
++    {
++        if (clients.TryGetValue(did, out var client)) return client;
++        var saved = await store.GetAsync(did, ct) ?? throw new InvalidOperationException("AT authorization is required for this DID.");
++        var identity = await Resolve(did, ct);
++        ValidateSaved(saved, identity);
++        client = await OAuth(saved.Scope ?? Constants.BaseScope, did).RestoreSessionAsync(did, ct) ?? throw new InvalidOperationException("AT session restoration failed; reauthorize.");
++        clients[did] = client;
++        return client;
++    }
++
++    private void ValidateSaved(OAuthSessionData saved, (string Did, string? Handle, string Pds, string Issuer) identity)
++    {
++        RequireScopes(saved.Scope, AllowedScopes);
++        RequireScopes(saved.TokenSet.Scope, AllowedScopes);
++        if (saved.TokenSet.Sub != identity.Did || saved.TokenSet.Audience.TrimEnd('/') != identity.Pds || saved.TokenSet.Issuer != identity.Issuer || saved.ClientId != ClientId)
++            throw new InvalidOperationException("Stored AT session no longer matches its identity, PDS, issuer or client; reauthorize.");
++    }
++
++    private static bool HasBroaderScopes(string? scope)
++        => (scope ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(x => x != Constants.BaseScope);
++
++    /// <summary>Send XRPC to the DID's verified PDS through the guarded transport. The caller owns response disposal.</summary>
++    public async Task<HttpResponseMessage> Send(string did, string nsid, HttpMethod method,
++        IEnumerable<KeyValuePair<string, string>>? parameters = null, HttpContent? content = null, CancellationToken ct = default)
++    {
++        if (string.IsNullOrWhiteSpace(nsid) || nsid.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '-')) || !nsid.Contains('.'))
++            throw new ArgumentException("A valid XRPC NSID is required.", nameof(nsid));
++        var gate = locks.GetOrAdd(did, _ => new SemaphoreSlim(1));
++        await gate.WaitAsync(ct);
++        try
++        {
++            var client = await Client(did, ct);
++            var provider = (DPoPTokenProvider)client.TokenProvider;
++            await provider.GetAccessTokenAsync(ct);
++            var current = await store.GetAsync(did, ct) ?? throw new InvalidOperationException("AT session disappeared; reauthorize.");
++            RequireScopes(current.TokenSet.Scope, AllowedScopes);
++            var url = client.BaseUrl.ToString().TrimEnd('/') + "/xrpc/" + nsid;
++            if (parameters is not null) url += "?" + string.Join('&', parameters.Select(x => Uri.EscapeDataString(x.Key) + "=" + Uri.EscapeDataString(x.Value)));
++            var body = content is null ? null : await content.ReadAsByteArrayAsync(ct);
++            for (var attempt = 0; attempt < 2; attempt++)
++            {
++                using var request = await provider.CreateDPoPRequestAsync(method, url);
++                if (body is not null)
++                {
++                    request.Content = new ByteArrayContent(body);
++                    foreach (var header in content!.Headers) request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
++                }
++                var response = await network.Client.SendAsync(request, ct);
++                provider.UpdateNonceFromResponse(response, url);
++                if (attempt == 0 && response.StatusCode == HttpStatusCode.Unauthorized && response.Headers.Contains("DPoP-Nonce")) { response.Dispose(); continue; }
++                return response;
++            }
++            throw new HttpRequestException("AT request retry exhausted.");
++        }
++        catch { clients.TryRemove(did, out _); throw; }
++        finally { gate.Release(); }
++    }
++
++    /// <summary>Revoke and remove the upstream grant; this is separate from local cookie logout.</summary>
++    public async Task Disconnect(string did, CancellationToken ct = default)
++    {
++        var gate = locks.GetOrAdd(did, _ => new SemaphoreSlim(1));
++        await gate.WaitAsync(ct);
++        try
++        {
++            var client = await Client(did, ct);
++            var provider = (DPoPTokenProvider)client.TokenProvider;
++            var saved = await store.GetAsync(did, ct) ?? throw new InvalidOperationException("AT session unavailable.");
++            using var discovery = new AuthorizationServerDiscovery(network.Client, TimeSpan.Zero);
++            var metadata = await discovery.GetMetadataAsync(saved.TokenSet.Issuer, ct);
++            var endpoint = metadata.RevocationEndpoint ?? throw new InvalidOperationException("Provider does not advertise revocation; upstream disconnect cannot be confirmed.");
++            if (string.IsNullOrEmpty(saved.TokenSet.RefreshToken)) throw new InvalidOperationException("Session has no refresh token to revoke.");
++            for (var attempt = 0; attempt < 2; attempt++)
++            {
++                using var request = await provider.CreateDPoPRequestAsync(HttpMethod.Post, endpoint, includeAccessToken: false);
++                request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
++                { ["token"] = saved.TokenSet.RefreshToken, ["token_type_hint"] = "refresh_token", ["client_id"] = ClientId });
++                using var response = await network.Client.SendAsync(request, ct);
++                provider.UpdateNonceFromResponse(response, endpoint);
++                if (attempt == 0 && response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized && response.Headers.Contains("DPoP-Nonce")) continue;
++                if (!response.IsSuccessStatusCode) throw new InvalidOperationException("Provider rejected AT revocation; the local session was retained for retry.");
++                await store.DeleteAsync(did, ct);
++                clients.TryRemove(did, out _);
++                client.Dispose();
++                return;
++            }
++            throw new InvalidOperationException("AT revocation nonce negotiation failed; the local session was retained for retry.");
++        }
++        finally { gate.Release(); }
++    }
++
++    private sealed record Binding(string Did, string Pds, string Issuer, string Scope, string Properties);
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/README.md b/src/Connectors/Web/Auth/Atproto/README.md
+new file mode 100644
+index 000000000..e3ba9d6ac
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/README.md
+@@ -0,0 +1,122 @@
++# AT Protocol sign-in
++
++Reference `Sylin.Koan.Web.Auth.Connector.Atproto` and keep `builder.Services.AddKoan()`.
++This source contribution adds native AT OAuth as a public client using CarpaNet.OAuth
++1.1.0-alpha.5. It is not yet a published-package or production-certification claim.
++
++Keep `PlcDirectory` at the public default when accepting public accounts. A mixed
++development network can set `DevelopmentPlcDirectory` for only the handles/DIDs
++explicitly listed in `DevelopmentHandles`. For Docker Desktop, set
++`DevelopmentConnectHost` to `host.docker.internal` to reach the exact origins in
++`DevelopmentAllowedOrigins` through the host. This changes only the socket
++destination; issuer URLs, HTTP Host, TLS identity and DPoP audiences stay intact.
++Neither setting is accepted outside Development. Failed discovery or PAR returns
++a sanitized HTTP 400 retry page, without exposing the provider response.
++
++Configure the public metadata URL:
++
++```json
++{
++  "Koan": { "Web": { "Auth": {
++    "Providers": { "atproto": {
++      "ClientId": "https://your-app.example/auth/atproto/client-metadata.json",
++      "Scopes": ["atproto"]
++    }},
++    "Atproto": { "SessionDirectory": "/private/persistent/atproto" }
++  }}}
++}
++```
++
++Serve that HTTPS metadata URL publicly and keep the callback at
++`https://your-app.example/auth/atproto/callback`. The connector derives both from
++trusted configuration, never the incoming Host header. This first connector uses
++the public OAuth client profile, with no client secret or confidential-client key;
++provider session lifetime limits still apply.
++
++Send the browser to `/auth/atproto/challenge?identifier=<handle-or-DID>&return=<path>`.
++Koan validates the return destination and creates its ordinary authentication
++cookie after the connector verifies correlation, issuer, account DID and PDS.
++Use `AtprotoClaimTypes.Did` for protocol identity even if a local identity module
++reconciles `ClaimTypes.NameIdentifier`. `AtprotoClaimTypes.Handle` is optional and
++is emitted only after bidirectional handle verification. Neither email nor a
++Bluesky profile is requested.
++
++## Request additional access deliberately
++
++For this connector, `Providers:atproto:Scopes` declares the client-metadata upper
++bound. A first ordinary sign-in requests only `atproto`. When a validated durable
++session for the same DID/PDS/issuer/client already has a broader grant within
++the current ceiling, ordinary sign-in requests that established grant again.
++A trusted server action requests additional exact declared scope strings:
++
++```csharp
++var properties = new AuthenticationProperties { RedirectUri = "/approved-return" };
++AtprotoChallenge.WithScopes(properties, "atproto", "your-exact-declared-scope");
++return Challenge(properties, "atproto");
++```
++
++Validate the return destination in an application-owned challenge action. Raw
++query-string scopes do not change permissions. The requested set must include
++`atproto` and be an exact subset of the declared strings. Declare separate
++ordinary and management permission strings; request management only from the
++server action authorized to establish that grant. OAuth scopes grant PDS access,
++not application administration roles.
++
++The callback requires every requested scope in the returned token grant and
++rejects any scope outside the request or current declared ceiling. A provider
++that silently omits requested access receives a sanitized HTTP 400 correction;
++the previous durable session and cached client are retained. Refresh and
++restoration check the current declared ceiling without requiring optional
++permissions that were never requested. Explicit requested scopes always remain
++exact. This first connector
++accepts exact scope strings; it does not interpret permission-set expansion or
++experimental Spaces scope defaults. Supply concrete resource scopes in their
++provider-canonical form. For the pinned experimental Spaces provider, specify
++the authority DID and collections explicitly: `authority=self` and omitted
++collections are rewritten during token issuance and therefore fail the exact
++grant check. Reauthorization is required when the client ID or permission ceiling
++changes.
++
++`AtprotoSessions` in the `.Protocol` namespace sends XRPC through the native
++session using `Send(did, nsid, method, parameters, content, ct)`. It fixes the
++destination to that DID's verified PDS, bounds responses, applies SDK DPoP and
++refresh, and returns a disposable `HttpResponseMessage`. `Disconnect(did)` revokes
++the upstream grant. Ordinary Koan logout clears only the local cookie.
++
++For a protocol workflow that uses a different credential, `AtprotoHttp.Send(request, ct)`
++reuses the same network guards while the caller owns headers and credential context.
++`AtprotoSessions.ResolveDid(did, ct)` returns the SDK DID document after an exact
++identifier check. Neither API exposes stored OAuth secrets or the raw HttpClient.
++
++## Custody and development
++
++Persist the session directory and the ASP.NET Data Protection key ring. Protocol
++state and sessions are encrypted with that key ring; token/key material is not
++stored in the browser cookie. Protect the key ring for the deployment account
++(for example DPAPI on Windows or a managed encryptor in a service deployment).
++A process-exclusive file lock rejects a second host using the same session
++directory. This initial storage implementation is single-process; it does not
++claim distributed refresh coordination.
++
++`Koan:Web:Auth:Atproto` options are:
++
++| Key | Default / meaning |
++| --- | --- |
++| `PlcDirectory` | `https://plc.directory` |
++| `SessionDirectory` | `.koan/atproto`, relative to content root |
++| `MaximumResponseBytes` | 4194304, maximum buffered protocol/XRPC response |
++| `RequestTimeoutSeconds` | 30 |
++| `DevelopmentAllowedOrigins` | Empty; exact HTTP(S) origins for a local protocol test network |
++| `DevelopmentHandles` | Empty; explicit local DNS fixture map from handle to DID |
++
++Development exceptions require `KoanEnv.Gate.DevelopmentOnly`; no production
++override exists. A fixture handle still resolves through the real DID directory
++and must appear in that DID document's `alsoKnownAs`. Normal public handles use
++SDK DNS/HTTPS resolution. The special `http://localhost` client ID must contain
++one IP-loopback `redirect_uri` with the canonical callback path and one `scope`
++query value equal to the declared upper bound. See `samples/AtprotoIdentity`.
++
++An inactive reference supplies availability without initiating network traffic or
++opening session storage. Incorrect client/issuer/endpoint settings fail with a
++corrective configuration message. Failed browser verification returns a generic
++HTTP 400 without disclosing provider responses or token material.
+diff --git a/src/Connectors/Web/Auth/Atproto/Storage/ProtectedAtprotoStore.cs b/src/Connectors/Web/Auth/Atproto/Storage/ProtectedAtprotoStore.cs
+new file mode 100644
+index 000000000..35edc5cb5
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Storage/ProtectedAtprotoStore.cs
+@@ -0,0 +1,91 @@
++using System.Text.Json;
++using CarpaNet.OAuth.Storage;
++using Koan.Web.Auth.Connector.Atproto.Infrastructure;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Microsoft.AspNetCore.DataProtection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Options;
++
++namespace Koan.Web.Auth.Connector.Atproto.Storage;
++
++internal sealed class ProtectedAtprotoStore(IDataProtectionProvider protection, IOptions<AtprotoOptions> options, IHostEnvironment environment)
++    : IOAuthStateStore, IOAuthSessionStore, IDisposable
++{
++    private readonly object gate = new();
++    private readonly IDataProtector protector = protection.CreateProtector(Constants.ProtectionPurpose);
++    private StoreData? data;
++    private FileStream? ownership;
++    private string file = "";
++
++    private StoreData Data
++    {
++        get
++        {
++            if (data is not null) return data;
++            var directory = Path.GetFullPath(options.Value.SessionDirectory, environment.ContentRootPath);
++            Directory.CreateDirectory(directory);
++            ownership = new FileStream(Path.Combine(directory, "owner.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
++            file = Path.Combine(directory, "protocol.protected");
++            data = File.Exists(file) ? JsonSerializer.Deserialize<StoreData>(protector.Unprotect(File.ReadAllText(file)))! : new();
++            return data;
++        }
++    }
++
++    private void Save()
++    {
++        var temporary = file + ".tmp";
++        File.WriteAllText(temporary, protector.Protect(JsonSerializer.Serialize(Data)));
++        File.Move(temporary, file, overwrite: true);
++    }
++
++    public Task StoreAsync(string state, OAuthStateData value, CancellationToken cancellationToken = default)
++    {
++        lock (gate)
++        {
++            foreach (var expired in Data.States.Where(x => x.Value.ExpiresAt <= DateTimeOffset.UtcNow).Select(x => x.Key).ToArray()) Data.States.Remove(expired);
++            Data.States[state] = value; Save();
++        }
++        return Task.CompletedTask;
++    }
++
++    internal OAuthStateData? Peek(string state)
++    {
++        lock (gate) return Data.States.GetValueOrDefault(state) is { } value && value.ExpiresAt > DateTimeOffset.UtcNow ? value : null;
++    }
++
++    public Task<OAuthStateData?> ConsumeAsync(string state, CancellationToken cancellationToken = default)
++    {
++        lock (gate)
++        {
++            var value = Data.States.GetValueOrDefault(state);
++            Data.States.Remove(state); Save();
++            return Task.FromResult(value is not null && value.ExpiresAt > DateTimeOffset.UtcNow ? value : null);
++        }
++    }
++
++    public Task StoreAsync(string sub, OAuthSessionData value, CancellationToken cancellationToken = default)
++    {
++        if (value.TokenSet.Sub != sub) throw new InvalidOperationException("AT token subject changed.");
++        lock (gate) { Data.Sessions[sub] = value; Save(); }
++        return Task.CompletedTask;
++    }
++
++    public Task<OAuthSessionData?> GetAsync(string sub, CancellationToken cancellationToken = default)
++    {
++        lock (gate) return Task.FromResult(Data.Sessions.GetValueOrDefault(sub));
++    }
++
++    public Task DeleteAsync(string sub, CancellationToken cancellationToken = default)
++    {
++        lock (gate) { Data.Sessions.Remove(sub); Save(); }
++        return Task.CompletedTask;
++    }
++
++    public void Dispose() { lock (gate) ownership?.Dispose(); }
++
++    private sealed class StoreData
++    {
++        public Dictionary<string, OAuthStateData> States { get; set; } = new();
++        public Dictionary<string, OAuthSessionData> Sessions { get; set; } = new();
++    }
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/Storage/VerifiedSessionStore.cs b/src/Connectors/Web/Auth/Atproto/Storage/VerifiedSessionStore.cs
+new file mode 100644
+index 000000000..60eaf7330
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/Storage/VerifiedSessionStore.cs
+@@ -0,0 +1,32 @@
++using CarpaNet.OAuth.Storage;
++
++namespace Koan.Web.Auth.Connector.Atproto.Storage;
++
++/// <summary>SDK callback writes stay private until browser, DID, PDS and issuer checks all pass.</summary>
++internal sealed class VerifiedSessionStore(ProtectedAtprotoStore durable) : IOAuthSessionStore
++{
++    private OAuthSessionData? staged;
++    private string? verifiedDid;
++    internal string? GrantedScope => staged?.TokenSet.Scope;
++
++    internal Task Commit(string did, CancellationToken ct)
++    {
++        if (staged?.TokenSet.Sub != did) throw new InvalidOperationException("Unverified AT session cannot be persisted.");
++        verifiedDid = did;
++        return durable.StoreAsync(did, staged, ct);
++    }
++
++    public Task StoreAsync(string sub, OAuthSessionData value, CancellationToken cancellationToken = default)
++    {
++        if (sub != value.TokenSet.Sub || (verifiedDid is not null && sub != verifiedDid)) throw new InvalidOperationException("AT token subject changed.");
++        if (verifiedDid is not null) return durable.StoreAsync(sub, value, cancellationToken);
++        staged = value;
++        return Task.CompletedTask;
++    }
++
++    public Task<OAuthSessionData?> GetAsync(string sub, CancellationToken cancellationToken = default)
++        => verifiedDid is null ? Task.FromResult<OAuthSessionData?>(null) : durable.GetAsync(sub, cancellationToken);
++
++    public Task DeleteAsync(string sub, CancellationToken cancellationToken = default)
++        => verifiedDid is null ? Task.CompletedTask : durable.DeleteAsync(sub, cancellationToken);
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/TECHNICAL.md b/src/Connectors/Web/Auth/Atproto/TECHNICAL.md
+new file mode 100644
+index 000000000..17840bd69
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/TECHNICAL.md
+@@ -0,0 +1,101 @@
++# AT Protocol connector mechanics
++
++Web Auth owns provider election, return URL policy, sign-in contributors, cookies
++and external identity management. This connector implements `IAuthProtocol` and
++registers the ordinary named ASP.NET scheme `atproto` plus its metadata controller
++through one `AtprotoAuthModule`. No AT branch is added to the generic controller.
++
++The native dependency is CarpaNet.OAuth/CarpaNet 1.1.0-alpha.5, whose package NuSpec
++names source commit `a24d54bf6a9ce3bbf7c1961d37ab099abe1d1a65`. The SDK supplies
++identity parsing/resolution, PKCE, PAR, token exchange, DPoP key generation/proofs,
++nonce storage and token refresh. The adapter adds the checks
++and lifecycle required to fit the AT profile to ASP.NET sign-in.
++
++DNS TXT resolution uses maintained DnsClient 1.8.0 over TCP via the SDK resolver
++hook, with matching answer names; the SDK's raw UDP parser is not used. Revocation
++uses SDK DPoP proof generation and nonce state, includes the required client_id,
++checks the provider response and retains local state on failure. This corrects
++the pinned SDK's best-effort revoke method, which otherwise hides rejection.
++The adapter rejects SDK non-PAR fallback and enforces the configured permission
++ceiling on both staged token responses and restored/refreshed sessions. Callback
++grants must additionally contain every exact scope in the protected request;
++downscoped grants are rejected before either durable or cached session replacement.
++An ordinary default challenge reuses an existing broader durable scope set only
++after the same DID/PDS/issuer/client and current declared ceiling validate;
++explicit scope challenges retain their exact requested set.
++
++1. The standard challenge receives a handle/DID and AuthenticationProperties.
++   The remote handler creates its browser correlation cookie and protects those
++   properties separately from SDK state.
++2. Guarded discovery resolves the DID/PDS/authorization issuer. A local handle map
++   is used only under the explicit development gate and requires the reverse DID
++   binding. A public handle uses normal SDK resolution.
++3. SDK state contains the expected DID, PDS, issuer, requested scope and protected
++   browser properties. SDK PKCE/PAR creates the authorization URL.
++4. Callback processing validates browser correlation before exchanging a code.
++   It requires one state and issuer, exact issuer equality, expected token subject,
++   and a fresh subject/PDS/issuer resolution.
++5. SDK session writes go to `VerifiedSessionStore` until those checks and exact
++   requested-scope coverage pass. A missing requested permission produces a
++   sanitized HTTP 400 correction without clearing the previous session. Only
++   then does a per-DID gate commit the protected session and replace its cached
++   client. This is the same gate used by request/refresh and disconnect, preventing
++   an old in-flight refresh from overwriting a newly authorized session.
++6. The principal carries protocol DID/optional verified handle claims, links the
++   existing external-identity store, and enters Koan's cookie lifecycle. No OAuth
++   credential is placed in AuthenticationProperties tokens.
++
++The protected file store atomically consumes one-use state and replaces the
++encrypted document. Its process lock makes its single-host guarantee explicit.
++Restoration checks subject, PDS, issuer and configured client ID again. PDS origin
++comparison permits the SDK's equivalent trailing slash after refresh; callback
++issuer comparison remains exact.
++
++`AtprotoHttp` checks scheme and origin on every outgoing request and resolves DNS
++inside `SocketsHttpHandler.ConnectCallback`. It rejects private, loopback,
++link-local, documentation, multicast, mapped and selected translation addresses,
++then connects the specific vetted address while the standard handler retains TLS
++hostname verification. Public destinations require HTTPS/default port. Redirects
++and ambient proxies are disabled. Responses and total request time are bounded.
++The initial conservative address policy is not a general networking framework.
++Exact development origins are allowed only by the named environment gate.
++
++The development PLC selector applies only to explicit `DevelopmentHandles` keys
++or DID values and is used consistently for challenge, callback, restore and DID
++document lookup. Unknown/public identities use `PlcDirectory`; lookup failure
++never triggers a fallback to another directory. `DevelopmentConnectHost` affects
++socket DNS only for an exact allowed development origin; public destinations keep
++their original connection host and address checks. Production configuration
++rejects both settings. These hooks let one container use disposable loopback
++fixtures while continuing to resolve public identities normally.
++
++The SDK's raw `ATProtoOAuthClient.HttpClient` is not exposed: it bypasses this
++transport. Guarded XRPC composes SDK DPoP requests and sends them through the same
++connection owner. Namespace syntax cannot supply a separate URL; destination
++comes from the verified session. A server action still owns whether it may use a
++particular DID's grant. This service is not an HTTP impersonation endpoint.
++
++Evidence boundaries:
++
++- S01 outside this module proved real OAuth, callback replay denial, native
++  cross-PDS Spaces transport, and real refresh after a process restart.
++- This module's focused tests exercise address guards, configuration corrections,
++  development exceptions, protected state consumption, staging, permission ceilings,
++  requested-grant completeness and mandatory PAR. Thirty checks pass; the destructive provider lifecycle test
++  is skipped unless explicitly enabled. The generic sample additionally passed
++  real correlation/issuer/state/replay, cookie sign-in and actual process-restart
++  checks. Redacted receipts are in `evidence/`.
++- The opt-in local-provider lifecycle proof opens the stopped sample's protected
++  session using its normal key ring. It adjusts local expiry metadata to cause a
++  real refresh, verifies rotation of both tokens and authenticated `getSession`,
++  then proves checked revocation makes the retained refresh token fail with
++  `invalid_grant`. Explicit provider authentication/consent and restored refresh
++  after reauthorization also passed. It never exports credentials.
++- No production certification, multi-node session guarantee, confidential-client
++  lifetime, A2A/MCP/WebMCP support, or Spaces repository verification is implied.
++- The public repo MST parser in this SDK cannot verify the current experimental
++  Spaces commitment/index format. That is a separate protocol data concern.
++
++Follow-up SDK contributions should cover callback issuer/token-subject checks and
++binding validation explicitly. This adapter must not remove its guards merely
++because a future SDK adds similarly named methods; rerun the negative evidence.
+diff --git a/src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json b/src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json
+new file mode 100644
+index 000000000..4bb96bfe8
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json
+@@ -0,0 +1,41 @@
++{
++  "date": "2026-09-09",
++  "runtime": ".NET 10.0.401",
++  "nativeOAuthSdk": "CarpaNet.OAuth/1.1.0-alpha.5",
++  "dnsResolver": "DnsClient/1.8.0",
++  "testPdsRevision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
++  "sample": "samples/AtprotoIdentity",
++  "build": { "warnings": 0, "errors": 0 },
++  "focusedGuardTests": { "passed": 19, "failed": 0, "explicitLocalLifecycleSkippedByDefault": 1 },
++  "realProviderBrowserApi": {
++    "origin": "http://127.0.0.1:5211",
++    "account": "owner",
++    "handle": "tangent-owner.test",
++    "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
++    "scope": "atproto",
++    "passed": [
++      "Handle input with development DNS fixture and real reverse DID binding",
++      "ASP.NET browser correlation cookie and native PAR",
++      "Provider CSRF, password authentication and consent",
++      "Native callback issuer, DID and PDS verification",
++      "Koan cookie sign-in and authenticated /sample/identity",
++      "Protocol DID claim retained through Koan Identity integration",
++      "Callback replay rejected"
++    ],
++    "negativeCases": { "wrongIssuer": 400, "invalidState": 400, "missingCorrelationCookie": 400 },
++    "readinessAfterIdentityAndSqliteComposition": 200
++  },
++  "actualProcessRestart": {
++    "listenerStoppedConfirmed": true,
++    "sameBrowserCookieAuthenticatedAfterRestart": true,
++    "sameProtocolDidAndHandle": true
++  },
++  "checkedLifecycle": {
++    "disconnectReceipt": "lifecycle-disconnect-2026-09-09.json",
++    "reauthorizedReceipt": "lifecycle-reauthorized-2026-09-09.json",
++    "explicitProviderPasswordAndConsentAfterDisconnect": true,
++    "sameDidKoanCookieAndReplayRejectionAfterReauthorization": true,
++    "sampleStoppedBetweenBrowserAndStoreProofProcesses": true
++  },
++  "scopeOfEvidence": "Real local PDS OAuth and the ASP.NET cookie lifecycle, driven through the provider browser API, not browser visual automation. The opt-in lifecycle test independently exercised real provider refresh, checked revocation, retained revoked-refresh rejection as invalid_grant, and restored refresh after explicit reauthorization. Only local expiry metadata was adjusted to trigger refresh. Production certification and Spaces repository verification are not claimed."
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json
+new file mode 100644
+index 000000000..d4dbeaa4a
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json
+@@ -0,0 +1,16 @@
++{
++  "date": "2026-09-09T20:50:29.6261396+00:00",
++  "mode": "disconnect",
++  "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
++  "scope": "atproto",
++  "actualProviderRefresh": true,
++  "accessTokenRotated": true,
++  "refreshTokenRotated": true,
++  "authenticatedPdsRequest": 200,
++  "localExpiryMetadataAdjusted": true,
++  "checkedDisconnect": true,
++  "localSessionRemoved": true,
++  "revokedRefreshDenied": true,
++  "revokedRefreshError": "invalid_grant",
++  "secretsWritten": false
++}
+diff --git a/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json
+new file mode 100644
+index 000000000..b000ba158
+--- /dev/null
++++ b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json
+@@ -0,0 +1,16 @@
++{
++  "date": "2026-09-09T20:53:03.1716881+00:00",
++  "mode": "reauthorized",
++  "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
++  "scope": "atproto",
++  "actualProviderRefresh": true,
++  "accessTokenRotated": true,
++  "refreshTokenRotated": true,
++  "authenticatedPdsRequest": 200,
++  "localExpiryMetadataAdjusted": true,
++  "checkedDisconnect": false,
++  "localSessionRemoved": false,
++  "revokedRefreshDenied": false,
++  "revokedRefreshError": null,
++  "secretsWritten": false
++}
+diff --git a/src/Koan.Web.Auth.Abstractions/Providers/IAuthProtocol.cs b/src/Koan.Web.Auth.Abstractions/Providers/IAuthProtocol.cs
+new file mode 100644
+index 000000000..817bc7e00
+--- /dev/null
++++ b/src/Koan.Web.Auth.Abstractions/Providers/IAuthProtocol.cs
+@@ -0,0 +1,22 @@
++using System.ComponentModel;
++using Koan.Web.Auth.Options;
++
++namespace Koan.Web.Auth.Providers;
++
++/// <summary>
++/// Connector-owned configuration validation for an authentication protocol whose named ASP.NET handler is
++/// registered by that connector. Web Auth retains provider activation, default election, and reporting.
++/// </summary>
++[EditorBrowsable(EditorBrowsableState.Never)]
++public interface IAuthProtocol
++{
++    /// <summary>The protocol identifier used by <see cref="ProviderOptions.Type"/>.</summary>
++    string Protocol { get; }
++
++    /// <summary>
++    /// Validate the provider's effective, merged configuration once during host composition, without mutation or network I/O.
++    /// Return no entries when complete; otherwise return secret-free corrective messages naming the relevant
++    /// configuration paths. Unsupported overrides must reject instead of being silently ignored.
++    /// </summary>
++    IReadOnlyList<string> Validate(string providerId, ProviderOptions options);
++}
+diff --git a/src/Koan.Web.Auth.Abstractions/README.md b/src/Koan.Web.Auth.Abstractions/README.md
+index d8bc3ead5..58878b9ba 100644
+--- a/src/Koan.Web.Auth.Abstractions/README.md
++++ b/src/Koan.Web.Auth.Abstractions/README.md
+@@ -12,7 +12,8 @@ dotnet add package Sylin.Koan.Web.Auth.Abstractions
+ ## Meaningful use
+ 
+ Reference this package when authoring a reusable module that implements an auth lifecycle handler, identity store,
+-current-user projector, or authentication provider definition without activating Koan's Web Auth runtime.
++current-user projector, authentication provider definition, or `IAuthProtocol` configuration validator without
++activating Koan's Web Auth runtime. A protocol validator does not register or implement an authentication handler.
+ 
+ ## Boundaries
+ 
+diff --git a/src/Koan.Web.Auth.Abstractions/TECHNICAL.md b/src/Koan.Web.Auth.Abstractions/TECHNICAL.md
+index e38d938b2..2e84f5f53 100644
+--- a/src/Koan.Web.Auth.Abstractions/TECHNICAL.md
++++ b/src/Koan.Web.Auth.Abstractions/TECHNICAL.md
+@@ -16,6 +16,11 @@ package implements or consumes these contracts and owns its own ordinary module
+ - Auth lifecycle contexts carry one request/host operation; implementations are discovered and registered by Web Auth.
+ - Identity-store contracts let a durable identity module replace Web Auth's host-local defaults.
+ - Provider definitions describe availability; Web Auth alone compiles eligibility and election.
++- `IAuthProtocol` lets a connector validate its protocol's effective merged `ProviderOptions` once during host
++  composition. It returns secret-free corrective messages with complete configuration paths; an empty list means
++  configuration is complete. Validation must not mutate options or perform network I/O.
++- Protocol validators do not realize schemes. The connector module registers its ordinary ASP.NET authentication
++  handler under the same provider ID before startup. Web Auth verifies every eligible provider has a named scheme.
+ - Cross-module projections expose no credentials or token material.
+ 
+ Provider composition and error posture are documented by `Sylin.Koan.Web.Auth`.
+diff --git a/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs b/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs
+index c5b73bb72..8b511f9a6 100644
+--- a/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs
++++ b/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs
+@@ -57,7 +57,7 @@ internal static class AuthSchemeSeeder
+         {
+             var id = route.Info.Id;
+             var cfg = route.Options;
+-            var type = (cfg.Type ?? AuthProviderProtocols.Oidc).ToLowerInvariant();
++            var type = route.Info.Protocol;
+             // Idempotent: another seeding pass (or a statically-registered scheme) already owns this id.
+             if (schemes.GetSchemeAsync(id).GetAwaiter().GetResult() is not null) continue;
+ 
+@@ -76,6 +76,13 @@ internal static class AuthSchemeSeeder
+                 schemes.AddScheme(new AuthenticationScheme(id, cfg.DisplayName ?? id, typeof(OpenIdConnectHandler)));
+             }
+ 
++            if (schemes.GetSchemeAsync(id).GetAwaiter().GetResult() is null)
++            {
++                throw new InvalidOperationException(
++                    $"Koan Web Auth provider '{id}' is eligible for protocol '{route.Info.Protocol}', but no ASP.NET authentication scheme is registered. " +
++                    $"The connector must register scheme '{id}' before host startup; reference/configure its handler or disable/remove the provider intent.");
++            }
++
+             log?.LogDebug("Koan.Web.Auth: seeded {Type} scheme for provider {Provider}", type, id);
+         }
+     }
+diff --git a/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs b/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs
+index ab6d52de6..ef62e30ad 100644
+--- a/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs
++++ b/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs
+@@ -13,12 +13,26 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
+ 
+     public AuthProviderPlan(
+         IOptions<AuthOptions> options,
+-        IEnumerable<AuthProviderDefinition> definitions)
++        IEnumerable<AuthProviderDefinition> definitions,
++        IEnumerable<IAuthProtocol>? protocols = null)
+     {
+         ArgumentNullException.ThrowIfNull(options);
+         ArgumentNullException.ThrowIfNull(definitions);
+ 
+         var configured = options.Value;
++        var protocolCatalog = ProviderCatalog<IAuthProtocol>.Compile(
++            protocols ?? [],
++            static protocol => new ProviderCandidateDescriptor(protocol.Protocol));
++        foreach (var protocol in protocolCatalog.Candidates)
++        {
++            if (string.Equals(protocol.Id, AuthProviderProtocols.Oidc, StringComparison.OrdinalIgnoreCase)
++                || string.Equals(protocol.Id, AuthProviderProtocols.OAuth2, StringComparison.OrdinalIgnoreCase))
++            {
++                throw new InvalidOperationException(
++                    $"Authentication protocol '{protocol.Id}' is owned by Koan Web Auth and cannot be replaced by a connector.");
++            }
++        }
++
+         var catalog = ProviderCatalog<AuthProviderDefinition>.Compile(
+             definitions,
+             static definition => new ProviderCandidateDescriptor(
+@@ -33,7 +47,7 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
+             var effective = isExplicit
+                 ? ProviderOptions.Merge(definition.Defaults, overlay!)
+                 : definition.Defaults;
+-            routes.Add(candidate.Id, Compile(candidate.Id, effective, definition, isExplicit));
++            routes.Add(candidate.Id, Compile(candidate.Id, effective, definition, isExplicit, protocolCatalog));
+         }
+ 
+         // Web Auth itself owns generic OIDC/OAuth2 mechanics. An explicitly configured provider therefore needs no
+@@ -47,7 +61,7 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
+                 Automatic: false,
+                 Available: true,
+                 AvailabilityReason: "configuration-defined");
+-            routes.Add(id, Compile(id, provider, definition, isExplicit: true));
++            routes.Add(id, Compile(id, provider, definition, isExplicit: true, protocolCatalog));
+         }
+ 
+         _routes = routes;
+@@ -86,13 +100,15 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
+         string id,
+         ProviderOptions effective,
+         AuthProviderDefinition definition,
+-        bool isExplicit)
++        bool isExplicit,
++        ProviderCatalog<IAuthProtocol> protocols)
+     {
+         var protocol = NormalizeProtocol(effective.Type);
+         var displayName = string.IsNullOrWhiteSpace(effective.DisplayName) ? id : effective.DisplayName.Trim();
+         var priority = effective.Priority ?? definition.Defaults.Priority ?? 0;
+         var scopes = effective.Scopes ?? [];
+-        var challenge = protocol is AuthProviderProtocols.Oidc or AuthProviderProtocols.OAuth2
++        var customProtocol = protocols.Find(protocol);
++        var challenge = protocol is AuthProviderProtocols.Oidc or AuthProviderProtocols.OAuth2 || customProtocol is not null
+             ? $"/auth/{id}/challenge"
+             : null;
+ 
+@@ -110,7 +126,22 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
+             return Route("inactive", false, "configuration-required",
+                 $"Configure Koan:Web:Auth:Providers:{id} with the provider credentials to activate it.");
+ 
+-        var missing = MissingFields(protocol, effective);
++        if (customProtocol is not null)
++        {
++            var corrections = customProtocol.Validate(id, effective)
++                ?? throw new InvalidOperationException(
++                    $"Authentication protocol '{protocol}' returned no configuration validation result for provider '{id}'.");
++            if (corrections.Count > 0)
++            {
++                throw new InvalidOperationException(
++                    $"Koan Web Auth provider '{id}' has incomplete or unsupported '{protocol}' configuration. " +
++                    string.Join(" ", corrections));
++            }
++        }
++
++        var missing = customProtocol is null
++            ? MissingFields(protocol, effective, protocols.Candidates.Select(static candidate => candidate.Id))
++            : [];
+         if (missing.Count > 0)
+         {
+             var source = isExplicit ? "configured" : "automatic";
+@@ -178,7 +209,7 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
+             .FirstOrDefault();
+     }
+ 
+-    private static List<string> MissingFields(string protocol, ProviderOptions options)
++    private static List<string> MissingFields(string protocol, ProviderOptions options, IEnumerable<string> customProtocols)
+     {
+         var missing = new List<string>();
+         if (protocol == AuthProviderProtocols.Oidc)
+@@ -197,7 +228,9 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
+         }
+         else
+         {
+-            missing.Add($"Type (supported: {AuthProviderProtocols.Oidc}, {AuthProviderProtocols.OAuth2})");
++            var supported = new[] { AuthProviderProtocols.Oidc, AuthProviderProtocols.OAuth2 }
++                .Concat(customProtocols).Order(StringComparer.Ordinal);
++            missing.Add($"Type (supported: {string.Join(", ", supported)}; reference the connector for another protocol)");
+         }
+ 
+         return missing;
+diff --git a/src/Koan.Web.Auth/README.md b/src/Koan.Web.Auth/README.md
+index ba9a1e22b..b6d2adda9 100644
+--- a/src/Koan.Web.Auth/README.md
++++ b/src/Koan.Web.Auth/README.md
+@@ -44,7 +44,7 @@ Register `https://your-app/auth/google/callback` with Google. Start sign-in at
+ ## Meaningful behavior
+ 
+ - `GET /.well-known/auth/providers` returns eligible providers only.
+-- `GET /auth/{provider}/challenge` starts a maintained OAuth2/OIDC code flow with PKCE.
++- `GET /auth/{provider}/challenge` invokes the provider's ASP.NET handler. Built-in OAuth2/OIDC flows use PKCE.
+ - `/auth/{provider}/callback` is consumed by the corresponding ASP.NET authentication handler.
+ - `GET /me` projects the current cookie principal; `GET|POST /auth/logout` removes the local session.
+ - Explicitly configured providers outrank automatic local defaults. `PreferredProviderId` selects among eligible
+@@ -59,6 +59,8 @@ provider endpoints or `Authority`, `ClientId`, and `ClientSecret` under `Koan:We
+ 
+ - Connector references declare availability; they do not silently enable an unconfigured real provider.
+ - Explicit but incomplete provider intent fails startup with the exact missing fields and configuration path.
++- Custom protocol connectors participate in the same plan, discovery, facts, and election; an eligible provider with
++  no registered ASP.NET handler stops startup with a correction naming the missing scheme.
+ - Unknown or ineligible `PreferredProviderId` values fail startup instead of silently selecting something else.
+ - Missing external subject identifiers, identity-link persistence failures, and security-bearing lifecycle-handler
+   failures reject the sign-in flow.
+@@ -66,7 +68,9 @@ provider endpoints or `Authority`, `ClientId`, and `ClientSecret` under `Koan:We
+ 
+ ## Boundaries
+ 
+-- Supports OAuth2 and OIDC interactive sign-in. SAML is not supported.
++- Includes OAuth2 and OIDC interactive sign-in. Other protocols require a connector providing both `IAuthProtocol`
++  configuration validation and a standard ASP.NET handler; declaring a `Type` alone does not add protocol mechanics.
++  No SAML handler is included.
+ - Web Auth signs users into this application; `Sylin.Koan.Web.Auth.Server` is the separate opt-in capability that
+   issues OAuth tokens to clients.
+ - Referencing `Sylin.Koan.Web.Auth` alone does not add a simulated provider. Use
+diff --git a/src/Koan.Web.Auth/TECHNICAL.md b/src/Koan.Web.Auth/TECHNICAL.md
+index 9aae50cea..c19a42c2b 100644
+--- a/src/Koan.Web.Auth/TECHNICAL.md
++++ b/src/Koan.Web.Auth/TECHNICAL.md
+@@ -19,6 +19,9 @@ directly instead of depending on functional Web Auth merely to consume a contrac
+ - Configuration-only provider IDs are supported because OAuth2/OIDC mechanics belong to Web Auth itself.
+ - Required OIDC values: `Authority`, `ClientId`, `ClientSecret`.
+ - Required OAuth2 values: `AuthorizationEndpoint`, `TokenEndpoint`, `UserInfoEndpoint`, `ClientId`, `ClientSecret`.
++- Other protocols require one connector-owned `IAuthProtocol` validator plus the named ASP.NET handler. Unknown
++  protocols, duplicate validator identities, and attempted replacement of reserved `oidc`/`oauth2` mechanics stop
++  startup. Protocol identities are trimmed and compared without case sensitivity.
+ 
+ Provider callbacks use `/auth/{id}/callback`. Relative endpoints and authorities are reserved for the self-hosted local
+ test provider; deployment providers should use absolute HTTPS endpoints.
+@@ -32,10 +35,29 @@ implicit ones across browser redirects. This changes local issuer construction,
+ 
+ ## Runtime behavior
+ 
+-`AuthModule.Start` resolves the immutable plan and seeds one ASP.NET scheme per eligible provider. OIDC uses
++`AuthModule.Start` resolves the immutable plan and ensures one ASP.NET scheme per eligible provider. OIDC uses
+ `OpenIdConnectHandler`; OAuth2 uses `OAuthHandler<OAuthOptions>`. PKCE, state, correlation, OIDC nonce, issuer,
+ audience, and signature validation remain owned by maintained ASP.NET handlers.
+ 
++A custom connector registers its `IAuthProtocol`, `AuthProviderDefinition`, and ordinary ASP.NET named scheme in its
++module registration phase. Web Auth passes the effective, merged `ProviderOptions` into the protocol validator once
++for each active provider. The validator returns an empty list for complete configuration, or secret-free corrective
++messages with full configuration paths. It must reject unsupported scope, callback, or other overrides that its
++handler cannot honor; it must not perform network I/O or mutate configuration. Inactive, disabled, and unavailable
++providers do not undergo protocol validation.
++
++The existing seeder preserves a registered scheme and rejects any eligible route that still lacks one. Merely
++declaring a custom `Type` does not implement configuration-only provider IDs: the connector must register each
++corresponding scheme. Normalized protocol and merged provider options remain owned by the compiled plan. There is no
++second custom protocol startup lifecycle and no per-request protocol discovery.
++
++The unmodified challenge controller applies the existing return-URL policy before invoking the named handler.
++Protocol-specific initiation input is available through the handler's request; the connector owns validation and
++must bind any security-relevant value into its protected transaction state rather than trusting callback query
++parameters. Custom handlers own their protocol's remote validation, subject mapping, external linkage, and any token
++storage. They sign in through `AuthenticationExtensions.CookieScheme` to retain Koan's cookie lifecycle and rejection
++semantics. A registered scheme proves composition only, not that these security requirements are implemented.
++
+ The framework cookie scheme is `Koan.cookie`. Challenge and access-denied responses pass through the discovered
+ `IKoanAuthFlowHandler` pipeline. JSON/API requests receive the built-in JSON challenge behavior; interactive requests
+ redirect to the elected provider when one exists.
+diff --git a/tests/Koan.Web.Auth.Atproto.Tests/Koan.Web.Auth.Atproto.Tests.csproj b/tests/Koan.Web.Auth.Atproto.Tests/Koan.Web.Auth.Atproto.Tests.csproj
+new file mode 100644
+index 000000000..b09bcbc4f
+--- /dev/null
++++ b/tests/Koan.Web.Auth.Atproto.Tests/Koan.Web.Auth.Atproto.Tests.csproj
+@@ -0,0 +1,13 @@
++<Project Sdk="Microsoft.NET.Sdk">
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType>
++    <IsPackable>false</IsPackable><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
++  </PropertyGroup>
++  <ItemGroup>
++    <FrameworkReference Include="Microsoft.AspNetCore.App" />
++    <PackageReference Include="Microsoft.NET.Test.Sdk" />
++    <PackageReference Include="xunit.v3" />
++    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
++    <ProjectReference Include="../../src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj" />
++  </ItemGroup>
++</Project>
+diff --git a/tests/Koan.Web.Auth.Atproto.Tests/LocalProviderLifecycle.cs b/tests/Koan.Web.Auth.Atproto.Tests/LocalProviderLifecycle.cs
+new file mode 100644
+index 000000000..bed93018b
+--- /dev/null
++++ b/tests/Koan.Web.Auth.Atproto.Tests/LocalProviderLifecycle.cs
+@@ -0,0 +1,107 @@
++using System.Text.Json;
++using CarpaNet.OAuth;
++using CarpaNet.OAuth.Storage;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Koan.Web.Auth.Connector.Atproto.Protocol;
++using Koan.Web.Auth.Connector.Atproto.Storage;
++using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++using Microsoft.AspNetCore.Builder;
++using Microsoft.AspNetCore.DataProtection;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Logging;
++using Xunit;
++
++namespace Koan.Web.Auth.Atproto.Tests;
++
++/// <summary>Explicit, disposable-account-only proof; stop the sample before opening its protected store.</summary>
++public sealed class LocalProviderLifecycle
++{
++    public static bool Enabled => Environment.GetEnvironmentVariable("KOAN_ATPROTO_LIFECYCLE") is "disconnect" or "reauthorized";
++
++    [Fact(Skip = "Requires an explicitly selected disposable local-provider lifecycle run.", SkipUnless = nameof(Enabled))]
++    public async Task Real_refresh_and_checked_revocation()
++    {
++        var mode = Environment.GetEnvironmentVariable("KOAN_ATPROTO_LIFECYCLE")!;
++        var sample = Path.GetFullPath(Environment.GetEnvironmentVariable("KOAN_ATPROTO_SAMPLE") ?? throw new InvalidOperationException("Set KOAN_ATPROTO_SAMPLE."));
++        using var fixture = JsonDocument.Parse(await File.ReadAllTextAsync(Environment.GetEnvironmentVariable("KOAN_ATPROTO_FIXTURES") ?? throw new InvalidOperationException("Set KOAN_ATPROTO_FIXTURES.")));
++        var account = fixture.RootElement.GetProperty("accounts").EnumerateArray().Single(x => x.GetProperty("role").GetString() == "owner");
++        var did = account.GetProperty("did").GetString()!;
++        var pds = new Uri(account.GetProperty("pds").GetString()!);
++        Assert.True(pds.IsLoopback && pds.Scheme == "http", "This destructive lifecycle proof accepts only disposable loopback provider accounts.");
++
++        // Match the ordinary sample's content-root discriminator and OS key ring. No copied or exported keys.
++        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
++        { ApplicationName = "AtprotoIdentity", ContentRootPath = sample, EnvironmentName = "Development" });
++        builder.Logging.ClearProviders();
++        builder.Services.AddDataProtection();
++        using var services = builder.Services.BuildServiceProvider();
++        var environment = services.GetRequiredService<IHostEnvironment>();
++        var configured = builder.Configuration.GetSection("Koan:Web:Auth:Atproto").Get<AtprotoOptions>()!;
++        foreach (var item in fixture.RootElement.GetProperty("accounts").EnumerateArray())
++            configured.DevelopmentHandles[item.GetProperty("handle").GetString()!] = item.GetProperty("did").GetString()!;
++        var auth = builder.Configuration.GetSection("Koan:Web:Auth").Get<AuthOptions>()!;
++        var options = Microsoft.Extensions.Options.Options.Create(configured);
++        using var store = new ProtectedAtprotoStore(services.GetRequiredService<IDataProtectionProvider>(), options, environment);
++        using var network = new AtprotoHttp(options, environment);
++        var sessions = new AtprotoSessions(store, network, options, Microsoft.Extensions.Options.Options.Create(auth), new Catalog(), environment);
++        var previous = await store.GetAsync(did);
++        Assert.NotNull(previous);
++        var oldAccess = previous.TokenSet.AccessToken;
++        var oldRefresh = previous.TokenSet.RefreshToken;
++        // Expire local metadata only; the provider receives the original real refresh token and SDK DPoP.
++        previous.TokenSet.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
++        await store.StoreAsync(did, previous);
++        using var response = await sessions.Send(did, "com.atproto.server.getSession", HttpMethod.Get);
++        Assert.True(response.IsSuccessStatusCode, "The authenticated post-refresh PDS request failed.");
++        using var identity = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
++        Assert.Equal(did, identity.RootElement.GetProperty("did").GetString());
++        var refreshed = await store.GetAsync(did);
++        Assert.NotNull(refreshed);
++        Assert.True(oldAccess != refreshed.TokenSet.AccessToken, "Real access-token rotation did not occur.");
++        Assert.True(oldRefresh != refreshed.TokenSet.RefreshToken, "Real refresh-token rotation did not occur.");
++        Assert.True(refreshed.TokenSet.ExpiresAt > DateTimeOffset.UtcNow);
++
++        var revokedRefreshDenied = false;
++        var localSessionRemoved = false;
++        if (mode == "disconnect")
++        {
++            // Keep the last valid grant only in memory, so revocation is checked beyond local deletion.
++            var retained = JsonSerializer.Deserialize<OAuthSessionData>(JsonSerializer.Serialize(refreshed))!;
++            await sessions.Disconnect(did);
++            localSessionRemoved = await store.GetAsync(did) is null;
++            Assert.True(localSessionRemoved);
++            retained.TokenSet.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
++            var memory = new MemoryOAuthSessionStore();
++            await memory.StoreAsync(did, retained);
++            using var provider = new DPoPTokenProvider(network.Client, memory, clientId: retained.ClientId,
++                redirectUri: retained.RedirectUri, scope: retained.Scope);
++            Assert.True(await provider.RestoreSessionAsync(did));
++            try { await provider.GetAccessTokenAsync(); }
++            catch (TokenRefreshException error) when (error.InnerException is OAuthException oauth && oauth.ErrorCode == "invalid_grant")
++            { revokedRefreshDenied = true; }
++            Assert.True(revokedRefreshDenied, "The provider did not reject the revoked refresh grant as invalid_grant.");
++            await Assert.ThrowsAsync<InvalidOperationException>(() => sessions.Send(did, "com.atproto.server.getSession", HttpMethod.Get));
++        }
++
++        var receipt = new
++        {
++            date = DateTimeOffset.UtcNow, mode, did, scope = "atproto", actualProviderRefresh = true,
++            accessTokenRotated = true, refreshTokenRotated = true, authenticatedPdsRequest = (int)response.StatusCode,
++            localExpiryMetadataAdjusted = true, checkedDisconnect = mode == "disconnect", localSessionRemoved,
++            revokedRefreshDenied, revokedRefreshError = revokedRefreshDenied ? "invalid_grant" : null,
++            secretsWritten = false
++        };
++        var output = Environment.GetEnvironmentVariable("KOAN_ATPROTO_RECEIPT") ?? throw new InvalidOperationException("Set KOAN_ATPROTO_RECEIPT.");
++        await File.WriteAllTextAsync(output, JsonSerializer.Serialize(receipt, new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
++    }
++
++    private sealed class Catalog : IAuthProviderCatalog
++    {
++        public IReadOnlyList<AuthProviderInfo> Providers { get; } = [new("atproto", "AT Protocol", "atproto", "enabled", true, true, false, 200, "Local proof", null, null, ["atproto"], "/auth/atproto/challenge")];
++        public AuthProviderInfo? Default => Providers[0];
++        public AuthProviderInfo? Find(string? id) => id == "atproto" ? Default : null;
++    }
++}
+diff --git a/tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs b/tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs
+new file mode 100644
+index 000000000..0c4115e21
+--- /dev/null
++++ b/tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs
+@@ -0,0 +1,219 @@
++using System.Net;
++using CarpaNet.OAuth;
++using CarpaNet.OAuth.Storage;
++using Koan.Web.Auth.Connector.Atproto.Hosting;
++using Koan.Web.Auth.Connector.Atproto.Options;
++using Koan.Web.Auth.Connector.Atproto.Protocol;
++using Koan.Web.Auth.Connector.Atproto.Storage;
++using Koan.Web.Auth.Options;
++using Microsoft.AspNetCore.DataProtection;
++using Microsoft.Extensions.FileProviders;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Options;
++using Xunit;
++
++namespace Koan.Web.Auth.Atproto.Tests;
++
++public sealed class ProtocolGuards
++{
++    [Theory]
++    [InlineData("127.0.0.1")][InlineData("10.1.1.1")][InlineData("169.254.169.254")]
++    [InlineData("100.100.100.200")][InlineData("::1")][InlineData("::ffff:127.0.0.1")]
++    [InlineData("fe80::1")][InlineData("fc00::1")][InlineData("2001:db8::1")][InlineData("2002:7f00:1::")]
++    public void Private_and_translation_addresses_are_not_public(string address) => Assert.False(AtprotoHttp.PublicAddress(IPAddress.Parse(address)));
++
++    [Theory]
++    [InlineData("1.1.1.1")][InlineData("8.8.8.8")][InlineData("2606:4700:4700::1111")]
++    public void Public_addresses_are_eligible(string address) => Assert.True(AtprotoHttp.PublicAddress(IPAddress.Parse(address)));
++
++    [Fact]
++    public void Development_exceptions_are_rejected_in_production()
++    {
++        var options = new AtprotoOptions { DevelopmentAllowedOrigins = ["http://localhost:2582"] };
++        var validator = new AtprotoProtocol(Microsoft.Extensions.Options.Options.Create(options), new EnvironmentStub("Production"));
++        Assert.Contains(validator.Validate("atproto", Provider()), x => x.Contains("require Development"));
++    }
++
++    [Fact]
++    public void Unsupported_provider_overlay_is_corrective()
++    {
++        var validator = new AtprotoProtocol(Microsoft.Extensions.Options.Options.Create(new AtprotoOptions()), new EnvironmentStub("Production"));
++        var errors = validator.Validate("atproto", new ProviderOptions { ClientId = "https://app.example/auth/atproto/client-metadata.json", CallbackPath = "/different", ClientSecret = "never-in-error" });
++        Assert.Contains(errors, x => x.Contains("CallbackPath"));
++        Assert.DoesNotContain(errors, x => x.Contains("never-in-error"));
++    }
++
++    [Fact]
++    public void Public_configuration_accepts_no_secret_or_fixed_issuer()
++    {
++        var validator = new AtprotoProtocol(Microsoft.Extensions.Options.Options.Create(new AtprotoOptions()), new EnvironmentStub("Production"));
++        Assert.Empty(validator.Validate("atproto", Provider()));
++    }
++
++    [Fact]
++    public void Removed_permission_ceiling_rejects_an_older_stored_grant()
++    {
++        Assert.Throws<InvalidOperationException>(() => AtprotoSessions.RequireScopes("atproto transition:generic.write", ["atproto"]));
++        AtprotoSessions.RequireScopes("atproto", ["atproto", "transition:generic.write"]);
++    }
++
++    [Theory]
++    [InlineData("atproto")]
++    [InlineData("atproto space:read")]
++    public void Callback_rejects_a_partial_requested_grant(string granted)
++    {
++        var error = Assert.Throws<AtprotoMissingScopesException>(() =>
++            AtprotoSessions.RequireRequestedScopes(granted, ["atproto", "space:read", "space:write"]));
++        Assert.DoesNotContain("space:", error.Message);
++    }
++
++    [Fact]
++    public void Callback_accepts_all_requested_scopes_regardless_of_order_or_duplicates()
++        => AtprotoSessions.RequireRequestedScopes("space:write atproto space:read atproto",
++            ["atproto", "space:read", "space:write", "atproto"]);
++
++    [Fact]
++    public void Callback_still_rejects_unrequested_permissions()
++        => Assert.Throws<InvalidOperationException>(() =>
++            AtprotoSessions.RequireRequestedScopes("atproto space:write", ["atproto"]));
++
++    [Fact]
++    public void Ordinary_sign_in_need_not_receive_every_optional_declared_scope()
++    {
++        AtprotoSessions.RequireScopes("atproto", ["atproto", "space:read", "space:write"]);
++        AtprotoSessions.RequireRequestedScopes("atproto", ["atproto"]);
++    }
++
++    [Fact]
++    public void A_default_sign_in_preserves_a_valid_broader_grant()
++    {
++        var scopes = AtprotoSessions.ScopesForSignIn(false, ["atproto"], "atproto space:read space:write",
++            ["atproto", "space:read", "space:write"]);
++        Assert.Equal(["atproto", "space:read", "space:write"], scopes);
++    }
++
++    [Fact]
++    public void An_explicit_connection_scope_is_not_relaxed_to_a_previous_grant()
++    {
++        var scopes = AtprotoSessions.ScopesForSignIn(true, ["atproto", "space:read"], "atproto space:read space:write",
++            ["atproto", "space:read", "space:write"]);
++        Assert.Equal(["atproto", "space:read"], scopes);
++    }
++
++    [Fact]
++    public void An_old_broader_grant_cannot_survive_a_reduced_declared_ceiling()
++        => Assert.Throws<InvalidOperationException>(() =>
++            AtprotoSessions.ScopesForSignIn(false, ["atproto"], "atproto space:read", ["atproto"]));
++
++    [Fact]
++    public async Task Rejected_downscope_keeps_the_previous_durable_session()
++    {
++        var directory = Path.Combine(Path.GetTempPath(), "koan-atproto-" + Guid.NewGuid().ToString("N"));
++        var options = Microsoft.Extensions.Options.Options.Create(new AtprotoOptions { SessionDirectory = directory });
++        var protector = DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(directory, "keys")));
++        var environment = new EnvironmentStub("Development");
++        const string did = "did:plc:test";
++        using (var durable = new ProtectedAtprotoStore(protector, options, environment))
++        {
++            await durable.StoreAsync(did, new OAuthSessionData { TokenSet = new TokenSet
++                { Sub = did, Scope = "atproto space:read space:write", AccessToken = "previous-test-token" } });
++            var staged = new VerifiedSessionStore(durable);
++            await staged.StoreAsync(did, new OAuthSessionData { TokenSet = new TokenSet
++                { Sub = did, Scope = "atproto", AccessToken = "downscoped-test-token" } });
++            await Assert.ThrowsAsync<AtprotoMissingScopesException>(async () =>
++            {
++                AtprotoSessions.RequireRequestedScopes(staged.GrantedScope, ["atproto", "space:read", "space:write"]);
++                await staged.Commit(did, default);
++            });
++            // The rejected SDK client's cleanup must not delete a previously working session either.
++            await staged.DeleteAsync(did);
++            Assert.Equal("previous-test-token", (await durable.GetAsync(did))!.TokenSet.AccessToken);
++        }
++        using var restored = new ProtectedAtprotoStore(protector, options, environment);
++        Assert.Equal("previous-test-token", (await restored.GetAsync(did))!.TokenSet.AccessToken);
++        Assert.Equal("atproto space:read space:write", (await restored.GetAsync(did))!.TokenSet.Scope);
++    }
++
++    [Fact]
++    public void Failed_PAR_cannot_downgrade_to_direct_authorization()
++    {
++        Assert.Throws<InvalidOperationException>(() => AtprotoSessions.RequirePar("https://issuer.example/auth?client_id=client&response_type=code&state=state", "client"));
++        AtprotoSessions.RequirePar("https://issuer.example/auth?client_id=client&request_uri=urn%3Atest%3Apushed", "client");
++    }
++
++    [Fact]
++    public async Task State_is_single_use_after_storage_restart_and_sessions_stage_before_verification()
++    {
++        var directory = Path.Combine(Path.GetTempPath(), "koan-atproto-" + Guid.NewGuid().ToString("N"));
++        var options = Microsoft.Extensions.Options.Options.Create(new AtprotoOptions { SessionDirectory = directory });
++        var protector = DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(directory, "keys")));
++        var environment = new EnvironmentStub("Development");
++        using (var first = new ProtectedAtprotoStore(protector, options, environment))
++            await first.StoreAsync("state", new OAuthStateData { ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(1), AppState = "browser" });
++        using var restored = new ProtectedAtprotoStore(protector, options, environment);
++        Assert.Equal("browser", (await restored.ConsumeAsync("state"))!.AppState);
++        Assert.Null(await restored.ConsumeAsync("state"));
++        var staged = new VerifiedSessionStore(restored);
++        await staged.StoreAsync("did:plc:test", new OAuthSessionData { TokenSet = new TokenSet { Sub = "did:plc:test", AccessToken = "not-public" } });
++        Assert.Null(await restored.GetAsync("did:plc:test"));
++        await Assert.ThrowsAsync<InvalidOperationException>(() => staged.Commit("did:plc:other", default));
++        await staged.Commit("did:plc:test", default);
++        Assert.NotNull(await restored.GetAsync("did:plc:test"));
++        Assert.DoesNotContain("not-public", await File.ReadAllTextAsync(Path.Combine(directory, "protocol.protected")));
++    }
++
++    private static ProviderOptions Provider() => new() { ClientId = "https://app.example/auth/atproto/client-metadata.json", Scopes = ["atproto"] };
++
++    [Fact]
++    public void Fixture_PLC_selection_never_captures_public_or_unknown_identities()
++    {
++        var options = new AtprotoOptions { DevelopmentPlcDirectory = "http://localhost:2582",
++            DevelopmentHandles = new() { ["owner.test"] = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" } };
++        Assert.Equal("http://localhost:2582", options.DirectoryFor("owner.test", true));
++        Assert.Equal("http://localhost:2582", options.DirectoryFor("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", true));
++        Assert.Equal("https://plc.directory", options.DirectoryFor("leo.sylin.org", true));
++        Assert.Equal("https://plc.directory", options.DirectoryFor("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", true));
++        Assert.Equal("https://plc.directory", options.DirectoryFor("owner.test", false));
++    }
++
++    [Fact]
++    public void Container_connection_host_applies_only_to_exact_development_origins()
++    {
++        var options = Microsoft.Extensions.Options.Options.Create(new AtprotoOptions {
++            DevelopmentAllowedOrigins = ["http://localhost:2583"], DevelopmentConnectHost = "host.docker.internal" });
++        using var dev = new AtprotoHttp(options, new EnvironmentStub("Development"));
++        using var prod = new AtprotoHttp(options, new EnvironmentStub("Production"));
++        Assert.Equal("host.docker.internal", dev.ConnectionHost(new Uri("http://localhost:2583/xrpc/test")));
++        Assert.Equal("public.example", dev.ConnectionHost(new Uri("https://public.example/xrpc/test")));
++        Assert.Equal("localhost", dev.ConnectionHost(new Uri("http://localhost:2584/xrpc/test")));
++        Assert.Equal("localhost", prod.ConnectionHost(new Uri("http://localhost:2583/xrpc/test")));
++    }
++
++    [Theory]
++    [InlineData(true, false)]
++    [InlineData(false, true)]
++    public void Production_rejects_each_development_routing_option(bool directory, bool connection)
++    {
++        var options = new AtprotoOptions { DevelopmentPlcDirectory = directory ? "http://localhost:2582" : null,
++            DevelopmentConnectHost = connection ? "host.docker.internal" : null };
++        var validator = new AtprotoProtocol(Microsoft.Extensions.Options.Options.Create(options), new EnvironmentStub("Production"));
++        Assert.Contains(validator.Validate("atproto", Provider()), x => x.Contains("require Development"));
++    }
++
++    [Fact]
++    public void Invalid_development_routes_are_corrective_configuration_errors()
++    {
++        var options = new AtprotoOptions { DevelopmentPlcDirectory = "http://unlisted.example", DevelopmentConnectHost = "http://proxy.example/path" };
++        var validator = new AtprotoProtocol(Microsoft.Extensions.Options.Options.Create(options), new EnvironmentStub("Development"));
++        var errors = validator.Validate("atproto", Provider());
++        Assert.Contains(errors, x => x.Contains("DevelopmentPlcDirectory"));
++        Assert.Contains(errors, x => x.Contains("DevelopmentConnectHost"));
++    }
++    private sealed class EnvironmentStub(string name) : IHostEnvironment
++    {
++        public string EnvironmentName { get; set; } = name;
++        public string ApplicationName { get; set; } = "AtprotoTests";
++        public string ContentRootPath { get; set; } = Path.GetTempPath();
++        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
++    }
++}
+diff --git a/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs b/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs
+index 143469f8e..5f94c1afc 100644
+--- a/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs
++++ b/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs
+@@ -106,6 +106,118 @@ public sealed class AuthProviderPlanTests
+         second.Find("test-oidc").Should().BeNull();
+     }
+ 
++    [Fact]
++    public void Custom_protocol_validates_merged_options_once_and_joins_the_existing_plan()
++    {
++        ProviderOptions? observed = null;
++        var calls = 0;
++        var protocol = new TestProtocol("custom", (_, options) =>
++        {
++            calls++;
++            observed = options;
++            return [];
++        });
++        var plan = new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions
++        {
++            Providers = new(StringComparer.OrdinalIgnoreCase)
++            {
++                ["account"] = new ProviderOptions { Scopes = ["scoped"], CallbackPath = "/auth/account/callback" }
++            }
++        }), [new AuthProviderDefinition("account", new ProviderOptions
++        {
++            Type = " CUSTOM ", DisplayName = "External account", ClientId = "baseline-client", Scopes = ["baseline"]
++        })], [protocol]);
++
++        calls.Should().Be(1);
++        observed!.ClientId.Should().Be("baseline-client");
++        observed.Scopes.Should().Equal("scoped");
++        observed.CallbackPath.Should().Be("/auth/account/callback");
++        plan.Default!.Id.Should().Be("account");
++        plan.Default.Protocol.Should().Be("custom");
++        plan.Default.ChallengePath.Should().Be("/auth/account/challenge");
++        plan.Default.Scopes.Should().Equal("scoped");
++        plan.Find("account").Should().BeSameAs(plan.Default);
++        calls.Should().Be(1, "reading the immutable plan must not re-run validation");
++    }
++
++    [Fact]
++    public void Custom_protocol_correction_retains_its_own_configuration_path()
++    {
++        var protocol = new TestProtocol("custom", (_, _) => ["Set Koan:Web:Auth:Custom:KeyStore."]);
++        var act = () => new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
++            [new AuthProviderDefinition("account", new ProviderOptions { Type = "custom" }, Automatic: true)],
++            [protocol]);
++
++        act.Should().Throw<InvalidOperationException>()
++            .WithMessage("*account*custom*Set Koan:Web:Auth:Custom:KeyStore.*");
++    }
++
++    [Fact]
++    public void Explicit_unknown_protocol_fails_with_connector_correction()
++    {
++        var act = () => Compile(new AuthOptions
++        {
++            Providers = new(StringComparer.OrdinalIgnoreCase)
++            {
++                ["account"] = new ProviderOptions { Type = "missing-protocol" }
++            }
++        });
++
++        act.Should().Throw<InvalidOperationException>()
++            .WithMessage("*account*Type*supported:*oauth2*oidc*reference the connector*Koan:Web:Auth:Providers:account*");
++    }
++
++    [Fact]
++    public void Inactive_custom_provider_does_not_validate_or_become_default()
++    {
++        var calls = 0;
++        var protocol = new TestProtocol("custom", (_, _) => { calls++; return ["Must not run."]; });
++        var plan = new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
++            [new AuthProviderDefinition("account", new ProviderOptions { Type = "custom" })], [protocol]);
++
++        plan.Find("account")!.State.Should().Be("inactive");
++        plan.Default.Should().BeNull();
++        calls.Should().Be(0);
++    }
++
++    [Fact]
++    public void Duplicate_protocol_declarations_fail_instead_of_using_registration_order()
++    {
++        var act = () => new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions()), [],
++            [new TestProtocol("custom", (_, _) => []), new TestProtocol(" CUSTOM ", (_, _) => [])]);
++
++        act.Should().Throw<InvalidOperationException>().WithMessage("*declared more than once*");
++    }
++
++    [Theory]
++    [InlineData(AuthProviderProtocols.Oidc)]
++    [InlineData(AuthProviderProtocols.OAuth2)]
++    public void Connector_cannot_replace_builtin_protocol_mechanics(string protocol)
++    {
++        var act = () => new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions()), [],
++            [new TestProtocol(protocol, (_, _) => [])]);
++
++        act.Should().Throw<InvalidOperationException>().WithMessage("*owned by Koan Web Auth*cannot be replaced*");
++    }
++
++    [Fact]
++    public void Custom_protocol_availability_does_not_leak_between_hosts()
++    {
++        var definition = new AuthProviderDefinition("account", new ProviderOptions { Type = "custom" }, Automatic: true);
++        var first = new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions()), [definition],
++            [new TestProtocol("custom", (_, _) => [])]);
++        var second = () => new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions()), [definition]);
++
++        first.Default!.Id.Should().Be("account");
++        second.Should().Throw<InvalidOperationException>().WithMessage("*reference the connector*");
++    }
++
++    private sealed class TestProtocol(string protocol, Func<string, ProviderOptions, IReadOnlyList<string>> validate) : IAuthProtocol
++    {
++        public string Protocol => protocol;
++        public IReadOnlyList<string> Validate(string providerId, ProviderOptions options) => validate(providerId, options);
++    }
++
+     private static AuthProviderPlan Compile(AuthOptions options, params AuthProviderDefinition[] definitions)
+         => new(Microsoft.Extensions.Options.Options.Create(options), definitions);
+ 
+diff --git a/tests/Koan.Web.Auth.Tests/AuthSchemeSeederTests.cs b/tests/Koan.Web.Auth.Tests/AuthSchemeSeederTests.cs
+new file mode 100644
+index 000000000..34b7b7edf
+--- /dev/null
++++ b/tests/Koan.Web.Auth.Tests/AuthSchemeSeederTests.cs
+@@ -0,0 +1,94 @@
++using AwesomeAssertions;
++using Koan.Web.Auth.Hosting;
++using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.Authentication.Cookies;
++using Microsoft.AspNetCore.Authentication.OAuth;
++using Microsoft.AspNetCore.Authentication.OpenIdConnect;
++using Microsoft.AspNetCore.DataProtection;
++using Microsoft.Extensions.DependencyInjection;
++using Xunit;
++
++namespace Koan.Web.Auth.Tests;
++
++public sealed class AuthSchemeSeederTests
++{
++    [Fact]
++    public void Eligible_custom_protocol_without_its_named_handler_stops_startup()
++    {
++        using var services = Services(CustomPlan()).BuildServiceProvider();
++        var act = () => AuthSchemeSeeder.Seed(services);
++
++        act.Should().Throw<InvalidOperationException>()
++            .WithMessage("*'account'*'custom'*no ASP.NET authentication scheme*register scheme 'account'*disable/remove*");
++    }
++
++    [Fact]
++    public async Task Connector_registered_standard_scheme_is_preserved_on_repeated_seeding()
++    {
++        var registrations = Services(CustomPlan());
++        registrations.AddAuthentication().AddCookie("account");
++        using var services = registrations.BuildServiceProvider();
++        var schemes = services.GetRequiredService<IAuthenticationSchemeProvider>();
++        var original = await schemes.GetSchemeAsync("account");
++
++        AuthSchemeSeeder.Seed(services);
++        AuthSchemeSeeder.Seed(services);
++
++        (await schemes.GetSchemeAsync("account")).Should().BeSameAs(original);
++        original!.HandlerType.Should().Be(typeof(CookieAuthenticationHandler));
++    }
++
++    [Fact]
++    public async Task Builtin_protocols_use_normalized_plan_and_retained_maintained_handlers()
++    {
++        var plan = new AuthProviderPlan(Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
++        [
++            new AuthProviderDefinition("openid", new ProviderOptions
++            {
++                Type = " OIDC ", Authority = "https://identity.example.test", ClientId = "client", ClientSecret = "secret"
++            }, Automatic: true),
++            new AuthProviderDefinition("oauth", new ProviderOptions
++            {
++                Type = " OAuth2 ", ClientId = "client", ClientSecret = "secret",
++                AuthorizationEndpoint = "https://identity.example.test/authorize",
++                TokenEndpoint = "https://identity.example.test/token",
++                UserInfoEndpoint = "https://identity.example.test/userinfo"
++            }, Automatic: true)
++        ]);
++        using var services = Services(plan).BuildServiceProvider();
++        var schemes = services.GetRequiredService<IAuthenticationSchemeProvider>();
++
++        AuthSchemeSeeder.Seed(services);
++        var oidc = await schemes.GetSchemeAsync("openid");
++        var oauth = await schemes.GetSchemeAsync("oauth");
++        AuthSchemeSeeder.Seed(services);
++
++        oidc!.HandlerType.Should().Be(typeof(OpenIdConnectHandler));
++        oauth!.HandlerType.Should().Be(typeof(OAuthHandler<OAuthOptions>));
++        (await schemes.GetSchemeAsync("openid")).Should().BeSameAs(oidc);
++        (await schemes.GetSchemeAsync("oauth")).Should().BeSameAs(oauth);
++    }
++
++    private static ServiceCollection Services(AuthProviderPlan plan)
++    {
++        var services = new ServiceCollection();
++        services.AddLogging();
++        services.AddDataProtection().UseEphemeralDataProtectionProvider();
++        services.AddAuthentication();
++        services.AddSingleton(plan);
++        return services;
++    }
++
++    private static AuthProviderPlan CustomPlan()
++        => new(Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
++            [new AuthProviderDefinition("account", new ProviderOptions { Type = "custom" }, Automatic: true)],
++            [new TestProtocol()]);
++
++    private sealed class TestProtocol : IAuthProtocol
++    {
++        public string Protocol => "custom";
++        public IReadOnlyList<string> Validate(string providerId, ProviderOptions options) => [];
++    }
++}
+diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolFixture.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolFixture.cs
+new file mode 100644
+index 000000000..116970aee
+--- /dev/null
++++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolFixture.cs
+@@ -0,0 +1,74 @@
++using Koan.Core;
++using Koan.Web.Auth.Extensions;
++using Koan.Web.Auth.Flow;
++using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++using Koan.Web.Extensions;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.DataProtection;
++using Microsoft.AspNetCore.Hosting;
++using Microsoft.AspNetCore.Hosting.Server;
++using Microsoft.AspNetCore.Hosting.Server.Features;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Logging;
++using Xunit;
++
++namespace Koan.Web.Auth.Integration.Tests.CustomProtocol;
++
++/// <summary>Real AddKoan host with a deliberately synthetic protocol; proves composition, not external identity security.</summary>
++public sealed class CustomProtocolFixture : IAsyncLifetime
++{
++    private IHost? _host;
++    public string BaseUrl { get; private set; } = "";
++    public IServiceProvider Services => _host?.Services ?? throw new InvalidOperationException("Host not started.");
++
++    public async ValueTask InitializeAsync()
++    {
++        _host = Host.CreateDefaultBuilder()
++            .ConfigureLogging(logging => logging.ClearProviders())
++            .ConfigureWebHostDefaults(web =>
++            {
++                web.UseUrls("http://127.0.0.1:0");
++                web.UseEnvironment("Development");
++                web.ConfigureServices(services =>
++                {
++                    services.AddDataProtection().UseEphemeralDataProtectionProvider();
++                    services.AddKoan();
++                    services.AddKoanWeb();
++                    services.AddKoanControllersFrom<WhoAmIController>();
++                    // Connector-shaped contributions are local to this fixture, so existing OAuth/OIDC hosts keep
++                    // their original provider set. Production connectors put these registrations in their module.
++                    services.AddSingleton<IAuthProtocol, ProbeAuthProtocol>();
++                    services.AddSingleton(new AuthProviderDefinition("custom", new ProviderOptions
++                    {
++                        Type = "synthetic", DisplayName = "Synthetic fixture", Scopes = ["fixture"], Priority = 1000
++                    }, Automatic: true));
++                    services.AddScoped<IKoanAuthFlowHandler, ProbeSignInPolicy>();
++                    services.AddAuthentication().AddScheme<RemoteAuthenticationOptions, ProbeAuthenticationHandler>(
++                        "custom", options =>
++                        {
++                            options.SignInScheme = AuthenticationExtensions.CookieScheme;
++                            options.CallbackPath = "/auth/custom/callback";
++                            options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
++                            options.CorrelationCookie.SameSite = SameSiteMode.Lax;
++                        });
++                });
++                web.Configure(_ => { });
++            }).Build();
++
++        await _host.StartAsync();
++        BaseUrl = Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
++    }
++
++    public HttpClient NewClient()
++        => new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = true }) { BaseAddress = new Uri(BaseUrl) };
++
++    public async ValueTask DisposeAsync()
++    {
++        if (_host is null) return;
++        await _host.StopAsync();
++        _host.Dispose();
++    }
++}
+diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolSpec.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolSpec.cs
+new file mode 100644
+index 000000000..3395b2ec7
+--- /dev/null
++++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolSpec.cs
+@@ -0,0 +1,69 @@
++using System.Net;
++using System.Text.Json;
++using AwesomeAssertions;
++using Koan.Core.Diagnostics;
++using Koan.Web.Auth.Providers;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.WebUtilities;
++using Microsoft.Extensions.DependencyInjection;
++using Xunit;
++
++namespace Koan.Web.Auth.Integration.Tests.CustomProtocol;
++
++public sealed class CustomProtocolSpec(CustomProtocolFixture fixture) : IClassFixture<CustomProtocolFixture>
++{
++    [Fact]
++    public async Task Custom_protocol_projects_into_existing_discovery_facts_election_and_standard_scheme()
++    {
++        using var client = fixture.NewClient();
++        using var response = await client.GetAsync("/.well-known/auth/providers", TestContext.Current.CancellationToken);
++        response.StatusCode.Should().Be(HttpStatusCode.OK);
++        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
++        var provider = document.RootElement.EnumerateArray().Single(item => item.GetProperty("id").GetString() == "custom");
++        provider.GetProperty("challengeUrl").GetString().Should().Be("/auth/custom/challenge");
++
++        var catalog = fixture.Services.GetRequiredService<IAuthProviderCatalog>();
++        catalog.Default!.Id.Should().Be("custom");
++        catalog.Find("custom")!.Scopes.Should().Equal("fixture");
++        var facts = fixture.Services.GetRequiredService<IKoanRuntimeFacts>().Current.Facts;
++        facts.Should().Contain(fact => fact.Code == "koan.auth.provider.eligible" && fact.Subject == "auth:provider:custom");
++        facts.Should().Contain(fact => fact.Code == "koan.auth.provider.selected" && fact.Subject == "auth:provider:default");
++        var scheme = await fixture.Services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync("custom");
++        scheme!.HandlerType.Should().Be(typeof(ProbeAuthenticationHandler));
++    }
++
++    [Fact]
++    public async Task Custom_challenge_keeps_return_policy_and_issues_existing_application_cookie()
++    {
++        using var client = fixture.NewClient();
++        using var challenge = await client.GetAsync("/auth/custom/challenge?identifier=alice.example.test&return=https://untrusted.example.test/", TestContext.Current.CancellationToken);
++        challenge.StatusCode.Should().Be(HttpStatusCode.Redirect);
++        using var callback = await client.GetAsync(challenge.Headers.Location, TestContext.Current.CancellationToken);
++        callback.StatusCode.Should().Be(HttpStatusCode.Redirect);
++        callback.Headers.Location!.OriginalString.Should().Be("/");
++        callback.Headers.TryGetValues("Set-Cookie", out var cookies).Should().BeTrue();
++        cookies.Should().Contain(value => value.StartsWith(".AspNetCore.Koan.cookie=", StringComparison.Ordinal));
++
++        using var who = await client.GetAsync("/e2e/whoami", TestContext.Current.CancellationToken);
++        using var document = JsonDocument.Parse(await who.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
++        document.RootElement.GetProperty("authenticated").GetBoolean().Should().BeTrue();
++        document.RootElement.GetProperty("id").GetString().Should().Be("fixture-subject");
++    }
++
++    [Fact]
++    public async Task Callback_query_cannot_replace_challenge_input_and_sign_in_rejection_prevents_cookie()
++    {
++        using var client = fixture.NewClient();
++        using var challenge = await client.GetAsync("/auth/custom/challenge?identifier=reject.example.test&return=/e2e/whoami", TestContext.Current.CancellationToken);
++        challenge.StatusCode.Should().Be(HttpStatusCode.Redirect);
++        var callbackUrl = QueryHelpers.AddQueryString(challenge.Headers.Location!.OriginalString, "identifier", "alice.example.test");
++        using var callback = await client.GetAsync(callbackUrl, TestContext.Current.CancellationToken);
++        callback.IsSuccessStatusCode.Should().BeFalse();
++        if (callback.Headers.TryGetValues("Set-Cookie", out var cookies))
++            cookies.Should().NotContain(value => value.StartsWith(".AspNetCore.Koan.cookie=", StringComparison.Ordinal));
++
++        using var who = await client.GetAsync("/e2e/whoami", TestContext.Current.CancellationToken);
++        using var document = JsonDocument.Parse(await who.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
++        document.RootElement.GetProperty("authenticated").GetBoolean().Should().BeFalse();
++    }
++}
+diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthProtocol.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthProtocol.cs
+new file mode 100644
+index 000000000..444bd9429
+--- /dev/null
++++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthProtocol.cs
+@@ -0,0 +1,10 @@
++using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++
++namespace Koan.Web.Auth.Integration.Tests.CustomProtocol;
++
++public sealed class ProbeAuthProtocol : IAuthProtocol
++{
++    public string Protocol => "synthetic";
++    public IReadOnlyList<string> Validate(string providerId, ProviderOptions options) => [];
++}
+diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthenticationHandler.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthenticationHandler.cs
+new file mode 100644
+index 000000000..e3a4d5734
+--- /dev/null
++++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthenticationHandler.cs
+@@ -0,0 +1,42 @@
++using System.Security.Claims;
++using System.Text.Encodings.Web;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.DataProtection;
++using Microsoft.AspNetCore.WebUtilities;
++using Microsoft.Extensions.Logging;
++using Microsoft.Extensions.Options;
++
++namespace Koan.Web.Auth.Integration.Tests.CustomProtocol;
++
++/// <summary>Test-only loopback protocol. No upstream identity assertion is made or exercised here.</summary>
++public sealed class ProbeAuthenticationHandler(
++    IOptionsMonitor<RemoteAuthenticationOptions> options,
++    ILoggerFactory logger,
++    UrlEncoder encoder,
++    IDataProtectionProvider protection) : RemoteAuthenticationHandler<RemoteAuthenticationOptions>(options, logger, encoder)
++{
++    private readonly PropertiesDataFormat _state = new(protection.CreateProtector("auth-seam-integration-fixture"));
++
++    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
++    {
++        // Custom input is available on the initiating request without changing the generic controller.
++        properties.Items["identifier"] = Request.Query["identifier"].ToString();
++        GenerateCorrelationId(properties);
++        Response.Redirect(QueryHelpers.AddQueryString(Options.CallbackPath, "state", _state.Protect(properties)));
++        return Task.CompletedTask;
++    }
++
++    protected override Task<HandleRequestResult> HandleRemoteAuthenticateAsync()
++    {
++        var properties = _state.Unprotect(Request.Query["state"]!);
++        if (properties is null || !ValidateCorrelationId(properties))
++            return Task.FromResult(HandleRequestResult.Fail("Invalid fixture state or correlation."));
++
++        // Callback query cannot replace the value bound into the protected challenge state.
++        var identity = new ClaimsIdentity(Scheme.Name);
++        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, "fixture-subject"));
++        identity.AddClaim(new Claim("fixture-identifier", properties.Items["identifier"] ?? ""));
++        return Task.FromResult(HandleRequestResult.Success(
++            new AuthenticationTicket(new ClaimsPrincipal(identity), properties, Scheme.Name)));
++    }
++}
+diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeSignInPolicy.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeSignInPolicy.cs
+new file mode 100644
+index 000000000..f71fc8f83
+--- /dev/null
++++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeSignInPolicy.cs
+@@ -0,0 +1,14 @@
++using Koan.Web.Auth.Contributors;
++using Koan.Web.Auth.Flow;
++
++namespace Koan.Web.Auth.Integration.Tests.CustomProtocol;
++
++public sealed class ProbeSignInPolicy : IKoanAuthFlowHandler
++{
++    public Task OnSignIn(AuthSignInContext context, CancellationToken cancellationToken)
++    {
++        if (context.Provider == "custom" && context.Identity.HasClaim("fixture-identifier", "reject.example.test"))
++            context.Reject("Fixture policy rejected this sign-in.");
++        return Task.CompletedTask;
++    }
++}

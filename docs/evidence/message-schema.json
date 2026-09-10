@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-09-09T21:38:52.134Z",
+  "passed": true,
+  "source": "Pinned official Lexicon validator; offline, not PDS write enforcement or live schema publication.",
+  "checks": [
+    {
+      "name": "plain message",
+      "passed": true
+    },
+    {
+      "name": "reply with source reference",
+      "passed": true
+    },
+    {
+      "name": "missing reply CID",
+      "passed": true
+    },
+    {
+      "name": "invalid reply CID",
+      "passed": true
+    },
+    {
+      "name": "invalid timestamp",
+      "passed": true
+    },
+    {
+      "name": "oversized UTF-8 body",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "source": "/.well-known/Koan/facts",
+  "runId": "20260909T194848766Z",
+  "complete": true,
+  "facts": [
+    {
+      "subject": "data:route:default",
+      "state": "Observed",
+      "summary": "Koan's active default Data route is source 'Default' through provider 'sqlite' at authority revision 0 and content generation 1."
+    },
+    {
+      "subject": "koan.lock.json",
+      "state": "Healthy",
+      "summary": "11 modules · lockfile ok"
+    },
+    {
+      "subject": "communication:transport:default",
+      "state": "Selected",
+      "summary": "Koan selected adapter 'in-process' for 'communication:transport:default'."
+    },
+    {
+      "subject": "data:default",
+      "state": "Selected",
+      "summary": "Koan selected adapter 'sqlite' for 'data:default'."
+    }
+  ]
+}

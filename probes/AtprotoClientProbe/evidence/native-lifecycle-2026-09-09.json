@@ -1,0 +1,45 @@
+{
+  "observedDate": "2026-09-09",
+  "sdk": "CarpaNet.OAuth/1.1.0-alpha.5",
+  "sdkSourceCommit": "a24d54bf6a9ce3bbf7c1961d37ab099abe1d1a65",
+  "pdsSourceCommit": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "build": {
+    "sdk": "10.0.401",
+    "command": "dotnet build probes/AtprotoClientProbe/AtprotoClientProbe.csproj --nologo -p:RestoreLockedMode=true -p:UseAppHost=false",
+    "warnings": 0,
+    "errors": 0
+  },
+  "initialDisposableNetwork": {
+    "agentDid": "did:plc:rkonwqawkpfnexdufy3ahfkc",
+    "pds": "http://localhost:2584",
+    "minimalAtprotoOAuth": "passed real PAR, provider sign-in, consent, token exchange, DID verification, callback replay rejection",
+    "explicitExpiredTokenRefresh": { "refreshed": true },
+    "minimalScopeSpaceDelegation": { "status": 403, "error": "ScopeMissingError" },
+    "processRestart": {
+      "stoppedListenerConfirmed": true,
+      "sameProtectedSessionRestored": true,
+      "realTokenRotationAfterRestore": true,
+      "integrationFix": "Compare equivalent PDS root URI with or without trailing slash; retain strict issuer comparison"
+    }
+  },
+  "recreatedDisposableNetwork": {
+    "agentDid": "did:plc:mgxxqowf6nnd3btckqjq573l",
+    "pds": "http://localhost:2584",
+    "scope": "atproto space:local.tangent.room?authority=*&action=read&action=create&collection=local.tangent.message",
+    "oauthAndReplay": "passed",
+    "nativeWrite": {
+      "status": 200,
+      "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/native-agent-20260909",
+      "cid": "bafyreidppxcsmh6zibs6eehn52vuajbdfla4jp3thvl4nfdxxstgio2fmi",
+      "validationStatus": "unknown"
+    },
+    "nativeReadOfOwnRecordThroughSpaceCredential": {
+      "delegationFromPds2": true,
+      "credentialFromAuthorityPds1": true,
+      "readFromPds2": true,
+      "status": 200,
+      "cidMatchedWrite": true
+    }
+  },
+  "boundary": "These lifecycle and own-record observations supplement the root-owned full S01 script. They do not by themselves demonstrate a second participant read, full repository verification, browser cookie sign-in, or production readiness."
+}

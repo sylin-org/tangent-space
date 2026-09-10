@@ -1,0 +1,5 @@
+docs/workcards/web-static-security-headers.md
+src/Koan.Web/Hosting/KoanWebStartupFilter.cs
+src/Koan.Web/README.md
+src/Koan.Web/TECHNICAL.md
+tests/Suites/Web/Koan.Web.WellKnown.Tests/StaticSecurityHeadersSpec.cs

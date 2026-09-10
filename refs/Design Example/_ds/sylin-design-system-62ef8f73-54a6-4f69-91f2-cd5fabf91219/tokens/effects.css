@@ -1,0 +1,51 @@
+/* ==========================================================================
+   Sylin — Effects: shadow, glow, blur, motion
+   Light touch. On the dusk ground, depth comes from a faint glow and a
+   darker well, not from heavy drop shadows. The lantern flame is the only
+   thing that truly emits light.
+   ========================================================================== */
+
+:root {
+  /* ---- Elevation (soft, cool shadows against the night) ---------------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 18px 48px -12px rgba(0, 0, 0, 0.6);
+  /* Inset well — sunken panels / code blocks on dark */
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                  inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+
+  /* ---- Glow — the lantern light. Used sparingly, on the accent. -------- */
+  --glow-flame-sm: 0 0 0 1px var(--accent-line),
+                   0 0 12px -2px rgba(51, 183, 200, 0.4);
+  --glow-flame-md: 0 0 20px -2px rgba(51, 183, 200, 0.45),
+                   0 0 48px -8px rgba(51, 183, 200, 0.25);
+  /* Warm lantern-body glow */
+  --glow-warm: 0 0 32px -6px rgba(240, 194, 107, 0.35);
+
+  /* Focus ring */
+  --focus-ring-shadow: 0 0 0 2px var(--surface-ground),
+                       0 0 0 4px var(--focus-ring);
+
+  /* ---- Blur / transparency (used rarely — dialog scrims, sticky nav) --- */
+  --blur-sm: 6px;
+  --blur-md: 14px;
+
+  /* ---- Motion — calm, natural. Nothing bounces. ----------------------- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1); /* @kind other */
+
+  --duration-fast: 120ms; /* @kind other */
+  --duration-base: 220ms; /* @kind other */
+  --duration-slow: 420ms; /* @kind other */
+  --duration-drift: 6s; /* @kind other */
+}
+
+/* Respect the user. Ambient motion off when asked. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms; /* @kind other */
+    --duration-base: 0ms; /* @kind other */
+    --duration-slow: 0ms; /* @kind other */
+  }
+}

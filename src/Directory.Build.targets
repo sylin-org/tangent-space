@@ -1,0 +1,4 @@
+<Project>
+  <!-- Temporary contribution-development bridge: ProjectReference does not carry NuGet buildTransitive assets. -->
+  <Import Project="$(KoanSourceRoot)/src/Koan.Core/build/Sylin.Koan.Core.targets" />
+</Project>

@@ -1,0 +1,89 @@
+{
+  "observedAt": "2026-09-09T17:51:46.2640361-04:00",
+  "passed": true,
+  "sdk": "10.0.401",
+  "baseRevision": "e07a84cc3f71a0867f1122b03b723cc80727e772",
+  "patchSha256": "10ad8038f6ee244afa340435f784dd1c1aa6380af552445c341d7739db7dc836",
+  "headerFiles": 5,
+  "authContribution": {
+    "files": 48,
+    "postimagesPreserved": true,
+    "overlappingFiles": 0,
+    "patchSha256": "2d00e951945c0c862d051ae5c4daa9fb375ea639fe3add143f31adfaa5e5c013",
+    "patchBytesPreserved": true
+  },
+  "regressionBeforeFix": {
+    "failure": "Enabled security headers missing X-Frame-Options on real static / response",
+    "failed": 1,
+    "total": 3,
+    "passed": 2
+  },
+  "sourceAfterFix": {
+    "failed": 0,
+    "total": 3,
+    "passed": 3
+  },
+  "freshCheckout": {
+    "allPostimagesVerified": true,
+    "authAppliedFirst": true,
+    "command": "./contributions/koan-static-headers/verify.ps1 -Destination .local/upstream/koan-static-headers-verify -SourceRepository .local/upstream/koan-framework -RunTests",
+    "httpTests": {
+      "failed": 0,
+      "total": 3,
+      "passed": 3
+    },
+    "headerPatchApplied": true,
+    "directory": ".local/upstream/koan-static-headers-verify"
+  },
+  "httpScope": {
+    "physicalStaticBodyVerified": true,
+    "configurations": [
+      "headers enabled",
+      "headers explicitly disabled",
+      "proxied API"
+    ],
+    "realAddKoanHost": true,
+    "paths": [
+      "/",
+      "/index.html",
+      "/health/live"
+    ],
+    "headers": [
+      "X-Frame-Options",
+      "Referrer-Policy",
+      "X-Content-Type-Options",
+      "Content-Security-Policy"
+    ]
+  },
+  "tangentBuild": {
+    "passed": true,
+    "errors": 0,
+    "command": "dotnet build src/TangentSpace/TangentSpace.csproj --no-restore -v minimal",
+    "warnings": 0
+  },
+  "limits": [
+    "Focused real TestServer HTTP regression; not a broad Web or security certification.",
+    "Existing auth tests were not rerun because all48 auth postimages and patch bytes are unchanged.",
+    "No running Tangent host was restarted by this contribution work; live deployment verification is separate.",
+    "No upstream commit, PR, publication or package-version edit was performed."
+  ],
+  "dockerFollowUp": {
+    "httpTestsPassed": 3,
+    "observedAt": "2026-09-09T22:55:36.9755256+00:00",
+    "freshLayeredApply": true,
+    "authPatchSha256": "c457826e94764fd7b069b333023ed8216a4d12df0af4ebb2d159eafa1a894da2"
+  },
+  "scopeGrantCorrection": {
+    "observedAt": "2026-09-10T01:36:22.915Z",
+    "authPatchSha256": "a62676ea0cc34d394b6d496344952fb76c2b2b10f59935830411f53df87979e8",
+    "authPostimagesPreserved": 49,
+    "headerFiles": 5,
+    "freshLayeredApply": true,
+    "headerHttpTests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "headerPatchUnchanged": true,
+    "freshCheckout": ".local/upstream/koan-auth-scope-verify-1789004005"
+  }
+}

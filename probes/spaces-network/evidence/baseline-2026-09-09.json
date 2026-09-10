@@ -1,0 +1,102 @@
+{
+  "revision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "status": "passed",
+  "accounts": [
+    {
+      "role": "authority",
+      "handle": "tangent-authority.test",
+      "did": "did:plc:x3okjlp7hza4d3ta4bx73yja",
+      "pds": "http://localhost:2583"
+    },
+    {
+      "role": "owner",
+      "handle": "tangent-owner.test",
+      "did": "did:plc:2dqru276mtmkuw2y4yx7vkjx",
+      "pds": "http://localhost:2583"
+    },
+    {
+      "role": "manager",
+      "handle": "tangent-manager.test",
+      "did": "did:plc:42m7yrgnbze2odhmxfijvatw",
+      "pds": "http://localhost:2583"
+    },
+    {
+      "role": "agent",
+      "handle": "tangent-agent.test2",
+      "did": "did:plc:rkonwqawkpfnexdufy3ahfkc",
+      "pds": "http://localhost:2584"
+    },
+    {
+      "role": "outsider",
+      "handle": "tangent-outsider.test2",
+      "did": "did:plc:o4vk4lnirwlwdtsvpiimsvly",
+      "pds": "http://localhost:2584"
+    }
+  ],
+  "completedAt": "2026-09-09T19:57:43.171Z",
+  "authentication": "Legacy password sessions for fixture setup and this baseline; OAuth remains a separate required probe.",
+  "rooms": {
+    "lounge": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/lounge",
+    "workshop": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/workshop"
+  },
+  "managingApp": "did:plc:x5fiontg63dzi6ekbr3357no#tangent",
+  "lexiconAuthority": "did:plc:fx4jzf6ehot5ckvkml7fx3r7",
+  "checks": {
+    "crossPdsRead": {
+      "status": 200,
+      "author": "did:plc:rkonwqawkpfnexdufy3ahfkc",
+      "reader": "did:plc:42m7yrgnbze2odhmxfijvatw",
+      "sourceUri": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/workshop/did:plc:rkonwqawkpfnexdufy3ahfkc/local.tangent.message/s01-message",
+      "cid": "bafyreicr7ok6uu2hsjgmpgir65lhauwbccwqzaayymatzzhe7phkku2p74",
+      "validationStatus": "unknown"
+    },
+    "outsiderCredential": {
+      "denied": true,
+      "error": "UserNotAuthorized"
+    },
+    "wrongRoomCredential": {
+      "status": 400,
+      "error": "InvalidCredential"
+    },
+    "unsignedManagingCallback": {
+      "status": 401
+    },
+    "removal": {
+      "newCredentialDenied": true,
+      "oldCredentialReadStatus": 200,
+      "credentialLifetimeSeconds": 7200
+    }
+  },
+  "callbackCalls": [
+    {
+      "space": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/workshop",
+      "user": "did:plc:rkonwqawkpfnexdufy3ahfkc",
+      "issuer": "did:plc:x3okjlp7hza4d3ta4bx73yja",
+      "authorized": true
+    },
+    {
+      "space": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/workshop",
+      "user": "did:plc:42m7yrgnbze2odhmxfijvatw",
+      "issuer": "did:plc:x3okjlp7hza4d3ta4bx73yja",
+      "authorized": true
+    },
+    {
+      "space": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/workshop",
+      "user": "did:plc:o4vk4lnirwlwdtsvpiimsvly",
+      "issuer": "did:plc:x3okjlp7hza4d3ta4bx73yja",
+      "authorized": false
+    },
+    {
+      "space": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/lounge",
+      "user": "did:plc:o4vk4lnirwlwdtsvpiimsvly",
+      "issuer": "did:plc:x3okjlp7hza4d3ta4bx73yja",
+      "authorized": true
+    },
+    {
+      "space": "at://did:plc:x3okjlp7hza4d3ta4bx73yja/space/local.tangent.room/workshop",
+      "user": "did:plc:42m7yrgnbze2odhmxfijvatw",
+      "issuer": "did:plc:x3okjlp7hza4d3ta4bx73yja",
+      "authorized": false
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+/* ==========================================================================
+   Sylin — Base
+   Minimal, self-contained resets and element defaults. No @font-face here:
+   the type system is built on system stacks (see typography.css) — the site
+   ships no webfonts by design. This file sets the dusk ground and the
+   crisp pixel-art rendering the house illustration style depends on.
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background-color: var(--surface-ground);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings default to the storybook serif. */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  color: var(--text-strong);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+p { margin: 0; }
+
+/* Links — always defined so editor-added links are never browser-blue. */
+a { color: var(--link); text-decoration: none; transition: color var(--duration-fast) var(--ease-standard); }
+a:hover { color: var(--link-hover); }
+
+code, pre, kbd, samp { font-family: var(--font-code); font-size: 0.9em; }
+
+/* Pixel art — the house illustration medium. Always crisp, integer scaled. */
+.pixel, img.pixel {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Visible keyboard focus, everywhere. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+  border-radius: var(--radius-sm);
+}
+
+/* Micro-label / eyebrow helper */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+::selection { background: var(--accent-quiet); color: var(--text-strong); }
+
+/* ==========================================================================
+   Component interaction states.
+   Inline styles can't express :hover / :active, so the components carry
+   stable class hooks and their motion lives here. Keep it minimal — the
+   register is calm: color shifts and a 1px lift, nothing bouncy.
+   ========================================================================== */
+
+.syl-btn { -webkit-tap-highlight-color: transparent; }
+.syl-btn:not([aria-disabled="true"]):hover { transform: translateY(-1px); }
+.syl-btn:not([aria-disabled="true"]):active { transform: translateY(0); }
+.syl-btn--primary:not([aria-disabled="true"]):hover { background: var(--accent-hover) !important; }
+.syl-btn--primary:not([aria-disabled="true"]):active { background: var(--accent-press) !important; }
+.syl-btn--secondary:not([aria-disabled="true"]):hover {
+  border-color: var(--accent-line) !important;
+  color: var(--accent-bright) !important;
+  background: var(--accent-quiet) !important;
+}
+.syl-btn--ghost:not([aria-disabled="true"]):hover {
+  background: var(--accent-quiet) !important;
+  color: var(--text-strong) !important;
+}
+
+.syl-extlink { transition: color var(--duration-fast) var(--ease-standard); }
+.syl-extlink:hover { color: var(--link-hover); }
+
+.syl-project, .syl-commitment {
+  transition: border-color var(--duration-base) var(--ease-standard),
+              transform var(--duration-base) var(--ease-out);
+}
+.syl-project:hover, .syl-commitment:hover { border-color: var(--border-strong); }
+
+.syl-tag { transition: border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }

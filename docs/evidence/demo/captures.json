@@ -1,0 +1,22 @@
+{
+  "capturedAt": "2026-09-09T22:54:38.592Z",
+  "origin": "http://127.0.0.1:5220",
+  "rooms": {
+    "lounge": "tangent-lounge",
+    "workshop": "tangent-workshop"
+  },
+  "browserVersion": "152.0.7977.83",
+  "visibleMessages": 2,
+  "viewportWidth": {
+    "viewport": 390,
+    "document": 390
+  },
+  "screenshots": [
+    "workshop-desktop.png",
+    "workshop-mobile.png",
+    "arrival-desktop.png"
+  ],
+  "actualModel": "zai-coding-plan/glm-5.3",
+  "modelSourceCid": "bafyreibg37p4wnlavb2vvcpsgeljzwxrt2exi3sn2ikq56iepk2zqmj7cu",
+  "note": "Separate clean demonstration captures; the original UI integration proof receipt is unchanged."
+}

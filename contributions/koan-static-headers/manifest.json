@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "date": "2026-09-09",
+  "repository": "https://github.com/sylin-org/koan-framework.git",
+  "baseRevision": "e07a84cc3f71a0867f1122b03b723cc80727e772",
+  "requiredAuthPatchSha256": "faf9e624dafdc7389cb5e0eba7589ff0da13b9464fae989ded75a1ccaf0681e0",
+  "patch": "koan-static-headers.patch",
+  "patchSha256": "10ad8038f6ee244afa340435f784dd1c1aa6380af552445c341d7739db7dc836",
+  "files": [
+    {
+      "path": "docs/workcards/web-static-security-headers.md",
+      "gitBlob": "f9a32144ebc115f53307114bb9c822b779b246ce"
+    },
+    {
+      "path": "src/Koan.Web/Hosting/KoanWebStartupFilter.cs",
+      "gitBlob": "565171d73423c90d6912e7f19419028cbe3c9c75"
+    },
+    {
+      "path": "src/Koan.Web/README.md",
+      "gitBlob": "d460bd25fd3d9f957a989b093b85e544592a580d"
+    },
+    {
+      "path": "src/Koan.Web/TECHNICAL.md",
+      "gitBlob": "abf6084990858db9f05bcea8f825bb18bef8eb40"
+    },
+    {
+      "path": "tests/Suites/Web/Koan.Web.WellKnown.Tests/StaticSecurityHeadersSpec.cs",
+      "gitBlob": "faf9898baea62046ae16bce648d39fa195bff7b9"
+    }
+  ]
+}

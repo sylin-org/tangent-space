@@ -1,0 +1,231 @@
+{
+  "observedAt": "2026-09-09T21:30:45.677Z",
+  "passed": true,
+  "origin": "http://127.0.0.1:5223",
+  "roomKey": "ui-1788989438711",
+  "browserVersion": "152.0.7977.83",
+  "checks": [
+    {
+      "name": "Real host readiness endpoint is healthy",
+      "passed": true,
+      "observed": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Anonymous arrival exposes room descriptions without private conversation",
+      "passed": true,
+      "observed": {
+        "roomDescriptions": 12,
+        "renderedMessages": 0,
+        "privateHistoryRequests": 0
+      }
+    },
+    {
+      "name": "Real anonymous history endpoint refuses access",
+      "passed": true,
+      "observed": {
+        "status": 401
+      }
+    },
+    {
+      "name": "Anonymous desktop 1440px has no horizontal page overflow",
+      "passed": true,
+      "observed": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440
+      }
+    },
+    {
+      "name": "Anonymous mobile 390px has no horizontal page overflow",
+      "passed": true,
+      "observed": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390
+      }
+    },
+    {
+      "name": "Real OAuth cookie resolves the verified persisted owner in the browser",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "verifiedOwner": true,
+        "playwrightVersion": "1.63.0"
+      }
+    },
+    {
+      "name": "Seeded authentication cookies remain unavailable to page JavaScript",
+      "passed": true,
+      "observed": {}
+    },
+    {
+      "name": "Owner can open existing human and agent conversation without changing it",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "visibleMessages": 3,
+        "distinctVisibleAuthors": 2
+      }
+    },
+    {
+      "name": "Shared conversation desktop 1440px has no horizontal page overflow",
+      "passed": true,
+      "observed": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440
+      }
+    },
+    {
+      "name": "Shared conversation mobile 390px has no horizontal page overflow",
+      "passed": true,
+      "observed": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390
+      }
+    },
+    {
+      "name": "Owner creates a fresh room through the real form",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Finish room setup provisions a real Space",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "realSpaceMapped": true,
+        "audited": true
+      }
+    },
+    {
+      "name": "Topic administration saves through current real room policy",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "audited": true
+      }
+    },
+    {
+      "name": "Browser compose produces an accepted real source reference",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted",
+        "hasSourceReference": true
+      }
+    },
+    {
+      "name": "Message reveals matching source URI, CID and verified author DID",
+      "passed": true,
+      "observed": {}
+    },
+    {
+      "name": "Browser reply is accepted from the owner source repository",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "Real history retains the reply dependency and both source messages",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "messages": 2,
+        "replySourceMatches": true
+      }
+    },
+    {
+      "name": "Browser renders the reply relationship",
+      "passed": true,
+      "observed": {}
+    },
+    {
+      "name": "Owner desktop 1440px has no horizontal page overflow",
+      "passed": true,
+      "observed": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440
+      }
+    },
+    {
+      "name": "Owner mobile 390px has no horizontal page overflow",
+      "passed": true,
+      "observed": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390
+      }
+    },
+    {
+      "name": "Both application scripts and stylesheets load successfully",
+      "passed": true,
+      "observed": {
+        "assets": {
+          "/app.css": 200,
+          "/rooms.css": 200,
+          "/app.js": 200,
+          "/rooms.js": 200
+        }
+      }
+    },
+    {
+      "name": "No browser JavaScript errors, failed requests or failed UI responses",
+      "passed": true,
+      "observed": {
+        "pageErrors": [],
+        "consoleErrors": 0,
+        "consoleLocations": [],
+        "failedRequests": [],
+        "failedResponses": [],
+        "assets": {
+          "/app.css": 200,
+          "/rooms.css": 200,
+          "/app.js": 200,
+          "/rooms.js": 200
+        }
+      }
+    }
+  ],
+  "screenshots": [
+    "docs/evidence/ui/anonymous-desktop.png",
+    "docs/evidence/ui/anonymous-mobile.png",
+    "docs/evidence/ui/shared-workshop-desktop.png",
+    "docs/evidence/ui/shared-workshop-mobile.png",
+    "docs/evidence/ui/owner-desktop.png",
+    "docs/evidence/ui/owner-mobile.png"
+  ],
+  "diagnostics": {
+    "pageErrors": [],
+    "consoleErrors": 0,
+    "consoleLocations": [],
+    "failedRequests": [],
+    "failedResponses": [],
+    "assets": {
+      "/app.css": 200,
+      "/rooms.css": 200,
+      "/app.js": 200,
+      "/rooms.js": 200
+    }
+  },
+  "limits": [
+    "Isolated nonpersistent headless Chrome contexts; no user browser profile or mocked API responses.",
+    "The earlier real OAuth flow supplied the genuine Koan cookie. This proof exercises browser behavior, not provider password entry.",
+    "Only the new UI room was created, provisioned, given a topic, or written to. Existing room governance and source content were untouched.",
+    "All screenshot text is actual rendered fixture content. Cookies, provider tokens, passwords and protected state were never logged or captured.",
+    "1440px and 390px viewport checks cover horizontal overflow; saved screenshots require visual inspection."
+  ],
+  "references": [
+    "https://playwright.dev/docs/api/class-browsercontext#browser-context-add-cookies",
+    "https://playwright.dev/docs/api/class-page#page-screenshot"
+  ]
+}

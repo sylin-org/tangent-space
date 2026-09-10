@@ -1,0 +1,79 @@
+{
+  "observedAt": "2026-09-10 01:43:48 UTC",
+  "origin": "http://127.0.0.1:5220",
+  "room": "tangent-lounge",
+  "recordingMethod": "Curated from actual CUA browser and native WebMCP calls, Docker logs, and read-only SQLite inspection. Credentials and opaque cursors excluded.",
+  "publicAccountAttempt": {
+    "did": "did:plc:5rqf45qvouvadvz26a4m4al3",
+    "writeFailure": {
+      "status": 403,
+      "code": "ScopeMissingError"
+    },
+    "publicConsentScopes": [
+      "atproto"
+    ],
+    "state": "pending",
+    "detail": "reauthorization-required",
+    "operationId": "9d51778f-b957-4b46-a8be-965d43521395",
+    "sourceUri": null
+  },
+  "userDecision": "Keep native Spaces; use a compatible test account for now.",
+  "ownerConnection": {
+    "handle": "tangent-owner.test",
+    "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+    "userSignedIn": true,
+    "userSubmittedMessage": true,
+    "ordinaryLoginInitiallyLackedRoomGrant": true,
+    "coordinatorRenewedRoomGrant": true,
+    "renewalMethod": "Existing loopback-only probes/scripts/oauth-flow.mjs with owner fixture and /api/connections/rooms; no public credentials used.",
+    "savedMessageRecoveredThroughActualBrowserReload": true,
+    "coordinatorClickedRetrySavedMessage": true
+  },
+  "humanMessage": {
+    "text": "hey ho!",
+    "operationId": "860a8598-6f10-49c7-aedc-bc975821b4b0",
+    "state": "accepted",
+    "authorDid": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+    "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-lounge/did:plc:6c26drqwrk5yavtnnjuvpvdf/local.tangent.message/op-32444bd5aa5236237521c1e76a99ab94047646a220b0a8b7f10ae47c3b0f88bd",
+    "sourceCid": "bafyreiabzglt7gowz3gwzqvkckxtackea7227qt5tfwp5lb7ap3ygbzegq",
+    "acceptedAt": "2026-09-10T01:40:29.3683859+00:00",
+    "sequence": 2
+  },
+  "agentReply": {
+    "transport": "Actual native WebMCP tools.call",
+    "authorDid": "did:plc:mgxxqowf6nnd3btckqjq573l",
+    "operationId": "d8a7c923-3b7a-4ff5-b8d2-8a254c6189be",
+    "state": "accepted",
+    "sourceUri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-lounge/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/op-fe66c0047d03d2ca487b4fa6515467ad2fe344300f401496dbb63822489d02f9",
+    "sourceCid": "bafyreibbrcqhgijagqsvpej47bo7jwdxtktjxzcehgexfy5iixhxxs2f2m",
+    "referencesHumanSource": true,
+    "sequence": 3,
+    "agentAcknowledgedThroughSequence": 3
+  },
+  "humanLiveView": {
+    "replyAppearedWithoutRefresh": true,
+    "unsentVerificationDraftPreserved": true,
+    "verificationDraftClearedAfterCheck": true,
+    "userTextWasNotOverwritten": true
+  },
+  "verification": {
+    "applicationTests": 180,
+    "javascriptTests": 43,
+    "pendingHttpChecks": 6,
+    "connectorTests": 30,
+    "connectorOptInSkipped": 1,
+    "genericAuthTests": 57,
+    "authIntegrationTests": 9,
+    "staticHeaderTests": 3,
+    "dockerHealth": "healthy",
+    "dockerImageManifest": "sha256:95ea79848f3110b0cda407ea8dce3c9060857a3ec9a0feaf5fe486d083d37666",
+    "protocolContainerNotRestarted": true
+  },
+  "limitations": [
+    "Public-account Spaces write still unsupported in this tested setup; public intent is unsent.",
+    "Source reconciler still reports unavailable in mixed public/local fixture; direct compatible-account writes succeed.",
+    "Missing-scopes callback page is covered by connector tests, not a live downscope callback.",
+    "No idle Codex wakeup or model execution was added.",
+    "Lumen public identity resolved to https://agrocybe.us-west.host.bsky.network; no credential was requested, used or stored."
+  ]
+}

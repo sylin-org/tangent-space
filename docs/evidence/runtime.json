@@ -1,0 +1,87 @@
+{
+  "observedAt": "2026-09-09T21:40:55.4423277+00:00",
+  "passed": true,
+  "origin": "http://127.0.0.1:5223",
+  "frameworkModules": 14,
+  "directReferences": [
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Sqlite"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Identity"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Web"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Web.Auth.Connector.Atproto"
+    }
+  ],
+  "applicationModules": [
+    "TangentModule"
+  ],
+  "health": [
+    {
+      "name": "ConversationSync",
+      "state": "healthy"
+    },
+    {
+      "name": "data:sqlite",
+      "state": "healthy"
+    },
+    {
+      "name": "HealthProbeScheduler",
+      "state": "healthy"
+    },
+    {
+      "name": "Koan-background-services",
+      "state": "healthy"
+    },
+    {
+      "name": "koan-runtime-facts",
+      "state": "healthy"
+    }
+  ],
+  "facts": [
+    {
+      "code": "koan.auth.provider.eligible",
+      "state": "Observed",
+      "subject": "auth:provider:atproto",
+      "summary": "Authentication provider 'atproto' is eligible: explicit-configuration.",
+      "reasonCode": "explicit-configuration"
+    },
+    {
+      "code": "koan.data.route.default.selected",
+      "state": "Observed",
+      "subject": "data:route:default",
+      "summary": "Koan's active default Data route is source 'Default' through provider 'sqlite' at authority revision 0 and content generation 1.",
+      "reasonCode": "durable-route-authority"
+    },
+    {
+      "code": "koan.composition.lockfile.matched",
+      "state": "Healthy",
+      "subject": "koan.lock.json",
+      "summary": "14 modules · lockfile ok",
+      "reasonCode": "lockfile-matched"
+    },
+    {
+      "code": "koan.auth.provider.selected",
+      "state": "Selected",
+      "subject": "auth:provider:default",
+      "summary": "Koan selected adapter 'atproto' for 'auth:provider:default'.",
+      "reasonCode": "preferred-provider"
+    },
+    {
+      "code": "koan.data.adapter.selected",
+      "state": "Selected",
+      "subject": "data:default",
+      "summary": "Koan selected adapter 'sqlite' for 'data:default'.",
+      "reasonCode": "default-source"
+    }
+  ],
+  "correction": "Startup now copies the generated composition lock to the instance content root; the restarted runtime matches build intent."
+}

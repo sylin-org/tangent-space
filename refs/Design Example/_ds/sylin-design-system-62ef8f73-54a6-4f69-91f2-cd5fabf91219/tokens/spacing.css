@@ -1,0 +1,42 @@
+/* ==========================================================================
+   Sylin — Spacing, radii & layout
+   A calm 4px-based rhythm with generous negative space. The garden breathes.
+   ========================================================================== */
+
+:root {
+  /* ---- Spacing scale (4px base) ---------------------------------------- */
+  --space-0: 0;
+  --space-1: 0.25rem;   /* 4  */
+  --space-2: 0.5rem;    /* 8  */
+  --space-3: 0.75rem;   /* 12 */
+  --space-4: 1rem;      /* 16 */
+  --space-5: 1.5rem;    /* 24 */
+  --space-6: 2rem;      /* 32 */
+  --space-7: 3rem;      /* 48 */
+  --space-8: 4rem;      /* 64 */
+  --space-9: 6rem;      /* 96 */
+  --space-10: 8rem;     /* 128 — section rhythm */
+
+  /* ---- Radii — soft, but not bubbly. Storybook-round, not app-round. --- */
+  --radius-xs: 3px;     /* tags, inline chips */
+  --radius-sm: 6px;     /* buttons, inputs */
+  --radius-md: 10px;    /* cards */
+  --radius-lg: 16px;    /* large panels, project cards */
+  --radius-xl: 24px;    /* hero surfaces */
+  --radius-pill: 999px; /* pills, maturity labels */
+
+  /* ---- Layout ---------------------------------------------------------- */
+  --container-prose: 42rem;   /* 672 — reading measure */
+  --container-narrow: 52rem;  /* 832 — narrow content */
+  --container-wide: 72rem;    /* 1152 — main content */
+  --container-full: 88rem;    /* 1408 — full grounds */
+
+  --gutter: var(--space-5);       /* mobile page gutter */
+  --gutter-lg: var(--space-8);    /* desktop page gutter */
+
+  /* Vertical section rhythm */
+  --section-gap: var(--space-10);
+
+  /* Hairline width */
+  --hairline: 1px;
+}

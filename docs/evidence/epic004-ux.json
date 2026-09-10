@@ -1,0 +1,73 @@
+{
+  "proof": "epic004-reference-aligned-human-and-agent-walkthrough",
+  "observedDate": "2026-09-10",
+  "origin": "http://127.0.0.1:5220",
+  "method": "Actual Chrome human browser and native in-app-browser WebMCP, operated by the coordinating assistant using separate fixture identities",
+  "reference": "refs/Design Example/Tangent Space - standalone.html, Return and Live chapters inspected visually",
+  "humanReply": {
+    "uiVersion": "20260910-10",
+    "viewportRequested": {"width": 390, "height": 844},
+    "viewportClientWidth": 375,
+    "documentScrollWidth": 375,
+    "roomKey": "small-hours-lounge",
+    "authorDid": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+    "text": "Human-side check: I can read Small Hours and reply from the revised conversation view.",
+    "messageSequence": 4,
+    "activitySequence": "85",
+    "acceptedAt": "2026-09-10T04:36:17.2467283+00:00",
+    "sourceCid": "bafyreicfjgdakazpwnei76vnviz4nlhcny2uspodg2fx3zn6ftzas72ai4",
+    "replyTargetCid": "bafyreie5yptigym5ludi4pvzb5ls3466e7zplsclzq65whxvqgn2fichma",
+    "replyTargetMatchesFirstAgentMessage": true,
+    "observedAcceptedCopies": 1,
+    "composerClearedAfterAcceptance": true,
+    "agentReceivedViaNativeWebMcp": true,
+    "agentDirectReplyCount": 1
+  },
+  "backgroundHumanView": {
+    "activeRoom": "tangent-workshop",
+    "documentClientWidth": 2048,
+    "documentScrollWidth": 2048,
+    "smallHoursMarkerBefore": 3,
+    "smallHoursMarkerAfter": 4,
+    "draftAndActiveRoomPreserved": true,
+    "verificationDraftClearedAfterCheck": true
+  },
+  "readAcknowledgement": {
+    "method": "Human clicked Mark as read after all four Small Hours messages were displayed",
+    "humanReadSequence": 4,
+    "humanUnreadCount": 0,
+    "agentReadSequenceAfterHumanAcknowledgement": 0,
+    "agentUnreadCount": 4
+  },
+  "nativeIdleWait": {
+    "method": "Actual tangent_wait_activity call in native browser WebMCP after arrival",
+    "serverCapSeconds": 15,
+    "elapsedMilliseconds": 15158,
+    "eventCount": 0,
+    "checkpointUnchanged": true,
+    "resetRequired": false,
+    "boundary": "The previous 20-second cap hit the browser transport timeout; this verifies the shorter cap on the same backend included in the final UX build."
+  },
+  "visualReview": {
+    "fullCardArtworkContained": true,
+    "compactCardNamesAndActivityVisible": true,
+    "realAuthorHandlesShown": true,
+    "sourceIdentityDisclosurePreserved": true,
+    "administrationClosedByDefault": true,
+    "channelTechnicalControlsClosedWhenReady": true,
+    "liveTransportAndSourceFreshnessSeparate": true
+  },
+  "finalDeployment": {
+    "humanUiVersion": "20260910-11",
+    "imageManifest": "sha256:dea8a4d72cd223cea9541f1046ca904d8fcc3b59658aa60ab72157f332c9164b",
+    "dockerHealth": "healthy",
+    "keyboardReturnFocus": "tangent-return",
+    "managementAndChannelDetailsToggleWithEnter": true,
+    "computedCompactNavigationFlexWrap": "wrap",
+    "mobileClientAndScrollWidth": 375,
+    "agentRestoredAfterReload": true,
+    "channelSequencesAfterRestart": {"tangent-lounge": 3, "tangent-workshop": 2, "small-hours-lounge": 4},
+    "reducedMotion": "The handler respects prefers-reduced-motion; checked in code, not by changing the OS preference."
+  },
+  "boundary": "Real fixture interactions, not Leo's personal account or simulated reference traffic. A clean-owner first-run browser flow was not repeated in this final visual pass; bootstrap has separate regression coverage. Draft navigation preservation is in-page; submitted pending operations are durable. Native Spaces remains pinned experimental infrastructure."
+}

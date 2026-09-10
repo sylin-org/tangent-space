@@ -1,0 +1,238 @@
+using Koan.Data.Abstractions;
+using Koan.Data.Core;
+using Koan.Data.Core.Sorting;
+using TangentSpace.Infrastructure;
+using TangentSpace.Participants;
+using TangentSpace.Site;
+using TangentSpace.Communities;
+using TangentSpace.Activity;
+
+namespace TangentSpace.Rooms;
+
+/// <summary>Register once as a singleton; policy and acceptance share the host's arrival gate.</summary>
+public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate)
+{
+    private static readonly QueryDefinition directoryQuery = new QueryDefinition
+    {
+        Sort = SortSpecParser.ParseStrict<Room>(nameof(Room.Id)),
+        CountStrategy = CountStrategy.Exact
+    };
+
+    public async Task<RoomListing> List(string? actorDid, int page, CancellationToken ct)
+    {
+        if (page is < 1 or > RoomConstants.MaximumPage)
+            throw new RoomRuleViolation(RoomDenial.InvalidInput, "Choose a room page between 1 and 10000.");
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            var site = await TangentSite.Get(TangentConstants.SiteId, ct);
+            await TangentBootstrap.EnsureHome(site, clock, ct);
+            var participant = actorDid is null ? null : await Participant.Get(actorDid, ct);
+            var result = await Room.AllWithCount(directoryQuery.WithPagination(page, RoomConstants.PageSize), ct);
+            var descriptions = new List<RoomDescription>(result.Items.Count);
+            foreach (var room in result.Items)
+            {
+                var membership = actorDid is null ? null : await RoomMembership.Get(RoomMembership.Key(room.Id, actorDid), ct);
+                var tangent = await TangentCommunity.Get(room.TangentKey, ct);
+                var tangentMembership = actorDid is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorDid), ct);
+                var policy = room.CurrentPolicy(site, actorDid, membership, participant?.IsSuspended == true, tangent, tangentMembership);
+                // A directory must not become an oracle for invitation-only channel names.
+                if (policy.CanRead || policy.CanManage) descriptions.Add(RoomDescription.From(room, policy));
+            }
+            await EntityContext.Commit(ct);
+            return new RoomListing(descriptions, page, result.HasNextPage ? page + 1 : null, clock.GetUtcNow());
+        }
+        finally { gate.Exit(); }
+    }
+
+    public Task<RoomDescription?> Describe(string? actorDid, string roomKey, CancellationToken ct)
+        => WithCurrentPolicy<RoomDescription?>(actorDid, roomKey, async (policy, token) =>
+        {
+            var room = await Room.Get(roomKey, token);
+            return room is null || (!policy.CanRead && !policy.CanManage) ? null : RoomDescription.From(room, policy);
+        }, ct);
+
+    public async Task<RoomAdministrationResult> SetSuspension(string actorDid, string targetDid, bool suspended, CancellationToken ct)
+    {
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            var site = await TangentSite.Get(TangentConstants.SiteId, ct);
+            var participant = await Participant.Get(targetDid, ct);
+            var actor = await Participant.Get(actorDid, ct);
+            var denial = site?.IsOwner(actorDid) != true || actor?.IsSuspended == true || site.IsOwner(targetDid)
+                ? new RoomRuleViolation(RoomDenial.Forbidden, "Only the current site owner can suspend or restore other participants.")
+                : participant is null ? new RoomRuleViolation(RoomDenial.NotFound, "The participant must first establish a verified arrival.") : null;
+            if (denial is null)
+            {
+                participant!.IsSuspended = suspended;
+                site!.PolicyRevision = checked(site.PolicyRevision + 1);
+                await participant.Save(ct);
+                await site.Save(ct);
+                await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorDid, targetDid, ct: ct);
+            }
+            var audit = new RoomAudit
+            {
+                ActorDid = actorDid, TargetDid = targetDid, Operation = RoomAdministration.SetSuspension,
+                Accepted = denial is null, Denial = denial?.Denial,
+                Reason = denial?.Message ?? (suspended ? "Participant suspended." : "Participant restored."),
+                SitePolicyRevision = site?.PolicyRevision ?? 0, OccurredAt = clock.GetUtcNow()
+            };
+            await audit.Save(ct);
+            await EntityContext.Commit(ct);
+            if (denial is null) ActivityJournal.SignalAfterCommit();
+            return new RoomAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, "",
+                audit.SitePolicyRevision, null, audit.Id);
+        }
+        finally { gate.Exit(); }
+    }
+
+    public Task<RoomAdministrationResult> Create(string actorDid, string roomKey, string title, RoomAdmission admission, CancellationToken ct)
+        => Administer(actorDid, roomKey, null, RoomAdministration.Create, null,
+            (site, existing, _, _, _, _, now) => existing is not null
+                ? throw new RoomRuleViolation(RoomDenial.AlreadyExists, "That stable room key already exists; reconcile its pending Space instead of creating another room.")
+                : new Change(Room.Create(site, actorDid, roomKey, title, admission, now)), ct);
+
+    public Task<RoomAdministrationResult> SetMembership(string actorDid, string roomKey, string targetDid, RoomRole role, CancellationToken ct)
+        => Administer(actorDid, roomKey, targetDid, RoomAdministration.SetMembership, role,
+            (site, room, actor, target, tangent, tangentMembership, now) =>
+            {
+                var current = RequireRoom(room);
+                return new Change(current, current.ChangeMembership(site, actorDid, actor, targetDid, target, role, now, tangent, tangentMembership));
+            }, ct);
+
+    public Task<RoomAdministrationResult> SetTopic(string actorDid, string roomKey, string topic, CancellationToken ct)
+        => Administer(actorDid, roomKey, null, RoomAdministration.SetTopic, null,
+            (site, room, actor, _, tangent, tangentMembership, now) =>
+            {
+                var current = RequireRoom(room);
+                current.ChangeTopic(site, actorDid, actor, topic, now, tangent, tangentMembership);
+                return new Change(current);
+            }, ct);
+
+    public Task<RoomAdministrationResult> SetAdmission(string actorDid, string roomKey, RoomAdmission admission, CancellationToken ct)
+        => Administer(actorDid, roomKey, null, RoomAdministration.SetAdmission, null,
+            (site, room, _, _, tangent, _, now) =>
+            {
+                var current = RequireRoom(room);
+                current.ChangeAdmission(site, actorDid, admission, now, tangent);
+                return new Change(current);
+            }, ct);
+
+    /// <summary>Audited authorization before external provisioning. The network call happens after this gate is released.</summary>
+    public Task<RoomAdministrationResult> BeginProvisioning(string actorDid, string roomKey, CancellationToken ct)
+        => Administer(actorDid, roomKey, null, RoomAdministration.Provision, null,
+            (site, room, actor, _, tangent, tangentMembership, _) =>
+            {
+                var current = RequireRoom(room);
+                if (!current.CurrentPolicy(site, actorDid, actor, false, tangent, tangentMembership).CanAppointManagers)
+                    throw new RoomRuleViolation(RoomDenial.Forbidden, "Only the current owner can provision a room.");
+                return new Change(current);
+            }, ct);
+
+    /// <summary>Called after the real transport verifies authority/type/key. Retries preserve an existing identical mapping.</summary>
+    public Task<RoomAdministrationResult> MapSpace(string actorDid, string roomKey, long expectedRevision, string spaceUri, CancellationToken ct)
+        => Administer(actorDid, roomKey, null, RoomAdministration.MapSpace, null,
+            (site, room, _, _, tangent, _, now) =>
+            {
+                var current = RequireRoom(room);
+                current.CompleteSpace(site, actorDid, expectedRevision, spaceUri, now, tangent);
+                return new Change(current);
+            }, ct);
+
+    /// <summary>
+    /// Reload current authority and execute bounded local work under the same gate and transaction as administration.
+    /// Do not call PDS/network services, nest a transaction, or reenter RoomGovernance/Arrival inside the callback.
+    /// A denied snapshot still carries the selected revisions so source acceptance can retain its decision.
+    /// </summary>
+    public async Task<T> WithCurrentPolicy<T>(string? actorDid, string roomKey,
+        Func<RoomPolicy, CancellationToken, Task<T>> operation, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            var site = await TangentSite.Get(TangentConstants.SiteId, ct);
+            await TangentBootstrap.EnsureHome(site, clock, ct);
+            var room = await Room.Get(roomKey, ct);
+            var membership = room is null || actorDid is null ? null
+                : await RoomMembership.Get(RoomMembership.Key(roomKey, actorDid), ct);
+            var participant = actorDid is null ? null : await Participant.Get(actorDid, ct);
+            var tangent = room is null ? null : await TangentCommunity.Get(room.TangentKey, ct);
+            var tangentMembership = actorDid is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorDid), ct);
+            var policy = room?.CurrentPolicy(site, actorDid, membership, participant?.IsSuspended == true, tangent, tangentMembership)
+                ?? new RoomPolicy(roomKey, actorDid, 0, site?.PolicyRevision ?? 0, RoomAdmission.InvitationOnly,
+                    RoomSpaceState.Pending, null, null, false, false, false, false, false, "room-not-found");
+            var result = await operation(policy, ct);
+            await EntityContext.Commit(ct);
+            return result;
+        }
+        finally { gate.Exit(); }
+    }
+
+    private async Task<RoomAdministrationResult> Administer(string actorDid, string roomKey, string? targetDid,
+        RoomAdministration operation, RoomRole? requestedRole,
+        Func<TangentSite?, Room?, RoomMembership?, RoomMembership?, TangentCommunity?, TangentMembership?, DateTimeOffset, Change> apply, CancellationToken ct)
+    {
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            var now = clock.GetUtcNow();
+            var site = await TangentSite.Get(TangentConstants.SiteId, ct);
+            await TangentBootstrap.EnsureHome(site, clock, ct);
+            Room? room = null;
+            Change? change = null;
+            RoomRuleViolation? denial = null;
+            try
+            {
+                Room.CheckKey(roomKey);
+                room = await Room.Get(roomKey, ct);
+                if ((await Participant.Get(actorDid, ct))?.IsSuspended == true)
+                    throw new RoomRuleViolation(RoomDenial.Forbidden, "A suspended participant cannot administer rooms.");
+                var actor = room is null ? null : await RoomMembership.Get(RoomMembership.Key(roomKey, actorDid), ct);
+                var target = room is null || targetDid is null ? null
+                    : await RoomMembership.Get(RoomMembership.Key(roomKey, targetDid), ct);
+                var tangent = room is null ? null : await TangentCommunity.Get(room.TangentKey, ct);
+                var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorDid), ct);
+                change = apply(site, room, actor, target, tangent, tangentMembership, now);
+            }
+            catch (RoomRuleViolation rejected) { denial = rejected; }
+
+            // Policy errors are ordinary audited denials. Persistence failures propagate and roll back everything.
+            if (change is not null)
+            {
+                room = change.Room;
+                await room.Save(ct);
+                if (change.Membership is not null) await change.Membership.Save(ct);
+                var kind = operation == RoomAdministration.SetMembership ? ActivityKind.MembershipChanged : ActivityKind.RoomChanged;
+                await ActivityJournal.AppendInTransaction(kind, room.Id, actorDid, change.Membership?.ParticipantDid, room.TangentKey, ct: ct);
+            }
+            var audit = new RoomAudit
+            {
+                ActorDid = actorDid, RoomKey = roomKey, TargetDid = targetDid, Operation = operation,
+                RequestedRole = requestedRole, Accepted = denial is null, Denial = denial?.Denial,
+                Reason = denial?.Message ?? "Accepted.", SelectedPolicyRevision = room?.PolicyRevision ?? 0,
+                SitePolicyRevision = site?.PolicyRevision ?? 0, OccurredAt = now
+            };
+            await audit.Save(ct);
+            await EntityContext.Commit(ct);
+            if (change is not null) ActivityJournal.SignalAfterCommit();
+            return new RoomAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, roomKey,
+                audit.SelectedPolicyRevision, room?.SpaceUri, audit.Id);
+        }
+        finally { gate.Exit(); }
+    }
+
+    private static Room RequireRoom(Room? room)
+        => room ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The requested room does not exist.");
+
+    private sealed record Change(Room Room, RoomMembership? Membership = null);
+}

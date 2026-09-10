@@ -1,0 +1,80 @@
+{
+  "observedAt": "2026-09-09T21:38:42.442Z",
+  "passed": true,
+  "origin": "http://127.0.0.1:5223",
+  "checks": [
+    {
+      "name": "Existing outsider begins unsuspended without changing its room role",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "accessState": "removed"
+      }
+    },
+    {
+      "name": "Four real provider OAuth arrivals and twelve overlapping suspension commits complete",
+      "passed": true,
+      "observed": {
+        "successfulArrivals": 4,
+        "suspensionCommits": 12,
+        "writesWhileArrivalActive": 12
+      }
+    },
+    {
+      "name": "Existing cookie sees durable suspension after every concurrent arrival completes",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "accessState": "suspended",
+        "canRead": false,
+        "canWrite": false
+      }
+    },
+    {
+      "name": "A subsequent genuine OAuth sign-in preserves suspension with its new cookie",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "accessState": "suspended"
+      }
+    },
+    {
+      "name": "A newly issued verified cookie cannot read while suspended",
+      "passed": true,
+      "observed": {
+        "status": 403
+      }
+    },
+    {
+      "name": "Restoration retains the pre-existing room decision",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "accessState": "removed"
+      }
+    }
+  ],
+  "auditIds": [
+    "01a0881b-cbd8-7dd4-a93f-35efc3651414",
+    "01a0881b-cc19-7f22-87b6-e3a6b5623654",
+    "01a0881b-cc4b-75c8-aa88-39c704331812",
+    "01a0881b-cc7a-76be-ac72-cf54eb137534",
+    "01a0881b-cca7-7a67-a4b3-0e5b8c32d6ae",
+    "01a0881b-ccd6-7a98-9f2c-e214031b4f10",
+    "01a0881b-cd05-76d9-9e09-665372a766d5",
+    "01a0881b-cd33-7da4-8531-510a223495ba",
+    "01a0881b-cd63-7fb2-aeaf-4de658fcf7df",
+    "01a0881b-cd90-720a-be39-6909de7700a2",
+    "01a0881b-cdbf-75c6-aa1b-88e44f7c71cd",
+    "01a0881b-cded-7d5d-905a-306c5ff709ff",
+    "01a0881b-dc7a-7f24-946a-eff0a51f706e"
+  ],
+  "outsiderRestored": true,
+  "limits": [
+    "Real disposable provider OAuth flows and real audited HTTP suspension writes overlap; no fake identity, PDS, or persistence backend.",
+    "This bounded concurrency run observes the durable result but does not force every possible database scheduling interleaving.",
+    "The shared DI PolicyGate and NoCache reload close the stale Participant overwrite path structurally; focused domain tests verify returning identity preserves suspension.",
+    "No room membership, topic, admission, or source records changed. Only the disposable outsider suspension was changed and restored.",
+    "Cookies, passwords, authorization tokens and OAuth callback URLs are absent from this receipt."
+  ]
+}

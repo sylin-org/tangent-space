@@ -1,0 +1,52 @@
+{
+  "date": "2026-09-09",
+  "sdk": "10.0.401",
+  "baseRevision": "e07a84cc3f71a0867f1122b03b723cc80727e772",
+  "patchSha256": "2d00e951945c0c862d051ae5c4daa9fb375ea639fe3add143f31adfaa5e5c013",
+  "freshBase": {
+    "detachedClone": true,
+    "applyCheckPassed": true,
+    "applyPassed": true,
+    "diffCheckPassed": true,
+    "matchedPostimageBlobs": 48,
+    "reusableVerifierExecuted": true,
+    "sampleBuild": {
+      "passed": true,
+      "warnings": 0,
+      "errors": 0
+    },
+    "connectorTests": {
+      "passed": 19,
+      "failed": 0,
+      "optInLifecycleSkipped": 1
+    },
+    "genericAuthTests": {
+      "passed": 57,
+      "failed": 0
+    },
+    "authHttpIntegrationTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "note": "The first local-clone test build emitted SourceLink origin warnings; origin was then set to the declared upstream URL, and the generic sample build completed with zero warnings."
+  },
+  "sourceCheckoutRealProvider": {
+    "browserAndCookie": true,
+    "issuerStateCorrelationNegatives": true,
+    "actualProcessRestart": true,
+    "realRefreshRotation": true,
+    "authenticatedGetSession": 200,
+    "checkedRevocation": true,
+    "retainedRevokedRefreshError": "invalid_grant",
+    "explicitProviderReauthorization": true,
+    "reauthorizedRestoredRefresh": true,
+    "localExpiryMetadataAdjusted": true,
+    "secretsExported": false,
+    "receipts": [
+      "src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json",
+      "src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json",
+      "src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json"
+    ]
+  },
+  "scope": "Bounded source contribution. No upstream publish, production certification, distributed session claim or Spaces verification claim."
+}

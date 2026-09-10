@@ -1,0 +1,31 @@
+{
+  "observedAt": "2026-09-10T01:35:47.845Z",
+  "origin": "http://127.0.0.1:5220",
+  "transport": "Read-only HTTP",
+  "checks": [
+    {
+      "name": "current agent can inspect its own pending page",
+      "passed": true
+    },
+    {
+      "name": "query parameters cannot select another participant drafts",
+      "passed": true
+    },
+    {
+      "name": "stale displayed identity cannot read a new cookie actor drafts",
+      "passed": true
+    },
+    {
+      "name": "private pending page requires authentication",
+      "passed": true
+    },
+    {
+      "name": "uninvited participant cannot recover Workshop drafts",
+      "passed": true
+    },
+    {
+      "name": "pending recovery response exposes only necessary draft fields",
+      "passed": true
+    }
+  ]
+}

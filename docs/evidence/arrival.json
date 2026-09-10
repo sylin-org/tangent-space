@@ -1,0 +1,251 @@
+{
+  "observedAt": "2026-09-09T20:39:30.7840290+00:00",
+  "passed": true,
+  "checks": [
+    {
+      "name": "A fresh site has no established owner or participant",
+      "passed": true,
+      "observed": {
+        "name": "Tangent Space",
+        "established": false,
+        "signIn": "/auth/atproto/challenge"
+      }
+    },
+    {
+      "name": "Real Koan sign-in: manager ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "manager",
+        "did": "did:plc:3ruzzbw452co4pk4sbywy2qf",
+        "pds": "http://localhost:2583",
+        "sdk": "Koan AT connector",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "First visitor is a participant and cannot bootstrap ownership",
+      "passed": true,
+      "observed": {
+        "name": "Tangent Space",
+        "established": false,
+        "participant": {
+          "did": "did:plc:3ruzzbw452co4pk4sbywy2qf",
+          "handle": "tangent-manager.test",
+          "isOwner": false,
+          "joinedAt": "2026-09-09T16:39:11.116669-04:00"
+        },
+        "signIn": "/auth/atproto/challenge",
+        "signOut": "/auth/logout"
+      }
+    },
+    {
+      "name": "Real Koan sign-in: owner ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+        "pds": "http://localhost:2583",
+        "sdk": "Koan AT connector",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "Only the configured verified account establishes ownership",
+      "passed": true,
+      "observed": {
+        "name": "Tangent Space",
+        "established": true,
+        "participant": {
+          "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+          "handle": "tangent-owner.test",
+          "isOwner": true,
+          "joinedAt": "2026-09-09T16:39:11.7637849-04:00"
+        },
+        "signIn": "/auth/atproto/challenge",
+        "signOut": "/auth/logout"
+      }
+    },
+    {
+      "name": "Real Koan sign-in: agent ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "agent",
+        "did": "did:plc:mgxxqowf6nnd3btckqjq573l",
+        "pds": "http://localhost:2584",
+        "sdk": "Koan AT connector",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "An account on the second PDS arrives without owner privileges",
+      "passed": true,
+      "observed": {
+        "name": "Tangent Space",
+        "established": true,
+        "participant": {
+          "did": "did:plc:mgxxqowf6nnd3btckqjq573l",
+          "handle": "tangent-agent.test2",
+          "isOwner": false,
+          "joinedAt": "2026-09-09T16:39:14.4335869-04:00"
+        },
+        "signIn": "/auth/atproto/challenge",
+        "signOut": "/auth/logout"
+      }
+    },
+    {
+      "name": "Real Koan sign-in: owner issuer",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "negative": "issuer",
+        "status": 400,
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect"
+        ]
+      }
+    },
+    {
+      "name": "Real Koan sign-in: owner state",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "negative": "state",
+        "status": 400,
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect"
+        ]
+      }
+    },
+    {
+      "name": "Real Koan sign-in: owner correlation",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "negative": "correlation",
+        "status": 400,
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect"
+        ]
+      }
+    },
+    {
+      "name": "Real Koan sign-in: owner ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+        "pds": "http://localhost:2583",
+        "sdk": "Koan AT connector",
+        "phases": [
+          "Koan challenge, browser correlation and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Authenticated application welcome",
+          "Koan cookie carries verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "Repeated sign-in retains participant DID and original join time",
+      "passed": true,
+      "observed": {
+        "name": "Tangent Space",
+        "established": true,
+        "participant": {
+          "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+          "handle": "tangent-owner.test",
+          "isOwner": true,
+          "joinedAt": "2026-09-09T16:39:11.7637849-04:00"
+        },
+        "signIn": "/auth/atproto/challenge",
+        "signOut": "/auth/logout"
+      }
+    },
+    {
+      "name": "A new process accepts the protected cookie and persisted owner/participant",
+      "passed": true,
+      "observed": {
+        "name": "Tangent Space",
+        "established": true,
+        "participant": {
+          "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+          "handle": "tangent-owner.test",
+          "isOwner": true,
+          "joinedAt": "2026-09-09T16:39:11.7637849-04:00"
+        },
+        "signIn": "/auth/atproto/challenge",
+        "signOut": "/auth/logout"
+      }
+    },
+    {
+      "name": "Local logout expires the application cookie",
+      "passed": true,
+      "observed": {
+        "cookieExpired": true,
+        "status": 302
+      }
+    },
+    {
+      "name": "A changed owner configuration fails startup rather than transferring ownership",
+      "passed": true,
+      "observed": {
+        "correctionObserved": true,
+        "exited": true
+      }
+    }
+  ],
+  "limits": [
+    "Disposable loopback identity network",
+    "Real HTTP cookie/issuer flow; UI rendered separately",
+    "Arrival slice only; room governance and conversation follow"
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "date": "2026-09-10",
+  "sdk": "10.0.401",
+  "baseRevision": "e07a84cc3f71a0867f1122b03b723cc80727e772",
+  "patchSha256": "a62676ea0cc34d394b6d496344952fb76c2b2b10f59935830411f53df87979e8",
+  "freshBase": {
+    "detachedClone": true,
+    "applyCheckPassed": true,
+    "applyPassed": true,
+    "diffCheckPassed": true,
+    "matchedPostimageBlobs": 49,
+    "reusableVerifierExecuted": true,
+    "sampleBuild": {
+      "passed": true,
+      "warnings": 0,
+      "errors": 0
+    },
+    "connectorTests": {
+      "passed": 30,
+      "failed": 0,
+      "optInLifecycleSkipped": 1
+    },
+    "genericAuthTests": {
+      "passed": 57,
+      "failed": 0
+    },
+    "authHttpIntegrationTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "note": "Fresh application of the current 49-file patch passed all postimage, sample-build, connector, generic-auth, and HTTP integration checks. The live grant-revocation lifecycle test remained skipped."
+  },
+  "sourceCheckoutRealProvider": {
+    "browserAndCookie": true,
+    "issuerStateCorrelationNegatives": true,
+    "actualProcessRestart": true,
+    "realRefreshRotation": true,
+    "authenticatedGetSession": 200,
+    "checkedRevocation": true,
+    "retainedRevokedRefreshError": "invalid_grant",
+    "explicitProviderReauthorization": true,
+    "reauthorizedRestoredRefresh": true,
+    "localExpiryMetadataAdjusted": true,
+    "secretsExported": false,
+    "receipts": [
+      "src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json",
+      "src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json",
+      "src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json"
+    ]
+  },
+  "scope": "Bounded source contribution. No upstream publish, production certification, distributed session claim or Spaces verification claim.",
+  "dockerFollowUp": {
+    "publicChallengeRedirectVerified": true,
+    "fixtureOAuthAndContainerRestartVerified": true,
+    "originalEvidence": "verification-initial.json",
+    "evidence": "../../docs/evidence/docker.json",
+    "verifiedAt": "2026-09-09T22:55:36.9669561+00:00"
+  },
+  "scopeGrantCorrection": {
+    "observedAt": "2026-09-10T01:36:22.915Z",
+    "freshCheckout": ".local/upstream/koan-auth-scope-verify-1789004005",
+    "callbackRequestedScopesMustAllBeGranted": true,
+    "grantExpansionStillRejected": true,
+    "priorDurableSessionSurvivedRejectionCleanupAndReopen": true,
+    "ordinarySignInAndRestoreRemainCeilingOnly": true,
+    "sanitizedMissingAccessPageImplemented": true,
+    "liveProviderDownscopeCallbackReplayed": false,
+    "freshSampleBuild": {
+      "passed": true,
+      "warnings": 0,
+      "errors": 0
+    },
+    "connector": {
+      "passed": 30,
+      "failed": 0,
+      "skipped": 1
+    },
+    "genericAuth": {
+      "passed": 57,
+      "failed": 0
+    },
+    "authHttpIntegration": {
+      "passed": 9,
+      "failed": 0
+    },
+    "previousPatchSha256": "c457826e94764fd7b069b333023ed8216a4d12df0af4ebb2d159eafa1a894da2",
+    "limits": "Scope policy and durable staging are covered by focused regressions. Historical provider/browser lifecycle receipts were not rerun by this correction; the new missing-access HTML path has not been exercised against a live provider callback."
+  }
+}

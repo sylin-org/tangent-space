@@ -1,0 +1,266 @@
+{
+  "observedAt": "2026-09-09T20:06:39.6304051+00:00",
+  "upstreamRevision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "sdk": "CarpaNet.OAuth/1.1.0-alpha.5",
+  "passed": true,
+  "checks": [
+    {
+      "name": "OAuth owner ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "did": "did:plc:6c26drqwrk5yavtnnjuvpvdf",
+        "pds": "http://localhost:2583",
+        "sdk": "CarpaNet.OAuth/1.1.0-alpha.5",
+        "phases": [
+          "OAuth start and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Native token exchange and verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "OAuth owner issuer",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "negative": "issuer",
+        "status": 400,
+        "phases": [
+          "OAuth start and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect"
+        ]
+      }
+    },
+    {
+      "name": "OAuth owner state",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "owner",
+        "negative": "state",
+        "status": 400,
+        "phases": [
+          "OAuth start and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect"
+        ]
+      }
+    },
+    {
+      "name": "OAuth authority ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "authority",
+        "did": "did:plc:yblwluenzocgiqpmu4ip7six",
+        "pds": "http://localhost:2583",
+        "sdk": "CarpaNet.OAuth/1.1.0-alpha.5",
+        "phases": [
+          "OAuth start and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Native token exchange and verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "OAuth agent ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "agent",
+        "did": "did:plc:mgxxqowf6nnd3btckqjq573l",
+        "pds": "http://localhost:2584",
+        "sdk": "CarpaNet.OAuth/1.1.0-alpha.5",
+        "phases": [
+          "OAuth start and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Native token exchange and verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "OAuth manager ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "manager",
+        "did": "did:plc:3ruzzbw452co4pk4sbywy2qf",
+        "pds": "http://localhost:2583",
+        "sdk": "CarpaNet.OAuth/1.1.0-alpha.5",
+        "phases": [
+          "OAuth start and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Native token exchange and verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "OAuth outsider ",
+      "passed": true,
+      "observed": {
+        "passed": true,
+        "account": "outsider",
+        "did": "did:plc:oytnmi77udttl557oeenne3u",
+        "pds": "http://localhost:2584",
+        "sdk": "CarpaNet.OAuth/1.1.0-alpha.5",
+        "phases": [
+          "OAuth start and PAR",
+          "Issuer authorization page",
+          "Issuer password authentication",
+          "Issuer consent",
+          "Issuer callback redirect",
+          "Native token exchange and verified DID",
+          "Replayed callback rejected"
+        ]
+      }
+    },
+    {
+      "name": "Native OAuth creates a Space under authority DID",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "body": {
+          "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/native-1788984370913"
+        }
+      }
+    },
+    {
+      "name": "Native OAuth creates participant-owned source record on PDS2",
+      "passed": true,
+      "observed": {
+        "status": 200,
+        "body": {
+          "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/native-1788984370913",
+          "cid": "bafyreic3d2yov3eai6w7tdjxvlani7alnqbffuxhcg2okvaooouuyvtosm",
+          "validationStatus": "unknown"
+        }
+      }
+    },
+    {
+      "name": "PDS1 participant reads PDS2 source through OAuth delegation and SpaceCredential",
+      "passed": true,
+      "observed": {
+        "stage": "read",
+        "credentialIssued": true,
+        "response": {
+          "status": 200,
+          "body": {
+            "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/native-1788984370913",
+            "cid": "bafyreic3d2yov3eai6w7tdjxvlani7alnqbffuxhcg2okvaooouuyvtosm",
+            "value": {
+              "text": "A native OAuth participant wrote this message.",
+              "$type": "local.tangent.message",
+              "createdAt": "2026-09-09T16:06:24.3384486-04:00"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Outsider denied SpaceCredential despite OAuth read grant",
+      "passed": true,
+      "observed": {
+        "stage": "credential",
+        "response": {
+          "status": 400,
+          "body": {
+            "error": "UserNotAuthorized",
+            "message": "User not authorized for this space"
+          }
+        }
+      }
+    },
+    {
+      "name": "Plain sign-in scope cannot request room delegation",
+      "passed": true,
+      "observed": {
+        "stage": "delegation",
+        "response": {
+          "status": 403,
+          "body": {
+            "error": "ScopeMissingError",
+            "message": "Missing required scope \"space:local.tangent.room?authority=did:plc:yblwluenzocgiqpmu4ip7six&skey=workshop&action=read\""
+          }
+        }
+      }
+    },
+    {
+      "name": "Real refresh token rotates the access token",
+      "passed": true,
+      "observed": {
+        "refreshed": true,
+        "did": "did:plc:mgxxqowf6nnd3btckqjq573l"
+      }
+    },
+    {
+      "name": "Refreshed session retains native Spaces access",
+      "passed": true,
+      "observed": {
+        "stage": "read",
+        "credentialIssued": true,
+        "response": {
+          "status": 200,
+          "body": {
+            "uri": "at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/workshop/did:plc:mgxxqowf6nnd3btckqjq573l/local.tangent.message/native-1788984370913",
+            "cid": "bafyreic3d2yov3eai6w7tdjxvlani7alnqbffuxhcg2okvaooouuyvtosm",
+            "value": {
+              "text": "A native OAuth participant wrote this message.",
+              "$type": "local.tangent.message",
+              "createdAt": "2026-09-09T16:06:24.3384486-04:00"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Spaces CAR transport works while native parser gap remains explicit",
+      "passed": true,
+      "observed": {
+        "stage": "read",
+        "credentialIssued": true,
+        "response": {
+          "status": 200,
+          "mediaType": "application/vnd.ipld.car",
+          "bytes": 1110,
+          "carRoots": 2,
+          "blocks": 5,
+          "sdkPublicRepositoryVersion": 0,
+          "sdkPublicRepositoryRecords": 0,
+          "verified": false,
+          "gap": "SDK public-repo MST parser does not verify Spaces commitment and index"
+        }
+      }
+    }
+  ],
+  "limits": [
+    "Disposable loopback PDS network",
+    "HTTP issuer API driver, not browser rendering",
+    "PDS custom record validation may be unknown",
+    "Spaces CAR integrity verification is not implemented by the selected SDK",
+    "Application cookie, governance and unattended credentials are later stories"
+  ]
+}

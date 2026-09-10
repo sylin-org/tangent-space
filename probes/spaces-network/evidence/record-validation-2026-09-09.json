@@ -1,0 +1,28 @@
+{
+  "completedAt": "2026-09-09T20:06:06.036Z",
+  "revision": "c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae",
+  "patch": "upstream-varint.patch",
+  "messageSchema": {
+    "uri": "at://did:plc:35stld6favwaos2otdojrxpd/com.atproto.lexicon.schema/local.tangent.message",
+    "cid": "bafyreiexxqmqg5ya2onk4tvi57fplbb6uh6rdtbzszcidrufxf4rvvzwku",
+    "validAccepted": true,
+    "malformedRejected": true
+  },
+  "pdsRecordValidation": [
+    {
+      "label": "valid",
+      "requestedValidation": true,
+      "status": 400,
+      "error": "InvalidRequest",
+      "message": "Unknown lexicon type: local.tangent.message"
+    },
+    {
+      "label": "malformed",
+      "requestedValidation": true,
+      "status": 400,
+      "error": "InvalidRequest",
+      "message": "Unknown lexicon type: local.tangent.message"
+    }
+  ],
+  "conclusion": "PDS dynamic third-party record schema validation is unavailable at this revision. Tangent must validate records before writes and acceptance; verified Lexicon resolution and client validation succeed."
+}

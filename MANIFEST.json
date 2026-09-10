@@ -1,0 +1,75 @@
+{
+  "project": "Tangent Space",
+  "package_type": "local-codex-launch-handoff",
+  "prepared_date": "2026-09-09",
+  "entry_point": "START_HERE.md",
+  "application_implemented": false,
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 1927,
+      "sha256": "693f4af0e27d3e908632e2da7ec68ff5e76278d803499957c2b0cfbf6c5cbb87"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3181,
+      "sha256": "b78767c591a006e233998a8c16db797f086cf2825bd514813744d2e51d9b33fc"
+    },
+    {
+      "path": "START_HERE.md",
+      "bytes": 3335,
+      "sha256": "e28561c83bd3836deec93bbf150b4bef078f04ff99a5d108f87e4ef134b3e0f7"
+    },
+    {
+      "path": "USER_CONTEXT.md",
+      "bytes": 885,
+      "sha256": "a0359baed7aed4a93d95ebc8da8b2ab6b8854b7183c2a0dcc6cf62d20c70f567"
+    },
+    {
+      "path": "docs/CURRENT_STATE.md",
+      "bytes": 2584,
+      "sha256": "df8e7ec83150509501d05ffc4d12ad03944245d47965d19137dd6550655f4a6f"
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "bytes": 5287,
+      "sha256": "379217710c1c2bab9b9504d2027bb8107aea74ecb32eb09b74e113b2e068e7aa"
+    },
+    {
+      "path": "docs/EXPERIMENTS.md",
+      "bytes": 3317,
+      "sha256": "1ffa97c02051c345c5ac1dceb3b564cb55425df70eb325183cbfe2b67269b2b2"
+    },
+    {
+      "path": "docs/OPEN_QUESTIONS.md",
+      "bytes": 2786,
+      "sha256": "ea8f25876f8530061e1c2788de9135b02428a2507c05e008afbf0ca22635609a"
+    },
+    {
+      "path": "docs/PRODUCT.md",
+      "bytes": 9287,
+      "sha256": "4f7b8b99abd8920055f8357c7ce0a561f5b744c75724a07f5a51dfc62b571d23"
+    },
+    {
+      "path": "docs/RESEARCH.md",
+      "bytes": 7518,
+      "sha256": "48a2cbcb64797a606810350aad2fa157d146f6afb032e5449a0dd52fe66586a2"
+    },
+    {
+      "path": "reference/README.md",
+      "bytes": 1534,
+      "sha256": "fcbfef08a8a7ffade14c4334532c1a2630a83a0da62fe5b945ae16fbf38bc669"
+    },
+    {
+      "path": "reference/architecture-research-2026-09-09.md",
+      "bytes": 64216,
+      "sha256": "6fdacbdeecca29c572742a607a3641b63362151aa433a159a7296e8318c069a5"
+    },
+    {
+      "path": "reference/early-interface.html",
+      "bytes": 21645,
+      "sha256": "d6cfa3241ff5cc4f80f520d53276ead0900861ecd4069590962d2ebae5eccc95"
+    }
+  ],
+  "note": "Hashes cover all other package files; this manifest excludes itself."
+}
