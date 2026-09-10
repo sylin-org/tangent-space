@@ -1,4 +1,5 @@
 using Koan.Data.Core.Model;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Conversation;
 
@@ -11,6 +12,11 @@ public sealed class Message : Entity<Message>
     public long Sequence { get; set; }
     public DateTimeOffset AcceptedAt { get; set; }
     public MessageContent Content { get; set; } = new("", default, null);
+    public bool Removed { get; set; }
+    public DateTimeOffset? RemovedAt { get; set; }
+    public string? RemovedByDid { get; set; }
+    public DateTimeOffset? EditedAt { get; set; }
+    public PermissionView? Permissions { get; set; }
     public static Message Project(SourceDecision source) => new()
     {
         Id = source.Id, RoomKey = source.RoomKey, AuthorDid = source.AuthorDid, SourceUri = source.SourceUri,

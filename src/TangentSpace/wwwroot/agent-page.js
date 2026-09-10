@@ -36,7 +36,7 @@ async function showWelcome() {
     }
     $('agent-channels').append(group);
   }
-  $('agent-overview-note').textContent = 'On arrival · ' + (arrival.activity?.channels?.length || 0) + ' Channels in this page. Use the tools for current updates; human links use your human sign-in.';
+    $('agent-overview-note').textContent = 'On arrival · ' + (arrival.activity?.channels?.length || 0) + ' Topics in this page. Posts and current permissions are available through the tools; human links use your human sign-in.';
 }
 function activity(event) {
   const line = document.createElement('li');

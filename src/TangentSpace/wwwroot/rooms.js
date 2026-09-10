@@ -5,9 +5,16 @@
   let liveController;
   let activityController, activityCursor, activityReconnect, activityActive = false;
   let sourceReadiness, activeTangentKey, activitySignature = '', tangentNextPage;
+  let routeTangent, routeTopics, routeFailure;
+  const route = () => window.TangentPages?.route || { kind: 'home' };
+  const tangentPath = key => '/api/v1/tangents/' + encodeURIComponent(key);
+  const tangentUrl = key => window.TangentPages.tangentUrl(key);
+  const topicUrl = (tangent, key) => window.TangentPages.topicUrl(tangent, key);
+  const updateHero = () => routeFailure ? window.TangentPages?.unavailable(routeFailure) : window.TangentPages?.hero(site, route().tangent ? tangentByKey.get(route().tangent) || routeTangent : undefined, room);
   const activityByRoom = new Map();
   const tangentByKey = new Map();
   const pending = new Map();
+  const postMutations = new Map();
   const recoveryBlocked = new Set();
   const drafts = new Map();
   const sending = new Map();
@@ -21,15 +28,44 @@
   function safeAccent(value) { return /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#d88957'; }
   function currentTangents() { return Array.isArray(site?.tangents?.tangents) ? site.tangents.tangents : []; }
   function activityFor(key) { return activityByRoom.get(key) || {}; }
+  function can(subject, action) { const actions = subject?.permissions?.allowedActions || subject?.allowedActions; return Array.isArray(actions) && actions.includes(action); }
   async function request(path, body, method = 'POST', signal) {
     const response = await fetch(path, { method: body === undefined ? 'GET' : method, credentials: 'same-origin', cache: 'no-store',
       headers: { Accept: 'application/json', ...(site?.participant?.did ? { 'X-Tangent-Participant': site.participant.did } : {}),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body), signal });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok && !['rejected', 'conflict'].includes(data.state)) { const error = new Error(data.reason || data.title || (response.status === 403 ? 'Your current access does not permit this action.' : 'This request could not be completed.')); error.status = response.status; throw error; }
+    if (!response.ok && !['rejected', 'conflict'].includes(data.state)) { const error = new Error(data.reason || data.error || data.title || (response.status === 403 ? 'Your current access does not permit this action.' : 'This request could not be completed.')); error.status = response.status; throw error; }
     return { data, status: response.status };
   }
+  function permissionSummary(view) {
+    if (!view) return '';
+    const labels = { read: 'read', reply: 'reply', manageServer: 'manage this server', createTangent: 'create Tangents', manageTangent: 'manage this Tangent', createTopic: 'create Topics', manageTopic: 'manage this Topic', manageParticipants: 'manage participants', editOwnPost: 'edit your posts', deleteOwnPost: 'delete your posts', removePost: 'remove posts' };
+    return 'Your role: ' + view.role + '. You can ' + (view.allowedActions || []).map(a => labels[a] || a).join(', ') + '.';
+  }
+  function renderServerSettings(server) {
+    const welcome = $('server-welcome'); if (!welcome || !server) return;
+    window.TangentAtmosphere?.configure(server, site?.participant);
+    text('server-welcome-title', server.name || site?.name || 'Tangent Space');
+    text('server-welcome-message', server.welcomeMessage || 'A shared place for durable conversation.');
+    text('server-motd', server.motd || ''); show('server-motd', !!server.motd);
+    const participant = site?.participant, role = server.role || server.permissions?.role || participant?.role;
+    const actions = server.permissions?.allowedActions || server.allowedActions;
+    const restriction = server.permissions?.restrictions || server.restrictions;
+    const summary = permissionSummary(server.permissions);
+    text('server-role', summary); show('server-role', !!summary);
+    const canManage = participant?.isOwner === true || can(server, 'manageServer') || can(server, 'editServer');
+    show('server-settings-toggle', canManage);
+    if (canManage) {
+      const form = $('server-settings-form');
+      for (const key of ['name', 'byline', 'coverImageUrl', 'welcomeMessage', 'motd', 'creationPolicy']) if (form.elements.namedItem(key)) form.elements.namedItem(key).value = server[key] || (key === 'creationPolicy' ? 'owner_only' : '');
+      form.elements.namedItem('allowAgentTangentOwnership').checked = server.allowAgentTangentOwnership === true;
+      text('server-permissions-summary', Array.isArray(server.permissions) ? server.permissions.map(p => [p.role, p.scope, (p.allowedActions || []).join(', ')].filter(Boolean).join(': ')).join(' · ') : '');
+    }
+    show('server-welcome', true);
+    updateHero();
+  }
+  async function refreshServer() { try { const value = (await request('/api/server')).data; if (value && typeof value === 'object') { site.server = value; renderServerSettings(value); } } catch (_) { /* older servers may not expose server settings yet */ } }
   async function action(button, work) {
     if (button) button.disabled = true;
     try { await work(); } catch (error) { status(error.message || 'The site could not be reached. Try again.', true); }
@@ -37,21 +73,30 @@
   }
   function listRooms(listing, append = false) {
     if (!append) $('room-list').replaceChildren();
-    for (const entry of listing.rooms || []) {
+    for (const entry of listing.rooms || listing.channels || []) {
       const activity = activityFor(entry.key);
-      const button = element('button', 'room-link', ''); button.type = 'button'; button.dataset.key = entry.key;
+      const button = element('a', 'room-link', ''); button.href = topicUrl(entry.tangentKey || activeTangentKey, entry.key); button.dataset.key = entry.key;
       const state = entry.spaceState === 'Pending' ? 'Setup pending' : entry.admission === 'InvitationOnly' ? 'By invitation' : 'Open to signed-in participants';
       const label = element('span', 'room-name', entry.title);
       if (activity.directReplies > 0) label.append(element('span', 'activity-diamond', '◆'));
       else if (activity.unreadCount > 0) label.append(element('span', 'activity-count', activity.unreadCountCapped || activity.unreadCount > 50 ? '50+' : String(activity.unreadCount)));
-      button.append(label, element('span', 'room-state', state));
-      button.addEventListener('click', () => action(button, () => choose(entry.key)));
+      button.append(label);
+      if (entry.topic) button.append(element('span', 'room-description', entry.topic));
+      button.append(element('span', 'room-state', state));
       $('room-list').append(button);
     }
     nextRoomPage = listing.nextPage;
     show('more-rooms', !!nextRoomPage); show('no-rooms', !$('room-list').children.length);
   }
-  async function refreshRooms() { listRooms((await request('/api/rooms')).data); }
+  async function refreshRooms(append = false) {
+    if (activeTangentKey) {
+      const key = activeTangentKey, identity = identityEpoch;
+      const listing = (await request(tangentPath(key) + '/topics' + (append && nextRoomPage ? '?page=' + encodeURIComponent(nextRoomPage) : ''))).data;
+      if (identity !== identityEpoch || key !== activeTangentKey) return;
+      routeTopics = { ...listing, channels: append ? [...(routeTopics?.channels || []), ...(listing.channels || [])] : listing.channels || [] };
+      listRooms(routeTopics);
+    } else listRooms((await request('/api/rooms')).data);
+  }
   function cardArtwork(card, tangent) {
     if (card.style) card.style.backgroundImage = '';
     card.classList.remove('has-artwork');
@@ -65,7 +110,7 @@
     const disc = element('span', 'activity-disc', count ? countLabel : '·'); disc.title = count ? countLabel + ' unread activity' : 'No unread activity';
     top.append(element('span', 'card-kicker', 'TANGENT'), disc);
     const face = element('span', 'card-face', '');
-    if (validArtwork(value.artwork)) { const image = document.createElement('img'); image.className = 'card-art'; image.src = value.artwork; image.alt = ''; face.append(image); }
+    if (value.artwork && validArtwork(value.artwork)) { const image = document.createElement('img'); image.className = 'card-art'; image.src = value.artwork; image.alt = ''; face.append(image); }
     else face.append(element('span', 'card-sigil', '✦'));
     const stripe = element('span', 'card-stripe', '');
     const glass = element('span', 'card-glass', '');
@@ -103,15 +148,17 @@
   function selectTangent(tangent, preferredRoom) {
     activeTangentKey = tangent.key;
     const channels = Array.isArray(tangent.channels) ? tangent.channels : [];
-    const key = preferredRoom || channels.find(channel => channel.canRead)?.key || channels[0]?.key;
+    const key = preferredRoom;
     document.querySelectorAll('.tangent-card').forEach(card => card.setAttribute('aria-current', String(card.dataset.key === tangent.key)));
     listRooms({ rooms: channels });
-    text('rooms-heading', tangent.name || 'Channels');
-    show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || tangent.canManage || tangent.isOwner));
+    text('rooms-heading', route().kind === 'topics' ? 'Conversations' : tangent.name || 'Topics');
+    show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || tangent.canManage || tangent.isOwner || tangent.canCreateTopic === true));
+    show('site-setup', site?.participant?.isOwner === true || tangent.canCreateTopic === true || can(tangent, 'createTopic'));
     show('tangent-members', !!(tangent.canManage || tangent.isOwner));
     openTangentEditor(tangent);
     if (key) action(null, () => choose(key));
-    else { rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; document.body.classList.remove('conversation-open'); show('room-content', false); show('choose-room', true); text('choose-room', 'This Tangent has no channels yet. Add one when you know what it is for.'); }
+    else { rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; document.body.classList.remove('conversation-open'); show('room-content', false); show('choose-room', true); text('choose-room', channels.length ? 'Choose a topic to join the conversation.' : 'No topics here yet. Start one when you are ready.'); }
+    updateHero();
   }
   function renderTangents() {
     const holder = $('tangent-list'); if (!holder) return;
@@ -119,18 +166,27 @@
     const tangents = currentTangents();
     for (const tangent of tangents) {
       tangentByKey.set(tangent.key, tangent);
-      const card = element('button', 'tangent-card', ''); card.type = 'button'; card.dataset.key = tangent.key;
+      const wrap = element('div', 'tangent-card-wrap');
+      const card = element('a', 'tangent-card', ''); card.href = tangentUrl(tangent.key); card.dataset.key = tangent.key;
       card.style.setProperty('--tangent-accent', safeAccent(tangent.accent)); cardArtwork(card, tangent);
       const channels = Array.isArray(tangent.channels) ? tangent.channels : [];
       const total = channels.reduce((sum, channel) => sum + (activityFor(channel.key).unreadCount || 0), 0);
       const cap = total > 50 || channels.some(channel => activityFor(channel.key).unreadCountCapped === true) ? '50+' : String(total);
       card.append(...cardContents(tangent, total, cap));
-      card.addEventListener('click', () => selectTangent(tangent)); holder.append(card);
+      wrap.append(card);
+      if (tangent.canManage || tangent.isOwner || can(tangent, 'manageTangent')) {
+        const settings = element('button', 'card-settings btn btn-quiet', '⚙'); settings.type = 'button'; settings.title = 'Tangent settings'; settings.setAttribute('aria-label', 'Open settings for ' + (tangent.name || tangent.key));
+        settings.addEventListener('click', event => { event.stopPropagation(); activeTangentKey = tangent.key; show('community-settings', true); openTangentEditor(tangent); $('community-settings').open = true; $('tangent-editor').open = true; }); wrap.append(settings);
+      }
+      holder.append(wrap);
     }
+    if (routeTangent && !tangentByKey.has(routeTangent.key)) tangentByKey.set(routeTangent.key, routeTangent);
+    text('no-tangents', site?.participant ? 'No Tangents are available to this account yet.' : 'Sign in to discover the Tangents available to you.');
     show('no-tangents', !tangents.length);
     show('tangent-setup', !!site?.tangents?.setupRequired || !!site?.tangents?.canCreate);
     const active = tangentByKey.get(activeTangentKey);
-    show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || active?.canManage || active?.isOwner));
+    show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || active?.canManage || active?.isOwner || active?.canCreateTopic === true));
+    show('site-setup', site?.participant?.isOwner === true || active?.canCreateTopic === true || can(active, 'createTopic'));
     configureCreateForm();
     tangentNextPage = site?.tangents?.nextPage;
     show('more-tangents', !!tangentNextPage);
@@ -139,13 +195,19 @@
     show('directory-note', !!incomplete);
   }
   async function refreshTangents() {
-    const directory = (await request('/api/tangents')).data;
+    const directory = (await request('/api/v1/tangents')).data;
     if (!directory || !Array.isArray(directory.tangents)) throw new Error('Tangent directory could not be read.');
     site.tangents = directory; renderTangents();
+    if (route().tangent) {
+      routeTangent = (await request(tangentPath(route().tangent))).data;
+      tangentByKey.set(routeTangent.key, routeTangent);
+      await refreshRooms();
+    }
+    updateHero();
   }
   async function moreTangents() {
     if (!tangentNextPage) return;
-    const page = (await request('/api/tangents?page=' + encodeURIComponent(tangentNextPage))).data;
+    const page = (await request('/api/v1/tangents?page=' + encodeURIComponent(tangentNextPage))).data;
     if (!page || !Array.isArray(page.tangents)) throw new Error('More Tangents could not be loaded.');
     const known = new Set(currentTangents().map(tangent => tangent.key));
     site.tangents.tangents.push(...page.tangents.filter(tangent => !known.has(tangent.key)));
@@ -153,12 +215,21 @@
     renderTangents();
   }
   function resetMessages() { liveController?.abort(); rendered.clear(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); text('freshness', ''); }
-  function revokeSelectedRoom() {
+  function unavailableRoute(code) {
+    routeFailure = code; epoch++; resetMessages(); stopActivity(); room = null; reply = undefined; sourceReadiness = undefined;
+    routeTangent = routeTopics = undefined;
+    for (const id of ['room-title', 'room-topic', 'topic-permissions', 'room-access']) text(id, '');
+    field('topic-form', 'topic').value = '';
+    $('room-list').replaceChildren();
+    show('room-content', false); show('more-rooms', false); show('choose-room', true);
+    text('choose-room', code === 401 ? 'Sign in to continue.' : 'This conversation isn’t available.');
+    updateHero();
+  }
+  function revokeSelectedRoom(code = 403) {
     const key = room?.key; if (!key) return;
-    rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
+    rememberDraft();
     for (const tangent of currentTangents()) tangent.channels = (tangent.channels || []).filter(channel => channel.key !== key);
-    renderTangents(); const active = tangentByKey.get(activeTangentKey); listRooms({ rooms: active?.channels || [] });
-    show('room-content', false); show('choose-room', true); text('choose-room', 'This channel is no longer available to this account.');
+    unavailableRoute(code);
   }
   function renderRoom(value) {
     room = value;
@@ -166,15 +237,18 @@
     text('tangent-return-title', 'Your Tangents');
     if (room.tangentKey) activeTangentKey = room.tangentKey;
     document.querySelectorAll('.room-link').forEach(button => button.setAttribute('aria-current', String(button.dataset.key === room.key)));
+    text('topic-permissions', permissionSummary(room.permissions) + (room.isLocked ? ' This Topic is locked.' : room.allowPostEditing ? ' Authors may edit their posts.' : ' Posts are write-once; corrections are new replies.'));
     text('room-title', room.title); text('room-topic', room.topic || 'No topic has been set yet.');
     const tangent = tangentByKey.get(room.tangentKey);
-    text('rooms-heading', tangent?.name || 'Channels');
+    text('rooms-heading', tangent?.name || 'Topics');
     const mark = $('room-tangent-mark');
     if (mark) { if (mark.style) mark.style.background = safeAccent(tangent?.accent); mark.textContent = tangent?.artwork ? '◈' : '✦'; mark.title = tangent?.name || ''; }
     text('room-admission', room.admission === 'InvitationOnly' ? 'By invitation' : 'Signed-in participants');
     const access = { 'sign-in-required': 'Sign in to enter this room.', 'invitation-required': 'A room manager can invite your DID to join.', removed: 'Your access to this room has been removed.', suspended: 'Your participation at this site is suspended.', 'space-pending': 'Room setup is pending. Its owner can finish connecting it.' };
     text('room-access', access[room.accessState] || (room.canWrite ? 'You can read and take part.' : room.canRead ? 'You can read this room.' : 'Content is not available under your current access.'));
-    show('choose-room', false); show('room-content', true); show('room-admin', room.canManage);
+    show('choose-room', false); show('room-content', true); show('room-admin', room.canManage || can(room, 'manageTopic'));
+    const topicSettings = $('topic-settings-form');
+    if (topicSettings) { topicSettings.elements.namedItem('allowPostEditing').checked = room.allowPostEditing === true; topicSettings.elements.namedItem('isLocked').checked = room.isLocked === true; show('topic-settings-form', room.canManage || can(room, 'manageTopic')); }
     show('provision-room', room.canAppointManagers && room.spaceState === 'Pending');
     show('sync-room', room.canRead); show('message-form', room.canWrite);
     $('channel-details').open = !room.canRead || room.spaceState === 'Pending';
@@ -186,18 +260,28 @@
     if (!room.canAppointManagers && field('member-form', 'role').value === 'Manager') field('member-form', 'role').value = 'Member';
     renderDraft();
     refreshSourceReadiness();
+    updateHero();
   }
   async function choose(key) {
+    if (route().kind === 'post') return openPost();
     rememberDraft();
     const version = ++epoch; resetMessages(); room = null; reply = undefined;
     show('room-content', false); text('choose-room', 'Opening room…'); show('choose-room', true); status('');
-    const data = (await request(roomPath(key))).data;
+    const data = (await request(route().tangent ? tangentPath(route().tangent) + '/topics/' + encodeURIComponent(key) : roomPath(key))).data;
     if (version !== epoch) return;
     renderRoom(data);
-    history.replaceState(null, '', '/?room=' + encodeURIComponent(key));
     if (data.canWrite) await restorePending(version, key);
     if (version !== epoch) return;
     if (data.canRead) await historyPage(undefined, version, key, true);
+  }
+  async function openPost() {
+    rememberDraft(); const version = ++epoch; resetMessages(); room = null; reply = undefined;
+    show('room-content', false); text('choose-room', 'Opening post…'); show('choose-room', true);
+    const result = (await request(tangentPath(route().tangent) + '/posts/' + encodeURIComponent(route().post))).data;
+    if (version !== epoch) return;
+    renderRoom(result.topic);
+    renderPage(result.window, false);
+    if (room.canWrite) await restorePending(version, room.key);
   }
   async function restorePending(version, key) {
     if (pending.has(key)) return;
@@ -233,6 +317,7 @@
     }
   }
   async function historyPage(cursor, version = epoch, key = room?.key, fromStart = false) {
+    if (route().kind === 'post') return refreshOpenHistory();
     if (!key) return;
     try {
       const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : fromStart ? '?from=start' : ''))).data;
@@ -241,9 +326,23 @@
       startLive();
     } catch (error) {
       if (version !== epoch) return;
-      if (error.status === 403 || error.status === 401 || error.status === 404) revokeSelectedRoom();
+      if (error.status === 403 || error.status === 401 || error.status === 404) revokeSelectedRoom(error.status);
       throw error;
     }
+  }
+  async function refreshOpenHistory(force = false) {
+    if (!room?.canRead || !force && document.querySelector('.message-edit-form')) return;
+    const key = room.key, version = epoch;
+    if (route().kind === 'post') {
+      try {
+        const result = (await request(tangentPath(route().tangent) + '/posts/' + encodeURIComponent(route().post))).data;
+        if (version !== epoch || room?.key !== key) return;
+        resetMessages(); renderRoom(result.topic); renderPage(result.window, false);
+      } catch (error) {
+        if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status);
+        throw error;
+      }
+    } else { resetMessages(); await historyPage(undefined, version, key, true); }
   }
   async function refreshSourceReadiness() {
     const key = room?.key, identity = identityEpoch, version = epoch;
@@ -266,11 +365,13 @@
       // readiness endpoint must not be mistaken for account consent.
     }
   }
-  function renderPage(page) {
+  function renderPage(page, nativeHistory = true) {
       for (const message of page.messages || []) {
         if (rendered.has(message.id)) continue;
         rendered.add(message.id);
         const li = element('li', 'message', '');
+        li.id = 'post-' + message.id;
+        if (route().kind === 'post' && message.id === route().post) { li.classList.add('message-anchor'); li.setAttribute('aria-current', 'true'); }
         const byline = element('div', 'message-byline', '');
         const isYou = message.authorDid === site.participant?.did;
         const handle = typeof page.authorHandles?.[message.authorDid] === 'string' ? page.authorHandles[message.authorDid] : '';
@@ -279,21 +380,70 @@
         const avatar = element('span', 'message-avatar', initial); avatar.title = message.authorDid;
         const author = element('strong', 'message-author', shown); author.title = message.authorDid;
         byline.append(avatar, author, element('time', '', new Date(message.acceptedAt).toLocaleString()));
+        const permalink = element('a', 'post-permalink', 'Permalink');
+        permalink.href = '/t/' + encodeURIComponent(room.tangentKey) + '/' + encodeURIComponent(message.id);
+        byline.append(permalink);
         li.append(byline);
-        if (message.content.replyTo) li.append(element('p', 'hint reply-label', 'In reply to an earlier message'));
-        li.append(element('p', 'message-text', message.content.text));
+        const content = message.content || {}, deleted = message.removed === true || message.deleted === true;
+        if (content.replyTo) li.append(element('p', 'hint reply-label', 'In reply to an earlier message'));
+        li.append(element('p', 'message-text', deleted ? 'This message was removed.' : content.text));
+        if (message.editedAt && !deleted) li.append(element('span', 'message-edited', 'Edited ' + new Date(message.editedAt).toLocaleString()));
         const details = element('details', 'source-details', ''); details.append(element('summary', '', 'Source and identity'));
         details.append(element('p', 'did', message.authorDid), element('p', 'did', message.sourceUri), element('p', 'did', message.sourceCid)); li.append(details);
-        if (room.canWrite) { const button = element('button', 'btn btn-quiet', 'Reply'); button.type = 'button'; button.addEventListener('click', () => { if (pending.has(room.key)) return status('Finish or retry the pending message first.'); drafts.set(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } }); renderDraft(); $('message-text').focus(); }); li.append(button); }
+        const actions = message.permissions?.allowedActions || room.permissions?.allowedActions || [];
+        const own = isYou;
+        if (room.canWrite && !deleted) { const button = element('button', 'btn btn-quiet', 'Reply'); button.type = 'button'; button.addEventListener('click', () => { if (pending.has(room.key)) return status('Finish or retry the pending message first.'); drafts.set(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } }); renderDraft(); $('message-text').focus(); }); li.append(button); }
+        const mayEdit = !deleted && (actions.includes('editOwnPost') && own) && !message._editing;
+        const mayDelete = !deleted && ((actions.includes('deleteOwnPost') && own) || actions.includes('removePost'));
+        if (mayEdit || mayDelete) {
+          const controls = element('span', 'message-controls', '');
+          if (mayEdit) { const edit = element('button', 'btn btn-quiet', 'Edit'); edit.type = 'button'; edit.addEventListener('click', () => beginEdit(li, message)); controls.append(edit); }
+          if (mayDelete) { const remove = element('button', 'btn btn-quiet', actions.includes('removePost') && !own ? 'Remove' : 'Delete'); remove.type = 'button'; remove.addEventListener('click', () => removeMessage(message)); controls.append(remove); }
+          li.append(controls);
+        }
         $('messages').append(li);
       }
-      nextCursor = page.nextCursor; resumeCursor = page.resumeCursor;
-      show('more-messages', !!nextCursor); show('acknowledge', rendered.size > 0);
+      nextCursor = nativeHistory ? page.nextCursor : undefined; resumeCursor = nativeHistory ? page.resumeCursor : undefined;
+      show('more-messages', !!nextCursor); show('acknowledge', nativeHistory && rendered.size > 0 && !!resumeCursor);
       const freshness = { 'writer-checked': 'Latest notified writer verified against its source.', checked: 'Checked against source repositories.', 'catching-up': 'Catching up with source repositories.', unavailable: 'Source unavailable. Showing retained messages.', 'authority-reauthorization-required': 'The site connection needs to be renewed by its owner.', 'not-yet-checked': 'Source reconciliation has not completed yet.' };
       text('freshness', (freshness[page.freshness] || 'Source status is pending.') + (page.lastCheckedAt ? ' Last complete check: ' + new Date(page.lastCheckedAt).toLocaleString() : '') + (!rendered.size ? ' No messages here yet.' : ''));
   }
+  function beginEdit(li, message) {
+    const current = li.querySelector('.message-text'); if (!current) return;
+    const key = room.key, mutationKey = site.participant.did + ':' + key + ':' + message.id;
+    const saved = postMutations.get(mutationKey);
+    if (saved?.method === 'DELETE') { status('A deletion is pending. Retry Delete to finish it.'); return; }
+    const form = document.createElement('form'); form.className = 'message-edit-form';
+    const input = document.createElement('textarea'); input.className = 'input'; input.rows = 3; input.maxLength = 4096;
+    input.value = saved?.body.text ?? message.content.text; input.readOnly = !!saved;
+    const save = element('button', 'btn btn-primary', saved ? 'Retry edit' : 'Save'), cancel = element('button', 'btn btn-quiet', 'Close');
+    save.type = 'submit'; cancel.type = 'button'; cancel.addEventListener('click', () => { form.replaceWith(current); action(null, () => refreshOpenHistory(true)); });
+    form.append(input, save, cancel); current.replaceWith(form); input.focus();
+    form.addEventListener('submit', event => { event.preventDefault(); action(save, async () => {
+      if (!input.value.trim() || new TextEncoder().encode(input.value).length > 4096) throw new Error('Use a post of 1–4096 UTF-8 bytes.');
+      const intent = postMutations.get(mutationKey) ?? { method: 'PATCH', body: { text: input.value, operationId: crypto.randomUUID() } };
+      postMutations.set(mutationKey, intent); input.readOnly = true; save.textContent = 'Retry edit';
+      const response = await request(roomPath(key) + '/messages/' + encodeURIComponent(message.id), intent.body, intent.method);
+      if (response.data.state === 'pending') { status('Your edit is saved for this visit. Retry it to confirm the source result.'); return; }
+      if (response.data.state !== 'accepted') throw new Error('The source has not confirmed this edit.');
+      postMutations.delete(mutationKey); await refreshOpenHistory(true);
+    }); });
+  }
+  function removeMessage(message) {
+    if (!confirm(message.permissions?.allowedActions?.includes('removePost') ? 'Remove this post for everyone here?' : 'Delete this post?')) return;
+    const key = room.key, mutationKey = site.participant.did + ':' + key + ':' + message.id;
+    if (postMutations.get(mutationKey)?.method === 'PATCH') { status('An edit is pending. Retry Edit to finish it.'); return; }
+    const intent = postMutations.get(mutationKey) ?? { method: 'DELETE', body: { operationId: crypto.randomUUID() } };
+    postMutations.set(mutationKey, intent);
+    action(null, async () => {
+      const response = await request(roomPath(key) + '/messages/' + encodeURIComponent(message.id), intent.body, intent.method);
+      if (response.data.state === 'pending') { status('Deletion is pending. Retry Delete to confirm the source result.'); return; }
+      if (!['deleted','moderated'].includes(response.data.state)) throw new Error('The source has not confirmed deletion.');
+      postMutations.delete(mutationKey); await refreshOpenHistory(true);
+    });
+  }
   async function startLive() {
-    if (activityActive || document.hidden || !room?.canRead || !resumeCursor || nextCursor || (liveController && !liveController.signal.aborted)) return;
+    if (route().kind === 'post' || activityActive || document.hidden || !room?.canRead || !resumeCursor || nextCursor || (liveController && !liveController.signal.aborted)) return;
     const controller = new AbortController(); liveController = controller;
     const version = epoch, key = room.key;
     try {
@@ -306,7 +456,7 @@
     } catch (error) {
       if (controller.signal.aborted || version !== epoch) return;
       if (error.status === 401 || error.status === 403) {
-        revokeSelectedRoom();
+        revokeSelectedRoom(error.status);
       } else text('freshness', 'Live updates paused. Use Check for updates to reconnect.');
     } finally { controller.abort(); }
   }
@@ -321,7 +471,7 @@
       if (typeof channel.roomKey === 'string') activityByRoom.set(channel.roomKey, channel);
     }
     const selectedTangent = tangentByKey.get(room?.tangentKey || activeTangentKey);
-    const state = snapshot.channelsIncomplete ? 'Live activity is connected. This overview is incomplete because the directory reached its current scan limit.' : snapshot.channelsTruncated ? 'Live activity is connected. This overview shows up to 100 visible channels.' : selectedTangent?.channelsIncomplete ? 'Live activity is connected. This Tangent’s channel directory is incomplete.' : selectedTangent?.nextChannelsPage ? 'Live activity is connected. This Tangent has more visible channels to load.' : snapshot.resetRequired ? 'Activity reconnected. Some earlier markers may need a fresh check.' : 'Live activity is connected.';
+    const state = snapshot.channelsIncomplete ? 'Live activity is connected. This overview is incomplete because the directory reached its current scan limit.' : snapshot.channelsTruncated ? 'Live activity is connected. This overview shows up to 100 visible topics.' : selectedTangent?.channelsIncomplete ? 'Live activity is connected. This Tangent’s topic directory is incomplete.' : selectedTangent?.nextChannelsPage ? 'Live activity is connected. This Tangent has more visible topics to load.' : snapshot.resetRequired ? 'Activity reconnected. Some earlier markers may need a fresh check.' : 'Live activity is connected.';
     const compactLive = state === 'Live activity is connected.';
     text('activity-status', compactLive ? 'Live' : state);
     $('activity-status').title = state;
@@ -330,17 +480,24 @@
       renderTangents();
       const activeChannels = currentTangents().flatMap(tangent => tangent.channels || []);
       const scope = room?.tangentKey || activeTangentKey;
-      listRooms({ rooms: activeChannels.filter(channel => !scope || channel.tangentKey === scope) || [] });
+      listRooms(routeTopics || { rooms: activeChannels.filter(channel => !scope || channel.tangentKey === scope) || [] });
       if (room) document.querySelectorAll('.room-link').forEach(button => button.setAttribute('aria-current', String(button.dataset.key === room.key)));
     }
     const selected = room ? activityByRoom.get(room.key) : undefined;
     const completeOverview = !snapshot.channelsTruncated && !snapshot.channelsHasMore && !snapshot.channelsIncomplete;
     if (room?.canRead && completeOverview && !selected) { revokeSelectedRoom(); refreshTangents().catch(() => {}); return; }
     const shouldRefresh = room && (snapshot.resetRequired || (Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room.key)) || selected?.lastSequence !== previousSequence);
-    if (shouldRefresh && room.canRead && !nextCursor && resumeCursor) action(null, () => historyPage(resumeCursor, epoch, room.key));
+    const messageEvent = Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room?.key && ['MessageChanged', 'MessageEdited', 'MessageDeleted', 'PostChanged', 'PostDeleted'].includes(event.kind));
+    if ((messageEvent || route().kind === 'post' && shouldRefresh) && room?.canRead) action(null, refreshOpenHistory);
+    else if (shouldRefresh && room.canRead && !nextCursor && resumeCursor) action(null, () => historyPage(resumeCursor, epoch, room.key));
+    if (snapshot.resetRequired || snapshot.events?.some(event => event?.kind === 'ParticipantChanged')) refreshServer();
     if (Array.isArray(snapshot.events) && snapshot.events.some(event => ['TangentChanged', 'RoomChanged', 'MembershipChanged', 'ParticipantChanged'].includes(event?.kind))) {
-      refreshTangents().then(() => {
-        if (room && !currentTangents().some(tangent => (tangent.channels || []).some(channel => channel.key === room.key))) revokeSelectedRoom();
+      refreshTangents().then(async () => {
+        if (room) {
+          const key = room.key, version = epoch;
+          try { const current = (await request(tangentPath(room.tangentKey) + '/topics/' + encodeURIComponent(key))).data; if (version === epoch && room?.key === key) renderRoom(current); }
+          catch (error) { if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status); }
+        }
       }).catch(() => text('activity-status', 'Live activity is connected; the directory will refresh when you reopen it.'));
     }
   }
@@ -357,7 +514,7 @@
     }
   }
   async function startActivity() {
-    if (typeof ReadableStream === 'undefined' || activityController || !site?.participant?.did || !site?.tangents || document.hidden) return;
+    if (routeFailure || typeof ReadableStream === 'undefined' || activityController || !site?.participant?.did || !site?.tangents || document.hidden) return;
     activityController = new AbortController(); const controller = activityController;
     try {
       const identity = identityEpoch;
@@ -413,63 +570,72 @@
   async function mutateRoom(suffix, body, method) { const key = room.key; await request(roomPath(key) + suffix, body, method); status('Saved.'); await refreshRooms(); if (room?.key === key) await choose(key); }
   window.addEventListener('tangent:welcome', event => {
     if (site?.participant?.did !== event.detail.participant?.did) {
-      identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); recoveryBlocked.clear(); drafts.clear(); sending.clear(); restoring = undefined; room = null; reply = undefined; sourceReadiness = undefined; activeTangentKey = undefined; activityByRoom.clear(); tangentByKey.clear();
+      identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); recoveryBlocked.clear(); drafts.clear(); sending.clear(); restoring = undefined; room = null; reply = undefined; sourceReadiness = undefined; activeTangentKey = undefined; routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
       renderDraft(); show('room-content', false); show('choose-room', true); text('choose-room', 'Choose a room to see its topic and current access.'); status('');
     }
-    site = event.detail; show('place', true); document.body.classList.add('has-rooms');
-    show('site-setup', site.participant?.isOwner === true);
-    const key = new URL(location.href).searchParams.get('room');
-    if (currentTangents().length) {
+    site = event.detail;
+    routeFailure = undefined;
+    if (['sign-in', 'onboarding'].includes(route().kind)) return;
+    show('place', true); document.body.classList.add('has-rooms'); refreshServer();
+    show('site-setup', site.participant?.isOwner === true || currentTangents().some(t => t.canCreateTopic === true));
+    const identity = identityEpoch;
+    action(null, async () => {
+      try {
+      const legacy = new URL(location.href).searchParams.get('room');
+      if (legacy && route().kind === 'home') {
+        const topic = (await request(roomPath(legacy))).data;
+        if (identity === identityEpoch) location.replace(topicUrl(topic.tangentKey, topic.key));
+        return;
+      }
+      if (!site.tangents) site.tangents = (await request('/api/v1/tangents')).data;
+      if (identity !== identityEpoch) return;
       renderTangents();
-      const parent = currentTangents().find(tangent => (tangent.channels || []).some(channel => channel.key === key));
-      if (parent) selectTangent(parent, key);
-    } else {
-      // Kept only for older servers during the API rollout. This is server data,
-      // never an app-managed room fallback.
-      listRooms(site.rooms || { rooms: [] });
-      if (key && /^[a-z0-9-]{1,64}$/.test(key)) action(null, () => choose(key));
-    }
-    startActivity();
+      if (route().tangent) {
+        routeTangent = tangentByKey.get(route().tangent) || (await request(tangentPath(route().tangent))).data;
+        if (identity !== identityEpoch) return;
+        tangentByKey.set(routeTangent.key, routeTangent);
+        selectTangent(routeTangent);
+        await refreshRooms();
+        if (identity !== identityEpoch) return;
+        if (route().kind === 'topic') await choose(route().topic);
+        else if (route().kind === 'post') await openPost();
+      }
+      updateHero(); startActivity();
+      } catch (error) {
+        if (identity === identityEpoch && [401, 403, 404].includes(error.status)) unavailableRoute(error.status);
+        throw error;
+      }
+    });
+    try { if (sessionStorage.getItem('tangent-created') === site.participant?.did) { sessionStorage.removeItem('tangent-created'); status('Your Tangent is ready. Make yourself at home.'); } } catch (_) { }
   });
-  $('refresh-rooms').addEventListener('click', () => action($('refresh-rooms'), async () => { if (currentTangents().length) await refreshTangents(); else await refreshRooms(); }));
+  $('refresh-rooms').addEventListener('click', () => action($('refresh-rooms'), refreshRooms));
   $('return-to-tangents').addEventListener('click', () => {
-    rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined;
-    document.body.classList.remove('conversation-open');
-    text('tangent-return-title', 'Pick up a conversation');
-    const active = tangentByKey.get(activeTangentKey); listRooms({ rooms: active?.channels || [] });
-    show('room-content', false); show('choose-room', true); text('choose-room', 'Choose a channel, or pick another Tangent above.');
-    history.replaceState(null, '', '/');
-    const tangents = document.getElementById('tangent-return');
-    tangents?.focus?.({ preventScroll: true });
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    tangents?.scrollIntoView?.({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+    rememberDraft(); location.assign('/tangents/');
   });
   $('more-tangents').addEventListener('click', () => action($('more-tangents'), moreTangents));
   document.addEventListener('visibilitychange', () => { if (document.hidden) { liveController?.abort(); stopActivity(); } else { startLive(); startActivity(); } });
-  $('more-rooms').addEventListener('click', () => action($('more-rooms'), async () => listRooms((await request('/api/rooms?page=' + nextRoomPage)).data, true)));
+  $('more-rooms').addEventListener('click', () => action($('more-rooms'), () => refreshRooms(true)));
   $('more-messages').addEventListener('click', () => action($('more-messages'), () => historyPage(nextCursor)));
   $('message-text').addEventListener('input', () => { size(); rememberDraft(); });
   $('cancel-reply').addEventListener('click', () => { drafts.set(room.key, { text: $('message-text').value }); renderDraft(); });
   $('provision-room').addEventListener('click', () => action($('provision-room'), () => mutateRoom('/provision', {})));
   $('sync-room').addEventListener('click', () => action($('sync-room'), async () => { const key = room.key; status('Checking source repositories…'); await request(roomPath(key) + '/sync', {}); if (room?.key === key) { status(''); await choose(key); } }));
-  $('acknowledge').addEventListener('click', () => action($('acknowledge'), async () => { await request(roomPath(room.key) + '/read-position', { cursor: resumeCursor }); status('Your read position is saved.'); }));
+  $('acknowledge').addEventListener('click', () => action($('acknowledge'), async () => { if (route().kind === 'post' || !resumeCursor) return; await request(roomPath(room.key) + '/read-position', { cursor: resumeCursor }); status('Your read position is saved.'); }));
   $('create-room').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
     const body = Object.fromEntries(new FormData(event.target));
-    if (activeTangentKey && currentTangents().length) {
-      await request('/api/tangents/' + encodeURIComponent(activeTangentKey) + '/channels', body);
-      event.target.reset(); await refreshTangents(); await choose(body.key); status('Channel created. Finish its setup to open conversation.');
+    if (activeTangentKey) {
+      await request(tangentPath(activeTangentKey) + '/topics', body);
+      event.target.reset(); location.assign(topicUrl(activeTangentKey, body.key));
       return;
     }
-    await request('/api/rooms', body); event.target.reset(); await refreshRooms(); await choose(body.key); status('Room created. Finish its setup to open conversation.');
+    await request('/api/rooms', body); event.target.reset(); const created = (await request(roomPath(body.key))).data; location.assign(topicUrl(created.tangentKey, created.key));
   }); });
   $('create-tangent').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
     const body = Object.fromEntries(new FormData(event.target));
     body.name = body.name.trim(); body.key = body.key.trim(); body.description = body.description.trim(); body.motto = body.motto.trim();
     if (!body.name || !body.key || !validArtwork(body.artwork)) throw new Error('Give this Tangent a name and stable address. Artwork must use HTTPS or a supplied sample.');
-    await request('/api/tangents', body); event.target.reset(); await refreshTangents();
-    const tangent = currentTangents().find(value => value.key === body.key);
-    if (tangent) selectTangent(tangent);
-    status('Your Tangent is ready. Add a channel whenever you know what it is for.');
+    await request('/api/v1/tangents', body); event.target.reset(); await refreshTangents();
+    location.assign(tangentUrl(body.key));
   }); });
   $('create-tangent').addEventListener('input', renderCreatePreview);
   $('edit-tangent-form').addEventListener('input', renderEditorPreview);
@@ -478,7 +644,7 @@
     const body = Object.fromEntries(new FormData(event.target));
     body.name = body.name.trim(); body.description = body.description.trim(); body.motto = body.motto.trim(); body.artwork = body.artwork.trim();
     if (!body.name || !validArtwork(body.artwork)) throw new Error('Give this Tangent a name. Artwork must use HTTPS or a supplied sample.');
-    await request('/api/tangents/' + encodeURIComponent(tangent.key), body, 'PATCH');
+    await request(tangentPath(tangent.key), body, 'PATCH');
     await refreshTangents(); const updated = tangentByKey.get(tangent.key); if (updated) { activeTangentKey = updated.key; openTangentEditor(updated); }
     status('Tangent card saved.');
   }); });
@@ -495,6 +661,10 @@
   $('topic-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/topic', { topic: field('topic-form', 'topic').value }, 'PUT')); });
   $('member-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/members/' + encodeURIComponent(field('member-form', 'did').value.trim()), { role: field('member-form', 'role').value }, 'PUT')); });
   $('admission-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/admission', { admission: field('admission-form', 'admission').value }, 'PUT')); });
+  $('topic-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/settings', { allowPostEditing: field('topic-settings-form', 'allowPostEditing').checked, isLocked: field('topic-settings-form', 'isLocked').checked, title: room.title, topic: field('topic-form', 'topic').value }, 'PATCH')); });
+  $('server-atmosphere-open').addEventListener('click', () => window.TangentAtmosphere?.open());
+  $('server-settings-toggle').addEventListener('click', () => { const panel = $('server-settings'), button = $('server-settings-toggle'); panel.open = !panel.open; panel.hidden = !panel.open; button.setAttribute('aria-expanded', String(panel.open)); if (panel.open) $('server-settings-form').elements.namedItem('name').focus(); });
+  $('server-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => { const body = Object.fromEntries(new FormData(event.target)); body.allowAgentTangentOwnership = field('server-settings-form', 'allowAgentTangentOwnership').checked; await request('/api/server', body, 'PATCH'); await refreshServer(); status('Server settings saved.'); }); });
   $('message-form').addEventListener('submit', event => {
     event.preventDefault();
     if (!room?.canWrite || sending.has(room.key) || recoveryBlocked.has(room.key) || restoring?.version === epoch) return;

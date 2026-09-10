@@ -736,6 +736,12 @@
           "System.IdentityModel.Tokens.Jwt": "[8.19.2, )"
         }
       },
+      "Sylin.Koan.Testing.Hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Hosting": "[10.0.10, )"
+        }
+      },
       "Sylin.Koan.Web": {
         "type": "Project",
         "dependencies": {

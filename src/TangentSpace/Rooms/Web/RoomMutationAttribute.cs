@@ -1,19 +1,30 @@
 using Koan.Web.Auth.Connector.Atproto;
+using TangentSpace.Participation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace TangentSpace.Rooms.Web;
 
-/// <summary>Cookie-only administration. A supplied Authorization header can never bypass the browser origin check.</summary>
+/// <summary>Cookie mutations require same origin; bearer mutations require an explicit transport grant and the domain still checks scope.</summary>
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class RoomMutationAttribute : Attribute, IAuthorizationFilter
+public sealed class RoomMutationAttribute(string grant = ParticipationGrants.Manage) : Attribute, IAuthorizationFilter
 {
     public void OnAuthorization(AuthorizationFilterContext context)
     {
         var request = context.HttpContext.Request;
         if (request.Headers.ContainsKey("Authorization"))
         {
-            context.Result = Failure(403, "Room administration requires a browser session.");
+            try
+            {
+                var principal = context.HttpContext.User;
+                if (!ParticipationAccess.UsesCredential(principal)) throw new UnauthorizedAccessException();
+                var did = ParticipationAccess.Require(principal, grant);
+                var expected = request.Headers["X-Tangent-Participant"];
+                if (expected.Count > 0 && (expected.Count != 1 || expected[0] != did)) throw new UnauthorizedAccessException();
+                if (!string.Equals(request.ContentType?.Split(';',2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase))
+                    context.Result = Failure(415, "Use application/json.");
+            }
+            catch (UnauthorizedAccessException) { context.Result = Failure(403, "This credential does not permit the operation."); }
             return;
         }
         if (context.HttpContext.User.Identity?.IsAuthenticated != true

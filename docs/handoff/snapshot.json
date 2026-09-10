@@ -1,0 +1,879 @@
+{
+  "capturedAtUtc": "2026-09-10T18:42:05.264772+00:00",
+  "scope": "Read-only takeover observations; not a backup, authentication receipt, or production-readiness claim.",
+  "repository": {
+    "path": "E:\\repo\\github\\sylin-org\\tangent-space",
+    "branch": "main",
+    "head": "b2abeff343afc43ef8a62dcca0de5430670b42ec",
+    "headSubject": "feat: establish Tangent Space working prototype",
+    "workingTreeChanges": [
+      {
+        "status": "M ",
+        "path": "dockerignore"
+      },
+      {
+        "status": " M",
+        "path": ".gitignore"
+      },
+      {
+        "status": " M",
+        "path": "Dockerfile"
+      },
+      {
+        "status": " M",
+        "path": "README.md"
+      },
+      {
+        "status": " M",
+        "path": "compose.yaml"
+      },
+      {
+        "status": " M",
+        "path": "docs/CURRENT_STATE.md"
+      },
+      {
+        "status": " M",
+        "path": "docs/DECISIONS.md"
+      },
+      {
+        "status": " M",
+        "path": "docs/DOCKER.md"
+      },
+      {
+        "status": " M",
+        "path": "docs/PRODUCT.md"
+      },
+      {
+        "status": " M",
+        "path": "docs/WEBMCP.md"
+      },
+      {
+        "status": " M",
+        "path": "docs/evidence/README.md"
+      },
+      {
+        "status": " M",
+        "path": "scripts/local-configuration.ps1"
+      },
+      {
+        "status": " M",
+        "path": "scripts/start-docker.ps1"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Activity/ActivityController.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Activity/ActivityKind.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Activity/ActivityService.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/AtProtocol/SourceStatusController.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/AtProtocol/SpacesOptions.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/AtProtocol/SpacesService.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Communities/TangentBootstrap.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Communities/TangentCommunity.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Communities/TangentDescription.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Communities/TangentGovernance.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Communities/TangentRole.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Communities/Web/TangentRequests.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Communities/Web/TangentsController.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Conversation/ConversationController.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Conversation/ConversationService.Acceptance.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Conversation/ConversationService.History.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Conversation/Message.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Infrastructure/TangentModule.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Participants/Participant.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Participation/ParticipantArrivalController.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Participation/ParticipantCredential.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Participation/ParticipationGrants.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Participation/ParticipationRegistration.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Rooms/Room.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Rooms/RoomAdministration.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Rooms/RoomDescription.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Rooms/RoomGovernance.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Rooms/RoomPolicy.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Rooms/Web/RoomMutationAttribute.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Rooms/Web/RoomsController.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Site/Arrival.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Site/SiteOptions.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Site/TangentSite.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/TangentSpace.csproj"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Web/SiteWelcome.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/Web/WelcomeController.cs"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/agent-connection.js"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/agent-page.js"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/agent.html"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/app.js"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/index.html"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/rooms.css"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/rooms.js"
+      },
+      {
+        "status": " M",
+        "path": "src/TangentSpace/wwwroot/webmcp.js"
+      },
+      {
+        "status": " M",
+        "path": "tests/TangentSpace.Tests/ArrivalRulesTests.cs"
+      },
+      {
+        "status": " M",
+        "path": "tests/TangentSpace.Tests/TangentSpace.Tests.csproj"
+      },
+      {
+        "status": " M",
+        "path": "tests/TangentSpace.Tests/packages.lock.json"
+      },
+      {
+        "status": "??",
+        "path": "Backup.bat"
+      },
+      {
+        "status": "??",
+        "path": "Build.bat"
+      },
+      {
+        "status": "??",
+        "path": "Launch.bat"
+      },
+      {
+        "status": "??",
+        "path": "Restore.bat"
+      },
+      {
+        "status": "??",
+        "path": "Wipe.bat"
+      },
+      {
+        "status": "??",
+        "path": "docs/adr/0001-tangent-server-participation.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/adr/0002-server-hub-and-consumers.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/adr/0003-owner-onboarding.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/adr/0004-page-routes-and-editorial-heroes.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/atmospheres.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/README.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/STORYBOOK.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/build_contract.py"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/examples.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/explorer.html"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/explorer.template.html"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/scenario_source.py"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/server_contract.py"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/tools.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/design/tangent-mcp/validate_contract.py"
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence/mcp-companion-context.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence/mcp-inbound.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence/mcp-sdk.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence/mcp-workflows.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence/server-hub.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/evidence/server-roles.json"
+      },
+      {
+        "status": "??",
+        "path": "docs/handoff/ARCHITECTURE.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/handoff/EPICS_AND_NEXT_STEPS.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/handoff/PRODUCT_AND_DECISIONS.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/handoff/README.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/handoff/RUNBOOK.md"
+      },
+      {
+        "status": "??",
+        "path": "docs/handoff/START_PROMPT.md"
+      },
+      {
+        "status": "??",
+        "path": "probes/scripts/prove-mcp-inbound.mjs"
+      },
+      {
+        "status": "??",
+        "path": "probes/scripts/prove-mcp-sdk.mjs"
+      },
+      {
+        "status": "??",
+        "path": "probes/scripts/prove-mcp-workflows.mjs"
+      },
+      {
+        "status": "??",
+        "path": "scripts/docker-lifecycle.ps1"
+      },
+      {
+        "status": "??",
+        "path": "scripts/docker-state.ps1"
+      },
+      {
+        "status": "??",
+        "path": "scripts/test-docker-lifecycle.ps1"
+      },
+      {
+        "status": "??",
+        "path": "scripts/test-docker-state.ps1"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Activity/AttentionRules.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Activity/TangentWatchSetting.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Activity/WatchMode.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Activity/WatchSetting.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Authorization/PermissionView.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Authorization/Permissions.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/CompanionGovernance.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/CompanionResults.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/CompanionRole.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/ParticipationPreset.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/TangentAdmission.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/TangentInvitation.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/TangentJoinRequest.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/UndeclaredAccess.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Communities/Web/VersionedTangentsController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Conversation/ConversationService.McpWindow.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Conversation/ConversationService.PostChanges.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Conversation/McpMessageWindow.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Conversation/McpWindowPlanner.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Conversation/PostChange.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Hosting/ConsumerRegistrations.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Hosting/IRegistration.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Infrastructure/CommandCommit.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/IServiceProofKeySource.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/McpAuthenticationConstants.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/McpAuthenticationRegistration.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/ServiceProof.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/ServiceProofAuthentication.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/ServiceProofExchange.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/ServiceProofExchangeRequest.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/ServiceProofExchangeResult.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/ServiceProofReplayRecord.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/ServiceProofTokenController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/Authentication/TangentMcpDiscoveryController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/BbsScreen.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpArguments.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpAuthorization.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpConsumerRegistration.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpContext.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpContexts.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpContractCatalog.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpData.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpEnvelope.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpInvitationController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpJson.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpOperationDispatcher.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpOperations.Control.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpOperations.Conversation.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpOperations.Daily.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpOperations.Governance.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpOperations.PostChanges.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpOptions.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpRefs.Updates.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpRefs.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpRegistration.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpRequestRecord.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpRequests.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpSelection.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpVocabulary.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Mcp/McpWire.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Participants/ParticipantClassification.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Participants/ParticipantProfiles.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Participants/Web/ParticipantSelfController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Rooms/EffectiveRestriction.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Rooms/RestrictionKind.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Rooms/RestrictionResult.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Rooms/RestrictionScope.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Rooms/Restrictions.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Rooms/ScopedRestriction.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Rooms/Web/ChangeRoomSettingsRequest.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Site/ServerGovernance.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/TangentServer.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Web/OnboardingController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Web/PagesController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Web/ServerController.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/Web/WebRegistration.cs"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/ascii-scenes.js"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/atmosphere.css"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/atmosphere.js"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/invitation.css"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/invitation.js"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/onboarding.css"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/onboarding.js"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/pages.css"
+      },
+      {
+        "status": "??",
+        "path": "src/TangentSpace/wwwroot/pages.js"
+      },
+      {
+        "status": "??",
+        "path": "tests/TangentSpace.Tests/McpAttentionTests.cs"
+      },
+      {
+        "status": "??",
+        "path": "tests/TangentSpace.Tests/McpAuthenticationTests.cs"
+      },
+      {
+        "status": "??",
+        "path": "tests/TangentSpace.Tests/McpCommunityTests.cs"
+      },
+      {
+        "status": "??",
+        "path": "tests/TangentSpace.Tests/McpContextTests.cs"
+      },
+      {
+        "status": "??",
+        "path": "tests/TangentSpace.Tests/McpContractTests.cs"
+      },
+      {
+        "status": "??",
+        "path": "tests/TangentSpace.Tests/McpWindowTests.cs"
+      },
+      {
+        "status": "??",
+        "path": "tests/TangentSpace.Tests/McpWireTests.cs"
+      }
+    ],
+    "note": "Modified and untracked files are required for the current prototype; source is not included in this documentation kit."
+  },
+  "runtime": {
+    "url": "http://127.0.0.1:5220/",
+    "application": [
+      {
+        "name": "tangent-space-tangent-1",
+        "state": "running",
+        "health": "healthy",
+        "image": "tangent-space:dev"
+      }
+    ],
+    "sourceContainerObservation": "tangent-spaces-network Up 23 hours",
+    "anonymousServerSettings": {
+      "setupRequired": true,
+      "ownerDid": "",
+      "canManage": false,
+      "backgroundScene": "galaxy",
+      "backgroundIntensity": 35,
+      "backgroundMotion": true,
+      "backgroundMouseSpotlight": true
+    },
+    "appStateMount": {
+      "host": "E:\\repo\\github\\sylin-org\\tangent-space\\.local\\docker\\site",
+      "container": "/state"
+    },
+    "sourceNetworkRestartRegeneratesIdentities": true
+  },
+  "mcp": {
+    "catalogVersion": "0.2",
+    "catalogStatusLabel": "proposed",
+    "implementationWireVersions": [
+      "2026-07-28",
+      "2025-11-25"
+    ],
+    "standardMcpOAuthAuthorizationSupport": false,
+    "discoveryPath": "/.well-known/tangent-mcp",
+    "tokenPath": "/mcp/token",
+    "rpcPath": "/mcp",
+    "inboundOperationCount": 26,
+    "inboundOperations": [
+      "SelectCompanion",
+      "Arrive",
+      "ListTangents",
+      "JoinTangent",
+      "ListTopics",
+      "ReadTopic",
+      "CreatePost",
+      "GetUpdates",
+      "MarkRead",
+      "LeaveTangent",
+      "SetWatch",
+      "GetOperation",
+      "CreateTangent",
+      "CreateTopic",
+      "InviteParticipant",
+      "SetRole",
+      "SetParticipationPolicy",
+      "SetRestriction",
+      "GetPermissions",
+      "ConfigureServer",
+      "ConfigureTangent",
+      "ConfigureTopic",
+      "DeclareParticipant",
+      "ClaimServer",
+      "EditPost",
+      "DeletePost"
+    ],
+    "connectorOnly": [
+      "ListCompanions",
+      "RegisterCompanion"
+    ],
+    "webMcpDefinitionCount": 16,
+    "webMcpDefinitions": [
+      "tangent_get_server",
+      "tangent_arrive",
+      "tangent_list_tangents",
+      "tangent_list_channels",
+      "tangent_read_channel",
+      "tangent_wait_updates",
+      "tangent_get_updates",
+      "tangent_wait_activity",
+      "tangent_configure_server",
+      "tangent_configure_tangent",
+      "tangent_configure_topic",
+      "tangent_edit_post",
+      "tangent_delete_post",
+      "tangent_post_message",
+      "tangent_mark_read",
+      "tangent_refresh_channel"
+    ],
+    "note": "Definitions are not a guarantee every operation is advertised/allowed for a particular caller. Generated storybook scenarios are synthetic."
+  },
+  "handoffVerification": [
+    "Inspected source, ADRs, epic summaries and working tree",
+    "Read Docker application/source container status",
+    "Read anonymous /api/server settings",
+    "No ownership claim, reset, rebuild, authenticated exchange or model call performed for this handoff"
+  ],
+  "secrets": "No credential values, passwords, OAuth session contents, private configuration or database contents included."
+}

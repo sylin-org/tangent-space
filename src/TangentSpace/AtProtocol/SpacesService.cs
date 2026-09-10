@@ -50,6 +50,20 @@ public sealed class SpacesService(AtprotoSessions sessions, AtprotoHttp network,
         return await Json(response, "write", ct, "RecordAlreadyExists");
     }
 
+    public async Task<JsonElement> PutRecord(string authorDid, string space, string recordKey, JsonElement record, CancellationToken ct)
+    {
+        using var content = JsonContent.Create(new { space, repo = authorDid, collection = SpacesOptions.Collection, rkey = recordKey, record });
+        using var response = await Own(authorDid, "com.atproto.space.putRecord", HttpMethod.Post, null, content, ct);
+        return await Json(response, "update", ct);
+    }
+
+    public async Task DeleteRecord(string authorDid, string space, string recordKey, CancellationToken ct)
+    {
+        using var content = JsonContent.Create(new { space, repo = authorDid, collection = SpacesOptions.Collection, rkey = recordKey });
+        using var response = await Own(authorDid, "com.atproto.space.deleteRecord", HttpMethod.Post, null, content, ct);
+        await Json(response, "delete", ct);
+    }
+
     public async Task<VerifiedSpaceRepo> ReadRepo(string readerDid, string space, string authorDid, CancellationToken ct)
     {
         using var response = await Read(readerDid, space, authorDid, "com.atproto.space.getRepo", null, ct);

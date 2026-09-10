@@ -2,6 +2,7 @@
 !Dockerfile
 !global.json
 !src/**
+!docs/design/tangent-mcp/tools.json
 !.local/upstream/koan-framework/**
 **/bin/**
 **/obj/**

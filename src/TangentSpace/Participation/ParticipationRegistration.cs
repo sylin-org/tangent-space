@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using CookieAuthentication = Koan.Web.Auth.Extensions.AuthenticationExtensions;
 
 namespace TangentSpace.Participation;
 
@@ -9,13 +8,16 @@ public static class ParticipationRegistration
     public static IServiceCollection AddParticipation(this IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<TangentSpace.Hosting.ConsumerRegistrations>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<TangentSpace.Hosting.IRegistration, TangentSpace.Web.WebRegistration>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<TangentSpace.Hosting.IRegistration, TangentSpace.Mcp.McpConsumerRegistration>());
         services.AddSingleton<ParticipationCredentials>();
         services.AddAuthentication()
             .AddScheme<AuthenticationSchemeOptions, ParticipantAuthenticationHandler>(ParticipationConstants.Scheme, _ => { })
             .AddPolicyScheme(ParticipationConstants.RequestScheme, "Tangent request identity", options =>
             {
-                options.ForwardDefaultSelector = context => context.Request.Headers.ContainsKey("Authorization")
-                    ? ParticipationConstants.Scheme : CookieAuthentication.CookieScheme;
+                options.ForwardDefaultSelector = context => context.RequestServices
+                    .GetRequiredService<TangentSpace.Hosting.ConsumerRegistrations>().SelectAuthentication(context.Request);
                 options.ForwardChallenge = ParticipationConstants.Scheme;
                 options.ForwardForbid = ParticipationConstants.Scheme;
             });

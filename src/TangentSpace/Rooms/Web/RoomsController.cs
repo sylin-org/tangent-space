@@ -9,8 +9,11 @@ namespace TangentSpace.Rooms.Web;
 [ApiController]
 [Authorize]
 [Route("api/rooms")]
-public sealed class RoomsController(RoomGovernance rooms, SpacesService spaces) : ControllerBase
+public sealed class RoomsController(TangentServer hub) : ControllerBase
 {
+    private RoomGovernance rooms => hub.Topics;
+    private SpacesService spaces => hub.Source;
+
     [AllowAnonymous]
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] int page = 1, CancellationToken ct = default)
@@ -65,6 +68,11 @@ public sealed class RoomsController(RoomGovernance rooms, SpacesService spaces) 
     [HttpPut("{roomKey}/admission")]
     public async Task<IActionResult> SetAdmission(string roomKey, ChangeRoomAdmissionRequest request, CancellationToken ct)
         => Outcome(await rooms.SetAdmission(Actor(), roomKey, request.Admission, ct));
+
+    [RoomMutation]
+    [HttpPatch("{roomKey}/settings")]
+    public async Task<IActionResult> SetSettings(string roomKey, ChangeRoomSettingsRequest request, CancellationToken ct)
+        => Outcome(await rooms.SetSettings(Actor(), roomKey, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));
 
     [RoomMutation]
     [HttpPut("/api/site/participants/{targetDid}/suspension")]

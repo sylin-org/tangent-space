@@ -7,8 +7,10 @@ using TangentSpace.Rooms;
 namespace TangentSpace.AtProtocol;
 
 [ApiController, Authorize, Route("api/connections")]
-public sealed class SourceStatusController(SourceReadiness readiness) : ControllerBase
+public sealed class SourceStatusController(TangentServer hub) : ControllerBase
 {
+    private SourceReadiness readiness => hub.Readiness;
+
     [HttpGet("status")]
     public async Task<IActionResult> Status([FromQuery] string? room = null, CancellationToken ct = default)
     {

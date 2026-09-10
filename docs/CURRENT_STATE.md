@@ -1,6 +1,51 @@
 # Current state
 
+## Model handoff — 10 September 2026
+
+The [cold-start kit](handoff/README.md) reconciles the latest product decisions, architecture, four numbered epics and subsequent increments, source/API maps, local operations and remaining work. Its [snapshot](handoff/snapshot.json) records read-only Git/Docker/anonymous-settings observations: app healthy, server unclaimed, 26 inbound MCP operations and 16 browser WebMCP definitions. The many historical receipts and demo descriptions below predate the user-requested wipe; they do not describe current seeded content or valid app credentials. No new authenticated test, account claim, reset or deployment was performed for the handoff.
+
+## ASCII atmospheres
+
+[Eight procedural backgrounds](design/atmospheres.md) are available through the Atmosphere picker, with local previews/preferences and owner-persisted defaults shared with MCP/WebMCP. Larger viewports get denser glyph fields and additional detail. Motion pauses in hidden tabs and follows reduced-motion preferences. Browser checks covered all eight scene selections, pause, zero intensity, and layouts at 390×844, 1920×1080, and 3840×2160 (2,508 / 15,622 / 42,120 cells), without horizontal overflow. The gallery stays locally configurable before owner onboarding; server-default controls require the established owner. Mouse Spotlight adds a viewport-scaled colour/brightness gradient around the mouse, with a local toggle and owner-persisted default exposed through REST/MCP/WebMCP. Docker build and JavaScript syntax checks passed; browser checks confirmed the glow on a paused scene, switching it off, and preference persistence after reload. Server-default writes were not exercised on the unclaimed server.
+
+## Routed bulletin board and editorial layout
+
+[ADR 0004](adr/0004-page-routes-and-editorial-heroes.md) records the `/` BBS home (redirecting unclaimed servers to onboarding), `/onboarding/` and `/sign-in/`, Tangent and Topic directories, and Post permalinks. Shared heroes support server cover image/byline/MOTD and contextual breadcrumbs. The v1 REST adapter reuses domain permissions and transitions. Existing response fields still use `channels`; internal Room/Message names remain. Topic/Post heroes inherit Tangent or server artwork. No image upload UI is included. Docker build and JavaScript syntax checks passed. Direct page routes returned the shell; anonymous nested reads returned 401/404 as appropriate. Browser checks covered the signed-in owner BBS, card navigation to the empty Topic directory, settings access, signed-out sign-in/unavailable states, and a 390px viewport without horizontal overflow. The reset server has no Posts yet, so a populated permalink window and its live updates were not exercised in this increment.
+
+
 Updated: 10 September 2026.
+
+## Owner onboarding and fresh reset
+
+[ADR 0003](adr/0003-owner-onboarding.md) implements sign-in → fetched profile card → Confirm as Owner / Switch account → name or skip the first Tangent → main page. Optional profile details come from the account's resolved PDS; the verified DID/handle remain authoritative. First-Tangent completion is a durable, retryable domain transition. The Docker image built and the fresh anonymous screen was verified in the browser.
+
+The onboarding presentation was subsequently reviewed with a UX specialist: the inherited 608px panel cap was removed, typography and form spacing restrained, and the preview now uses the main Tangent card anatomy. Container-based stacking was visually checked with the real stylesheet at 880px and phone width using a temporary static view of the first-Tangent markup; no horizontal overflow and live preview updates were verified. Docker is running the revision. This visual pass did not reset ownership or complete onboarding for the user.
+
+At the user's request, `.local/docker/site` was wiped and recreated with an empty owner reservation. The server is running at http://127.0.0.1:5220/ and was left unclaimed for the user to sign in. Prior proof records below describe earlier runs; their local participant credentials and conversations were cleared by this reset. Existing prototype data is disposable and gets no special migration treatment.
+
+## Shared server hub
+
+[ADR 0002](adr/0002-server-hub-and-consumers.md) records the singleton `TangentServer` application entry point and registered Web/MCP authentication adapters. Web controllers and the MCP dispatcher use the same domain-service instances through the hub. Actor, request and transaction state remain per operation; ASP.NET authentication handlers keep their required request lifetimes. Existing domain transitions, source confirmation, commits and activity signaling are preserved.
+
+Docker build and the [focused hub check](evidence/server-hub.json) passed against the existing app: concurrent owner-cookie/agent-bearer reads retained distinct permissions, invalid bearer credentials could not fall back to an owner cookie, cookie-only MCP access was rejected, and MCP arrival/permissions agreed with Web settings. No source writes, database reset, second server or full suite were needed. Service DID and public sharing exploration was deferred to keep this increment focused on the agreed architecture.
+
+## Server roles and Topic/Post increment
+
+[ADR 0001](adr/0001-tangent-server-participation.md) is accepted and implemented as a lean extension of the existing monolith. Server → Tangent → Topic → Post is the public model; existing Room/Message storage and native Space references remain. One explicitly declared human owns the server. Server settings control Tangent creation and agent ownership; permitted agent-created Tangents fall back to the human server owner when agent ownership is disabled, with the agent assigned administrator.
+
+Server, Tangent and Topic settings have contextual web controls and explicit permission views. Native author edit/delete, local moderator removal, write-once/editable policies, locking and SSE change events are implemented. Inbound MCP advertises the new vocabulary and governance/content commands; browser WebMCP has equivalent configuration/edit/delete controls. Source edits require renewed `update`/`delete` consent. Existing local owner, agent and authority connections were renewed for this increment.
+
+The focused Docker walkthrough used the existing source network and bind mount: agent-created Tangent/Topic, native post, write-once denial, enabling edits, stable native edit, human reply, native delete, idempotent retry and tombstone history. The agent also configured its own Tangent and locked/unlocked its Topic through the actual WebMCP handlers and bearer transport; [focused evidence](evidence/server-roles.json) records this. No full test suite or second server was run. Backup: `.local/backups/before-server-roles`. Public service DID lifecycle and Atmosphere Share remain the next slices, not implemented behavior.
+
+## MCP inbound API and fresh-server lifecycle
+
+The PoC now exposes signed AT service-proof exchange at `/mcp/token`, discovery at `/.well-known/tangent-mcp`, and 26 inbound MCP tools at `/mcp`. The [contract and storybook](design/tangent-mcp/README.md) define 28 operations including two future connector-only setup tools. `SelectCompanion` returns `companionId`; successful `Arrive(companionId, serverUrl)` returns a distinct server-bound `contextId`. Subsequent calls carry that context. Both handles require the bound active credential and verified DID; neither is an authentication token.
+
+The fixed identity/place/result/activity/next segments return bounded history alongside current activity. Daily participation, invitations, watches, roles, participation presets, restrictions, channel creation with native provisioning and durable request recovery use the same domain policies as the human UI. Local mutation receipts commit atomically with domain changes; source posts retain native write-intent reconciliation. Read acknowledgements, history windows and update checkpoints remain independent. Public source content is still authored through compatible native Spaces accounts.
+
+[Current companion/context smoke check](evidence/mcp-companion-context.json) confirms selection has no server context and arrival returns one against the healthy Docker app. Earlier signed-proof and native workflow receipts precede this identifier split; they remain historical evidence for authentication and domain behavior. [Signed-proof/API evidence](evidence/mcp-inbound.json), [official SDK evidence](evidence/mcp-sdk.json), and [native workflow evidence](evidence/mcp-workflows.json) record actual calls. Synthetic BBS screens are separately labelled. The full personal credential manager, standard MCP OAuth authorization-server profile, automatic model wake-up, live automation-label import and complete admission-review UI remain follow-on work. Classification is explicitly declared, and mention counts currently remain zero.
+
+`Build.bat`, `Launch.bat`, `Wipe.bat`, `Backup.bat` and `Restore.bat` provide the local lifecycle. Backup and restore copy the whole bind mount while SQLite is stopped; no second server is needed. All app state is mounted from `.local/docker/site`; launch preserves config and never silently restores legacy Windows data. Blank OwnerDid allows an explicit human ownership claim after verified arrival; explicit OwnerDid reserves that claim for the configured DID. Wipe requires confirmation and resets app config/database/keys while preserving backups and the running disposable source network. See [Docker operations](DOCKER.md).
 
 ## EPIC-004 — Your Tangents, alive
 
@@ -18,7 +63,7 @@ Native notification delivery is now proven. The source authority registers Tange
 
 Ordinary fixture sign-in was repeated through real OAuth and retained the previously granted room permissions. Account readiness distinguishes identity, source scope and the specifically observed unsupported public provider. Native Spaces still uses the compatible local test network selected by Leo; public Bluesky sign-in is not proof of public Spaces support.
 
-Prototype bounds remain explicit: directory discovery scans at most 500 candidates and reports incomplete results; activity and Channel overview have independent bounded continuations; draft preservation currently covers navigation within the page, while already-submitted pending operations are durable. Notifications are best-effort, so one due-work loop handles renewals, retries and a bounded five-minute repair path. Invitations, Posts/Series, search, richer moderation and production source recovery remain EPIC-003 follow-on scope. The disposable source network has not been restarted or recreated.
+Prototype bounds remain explicit: directory discovery scans at most 500 candidates and reports incomplete results; activity and Channel overview have independent bounded continuations; draft preservation currently covers navigation within the page, while already-submitted pending operations are durable. Notifications are best-effort, so one due-work loop handles renewals, retries and a bounded five-minute repair path. Posts/Series, search, further moderation UI and production source recovery remain EPIC-003 follow-on scope; inbound invitations and scoped restrictions are now implemented. The disposable source network has not been restarted or recreated.
 
 ## Docker follow-up
 
@@ -55,7 +100,7 @@ The accepted [first PoC epic](epics/EPIC-001.md) and the current [EPIC-004](epic
 
 Real integration receipts cover 15 arrival checks, 51 room checks, 8 signed admission checks, 95 conversation checks, 18 participation checks, 18 restored-state checks, 11 outage checks, 6 overlapping-arrival/suspension checks and 22 browser checks. These are separate overlapping proofs, not a statistical reliability claim. The evidence index distinguishes network execution, unit tests, offline schema/oracle validation and actual model execution.
 
-The original PoC final verification passed **138 application tests and 7 participant-client tests**, with a zero-warning/error build. All 95 real conversation checks passed again after stricter source URI/CID/datetime validation. [Final verification](evidence/final-verification.json) · [Final real conversation](evidence/conversation-final.json). The current full suites passed **210 application and 53 JavaScript tests**; the final frontend recovery checks passed 16/16 after the keyboard fixes. The latest 49-file auth patch passed 33 connector tests with one opt-in lifecycle test skipped. The final Docker image builds and reports healthy; actual UX/integration observations are in the EPIC-004 receipts.
+The original PoC final verification passed **138 application tests and 7 participant-client tests**, with a zero-warning/error build. All 95 real conversation checks passed again after stricter source URI/CID/datetime validation. [Final verification](evidence/final-verification.json) · [Final real conversation](evidence/conversation-final.json). The current full suites passed **319 application and 53 JavaScript tests**; the final frontend recovery checks passed 16/16 after the keyboard fixes. The latest 49-file auth patch passed 33 connector tests with one opt-in lifecycle test skipped. The final Docker image builds and reports healthy; actual UX/integration observations are in the EPIC-004 receipts.
 
 ## Local demonstration
 
@@ -71,7 +116,7 @@ All fixture passwords, cookies, runner credentials, protected sessions, database
 - Spaces proofs are non-transferable. Native ingestion is bound to the authenticated expected PDS response and current DID key, with 8 MiB/1024-record bounds. Historical keys, rollback detection, blobs and incremental repository streaming need further work.
 - Accepted history is retained even when the author is removed or the source record disappears. Room governance and metadata remain local; portable governance and moderation/export semantics are follow-on design work.
 - Windows recovery depends on the same user's DPAPI custody as well as the backed-up state. Application backup does not recover PDS data, PLC or control of the authority/participant accounts.
-- WebMCP has bounded per-Channel and participant-wide activity waits, while MCP and A2A remain unimplemented. Pins, summaries, goals, search, Posts/Series, richer moderation and multi-site discovery remain follow-on product work.
+- WebMCP has bounded per-Channel and participant-wide activity waits, while the personal cross-server MCP connector and A2A remain follow-on work. Pins, summaries, goals, search, Posts/Series, richer moderation and multi-site discovery remain follow-on product work.
 - Licensing, domain, deployment target, first community and public contribution submission remain undecided.
 
 ## Next useful work
@@ -82,3 +127,7 @@ The remaining [EPIC-003](epics/EPIC-003.md) scope includes invitations, Posts/Se
 
 The isolated framework checkout is `.local/upstream/koan-framework`, based on `e07a84cc3f71a0867f1122b03b723cc80727e772`. The source PDS revision is `c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae`. `scripts/prepare-framework.ps1` reconstructs or verifies the framework contribution without changing the original sibling repository.
 
+
+### Working cadence
+
+Leo explicitly wants PoC-sized verification and lower token use: one relevant build/check plus the affected happy path, with focused extra checks only for an observed failure. Avoid expanding production-style test infrastructure, extra instances or broad reruns. Existing detailed receipts remain available; they are not a required checklist for routine changes.

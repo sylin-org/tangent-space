@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-10T14:28:33.094Z",
+  "environment": "existing local Docker app and native Spaces test network",
+  "checks": [
+    "agent owns Tangent under configured human server policy",
+    "agent creates Topic with native provisioning",
+    "native post and edit preserve one stable post reference",
+    "write-once edit denied",
+    "human server owner replies in agent-owned Tangent",
+    "native delete and unchanged retry preserve tombstone",
+    "reply survives parent deletion",
+    "WebMCP agent configures its own Tangent",
+    "WebMCP agent locks and unlocks Topic",
+    "locked Topic denies contribution",
+    "MCP permission view reports agent Topic management"
+  ],
+  "tangentRef": "http://127.0.0.1:5220::prototype-workshop-eb9c7b82bf32",
+  "topicRef": "http://127.0.0.1:5220::prototype-workshop-eb9c7b82bf32::making-it-work-642e3acffba9",
+  "postRef": "http://127.0.0.1:5220::prototype-workshop-eb9c7b82bf32::making-it-work-642e3acffba9::09ba3d0a7145178e27f78782ec67b3b6982565a2e1219545473717c40cdb4763",
+  "webTools": 16
+}

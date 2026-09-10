@@ -1,0 +1,13 @@
+{
+  "recordedAt": "2026-09-10T14:57:24.343Z",
+  "environment": "existing Docker app, existing bind-mounted data",
+  "result": "passed",
+  "checks": [
+    "Concurrent browser-owner and bearer-agent reads preserve separate permissions",
+    "Invalid bearer with a valid owner cookie receives 401 on protected HTTP",
+    "Cookie-only access to MCP receives 401",
+    "MCP SelectCompanion, Arrive and GetPermissions use the same server settings as Web"
+  ],
+  "noSourceWrites": true,
+  "noSecondServer": true
+}

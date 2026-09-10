@@ -34,8 +34,7 @@ public sealed class Arrival(IOptions<SiteOptions> options, TimeProvider clock, P
             if (participant is null) participant = Participant.FirstArrival(verifiedDid, verifiedHandle, now);
             else participant.Return(verifiedDid, verifiedHandle, now);
             await participant.Save(ct);
-            if (site is null && string.Equals(options.Value.OwnerDid, verifiedDid, StringComparison.Ordinal))
-                await TangentSite.Establish(options.Value, verifiedDid, now).Save(ct);
+            // Arrival establishes participant identity only. Server ownership requires an explicit human declaration.
             await EntityContext.Commit(ct);
         }
         finally { gate.Exit(); }

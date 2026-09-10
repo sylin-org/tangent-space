@@ -7,12 +7,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <KoanSourceRoot Condition="'$(KoanSourceRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../.local/upstream/koan-framework'))</KoanSourceRoot>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="[18.8.1]" />
     <PackageReference Include="xunit.v3" Version="[3.2.2]" />
     <PackageReference Include="xunit.runner.visualstudio" Version="[3.1.5]" PrivateAssets="all" />
     <ProjectReference Include="../../src/TangentSpace/TangentSpace.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Testing.Hosting/Koan.Testing.Hosting.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="../../probes/SpaceVerificationProbe/fixtures/**" Link="VerificationFixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

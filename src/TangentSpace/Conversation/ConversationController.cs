@@ -6,8 +6,10 @@ using TangentSpace.Rooms.Web;
 namespace TangentSpace.Conversation;
 
 [ApiController, Authorize, Route("api/rooms/{roomKey}")]
-public sealed class ConversationController(ConversationService conversation) : ControllerBase
+public sealed class ConversationController(TangentServer hub) : ControllerBase
 {
+    private ConversationService conversation => hub.Posts;
+
     [HttpGet("messages")]
     public Task<IActionResult> History(string roomKey, [FromQuery] string? cursor, [FromQuery] string? from, CancellationToken ct)
         => Execute(async () =>
@@ -25,6 +27,26 @@ public sealed class ConversationController(ConversationService conversation) : C
             var receipt = await conversation.Post(did, roomKey, message, ct);
             return StatusCode(receipt.State == "pending" ? 202 : receipt.State == "accepted" ? 200 : 409,
                 new { receipt.OperationId, receipt.State, receipt.SourceUri, receipt.SourceCid, receipt.Detail });
+        });
+
+    [HttpPatch("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
+    public Task<IActionResult> Edit(string roomKey, string messageId, PostChangeRequest input, CancellationToken ct)
+        => Execute(async () =>
+        {
+            var did = await RequireChangeActor(roomKey, messageId, ct);
+            if (CheckExpectedParticipant(did) is { } mismatch) return mismatch;
+            var result = await conversation.ChangePost(did, roomKey, messageId, input.Text, false, input.OperationId, ct);
+            return StatusCode(result.State == "pending" ? 202 : result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
+        });
+
+    [HttpDelete("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
+    public Task<IActionResult> Delete(string roomKey, string messageId, PostDeleteRequest input, CancellationToken ct)
+        => Execute(async () =>
+        {
+            var did = await RequireChangeActor(roomKey, messageId, ct);
+            if (CheckExpectedParticipant(did) is { } mismatch) return mismatch;
+            var result = await conversation.ChangePost(did, roomKey, messageId, null, true, input.OperationId, ct);
+            return StatusCode(result.State == "pending" ? 202 : result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
         });
 
     [HttpGet("messages/pending")]
@@ -59,6 +81,16 @@ public sealed class ConversationController(ConversationService conversation) : C
             ? Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." }) : null;
     }
 
+    private async Task<string> RequireChangeActor(string roomKey, string messageId, CancellationToken ct)
+    {
+        var did = ParticipationAccess.Require(User, ParticipationGrants.Read);
+        using var fresh = Koan.Data.Core.EntityContext.NoCache();
+        var post = await Message.Get(messageId, ct);
+        if (post is null || post.RoomKey != roomKey) throw new ArgumentException("Choose a post in this Topic.");
+        ParticipationAccess.Require(User, post.AuthorDid == did ? ParticipationGrants.Post : ParticipationGrants.Manage);
+        return did;
+    }
+
     private async Task<IActionResult> Execute(Func<Task<IActionResult>> operation)
     {
         Response.Headers.CacheControl = "no-store";
@@ -67,3 +99,6 @@ public sealed class ConversationController(ConversationService conversation) : C
         catch (ArgumentException error) { return BadRequest(new { reason = error.Message }); }
     }
 }
+
+public sealed record PostChangeRequest(string Text, string OperationId);
+public sealed record PostDeleteRequest(string OperationId);

@@ -1,5 +1,7 @@
 # EPIC-003 — A living home for people and agents
 
+Current package-by-package status and superseded proposals are reconciled in the [10 September handoff](../handoff/EPICS_AND_NEXT_STEPS.md). This original roadmap is not a claim that all packages are complete.
+
 Proposed working-prototype epic, 9 September 2026. The user requested a complete AT Protocol, web and WebMCP experience, with event-driven interaction and visual design as the next step. The scope and implementation sequence below are recommendations for that outcome; they are not a completion claim.
 
 [Product intent](../PRODUCT.md) · [Actual implementation](../CURRENT_STATE.md) · [Standalone design-agent prompt](../design/PROTOTYPE_DESIGN_PROMPT.md)

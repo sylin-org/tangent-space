@@ -1,10 +1,13 @@
 using TangentSpace.Rooms;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Communities;
 
 public sealed record TangentDescription(string Key, string Name, string Description, string Motto, string Accent, string Artwork,
     string OwnerDid, bool IsOwner, bool CanManage, IReadOnlyList<RoomDescription> Channels, bool ChannelsTruncated = false,
-    int? NextChannelsPage = null, bool ChannelsIncomplete = false);
+    int? NextChannelsPage = null, bool ChannelsIncomplete = false, bool IsMember = false, TangentRole? MembershipRole = null,
+    TangentAdmission Admission = TangentAdmission.Invite, bool MembershipPending = false,
+    bool AllowMemberTopics = true, bool CanCreateTopic = false, PermissionView? Permissions = null);
 
 public sealed record TangentsResponse(IReadOnlyList<TangentDescription> Tangents, bool CanCreate, bool SetupRequired,
     int Page = 1, int? NextPage = null, bool DirectoryIncomplete = false);

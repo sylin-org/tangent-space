@@ -46,7 +46,7 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
             JournalWindow, ct)).OrderBy(value => value.Sequence).Take(MaximumJournalScan + 1).ToArray();
         var scanned = entries.Take(MaximumJournalScan).ToArray();
         var visibility = new List<(long Sequence, bool Visible)>(scanned.Length);
-        foreach (var entry in scanned) visibility.Add((entry.Sequence, await CanReadEvent(did, entry, ct)));
+        foreach (var entry in scanned) visibility.Add((entry.Sequence, await CanReadEvent(did, entry, ct) && await WatchesEvent(did, entry, ct)));
         var plan = ActivityPaging.Plan(requested.After, boundary, visibility, entries.Length > MaximumJournalScan, MaximumEvents);
         var delivered = plan.DeliveredSequences.ToHashSet();
         var events = scanned.Where(entry => delivered.Contains(entry.Sequence)).Select(entry => EventFor(did, entry)).ToArray();
@@ -128,8 +128,13 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
             if (channel is not null) channels.Add(channel);
         }
         var next = directory.NextPage is null ? null : EncodeChannel(selected with { Page = directory.NextPage.Value });
-        return new(channels.OrderBy(value => value.TangentKey, StringComparer.Ordinal).ThenBy(value => value.RoomKey, StringComparer.Ordinal).ToArray(),
-            next, next is not null, reset, directory.ScanLimited);
+        // Default priority: channels with waiting direct replies, then channels the participant engaged with.
+        var ordered = channels
+            .OrderBy(value => AttentionRules.PriorityTier(value.DirectReplies, value.ReadSequence))
+            .ThenBy(value => value.TangentKey, StringComparer.Ordinal)
+            .ThenBy(value => value.RoomKey, StringComparer.Ordinal)
+            .ToArray();
+        return new(ordered, next, next is not null, reset, directory.ScanLimited);
     }
 
     private Task<ActivityChannel?> Channel(string did, string roomKey, CancellationToken ct)
@@ -138,12 +143,18 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
             if (!policy.CanRead) return null;
             var room = await Room.Get(roomKey, token);
             if (room is null) return null;
+            // Null-safe: an absent watch record (the common case) simply means All.
+            var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(did, roomKey), token),
+                await TangentWatchSetting.Get(TangentWatchSetting.Key(did, room.TangentKey), token));
+            if (!AttentionRules.DeliversChannel(mode)) return null;
             var state = await RoomConversation.Get(roomKey, token) ?? new RoomConversation { Id = roomKey };
             var read = await ReadPosition.Get(ReadPosition.Key(did, roomKey), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
-            var unread = await Message.Query(message => message.RoomKey == roomKey && message.Sequence > readSequence,
+            // The window stays source-order; attention excludes the actor's own contributions.
+            var unreadWindow = await Message.Query(message => message.RoomKey == roomKey && message.Sequence > readSequence,
                 MessagesWindow, token);
-            var unreadCount = Math.Min(unread.Count, MaximumUnread);
+            var unread = unreadWindow.Where(message => AttentionRules.CountsForAttention(message, did)).ToArray();
+            var unreadCount = Math.Min(unread.Length, MaximumUnread);
             var directReplies = 0;
             foreach (var message in unread.Take(MaximumUnread))
             {
@@ -153,9 +164,27 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
             }
             var last = state.LastSequence == 0 ? null : (await Message.Query(message => message.RoomKey == roomKey && message.Sequence == state.LastSequence,
                 OneMessageWindow, token)).FirstOrDefault();
-            return new ActivityChannel(roomKey, room.TangentKey, unreadCount, unread.Count > MaximumUnread, directReplies,
-                state.LastSequence, readSequence, state.Freshness, last?.AcceptedAt);
+            var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
+            // The window itself overflowed: any count derived from it may be clipped at the cap.
+            return new ActivityChannel(roomKey, room.TangentKey, attention, unreadWindow.Count > MaximumUnread,
+                Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, state.Freshness, last?.AcceptedAt);
         }, ct);
+
+    /// <summary>Personal watch preference layered after the access check; never widens access.</summary>
+    private async Task<bool> WatchesEvent(string did, ActivityJournal entry, CancellationToken ct)
+    {
+        if (entry.Kind != ActivityKind.MessageAccepted || string.IsNullOrEmpty(entry.RoomKey)) return true;
+        var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(did, entry.RoomKey), ct),
+            await TangentWatchSetting.Get(TangentWatchSetting.Key(did, entry.TangentKey), ct));
+        if (!AttentionRules.DeliversEvent(mode, entry.Kind)) return false;
+        if (mode != WatchMode.Replies) return true;
+        // Replies mode delivers a message marker only when it answers this participant's accepted message.
+        var message = (await Message.Query(value => value.RoomKey == entry.RoomKey
+            && value.Sequence == (entry.MessageSequence ?? -1), OneMessageWindow, ct)).FirstOrDefault();
+        var parent = message?.Content.ReplyTo is { } reply
+            ? await SourceDecision.Get(SourceDecision.Key(entry.RoomKey, reply.Uri, reply.Cid), ct) : null;
+        return AttentionRules.IsDirectReply(message, parent, did);
+    }
 
     private async Task<bool> CanReadEvent(string did, ActivityJournal entry, CancellationToken ct)
     {
@@ -168,8 +197,9 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
 
     internal static ActivityEvent EventFor(string did, ActivityJournal entry)
     {
-        // Membership and participant targets are administration metadata, not room conversation data.
-        var privateTarget = entry.Kind is ActivityKind.MembershipChanged or ActivityKind.ParticipantChanged or ActivityKind.InvitationChanged;
+        // Membership, moderation and participant targets are administration metadata, not room conversation data.
+        var privateTarget = entry.Kind is ActivityKind.MembershipChanged or ActivityKind.ParticipantChanged
+            or ActivityKind.InvitationChanged or ActivityKind.RestrictionChanged;
         var target = privateTarget && entry.TargetDid != did && entry.ActorDid != did ? null : entry.TargetDid;
         return new(entry.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture), entry.Kind.ToString(), entry.RoomKey,
             entry.TangentKey, entry.ActorDid, target, entry.MessageSequence, entry.OccurredAt);

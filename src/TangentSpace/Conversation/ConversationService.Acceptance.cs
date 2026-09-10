@@ -1,3 +1,5 @@
+using Koan.Data.Abstractions;
+using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
 using TangentSpace.AtProtocol;
 using TangentSpace.AtProtocol.Verification;
@@ -26,9 +28,12 @@ public sealed partial class ConversationService
                 var previous = await SourceDecision.Get(id, token);
                 if (previous is not null)
                 {
-                    if (previous.Accepted && await Message.Get(id, token) is null) await Message.Project(previous).Save(token);
+                    // A missing version projection must never resurrect a deleted/tombstoned
+                    // post under that version's CID. Rebuild handles legitimate gaps explicitly.
                     return false;
                 }
+                var current = (await Message.Query(m => m.RoomKey == roomKey && m.SourceUri == uri,
+                    Window<Message>(nameof(Message.Sequence), 1, 2), token)).FirstOrDefault();
                 MessageContent? content = null;
                 var reason = policy.CanWrite ? "accepted" : policy.Reason == "allowed" ? "read-only" : policy.Reason;
                 if (record.Collection != SpacesOptions.Collection) reason = "unsupported-collection";
@@ -38,6 +43,11 @@ public sealed partial class ConversationService
                     catch (Exception e) when (e is InvalidDataException or ArgumentException or System.Formats.Cbor.CborContentException or KeyNotFoundException or InvalidOperationException)
                     { reason = "invalid-record"; }
                 }
+                // Source versions are write-once decisions. A participant may only advance
+                // the displayed version when room editing is enabled, except for the CID
+                // already committed by our own native edit operation.
+                if (reason == "accepted" && current is not null && current.SourceCid != record.Cid && !policy.EditingAllowed)
+                    reason = "editing-not-allowed";
                 if (reason == "accepted" && content?.ReplyTo is { } reply)
                 {
                     var target = await SourceDecision.Get(SourceDecision.Key(roomKey, reply.Uri, reply.Cid), token);
@@ -52,12 +62,30 @@ public sealed partial class ConversationService
                     Accepted = reason == "accepted", Reason = reason, DecidedAt = clock.GetUtcNow(),
                     PolicyRevision = policy.SelectedPolicyRevision, SitePolicyRevision = policy.SitePolicyRevision,
                     Content = reason == "accepted" ? content : null,
-                    Sequence = reason == "accepted" ? checked(++state.LastSequence) : 0
+                    Sequence = reason == "accepted" ? current?.Sequence ?? checked(++state.LastSequence) : 0
                 };
                 await decision.Save(token);
                 if (decision.Accepted)
                 {
-                    await Message.Project(decision).Save(token);
+                    // A source update is a new ledger decision but the displayed post keeps
+                    // the identity assigned to its first accepted version. Moderation state
+                    // belongs to that projection and survives re-ingestion.
+                    if (current?.Removed == true) return false;
+                    var projected = Message.Project(decision);
+                    if (current is not null)
+                    {
+                        projected.Id = current.Id;
+                        projected.Removed = current.Removed;
+                        projected.RemovedAt = current.RemovedAt;
+                        projected.RemovedByDid = current.RemovedByDid;
+                        projected.EditedAt = current.EditedAt;
+                        projected.Sequence = current.Sequence;
+                        projected.AcceptedAt = current.AcceptedAt;
+                        if (current.SourceCid != record.Cid) projected.EditedAt ??= decision.DecidedAt;
+                    }
+                    await projected.Save(token);
+                    decision.Sequence = projected.Sequence;
+                    await decision.Save(token);
                     await state.Save(token);
                     var room = await Room.Get(roomKey, token);
                     await ActivityJournal.AppendInTransaction(ActivityKind.MessageAccepted, roomKey, source.Author, null,
@@ -91,7 +119,23 @@ public sealed partial class ConversationService
             await governance.WithCurrentPolicy(actorDid, roomKey, async (policy, token) =>
             {
                 if (!policy.CanAppointManagers) throw new UnauthorizedAccessException("Only the owner can rebuild a room projection.");
-                foreach (var decision in decisions) { await Message.Project(decision).Save(token); rebuilt++; }
+                foreach (var decision in decisions)
+                {
+                    var current = (await Message.Query(m => m.RoomKey == roomKey && m.SourceUri == decision.SourceUri,
+                        Window<Message>(nameof(Message.Sequence), 1, 2), token)).FirstOrDefault();
+                    if (current?.Removed == true) continue;
+                    if (current is not null) continue;
+                    var latest = (await SourceDecision.Query(d => d.RoomKey == roomKey && d.SourceUri == decision.SourceUri && d.Accepted,
+                        new QueryDefinition { Page = 1, PageSize = 1,
+                            Sort = [new SortSpec(new MemberPath(typeof(SourceDecision), [typeof(SourceDecision).GetProperty(nameof(SourceDecision.DecidedAt))!], typeof(DateTimeOffset), false, -1), true)] }, token)).FirstOrDefault();
+                    if (latest is null || latest.Id != decision.Id) continue;
+                    var first = (await SourceDecision.Query(d => d.RoomKey == roomKey && d.SourceUri == decision.SourceUri && d.Accepted,
+                        Window<SourceDecision>(nameof(SourceDecision.DecidedAt), 1, 1), token)).First();
+                    var projected = Message.Project(decision);
+                    projected.Id = first.Id; projected.Sequence = first.Sequence; projected.AcceptedAt = first.DecidedAt;
+                    if (first.Id != decision.Id) projected.EditedAt = decision.DecidedAt;
+                    await projected.Save(token); rebuilt++;
+                }
                 return true;
             }, ct);
             if (decisions.Count < 100) return rebuilt;

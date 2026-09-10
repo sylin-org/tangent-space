@@ -14,9 +14,12 @@ namespace TangentSpace.Participation;
 
 /// <summary>One compact, current-identity return packet for native WebMCP and unattended clients.</summary>
 [ApiController, Route("api/participation/arrival")]
-public sealed class ParticipantArrivalController(TangentGovernance tangents, ActivityService activity,
-    SourceReadiness readiness, IOptions<SiteOptions> options) : ControllerBase
+public sealed class ParticipantArrivalController(TangentServer hub, IOptions<SiteOptions> options) : ControllerBase
 {
+    private TangentGovernance tangents => hub.Tangents;
+    private ActivityService activity => hub.Activity;
+    private SourceReadiness readiness => hub.Readiness;
+
     [AllowAnonymous, HttpGet]
     public async Task<IActionResult> Get([FromQuery] string? cursor, CancellationToken ct)
     {

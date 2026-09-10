@@ -1,6 +1,7 @@
 using CarpaNet.Identity;
 using Koan.Data.Core.Model;
 using TangentSpace.Infrastructure;
+using TangentSpace.Participants;
 using TangentSpace.Site;
 
 namespace TangentSpace.Communities;
@@ -16,6 +17,12 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     public string Artwork { get; set; } = "";
     public string OwnerDid { get; set; } = "";
     public bool OpenToSignedIn { get; set; }
+    public bool AllowMemberTopics { get; set; } = true;
+    // Manual-approval admission queues durable join requests instead of granting membership.
+    public bool ApprovalRequired { get; set; }
+    // Classification policy: persisted zero-value defaults Everyone/Write keep every existing participant allowed.
+    public ParticipationPreset ParticipationPreset { get; set; }
+    public UndeclaredAccess UndeclaredAccess { get; set; }
     // Only used by the host-owned home record to make the flat-room migration resumable.
     public bool LegacyRoomsAssigned { get; set; }
     public bool SetupComplete { get; set; }
@@ -36,6 +43,17 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
         };
     }
 
+    internal static TangentCommunity CreateForAuthorizedActor(TangentSite site, string actorDid, string ownerDid, string key,
+        string name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)
+    {
+        if (!site.IsOwner(ownerDid) || !IdentityResolver.IsValidDid(actorDid))
+            throw new TangentRuleViolation(TangentDenial.Forbidden, "The server owner must authorize Tangent creation.");
+        CheckKey(key); CheckCard(name, description, motto, accent, artwork);
+        return new TangentCommunity { Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto),
+            Accent = Clean(accent), Artwork = Clean(artwork), OwnerDid = actorDid, CreatedAt = now, UpdatedAt = now,
+            PolicyRevision = 1, SetupComplete = true };
+    }
+
     internal static TangentCommunity Home(TangentSite site, DateTimeOffset now) => new()
     {
         Id = HomeKey, Name = site.Name, Description = "", Motto = "", Accent = "", Artwork = "", OwnerDid = site.OwnerDid,
@@ -51,7 +69,85 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
         SetupComplete = true;
     }
 
+    internal void ChangeAuthorized(string actorDid, bool authorized, string? name, string? description, string? motto,
+        string? accent, string? artwork, DateTimeOffset now)
+    {
+        if (!authorized) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only an authorized Tangent administrator can change its card.");
+        CheckCard(name ?? Name, description ?? Description, motto ?? Motto, accent ?? Accent, artwork ?? Artwork);
+        Name = (name ?? Name).Trim(); Description = Clean(description ?? Description); Motto = Clean(motto ?? Motto);
+        Accent = Clean(accent ?? Accent); Artwork = Clean(artwork ?? Artwork); UpdatedAt = now; PolicyRevision = checked(PolicyRevision + 1); SetupComplete = true;
+    }
+
     public bool IsOwner(string? did) => string.Equals(OwnerDid, did, StringComparison.Ordinal);
+
+    public void ChangeTopicCreation(string actorDid, bool allowMemberTopics, DateTimeOffset now, bool authorized = false)
+    {
+        if (!IsOwner(actorDid) && !authorized) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can change topic creation policy.");
+        AllowMemberTopics = allowMemberTopics; UpdatedAt = now; PolicyRevision = checked(PolicyRevision + 1);
+    }
+
+    /// <summary>The effective admission combining the legacy open bit with the approval bit.</summary>
+    public TangentAdmission EffectiveAdmission => ApprovalRequired ? TangentAdmission.Approval
+        : OpenToSignedIn ? TangentAdmission.Open : TangentAdmission.Invite;
+
+    public void ChangeParticipationPolicy(string actorDid, TangentAdmission admission, ParticipationPreset preset,
+        UndeclaredAccess undeclared, DateTimeOffset now)
+    {
+        if (!IsOwner(actorDid)) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the Tangent owner can change its participation policy.");
+        if (!Enum.IsDefined(admission) || !Enum.IsDefined(preset) || !Enum.IsDefined(undeclared))
+            throw new TangentRuleViolation(TangentDenial.InvalidInput, "Choose a defined admission, preset, and undeclared access.");
+        OpenToSignedIn = admission == TangentAdmission.Open;
+        ApprovalRequired = admission == TangentAdmission.Approval;
+        ParticipationPreset = preset;
+        UndeclaredAccess = undeclared;
+        UpdatedAt = now;
+        PolicyRevision = checked(PolicyRevision + 1);
+        SetupComplete = true;
+    }
+
+    /// <summary>Conversation rights from an explicit declaration. Never fetches labels or infers a classification.</summary>
+    public (bool Read, bool Write) ParticipationRights(ParticipantClassification classification)
+    {
+        if (!Enum.IsDefined(classification))
+            throw new TangentRuleViolation(TangentDenial.InvalidInput, "The participant classification is not defined.");
+        if (ParticipationPreset == ParticipationPreset.Everyone)
+            return classification switch
+            {
+                // Declared participants are always welcome under Everyone; the stored undeclared access is honored too.
+                ParticipantClassification.Human => (true, true),
+                ParticipantClassification.Agent => (true, true),
+                _ => UndeclaredRights()
+            };
+        var human = ParticipationPreset switch
+        {
+            ParticipationPreset.HumansOnly => (true, true),
+            ParticipationPreset.HumansWriteAgentsRead => (true, true),
+            ParticipationPreset.HumansReadAgentsWrite => (true, false),
+            ParticipationPreset.AgentsOnly => (false, false),
+            _ => throw new TangentRuleViolation(TangentDenial.InvalidInput, "The participation preset is not defined.")
+        };
+        var agent = ParticipationPreset switch
+        {
+            ParticipationPreset.AgentsOnly => (true, true),
+            ParticipationPreset.HumansReadAgentsWrite => (true, true),
+            ParticipationPreset.HumansWriteAgentsRead => (true, false),
+            ParticipationPreset.HumansOnly => (false, false),
+            _ => throw new TangentRuleViolation(TangentDenial.InvalidInput, "The participation preset is not defined.")
+        };
+        return classification switch
+        {
+            ParticipantClassification.Human => human,
+            ParticipantClassification.Agent => agent,
+            _ => UndeclaredRights()
+        };
+    }
+
+    private (bool Read, bool Write) UndeclaredRights() => UndeclaredAccess switch
+    {
+        UndeclaredAccess.Write => (true, true),
+        UndeclaredAccess.Read => (true, false),
+        _ => (false, false)
+    };
 
     public bool CanParticipate(string? did, TangentMembership? membership)
     {
@@ -61,7 +157,9 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
         if (IsOwner(did)) return true;
         // A durable removal is an explicit override, including for an otherwise open home.
         if (membership?.Role == TangentRole.Removed) return false;
-        return membership?.Role == TangentRole.Member || OpenToSignedIn && did is not null && IdentityResolver.IsValidDid(did);
+        // Left is a voluntary departure, not a ban: open admission still applies, closed tangents need a new grant.
+        return membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader
+            || OpenToSignedIn && did is not null && IdentityResolver.IsValidDid(did);
     }
 
     public static void CheckKey(string key)

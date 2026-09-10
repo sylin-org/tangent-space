@@ -6,8 +6,10 @@ using TangentSpace.Participation;
 namespace TangentSpace.Activity;
 
 [ApiController, Authorize, Route("api/activity")]
-public sealed class ActivityController(ActivityService activity) : ControllerBase
+public sealed class ActivityController(TangentServer hub) : ControllerBase
 {
+    private ActivityService activity => hub.Activity;
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     [HttpGet]

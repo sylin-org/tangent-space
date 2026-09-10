@@ -4,15 +4,19 @@
 
 The [EPIC-004 working prototype](docs/epics/EPIC-004.md) extends the [first PoC](docs/epics/EPIC-001.md) in one .NET/Koan DDD monolith. AT DIDs identify participants; Tangent rules govern admission and source acceptance; authored records live in real experimental Spaces repositories. The browser and unattended WebMCP client share conversation and participant-wide activity operations. [Current evidence and remaining work](docs/CURRENT_STATE.md).
 
+## Continuing work
+
+For a model taking over this checkout, start with the [cold-start handoff kit](docs/handoff/README.md) and its [copy-ready prompt](docs/handoff/START_PROMPT.md). It reconciles the epics, latest decisions, live setup and remaining gaps. Much of the current prototype is still uncommitted; a clone of the base commit alone is incomplete.
+
 ## Run with Docker
 
 The default development setup uses Docker Desktop with Linux containers, PowerShell 7 (`pwsh`), Git and Node 24. The app's .NET SDK and runtime are pinned in its multi-stage Dockerfile; a host SDK is needed only for host-side tests or the optional native launcher. From this repository:
 
 ```powershell
-./scripts/prepare-framework.ps1
+./Build.bat
 ./probes/spaces-network/start.ps1 -Build # First launch only; keep an existing network running.
 # Wait for http://localhost:2585/health to report status "passed".
-./scripts/start-docker.ps1 -Build
+./Launch.bat
 docker compose logs -f tangent
 ```
 
@@ -29,6 +33,10 @@ docker compose stop tangent
 The local network is deliberately ephemeral. Keep it running across application restart and recovery tests. Recreating it makes new accounts and invalidates old protocol references. All fixture secrets, protected sessions, databases and backups remain ignored under `.local/`.
 
 When moving an existing Windows demo to Docker, run `./scripts/prepare-demo.ps1 -HumanOnly -Reconnect` after startup to renew the disposable OAuth grants without creating another model reply. The migration backs up the original Windows instance and copies SQLite; DPAPI login keys remain in that backup. Public account handles now resolve through the public PLC instead of the test directory; room-source capabilities still depend on the account's provider.
+
+Use `Backup.bat` to copy the complete mounted state out; `Restore.bat "path-to-backup"` copies it back, followed by `Launch.bat`. To test a fresh server, run `Wipe.bat`, type `WIPE` after checking the displayed path, then run `Build.bat` and `Launch.bat`. Wipe deletes the app's `.local/docker/site` configuration, database, OAuth state and keys. It leaves backups and the external test network intact. A fresh configuration has no reserved owner: sign-in opens owner onboarding, where the verified profile is shown before an explicit Confirm as Owner action claims the server. Set `Tangent:Site:OwnerDid` before that sign-in if you want to reserve ownership. Existing configuration is retained on subsequent launches.
+
+The [MCP action contract and BBS storybook](docs/design/tangent-mcp/README.md) cover the inbound API and the future personal connector. `SelectCompanion` returns `companionId`; `Arrive(companionId, serverUrl)` returns a server-bound `contextId`. Twenty-six inbound operations now invoke the same domain policies as the browser; companion credential management remains a separate client.
 
 ## Reading map
 
@@ -56,4 +64,4 @@ The project name is **Tangent Space**. Earlier names in the reference archive ar
 
 ## Package status
 
-Updated 10 September 2026. This is an experiment against pinned alpha Spaces source, using test accounts and a local Lexicon namespace. The revised human interface and native WebMCP have passed a real local exchange and activity walkthrough. MCP, A2A and the broader EPIC-003 lifecycle remain follow-on work. Production deployment, domain registration and licensing remain undecided.
+Updated 10 September 2026. This is an experiment against pinned alpha Spaces source, using test accounts and a local Lexicon namespace. The revised human interface and native WebMCP have passed a real local exchange and activity walkthrough. Inbound MCP is implemented; the personal MCP credential manager, A2A and the broader EPIC-003 lifecycle remain follow-on work. Production deployment, domain registration and licensing remain undecided.

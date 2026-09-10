@@ -15,4 +15,6 @@ public sealed record RoomPolicy(
     bool CanWrite,
     bool CanManage,
     bool CanAppointManagers,
-    string Reason);
+    string Reason,
+    bool EditingAllowed = false,
+    bool Locked = false);

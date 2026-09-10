@@ -9,6 +9,9 @@ public sealed class Participant : Entity<Participant>
     public DateTimeOffset JoinedAt { get; set; }
     public DateTimeOffset LastArrivedAt { get; set; }
     public bool IsSuspended { get; set; }
+    // A declaration, never an inference: absent labels prove nothing and undeclared stays distinct from human.
+    public ParticipantClassification Classification { get; set; }
+    public bool WasDeclaredAgent { get; set; }
 
     public static Participant FirstArrival(string verifiedDid, string? verifiedHandle, DateTimeOffset now)
     {
@@ -24,5 +27,15 @@ public sealed class Participant : Entity<Participant>
             throw new InvalidOperationException("A returning account must have the same verified DID.");
         Handle = verifiedHandle;
         LastArrivedAt = now;
+    }
+
+    /// <summary>Owner-reviewed prototype declaration; validated claim sources arrive later.</summary>
+    public void Declare(ParticipantClassification classification)
+    {
+        if (!Enum.IsDefined(classification)) throw new InvalidOperationException("Choose undeclared, human, or agent.");
+        if (WasDeclaredAgent && classification == ParticipantClassification.Human)
+            throw new InvalidOperationException("A known agent cannot declare itself human.");
+        Classification = classification;
+        if (classification == ParticipantClassification.Agent) WasDeclaredAgent = true;
     }
 }

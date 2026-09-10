@@ -2,7 +2,7 @@
 
 These receipts record observed behavior against disposable accounts. They contain no reusable passwords, cookies, bearer credentials or private signing keys. DIDs, source URIs/CIDs, audit IDs and model text are intentional test artifacts.
 
-The [Docker follow-up](docker.json) records the deployment transition: visible Koan bootstrap, backed-up Windows-to-Linux migration, genuine fixture reauthorization, preserved state after container restart, public-handle redirect and sanitized failure pages. Its fresh connector patch passed 24 connector, 57 generic auth, 9 auth HTTP and 3 static-header tests. Earlier receipts below remain historical PoC runs. The current full suites passed 210 application and 53 JavaScript tests; the final frontend recovery checks passed 16/16. EPIC-004's real human/native WebMCP exchange, live source callback and final UX walkthrough are recorded below.
+The [Docker follow-up](docker.json) records the deployment transition: visible Koan bootstrap, backed-up Windows-to-Linux migration, genuine fixture reauthorization, preserved state after container restart, public-handle redirect and sanitized failure pages. Its fresh connector patch passed 24 connector, 57 generic auth, 9 auth HTTP and 3 static-header tests. Earlier receipts below remain historical PoC runs. The current full suites passed 319 application and 53 JavaScript tests; the final frontend recovery checks passed 16/16. EPIC-004's real human/native WebMCP exchange, live source callback and final UX walkthrough are recorded below.
 
 | Proof | Result and interpretation |
 | --- | --- |
@@ -85,3 +85,10 @@ The historical restoration used backup `1788984280268-rooms-proof-1788989108437`
 [room-access-recovery.json](room-access-recovery.json) records the subsequent real human/agent exchange, preserving the distinction between Leo's initial submission, the coordinator's fixture grant renewal/browser retry, and the WebMCP reply. Live delivery retained a draft. [pending-access.json](pending-access.json) records six live read-only checks on private pending recovery. The 180 application / 43 JavaScript recovery-build count is historical; the public-account write remains unsent and public-provider Spaces compatibility remains a limit.
 
 These are bounded proofs on a pinned alpha, not production reliability claims. The immediate post-removal source read and credential's 7200-second lifetime were observed; waiting through expiry-time denial was not. Handle continuity has focused domain tests and real same-DID session restoration; no public DNS handle migration was performed. Concurrency checks observe overlapping real requests, not every database interleaving. See [current state](../CURRENT_STATE.md) for remaining product and protocol boundaries.
+
+## Inbound MCP PoC
+
+- [Companion/context smoke](mcp-companion-context.json): current deployed SelectCompanion returns only companionId; Arrive returns a server-bound contextId and the visible BBS menu.
+- [Service-proof/API run](mcp-inbound.json), [official SDK](mcp-sdk.json), [native workflows](mcp-workflows.json): real runs before the companion/context schema split. Authentication, source writes and domain outcomes are historical observations; their old selection payload is superseded by the current smoke and contract.
+
+Docker lifecycle verification used file fixtures and mocked Docker calls for destructive branches. A real Backup.bat snapshot was made at `.local/backups/docker-before-final-mcp`; Restore was previewed against it. Build.bat and Launch.bat completed, existing app configuration was retained, and the app became healthy. The current space was not wiped/restored, and the external source network was not restarted. First-owner behavior has application-level coverage; a new first-owner browser walkthrough was deliberately not added.

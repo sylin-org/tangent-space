@@ -4,11 +4,14 @@ namespace TangentSpace.Activity;
 public enum ActivityKind
 {
     MessageAccepted,
+    MessageEdited,
+    MessageDeleted,
     SourceFreshnessChanged,
     ReadAcknowledged,
     RoomChanged,
     MembershipChanged,
     ParticipantChanged,
     TangentChanged,
-    InvitationChanged
+    InvitationChanged,
+    RestrictionChanged
 }

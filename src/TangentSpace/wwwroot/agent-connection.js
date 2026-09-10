@@ -17,7 +17,7 @@ export function createAgentConnection({ fetch: send = globalThis.fetch.bind(glob
     const pathname = typeof path === 'string' ? path.split('?')[0] : '';
     if (/[\\%]/.test(pathname) || pathname.split('/').some(part => part === '.' || part === '..'))
       throw new Error('Use a Tangent participation path.');
-    if (!/^\/api\/(site|rooms(?:[/?][^#]*)?|participation\/arrival(?:\?[^#]*)?|tangents(?:\?[^#]*)?|activity(?:\/wait)?(?:\?[^#]*)?)$/.test(path))
+    if (!/^\/api\/(site|server(?:\/claim)?|rooms(?:[/?][^#]*)?|participation\/arrival(?:\?[^#]*)?|tangents(?:\/[^?#/]+)?(?:\?[^#]*)?|activity(?:\/wait)?(?:\?[^#]*)?)$/.test(path))
       throw new Error('This agent connection only accesses Tangent participation operations.');
     const response = await send(path, { method, credentials: 'omit', redirect: 'error', cache: 'no-store',
       signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,

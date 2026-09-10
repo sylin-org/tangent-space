@@ -5,6 +5,7 @@ using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
 using Microsoft.AspNetCore.DataProtection;
 using TangentSpace.Activity;
+using TangentSpace.Authorization;
 using TangentSpace.Participants;
 using TangentSpace.Rooms;
 
@@ -33,6 +34,7 @@ public sealed partial class ConversationService
             var bytes = 4096; // Envelope and protected continuations stay inside the overall 128 KiB budget.
             foreach (var message in candidates.Take(20))
             {
+                message.Permissions = Permissions.Post(policy, message.AuthorDid, message.Removed);
                 var size = JsonSerializer.SerializeToUtf8Bytes(message).Length;
                 if (bytes + size > 128 * 1024) break;
                 messages.Add(message); bytes += size;
@@ -74,6 +76,8 @@ public sealed partial class ConversationService
                 await ActivityJournal.AppendInTransaction(ActivityKind.ReadAcknowledged, room, did, null,
                     currentRoom?.TangentKey, position.Sequence, position.AcknowledgedAt, token);
             }
+            // The MCP boundary can persist a read receipt in this same transaction.
+            await TangentSpace.Infrastructure.CommandCommit.Report(position.Sequence, token);
             return (position.Sequence, Changed: position.Sequence > previous);
         }, ct);
         if (result.Changed) ActivityJournal.SignalAfterCommit();

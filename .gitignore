@@ -6,6 +6,7 @@
 **/bin/
 **/obj/
 **/node_modules/
+**/__pycache__/
 **/.next/
 **/TestResults/
 **/data/

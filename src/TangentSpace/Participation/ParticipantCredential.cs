@@ -15,12 +15,14 @@ public sealed class ParticipantCredential : Entity<ParticipantCredential>
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
 
-    internal static (ParticipantCredential Credential, string Token) Issue(string verifiedDid, string name, int lifetimeDays, string[] grants, DateTimeOffset now)
+    internal static (ParticipantCredential Credential, string Token) Issue(string verifiedDid, string name, int lifetimeDays,
+        string[] grants, DateTimeOffset now, bool managementPermitted = false)
     {
         if (!IdentityResolver.IsValidDid(verifiedDid)) throw new ArgumentException("A verified participant DID is required.");
         if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 80 || name.Any(char.IsControl)) throw new ArgumentException("Name must contain 1–80 printable characters.");
         if (lifetimeDays is < 1 or > 30) throw new ArgumentException("Credential lifetime must be 1–30 days.");
-        if (grants is null || grants.Length is 0 or > 3 || grants.Any(grant => !ParticipationGrants.IsKnown(grant))) throw new ArgumentException("Only welcome, read, and post grants are supported.");
+        if (grants is null || grants.Length is 0 or > 4 || grants.Any(grant => !ParticipationGrants.IsKnown(grant))) throw new ArgumentException("Only welcome, read, post, and manage grants are supported.");
+        if (grants.Contains(ParticipationGrants.Manage) && !managementPermitted) throw new ArgumentException("The manage grant requires current host management authorization.");
         var token = ParticipationConstants.TokenPrefix + Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         return (new ParticipantCredential
         {

@@ -163,16 +163,19 @@
         if (!site) {
           throw new Error('Unexpected site payload');
         }
+        if (!site.established && window.TangentPages.route.kind === 'home') {
+          location.replace('/onboarding/');
+          return;
+        }
         render(site);
+        window.TangentPages.prepare(site);
+        if (window.TangentOnboarding?.show(site)) return;
         // Tangents are deliberately a separate, viewer-filtered directory.  The
         // welcome remains useful if a very old server has not exposed it yet;
         // the room client never invents a local replacement.
-        if (!site.participant) {
-          window.dispatchEvent(new CustomEvent('tangent:welcome', { detail: site }));
-          return;
-        }
-        return fetch('/api/tangents', {
-          credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Tangent-Participant': site.participant.did }, cache: 'no-store'
+        if (window.TangentPages.route.kind === 'sign-in') return;
+        return fetch('/api/v1/tangents', {
+          credentials: 'same-origin', headers: { Accept: 'application/json', ...(site.participant ? { 'X-Tangent-Participant': site.participant.did } : {}) }, cache: 'no-store'
         })
           .then(function (response) { return response.ok ? response.json() : null; })
           .catch(function () { return null; })

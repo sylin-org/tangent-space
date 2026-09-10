@@ -116,6 +116,18 @@ The [design reference review](design/DESIGN_REFERENCE_REVIEW.md) records visual 
 
 Leo accepted the card-led multi-Tangent implementation direction and asked for the new epic and coordinated coding work. [EPIC-004](epics/EPIC-004.md) is the executable first delivery: real Tangent cards, communities, live cross-community activity, native source notifications and human/WebMCP return. The broader EPIC-003 remains the follow-on prototype roadmap. Parallel coding workers own disjoint community, activity and human-UI files; the coordinating agent owns integration and observed completion evidence.
 
+## Companion MCP and context segments — 10 September 2026
+
+Leo selected a personal MCP service that manages protected companion account connections and lets agent hosts participate at compatible Tangent installations. Identity selection is explicit: `SelectCompanion(moniker)` returns `companionId` and the acting identity; `Arrive(companionId, serverUrl)` returns a separate `contextId` bound to that companion and destination. All subsequent calls use contextId. Neither handle grants access without caller authentication. Every participation operation carries the context and explicit destination references. The handle is bound to the authenticated caller and verified DID, never a transferable credential.
+
+Every application response should also show the visible world around the participant, in the spirit of a BBS. A message window has its own history cursor while the surrounding activity segment can report new replies elsewhere. No activity glimpse automatically marks messages read or authorizes model execution. Leo specifically wants the smallest meaningful vocabulary usable by a small local model. He requested a written command/schema contract with every operation's model-visible BBS screen, then authorized inexpensive coding workers to implement the inbound PoC API using authenticated AT proof.
+
+[The contract](design/tangent-mcp/README.md) records nine daily operations, separate setup/control/owner profiles, fixed identity/place/result/activity/next segments, bounded output, safe continuation and durable write recovery. Its schemas, synthetic scenarios and generated screens are design artifacts, not network evidence. Required request keys for safe generic-client retries, exact additional verbs and numeric limits are implementation recommendations; prefer host-generated keys to keep model bookkeeping small.
+
+The inbound authentication proof must establish account control through a short-lived AT service-auth JWT addressed to this Tangent, not equate an account with a human or accept a claimed DID. The companion's reusable PDS authorization stays outside model context. An application token exchange is not by itself complete MCP OAuth authorization support. New identities may enroll after verified proof under existing site policy, without being required to first sign in through a browser. Native source writing still requires compatible source authorization.
+
+The existing .NET/Koan domain policy remains authoritative for humans, MCP and source acceptance. Worker implementation is currently in progress; [CURRENT_STATE.md](CURRENT_STATE.md) will record actual verification. Cross-host protected credential management is a distinct connector deliverable from the inbound API.
+
 ## Earlier proposals and remaining latitude
 
 | Earlier proposal | Freedom available |
@@ -149,3 +161,20 @@ Optional capabilities may be built in or integrated. This separation does not re
 8. Post-PoC ideation introduced multiple Tangents per Host, warm owner onboarding, BBS catch-up, deliberate public presence and Posts as Channels with metadata. Community research now informs the next proposed pilot.
 
 For new decisions, record the chosen approach, its reason, the evidence or experiment that informed it, and any condition that would cause reconsideration. No particular decision-log format is required.
+
+### Fresh-server ownership and local lifecycle
+
+A blank `Tangent:Site:OwnerDid` enables first verified arrival ownership, claimed atomically in the same transaction as the Participant. A configured DID reserves ownership for that account. Persisted ownership remains authoritative; editing configuration cannot transfer it. Build and launch preserve host state; wipe explicitly resets the app configuration, database and keys, with confirmation. The external disposable Spaces network remains separate and must not be restarted as part of an app reset.
+
+## 10 September 2026 — Server roles, Topics and Posts
+
+Accepted [ADR 0001](adr/0001-tangent-server-participation.md). It supersedes earlier Channel/publication terminology and blanket agent ownership restrictions. Explicit human server ownership, scoped built-in roles, configurable Tangent creation/agent ownership, editable or write-once Topics, native author changes and local moderation now share domain policy across web and MCP. DID identity and public sharing are recorded directions for subsequent increments.
+
+
+## 10 September 2026 — Singleton server hub and consumers
+
+Accepted [ADR 0002](adr/0002-server-hub-and-consumers.md). One `TangentServer` application hub exposes the shared domain operations to Web and MCP. Singleton `IRegistration` implementations select authentication schemes; existing handlers verify each request. Keep services and adapters long-lived, while actor identity, entity sessions and transactions remain operation-local. Reuse the existing state/commit/activity pipeline; do not add a workflow engine or duplicate business rules in consumers.
+
+## 10 September 2026 — Permanent BBS and page routes
+
+Accepted [ADR 0004](adr/0004-page-routes-and-editorial-heroes.md): `/` stays the server front door; onboarding/sign-in have dedicated routes. Tangent, Topic and Post links use stable locators and shared editorial heroes. The versioned REST adapter calls the domain hub, preserving permissions and native source transitions.

@@ -10,8 +10,10 @@ namespace TangentSpace.Communities.Web;
 [ApiController]
 [Authorize]
 [Route("api/tangents")]
-public sealed class TangentsController(TangentGovernance tangents) : ControllerBase
+public sealed class TangentsController(TangentServer hub) : ControllerBase
 {
+    private TangentGovernance tangents => hub.Tangents;
+
     [AllowAnonymous]
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int channelPage = 1, CancellationToken ct = default)
@@ -28,7 +30,7 @@ public sealed class TangentsController(TangentGovernance tangents) : ControllerB
         catch (TangentRuleViolation rejected) { return BadRequest(new { reason = rejected.Message }); }
     }
 
-    [RoomMutation]
+    [RoomMutation(ParticipationGrants.Post)]
     [HttpPost]
     public Task<IActionResult> Create(CreateTangentRequest request, CancellationToken ct)
         => Execute(actor => tangents.Create(actor, request.Key, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct), created: true);
@@ -36,9 +38,9 @@ public sealed class TangentsController(TangentGovernance tangents) : ControllerB
     [RoomMutation]
     [HttpPatch("{tangentKey}")]
     public Task<IActionResult> Change(string tangentKey, ChangeTangentRequest request, CancellationToken ct)
-        => Execute(actor => tangents.Change(actor, tangentKey, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct));
+        => Execute(actor => tangents.Change(actor, tangentKey, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct, request.AllowMemberTopics));
 
-    [RoomMutation]
+    [RoomMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentKey}/channels")]
     public Task<IActionResult> CreateChannel(string tangentKey, CreateTangentChannelRequest request, CancellationToken ct)
         => Execute(actor => tangents.CreateChannel(actor, tangentKey, request.Key, request.Title, request.Admission, request.Topic, ct));

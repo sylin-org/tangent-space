@@ -14,6 +14,8 @@ using TangentSpace.Participation;
 using TangentSpace.Conversation;
 using TangentSpace.Communities;
 using TangentSpace.Activity;
+using TangentSpace.Mcp;
+using TangentSpace.Mcp.Authentication;
 
 namespace TangentSpace.Infrastructure;
 
@@ -24,18 +26,25 @@ public sealed class TangentModule : KoanModule
     {
         services.AddOptions<SiteOptions>().BindConfiguration(TangentConstants.SiteConfiguration)
             .Validate(o => !string.IsNullOrWhiteSpace(o.Name) && o.Name.Length <= 120, "Set Tangent:Site:Name to a name of 1–120 characters.")
-            .Validate(o => IdentityResolver.IsValidDid(o.OwnerDid), "Set Tangent:Site:OwnerDid to the AT DID that must sign in to establish this site.")
+            .Validate(o => string.IsNullOrWhiteSpace(o.OwnerDid) || IdentityResolver.IsValidDid(o.OwnerDid), "Tangent:Site:OwnerDid must be blank for first-login ownership, or a valid AT DID.")
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<PolicyGate>();
         services.AddSingleton<Arrival>();
+        services.AddSingleton<TangentServer>();
+        services.AddMemoryCache();
+        services.AddSingleton<TangentSpace.Participants.ParticipantProfiles>();
+        services.AddSingleton<ServerGovernance>();
         services.AddOptions<SpacesOptions>().BindConfiguration(SpacesOptions.Configuration);
         services.AddSingleton<RoomGovernance>();
         services.AddSingleton<TangentGovernance>();
+        services.AddSingleton<CompanionGovernance>();
         services.AddSingleton<SpacesVerifier>();
         services.AddSingleton<SpacesService>();
         services.AddSingleton<ServiceAuthentication>();
         services.AddParticipation();
+        services.AddTangentMcpAuthentication();
+        services.AddTangentMcp();
         services.AddSingleton<ConversationService>();
         services.AddSingleton<ActivityService>();
         services.AddSingleton<SourceNotifications>();

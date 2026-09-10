@@ -18,6 +18,15 @@ public sealed class ArrivalRulesTests
     }
 
     [Fact]
+    public void An_unconfigured_site_can_be_claimed_by_a_verified_account()
+    {
+        var site = TangentSite.Establish(new SiteOptions(), Visitor, Started);
+        Assert.Equal(Visitor, site.OwnerDid);
+        site.CheckConfiguredOwner(new SiteOptions());
+        Assert.Throws<ArgumentException>(() => TangentSite.Establish(new SiteOptions(), "visitor.test", Started));
+    }
+
+    [Fact]
     public void An_explicit_owner_establishes_the_site_under_the_verified_DID()
     {
         var options = new SiteOptions { Name = " Our site ", OwnerDid = Owner };
