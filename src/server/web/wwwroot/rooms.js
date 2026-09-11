@@ -396,7 +396,15 @@
         li.append(deleted ? element('p', 'message-text', 'This message was removed.')
           : window.TangentFacets?.renderFacetedText?.(content.text, message.facets, page.resolved)
             || element('p', 'message-text', content.text));
-        if (message.editedAt && !deleted) li.append(element('span', 'message-edited', 'Edited ' + new Date(message.editedAt).toLocaleString()));
+        // Edit-history affordance (W2-C): the disclosure's meta line reads "Edited · view history"
+        // and history.js renders the recorded eras on first open; without history.js the post
+        // keeps its plain edited marker. Removed rows never carry the affordance.
+        if (!deleted && (message.editedAt || message.changeId)) {
+          const historyViewer = window.TangentHistory?.disclosure?.(message,
+            { handles: page.authorHandles, resolved: page.resolved, viewerDid: site.participant?.did });
+          li.append(historyViewer || element('span', 'message-edited', message.editedAt
+            ? 'Edited ' + new Date(message.editedAt).toLocaleString() : 'Edited'));
+        }
         const details = element('details', 'source-details', ''); details.append(element('summary', '', 'Source and identity'));
         details.append(element('p', 'did', message.authorDid), element('p', 'did', message.sourceUri), element('p', 'did', message.sourceCid)); li.append(details);
         const actions = message.permissions?.allowedActions || room.permissions?.allowedActions || [];
