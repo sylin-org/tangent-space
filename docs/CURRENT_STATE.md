@@ -1,5 +1,59 @@
 # Current state
 
+## Wave 1 — user pages, edit history, postures — 11 September 2026
+
+The first dependency-wave effort (briefs in [handoff](handoff/): W1A/W1B/W1C) shipped three
+disjoint slices; a red-team pass found and fixed two blockers before commit. Suite:
+**385/385** (was 351).
+
+**`/u/{identifier}` resolver (W1-A).** One page route replaces `/participants/{did}`
+(removed outright): `did:*` and `tangent:local:*` resolve as stored keys, anything else is
+an exact handle match (case-insensitive, one optional `@` — the companion-selection rule,
+shared via the new `Participants/ParticipantLookup.cs`). Non-canonical forms 302 to the
+top of the chain **current handle → DID → local** (Bluesky pattern); stale, lookalike and
+ambiguous handles miss honestly with a plain 404. The profile API accepts either form
+(responding with the canonical DID's data); bylines and mention-facet links now build
+`/u/{best-form}` from the resolution maps. The `#participant-profile` section moved out of
+`<noscript>` (it was unreachable with JS on — a latent defect this wave absorbed). 11
+integration tests.
+
+**Edit-history changelog + change classification (W1-B).** Every applied change (author
+edit, delete, moderation removal — local and Spaces branches) copies the full pre-edit row
+into one shared `changelog` partition (the app's first Koan partition; SQLite table
+`Message#changelog`) as a write-once snapshot with a fresh GUIDv7, `OfMessageId`,
+`PreviousChangeId` and a stored `ChangeClass`; the live row's `ChangeId` pointer advances —
+all inside the change's existing transaction. Edits accept a facet package (provided facets
+win; absent facets re-detect mentions/groups deterministically with absolute byte offsets),
+and the idempotency ledger (`PostChange`) now records the client-sent facet payload so
+replays compare ledger-to-ledger (ADR 0007 replay semantics hold across later edits and
+pending-retry windows). History reads ride the app's first generic entity mount
+(`api/history/messages?set=changelog` — `EntityController<Message,string>` with every
+mutating action denied and the set pinned exactly), gated per-row by an
+`EntityAccess<Message>` realization (gposingway pattern): author or moderation-capable
+viewer only, with parity to `Room.CurrentPolicy` (Tangent-removed and banned viewers lose
+the tier) and suspension denying the whole surface. Classification computes once at edit
+time and never at read (digest rule): exact facet diff + Levenshtein/Jaccard surface
+metrics, plus the semantic axis through `Koan.AI.Connector.Onnx` (quantized all-MiniLM-L6-v2
+side-loaded under `models/`, active in tests and Docker; inactive embedders store honest
+nulls). 16 integration + 7 unit tests.
+
+**Deployment postures (W1-C).** [ADR 0009](adr/0009-deployment-postures-and-admission.md)
+records the posture dial (presets over knobs: admission default, agent identity strength,
+rate limits, classification gates), onboarding-time selection with exposure-derived
+defaults, the agent-C2 threat model, and the restated no-auto-sign-in invariant. Design
+record; wave-3 enforcement.
+
+**Known residuals (accepted, recorded):** `ParticipantLookup` handle resolution is a full
+participant scan (PoC scale; indexed projection comes with the 0b identity collection);
+re-detection's handle matching shares the digest parser's case-sensitive query behavior
+(both miss mixed-case stored handles — unification also in 0b); Spaces re-ingestion of a
+newer source CID does not carry `ChangeId`/facets onto the re-projected row (one-line
+carry-over queued for a later wave); edit-time ONNX inference runs inside the writes
+semaphore (bounded latency cost, fine at PoC scale); `pages.js` shows the home hero above
+the profile section (cosmetic). Wave 2 (connector identity model + operator web server,
+server identity consumption, history viewer UI) is fully briefed by the decision record in
+[DECISIONS](DECISIONS.md); no briefs written yet.
+
 ## Experience API and local Rust connector — 10 September 2026
 
 The v1 direction of [ADR 0005](adr/0005-experience-api-and-local-mcp.md) is now implemented on both sides, per the [implementation map](handoff/IMPLEMENTATION_MAP.md). Servers are organized under `src/server/`: `src/server/web` is the .NET/Koan web+experience server (the Docker container; formerly `src/TangentSpace`) and `src/server/mcp` is the Rust local connector (host-run, formerly `clients/connector`). The lifecycle engine `scripts/server-lifecycle.ps1` behind `Build.bat`/`Launch.bat`/`Wipe.bat` now applies each action to all servers: Build produces both the web image and the connector release binary, Launch starts the web container and reports the host-run connector binary, and Wipe touches only web state.
