@@ -13,11 +13,22 @@ text the parser resolves. Add the argument (schema + decode + journaled body), a
 render facets in the connector's expanded views using the experience API's `resolved` map.
 Surfaces: `src/server/mcp/src/application/operations.rs`, `hub.rs`, `src/adapters/mcp.rs`.
 
-## 2. Facet recompute on edit (replacing the drop)
-Edits currently drop facets (honest but lossy — ADR 0008 records recompute as the refinement).
-On a text-changing edit, re-run detection over the new text (mention facets from the
-mentionables resolution at authoring time cannot be reconstructed, but handle/DID/group/tag
-tokens can) and store fresh ranges. Surfaces: `ConversationService.PostChanges.cs`, tests.
+## 2. Edit history chain + facet recompute (user-directed design, 11 September)
+Edits preserve change history via Koan partitions: on every edit (author edit, delete,
+moderation removal), copy the full pre-edit row into a single shared `changelog` partition
+(`Data<Message,string>.WithPartition`) with a minted GUIDv7, an `OfMessageId` index, and the
+`PreviousChangeId` the live row held; the live row's pointer moves to the new snapshot.
+Backward-linked chain (original has null); snapshots are write-once appends. One shared
+partition, never per-post (SQLite partitions are physical tables under a repository plan
+cap). Reads query the partition by `OfMessageId` ordered by GUIDv7; the chain remains the
+integrity spine. `PostChange` records stay the operation ledger; the changelog is the state
+ledger; Spaces mode already versions via its SourceDecision ledger (unified history reader
+optional). Facets ride their era's snapshot; the *new* current version gets re-detected
+facets (replacing today's honest drop). UI: "Edited · view history" viewer. Optional later:
+content-hash chaining per snapshot for tamper-proofing. History starts at adoption — no
+retroactive recovery of never-stored prior text.
+Surfaces: `ConversationService.PostChanges.cs`, `Message`, new partition access, history
+endpoint + UI viewer, tests.
 
 ## 3. Composer-simplicity cleanup (the "EntityController" direction)
 Composer visibility derives purely from the topic response; the Spaces-only readiness probe,
