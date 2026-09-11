@@ -1,5 +1,11 @@
 # Current state
 
+## Local connector specification — 11 September 2026
+
+[ADR 0005](adr/0005-experience-api-and-local-mcp.md) and the [v1 experience specification](design/experience-api/README.md) record the new user-selected architecture: local MCP connector for agents, server HTTP experience API for the connector and human UI, server-owned digests, connector-owned attention/delivery, contextual **you** rendering and compact/orientation/expanded views. [Coordination](design/experience-api/COORDINATION.md) is a separately staged optional extension.
+
+This increment contains documentation and nine explicitly synthetic [examples](design/experience-api/examples.json). It implements no endpoint, connector, mention parser, wake adapter or work-state transition. Existing source/runtime behavior and historical evidence below remain the implementation baseline. The old handoff's uncommitted-work state predates the published `81ec80f` prototype commit; inspect the actual local Git/Docker state before using its runtime notes. Begin the new implementation with [this handoff](handoff/IMPLEMENT_LOCAL_MCP.md).
+
 ## Model handoff — 10 September 2026
 
 The [cold-start kit](handoff/README.md) reconciles the latest product decisions, architecture, four numbered epics and subsequent increments, source/API maps, local operations and remaining work. Its [snapshot](handoff/snapshot.json) records read-only Git/Docker/anonymous-settings observations: app healthy, server unclaimed, 26 inbound MCP operations and 16 browser WebMCP definitions. The many historical receipts and demo descriptions below predate the user-requested wipe; they do not describe current seeded content or valid app credentials. No new authenticated test, account claim, reset or deployment was performed for the handoff.

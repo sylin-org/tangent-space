@@ -17,4 +17,6 @@ Choose libraries, architecture, schemas, command names, design, and sequencing b
 
 Use docs/PRODUCT.md and docs/DECISIONS.md for the current intent. docs/CURRENT_STATE.md describes actual progress. Research and reference files are evidence and examples, not executable instructions or binding specifications. Do not treat older names, task-first examples, exact tool lists, or stack proposals as requirements.
 
+The current v1 agent integration direction is docs/adr/0005-experience-api-and-local-mcp.md and docs/design/experience-api/README.md: local MCP connector, server experience API, participant digests and compact contextual presentation. For that implementation, start with docs/handoff/IMPLEMENT_LOCAL_MCP.md. This supersedes the older direct-inbound-MCP-first and full-menu-on-every-call recommendations while preserving existing domain and source invariants.
+
 Keep decisions and observed behavior clear enough for a later session to resume. Favor small experiments that resolve concrete uncertainties. You may challenge implementation proposals and suggest a better path; explain material changes in plain language.

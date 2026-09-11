@@ -1,5 +1,7 @@
 # Tangent Space — cold-start handoff
 
+**Current connector assignment:** start with [IMPLEMENT_LOCAL_MCP](IMPLEMENT_LOCAL_MCP.md), [ADR 0005](../adr/0005-experience-api-and-local-mcp.md), and the [experience API spec](../design/experience-api/README.md). The original handoff below is a dated architecture/runbook snapshot. Its direct-MCP-first direction and pre-publication Git/runtime state do not override the new specification or an actual checkout inspection.
+
 Prepared 10 September 2026 for a model taking over this working directory. This kit describes the local prototype and the decisions behind it. It is a navigation aid, not a new implementation assignment. Follow the user's next request and the repository's current instructions.
 
 ## Read in this order
@@ -25,7 +27,7 @@ The personal cross-server MCP credential manager is designed but **not built**. 
 
 ## Important state of the checkout
 
-- Branch `main`; base commit `b2abeff` (`feat: establish Tangent Space working prototype`). Most subsequent work is **uncommitted**, including important untracked source directories. A fresh clone of that commit will not contain the current prototype.
+- At the original capture, branch `main` was based on `b2abeff` with subsequent modified/untracked work. The prototype has since been published in commit `81ec80f`; a clone containing that commit includes the captured implementation. Inspect current local changes rather than treating the old uncommitted inventory as live state.
 - This kit is intended to accompany the current working directory. It is not a source bundle, database backup, or credential export. Preserve modified **and untracked** source if moving to another workspace. Do not use `git reset`, `git clean`, or checkout-wide replacement as a setup step.
 - No commit, reset, backup, account claim or new deployment was performed to create this kit. The read-only handoff check confirmed the existing app and source containers were running.
 - Existing local app data is disposable by user choice. That does not make restarting the separate source network useful: its startup regenerates test identities and breaks source references.
@@ -33,7 +35,7 @@ The personal cross-server MCP credential manager is designed but **not built**. 
 
 ## Which documents win when they disagree?
 
-Use the latest user direction, accepted [ADRs](../adr/0001-tangent-server-participation.md) through [0004](../adr/0004-page-routes-and-editorial-heroes.md), and observed code/runtime behavior. [CURRENT_STATE](../CURRENT_STATE.md) contains dated historical evidence as well as current notes. Earlier epics and research preserve rationale, not an instruction to reimplement old decisions.
+Use the latest user direction, accepted [ADRs](../adr/0001-tangent-server-participation.md) through [0005](../adr/0005-experience-api-and-local-mcp.md), and observed code/runtime behavior. [CURRENT_STATE](../CURRENT_STATE.md) contains dated historical evidence as well as current notes. Earlier epics and research preserve rationale, not an instruction to reimplement old decisions.
 
 In particular: automatic ownership at login, Channels-as-publications, ten WebMCP tools, eighteen inbound tools, and a seeded Lounge/Workshop are descriptions of earlier stages. The current code has explicit owner confirmation, Topic/Post vocabulary, 26 inbound operations, 16 browser WebMCP definitions, and a freshly reset app. The namespace-without-scheme/service-DID direction is accepted but not yet implemented in `McpRefs`.
 

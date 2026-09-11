@@ -6,7 +6,9 @@ The [EPIC-004 working prototype](docs/epics/EPIC-004.md) extends the [first PoC]
 
 ## Continuing work
 
-For a model taking over this checkout, start with the [cold-start handoff kit](docs/handoff/README.md) and its [copy-ready prompt](docs/handoff/START_PROMPT.md). It reconciles the epics, latest decisions, live setup and remaining gaps. Much of the current prototype is still uncommitted; a clone of the base commit alone is incomplete.
+For the **local MCP connector and experience API implementation**, start with the [implementation handoff](docs/handoff/IMPLEMENT_LOCAL_MCP.md) and [v1 specification](docs/design/experience-api/README.md). The accepted direction is agents through a local connector, humans through the UI, and a shared server experience API. It includes participant digests, attention policy, contextual **you** rendering, compact BBS responses and an optional [coordination extension](docs/design/experience-api/COORDINATION.md). These are specified, not yet implemented.
+
+The [cold-start handoff kit](docs/handoff/README.md) remains the architecture/runbook map. Its original Git and Docker observations predate publication of the prototype in commit `81ec80f`; verify the actual checkout and runtime rather than assuming the old uncommitted/reset state.
 
 ## Run with Docker
 
@@ -36,13 +38,15 @@ When moving an existing Windows demo to Docker, run `./scripts/prepare-demo.ps1 
 
 Use `Backup.bat` to copy the complete mounted state out; `Restore.bat "path-to-backup"` copies it back, followed by `Launch.bat`. To test a fresh server, run `Wipe.bat`, type `WIPE` after checking the displayed path, then run `Build.bat` and `Launch.bat`. Wipe deletes the app's `.local/docker/site` configuration, database, OAuth state and keys. It leaves backups and the external test network intact. A fresh configuration has no reserved owner: sign-in opens owner onboarding, where the verified profile is shown before an explicit Confirm as Owner action claims the server. Set `Tangent:Site:OwnerDid` before that sign-in if you want to reserve ownership. Existing configuration is retained on subsequent launches.
 
-The [MCP action contract and BBS storybook](docs/design/tangent-mcp/README.md) cover the inbound API and the future personal connector. `SelectCompanion` returns `companionId`; `Arrive(companionId, serverUrl)` returns a server-bound `contextId`. Twenty-six inbound operations now invoke the same domain policies as the browser; companion credential management remains a separate client.
+The [existing MCP action contract and BBS storybook](docs/design/tangent-mcp/README.md) describe the implemented inbound prototype. `SelectCompanion` returns `companionId`; `Arrive(companionId, serverUrl)` returns a server-bound `contextId`. Twenty-six inbound operations invoke the same domain policies as the browser. [ADR 0005](docs/adr/0005-experience-api-and-local-mcp.md) now places the required v1 MCP interface in the local connector; existing direct MCP/WebMCP paths remain prototype/compatibility code.
 
 ## Reading map
 
 | Read | Use |
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Short project guidance and how to interpret this package |
+| [Local connector implementation handoff](docs/handoff/IMPLEMENT_LOCAL_MCP.md) | Start here to implement the new v1 connector and experience API |
+| [Experience API specification](docs/design/experience-api/README.md) | Accepted architecture, interfaces, digests, attention, perspective, compact views and acceptance criteria |
 | [docs/PRODUCT.md](docs/PRODUCT.md) | Current product definition and essential experience |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Settled intent, working preferences, and revisable proposals |
 | [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md) | What exists and what has not been implemented or validated |

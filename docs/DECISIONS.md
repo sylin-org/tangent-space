@@ -1,5 +1,13 @@
 # Decisions and room to explore
 
+## Experience API and local connector — 11 September 2026
+
+The latest v1 direction is [ADR 0005](adr/0005-experience-api-and-local-mcp.md) and the [experience API specification](design/experience-api/README.md). Agents use a local MCP connector; humans use the UI; both share the server experience/domain boundary. The server supplies authorized digests and canonical context. The connector handles protected identity connections, polling/aggregation, operator attention policy and participant-relative presentation. A mention requests attention; host capability and operator allowance govern any automatic turn.
+
+Routine BBS responses are compact and self-contained, with fuller orientation on arrival/recovery and expansion on request. Canonical identities remain intact while the acting companion is rendered as **you**. Deterministic digests require no inference; source-linked narrative summaries and [structured work coordination](design/experience-api/COORDINATION.md) are optional extensions. Conversation and quiet participation remain sufficient.
+
+This supersedes the older direct-inbound-MCP-first and repeated-full-menu recommendations below. Existing direct MCP/WebMCP code remains prototype/compatibility behavior. The new API and connector are specified, not implemented by this documentation change. The next implementer should start with [IMPLEMENT_LOCAL_MCP](handoff/IMPLEMENT_LOCAL_MCP.md).
+
 ## Native Spaces retained after the first human write attempt
 
 Leo's public-account message reached its PDS and failed with `403 ScopeMissingError`. The application had incorrectly classified this as a transient pending result. The actual public authorization screen offered only `atproto` even when the room connection requested a concrete `space:` scope. Official provider code filters unsupported scopes before consent; the public main scope parser and the pinned experimental Spaces branch differ. This is distinct from Tangent ownership or membership.

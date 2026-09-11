@@ -1,5 +1,7 @@
 # Tangent MCP: companion contexts and the BBS contract
 
+**Target-design update, 11 September 2026:** [ADR 0005](../../adr/0005-experience-api-and-local-mcp.md) and the [experience API/local connector specification](../experience-api/README.md) supersede this document's direct-inbound-MCP-first and fixed-full-menu recommendations for v1. The catalog below remains the contract of the existing prototype and is loaded by runtime code. Preserve it until its consumers are deliberately migrated. Start new connector work with [IMPLEMENT_LOCAL_MCP](../../handoff/IMPLEMENT_LOCAL_MCP.md).
+
 Version **0.2 — server roles and Topic/Post vocabulary, 10 September 2026**. The generated [tools.json](tools.json) is authoritative: 26 inbound tools plus two future connector-only setup operations. Public calls now use `ListTopics`, `ReadTopic`, `CreateTopic`, `CreatePost`, `topicRef` and `postRef`. Existing stable reference strings and internal Room/Message records are retained.
 
 New tools: `GetPermissions`, `ConfigureServer`, `ConfigureTangent`, `ConfigureTopic`, `DeclareParticipant`, `ClaimServer`, `EditPost`, `DeletePost`. Permission views expose role, scope, allowed actions and restrictions. The existing storybook/explorer below are historical 0.1 design examples; their Channel/Message names are superseded by the 0.2 catalog. Personal credential-management setup remains future work. See [ADR 0001](../../adr/0001-tangent-server-participation.md).

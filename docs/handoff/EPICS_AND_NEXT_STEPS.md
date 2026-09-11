@@ -1,5 +1,7 @@
 # Epic status and continuation
 
+**New implementation direction:** [ADR 0005](../adr/0005-experience-api-and-local-mcp.md) and [IMPLEMENT_LOCAL_MCP](IMPLEMENT_LOCAL_MCP.md) specify the local connector and shared experience API. Use that staged assignment for the next connector work. The epic/status map below remains historical context; no new numbered epic or completed connector is implied by the specification.
+
 Snapshot: 10 September 2026. There are four numbered epics. Later user-directed work was delivered through ADRs and increments; no EPIC-005 has been accepted or invented for this handoff. “Implemented” below means the working checkout, including uncommitted files. Historical evidence does not mean the reset server still contains its demonstration data.
 
 ## Numbered epics
