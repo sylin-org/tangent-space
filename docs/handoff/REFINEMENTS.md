@@ -59,6 +59,22 @@ Framework-verified specifics (author's repo, 11 September):
 - Bulk backfill, if ever wanted, has first-class machinery: `Copy(predicate).To("changelog")`
   transfer builders with batching.
 
+Change classification for agents (user-directed, 11 September): an agent dropped on a thread
+must be able to tell a spelling fix from a meaning change. Layered design:
+1. Deterministic, free: surface metrics (Levenshtein/token overlap) + **facet diffs** —
+   mention added/removed/retargeted is structural meaning change detected exactly, no model.
+2. Semantic axis: a pinned small local embedding model (MiniLM-class, ONNX CPU) computing
+   version-to-version distance. The valuable signal is the 2x2 of text-distance x embedding-
+   distance; the small-text/large-shift cell (negation/reversal) is the dangerous one worth
+   flagging. Known limit: tiny models are weak on fine negation — the classifier triages
+   ("review advised"), the agent judges; verdicts are advisory, content stays authoritative.
+3. Compute once at edit time and store on the snapshot ({surface, semantic, facetDelta,
+   model id+version}): reads are pure lookups (deterministic, no model drift rewriting
+   history's interpretation, no inference at read time per the digest rule).
+4. MCP surface: edited posts carry a compact marker in ReadTopic (revisions, change class,
+   meaning class, mentionsChanged); bounded history retrieval walks the chain and returns
+   each version with its snapshot-time verdict. Compact shows the flag; history is explicit.
+
 ## 3. Composer-simplicity cleanup (the "EntityController" direction)
 Composer visibility derives purely from the topic response; the Spaces-only readiness probe,
 reconnect link and consent copy move behind the `spaceState === 'Ready'` branch so the Local
