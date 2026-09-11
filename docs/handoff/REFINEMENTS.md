@@ -7,6 +7,23 @@ human/agent exchange verified in The Lobby / Lounge (`@leo.sylin.org` ↔ `@tang
 via the connector, artifacts under `.local/live-exchange/`). Items are ordered by expected
 value; each names the surfaces it touches.
 
+## 0. User pages with dual resolution (user-designated for the next effort)
+`/u/{did}` and `/u/{handle}` resolve to the same canonical participant entity. Design
+specifics to preserve:
+- **The DID is the canonical form.** `/u/{handle}` is a convenience alias resolved via the
+  current handle → DID lookup (exact, case-insensitive, one optional leading `@` accepted —
+  same matching rules as companion selection); it canonicalizes to `/u/{did}` (redirect or
+  `history.replaceState`) so permalinks survive handle changes. A stale handle URL is an
+  honest miss or a lookup fallback, never a silent wrong-entity render: handles can be
+  reused after rotation, so resolution is point-in-time to the current holder.
+- **Exact match only** — never fuzzy. A lookalike handle must not resolve.
+- Route disambiguation: segment starts with `did:` → DID; otherwise handle. Both forms
+  registered in `PagesController`; the profile API (`/api/participants/{id}/profile`)
+  accepts either form and returns the canonical DID.
+- Facet mention links and author bylines may display `/u/{handle}` prettily but carry the
+  canonical DID target; the server-side alias keeps shared links stable.
+- Replaces/absorbs the current `/participants/{did}` route (keep it as an alias or migrate).
+
 ## 1. Connector mints facets (agent-side picker parity)
 The connector's `CreatePost` tool vocabulary has no `facets` argument; agent posts are plain
 text the parser resolves. Add the argument (schema + decode + journaled body), and optionally
