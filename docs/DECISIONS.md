@@ -215,10 +215,12 @@ Agreed direction for the next identity effort (refinement 0b), replacing today's
   collection; only the ParticipantId is permanent. Facet targets remain perennial external
   identifiers (DIDs as shipped in ADR 0008; `tangent:local:` when no DID exists), treated as
   lookup keys into the collection — handles are never facet targets.
-- One **best-identity projection** (atproto > internal > other kinds) serves display labels,
-  `/u/` canonicalization and byline links. Admission strength (posture gates) is a different
-  projection: the strongest tier held, not the primary. Priority is derived at read time and
-  never stored.
+- One **best-identity projection** serves display labels, `/u/` canonicalization and byline
+  links: the top of the identifier chain **current handle → atproto DID → internal DID**
+  (extensible), following the Bluesky pattern — the pretty handle URL is canonical while
+  held, and perennial forms remain stable entry points that redirect to the current top
+  form. Admission strength (posture gates) is a different projection: the strongest tier
+  held, not the primary. Priority is derived at read time and never stored.
 - Identity collection changes (add, bind, remove) are audited events on an identity-change
   chain — the partition-chain pattern from refinement 2 applied to participants. Koan's
   `ExternalIdentityLink` is the candidate implementation; reuse vs. custom is settled in the
@@ -256,3 +258,46 @@ migration code are not wanted while the rule holds.
 - First application: the Participant re-key above.
 - Reconsider when Leo revokes the rule or the first external/irreplaceable participant data
   arrives, whichever comes first; after that, real migration discipline applies.
+
+## 11 September 2026 — Refinement decision round (next effort)
+
+Leo's answers to the decision sheet, with evidence gathered the same day:
+
+- **`/u/` canonicalization (D1):** the resolver redirects to the top of the identifier chain
+  **handle → DID → `tangent:local:` → future forms** — Bluesky pattern: the pretty handle URL
+  is canonical while held; perennial forms stay stable entry points that redirect to the
+  current top form; a stale handle is an honest miss. `/participants/{did}` is removed
+  outright (simplify/remove deprecated/debt always).
+- **Edit facets (D2):** edit accepts the full composer package (text + facets,
+  client-verified ranges); absent facets degrade to server re-detection; the idempotency
+  conflict check includes the facet payload, same as create.
+- **History read surface (D3):** the generic Koan entity surface (`?set=changelog` through
+  `EntityContext.With(partition:)`), gated by an `EntityAccess<Message>` realization — the
+  gposingway governed-read pattern (`WorkAccess : EntityAccess<Work>` in
+  `gposingway-org/src/Gposingway/Catalog/Infrastructure/WorkAccess.cs`: `[Access]` coarse
+  gate + per-viewer `Constrain` predicate, auto-discovered via `IEntityAccessRealization`
+  on the WEB-0068 rail). Evidence: gposingway `3ccfb66` / Koan `c16c878`, KGE-01.
+- **History visibility (D4):** author + moderators only, with **per-row control** expressed
+  in the `Constrain` predicate (each snapshot's visibility derives from that row, e.g.
+  moderation-removed snapshots).
+- **Change classification (D5+D6):** both layers, computed once at edit time and stored on
+  the snapshot (`{surface, semantic, facetDelta, model id+version}`): deterministic facet
+  diff + surface metrics, **and** the semantic axis via Koan's ONNX embedding connector
+  (`sylin.koan.ai.connector.onnx` portable offline bundle — side-loaded quantized
+  MiniLM-class model ~22 MB committed as content, no runtime downloads, absent artifacts =
+  inactive embedder stated at startup; Koan capability doc validated 2026-08-24). Verdicts
+  are advisory; content stays authoritative.
+- **Identity wave shape (D7):** two sequential agents — connector model first, integrator
+  freezes the wire contract, server consumption second.
+- **Binding proof path (D8):** the unbound tier works this cycle; binding is design/ADR only,
+  choosing among atproto OAuth (native app), delegated DID signing key, or formalized
+  operator-browser consent.
+- **Connector operator surface (D9 + named-missing item):** the connector gains an
+  **embedded local-only web server** (loopback-bound, one-time CLI token): create/manage
+  identities, clientInfo allowlist, enrollment state, and the entry point for future atproto
+  sign-in/binding flows.
+- **Fresh-server posture (D10):** chosen during owner onboarding; recommended default from
+  exposure — loopback/unconfigured → Local, otherwise Public-secure; unclaimed servers are
+  closed. The dial remains presets over independent knobs.
+- **Human local accounts (D11):** named follow-up; this cycle wires the dial and agent-tier
+  gates only.
