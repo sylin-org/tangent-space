@@ -198,3 +198,54 @@ Accepted [ADR 0007](adr/0007-client-minted-identity.md). Posting is an atomic up
 ## 11 September 2026 — Verbatim text with facet annotations
 
 Accepted [ADR 0008](adr/0008-verbatim-text-facets.md). Post text is stored verbatim forever; facets (byte-range annotations) bind stable identities — DID mentions, dynamic role groups resolved at digest time, tags, topic references — and labels resolve fresh at read time. Picker-minted facet mentions are trusted structure; the idempotency conflict check includes the facet payload. Ships with the @-autocomplete composer, the mentionables endpoint, group-mention expansion, faceted rendering with profile links, and the internal participant profile page.
+
+## 11 September 2026 — Participant identity: GUIDv7 spine with an identity collection
+
+Agreed direction for the next identity effort (refinement 0b), replacing today's DID-keyed
+`Participant`:
+
+- Every Participant is keyed by an internal **GUIDv7 minted at creation**; no Participant
+  carries a DID or any external identifier as its key.
+- Each participant owns a **collection of identities** (`kind`, `value`): an **internal DID**
+  (`tangent:local:{ParticipantId}`, minted for every participant at creation — the routable
+  presentation of the spine itself), an **atproto DID** added on first verified arrival, and
+  future kinds (email/IdP identities for humans, connector-client references), each with its
+  own verification path.
+- **All external identifiers resolve point-in-time to their current holder** through the
+  collection; only the ParticipantId is permanent. Facet targets remain perennial external
+  identifiers (DIDs as shipped in ADR 0008; `tangent:local:` when no DID exists), treated as
+  lookup keys into the collection — handles are never facet targets.
+- One **best-identity projection** (atproto > internal > other kinds) serves display labels,
+  `/u/` canonicalization and byline links. Admission strength (posture gates) is a different
+  projection: the strongest tier held, not the primary. Priority is derived at read time and
+  never stored.
+- Identity collection changes (add, bind, remove) are audited events on an identity-change
+  chain — the partition-chain pattern from refinement 2 applied to participants. Koan's
+  `ExternalIdentityLink` is the candidate implementation; reuse vs. custom is settled in the
+  implementation brief with evidence.
+- `/u/{id}` (refinement 0) is a single resolver handler dispatched over identifier kinds:
+  `did:*` and `tangent:local:*` are exact perennial lookups, anything else is a handle
+  resolved to the current holder. Stale handles are an honest miss.
+
+Rekey consequence: `AuthorDid`/`ParticipantDid`-style references become ParticipantId
+references; source-ingested foreign authors mint through the same path. Implemented as
+break-and-rebuild under the standing wipe rule below — no migration code.
+
+## 11 September 2026 — Standing wipe authorization (pre-external-users)
+
+Leo set a standing rule, revocable only by him: **there is no external user yet, so all
+current data is disposable — wipes are always authorized, and break-and-rebuild is the
+preferred way to get schemas and models right at this stage.** Compatibility shims and
+migration code are not wanted while the rule holds.
+
+- Scope: application data (server database, configuration, keys, seeded worlds), test
+  fixtures, and connector-local enrollment state. Wipes remain explicit and confirmed
+  (existing lifecycle behavior — see *Fresh-server ownership and local lifecycle*); backups,
+  evidence receipts, documentation and Git history are never destroyed, and the disposable
+  Spaces network stays separate from app resets.
+- "No silent migration" stays in force in its essential form: schema changes are still
+  deliberate, ADR-recorded and announced. But while this rule holds, the migration strategy
+  for a breaking change is **break-and-rebuild plus an explicit reset**, not migration code.
+- First application: the Participant re-key above.
+- Reconsider when Leo revokes the rule or the first external/irreplaceable participant data
+  arrives, whichever comes first; after that, real migration discipline applies.
