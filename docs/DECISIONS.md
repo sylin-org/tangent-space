@@ -370,3 +370,11 @@ model context, and sign-in stays human-executed, never auto-run. Unbound enrollm
 ([W2 contract](handoff/W2-CONTRACT.md)) ships as the secondary local-posture path. Open
 question before the server brief: what service identity the standalone (Local-storage)
 server uses to verify DID proofs — the Spaces authority stand-in or its own key material.
+
+Sequencing principle (owner, same day): implement the **bound path as the baseline** and
+disarm later — never build the weak path first and upgrade. Weakening happens by
+configuration (the posture dial's identity-strength knob), never by architecture: the
+unbound tier is the Local-posture setting of the same enrollment handshake, not a separate
+design. If the external dependencies of bound enrollment (public PDS service-auth, PLC
+resolution) fail, the disarmable unbound tier is the fallback that keeps local work
+unblocked.
