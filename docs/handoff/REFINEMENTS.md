@@ -30,6 +30,18 @@ retroactive recovery of never-stored prior text.
 Surfaces: `ConversationService.PostChanges.cs`, `Message`, new partition access, history
 endpoint + UI viewer, tests.
 
+Framework-verified specifics (author's repo, 11 September):
+- Snapshot writes use `Entity<Message,string>.Insert(snapshot, "changelog")` — insert-only
+  semantics make snapshots write-once by construction (fresh GUIDv7 never collides).
+- History reads can ride the generic entity surface natively: `?set=changelog` routes through
+  `EntityContext.With(partition:)` (EntityEndpointService), gated by an `EntityAccess<Message>`
+  realization (author-or-moderator visibility) — converging with refinement #3's direction.
+- SQLite materializes the partition as a `#`-suffixed table
+  (`TangentSpace.Conversation.Message#changelog`); DATA-0094 keeps the design portable to
+  adapters with native partition containers.
+- Bulk backfill, if ever wanted, has first-class machinery: `Copy(predicate).To("changelog")`
+  transfer builders with batching.
+
 ## 3. Composer-simplicity cleanup (the "EntityController" direction)
 Composer visibility derives purely from the topic response; the Spaces-only readiness probe,
 reconnect link and consent copy move behind the `spaceState === 'Ready'` branch so the Local
