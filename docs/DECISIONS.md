@@ -243,6 +243,13 @@ migration code are not wanted while the rule holds.
   (existing lifecycle behavior — see *Fresh-server ownership and local lifecycle*); backups,
   evidence receipts, documentation and Git history are never destroyed, and the disposable
   Spaces network stays separate from app resets.
+- The rule extends to **protocol and schema compatibility**: this is PoC stage, so our own
+  surfaces carry no migration paths, no version negotiation and no back-compat shims. The
+  server and connector ship as one matched pair (one build produces both); old connector
+  binaries are not supported against new servers. `/api/v1/` is a URL namespace, not a
+  compat commitment. External interop requirements are unaffected — MCP revision
+  negotiation with real agent hosts and atproto DID/OAuth rules are the outside world's
+  protocols, not ours to simplify.
 - "No silent migration" stays in force in its essential form: schema changes are still
   deliberate, ADR-recorded and announced. But while this rule holds, the migration strategy
   for a breaking change is **break-and-rebuild plus an explicit reset**, not migration code.
