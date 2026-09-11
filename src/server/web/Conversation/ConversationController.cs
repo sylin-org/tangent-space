@@ -35,7 +35,8 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         {
             var did = await RequireChangeActor(roomKey, messageId, ct);
             if (CheckExpectedParticipant(did) is { } mismatch) return mismatch;
-            var result = await conversation.ChangePost(did, roomKey, messageId, input.Text, false, input.OperationId, ct);
+            var result = await conversation.ChangePost(did, roomKey, messageId, input.Text, false, input.OperationId, ct,
+                facets: input.Facets);
             return StatusCode(result.State == "pending" ? 202 : result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
         });
 
@@ -96,9 +97,12 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         Response.Headers.CacheControl = "no-store";
         try { return await operation(); }
         catch (UnauthorizedAccessException) { return StatusCode(403, new { reason = "Your current access does not permit this operation." }); }
+        catch (WriteConflict) { return Conflict(new { reason = "That operation ID was already used with different content." }); }
         catch (ArgumentException error) { return BadRequest(new { reason = error.Message }); }
     }
 }
 
-public sealed record PostChangeRequest(string Text, string OperationId);
+/// <summary>An edit carries the full composer package (D2a): text plus optional client-verified
+/// facets in the same DTO shape the create path uses; absent facets degrade to server re-detection.</summary>
+public sealed record PostChangeRequest(string Text, string OperationId, IReadOnlyList<PostFacet>? Facets = null);
 public sealed record PostDeleteRequest(string OperationId);

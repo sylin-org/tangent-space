@@ -24,6 +24,24 @@ public sealed class Message : Entity<Message>
     /// <summary>Structural references inside the verbatim text (ADR 0008): byte ranges bound
     /// to stable identities. The text is never rewritten; labels resolve at read time.</summary>
     public IReadOnlyList<PostFacet>? Facets { get; set; }
+
+    /// <summary>The changelog partition name: pre-edit snapshots are insert-only rows
+    /// materialized as <c>TangentSpace.Conversation.Message#changelog</c> (adapter separator '#').</summary>
+    public const string ChangelogPartition = "changelog";
+
+    /// <summary>Snapshot rows only: the live row this pre-edit copy archives. Live rows carry null.</summary>
+    public string? OfMessageId { get; set; }
+
+    /// <summary>Snapshot rows only: the live row's ChangeId when this snapshot was minted, so
+    /// snapshots chain oldest → newest. Null on the original's first snapshot; live rows carry null.</summary>
+    public string? PreviousChangeId { get; set; }
+
+    /// <summary>Snapshot rows only: the classification computed once at edit time. Reads never classify.</summary>
+    public ChangeClass? ChangeClass { get; set; }
+
+    /// <summary>Live rows only: the newest changelog snapshot for this message. Null until the first change.</summary>
+    public string? ChangeId { get; set; }
+
     public static Message Project(SourceDecision source) => new()
     {
         Id = source.Id, RoomKey = source.RoomKey, AuthorDid = source.AuthorDid, SourceUri = source.SourceUri,

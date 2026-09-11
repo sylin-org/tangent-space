@@ -83,6 +83,11 @@ public sealed class ExperienceWebApp : IAsyncDisposable
             ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
             ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={Path.Combine(root, "site.sqlite")}",
             ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={Path.Combine(root, "site.sqlite")}",
+            // W1-B: the in-process embedder activates for change classification exactly as the
+            // deployed appsettings does; relative paths resolve against the test output directory,
+            // where the web project's content artifacts flow transitively.
+            ["Koan:Ai:Onnx:ModelPath"] = "models/all-MiniLM-L6-v2/model_quantized.onnx",
+            ["Koan:Ai:Onnx:VocabPath"] = "models/all-MiniLM-L6-v2/vocab.txt",
         });
         builder.Services.AddKoan();
         // The test host's entry assembly is this test project; add the application's

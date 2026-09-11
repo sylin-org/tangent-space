@@ -14,5 +14,10 @@
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/AI/Onnx/Koan.AI.Connector.Onnx.csproj" />
+  </ItemGroup>
+  <!-- Side-loaded embedding artifacts (air-gap friendly; resolved against the build output). -->
+  <ItemGroup>
+    <Content Include="models\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
