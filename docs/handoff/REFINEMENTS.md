@@ -8,6 +8,13 @@ via the connector, artifacts under `.local/live-exchange/`). Items are ordered b
 value; each names the surfaces it touches.
 
 ## 0. User pages with dual resolution (user-designated for the next effort)
+**Implemented (wave 1, 11 September) under the superseding design in
+[DECISIONS](../DECISIONS.md): `/u/{identifier}` is a kind-dispatched resolver (did: /
+tangent:local: / handle) that redirects to the top of the chain current handle → DID →
+local, following the Bluesky pattern; `/participants/{did}` was removed outright. The
+original design notes below are kept for history — their "DID is canonical" framing was
+replaced by the identity-collection model before implementation.**
+
 `/u/{did}` and `/u/{handle}` resolve to the same canonical participant entity. Design
 specifics to preserve:
 - **The DID is the canonical form.** `/u/{handle}` is a convenience alias resolved via the
@@ -59,8 +66,9 @@ Identity lives at the local MCP server. Design as enumerated by the owner, with 
 ## 0c. Deployment postures and admission defaults (user-directed, 11 September)
 One composability model under a first-class posture dial (not two hardcoded modes):
 - **Local posture** (single operator / swarm): the operator IS the identity provider.
-  Minted DIDs for agents (0b), email/nickname accounts for humans who skip atproto,
-  optional atproto binding for anyone wanting portability. Koan.Identity (Identity/Session/
+  Minted agent identities in the `tangent:local:` form (0b), email/nickname accounts for
+  humans who skip atproto, optional atproto binding for anyone wanting portability.
+  Koan.Identity (Identity/Session/
   ExternalIdentityLink — currently bypassed for the atproto connector) is the natural
   machinery for local password/email accounts. All trust flows from the operator.
 - **Public posture** (internet-exposed): same tiers, secure-by-default — approval-required
@@ -77,6 +85,9 @@ posture, identity strength, rate limits. Restate explicitly: connector sign-in f
 never auto-executable from server discovery without operator consent (existing invariant,
 now named in the threat model).
 
+Recorded as [ADR 0009](../adr/0009-deployment-postures-and-admission.md); this item is the
+design source.
+
 ## 1. Connector mints facets (agent-side picker parity)
 The connector's `CreatePost` tool vocabulary has no `facets` argument; agent posts are plain
 text the parser resolves. Add the argument (schema + decode + journaled body), and optionally
@@ -84,6 +95,13 @@ render facets in the connector's expanded views using the experience API's `reso
 Surfaces: `src/server/mcp/src/application/operations.rs`, `hub.rs`, `src/adapters/mcp.rs`.
 
 ## 2. Edit history chain + facet recompute (user-directed design, 11 September)
+**Implemented (wave 1, 11 September): shared `changelog` partition with write-once
+snapshots on every change, facet-bearing edit packages with deterministic re-detection,
+both classification layers computed at edit time on the ONNX connector, and history reads
+on the generic entity surface (`?set=changelog`) gated per-row by an `EntityAccess<Message>`
+realization. The UI viewer (wave 2) and the connector's ReadTopic markers (wave 3) remain.
+See CURRENT_STATE. Original design notes:**
+
 Edits preserve change history via Koan partitions: on every edit (author edit, delete,
 moderation removal), copy the full pre-edit row into a single shared `changelog` partition
 (`Data<Message,string>.WithPartition`) with a minted GUIDv7, an `OfMessageId` index, and the

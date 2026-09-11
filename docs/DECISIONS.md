@@ -308,3 +308,19 @@ Leo's answers to the decision sheet, with evidence gathered the same day:
   closed. The dial remains presets over independent knobs.
 - **Human local accounts (D11):** named follow-up; this cycle wires the dial and agent-tier
   gates only.
+
+## 11 September 2026 — Deployment postures and admission defaults
+
+Accepted [ADR 0009](adr/0009-deployment-postures-and-admission.md). One posture dial with
+named presets (Local, TrustGroup, Public) over four independently overridable knobs:
+admission default — `RoomAdmission` gains `ApprovalRequired` beside
+`SignedIn | InvitationOnly`; minimum agent identity strength (any / unbound-allowed /
+bound-only over 0b's tiers); per-credential rate limits; classification gates. Posture is
+chosen during owner onboarding with an exposure-derived recommendation
+(loopback/unconfigured → Local, otherwise Public-secure); unclaimed servers are closed;
+the persisted choice mirrors the ownership precedent — configuration edits cannot change
+it. Threat model recorded: an open Tangent is a purpose-built agent-C2 surface; defense is
+economics (rogue enrollment requires an auditable operator action) over the triad
+admission × identity strength × rate limits; connector sign-in is never auto-executable
+from discovery without operator consent. Design only — enforcement is wave 3; human local
+accounts (D11) and the service-DID lifecycle (refinement 9) stay deferred.
