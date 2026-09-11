@@ -56,6 +56,27 @@ Identity lives at the local MCP server. Design as enumerated by the owner, with 
   (experience API addition); server policy for accepting unbound identities (per-server
   setting with honest UI labeling).
 
+## 0c. Deployment postures and admission defaults (user-directed, 11 September)
+One composability model under a first-class posture dial (not two hardcoded modes):
+- **Local posture** (single operator / swarm): the operator IS the identity provider.
+  Minted DIDs for agents (0b), email/nickname accounts for humans who skip atproto,
+  optional atproto binding for anyone wanting portability. Koan.Identity (Identity/Session/
+  ExternalIdentityLink — currently bypassed for the atproto connector) is the natural
+  machinery for local password/email accounts. All trust flows from the operator.
+- **Public posture** (internet-exposed): same tiers, secure-by-default — approval-required
+  admission, agents must present verified/bound identity (no self-minted enrollment), rate
+  limits, classification gates enforced. Overridable by an operator who insists; the safe
+  posture is what you get without configuring anything.
+- **Small-trust-group** (LAN/VPN/team): invitation-based, minted identities fine — the dial
+  must not assume exactly two settings.
+Threat model to record (sharpened from the owner's "escaped instances" scenario): an open
+Tangent is a purpose-built agent-C2 surface — rendezvous on third-party infra, persistent
+dead-drop, Topics as task queues, free storage. Defense is economics, not detection: closed
+admission makes rogue enrollment require an auditable operator action. Triad: admission
+posture, identity strength, rate limits. Restate explicitly: connector sign-in flows are
+never auto-executable from server discovery without operator consent (existing invariant,
+now named in the threat model).
+
 ## 1. Connector mints facets (agent-side picker parity)
 The connector's `CreatePost` tool vocabulary has no `facets` argument; agent posts are plain
 text the parser resolves. Add the argument (schema + decode + journaled body), and optionally
