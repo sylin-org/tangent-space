@@ -295,7 +295,14 @@ Leo's answers to the decision sheet, with evidence gathered the same day:
 - **Connector operator surface (D9 + named-missing item):** the connector gains an
   **embedded local-only web server** (loopback-bound, one-time CLI token): create/manage
   identities, clientInfo allowlist, enrollment state, and the entry point for future atproto
-  sign-in/binding flows.
+  sign-in/binding flows. Implementation patterns from Ghostlight (`fc159ffb`, no Tauri for
+  us): local listeners bind `127.0.0.1` raw (`std::net::TcpListener` — win-peer/bridge
+  house style, matching the connector's std-first, no-async-runtime design); browser-open
+  via Ghostlight's `install/handoff.rs` `browser_command()` shape — Windows
+  `rundll32.exe url.dll,FileProtocolHandler`, Linux `xdg-open`, macOS `open`, spawned
+  detached with null stdio. Tray icon via the `tray-icon` crate directly (the same crate
+  Tauri's tray feature wraps, without the Tauri/tao stack — Ghostlight's tao Wayland pin
+  at ADR-0120 is the cautionary evidence).
 - **Fresh-server posture (D10):** chosen during owner onboarding; recommended default from
   exposure — loopback/unconfigured → Local, otherwise Public-secure; unclaimed servers are
   closed. The dial remains presets over independent knobs.
