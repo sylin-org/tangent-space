@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tangent connector — operator</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 46rem; padding: 1rem 1rem 4rem; }
+  h1 { font-size: 1.3rem; } h2 { font-size: 1.05rem; margin-top: 2rem; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); padding-bottom: .3rem; }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+  th, td { text-align: left; padding: .3rem .5rem; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); font-weight: normal; }
+  th { opacity: .7; }
+  code, input { font: inherit; }
+  input[type=text] { width: 16rem; padding: .2rem .4rem; }
+  button { padding: .25rem .7rem; margin-right: .3rem; }
+  .muted { opacity: .7; } .error { color: crimson; } .ok { color: seagreen; }
+  .row { margin: .35rem 0; }
+  .deferred { margin-top: 2rem; padding: .8rem 1rem; border: 1px dashed color-mix(in srgb, currentColor 35%, transparent); opacity: .8; }
+</style>
+</head>
+<body>
+<h1>Tangent connector</h1>
+<p class="muted">Local operator page. Identities are connector-local personas; enrollments bind one identity
+to one server with a stored session (kept in connector state, like a browser keeps cookies). This page is
+loopback-only and carries a one-time token.</p>
+<p id="notice"></p>
+
+<h2>Identities</h2>
+<table id="identities"><thead><tr><th>handle</th><th>display name</th><th>local id</th><th>enrollments</th><th>sessions</th><th></th></tr></thead><tbody></tbody></table>
+<div class="row">Create: <input type="text" id="new-handle" placeholder="handle (2–253 chars)"> <input type="text" id="new-display" placeholder="display name (optional)"> <button data-action="create-identity">Create identity</button></div>
+<p class="muted">Update an identity: change its handle or display name inline, then press Save. Deleting refuses
+while enrollments exist unless you confirm a cascade (their sessions are forgotten too).</p>
+
+<h2>Client allowlist</h2>
+<p class="muted">An MCP client that calls SelectCompanion without a moniker resolves exactly the identity recorded
+for its <code>clientInfo.name</code>. A rule without an identity — like an unlisted client — resolves nothing.
+The allowlist is a guard against silent wrong-identity action on this machine, not an authentication boundary.</p>
+<table id="allowlist"><thead><tr><th>MCP client name</th><th>identity</th></tr></thead><tbody></tbody></table>
+<div class="row"><input type="text" id="rule-client" placeholder="MCP clientInfo.name"> <select id="rule-identity"></select> <button data-action="add-rule">Add rule</button> <button data-action="save-rules">Save allowlist</button></div>
+
+<h2>Servers / enrollments</h2>
+<table id="enrollments"><thead><tr><th>identity</th><th>server origin</th><th>participant</th><th>session</th><th>auto-check</th><th></th></tr></thead><tbody></tbody></table>
+<div class="row">Enroll an identity at a server (unbound enrollment; the server issues a session stored in
+connector state): <select id="enroll-identity"></select> <input type="text" id="enroll-origin" placeholder="https://tangent.example"> <button data-action="enroll">Enroll</button></div>
+
+<h2>Status</h2>
+<table id="status"><thead><tr><th>server</th><th>waiting</th><th>pending attention</th><th>unresolved writes</th></tr></thead><tbody></tbody></table>
+
+<div class="deferred">
+<button disabled>Sign in with atproto — coming in a later wave</button>
+<p class="muted">Identity binding to an atproto DID (OAuth, delegated key, or operator-browser consent) is designed but not implemented in this wave. Identities above are the unbound tier.</p>
+</div>
+
+<script>
+"use strict";
+const token = new URLSearchParams(location.search).get("token") || "";
+let identities = [];
+let rules = [];
+async function call(path, options) {
+  const response = await fetch(path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token), options);
+  const body = await response.json().catch(() => ({ status: "error", problem: { code: "bad_response", message: "the operator API answered unexpectedly" } }));
+  if (response.status === 401) { note("This page's token is missing or stale. Restart tangent-connector operator and use the freshly printed address.", true); }
+  return body;
+}
+function note(message, isError) {
+  const line = document.getElementById("notice");
+  line.textContent = message; line.className = isError ? "error" : "ok";
+  clearTimeout(note.timer); note.timer = setTimeout(() => { line.textContent = ""; }, 6000);
+}
+function row(cells) { const tr = document.createElement("tr"); for (const cell of cells) { const td = document.createElement("td"); td.append(...(Array.isArray(cell) ? cell : [cell])); tr.append(td); } return tr; }
+function text(value) { return document.createTextNode(value == null ? "" : String(value)); }
+
+function renderIdentities() {
+  const body = document.querySelector("#identities tbody"); body.replaceChildren();
+  for (const identity of identities) {
+    const handle = document.createElement("input"); handle.type = "text"; handle.value = identity.handle;
+    const display = document.createElement("input"); display.type = "text"; display.value = identity.displayName || "";
+    const save = document.createElement("button"); save.textContent = "Save";
+    save.onclick = async () => {
+      const result = await call("/api/identities/" + identity.localId, { method: "POST", headers: { "Content-Type": "application/json", "X-Tangent-Token": token }, body: JSON.stringify({ handle: handle.value, displayName: display.value || null }) });
+      result.status === "ok" ? note("Identity saved.") : note(problem(result), true); await refresh();
+    };
+    const del = document.createElement("button"); del.textContent = "Delete";
+    del.onclick = async () => {
+      const cascade = identity.enrollmentCount > 0 && window.confirm("This identity has " + identity.enrollmentCount + " enrollment(s). Cascade-delete them and their sessions?");
+      const result = await call("/api/identities/" + identity.localId + "/delete", { method: "POST", headers: { "Content-Type": "application/json", "X-Tangent-Token": token }, body: JSON.stringify({ cascade }) });
+      result.status === "ok" ? note("Identity deleted.") : note(problem(result), true); await refresh();
+    };
+    body.append(row([handle, display, text(identity.localId.slice(0, 8) + "…"), text(identity.enrollmentCount), text(identity.sessionsAvailable ? "stored" : "missing"), [save, del]]));
+  }
+  if (!identities.length) body.append(row([text("No identities yet. Create one above, then enroll it at a server below.")]));
+}
+function renderAllowlist() {
+  const body = document.querySelector("#allowlist tbody"); body.replaceChildren();
+  for (const rule of rules) {
+    const select = identitySelect(); select.value = rule.localId || "";
+    select.onchange = () => { rule.localId = select.value || null; };
+    body.append(row([text(rule.clientName), select]));
+  }
+  if (!rules.length) body.append(row([text("No clients listed. An unlisted MCP client resolves nothing, even if only one identity exists.")]));
+  const fill = identitySelect();
+  document.getElementById("rule-identity").replaceChildren(...fill.children);
+}
+function identitySelect() {
+  const select = document.createElement("select");
+  const none = document.createElement("option"); none.value = ""; none.textContent = "(ask — never auto-resolve)";
+  select.append(none);
+  for (const identity of identities) {
+    const option = document.createElement("option"); option.value = identity.localId; option.textContent = identity.handle;
+    select.append(option);
+  }
+  return select;
+}
+function renderEnrollments(enrollments) {
+  const body = document.querySelector("#enrollments tbody"); body.replaceChildren();
+  const byId = new Map(identities.map(identity => [identity.localId, identity.handle]));
+  for (const enrollment of enrollments) {
+    const forget = document.createElement("button"); forget.textContent = "Forget";
+    forget.onclick = async () => {
+      if (!window.confirm("Forget this enrollment and its stored session?")) return;
+      const result = await call("/api/enrollments/" + enrollment.companionId + "/forget", { method: "POST", headers: { "X-Tangent-Token": token }, body: "{}" });
+      result.status === "ok" ? note("Enrollment forgotten.") : note(problem(result), true); await refresh();
+    };
+    body.append(row([
+      text(byId.get(enrollment.identityId) || enrollment.identityId),
+      text(enrollment.origin), text(enrollment.participantRef || "—"),
+      text(enrollment.sessionStatus),
+      text(enrollment.autoCheck ? "on" : "off"), [forget],
+    ]));
+  }
+  if (!enrollments.length) body.append(row([text("No enrollments. Enroll an identity at a server above.")]));
+  const fill = identitySelect();
+  document.getElementById("enroll-identity").replaceChildren(...fill.children);
+}
+function renderStatus(statuses) {
+  const body = document.querySelector("#status tbody"); body.replaceChildren();
+  for (const status of statuses) {
+    body.append(row([text(status.origin), text(status.waiting), text(status.pendingAttention), text(status.unresolvedWrites)]));
+  }
+  if (!statuses.length) body.append(row([text("No enrollments to report on.")]));
+}
+function problem(result) { return (result.problem && (result.problem.code + ": " + result.problem.message)) || "the operator API refused"; }
+async function refresh() {
+  const identitiesResult = await call("/api/identities");
+  if (identitiesResult.status !== "ok") return;
+  identities = identitiesResult.identities || [];
+  renderIdentities(); renderAllowlist();
+  let enrollments = [];
+  for (const identity of identities) {
+    const result = await call("/api/identities/" + identity.localId + "/enrollments");
+    if (result.status === "ok") enrollments = enrollments.concat(result.enrollments || []);
+  }
+  renderEnrollments(enrollments);
+  const status = await call("/api/status");
+  if (status.status === "ok") renderStatus(status.enrollments || []);
+  const allowlist = await call("/api/allowlist");
+  if (allowlist.status === "ok") { rules = allowlist.rules || []; renderAllowlist(); }
+}
+document.addEventListener("click", async (event) => {
+  const action = event.target.getAttribute && event.target.getAttribute("data-action");
+  if (!action) return;
+  const post = (path, payload) => call(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Tangent-Token": token }, body: JSON.stringify(payload) });
+  if (action === "create-identity") {
+    const handle = document.getElementById("new-handle").value.trim();
+    const display = document.getElementById("new-display").value.trim();
+    const result = await post("/api/identities", { handle, displayName: display || null });
+    result.status === "ok" ? note("Identity created.") : note(problem(result), true);
+  }
+  if (action === "add-rule") {
+    const clientName = document.getElementById("rule-client").value.trim();
+    const localId = document.getElementById("rule-identity").value || null;
+    if (!clientName) { note("Name the MCP client exactly as its clientInfo.name reports it.", true); return; }
+    rules = rules.filter(rule => rule.clientName !== clientName); rules.push({ clientName, localId });
+    renderAllowlist();
+  }
+  if (action === "save-rules") {
+    const result = await post("/api/allowlist", { rules });
+    result.status === "ok" ? note("Allowlist saved.") : note(problem(result), true);
+  }
+  if (action === "enroll") {
+    const localId = document.getElementById("enroll-identity").value;
+    const origin = document.getElementById("enroll-origin").value.trim();
+    if (!localId) { note("Pick an identity to enroll.", true); return; }
+    const result = await post("/api/identities/" + localId + "/enroll", { origin });
+    result.status === "ok" ? note("Enrolled; the session is stored.") : note(problem(result), true);
+  }
+  await refresh();
+});
+refresh();
+</script>
+</body>
+</html>

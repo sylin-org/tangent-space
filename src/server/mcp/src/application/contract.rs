@@ -56,12 +56,31 @@ pub struct SnapshotDto {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdentityDto {
+    /// The server's canonical participant reference (its GUIDv7 id). The connector keys
+    /// on this; it is never empty on a usable response.
     #[serde(default)]
-    pub did: String,
+    pub participant_ref: String,
+    /// The participant's atproto DID when one is held; optional since the W2 contract.
+    #[serde(default)]
+    pub did: Option<String>,
     #[serde(default)]
     pub display_name: String,
     #[serde(default)]
     pub handle: Option<String>,
+    /// The participant's identity collection, best-first for display per the registry
+    /// (atproto > internal > connector-client > future kinds). Presentation only.
+    #[serde(default)]
+    pub identities: Vec<IdentityKindDto>,
+}
+
+/// One entry of a participant's identity collection.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityKindDto {
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -112,6 +131,50 @@ pub struct ProblemDto {
     pub code: String,
     #[serde(default)]
     pub message: String,
+}
+
+/// The W2 enrollment exchange: `POST {origin}/api/v1/experience/identities/enroll`, no
+/// Authorization header (pre-credential). Every outcome is HTTP 200 with a status.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnrollResponseDto {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub participant: Option<EnrollParticipantDto>,
+    #[serde(default)]
+    pub credential: Option<EnrollCredentialDto>,
+    #[serde(default)]
+    pub problem: Option<ProblemDto>,
+}
+
+/// The server's view of the enrolled participant.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnrollParticipantDto {
+    #[serde(default)]
+    pub participant_ref: String,
+    #[serde(default)]
+    pub identities: Vec<IdentityKindDto>,
+    #[serde(default)]
+    pub best_label: Option<String>,
+    #[serde(default)]
+    pub did: Option<String>,
+}
+
+/// The one-time scoped credential. The token crosses custody directly; it is never
+/// rendered, journaled or echoed.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnrollCredentialDto {
+    #[serde(default)]
+    pub token: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+    #[serde(default)]
+    pub grants: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

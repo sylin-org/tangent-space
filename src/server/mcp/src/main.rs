@@ -11,8 +11,9 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use tangent_connector::adapters::credentials;
+use tangent_connector::adapters::lockfile;
 use tangent_connector::adapters::mcp;
+use tangent_connector::adapters::operator;
 use tangent_connector::adapters::poller;
 use tangent_connector::application::hub::ConnectorHub;
 use tangent_connector::domain::identity::CallerId;
@@ -39,9 +40,11 @@ fn run(arguments: &[String]) -> i32 {
     let rest = &arguments[1..];
     match command.as_str() {
         "serve" => serve(rest),
+        "operator" => operator::operator(rest),
         "call" => call(rest),
         "catalog" => catalog(rest),
         "enroll" => enroll(rest),
+        "identities" => identities(rest),
         "companions" => companions(rest),
         "check" => check(rest),
         "forget" => forget(rest),
@@ -61,47 +64,59 @@ fn usage() {
     eprintln!(
         "tangent-connector — the personal local MCP connector for Tangent\n\
          \n\
-         serve                          MCP stdio server (the agent-facing intake)\n\
+         serve [--force]                MCP stdio server (the agent-facing intake)\n\
+         operator [--port N] [--no-open] [--force]\n\
+                                        local operator web page + tray (identities,\n\
+                                        client allowlist, enrollments, status)\n\
          call <tool> [json] [--view V]  invoke one participation tool through the same hub\n\
          call --stdin [--json]          read `<tool> <json>` lines from standard input\n\
          catalog [--json]               list the tool catalog\n\
-         enroll --name N --server URL --credential-file P [--no-auto-check]\n\
-         companions [--json]            list enrolled companions\n\
+         enroll --name N --server URL --token-file P [--identity I] [--no-auto-check]\n\
+         identities [--json]            list local identities\n\
+         companions [--json]            list enrollments (companions)\n\
          check [--name N]               run one background digest check (no model)\n\
-         forget --name N                remove a companion and its stored credential\n\
+         forget --name N                remove an enrollment and its stored session\n\
          \n\
-         Environment: TANGENT_CONNECTOR_HOME (state directory),\n\
-         TANGENT_CONNECTOR_PLAINTEXT_CREDENTIALS=1 (development credential fallback)."
+         Environment: TANGENT_CONNECTOR_HOME (state directory)."
     );
 }
 
 // ---------- the MCP intake ----------
 
 fn serve(rest: &[String]) -> i32 {
-    if !rest.is_empty() {
-        eprintln!("serve takes no options");
+    let force = rest.iter().any(|argument| argument == "--force");
+    if !force && !rest.is_empty() {
+        eprintln!("serve takes no options besides --force");
         return EXIT_USAGE;
     }
     let data_dir = data_directory();
-    let hub = match build_hub(CallerId("mcp".into()), data_dir) {
-        Ok(hub) => hub,
+    // Long-running verbs are mutually exclusive per data directory: whole-file state
+    // saves from two processes would clobber each other.
+    let _lock = match lockfile::DataDirLock::acquire(&data_dir, force) {
+        Ok(lock) => lock,
         Err(error) => {
-            eprintln!("cannot open connector state: {error}");
+            eprintln!("{error}");
             return EXIT_FAILED;
         }
     };
-    let auto: Vec<String> = {
-        let store = hub.store().lock().expect("state lock");
-        store.companions().iter().filter(|entry| entry.auto_check).map(|entry| entry.companion_id.clone()).collect()
+    // The hub is constructed when the initialize request names the connecting client;
+    // clientInfo.name becomes the caller (attribution + allowlist key, never a domain
+    // input). One process still serves exactly one client.
+    let build = move |client_name: &str| -> Result<Arc<ConnectorHub>, String> {
+        let hub = build_hub(CallerId(format!("mcp:{client_name}")), data_dir.clone())?;
+        let (auto, poll_seconds) = {
+            let store = hub.store().lock().expect("state lock");
+            let auto = store.companions().iter().filter(|entry| entry.auto_check).map(|entry| entry.companion_id.clone()).collect();
+            let poll_seconds = store.policy().poll_seconds;
+            (auto, poll_seconds)
+        };
+        poller::spawn_checkers(hub.clone(), auto, poll_seconds);
+        Ok(hub)
     };
-    let poll_seconds = {
-        let store = hub.store().lock().expect("state lock");
-        store.policy().poll_seconds
-    };
-    let _stoppers = poller::spawn_checkers(hub.clone(), auto, poll_seconds);
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    mcp::serve(hub, &mut out)
+    mcp::serve(build, &mut out)
+    // stdin ended: the lock releases on drop as the process winds down.
 }
 
 // ---------- the CLI intake ----------
@@ -224,17 +239,37 @@ fn catalog(rest: &[String]) -> i32 {
 
 // ---------- setup and stewardship ----------
 
+/// Reads an operator-supplied session token file: raw `ts_…` token or `{"token": "..."}`
+/// JSON. The file is input, never storage — the session is kept in connector state.
+fn read_token_file(path: &std::path::Path) -> Result<String, String> {
+    let raw = tangent_connector::adapters::store::read_bounded(path, 16 * 1024)?;
+    let trimmed = raw.trim();
+    if trimmed.starts_with('{') {
+        let parsed: Value = serde_json::from_str(trimmed)
+            .map_err(|_| "token file is not valid enrollment JSON".to_string())?;
+        return parsed.get("token").and_then(|value| value.as_str()).map(str::to_string)
+            .filter(|token| !token.is_empty())
+            .ok_or_else(|| "token JSON has no token field".to_string());
+    }
+    if trimmed.len() < 8 {
+        return Err("token file does not contain a usable session token".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
 fn enroll(rest: &[String]) -> i32 {
     let mut name = None;
     let mut server = None;
-    let mut credential_file = None;
+    let mut token_file = None;
+    let mut identity = None;
     let mut auto_check = true;
     let mut remaining = rest.iter();
     while let Some(argument) = remaining.next() {
         match argument.as_str() {
             "--name" => name = remaining.next().cloned(),
             "--server" => server = remaining.next().cloned(),
-            "--credential-file" => credential_file = remaining.next().map(PathBuf::from),
+            "--token-file" => token_file = remaining.next().map(PathBuf::from),
+            "--identity" => identity = remaining.next().cloned(),
             "--no-auto-check" => auto_check = false,
             other => {
                 eprintln!("unknown enroll option {other}");
@@ -242,12 +277,12 @@ fn enroll(rest: &[String]) -> i32 {
             }
         }
     }
-    let (Some(name), Some(server), Some(credential_file)) = (name, server, credential_file) else {
-        eprintln!("enroll requires --name, --server and --credential-file");
+    let (Some(name), Some(server), Some(token_file)) = (name, server, token_file) else {
+        eprintln!("enroll requires --name, --server and --token-file");
         return EXIT_USAGE;
     };
-    let credential = match credentials::read_credential_file(&credential_file) {
-        Ok(credential) => credential,
+    let token = match read_token_file(&token_file) {
+        Ok(token) => token,
         Err(error) => {
             eprintln!("{error}");
             return EXIT_USAGE;
@@ -256,23 +291,23 @@ fn enroll(rest: &[String]) -> i32 {
     let hub = match build_hub(CallerId("cli".into()), data_directory()) {
         Ok(hub) => hub,
         Err(error) => {
-            eprintln!("{error}");
+            eprintln!("cannot open connector state: {error}");
             return EXIT_FAILED;
         }
     };
-    match hub.enroll(&name, &server, &credential, auto_check) {
+    match hub.enroll_as(&name, identity.as_deref(), &server, &token, auto_check) {
         Ok(entry) => {
+            let identity_label = identity.as_deref().unwrap_or(&entry.name).to_string();
             println!(
-                "Enrolled {} as {} ({}) on {} — manual enrollment of an imported scoped credential.\n\
-                 companionId: {} (credential kept in the {})",
+                "Enrolled {} as identity {} ({}) on {} — manual enrollment of an imported session.\n\
+                 companionId: {} (session kept in connector state)",
                 entry.name,
-                entry.display_name.as_deref().unwrap_or(&entry.did),
-                entry.did,
+                identity_label,
+                entry.did.as_deref().unwrap_or(&entry.participant_ref),
                 entry.origin,
-                entry.companion_id,
-                if entry.credential_source == "platform" { "platform credential store" } else { "development plaintext fallback" }
+                entry.companion_id
             );
-            println!("Delete the imported credential file if it is no longer needed.");
+            println!("Delete the imported token file if it is no longer needed.");
             EXIT_OK
         }
         Err(error) => {
@@ -280,6 +315,53 @@ fn enroll(rest: &[String]) -> i32 {
             EXIT_FAILED
         }
     }
+}
+
+fn identities(rest: &[String]) -> i32 {
+    let json = rest.iter().any(|argument| argument == "--json");
+    let hub = match build_hub(CallerId("cli".into()), data_directory()) {
+        Ok(hub) => hub,
+        Err(error) => {
+            eprintln!("cannot open connector state: {error}");
+            return EXIT_FAILED;
+        }
+    };
+    let entries: Vec<(Value, usize)> = {
+        let store = hub.store().lock().expect("state lock");
+        store
+            .identities()
+            .iter()
+            .map(|identity| {
+                let enrollment_count = store.companions_of(&identity.local_id).len();
+                (
+                    json!({
+                        "localId": identity.local_id,
+                        "handle": identity.handle,
+                        "displayName": identity.display_name,
+                        "boundDid": identity.bound_did,
+                    }),
+                    enrollment_count,
+                )
+            })
+            .collect()
+    };
+    if json {
+        let plain: Vec<Value> = entries.into_iter().map(|(value, _)| value).collect();
+        println!("{}", serde_json::to_string_pretty(&plain).unwrap_or_default());
+    } else {
+        if entries.is_empty() {
+            println!("No identities exist yet. Create one in the operator page (tangent-connector operator).");
+        }
+        for (identity, count) in &entries {
+            println!(
+                "{}\n    {} · {} enrollment(s)",
+                identity.get("handle").and_then(Value::as_str).unwrap_or_default(),
+                identity.get("localId").and_then(Value::as_str).unwrap_or_default(),
+                count
+            );
+        }
+    }
+    EXIT_OK
 }
 
 fn companions(rest: &[String]) -> i32 {
@@ -298,7 +380,9 @@ fn companions(rest: &[String]) -> i32 {
         .map(|entry| {
             json!({
                 "companionId": entry.companion_id,
+                "identityId": entry.local_id,
                 "name": entry.name,
+                "participantRef": entry.participant_ref,
                 "did": entry.did,
                 "displayName": entry.display_name,
                 "handle": entry.handle,
@@ -312,13 +396,14 @@ fn companions(rest: &[String]) -> i32 {
         println!("{}", serde_json::to_string_pretty(&companions).unwrap_or_default());
     } else {
         if companions.is_empty() {
-            println!("No companions are enrolled. Use enroll first.");
+            println!("No companions are enrolled. Use enroll or the operator page first.");
         }
         for entry in &companions {
             println!(
-                "{}\n    {} · {} · auto-check {}",
+                "{}\n    identity {} · {} · {} · auto-check {}",
                 entry.get("name").and_then(Value::as_str).unwrap_or_default(),
-                entry.get("did").and_then(Value::as_str).unwrap_or_default(),
+                entry.get("identityId").and_then(Value::as_str).unwrap_or_default(),
+                entry.get("participantRef").and_then(Value::as_str).unwrap_or_default(),
                 entry.get("server").and_then(Value::as_str).unwrap_or_default(),
                 entry.get("autoCheck").and_then(Value::as_bool).unwrap_or_default(),
             );
@@ -401,17 +486,12 @@ fn forget(rest: &[String]) -> i32 {
         eprintln!("no companion matches '{name}'");
         return EXIT_USAGE;
     };
-    credentials::delete(
-        &data_dir,
-        &if entry.credential_source == "plaintext-dev" { credentials::CredentialSource::PlaintextDev } else { credentials::CredentialSource::PlatformStore },
-        &entry.name,
-    );
     store.remove_companion(&entry.companion_id);
     let result = store.save();
     drop(store);
     match result {
         Ok(()) => {
-            println!("Removed {} and its stored credential.", entry.name);
+            println!("Removed {} and its stored session.", entry.name);
             EXIT_OK
         }
         Err(error) => {

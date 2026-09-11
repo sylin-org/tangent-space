@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::attention::{AttentionRecord, AttentionState, ATTENTION_RECORD_LIMIT};
-use crate::domain::identity::{CallerId, CompanionEntry, LocalContext};
+use crate::domain::identity::{CallerId, ClientRule, CompanionEntry, Identity, LocalContext};
 use crate::domain::policy::{AttentionPolicy, PolicyLedger};
 use crate::domain::writes::PendingWrite;
 
@@ -22,7 +22,17 @@ const JOURNAL_LINE_LIMIT: u64 = 256 * 1024;
 struct StateFile {
     version: u32,
     #[serde(default)]
+    identities: Vec<Identity>,
+    #[serde(default)]
+    client_rules: Vec<ClientRule>,
+    #[serde(default)]
     companions: Vec<CompanionEntry>,
+    /// Bearer sessions per enrollment, keyed by companion id. Sessions live in
+    /// user-profile state BY DESIGN (owner decision): a `ts_…` token is a
+    /// cookie-equivalent session id, same exposure class as a browser cookie jar —
+    /// not a vault secret. Two enrollments of one identity hold two distinct entries.
+    #[serde(default)]
+    sessions: HashMap<String, String>,
     #[serde(default)]
     contexts: Vec<LocalContext>,
     #[serde(default)]
@@ -48,26 +58,66 @@ pub struct StateStore {
     path: PathBuf,
     journal_path: PathBuf,
     state: StateFile,
+    dropped_enrollments: Vec<(String, String)>,
 }
 
 impl StateStore {
-    /// Loads (or initializes) state under the data directory.
+    /// Loads (or initializes) state under the data directory. Enrollments recorded before
+    /// the identity model (empty `local_id`) are dropped here — the standing wipe rule
+    /// forbids migration code, and re-enrollment is the documented path. When any were
+    /// dropped, the cleaned state is saved once immediately, so the drop persists and the
+    /// `EnrollmentDropped` journal line fires on this launch only, not on every launch.
+    /// The caller reads them back with [`StateStore::take_dropped_enrollments`] to
+    /// publish the events once the event bus exists.
     pub fn open(data_dir: &Path) -> Result<Self, String> {
         fs::create_dir_all(data_dir).map_err(|error| format!("cannot create data directory: {error}"))?;
         let path = data_dir.join(STATE_FILE);
         let journal_path = data_dir.join(JOURNAL_FILE);
-        let state = match fs::read(&path) {
+        let mut state = match fs::read(&path) {
             Ok(bytes) if !bytes.is_empty() => serde_json::from_slice(&bytes)
                 .map_err(|error| format!("state file is malformed: {error}"))?,
             _ => StateFile { version: 1, ..Default::default() },
         };
-        Ok(Self { path, journal_path, state })
+        let legacy: Vec<CompanionEntry> = state.companions.iter().filter(|entry| entry.local_id.is_empty()).cloned().collect();
+        let mut dropped = Vec::new();
+        for entry in legacy {
+            dropped.push((entry.companion_id.clone(), entry.name.clone()));
+            remove_companion_state(&mut state, &entry.companion_id);
+        }
+        let store = Self { path, journal_path, state, dropped_enrollments: dropped };
+        if !store.dropped_enrollments.is_empty() {
+            store.save()?;
+        }
+        Ok(store)
+    }
+
+    /// The `(companion_id, name)` pairs dropped at load, for the `EnrollmentDropped`
+    /// events; takes them.
+    pub fn take_dropped_enrollments(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.dropped_enrollments)
     }
 
     /// Atomic snapshot write: unique temp file, write, sync, rename.
     pub fn save(&self) -> Result<(), String> {
         let bytes = serde_json::to_vec_pretty(&self.state).map_err(|error| format!("cannot encode state: {error}"))?;
         atomic_write(&self.path, &bytes)
+    }
+
+    // ----- sessions -----
+
+    /// The bearer session of one enrollment. The token is handed only to the port layer;
+    /// it never renders, logs or journals.
+    pub fn session(&self, companion_id: &str) -> Option<String> {
+        self.state.sessions.get(companion_id).cloned()
+    }
+
+    pub fn set_session(&mut self, companion_id: &str, token: &str) {
+        self.state.sessions.insert(companion_id.to_string(), token.to_string());
+    }
+
+    /// Whether an enrollment holds a session (status reporting only).
+    pub fn has_session(&self, companion_id: &str) -> bool {
+        self.state.sessions.contains_key(companion_id)
     }
 
     pub fn policy(&self) -> AttentionPolicy {
@@ -78,7 +128,84 @@ impl StateStore {
         self.state.policy = Some(policy);
     }
 
-    // ----- companions -----
+    // ----- identities -----
+
+    pub fn identities(&self) -> &[Identity] {
+        &self.state.identities
+    }
+
+    pub fn identity(&self, local_id: &str) -> Option<Identity> {
+        self.state.identities.iter().find(|identity| identity.local_id == local_id).cloned()
+    }
+
+    /// Exact handle lookup, case-insensitive; `@`-prefixed input is accepted.
+    pub fn identity_by_handle(&self, handle: &str) -> Option<Identity> {
+        let supplied = handle.trim().strip_prefix('@').unwrap_or(handle.trim());
+        self.state
+            .identities
+            .iter()
+            .find(|identity| identity.handle.eq_ignore_ascii_case(supplied))
+            .cloned()
+    }
+
+    pub fn identity_by_moniker(&self, moniker: &str) -> Option<Identity> {
+        if let Some(identity) = self.identity_by_handle(moniker) {
+            return Some(identity);
+        }
+        let trimmed = moniker.trim();
+        self.state.identities.iter().find(|identity| identity.local_id == trimmed).cloned()
+    }
+
+    /// Inserts or updates one identity. The caller enforces handle validity; this side
+    /// enforces connector-wide handle uniqueness (case-insensitive, excluding the identity
+    /// being updated).
+    pub fn upsert_identity(&mut self, identity: Identity) -> Result<(), String> {
+        if let Some(clash) = self.state.identities.iter().find(|existing| {
+            existing.local_id != identity.local_id && existing.handle.eq_ignore_ascii_case(&identity.handle)
+        }) {
+            return Err(format!("handle '{}' is already used by identity '{}'", identity.handle, clash.handle));
+        }
+        match self.state.identities.iter_mut().find(|existing| existing.local_id == identity.local_id) {
+            Some(existing) => *existing = identity,
+            None => self.state.identities.push(identity),
+        }
+        Ok(())
+    }
+
+    /// Removes one identity. Enrollments must be gone first (the hub cascades them);
+    /// dangling client rules pointing at it are dropped.
+    pub fn remove_identity(&mut self, local_id: &str) {
+        self.state.identities.retain(|identity| identity.local_id != local_id);
+        for rule in &mut self.state.client_rules {
+            if rule.local_id.as_deref() == Some(local_id) {
+                rule.local_id = None;
+            }
+        }
+    }
+
+    // ----- client allowlist -----
+
+    pub fn client_rules(&self) -> &[ClientRule] {
+        &self.state.client_rules
+    }
+
+    /// Replaces the allowlist. One rule per client name — duplicates dedupe with the
+    /// last occurrence winning, matching the documented semantics; the caller validates
+    /// referenced identities.
+    pub fn set_client_rules(&mut self, rules: Vec<ClientRule>) {
+        let mut deduped: Vec<ClientRule> = Vec::new();
+        for rule in rules {
+            deduped.retain(|existing| existing.client_name != rule.client_name);
+            deduped.push(rule);
+        }
+        self.state.client_rules = deduped;
+    }
+
+    pub fn client_rule(&self, client_name: &str) -> Option<ClientRule> {
+        self.state.client_rules.iter().find(|rule| rule.client_name == client_name).cloned()
+    }
+
+    // ----- companions (enrollments) -----
 
     pub fn companions(&self) -> &[CompanionEntry] {
         &self.state.companions
@@ -92,6 +219,19 @@ impl StateStore {
         self.state.companions.iter().find(|entry| entry.matches(moniker)).cloned()
     }
 
+    pub fn companions_of(&self, local_id: &str) -> Vec<CompanionEntry> {
+        self.state.companions.iter().filter(|entry| entry.local_id == local_id).cloned().collect()
+    }
+
+    /// The enrollment of one identity at one canonical origin.
+    pub fn enrollment_at(&self, local_id: &str, origin: &str) -> Option<CompanionEntry> {
+        self.state
+            .companions
+            .iter()
+            .find(|entry| entry.local_id == local_id && entry.origin == origin)
+            .cloned()
+    }
+
     pub fn upsert_companion(&mut self, entry: CompanionEntry) {
         match self.state.companions.iter_mut().find(|existing| existing.companion_id == entry.companion_id) {
             Some(existing) => *existing = entry,
@@ -100,12 +240,7 @@ impl StateStore {
     }
 
     pub fn remove_companion(&mut self, companion_id: &str) {
-        self.state.companions.retain(|entry| entry.companion_id != companion_id);
-        self.state.attention.remove(companion_id);
-        self.state.checkpoints.remove(companion_id);
-        self.state.ledgers.remove(companion_id);
-        self.state.waiting_counts.remove(companion_id);
-        self.state.contexts.retain(|context| context.companion_id != companion_id);
+        remove_companion_state(&mut self.state, companion_id);
     }
 
     // ----- contexts -----
@@ -128,7 +263,7 @@ impl StateStore {
             caller: caller.clone(),
             companion_id: companion.companion_id.clone(),
             origin: companion.origin.clone(),
-            did: companion.did.clone(),
+            participant_ref: companion.participant_ref.clone(),
             created_at: now,
             last_used_at: now,
         };
@@ -342,6 +477,19 @@ impl StateStore {
     }
 }
 
+/// Cascades every piece of derived state that belongs to one enrollment — including its
+/// session.
+fn remove_companion_state(state: &mut StateFile, companion_id: &str) {
+    state.companions.retain(|entry| entry.companion_id != companion_id);
+    state.sessions.remove(companion_id);
+    state.attention.remove(companion_id);
+    state.checkpoints.remove(companion_id);
+    state.revisions.remove(companion_id);
+    state.ledgers.remove(companion_id);
+    state.waiting_counts.remove(companion_id);
+    state.contexts.retain(|context| context.companion_id != companion_id);
+}
+
 fn truncate(value: &str, limit: usize) -> String {
     if value.len() <= limit {
         value.to_string()
@@ -356,6 +504,11 @@ fn truncate(value: &str, limit: usize) -> String {
 
 pub fn short_uuid() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..8].to_string()
+}
+
+/// Connector-minted identity id: GUIDv7, 32 hex characters. Never formatted as a DID.
+pub fn new_local_id() -> String {
+    uuid::Uuid::now_v7().simple().to_string()
 }
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {

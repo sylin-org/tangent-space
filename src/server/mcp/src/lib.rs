@@ -16,6 +16,7 @@ use crate::adapters::store::StateStore;
 use crate::application::bus::EventBus;
 use crate::application::hub::ConnectorHub;
 use crate::application::ports::ExperiencePort;
+use crate::domain::events::DomainEvent;
 use crate::domain::identity::CallerId;
 
 /// Where durable state lives: `$TANGENT_CONNECTOR_HOME` or `~/.tangent-connector`.
@@ -30,11 +31,21 @@ pub fn data_directory() -> PathBuf {
     base.join(".tangent-connector")
 }
 
-/// Builds the hub over the ureq experience client and the durable store.
+/// Builds the hub over the ureq experience client and the durable store. Enrollments that
+/// predate the identity model are dropped at open (the standing wipe rule forbids
+/// migration); their `EnrollmentDropped` events reach the diagnostics journal here, once
+/// the bus exists.
 pub fn build_hub(caller: CallerId, data_dir: PathBuf) -> Result<Arc<ConnectorHub>, String> {
     let port: Arc<dyn ExperiencePort> = Arc::new(UreqExperience::new());
-    let store = StateStore::open(&data_dir)?;
     let events = Arc::new(EventBus::new());
+    let mut store = StateStore::open(&data_dir)?;
+    for (companion_id, name) in store.take_dropped_enrollments() {
+        events.publish(DomainEvent::EnrollmentDropped {
+            companion_id,
+            name,
+            reason: "enrollment predates the identity model; re-enroll to rejoin".into(),
+        });
+    }
     adapters::diagnostics::spawn(&events, data_dir.clone());
-    Ok(Arc::new(ConnectorHub::new(port, store, events, caller, data_dir)))
+    Ok(Arc::new(ConnectorHub::new(port, store, events, caller)))
 }

@@ -47,6 +47,10 @@ impl ExperiencePort for UreqExperience {
     fn wait(&self, context: &RequestContext, path: &str) -> Result<Value, ExperienceError> {
         request(&self.agent, context, "GET", path, None, WAIT_TIMEOUT)
     }
+
+    fn enroll(&self, origin: &str, path: &str, body: &Value) -> Result<Value, ExperienceError> {
+        request_anonymous(&self.agent, origin, path, body, READ_TIMEOUT)
+    }
 }
 
 fn request(
@@ -59,6 +63,24 @@ fn request(
 ) -> Result<Value, ExperienceError> {
     let url = format!("{}{}", context.origin, path);
     let request = agent.request(method, &url).timeout(timeout).set("Authorization", &format!("Bearer {}", context.credential));
+    dispatch(request, body)
+}
+
+/// The pre-credential enrollment exchange: same framing and status handling, no
+/// Authorization header.
+fn request_anonymous(
+    agent: &ureq::Agent,
+    origin: &str,
+    path: &str,
+    body: &Value,
+    timeout: Duration,
+) -> Result<Value, ExperienceError> {
+    let url = format!("{origin}{path}");
+    let request = agent.request("POST", &url).timeout(timeout);
+    dispatch(request, Some(body))
+}
+
+fn dispatch(request: ureq::Request, body: Option<&Value>) -> Result<Value, ExperienceError> {
     let request = match body {
         Some(value) if !value.is_null() => request.set("Content-Type", "application/json"),
         _ => request,

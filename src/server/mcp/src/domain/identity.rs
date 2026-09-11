@@ -1,13 +1,24 @@
-//! Local identity and context bindings. Handles are routing state, never credentials: a
-//! companion is an enrolled credential plus its verified identity and server binding, and a
-//! context binds one companion to one canonical server origin for one caller.
+//! Local identity, enrollment and context bindings. Handles are routing state, never
+//! credentials: an identity is a locally minted participant persona, an enrollment is the
+//! credential + server binding for one identity at one origin, and a context binds one
+//! enrollment to one caller for one canonical origin.
 
 use serde::{Deserialize, Serialize};
 
 /// The local caller identity. stdio v1 admits exactly one operator-approved caller per
-/// process; the field exists so a later daemon does not silently merge principals.
+/// process; the field exists so a later daemon does not silently merge principals. For the
+/// MCP intake the caller is `mcp:{clientInfo.name}`; the connector keys the client
+/// allowlist on that suffix.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallerId(pub String);
+
+impl CallerId {
+    /// The `clientInfo.name` this caller was admitted under, when it is an MCP caller.
+    /// The CLI caller has none: CLI verbs never auto-resolve an identity.
+    pub fn mcp_client_name(&self) -> Option<&str> {
+        self.0.strip_prefix("mcp:")
+    }
+}
 
 impl Default for CallerId {
     fn default() -> Self {
@@ -15,38 +26,77 @@ impl Default for CallerId {
     }
 }
 
-/// One enrolled companion: manual import of a scoped participant credential, verified at
-/// enrollment against the server's own experience identity response.
+/// One local identity: the persona the connector acts as. Minted locally (GUIDv7,
+/// immutable); binding it to an atproto DID is a later wave, so `bound_did` is normally
+/// `None`. The handle is unique within the connector.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Identity {
+    /// Connector-minted GUIDv7 (32 hex chars). Never formatted as a DID.
+    pub local_id: String,
+    /// Operator-chosen handle, 2..=253 characters, unique (case-insensitive) within the
+    /// connector. Used for moniker selection.
+    pub handle: String,
+    pub display_name: Option<String>,
+    /// The atproto DID once a binding is verified; `None` in the unbound tier.
+    #[serde(default)]
+    pub bound_did: Option<String>,
+    pub created_at: i64,
+}
+
+/// Identity handle discipline: 2..=253 characters, no whitespace, no separators.
+pub fn valid_handle(handle: &str) -> bool {
+    let trimmed = handle.trim();
+    (2..=253).contains(&trimmed.chars().count())
+        && trimmed == handle
+        && !handle.chars().any(|c| c.is_whitespace() || c == ':')
+}
+
+/// One enrollment: the session + server binding for one identity at one origin. Manual
+/// import of an existing session token, or an unbound enrollment performed against the
+/// server's enrollment endpoint. Verified at enrollment time against the server's own
+/// identity response. The bearer session itself lives in the store's per-enrollment
+/// session map — deliberately NOT on this struct, so cloned entries never carry it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompanionEntry {
-    /// Stable local handle, e.g. `cmp_lumen`.
+    /// Stable local handle for this enrollment, e.g. `cmp_lumen`; also its session key.
     pub companion_id: String,
+    /// The owning identity's `local_id`. Legacy entries without one are dropped at load.
+    #[serde(default)]
+    pub local_id: String,
     /// Operator-chosen short name used for selection matching.
     pub name: String,
-    /// Canonical server origin this companion is enrolled against.
+    /// Canonical server origin this enrollment is bound to.
     pub origin: String,
-    /// Verified participant DID from the server's identity response.
-    pub did: String,
+    /// The server's canonical participant reference (its GUIDv7 id per the W2 contract).
+    #[serde(default)]
+    pub participant_ref: String,
+    /// The participant's atproto DID when the server reports one; optional since W2.
+    #[serde(default)]
+    pub did: Option<String>,
     /// Display name and handle as the server reports them (presentation only).
     pub display_name: Option<String>,
     pub handle: Option<String>,
     pub enrolled_at: i64,
-    /// Whether the background checker runs for this companion while the process lives.
+    /// Whether the background checker runs for this enrollment while the process lives.
     pub auto_check: bool,
-    /// Where the credential is kept: `platform` store or `plaintext-dev` fallback.
-    pub credential_source: String,
 }
 
 impl CompanionEntry {
-    /// Moniker matching mirrors the server's companion selection: exact DID, or exact handle
-    /// (case-insensitive, one optional leading @), or the local name. Never a display-name guess.
+    /// Moniker matching mirrors the server's companion selection: exact participant
+    /// reference or DID, exact handle (case-insensitive, one optional leading @), or the
+    /// local name. Never a display-name guess.
     pub fn matches(&self, moniker: &str) -> bool {
         let trimmed = moniker.trim();
         if trimmed.is_empty() || trimmed.len() > 253 {
             return false;
         }
-        if trimmed == self.did || trimmed == self.name {
+        if trimmed == self.name || trimmed == self.companion_id || trimmed == self.participant_ref {
             return true;
+        }
+        if let Some(did) = &self.did {
+            if trimmed == did {
+                return true;
+            }
         }
         let Some(handle) = &self.handle else { return false };
         let supplied = trimmed.strip_prefix('@').unwrap_or(trimmed);
@@ -54,7 +104,19 @@ impl CompanionEntry {
     }
 }
 
-/// A participation context: caller + companion + canonical origin + credential binding.
+/// One clientInfo allowlist rule. `local_id: None` means "ask, never auto-resolve": a
+/// connecting MCP client resolves nothing until the operator records an exact identity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientRule {
+    /// The `clientInfo.name` an MCP client connects under (exact, case-sensitive).
+    pub client_name: String,
+    /// The identity this client acts as, or `None` to require explicit selection.
+    #[serde(default)]
+    pub local_id: Option<String>,
+}
+
+/// A participation context: caller + enrollment + canonical origin + credential binding.
+/// The acting identity rides the enrollment; it is never chosen here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalContext {
     /// Stable local handle, e.g. `ctx_9f01ab`.
@@ -62,13 +124,15 @@ pub struct LocalContext {
     pub caller: CallerId,
     pub companion_id: String,
     pub origin: String,
-    pub did: String,
+    /// The enrollment's participant reference at enrollment time (presentation only).
+    #[serde(default)]
+    pub participant_ref: String,
     pub created_at: i64,
     pub last_used_at: i64,
 }
 
 impl LocalContext {
-    /// A context is usable only for the exact caller and companion it was issued to.
+    /// A context is usable only for the exact caller and enrollment it was issued to.
     pub fn belongs_to(&self, caller: &CallerId, companion_id: &str) -> bool {
         &self.caller == caller && self.companion_id == companion_id
     }

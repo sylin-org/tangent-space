@@ -6,19 +6,17 @@
 //! remaining spokes; none of them talks to another directly.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 
-use crate::adapters::credentials::{self, CredentialSource};
 use crate::adapters::store::StateStore;
 use crate::application::bus::EventBus;
 use crate::application::contract::{self, ExperienceDto};
 use crate::application::operations::{decode, Operation, ViewMode};
 use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext};
 use crate::domain::events::DomainEvent;
-use crate::domain::identity::{CallerId, CompanionEntry, LocalContext};
+use crate::domain::identity::{valid_handle, CallerId, CompanionEntry, LocalContext};
 use crate::domain::intake::IntakeChannel;
 use crate::domain::refs;
 use crate::domain::writes::PendingWrite;
@@ -34,6 +32,16 @@ pub struct ToolOutcome {
     pub status: String,
     pub text: String,
     pub structured: Value,
+}
+
+/// Read-only per-enrollment attention/pending-write snapshot for the operator page.
+pub struct EnrollmentStatus {
+    pub companion_id: String,
+    pub identity_local_id: String,
+    pub origin: String,
+    pub waiting: i64,
+    pub pending_attention: usize,
+    pub unresolved_writes: usize,
 }
 
 impl ToolOutcome {
@@ -62,69 +70,356 @@ pub struct ConnectorHub {
     store: Mutex<StateStore>,
     events: Arc<EventBus>,
     caller: CallerId,
-    data_dir: PathBuf,
 }
 
 impl ConnectorHub {
-    pub fn new(
-        port: Arc<dyn ExperiencePort>,
-        store: StateStore,
-        events: Arc<EventBus>,
-        caller: CallerId,
-        data_dir: PathBuf,
-    ) -> Self {
-        Self { port, store: Mutex::new(store), events, caller, data_dir }
+    pub fn new(port: Arc<dyn ExperiencePort>, store: StateStore, events: Arc<EventBus>, caller: CallerId) -> Self {
+        Self { port, store: Mutex::new(store), events, caller }
     }
 
     pub fn events(&self) -> Arc<EventBus> {
         self.events.clone()
     }
 
-    /// Manual enrollment: import an existing scoped participant credential, verify the
-    /// resolved DID and origin against the server's own identity response, and record the
-    /// binding. Import never broadens the token's grants.
-    pub fn enroll(&self, name: &str, origin: &str, credential: &str, auto_check: bool) -> Result<CompanionEntry, String> {
+    /// Manual enrollment: import an existing session token, verify the participant
+    /// reference and origin against the server's own identity response, and record the
+    /// binding. Import never broadens the session's grants. When `identity` names no
+    /// existing identity, a fresh one is minted with `name` as its handle.
+    pub fn enroll(&self, name: &str, origin: &str, session: &str, auto_check: bool) -> Result<CompanionEntry, String> {
+        self.enroll_as(name, None, origin, session, auto_check)
+    }
+
+    /// Manual enrollment bound to an explicit identity (handle or local id).
+    pub fn enroll_as(
+        &self,
+        name: &str,
+        identity: Option<&str>,
+        origin: &str,
+        session: &str,
+        auto_check: bool,
+    ) -> Result<CompanionEntry, String> {
         let canonical = refs::acceptable_origin(origin)
             .ok_or_else(|| "Use one HTTPS server origin, or explicit loopback HTTP for development".to_string())?;
         let context = RequestContext {
             origin: canonical.clone(),
-            credential: credential.to_string(),
-            did: String::new(),
+            credential: session.to_string(),
+            participant_ref: String::new(),
         };
         let raw = self.port.get(&context, "/api/v1/experience").map_err(|error| match error {
             ExperienceError::Unreachable => "the server could not be reached".to_string(),
             ExperienceError::Unauthorized => {
-                "the credential was rejected; it may be expired, revoked or from another server".to_string()
+                "the session was rejected; it may be expired, revoked or from another server".to_string()
             }
             ExperienceError::Application { code, message } => format!("{code}: {message}"),
             ExperienceError::Transport(detail) => detail,
         })?;
         let experience = contract::parse(&raw).map_err(|error| format!("{error}; is this a Tangent experience API?"))?;
-        let identity = experience.identity.ok_or_else(|| "the server did not confirm a participant identity".to_string())?;
-        if !identity.did.starts_with("did:") {
-            return Err("the server did not resolve a verified DID".to_string());
+        let identity_view = experience.identity.ok_or_else(|| "the server did not confirm a participant identity".to_string())?;
+        if identity_view.participant_ref.is_empty() {
+            return Err("the server did not confirm a participant reference".to_string());
         }
-        let source = credentials::store(&self.data_dir, name, credential)?;
-        let entry = CompanionEntry {
-            companion_id: format!("cmp_{}", crate::adapters::store::short_uuid()),
-            name: name.to_string(),
-            origin: canonical,
-            did: identity.did,
-            display_name: Some(identity.display_name),
-            handle: identity.handle,
-            enrolled_at: now_millis(),
-            auto_check,
-            credential_source: match source {
-                CredentialSource::PlatformStore => "platform".to_string(),
-                CredentialSource::PlaintextDev => "plaintext-dev".to_string(),
+        let mut store = self.lock_store()?;
+        let bound_identity = match identity {
+            Some(handle_or_id) => store.identity_by_moniker(handle_or_id).ok_or_else(|| {
+                format!("no local identity matches '{handle_or_id}'; create one first in the operator page")
+            })?,
+            None => match store.identity_by_handle(name) {
+                Some(existing) => existing,
+                None => {
+                    if !valid_handle(name) {
+                        return Err(format!("'{name}' cannot become an identity handle; use 2-253 characters without spaces"));
+                    }
+                    let minted = crate::domain::identity::Identity {
+                        local_id: crate::adapters::store::new_local_id(),
+                        handle: name.to_string(),
+                        display_name: None,
+                        bound_did: None,
+                        created_at: now_millis(),
+                    };
+                    store.upsert_identity(minted.clone())?;
+                    minted
+                }
             },
         };
-        let mut store = self.lock_store()?;
+        if let Some(existing) = store.enrollment_at(&bound_identity.local_id, &canonical) {
+            return Err(format!(
+                "identity '{}' already holds an enrollment at {canonical} ({}); forget it first if you mean to replace it",
+                bound_identity.handle, existing.companion_id
+            ));
+        }
+        // The imported session is stored per enrollment, keyed by its fresh companion id:
+        // one identity at two servers keeps two distinct sessions.
+        let companion_id = format!("cmp_{}", crate::adapters::store::short_uuid());
+        let entry = CompanionEntry {
+            companion_id,
+            local_id: bound_identity.local_id.clone(),
+            name: name.to_string(),
+            origin: canonical,
+            participant_ref: identity_view.participant_ref,
+            did: identity_view.did,
+            display_name: Some(identity_view.display_name),
+            handle: identity_view.handle,
+            enrolled_at: now_millis(),
+            auto_check,
+        };
         store.upsert_companion(entry.clone());
+        store.set_session(&entry.companion_id, session);
         store.save()?;
         drop(store);
         self.events.publish(DomainEvent::CompanionSelected { companion_id: entry.companion_id.clone() });
         Ok(entry)
+    }
+
+    /// Unbound enrollment per the frozen W2 contract: ask the server to enroll this
+    /// identity, store the returned session in connector state, and create the
+    /// enrollment. The token never renders, logs or journals.
+    pub fn enroll_unbound(&self, local_id: &str, origin: &str) -> Result<CompanionEntry, String> {
+        self.attributed("operator.enroll_unbound", || {
+            let canonical = refs::acceptable_origin(origin)
+                .ok_or_else(|| "Use one HTTPS server origin, or explicit loopback HTTP for development".to_string())?;
+            let (identity, already) = {
+                let store = self.lock_store()?;
+                let identity = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+                let already = store.enrollment_at(local_id, &canonical).is_some();
+                (identity, already)
+            };
+            if already {
+                return Err(
+                    "already_enrolled: this identity already holds a session for that server. Use the existing enrollment, or forget it first to re-enroll."
+                        .to_string(),
+                );
+            }
+            let mut body = json!({
+                "client": { "localId": identity.local_id, "handle": identity.handle },
+                "serverRef": { "label": "tangent-connector" },
+            });
+            if let Some(display) = &identity.display_name {
+                body["client"]["displayName"] = json!(display);
+            }
+            let raw = self
+                .port
+                .enroll(&canonical, "/api/v1/experience/identities/enroll", &body)
+                .map_err(|error| enroll_transport_error(&error))?;
+            let response: contract::EnrollResponseDto =
+                serde_json::from_value(raw).map_err(|error| format!("malformed enrollment response: {error}"))?;
+            match response.status.as_str() {
+                "ok" => {
+                    let participant = response
+                        .participant
+                        .ok_or_else(|| "the server confirmed enrollment without a participant".to_string())?;
+                    if participant.participant_ref.is_empty() {
+                        return Err("the server did not confirm a participant reference".to_string());
+                    }
+                    let granted = response
+                        .credential
+                        .ok_or_else(|| "the server confirmed enrollment without a session".to_string())?;
+                    if granted.token.is_empty() {
+                        return Err("the server returned an empty session".to_string());
+                    }
+                    let mut store = self.lock_store()?;
+                    // Re-check under the write lock: a concurrent intake may have enrolled
+                    // this (identity, origin) while the exchange was in flight. The new
+                    // session is then discarded — the state save below is the only write,
+                    // so nothing needs rolling back — and the honest answer is
+                    // already_enrolled with the existing enrollment intact.
+                    if let Some(existing) = store.enrollment_at(local_id, &canonical) {
+                        return Err(format!(
+                            "already_enrolled: identity '{}' gained an enrollment at {canonical} during the exchange ({}); use it, or forget it first to re-enroll",
+                            identity.handle, existing.companion_id
+                        ));
+                    }
+                    // Session storage is keyed by the per-enrollment companion id: two
+                    // servers, two distinct sessions (never one overwriting the other).
+                    let companion_id = format!("cmp_{}", crate::adapters::store::short_uuid());
+                    let entry = CompanionEntry {
+                        companion_id,
+                        local_id: identity.local_id.clone(),
+                        name: identity.handle.clone(),
+                        origin: canonical,
+                        participant_ref: participant.participant_ref,
+                        did: participant.did,
+                        display_name: identity.display_name.clone().or(participant.best_label.clone()),
+                        handle: participant.best_label,
+                        enrolled_at: now_millis(),
+                        auto_check: true,
+                    };
+                    store.upsert_companion(entry.clone());
+                    store.set_session(&entry.companion_id, &granted.token);
+                    store.save()?;
+                    drop(store);
+                    self.events.publish(DomainEvent::CompanionSelected { companion_id: entry.companion_id.clone() });
+                    Ok(entry)
+                }
+                _ => {
+                    let problem = response.problem.unwrap_or_default();
+                    Err(enroll_blocked_error(&problem.code, &problem.message))
+                }
+            }
+        })
+    }
+
+    /// Removes one enrollment and its stored session. Enrollment state (attention,
+    /// checkpoints, contexts) cascades; the server side is untouched.
+    pub fn forget_enrollment(&self, companion_id: &str) -> Result<(), String> {
+        self.attributed("operator.forget_enrollment", || {
+            let mut store = self.lock_store()?;
+            store.companion(companion_id).ok_or_else(|| "no enrollment matches that id".to_string())?;
+            store.remove_companion(companion_id);
+            store.save()?;
+            Ok(())
+        })
+    }
+
+    // ---------- identities and the client allowlist (operator surface) ----------
+
+    pub fn create_identity(&self, handle: &str, display_name: Option<&str>) -> Result<crate::domain::identity::Identity, String> {
+        self.attributed("operator.create_identity", || {
+            if !valid_handle(handle) {
+                return Err("a handle is 2-253 characters without whitespace or ':'".to_string());
+            }
+            let identity = crate::domain::identity::Identity {
+                local_id: crate::adapters::store::new_local_id(),
+                handle: handle.to_string(),
+                display_name: display_name.map(str::to_string),
+                bound_did: None,
+                created_at: now_millis(),
+            };
+            let mut store = self.lock_store()?;
+            store.upsert_identity(identity.clone())?;
+            store.save()?;
+            Ok(identity)
+        })
+    }
+
+    /// Updates handle and/or display name. `display_name`: `None` leaves it unchanged,
+    /// `Some(None)` clears it, `Some(Some(v))` sets it. The local id never changes.
+    pub fn update_identity(
+        &self,
+        local_id: &str,
+        handle: Option<&str>,
+        display_name: Option<Option<&str>>,
+    ) -> Result<crate::domain::identity::Identity, String> {
+        self.attributed("operator.update_identity", || {
+            let mut store = self.lock_store()?;
+            let mut identity = store.identity(local_id).ok_or_else(|| "no identity matches that id".to_string())?;
+            if let Some(handle) = handle {
+                if !valid_handle(handle) {
+                    return Err("a handle is 2-253 characters without whitespace or ':'".to_string());
+                }
+                identity.handle = handle.to_string();
+            }
+            if let Some(display) = display_name {
+                identity.display_name = display.map(str::to_string);
+            }
+            store.upsert_identity(identity.clone())?;
+            store.save()?;
+            Ok(identity)
+        })
+    }
+
+    /// Deletes an identity. Refuses while enrollments exist unless `cascade` forgets them
+    /// (and their sessions) first.
+    pub fn delete_identity(&self, local_id: &str, cascade: bool) -> Result<(), String> {
+        self.attributed("operator.delete_identity", || {
+            let mut store = self.lock_store()?;
+            let identity = store.identity(local_id).ok_or_else(|| "no identity matches that id".to_string())?;
+            let enrollments = store.companions_of(local_id);
+            if !enrollments.is_empty() && !cascade {
+                return Err(format!(
+                    "identity '{}' still holds {} enrollment(s); forget them first, or confirm a cascade delete",
+                    identity.handle,
+                    enrollments.len()
+                ));
+            }
+            for entry in &enrollments {
+                store.remove_companion(&entry.companion_id);
+            }
+            store.remove_identity(local_id);
+            store.save()?;
+            Ok(())
+        })
+    }
+
+    pub fn identities(&self) -> Vec<crate::domain::identity::Identity> {
+        let store = self.lock_store().expect("state lock");
+        store.identities().to_vec()
+    }
+
+    pub fn identity(&self, local_id: &str) -> Option<crate::domain::identity::Identity> {
+        let store = self.lock_store().expect("state lock");
+        store.identity(local_id)
+    }
+
+    pub fn enrollments_of(&self, local_id: &str) -> Vec<CompanionEntry> {
+        let store = self.lock_store().expect("state lock");
+        store.companions_of(local_id)
+    }
+
+    /// Every enrollment, oldest first, with its session availability (never the token).
+    pub fn enrollment_inventory(&self) -> Vec<(CompanionEntry, bool)> {
+        let store = self.lock_store().expect("state lock");
+        store.companions().iter().map(|entry| (entry.clone(), store.has_session(&entry.companion_id))).collect()
+    }
+
+    pub fn client_rules(&self) -> Vec<crate::domain::identity::ClientRule> {
+        let store = self.lock_store().expect("state lock");
+        store.client_rules().to_vec()
+    }
+
+    pub fn set_client_rules(&self, rules: Vec<crate::domain::identity::ClientRule>) -> Result<(), String> {
+        self.attributed("operator.set_allowlist", || {
+            for rule in &rules {
+                if rule.client_name.trim().is_empty() || rule.client_name.chars().count() > 100 {
+                    return Err("a client name is 1-100 characters".to_string());
+                }
+                if let Some(local_id) = &rule.local_id {
+                    let store = self.lock_store()?;
+                    if store.identity(local_id).is_none() {
+                        return Err(format!("allowlist names unknown identity '{local_id}'"));
+                    }
+                }
+            }
+            let mut store = self.lock_store()?;
+            store.set_client_rules(rules);
+            store.save()
+        })
+    }
+
+    /// Read-only attention/pending-write state per enrollment, for the operator page.
+    pub fn enrollment_statuses(&self) -> Vec<EnrollmentStatus> {
+        let store = self.lock_store().expect("state lock");
+        let unsettled = store.unsettled_writes();
+        store
+            .companions()
+            .iter()
+            .map(|entry| EnrollmentStatus {
+                companion_id: entry.companion_id.clone(),
+                identity_local_id: entry.local_id.clone(),
+                origin: entry.origin.clone(),
+                waiting: store.waiting_count(&entry.companion_id),
+                pending_attention: store
+                    .attention_records(&entry.companion_id)
+                    .iter()
+                    .filter(|record| record.state != AttentionState::Delivered)
+                    .count(),
+                unresolved_writes: unsettled.iter().filter(|write| write.companion_id == entry.companion_id).count(),
+            })
+            .collect()
+    }
+
+    /// Attribution wrapper for operator-page mutations: the same invoked/completed pair
+    /// every intake records, with the `Operator` channel.
+    fn attributed<T>(&self, action: &str, run: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        self.events.publish(DomainEvent::ToolInvoked { channel: IntakeChannel::Operator, tool: action.to_string() });
+        let result = run();
+        let status = if result.is_ok() { "ok" } else { "error" };
+        self.events.publish(DomainEvent::ToolCompleted {
+            channel: IntakeChannel::Operator,
+            tool: action.to_string(),
+            status: status.into(),
+            text_bytes: 0,
+        });
+        result
     }
 
     pub fn store(&self) -> &Mutex<StateStore> {
@@ -168,7 +463,7 @@ impl ConnectorHub {
 
     fn dispatch(&self, operation: Operation) -> ToolOutcome {
         match operation {
-            Operation::SelectCompanion { moniker } => self.select_companion(&moniker),
+            Operation::SelectCompanion { moniker } => self.select_companion(moniker.as_deref()),
             Operation::Arrive { companion_id, server_url } => self.arrive(&companion_id, &server_url),
             Operation::ListTangents { context_id, cursor } => {
                 self.with_context("ListTangents", &context_id, ViewMode::Compact, |frame| {
@@ -287,34 +582,66 @@ impl ConnectorHub {
         }
     }
 
-    fn select_companion(&self, moniker: &str) -> ToolOutcome {
+    /// Selection resolves an identity first, then one of its enrollments. Without a
+    /// moniker the only permitted source is the connecting client's allowlist rule: an
+    /// unlisted MCP client (and the CLI, always) resolves nothing — never a guess, never
+    /// machine-wide, even when exactly one identity exists.
+    fn select_companion(&self, moniker: Option<&str>) -> ToolOutcome {
         let store = self.lock_store().expect("state lock");
-        match store.find_companion(moniker) {
-            Some(companion) => {
-                let text = format!(
-                    "Selected {}. Continue with Arrive using this server: {}.",
-                    companion.display_name.clone().unwrap_or_else(|| companion.name.clone()),
-                    companion.origin
-                );
-                ToolOutcome {
-                    is_error: false,
-                    status: "ok".into(),
-                    text,
-                    structured: json!({
-                        "experience": null,
-                        "problem": null,
-                        "connector": {
-                            "companionId": companion.companion_id,
-                            "contextId": null,
-                            "serverUrl": companion.origin,
-                            "view": "compact",
-                            "deliveryMode": DELIVERY_MODE,
-                        }
-                    }),
+        match moniker {
+            Some(moniker) => {
+                if let Some(identity) = store.identity_by_moniker(moniker) {
+                    return self.select_enrollment_of(&store, &identity);
+                }
+                match store.find_companion(moniker) {
+                    Some(companion) => selected_outcome(&companion),
+                    None => self.problem_outcome("SelectCompanion", "companion_unavailable",
+                        "No enrolled companion or identity matches that moniker. Ask the operator to enroll one.", None),
                 }
             }
-            None => self.problem_outcome("SelectCompanion", "companion_unavailable",
-                "No enrolled companion matches that moniker. Ask the operator to enroll one.", None),
+            None => {
+                let instruction = |detail: String| {
+                    self.problem_outcome("SelectCompanion", "identity_selection_required", &detail, None)
+                };
+                let Some(client) = self.caller.mcp_client_name() else {
+                    return instruction(
+                        "This intake never auto-selects an identity. Pass a moniker: an identity handle, or an enrollment's name, handle or participant reference."
+                        .to_string(),
+                    );
+                };
+                let Some(rule) = store.client_rule(client) else {
+                    return instruction(format!(
+                        "MCP client '{client}' is not in the connector's identity allowlist. Ask the operator to assign it an identity in the operator page (tangent-connector operator), or pass a moniker."
+                    ));
+                };
+                let Some(local_id) = rule.local_id.as_deref() else {
+                    return instruction(format!(
+                        "MCP client '{client}' is listed without an identity. Ask the operator to choose one in the operator page, or pass a moniker."
+                    ));
+                };
+                let Some(identity) = store.identity(local_id) else {
+                    return instruction(
+                        "The allowlist names an identity that no longer exists. Ask the operator to fix the allowlist, or pass a moniker.".to_string(),
+                    );
+                };
+                self.select_enrollment_of(&store, &identity)
+            }
+        }
+    }
+
+    fn select_enrollment_of(&self, store: &StateStore, identity: &crate::domain::identity::Identity) -> ToolOutcome {
+        let enrollments = store.companions_of(&identity.local_id);
+        match enrollments.len() {
+            1 => selected_outcome(&enrollments[0]),
+            0 => self.problem_outcome("SelectCompanion", "companion_unavailable",
+                &format!("Identity '{}' has no enrollment yet. Ask the operator to enroll it on a server first.", identity.handle), None),
+            _ => self.problem_outcome("SelectCompanion", "identity_selection_needed",
+                &format!(
+                    "Identity '{}' is enrolled at {} servers. Select one explicitly with its companion id: {}",
+                    identity.handle,
+                    enrollments.len(),
+                    enrollments.iter().map(|entry| format!("{} ({})", entry.companion_id, entry.origin)).collect::<Vec<_>>().join(", ")
+                ), None),
         }
     }
 
@@ -328,17 +655,17 @@ impl ConnectorHub {
                 "That companion is not enrolled in this connector.", None);
         };
         // The destination must be the companion's enrolled canonical origin; a different
-        // URL never silently rebinds the credential.
+        // URL never silently rebinds the session.
         if canonical_check.as_deref() != Some(companion.origin.as_str()) {
             return self.problem_outcome("Arrive", "unreachable",
                 &format!("That destination does not match this companion's server ({}).", companion.origin),
                 Some((&companion, None)));
         }
-        let credential = match self.credential_of(&companion) {
-            Ok(credential) => credential,
+        let session = match self.session_of(&companion) {
+            Ok(session) => session,
             Err(error) => return self.problem_outcome("Arrive", "needs_operator_connection", &error, Some((&companion, None))),
         };
-        let request = RequestContext { origin: companion.origin.clone(), credential, did: companion.did.clone() };
+        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() };
         let raw = match self.port.get(&request, "/api/v1/experience") {
             Ok(raw) => raw,
             Err(error) => return self.transport_problem("Arrive", &companion, None, &error),
@@ -369,11 +696,11 @@ impl ConnectorHub {
         let Some(companion) = self.companion_of(&context_binding.companion_id) else {
             return self.context_expired("GetUpdates");
         };
-        let credential = match self.credential_of(&companion) {
-            Ok(credential) => credential,
+        let session = match self.session_of(&companion) {
+            Ok(session) => session,
             Err(error) => return self.problem_outcome("GetUpdates", "needs_operator_connection", &error, Some((&companion, Some(&context_binding)))),
         };
-        let request = RequestContext { origin: companion.origin.clone(), credential, did: companion.did.clone() };
+        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() };
         let mut query = Vec::new();
         match &cursor {
             // A supplied cursor continues the previous page sequence.
@@ -440,12 +767,12 @@ impl ConnectorHub {
         if !context_binding.belongs_to(&self.caller, &companion.companion_id) || context_binding.origin != companion.origin {
             return self.context_expired(tool);
         }
-        let credential = match self.credential_of(&companion) {
-            Ok(credential) => credential,
+        let session = match self.session_of(&companion) {
+            Ok(session) => session,
             Err(error) => return self.problem_outcome(tool, "needs_operator_connection", &error, Some((&companion, Some(&context_binding)))),
         };
         let frame = CallFrame {
-            request: RequestContext { origin: companion.origin.clone(), credential, did: companion.did.clone() },
+            request: RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() },
             companion: companion.clone(),
             context_id: context_binding.context_id.clone(),
         };
@@ -554,6 +881,7 @@ impl ConnectorHub {
             let mut store = self.lock_store().expect("state lock");
             let context_id = binding.map(|binding| binding.context_id.clone()).unwrap_or_default();
             let perspective = Perspective {
+                participant_ref: companion.participant_ref.clone(),
                 did: companion.did.clone(),
                 display: companion.display_name.clone().unwrap_or_else(|| companion.name.clone()),
             };
@@ -648,8 +976,8 @@ impl ConnectorHub {
         let Some(companion) = self.companion_of(companion_id) else {
             return Err("unknown companion".to_string());
         };
-        let credential = self.credential_of(&companion)?;
-        let request = RequestContext { origin: companion.origin.clone(), credential, did: companion.did.clone() };
+        let session = self.session_of(&companion)?;
+        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() };
         let checkpoint = {
             let store = self.lock_store().map_err(|_| "state lock poisoned")?;
             store.checkpoint(&companion.companion_id)
@@ -752,13 +1080,12 @@ impl ConnectorHub {
         store.companion(companion_id)
     }
 
-    fn credential_of(&self, companion: &CompanionEntry) -> Result<String, String> {
-        let source = if companion.credential_source == "plaintext-dev" {
-            CredentialSource::PlaintextDev
-        } else {
-            CredentialSource::PlatformStore
-        };
-        credentials::load(&self.data_dir, &source, &companion.name)
+    /// The enrollment's bearer session, from the per-enrollment session map. A missing
+    /// session is an honest 're-enroll' state (legacy rows are dropped at load; the
+    /// session map may also lag a hand-edited state file).
+    fn session_of(&self, companion: &CompanionEntry) -> Result<String, String> {
+        let store = self.lock_store()?;
+        store.session(&companion.companion_id).ok_or_else(|| "the stored session is missing; re-enroll this enrollment".to_string())
     }
 
     fn lock_store(&self) -> Result<std::sync::MutexGuard<'_, StateStore>, String> {
@@ -779,7 +1106,7 @@ impl ConnectorHub {
     ) -> ToolOutcome {
         let (code, message) = match error {
             ExperienceError::Unreachable => ("unreachable".to_string(), "The Tangent server could not be reached. Saved actions and cursors remain available.".to_string()),
-            ExperienceError::Unauthorized => ("needs_operator_connection".to_string(), "Authentication was rejected; the operator must renew this companion's credential.".to_string()),
+            ExperienceError::Unauthorized => ("needs_operator_connection".to_string(), "Authentication was rejected; the operator must renew this enrollment's session.".to_string()),
             ExperienceError::Application { code, message } => (code.clone(), message.clone()),
             ExperienceError::Transport(detail) => ("unreachable".to_string(), detail.clone()),
         };
@@ -852,6 +1179,57 @@ fn invalid_ref(kind: &str) -> ExperienceError {
     ExperienceError::Application {
         code: "invalid_arguments".into(),
         message: format!("Copy a {kind} reference returned by this server."),
+    }
+}
+
+/// The ok outcome of a resolved selection: one enrollment, one server to arrive at.
+fn selected_outcome(companion: &CompanionEntry) -> ToolOutcome {
+    let text = format!(
+        "Selected {}. Continue with Arrive using this server: {}.",
+        companion.display_name.clone().unwrap_or_else(|| companion.name.clone()),
+        companion.origin
+    );
+    ToolOutcome {
+        is_error: false,
+        status: "ok".into(),
+        text,
+        structured: json!({
+            "experience": null,
+            "problem": null,
+            "connector": {
+                "companionId": companion.companion_id,
+                "identityId": companion.local_id,
+                "contextId": null,
+                "serverUrl": companion.origin,
+                "view": "compact",
+                "deliveryMode": DELIVERY_MODE,
+            }
+        }),
+    }
+}
+
+fn enroll_transport_error(error: &ExperienceError) -> String {
+    match error {
+        ExperienceError::Unreachable => "the server could not be reached".to_string(),
+        ExperienceError::Unauthorized => "the enrollment endpoint rejected the request".to_string(),
+        ExperienceError::Application { code, message } => format!("{code}: {message}"),
+        ExperienceError::Transport(detail) => detail.clone(),
+    }
+}
+
+/// Honest operator-facing wording for the contract's blocked enrollment codes.
+fn enroll_blocked_error(code: &str, message: &str) -> String {
+    match code {
+        "already_enrolled" => format!(
+            "already_enrolled: the server reports this client identity is already enrolled there and returned no new session ({message}). Use the existing enrollment, or forget it first to re-enroll."
+        ),
+        "unbound_enrollment_disabled" => format!(
+            "unbound_enrollment_disabled: that server has unbound enrollment switched off ({message})."
+        ),
+        "invalid_handle" => format!("invalid_handle: the server rejected this identity's handle ({message})."),
+        "suspended_participant" => format!("suspended_participant: the server declined to re-enroll this identity ({message})."),
+        "request_conflict" => format!("request_conflict: this identity already maps to a different participant there ({message})."),
+        other => format!("the server blocked enrollment ({other}): {message}"),
     }
 }
 

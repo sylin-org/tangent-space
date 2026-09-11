@@ -5,7 +5,9 @@ use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub enum Operation {
-    SelectCompanion { moniker: String },
+    /// `None` asks the connector to resolve the acting identity from the connecting
+    /// client's allowlist rule (MCP only); the CLI never auto-resolves.
+    SelectCompanion { moniker: Option<String> },
     Arrive { companion_id: String, server_url: String },
     ListTangents { context_id: String, cursor: Option<String> },
     ListTopics { context_id: String, tangent_ref: String, cursor: Option<String> },
@@ -106,7 +108,7 @@ pub fn decode(tool: &str, arguments: &Value) -> Result<Operation, String> {
     };
     let view = || -> Result<ViewMode, String> { ViewMode::parse(optional("view")?.as_deref()) };
     match tool {
-        "SelectCompanion" => Ok(Operation::SelectCompanion { moniker: string("moniker")? }),
+        "SelectCompanion" => Ok(Operation::SelectCompanion { moniker: optional("moniker")? }),
         "Arrive" => Ok(Operation::Arrive { companion_id: string("companionId")?, server_url: string("serverUrl")? }),
         "ListTangents" => Ok(Operation::ListTangents { context_id: string("contextId")?, cursor: optional("cursor")? }),
         "ListTopics" => Ok(Operation::ListTopics {

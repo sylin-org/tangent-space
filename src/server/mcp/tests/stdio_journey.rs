@@ -23,7 +23,6 @@ impl Peer {
         let mut child = Command::new(env!("CARGO_BIN_EXE_tangent-connector"))
             .args(arguments)
             .env("TANGENT_CONNECTOR_HOME", home)
-            .env("TANGENT_CONNECTOR_PLAINTEXT_CREDENTIALS", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -75,14 +74,13 @@ fn the_stdio_edge_negotiates_and_serves_the_twelve_tools() {
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).expect("temp dir");
 
-    // The CLI intake performs setup: manual enrollment of the synthetic credential.
-    let credential_file = home.join("credential.txt");
-    std::fs::write(&credential_file, LUMEN_CREDENTIAL).expect("credential file");
+    // The CLI intake performs setup: manual enrollment of the synthetic session token.
+    let token_file = home.join("session-token.txt");
+    std::fs::write(&token_file, LUMEN_CREDENTIAL).expect("token file");
     let enroll = Command::new(env!("CARGO_BIN_EXE_tangent-connector"))
-        .args(["enroll", "--name", "lumen", "--server", server.origin(), "--credential-file"])
-        .arg(&credential_file)
+        .args(["enroll", "--name", "lumen", "--server", server.origin(), "--token-file"])
+        .arg(&token_file)
         .env("TANGENT_CONNECTOR_HOME", &home)
-        .env("TANGENT_CONNECTOR_PLAINTEXT_CREDENTIALS", "1")
         .output()
         .expect("run enroll");
     assert!(
@@ -164,7 +162,7 @@ fn the_stdio_edge_negotiates_and_serves_the_twelve_tools() {
     let discover = peer.receive();
     assert!(discover["result"]["supportedVersions"].as_array().expect("versions").len() >= 4);
 
-    // Every model-facing request carried the bearer credential, and no secret leaked into
+    // Every model-facing request carried the bearer session, and no token leaked into
     // any response text.
     let requests = server.requests();
     assert!(requests.iter().all(|request| request.bearer.contains("Bearer")), "missing bearer on {:?}", requests.iter().map(|request| request.path.clone()).collect::<Vec<_>>());

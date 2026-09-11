@@ -4,12 +4,13 @@
 
 use serde_json::Value;
 
-/// Per-call routing context: canonical origin, scoped credential and the verified DID it
-/// belongs to.
+/// Per-call routing context: canonical origin, scoped credential and the participant
+/// reference it belongs to.
 pub struct RequestContext {
     pub origin: String,
     pub credential: String,
-    pub did: String,
+    /// The enrollment's participant reference; informational for the adapter.
+    pub participant_ref: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -31,4 +32,7 @@ pub trait ExperiencePort: Send + Sync {
     fn send(&self, context: &RequestContext, method: &str, path: &str, body: &Value) -> Result<Value, ExperienceError>;
     /// Bounded long wait for activity (server caps near 15 seconds).
     fn wait(&self, context: &RequestContext, path: &str) -> Result<Value, ExperienceError>;
+    /// POST the pre-credential enrollment exchange (W2 contract). No Authorization
+    /// header: the call happens before any credential exists.
+    fn enroll(&self, origin: &str, path: &str, body: &Value) -> Result<Value, ExperienceError>;
 }

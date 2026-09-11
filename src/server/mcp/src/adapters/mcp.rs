@@ -34,8 +34,19 @@ pub fn negotiate_protocol_version(requested: &str) -> &'static str {
 }
 
 /// Serves the MCP edge until stdin ends. Returns a process exit code.
-pub fn serve(hub: Arc<ConnectorHub>, output: &mut dyn Write) -> i32 {
+///
+/// The hub is constructed when the first `initialize` request names the connecting
+/// client: `clientInfo.name` becomes the caller (`mcp:{name}`), which keys the identity
+/// allowlist and context binding. Attribution only — it never changes a domain outcome —
+/// and the per-process single-caller rule is unchanged: one process serves exactly one
+/// client.
+pub fn serve(
+    build_hub: impl FnOnce(&str) -> Result<Arc<ConnectorHub>, String>,
+    output: &mut dyn Write,
+) -> i32 {
     let initialized = Arc::new(AtomicBool::new(false));
+    let mut builder = Some(build_hub);
+    let mut hub: Option<Arc<ConnectorHub>> = None;
     let stdin = std::io::stdin();
     let mut reader = stdin.lock();
     let mut buffer = String::new();
@@ -78,7 +89,18 @@ pub fn serve(hub: Arc<ConnectorHub>, output: &mut dyn Write) -> i32 {
             }
             continue;
         };
-        let response = handle_request(&hub, &method, &message, &id, &initialized);
+        if method == "initialize" && hub.is_none() {
+            let client_name = client_name_of(&message);
+            match builder.take().map(|build| build(&client_name)) {
+                Some(Ok(built)) => hub = Some(built),
+                Some(Err(error)) => {
+                    let _ = write_json(output, &rpc_error(id, -32603, &format!("cannot open connector state: {error}")));
+                    return 4;
+                }
+                None => unreachable!("builder exists while no hub does"),
+            }
+        }
+        let response = handle_request(hub.as_deref(), &method, &message, &id, &initialized);
         if let Some(response) = response {
             if write_json(output, &response).is_err() {
                 return 0;
@@ -87,8 +109,20 @@ pub fn serve(hub: Arc<ConnectorHub>, output: &mut dyn Write) -> i32 {
     }
 }
 
+/// The bounded `clientInfo.name` of the connecting client. Attribution only; never an
+/// input to a domain decision.
+fn client_name_of(message: &Value) -> String {
+    message
+        .pointer("/params/clientInfo/name")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown-client")
+        .chars()
+        .take(100)
+        .collect()
+}
+
 fn handle_request(
-    hub: &ConnectorHub,
+    hub: Option<&ConnectorHub>,
     method: &str,
     message: &Value,
     id: &Value,
@@ -98,12 +132,15 @@ fn handle_request(
         "initialize" => Some(initialize(message, id)),
         "ping" => Some(success(id, json!({}))),
         "tools/list" => {
-            if !initialized.load(Ordering::SeqCst) {
+            if !ready(initialized, hub) {
                 return Some(rpc_error(id.clone(), -32002, "Server not initialized"));
             }
             Some(success(id, json!({ "tools": catalog() })))
         }
         "tools/call" => {
+            let Some(hub) = hub else {
+                return Some(rpc_error(id.clone(), -32002, "Server not initialized"));
+            };
             if !initialized.load(Ordering::SeqCst) {
                 return Some(rpc_error(id.clone(), -32002, "Server not initialized"));
             }
@@ -117,20 +154,16 @@ fn handle_request(
     }
 }
 
+fn ready(initialized: &AtomicBool, hub: Option<&ConnectorHub>) -> bool {
+    initialized.load(Ordering::SeqCst) && hub.is_some()
+}
+
 fn initialize(message: &Value, id: &Value) -> Value {
     let requested = message
         .pointer("/params/protocolVersion")
         .and_then(Value::as_str)
         .unwrap_or(PROTOCOL_VERSION);
     let negotiated = negotiate_protocol_version(requested);
-    let client_name = message
-        .pointer("/params/clientInfo/name")
-        .and_then(Value::as_str)
-        .unwrap_or("unknown-client")
-        .chars()
-        .take(100)
-        .collect::<String>();
-    let _ = client_name; // Attribution only; never an input to a domain decision.
     success(
         id,
         json!({
@@ -239,13 +272,12 @@ pub fn catalog() -> Value {
     let tools = [
         tool(
             "SelectCompanion",
-            "Select which enrolled companion (participant identity) to act as for this session. Returns a companionId.",
+            "Select which enrolled companion (participant identity) to act as for this session. Returns a companionId. With no moniker, the identity the operator assigned to this client in the allowlist is used; unlisted clients resolve nothing.",
             json!({
                 "type": "object",
                 "properties": {
-                    "moniker": { "type": "string", "description": "The companion's enrolled name, handle, or DID" }
+                    "moniker": { "type": "string", "description": "An identity handle, or an enrollment's name, handle or participant reference. Omit to use the operator-configured identity for this client." }
                 },
-                "required": ["moniker"],
                 "additionalProperties": false,
             }),
         ),

@@ -25,15 +25,14 @@ struct Workspace {
 }
 
 fn workspace(label: &str) -> Workspace {
-    // Test credentials are synthetic: never touch the real platform credential store.
-    std::env::set_var("TANGENT_CONNECTOR_PLAINTEXT_CREDENTIALS", "1");
+    // Test sessions are synthetic.
     let dir = std::env::temp_dir().join(format!("tangent-connector-test-{}-{}", label, std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp dir");
     let events = Arc::new(EventBus::new());
     let port: Arc<dyn ExperiencePort> = Arc::new(UreqExperience::new());
     let store = StateStore::open(&dir).expect("store");
-    let hub = Arc::new(ConnectorHub::new(port, store, events.clone(), CallerId("cli".into()), dir.clone()));
+    let hub = Arc::new(ConnectorHub::new(port, store, events.clone(), CallerId("cli".into())));
     Workspace { hub, events, dir }
 }
 
@@ -162,7 +161,7 @@ fn rebuild(dir: &std::path::Path) -> Arc<ConnectorHub> {
     let port: Arc<dyn ExperiencePort> = Arc::new(UreqExperience::new());
     let store = StateStore::open(dir).expect("reopen store");
     let events = Arc::new(EventBus::new());
-    Arc::new(ConnectorHub::new(port, store, events, CallerId("cli".into()), dir.to_path_buf()))
+    Arc::new(ConnectorHub::new(port, store, events, CallerId("cli".into())))
 }
 
 #[test]

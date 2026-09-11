@@ -6,27 +6,38 @@
 use crate::application::contract::{AttentionItemDto, ExperienceDto, IdentityDto};
 pub use crate::application::operations::ViewMode;
 
-/// Whose eyes the text is written from: the verified acting companion.
+/// Whose eyes the text is written from: the verified acting companion. Since the W2
+/// contract a participant may hold no DID, so **you** matching accepts either the
+/// participant reference or the DID.
 #[derive(Debug, Clone)]
 pub struct Perspective {
-    pub did: String,
+    pub participant_ref: String,
+    pub did: Option<String>,
     pub display: String,
 }
 
 impl Perspective {
     pub fn from_identity(identity: &IdentityDto) -> Self {
-        Self { did: identity.did.clone(), display: identity.display_name.clone() }
+        Self {
+            participant_ref: identity.participant_ref.clone(),
+            did: identity.did.clone(),
+            display: identity.display_name.clone(),
+        }
     }
 
     /// An author label with a `you` marker for the acting companion; canonical names of
     /// others are preserved verbatim.
     pub fn author_label(&self, author_ref: &str, author_name: &str) -> String {
         let name = if author_name.is_empty() { author_ref } else { author_name };
-        if author_ref == self.did {
+        if self.is_self(author_ref) {
             format!("{name} (you)")
         } else {
             name.to_string()
         }
+    }
+
+    fn is_self(&self, author_ref: &str) -> bool {
+        !author_ref.is_empty() && (author_ref == self.participant_ref || self.did.as_deref() == Some(author_ref))
     }
 }
 

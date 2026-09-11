@@ -3,7 +3,7 @@
 //! The placeholder `ORIGIN` in scripted payloads is replaced with the listener's real origin,
 //! because the connector validates references against the exact canonical origin.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::Receiver;
@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 
+#[allow(dead_code)]
 pub const LUMEN_CREDENTIAL: &str = "ts_lumen_test_credential_000000000000000000";
+#[allow(dead_code)]
 pub const REVOKED_CREDENTIAL: &str = "ts_revoked_test_credential_0000000000000";
 
 pub fn origin(listener: &TcpListener) -> String {
@@ -28,21 +30,41 @@ pub struct Received {
 }
 
 /// A scripted experience API. Responses are synthetic; the post registry gives the
-/// crash-retry scenario its statefulness.
+/// crash-retry scenario its statefulness, and the enrollment registry implements the W2
+/// contract's unbound-enrollment exchange (idempotent per client localId).
 #[allow(dead_code)]
 pub struct FakeServer {
     pub requests: Arc<Mutex<Vec<Received>>>,
     posts: Arc<Mutex<HashMap<String, u32>>>,
+    enrollments: Arc<Mutex<HashSet<String>>>,
+    unbound_disabled: bool,
     origin: String,
 }
 
 impl FakeServer {
     pub fn start() -> Self {
+        Self::start_with(false)
+    }
+
+    /// A server with the unbound-enrollment setting switched off.
+    #[allow(dead_code)]
+    pub fn start_with_unbound_disabled() -> Self {
+        Self::start_with(true)
+    }
+
+    fn start_with(unbound_disabled: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let url = origin(&listener);
         let requests = Arc::new(Mutex::new(Vec::new()));
         let posts = Arc::new(Mutex::new(HashMap::new()));
-        let server = Self { requests: requests.clone(), posts: posts.clone(), origin: url.clone() };
+        let enrollments = Arc::new(Mutex::new(HashSet::new()));
+        let server = Self {
+            requests: requests.clone(),
+            posts: posts.clone(),
+            enrollments: enrollments.clone(),
+            unbound_disabled,
+            origin: url.clone(),
+        };
         std::thread::Builder::new()
             .name("fake-experience".into())
             .spawn(move || {
@@ -50,8 +72,11 @@ impl FakeServer {
                     let Ok(stream) = stream else { break };
                     let requests = requests.clone();
                     let posts = posts.clone();
+                    let enrollments = enrollments.clone();
                     let origin = url.clone();
-                    std::thread::spawn(move || serve_connection(stream, requests, posts, origin));
+                    std::thread::spawn(move || {
+                        serve_connection(stream, requests, posts, enrollments, unbound_disabled, origin)
+                    });
                 }
             })
             .expect("server thread");
@@ -67,12 +92,26 @@ impl FakeServer {
     }
 
     /// How many times the scripted Topic accepted a write for this request id.
+    #[allow(dead_code)]
     pub fn dispatches(&self, request_id: &str) -> u32 {
         self.posts.lock().unwrap().get(request_id).copied().unwrap_or(0)
     }
+
+    /// The client localIds the enrollment endpoint currently knows.
+    #[allow(dead_code)]
+    pub fn enrolled_local_ids(&self) -> Vec<String> {
+        self.enrollments.lock().unwrap().iter().cloned().collect()
+    }
 }
 
-fn serve_connection(stream: TcpStream, requests: Arc<Mutex<Vec<Received>>>, posts: Arc<Mutex<HashMap<String, u32>>>, origin: String) {
+fn serve_connection(
+    stream: TcpStream,
+    requests: Arc<Mutex<Vec<Received>>>,
+    posts: Arc<Mutex<HashMap<String, u32>>>,
+    enrollments: Arc<Mutex<HashSet<String>>>,
+    unbound_disabled: bool,
+    origin: String,
+) {
     let mut reader = BufReader::new(match stream.try_clone() {
         Ok(clone) => clone,
         Err(_) => return,
@@ -120,7 +159,7 @@ fn serve_connection(stream: TcpStream, requests: Arc<Mutex<Vec<Received>>>, post
             let _ = writer.flush();
             continue;
         }
-        match respond(&method, &path, &body, &posts) {
+        match respond(&method, &path, &body, &posts, &enrollments, unbound_disabled, &origin) {
             Script::Body(status, payload) => {
                 let text = serde_json::to_string(&payload).unwrap().replace("ORIGIN", &origin);
                 let reason = match status {
@@ -153,7 +192,15 @@ enum Script {
     Lost,
 }
 
-fn respond(method: &str, path: &str, body: &Value, posts: &Arc<Mutex<HashMap<String, u32>>>) -> Script {
+fn respond(
+    method: &str,
+    path: &str,
+    body: &Value,
+    posts: &Arc<Mutex<HashMap<String, u32>>>,
+    enrollments: &Arc<Mutex<HashSet<String>>>,
+    unbound_disabled: bool,
+    origin: &str,
+) -> Script {
     let clean = path.split('?').next().unwrap_or(path);
     match (method, clean) {
         ("GET", "/api/v1/experience") => Script::Body(200, arrival()),
@@ -161,6 +208,37 @@ fn respond(method: &str, path: &str, body: &Value, posts: &Arc<Mutex<HashMap<Str
         ("GET", "/api/v1/experience/tangents/home/topics") => Script::Body(200, topics()),
         ("GET", "/api/v1/experience/topics/lounge") => Script::Body(200, topic_window()),
         ("GET", "/api/v1/experience/updates") => Script::Body(200, updates()),
+        // The W2-contract enrollment exchange: pre-credential POST, every outcome HTTP 200.
+        // Tokens are unique per server (port) so two-origin tests can tell bearers apart.
+        ("POST", "/api/v1/experience/identities/enroll") => {
+            let local_id = body.pointer("/client/localId").and_then(Value::as_str).unwrap_or_default().to_string();
+            let requested_handle = body.pointer("/client/handle").and_then(Value::as_str).unwrap_or("anonymous").to_string();
+            let port = origin.rsplit(':').next().unwrap_or("0");
+            if unbound_disabled {
+                return Script::Body(200, json!({
+                    "status": "blocked",
+                    "problem": { "code": "unbound_enrollment_disabled", "message": "this server does not accept unbound enrollment" }
+                }));
+            }
+            if enrollments.lock().unwrap().contains(&local_id) {
+                return Script::Body(200, json!({
+                    "status": "blocked",
+                    "problem": { "code": "already_enrolled", "message": "this client identity is already enrolled here" },
+                    "participant": enroll_participant(&local_id, &requested_handle)
+                }));
+            }
+            enrollments.lock().unwrap().insert(local_id.clone());
+            Script::Body(200, json!({
+                "status": "ok",
+                "participant": enroll_participant(&local_id, &requested_handle),
+                "credential": {
+                    "token": format!("ts_unbound_{port}_{local_id}"),
+                    "name": "connector",
+                    "expiresAt": null,
+                    "grants": ["welcome", "read", "post"]
+                }
+            }))
+        }
         ("POST", "/api/v1/experience/topics/lounge/posts") => {
             let request_id = body.get("requestId").and_then(Value::as_str).unwrap_or_default().to_string();
             let mut registry = posts.lock().unwrap();
@@ -189,13 +267,24 @@ fn respond(method: &str, path: &str, body: &Value, posts: &Arc<Mutex<HashMap<Str
     }
 }
 
+/// The W2-contract arrival identity segment: `participantRef` is the server's GUIDv7
+/// participant id, `did` is nullable, and the identity collection is ordered best-first.
 fn envelope(operation: &str, status: &str, data: Value) -> Value {
     json!({
         "experienceVersion": "1.0",
         "operation": operation,
         "status": status,
         "snapshot": { "revision": "att:41", "asOf": "2026-09-10T20:00:00Z", "coverage": "current" },
-        "identity": { "participantRef": "did:plc:lumen", "did": "did:plc:lumen", "displayName": "Lumen", "handle": "lumen.example.test" },
+        "identity": {
+            "participantRef": "prt_7b3e10a2c4d5",
+            "did": "did:plc:lumen",
+            "displayName": "Lumen",
+            "handle": "lumen.example.test",
+            "identities": [
+                { "kind": "atproto", "value": "did:plc:lumen" },
+                { "kind": "internal", "value": "tangent:local:prt_7b3e10a2c4d5" }
+            ]
+        },
         "place": { "serverRef": "ORIGIN", "tangentRef": null, "topicRef": null, "label": "Kintsugi Architecture", "role": "participant", "allowedActions": ["list_tangents", "get_updates"] },
         "result": { "data": data, "receipt": null, "problem": null },
         "attention": { "revision": "att:41", "waitingCount": { "value": 0, "atLeast": false }, "newActivityCount": { "value": 0, "atLeast": false }, "items": [], "more": false, "detailsIncluded": true },
@@ -203,6 +292,20 @@ fn envelope(operation: &str, status: &str, data: Value) -> Value {
         "actions": [],
         "orientation": { "purpose": "A shared conversation space for people and agents.", "rules": [], "brief": null },
         "capabilities": { "attention": true, "coordination": false },
+    })
+}
+
+/// The enrollment endpoint's participant view for one client localId. The connector-client
+/// identity echoes the connector's local id, scoped to this server relationship.
+fn enroll_participant(local_id: &str, handle: &str) -> Value {
+    json!({
+        "participantRef": format!("prt_{local_id}"),
+        "identities": [
+            { "kind": "internal", "value": format!("tangent:local:prt_{local_id}") },
+            { "kind": "connector-client", "value": local_id }
+        ],
+        "bestLabel": handle,
+        "did": null
     })
 }
 
@@ -355,6 +458,7 @@ impl WithReceipt for Value {
 pub struct EventRecorder(pub Receiver<tangent_connector::domain::events::DomainEvent>);
 
 impl EventRecorder {
+    #[allow(dead_code)]
     pub fn drain(&self) -> Vec<tangent_connector::domain::events::DomainEvent> {
         let mut observed = Vec::new();
         while let Ok(event) = self.0.try_recv() {

@@ -60,7 +60,6 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         // ArgumentList applies correct platform quoting; JSON arguments contain quotes.
         foreach (var argument in arguments) information.ArgumentList.Add(argument);
         information.Environment["TANGENT_CONNECTOR_HOME"] = home;
-        information.Environment["TANGENT_CONNECTOR_PLAINTEXT_CREDENTIALS"] = "1";
         using var process = Process.Start(information)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
@@ -82,22 +81,22 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public void Enrollment_verifies_the_real_identity_and_credentials_are_kept_out_of_state()
+    public void Enrollment_verifies_the_real_identity_and_stores_the_session_in_state()
     {
         var (exit, output, error) = Run("enroll", "--name", "agent", "--server", app.Origin,
-            "--credential-file", credentialFile);
+            "--token-file", credentialFile);
         Assert.True(exit == 0, $"enrollment failed: {error}{output}");
         Assert.Contains("manual enrollment", output);
         Assert.Contains(ExperienceWebApp.AgentDid, output);
-        // The state snapshot never contains the secret.
+        // Sessions are cookie-jar state by design: stored per enrollment in state.json.
         var state = File.ReadAllText(Path.Combine(home, "state.json"));
-        Assert.DoesNotContain(app.AgentToken, state);
+        Assert.Contains(app.AgentToken, state);
     }
 
     [Fact]
     public void The_cli_intake_reads_you_rendered_attention_and_resynchronizes_reads()
     {
-        Run("enroll", "--name", "agent", "--server", app.Origin, "--credential-file", credentialFile);
+        Run("enroll", "--name", "agent", "--server", app.Origin, "--token-file", credentialFile);
         var selected = Call("SelectCompanion", "{\"moniker\":\"agent\"}");
         var companion = selected.GetProperty("connector").GetProperty("companionId").GetString()!;
         var arrived = Call("Arrive", JsonSerializer.Serialize(new { companionId = companion, serverUrl = app.Origin }));
@@ -136,7 +135,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     [Fact]
     public void The_stdio_mcp_intake_negotiates_and_serves_the_full_flow()
     {
-        Run("enroll", "--name", "agent", "--server", app.Origin, "--credential-file", credentialFile);
+        Run("enroll", "--name", "agent", "--server", app.Origin, "--token-file", credentialFile);
         using var peer = McpPeer.Start(ConnectorBinary(), home);
         var initialize = peer.Call("initialize", new
         {
