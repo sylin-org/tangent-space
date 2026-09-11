@@ -354,3 +354,19 @@ The frozen enrollment endpoint gains a `proof-required` outcome (challenge inste
 session); binding an existing unbound record rides the identity-change chain. Servers
 never initiate auth toward a connector (ADR 0009 invariant). Implementation stays
 deferred per D8; this records the direction.
+
+## 11 September 2026 — Round objective: bound atproto exchange (owner-directed)
+
+This round's success criterion, set by the owner: Leo signs in with his public Bluesky
+handle and posts; an agent, driving the local connector, binds a newly created Bluesky
+account to one of its connector identities, enrolls at the Tangent server through the DID
+service-proof exchange, and replies — both sides seeing each other under real atproto
+names. Consequences: binding (D8) moves from research-only into implementation this
+round; acquisition on the operator page is app-password session creation initially (works
+against public Bluesky today; cookie-jar semantics) with atproto OAuth-native as the
+recorded target; the MCP client gains an open-registration operation that browser-opens
+the LOCAL operator page — the human acts in the browser, the page token never enters
+model context, and sign-in stays human-executed, never auto-run. Unbound enrollment
+([W2 contract](handoff/W2-CONTRACT.md)) ships as the secondary local-posture path. Open
+question before the server brief: what service identity the standalone (Local-storage)
+server uses to verify DID proofs — the Spaces authority stand-in or its own key material.
