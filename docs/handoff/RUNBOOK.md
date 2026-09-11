@@ -115,8 +115,8 @@ Use the smallest relevant check, not all of these commands every time:
 
 ```powershell
 # Changed browser code:
-node --check src/TangentSpace/wwwroot/atmosphere.js
-node --check src/TangentSpace/wwwroot/ascii-scenes.js
+node --check src/server/web/wwwroot/atmosphere.js
+node --check src/server/web/wwwroot/ascii-scenes.js
 
 # For a relevant .NET behavior, choose an existing focused filter:
 dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj --filter 'FullyQualifiedName~RelevantExistingTest'

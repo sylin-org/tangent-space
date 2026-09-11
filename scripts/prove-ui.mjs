@@ -82,7 +82,7 @@ async function mutation(page, path, method, interaction) {
 async function visible(page, selector) { await page.locator(selector).waitFor({ state: 'visible' }); }
 
 try {
-  await access(resolve(root, 'src/TangentSpace/wwwroot/rooms.css'));
+  await access(resolve(root, 'src/server/web/wwwroot/rooms.css'));
   await mkdir(outputDirectory, { recursive: true });
   const saved = JSON.parse(await readFile(cookieFile, 'utf8'));
   if (saved.origin !== origin || typeof saved.did !== 'string' || !Array.isArray(saved.cookies)

@@ -100,7 +100,7 @@ try {
     $failureLog = Join-Path $hostInfo.stateDirectory 'wrong-owner.stdout.log'
     $failureError = Join-Path $hostInfo.stateDirectory 'wrong-owner.stderr.log'
     $arguments = @((Join-Path $runtime.FullName 'TangentSpace.dll'), '--urls', $origin, '--environment', 'Development', '--contentRoot', $hostInfo.stateDirectory,
-        '--webroot', (Join-Path $repoRoot 'src/TangentSpace/wwwroot'))
+        '--webroot', (Join-Path $repoRoot 'src/server/web/wwwroot'))
     $quoted = @($arguments | ForEach-Object { if ($_ -match '[\s]') { '"' + $_ + '"' } else { $_ } })
     $failureProcess = Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList $quoted -WorkingDirectory $hostInfo.stateDirectory `
         -WindowStyle Hidden -PassThru -RedirectStandardOutput $failureLog -RedirectStandardError $failureError

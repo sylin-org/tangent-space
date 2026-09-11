@@ -3,7 +3,7 @@ param([int]$Port = 5220, [switch]$NoBuild, [switch]$Background,
     [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$Instance = 'site')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repoRoot 'src/TangentSpace/TangentSpace.csproj'
+$project = Join-Path $repoRoot 'src/server/web/TangentSpace.csproj'
 $fixturePath = Join-Path $repoRoot '.local/spaces-network/fixtures.json'
 if (-not (Test-Path -LiteralPath $fixturePath)) { throw 'Start probes/spaces-network/start.ps1 first. This command uses only its disposable local accounts.' }
 $fixture = Get-Content -LiteralPath $fixturePath -Raw | ConvertFrom-Json
@@ -45,10 +45,10 @@ if (-not $NoBuild) {
     & dotnet build $project --nologo
     if ($LASTEXITCODE -ne 0) { throw 'Tangent build failed.' }
 }
-$appDll = Join-Path $repoRoot 'src/TangentSpace/bin/Debug/net10.0/TangentSpace.dll'
+$appDll = Join-Path $repoRoot 'src/server/web/bin/Debug/net10.0/TangentSpace.dll'
 if (-not (Test-Path -LiteralPath $appDll)) { throw 'Build Tangent before using -NoBuild.' }
 # Koan compares build intent with runtime composition at the configured content root.
-$compositionLock = Join-Path $repoRoot 'src/TangentSpace/koan.lock.json'
+$compositionLock = Join-Path $repoRoot 'src/server/web/koan.lock.json'
 if (-not (Test-Path -LiteralPath $compositionLock)) { throw 'Build Tangent to generate its Koan composition lock.' }
 Copy-Item -LiteralPath $compositionLock -Destination (Join-Path $stateDirectory 'koan.lock.json')
 if ($Background) {
@@ -59,7 +59,7 @@ if ($Background) {
     $appDll = Join-Path $runtimeDirectory 'TangentSpace.dll'
 }
 $arguments = @($appDll, '--urls', $origin, '--environment', 'Development', '--contentRoot', $stateDirectory,
-    '--webroot', (Join-Path $repoRoot 'src/TangentSpace/wwwroot'))
+    '--webroot', (Join-Path $repoRoot 'src/server/web/wwwroot'))
 if ($Background) {
     # Quote only verified filesystem paths; Start-Process consumes one command line on Windows.
     $quoted = @($arguments | ForEach-Object { if ($_ -match '[\s]') { '"' + $_ + '"' } else { $_ } })

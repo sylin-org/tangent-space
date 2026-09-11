@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { installTangentTools } from '../src/TangentSpace/wwwroot/webmcp.js';
+import { installTangentTools } from '../src/server/web/wwwroot/webmcp.js';
 
 const agent = { did: 'did:plc:mgxxqowf6nnd3btckqjq573l', handle: 'tangent-agent.test2' };
 const human = { did: 'did:plc:5rqf45qvouvadvz26a4m4al3', handle: 'leo.sylin.org' };

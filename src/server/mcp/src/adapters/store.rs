@@ -1,0 +1,399 @@
+//! Durable connector state: atomic JSON snapshots plus an append-only pending-write journal.
+//! A mutation's tuple is journaled before it is sent; delivery checkpoints advance only after
+//! the batch is saved. Crashes replay safely from these files.
+
+use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::domain::attention::{AttentionRecord, AttentionState, ATTENTION_RECORD_LIMIT};
+use crate::domain::identity::{CallerId, CompanionEntry, LocalContext};
+use crate::domain::policy::{AttentionPolicy, PolicyLedger};
+use crate::domain::writes::PendingWrite;
+
+const STATE_FILE: &str = "state.json";
+const JOURNAL_FILE: &str = "pending-writes.jsonl";
+const JOURNAL_LINE_LIMIT: u64 = 256 * 1024;
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct StateFile {
+    version: u32,
+    #[serde(default)]
+    companions: Vec<CompanionEntry>,
+    #[serde(default)]
+    contexts: Vec<LocalContext>,
+    #[serde(default)]
+    aliases: HashMap<String, BTreeMap<String, String>>,
+    #[serde(default)]
+    alias_counters: HashMap<String, u32>,
+    #[serde(default)]
+    attention: HashMap<String, Vec<AttentionRecord>>,
+    #[serde(default)]
+    checkpoints: HashMap<String, String>,
+    #[serde(default)]
+    revisions: HashMap<String, String>,
+    #[serde(default)]
+    waiting_counts: HashMap<String, i64>,
+    #[serde(default)]
+    ledgers: HashMap<String, PolicyLedger>,
+    #[serde(default)]
+    policy: Option<AttentionPolicy>,
+}
+
+/// The connector's durable state store. Interior state is guarded by the owning hub.
+pub struct StateStore {
+    path: PathBuf,
+    journal_path: PathBuf,
+    state: StateFile,
+}
+
+impl StateStore {
+    /// Loads (or initializes) state under the data directory.
+    pub fn open(data_dir: &Path) -> Result<Self, String> {
+        fs::create_dir_all(data_dir).map_err(|error| format!("cannot create data directory: {error}"))?;
+        let path = data_dir.join(STATE_FILE);
+        let journal_path = data_dir.join(JOURNAL_FILE);
+        let state = match fs::read(&path) {
+            Ok(bytes) if !bytes.is_empty() => serde_json::from_slice(&bytes)
+                .map_err(|error| format!("state file is malformed: {error}"))?,
+            _ => StateFile { version: 1, ..Default::default() },
+        };
+        Ok(Self { path, journal_path, state })
+    }
+
+    /// Atomic snapshot write: unique temp file, write, sync, rename.
+    pub fn save(&self) -> Result<(), String> {
+        let bytes = serde_json::to_vec_pretty(&self.state).map_err(|error| format!("cannot encode state: {error}"))?;
+        atomic_write(&self.path, &bytes)
+    }
+
+    pub fn policy(&self) -> AttentionPolicy {
+        self.state.policy.clone().unwrap_or_default()
+    }
+
+    pub fn set_policy(&mut self, policy: AttentionPolicy) {
+        self.state.policy = Some(policy);
+    }
+
+    // ----- companions -----
+
+    pub fn companions(&self) -> &[CompanionEntry] {
+        &self.state.companions
+    }
+
+    pub fn companion(&self, companion_id: &str) -> Option<CompanionEntry> {
+        self.state.companions.iter().find(|entry| entry.companion_id == companion_id).cloned()
+    }
+
+    pub fn find_companion(&self, moniker: &str) -> Option<CompanionEntry> {
+        self.state.companions.iter().find(|entry| entry.matches(moniker)).cloned()
+    }
+
+    pub fn upsert_companion(&mut self, entry: CompanionEntry) {
+        match self.state.companions.iter_mut().find(|existing| existing.companion_id == entry.companion_id) {
+            Some(existing) => *existing = entry,
+            None => self.state.companions.push(entry),
+        }
+    }
+
+    pub fn remove_companion(&mut self, companion_id: &str) {
+        self.state.companions.retain(|entry| entry.companion_id != companion_id);
+        self.state.attention.remove(companion_id);
+        self.state.checkpoints.remove(companion_id);
+        self.state.ledgers.remove(companion_id);
+        self.state.waiting_counts.remove(companion_id);
+        self.state.contexts.retain(|context| context.companion_id != companion_id);
+    }
+
+    // ----- contexts -----
+
+    pub fn context(&self, context_id: &str) -> Option<LocalContext> {
+        self.state.contexts.iter().find(|context| context.context_id == context_id).cloned()
+    }
+
+    /// Reuses the live context for this caller/companion/origin binding, or issues a new one.
+    /// A context never rebinds: mismatched companions or origins get distinct ids.
+    pub fn bind_context(&mut self, caller: &CallerId, companion: &CompanionEntry, now: i64) -> LocalContext {
+        if let Some(existing) = self.state.contexts.iter_mut().find(|context| {
+            context.belongs_to(caller, &companion.companion_id) && context.origin == companion.origin
+        }) {
+            existing.last_used_at = now;
+            return existing.clone();
+        }
+        let context = LocalContext {
+            context_id: format!("ctx_{}", short_uuid()),
+            caller: caller.clone(),
+            companion_id: companion.companion_id.clone(),
+            origin: companion.origin.clone(),
+            did: companion.did.clone(),
+            created_at: now,
+            last_used_at: now,
+        };
+        self.state.contexts.push(context.clone());
+        context
+    }
+
+    // ----- aliases -----
+
+    /// Stable per-context short aliases. The canonical reference is always available in
+    /// structured output; the alias is presentational and never valid in another context.
+    pub fn alias_for(&mut self, context_id: &str, canonical: &str) -> String {
+        let map = self.state.aliases.entry(context_id.to_string()).or_default();
+        if let Some(existing) = map.get(canonical) {
+            return existing.clone();
+        }
+        let counter = self.state.alias_counters.entry(context_id.to_string()).or_insert(0);
+        *counter += 1;
+        let alias = if canonical.matches("::").count() >= 3 {
+            format!("p{counter}")
+        } else if canonical.matches("::").count() == 2 {
+            format!("t{counter}")
+        } else {
+            format!("z{counter}")
+        };
+        map.insert(canonical.to_string(), alias.clone());
+        alias
+    }
+
+    pub fn aliases(&self, context_id: &str) -> BTreeMap<String, String> {
+        self.state.aliases.get(context_id).cloned().unwrap_or_default()
+    }
+
+    // ----- attention -----
+
+    pub fn attention_records(&self, companion_id: &str) -> Vec<AttentionRecord> {
+        self.state.attention.get(companion_id).cloned().unwrap_or_default()
+    }
+
+    /// Upserts digest occurrences, coalescing by stable item identity. Returns how many
+    /// occurrences matched an existing record (coalesced) and how many were genuinely new.
+    pub fn upsert_attention(
+        &mut self,
+        companion_id: &str,
+        items: &[crate::application::contract::AttentionItemDto],
+        revision: &str,
+        now: i64,
+    ) -> (Vec<String>, usize) {
+        let records = self.state.attention.entry(companion_id.to_string()).or_default();
+        let mut fresh = Vec::new();
+        let mut coalesced = 0;
+        for item in items {
+            match records.iter_mut().find(|record| record.id == item.reference) {
+                Some(record) => {
+                    record.refresh(item.actor_name.clone(), truncate(&item.excerpt, 160), revision.to_string(), now);
+                    coalesced += 1;
+                }
+                None => {
+                    fresh.push(item.reference.clone());
+                    records.push(AttentionRecord {
+                        id: item.reference.clone(),
+                        companion_id: companion_id.to_string(),
+                        kind: item.kind.clone(),
+                        actor_ref: item.actor_ref.clone(),
+                        actor_name: item.actor_name.clone(),
+                        scope_ref: item.scope_ref.clone(),
+                        source_ref: item.source_ref.clone(),
+                        relationship: item.relationship.clone(),
+                        excerpt: truncate(&item.excerpt, 160),
+                        source_revision: item.source_revision.clone(),
+                        state: AttentionState::Pending,
+                        first_seen_at: now,
+                        last_seen_at: now,
+                        revision_seen: revision.to_string(),
+                    });
+                }
+            }
+        }
+        // Bounded retention: evict the oldest delivered records first.
+        if records.len() > ATTENTION_RECORD_LIMIT {
+            records.sort_by_key(|record| (record.state == AttentionState::Delivered, record.last_seen_at));
+            let excess = records.len() - ATTENTION_RECORD_LIMIT;
+            records.drain(0..excess);
+        }
+        (fresh, coalesced)
+    }
+
+    /// Complete authorized resynchronization: on a full first page whose directed count
+    /// matches the server's waiting count, records the server no longer lists are withdrawn.
+    /// Disappearance from a partial page never withdraws anything.
+    pub fn resync_attention(
+        &mut self,
+        companion_id: &str,
+        items: &[crate::application::contract::AttentionItemDto],
+        waiting_count: Option<i64>,
+        page_complete: bool,
+    ) -> usize {
+        let Some(expected) = waiting_count else { return 0 };
+        if !page_complete {
+            return 0;
+        }
+        let directed: Vec<&str> = items
+            .iter()
+            .filter(|item| matches!(item.relationship.as_deref(), Some("addressed_to_you") | Some("replies_to_you")))
+            .map(|item| item.reference.as_str())
+            .collect();
+        if directed.len() as i64 != expected {
+            return 0;
+        }
+        let records = self.state.attention.entry(companion_id.to_string()).or_default();
+        let before = records.len();
+        records.retain(|record| {
+            !matches!(record.relationship.as_deref(), Some("addressed_to_you") | Some("replies_to_you"))
+                || directed.contains(&record.id.as_str())
+        });
+        before - records.len()
+    }
+
+    pub fn mark_attention_delivered(&mut self, companion_id: &str, ids: &[String]) {
+        if let Some(records) = self.state.attention.get_mut(companion_id) {
+            for record in records.iter_mut() {
+                if ids.contains(&record.id) {
+                    record.state = AttentionState::Delivered;
+                }
+            }
+        }
+    }
+
+    pub fn set_waiting_count(&mut self, companion_id: &str, waiting: i64) {
+        self.state.waiting_counts.insert(companion_id.to_string(), waiting);
+    }
+
+    pub fn waiting_count(&self, companion_id: &str) -> i64 {
+        self.state.waiting_counts.get(companion_id).copied().unwrap_or(0)
+    }
+
+    // ----- checkpoints and ledgers -----
+
+    pub fn checkpoint(&self, companion_id: &str) -> Option<String> {
+        self.state.checkpoints.get(companion_id).cloned()
+    }
+
+    pub fn set_checkpoint(&mut self, companion_id: &str, checkpoint: &str) {
+        self.state.checkpoints.insert(companion_id.to_string(), checkpoint.to_string());
+    }
+
+    /// The digest revision last observed for this companion.
+    pub fn revision(&self, companion_id: &str) -> Option<String> {
+        self.state.revisions.get(companion_id).cloned()
+    }
+
+    pub fn set_revision(&mut self, companion_id: &str, revision: &str) {
+        self.state.revisions.insert(companion_id.to_string(), revision.to_string());
+    }
+
+    pub fn ledger_mut(&mut self, companion_id: &str) -> &mut PolicyLedger {
+        self.state.ledgers.entry(companion_id.to_string()).or_default()
+    }
+
+    // ----- pending-write journal -----
+
+    /// Appends a registration event before the mutation is sent.
+    pub fn journal_register(&self, write: &PendingWrite) -> Result<(), String> {
+        append_journal(&self.journal_path, &serde_json::json!({
+            "event": "registered",
+            "requestId": write.request_id,
+            "contextId": write.context_id,
+            "companionId": write.companion_id,
+            "origin": write.origin,
+            "operation": write.operation,
+            "targetRef": write.target_ref,
+            "payload": write.payload,
+            "registeredAt": write.registered_at,
+        }))
+    }
+
+    /// Appends a settlement (terminal or still-pending state observed from a receipt).
+    pub fn journal_settle(&self, request_id: &str, state: &str) -> Result<(), String> {
+        append_journal(&self.journal_path, &serde_json::json!({
+            "event": "settled", "requestId": request_id, "state": state,
+        }))
+    }
+
+    /// Replays the journal, returning writes whose outcome is not yet reconciled.
+    pub fn unsettled_writes(&self) -> Vec<PendingWrite> {
+        let Ok(content) = fs::read_to_string(&self.journal_path) else { return Vec::new() };
+        let mut writes: HashMap<String, PendingWrite> = HashMap::new();
+        for line in content.lines() {
+            if line.len() as u64 > JOURNAL_LINE_LIMIT {
+                break;
+            }
+            let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+            let request_id = event.get("requestId").and_then(|value| value.as_str()).unwrap_or_default().to_string();
+            match event.get("event").and_then(|value| value.as_str()) {
+                Some("registered") => {
+                    if let Ok(mut write) = serde_json::from_value::<PendingWrite>(event.clone()) {
+                        write.settled = false;
+                        writes.insert(request_id, write);
+                    }
+                }
+                Some("settled") => {
+                    if let Some(write) = writes.get_mut(&request_id) {
+                        write.settled = true;
+                        write.state = event.get("state").and_then(|value| value.as_str()).map(str::to_string);
+                    }
+                }
+                _ => {}
+            }
+        }
+        writes.into_values().filter(|write| !write.settled).collect()
+    }
+}
+
+fn truncate(value: &str, limit: usize) -> String {
+    if value.len() <= limit {
+        value.to_string()
+    } else {
+        let mut cut = limit;
+        while cut > 0 && !value.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        format!("{}…", &value[..cut])
+    }
+}
+
+pub fn short_uuid() -> String {
+    uuid::Uuid::new_v4().simple().to_string()[..8].to_string()
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
+    {
+        let mut file = fs::File::create(&temporary).map_err(|error| format!("cannot create temp state file: {error}"))?;
+        file.write_all(bytes).map_err(|error| format!("cannot write state: {error}"))?;
+        file.sync_all().map_err(|error| format!("cannot sync state: {error}"))?;
+    }
+    match fs::rename(&temporary, path) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            // Windows rename-over-existing can need a remove first.
+            let _ = fs::remove_file(path);
+            fs::rename(&temporary, path).map_err(|error| format!("cannot replace state file: {error}"))
+        }
+    }
+}
+
+fn append_journal(path: &Path, event: &serde_json::Value) -> Result<(), String> {
+    use std::io::Write as _;
+    let mut line = serde_json::to_string(event).map_err(|error| format!("cannot encode journal event: {error}"))?;
+    line.push('\n');
+    let mut file = fs::OpenOptions::new().create(true).append(true).open(path)
+        .map_err(|error| format!("cannot open journal: {error}"))?;
+    file.write_all(line.as_bytes()).map_err(|error| format!("cannot append journal: {error}"))?;
+    file.sync_all().map_err(|error| format!("cannot sync journal: {error}"))
+}
+
+/// Bounded file read for credentials and journals.
+pub fn read_bounded(path: &Path, limit: u64) -> Result<String, String> {
+    let mut file = fs::File::open(path).map_err(|error| format!("cannot open {}: {error}", path.display()))?;
+    let mut bytes = Vec::new();
+    std::io::Read::take(&mut file, limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    if bytes.len() as u64 > limit {
+        return Err(format!("{} exceeds the supported size", path.display()));
+    }
+    String::from_utf8(bytes).map_err(|error| format!("{} is not valid UTF-8: {error}", path.display()))
+}

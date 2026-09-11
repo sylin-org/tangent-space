@@ -1,0 +1,99 @@
+{
+  "status": "live walkthrough",
+  "date": "2026-09-11T03:12:42.718Z",
+  "origin": "http://127.0.0.1:5220",
+  "steps": [
+    {
+      "name": "server-ready"
+    },
+    {
+      "name": "fixture-oauth",
+      "did": "did:plc:mgxxqowf6nnd3btckqjq573l",
+      "ownershipClaimed": false
+    },
+    {
+      "name": "browser-arrival",
+      "did": "did:plc:mgxxqowf6nnd3btckqjq573l",
+      "ownerClaimed": false
+    },
+    {
+      "name": "credential-minted",
+      "did": "did:plc:mgxxqowf6nnd3btckqjq573l",
+      "lifetimeDays": 2,
+      "storage": ".local/experience-walkthrough (gitignored)"
+    },
+    {
+      "name": "bearer-arrival",
+      "experienceVersion": "1.0",
+      "identityDid": "did:plc:mgxxqowf6nnd3btckqjq573l",
+      "bytes": 1236,
+      "tangents": 1
+    },
+    {
+      "name": "cookie-arrival-same-actor",
+      "identityDid": "did:plc:mgxxqowf6nnd3btckqjq573l"
+    },
+    {
+      "name": "no-cookie-fallback",
+      "status": 401
+    },
+    {
+      "name": "anonymous-rejected",
+      "status": 401
+    },
+    {
+      "name": "digest-read",
+      "waiting": 0,
+      "activity": 0,
+      "checkpointReturned": true
+    },
+    {
+      "name": "connector-enrolled",
+      "output": "Enrolled walkthrough as tangent-agent (did:plc:mgxxqowf6nnd3btckqjq573l) on http://127.0.0.1:5220 — manual enrollment of an imported scoped credential.",
+      "intake": "cli"
+    },
+    {
+      "name": "connector-cli-intake",
+      "calls": [
+        {
+          "tool": "SelectCompanion",
+          "exit": 0,
+          "bytes": 86
+        },
+        {
+          "tool": "Arrive",
+          "exit": 0,
+          "bytes": 289
+        },
+        {
+          "tool": "GetUpdates",
+          "exit": 0,
+          "bytes": 114
+        }
+      ]
+    },
+    {
+      "name": "connector-mcp-intake",
+      "negotiated": "2025-06-18",
+      "server": {
+        "name": "tangent-connector",
+        "version": "0.1.0"
+      },
+      "toolCount": 12,
+      "arrivalTextBytes": 289,
+      "arrivalView": "orientation",
+      "updatesIsError": false,
+      "pingResult": "{}",
+      "deliveryMode": "tool_response_only"
+    },
+    {
+      "name": "connector-forgotten",
+      "code": 0
+    }
+  ],
+  "limits": [
+    "No ownership was claimed and no Tangent/Topic was created: the server was left unclaimed for the owner, so the walkthrough could not include a genuine human/agent Topic exchange or a native-source Post.",
+    "The MCP peer in this walkthrough is a scripted stdio JSON-RPC client, not a named agent host; no automatic-wake claim is made.",
+    "The minted credential expires after 2 days; it is stored under .local/experience-walkthrough for reuse."
+  ]
+}

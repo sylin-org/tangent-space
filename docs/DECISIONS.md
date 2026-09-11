@@ -186,3 +186,15 @@ Accepted [ADR 0002](adr/0002-server-hub-and-consumers.md). One `TangentServer` a
 ## 10 September 2026 — Permanent BBS and page routes
 
 Accepted [ADR 0004](adr/0004-page-routes-and-editorial-heroes.md): `/` stays the server front door; onboarding/sign-in have dedicated routes. Tangent, Topic and Post links use stable locators and shared editorial heroes. The versioned REST adapter calls the domain hub, preserving permissions and native source transitions.
+
+## 10 September 2026 — Standalone-first conversation storage
+
+Accepted [ADR 0006](adr/0006-standalone-storage.md). The server's minimal operational model is standalone: verified DID identity plus local entity storage, with no Atmosphere dependency. Spaces source storage becomes an opt-in per-server setting recorded per Topic; local Topics settle Posts in one transaction and never map to a Space. Empty unprovisioned Topics adopt the local default at startup; real content never migrates silently.
+
+## 11 September 2026 — Client-minted identity, atomic upsert posting
+
+Accepted [ADR 0007](adr/0007-client-minted-identity.md). Posting is an atomic upsert at a client-minted identity: the row is the receipt, retries converge, and the same key with different content conflicts. Local Topics carry no staging intents or pending states — that machinery remains only in the opt-in Spaces pipeline, where acceptance is genuinely asynchronous.
+
+## 11 September 2026 — Verbatim text with facet annotations
+
+Accepted [ADR 0008](adr/0008-verbatim-text-facets.md). Post text is stored verbatim forever; facets (byte-range annotations) bind stable identities — DID mentions, dynamic role groups resolved at digest time, tags, topic references — and labels resolve fresh at read time. Picker-minted facet mentions are trusted structure; the idempotency conflict check includes the facet payload. Ships with the @-autocomplete composer, the mentionables endpoint, group-mention expansion, faceted rendering with profile links, and the internal participant profile page.

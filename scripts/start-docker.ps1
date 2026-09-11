@@ -3,7 +3,7 @@ param(
     [switch]$Build,
     # Explicit opt-in for the one-time legacy Windows state migration. Never automatic.
     [switch]$MigrateWindowsState,
-    # Internal seams used only by scripts/test-docker-lifecycle.ps1. Defaults exercise the real system.
+    # Internal seams used only by scripts/test-server-lifecycle.ps1. Defaults exercise the real system.
     [string]$StateRoot,
     [string]$FixtureFile,
     [int]$Port = 5220,
@@ -100,7 +100,7 @@ try {
     Write-Output "Configuration $($configuration.status): $($configuration.path)"
 
     # The composition lock is refreshed from the current source tree on every launch.
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'src/TangentSpace/koan.lock.json') -Destination (Join-Path $state 'koan.lock.json') -Force
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'src/server/web/koan.lock.json') -Destination (Join-Path $state 'koan.lock.json') -Force
 
     if ($MigrateWindowsState) {
         $migration = & $windowsStateMigrator $repoRoot $networkId $state

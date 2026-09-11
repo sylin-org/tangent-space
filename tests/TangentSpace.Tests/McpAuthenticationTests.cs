@@ -28,6 +28,9 @@ using Xunit;
 
 namespace TangentSpace.Tests;
 
+// Shares the ambient-host collection with the experience integration tests: both set
+// AppHost.Current and must never run concurrently.
+[Xunit.Collection("Experience integration")]
 public sealed class McpAuthenticationTests
 {
     private const string ManagingApp = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb#tangent";
@@ -285,6 +288,8 @@ public sealed class McpAuthenticationTests
         var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
         var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Mcp.McpRequests>();
+        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+        await server.Claim(owner, humanDeclaration: true, CancellationToken.None);
         await tangents.Create(owner, "atomic-invites", "Atomic invitations", null, null, null, null, CancellationToken.None);
         await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", owner, "invite-once", async () =>
         {
@@ -318,6 +323,8 @@ public sealed class McpAuthenticationTests
         var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
         var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Mcp.McpRequests>();
+        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+        await server.Claim(owner, humanDeclaration: true, CancellationToken.None);
         await tangents.Create(owner, "atomic-rollback", "Atomic rollback", null, null, null, null, CancellationToken.None);
         await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", owner, "failed-invite", async () =>
         {
@@ -335,8 +342,11 @@ public sealed class McpAuthenticationTests
     }
 
     [Fact]
-    public async Task First_verified_arrival_claims_blank_owner_once_and_survives_restart()
+    public async Task Explicit_owner_claim_after_arrival_is_once_only_and_survives_restart()
     {
+        // ADR 0003: arrival establishes identity only; ownership is an explicit human
+        // declaration. The first claim takes a blank site, later claims are refused, and
+        // the choice survives a restart.
         const string first = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
         const string second = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
         string database;
@@ -344,28 +354,48 @@ public sealed class McpAuthenticationTests
         {
             database = fixture.DatabasePath;
             var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
+            var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
             await arrival.Enter(first, "first.test", CancellationToken.None);
             await arrival.Enter(second, "second.test", CancellationToken.None);
+            await server.Claim(first, humanDeclaration: true, CancellationToken.None);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                server.Claim(second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
                 Assert.Equal(first, (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerDid);
         }
         await using (var fixture = await HostFixture.StartAsync(database, ownerDid: ""))
         {
             var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
+            var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
             await arrival.CheckConfiguration(CancellationToken.None);
             await arrival.Enter(second, "second.test", CancellationToken.None);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                server.Claim(second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
                 Assert.Equal(first, (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerDid);
         }
     }
 
     [Fact]
-    public async Task Concurrent_first_arrivals_choose_one_owner_and_preserve_both_participants()
+    public async Task Concurrent_claims_choose_one_owner_and_preserve_both_participants()
     {
         await using var fixture = await HostFixture.StartAsync(ownerDid: "");
         string[] dids = ["did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb"];
         var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
-        await Task.WhenAll(dids.Select(did => arrival.Enter(did, null, CancellationToken.None)));
+        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+        // Each arrival attempts the explicit claim; the policy gate serializes them, so
+        // exactly one wins and the loser receives the already-claimed denial.
+        var claims = await Task.WhenAll(dids.Select(async did =>
+        {
+            await arrival.Enter(did, null, CancellationToken.None);
+            try
+            {
+                await server.Claim(did, humanDeclaration: true, CancellationToken.None);
+                return true;
+            }
+            catch (InvalidOperationException) { return false; }
+        }));
+        Assert.Single(claims.Where(won => won));
         using (EntityContext.NoCache())
         {
             var site = await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None);
@@ -377,13 +407,19 @@ public sealed class McpAuthenticationTests
     [Fact]
     public async Task Explicit_owner_keeps_first_visitor_from_claiming_a_fresh_site()
     {
+        // A configured OwnerDid reserves the claim: a visitor's explicit declaration is
+        // refused and the site stays unestablished until the configured account claims it.
         const string owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
         await using var fixture = await HostFixture.StartAsync(ownerDid: owner);
         var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
+        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
         await arrival.Enter("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", null, CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            server.Claim("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", humanDeclaration: true, CancellationToken.None));
         using (EntityContext.NoCache())
             Assert.Null(await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None));
         await arrival.Enter(owner, null, CancellationToken.None);
+        await server.Claim(owner, humanDeclaration: true, CancellationToken.None);
         using (EntityContext.NoCache())
             Assert.Equal(owner, (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerDid);
     }

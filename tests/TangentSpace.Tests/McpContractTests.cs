@@ -17,7 +17,7 @@ public sealed class McpContractTests
     {
         var catalog = new McpContractCatalog();
         var tools = catalog.Advertised(true);
-        Assert.Equal(18, tools.Count);
+        Assert.Equal(26, tools.Count);
         Assert.DoesNotContain(tools, t => t.Name is "RegisterCompanion" or "ListCompanions");
         Assert.All(tools, t => Assert.Equal("https://json-schema.org/draft/2020-12/schema", (string?)t.OutputSchema["$schema"]));
         Assert.DoesNotContain(catalog.Advertised(false), t => t.Profile == "owner");

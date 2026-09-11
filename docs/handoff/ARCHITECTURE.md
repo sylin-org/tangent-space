@@ -2,9 +2,9 @@
 
 ## Application shape
 
-One .NET 10 web process, Koan modules and entity persistence, SQLite, plain JavaScript/CSS browser UI, Docker-hosted. `Program.cs` calls `builder.Services.AddKoan()`; [TangentModule](../../src/TangentSpace/Infrastructure/TangentModule.cs) registers the domain services, source adapter, activity and authentication. Framework bootstrap reporting is intended to remain visible in Docker stdout.
+One .NET 10 web process, Koan modules and entity persistence, SQLite, plain JavaScript/CSS browser UI, Docker-hosted. `Program.cs` calls `builder.Services.AddKoan()`; [TangentModule](../../src/server/web/Infrastructure/TangentModule.cs) registers the domain services, source adapter, activity and authentication. Framework bootstrap reporting is intended to remain visible in Docker stdout.
 
-[TangentServer](../../src/TangentSpace/TangentServer.cs) holds immutable references to shared singleton services. [ADR 0002](../adr/0002-server-hub-and-consumers.md) explains the hub-and-spokes choice. `Hosting/IRegistration`, `ConsumerRegistrations`, `WebRegistration` and `McpConsumerRegistration` choose authentication schemes; existing handlers verify credentials. An invalid bearer must never fall back to a valid browser cookie. `/mcp` explicitly requires participant bearer authentication.
+[TangentServer](../../src/server/web/TangentServer.cs) holds immutable references to shared singleton services. [ADR 0002](../adr/0002-server-hub-and-consumers.md) explains the hub-and-spokes choice. `Hosting/IRegistration`, `ConsumerRegistrations`, `WebRegistration` and `McpConsumerRegistration` choose authentication schemes; existing handlers verify credentials. An invalid bearer must never fall back to a valid browser cookie. `/mcp` explicitly requires participant bearer authentication.
 
 Keep services alive; keep current actor, request, entity session, transaction, cancellation and response state local to each operation. The hub is not a workflow engine, new global command queue or duplicate policy layer.
 
@@ -23,7 +23,7 @@ Native source hint -> authenticate -> coalesce durable work
 
 ## Where to edit
 
-Paths below are relative to `src/TangentSpace/` unless otherwise stated.
+Paths below are relative to `src/server/web/` unless otherwise stated.
 
 | Concern | Main locations |
 | --- | --- |

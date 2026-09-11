@@ -4,9 +4,9 @@ COPY global.json ./
 COPY src ./src
 COPY docs/design/tangent-mcp/tools.json ./docs/design/tangent-mcp/tools.json
 COPY .local/upstream/koan-framework ./.local/upstream/koan-framework
-RUN dotnet publish src/TangentSpace/TangentSpace.csproj -c Release -r linux-x64 --self-contained false -o /publish \
+RUN dotnet publish src/server/web/TangentSpace.csproj -c Release -r linux-x64 --self-contained false -o /publish \
     -p:EnableSourceControlManagerQueries=false -p:EnableSourceLink=false \
-    && cp src/TangentSpace/koan.lock.json /publish/koan.lock.json
+    && cp src/server/web/koan.lock.json /publish/koan.lock.json
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12@sha256:1fe86375600b62e6566b465da9553eef0621f13c67f40fe764cd8dbb1dee1497 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*

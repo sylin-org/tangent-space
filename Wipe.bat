@@ -9,5 +9,5 @@ if errorlevel 1 (
     echo PowerShell 7 ^(pwsh^) is required but was not found on PATH. 1>&2
     exit /b 9009
 )
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\docker-lifecycle.ps1" -Action Wipe %*
+pwsh -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\server-lifecycle.ps1" -Action Wipe %*
 exit /b %ERRORLEVEL%

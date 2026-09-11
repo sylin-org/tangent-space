@@ -59,7 +59,7 @@ The app's entire content root is the Windows bind mount: `.local/docker/site` â†
 
 The source test PDS/PLC processes remain disposable infrastructure. Their host evidence files are not a durable backup of source accounts or repositories. The lifecycle scripts deliberately leave this network running. App-state persistence does not make the test network production storage.
 
-Run `pwsh -File scripts/test-docker-lifecycle.ps1` for isolated safety and configuration-preservation checks. It uses disposable scratch paths and mocked Docker commands, never your current app state.
+Run `pwsh -File scripts/test-server-lifecycle.ps1` for isolated safety and configuration-preservation checks. It uses disposable scratch paths and mocked Docker commands, never your current app state.
 
 ## Copy state out and back in
 

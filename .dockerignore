@@ -4,6 +4,7 @@
 !src/**
 !docs/design/tangent-mcp/tools.json
 !.local/upstream/koan-framework/**
+src/server/mcp/**
 **/bin/**
 **/obj/**
 **/node_modules/**

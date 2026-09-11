@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 
-const source = await readFile(new URL('../src/TangentSpace/wwwroot/rooms.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../src/server/web/wwwroot/rooms.js', import.meta.url), 'utf8');
 const saved = { operationId: 'c2b64a14-f4b8-444e-8a1d-2a3053ebc6bb', text: 'My original message',
   replyTo: { uri: 'at://example/reply', cid: 'original-cid' }, detail: 'reauthorization-required' };
 const later = { operationId: 'e395b4f6-6d06-4c21-b64a-04777c48993b', text: 'Another saved message', replyTo: null, detail: 'source-unavailable' };

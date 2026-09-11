@@ -13,3 +13,6 @@
 **/logs/
 *.user
 *.log
+
+# Rust build artifacts.
+**/target/

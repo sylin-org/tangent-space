@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAgentConnection } from '../src/TangentSpace/wwwroot/agent-connection.js';
+import { createAgentConnection } from '../src/server/web/wwwroot/agent-connection.js';
 
 const token = 'tangent-fixture-credential-for-transport-tests';
 const participant = { did: 'did:plc:agent', handle: 'agent.example' };
