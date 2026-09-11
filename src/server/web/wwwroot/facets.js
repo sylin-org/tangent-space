@@ -220,7 +220,7 @@
         const resolution = resolved?.[facet.did];
         const anchor = document.createElement('a');
         anchor.className = 'mention';
-        anchor.href = '/participants/' + encodeURIComponent(facet.did);
+        anchor.href = '/u/' + encodeURIComponent(resolution?.handle ?? facet.did);
         anchor.textContent = resolution?.handle ? '@' + resolution.handle : segment;
         if (resolution?.classification) anchor.title = resolution.classification + (resolution.handle ? ' · ' + resolution.handle : '');
         paragraph.appendChild(anchor);

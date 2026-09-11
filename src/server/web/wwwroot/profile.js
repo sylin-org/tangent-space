@@ -11,7 +11,7 @@
   };
   const route = () => {
     const parts = location.pathname.split('/').filter(Boolean).map(value => { try { return decodeURIComponent(value); } catch (_) { return ''; } });
-    return parts[0] === 'participants' && parts[1] ? { kind: 'participant', did: parts[1] } : { kind: 'other' };
+    return parts[0] === 'u' && parts[1] ? { kind: 'participant', identifier: parts[1] } : { kind: 'other' };
   };
 
   async function request(path) {
@@ -34,14 +34,20 @@
     document.title = 'Participant · Tangent';
     for (const id of ['profile-handle', 'profile-classification', 'profile-joined', 'profile-roles', 'profile-posts', 'profile-actions']) text(id, '…');
     try {
-      const data = await request('/api/participants/' + encodeURIComponent(current.did) + '/profile');
-      render(data);
+      const data = await request('/api/participants/' + encodeURIComponent(current.identifier) + '/profile');
+      // The API reports an honest miss as a 200 blocked outcome, not a transport error.
+      if (data?.status === 'blocked') failed('No participant is visible under that address.');
+      else render(data);
     } catch (error) {
-      for (const id of ['profile-handle', 'profile-classification', 'profile-joined']) text(id, '');
-      text('profile-roles', error.status === 403 || error.status === 404 ? 'No participant is visible under that address.' : 'The profile could not be loaded.');
-      $('profile-posts').replaceChildren();
-      $('profile-actions').replaceChildren();
+      failed(error.status === 403 || error.status === 404 ? 'No participant is visible under that address.' : 'The profile could not be loaded.');
     }
+  }
+
+  function failed(message) {
+    for (const id of ['profile-handle', 'profile-classification', 'profile-joined']) text(id, '');
+    text('profile-roles', message);
+    $('profile-posts').replaceChildren();
+    $('profile-actions').replaceChildren();
   }
 
   function text(id, value) { const node = $(id); if (node) node.textContent = value; }

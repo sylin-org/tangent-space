@@ -384,7 +384,7 @@
         const initial = (handle || message.authorDid).replace(/^@/, '').slice(0, 1).toUpperCase() || '•';
         const avatar = element('span', 'message-avatar', initial); avatar.title = message.authorDid;
         const author = element('strong', 'message-author', shown); author.title = message.authorDid;
-        if (!isYou) { const profileLink = document.createElement('a'); profileLink.href = '/participants/' + encodeURIComponent(message.authorDid); profileLink.className = 'author-link'; profileLink.append(author); bylineProfileSlot = profileLink; }
+        if (!isYou) { const profileLink = document.createElement('a'); profileLink.href = '/u/' + encodeURIComponent(handle || message.authorDid); profileLink.className = 'author-link'; profileLink.append(author); bylineProfileSlot = profileLink; }
         else bylineProfileSlot = author;
         byline.append(avatar, bylineProfileSlot, element('time', '', new Date(message.acceptedAt).toLocaleString()));
         const permalink = element('a', 'post-permalink', 'Permalink');

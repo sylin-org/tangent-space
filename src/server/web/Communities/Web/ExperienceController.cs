@@ -70,9 +70,9 @@ public sealed class ExperienceController(ExperienceService experience) : Control
     public Task<IActionResult> SetWatch([FromBody] ExperienceWatchRequest request, CancellationToken ct)
         => Mutate(principal => experience.SetWatch(principal, request.ScopeRef, request.Mode, request.RequestId, ct));
 
-    [HttpGet("/api/participants/{did}/profile")]
-    public Task<IActionResult> Profile(string did, CancellationToken ct)
-        => Read(principal => experience.ParticipantProfile(principal, did, ct));
+    [HttpGet("/api/participants/{identifier}/profile")]
+    public Task<IActionResult> Profile(string identifier, CancellationToken ct)
+        => Read(principal => experience.ParticipantProfile(principal, identifier, ct));
 
     [HttpGet("operations/{requestId}")]
     public Task<IActionResult> Operation(string requestId, CancellationToken ct)

@@ -17,9 +17,9 @@
   <script src="/pages.js?v=20260910-18" defer></script>
   <script src="/onboarding.js?v=20260910-18" defer></script>
   <script src="/app.js?v=20260910-18" defer></script>
-  <script src="/rooms.js?v=20260911-02" defer></script>
-  <script src="/facets.js?v=20260911-02" defer></script>
-  <script src="/profile.js?v=20260911-01" defer></script>
+  <script src="/rooms.js?v=20260911-03" defer></script>
+  <script src="/facets.js?v=20260911-03" defer></script>
+  <script src="/profile.js?v=20260911-02" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -232,19 +232,20 @@
         <p id="action-status" class="note" role="status" aria-live="polite" hidden></p>
       </section>
 
+      <section id="participant-profile" class="participant-profile" hidden aria-labelledby="profile-handle">
+        <header class="profile-card">
+          <h2 id="profile-handle" tabindex="-1">Participant</h2>
+          <p id="profile-did" class="hint"></p>
+          <p id="profile-classification" class="hint"></p>
+          <p id="profile-joined" class="hint"></p>
+          <div id="profile-roles" class="profile-roles"></div>
+        </header>
+        <div id="profile-actions" class="profile-actions"></div>
+        <h3>Recent posts</h3>
+        <ul id="profile-posts" class="profile-posts"></ul>
+      </section>
+
       <noscript>
-        <section id="participant-profile" class="participant-profile" hidden aria-labelledby="profile-handle">
-          <header class="profile-card">
-            <h2 id="profile-handle" tabindex="-1">Participant</h2>
-            <p id="profile-did" class="hint"></p>
-            <p id="profile-classification" class="hint"></p>
-            <p id="profile-joined" class="hint"></p>
-            <div id="profile-roles" class="profile-roles"></div>
-          </header>
-          <div id="profile-actions" class="profile-actions"></div>
-          <h3>Recent posts</h3>
-          <ul id="profile-posts" class="profile-posts"></ul>
-        </section>
         <section aria-labelledby="noscript-title">
           <h1 class="title" id="noscript-title">JavaScript is needed</h1>
           <p class="lede">Tangent Space loads its welcome from the server. Please enable JavaScript, then reload this page.</p>

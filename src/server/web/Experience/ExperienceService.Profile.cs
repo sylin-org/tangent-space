@@ -16,19 +16,23 @@ public sealed partial class ExperienceService
     /// <summary>The internal participant profile (ADR 0008): identity card, roles across
     /// Tangents, a bounded policy-filtered window of their posts, and the viewer's permitted
     /// operational actions. Every post is scoped to Topics the viewer may read.</summary>
-    public async Task<ExperienceResponse> ParticipantProfile(ClaimsPrincipal principal, string did, CancellationToken ct)
+    public async Task<ExperienceResponse> ParticipantProfile(ClaimsPrincipal principal, string identifier, CancellationToken ct)
     {
         var viewer = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
         var identity = await IdentityOf(viewer, ct);
-        Participant? participant;
+        // Identifier resolution precedes policy: an unknown, stale, or ambiguous identifier is the
+        // same honest miss regardless of form; the profile data stays keyed by the DID.
+        (Participant Participant, string MatchedForm)? resolved;
         using (EntityContext.NoCache())
-            participant = await Participant.Get(did, ct);
-        if (participant is null || participant.IsSuspended && participant.Id != viewer)
+            resolved = await ParticipantLookup.TryResolveByIdentifier(identifier, ct);
+        if (resolved is not { } match || match.Participant.IsSuspended && match.Participant.Id != viewer)
             return Problem("participant_profile", identity, ServerPlace(principal, await SiteLabel(ct)),
-                ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "No participant is registered under that DID."),
+                ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "No participant is registered under that identity."),
                 did: viewer, credential: credential, ct: ct);
 
+        var participant = match.Participant;
+        var did = participant.Id;
         var self = string.Equals(did, viewer, StringComparison.Ordinal);
         var roles = new List<ExperienceProfileRole>();
         using (EntityContext.NoCache())
