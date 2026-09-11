@@ -1,5 +1,11 @@
 # W2-B2 — Server identity consumption: unbound enrollment, chain, per-identity credentials
 
+**Sequencing revised (bound-baseline principle, DECISIONS):** the round's primary path is
+W2-D (connector atproto binding + the existing `/mcp/token` service-proof exchange — no
+new server work required for it). This slice now follows W2-D and delivers the
+**setting-gated unbound tier** plus the identity-change audit chain. Design content below
+is unchanged.
+
 Wave 2 brief. One agent, runs ALONE after W2-B1 (and after W2-A; this brief assumes the
 W2-A connector exists and the [W2 contract](W2-CONTRACT.md) is implemented client-side).
 .NET server: `src/server/web` + `tests/TangentSpace.Tests`. Decision record:
