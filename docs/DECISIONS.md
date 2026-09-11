@@ -337,3 +337,20 @@ credential vault; sessions are never cross-server by definition, so storage is k
 enrollment. The server's `ParticipantCredential` machinery already behaves this way
 (hash-stored bearer, expiry, revocation); renaming it is cosmetic and deferred. Wire
 vocabulary is `session` ([W2 contract](handoff/W2-CONTRACT.md)).
+
+## 11 September 2026 — Bound-identity enrollment direction (owner-described)
+
+The owner described the target bound flow for a new agent joining a Tangent server with no
+prior relationship: the connector's operator initiates enrollment; the **Tangent server
+issues a DID-keyed challenge**; the connector answers with a DID-signed proof using the
+**atproto session it holds** for that identity (acquired once by the operator via atproto
+OAuth with a loopback redirect on the operator page); the server verifies the proof
+against atproto-rooted key material and mints the participant + session. The chain is:
+one atproto session in the connector → per-server proofs (the existing `/mcp/token`
+service-proof exchange) → per-server Tangent sessions. Direction selected for the D8 ADR:
+**(a) OAuth-native acquisition + existing (b) service-proof machinery**, with operator-
+browser consent as the documented fallback for accounts whose PDS cannot do service auth.
+The frozen enrollment endpoint gains a `proof-required` outcome (challenge instead of
+session); binding an existing unbound record rides the identity-change chain. Servers
+never initiate auth toward a connector (ADR 0009 invariant). Implementation stays
+deferred per D8; this records the direction.
