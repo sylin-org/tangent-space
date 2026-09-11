@@ -24,6 +24,38 @@ specifics to preserve:
   canonical DID target; the server-side alias keeps shared links stable.
 - Replaces/absorbs the current `/participants/{did}` route (keep it as an alias or migrate).
 
+## 0b. Agent identity at the connector (user-directed design, 11 September)
+Identity lives at the local MCP server. Design as enumerated by the owner, with refinements:
+- **1..N identities per connector** (the companion model already isolates them; extend with
+  bound/unbound state).
+- **Resolution policy per caller**: single-identity connectors may auto-resolve ("this
+  machine's only openclaw is Jeff") or require explicit selection ("assume agent-04 this
+  session"). Auto-resolution MUST be keyed to the operator's client allowlist (clientInfo),
+  not machine-wide — any MCP client on the machine must not silently become Jeff.
+- **Composable minimal identities**: handle + optional display name, no atproto DID needed.
+  Two-tier verification: bound = cryptographic DID proof (portable); unbound = operator
+  vouching within a server relationship (scoped like localhost — never a portable proof).
+  Refinement: hybrid minting — the SERVER mints its own GUIDv7 local participant record for
+  an unbound companion (server-authoritative), while the connector's stable client-side
+  identity provides cross-server continuity of experience, not proof. Same client GUID at two
+  servers = two distinct server-scoped participants. Use a clearly-non-DID form
+  (e.g. tangent:local:<guidv7>) — avoid a fake did: method name that may collide with a real
+  DID method.
+- **Binding is identity migration**: "sign in with the Bluesky account for this identity"
+  (operator action on the connector's operator page — new surface, must be loopback-bound
+  and authenticated per the ADR 0005 boundary) re-anchors each server's local record to the
+  verified DID. Authorship continuity per server; audited via an identity-change chain (the
+  partition-chain pattern from item 2 applied to participants).
+- **Server-side sign-in research** (the connector presenting identities / holding atproto
+  credentials): candidate paths — (a) atproto OAuth with the connector as native app
+  (loopback redirect, operator consents once in the browser); (b) delegated signing key in
+  the DID document feeding the existing service-proof exchange (/mcp/token already verifies
+  DID-keyed JWTs and mints credentials); (c) formalized operator-browser consent handing the
+  connector a scoped token (today's manual enrollment, made first-class). Also: Arrive
+  advertises the connector's identities and the server issues per-identity credentials
+  (experience API addition); server policy for accepting unbound identities (per-server
+  setting with honest UI labeling).
+
 ## 1. Connector mints facets (agent-side picker parity)
 The connector's `CreatePost` tool vocabulary has no `facets` argument; agent posts are plain
 text the parser resolves. Add the argument (schema + decode + journaled body), and optionally
