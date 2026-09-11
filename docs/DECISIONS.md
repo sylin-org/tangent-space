@@ -324,3 +324,16 @@ economics (rogue enrollment requires an auditable operator action) over the tria
 admission × identity strength × rate limits; connector sign-in is never auto-executable
 from discovery without operator consent. Design only — enforcement is wave 3; human local
 accounts (D11) and the service-DID lifecycle (refinement 9) stay deferred.
+
+## 11 September 2026 — Session-token semantics (owner-directed)
+
+The `ts_…` tokens servers issue at enrollment (or browser minting) are **server-scoped
+bearer sessions** — cookie-equivalent, not credentials. Possession is the session; they
+are returned once, expire, are revocable, and are re-minted by re-authenticating; a lost
+session means logging in again, never identity loss. Consequences: the connector stores
+sessions inside their per-server enrollment record in local user-profile state (the
+cookie-jar model — same exposure class as a browser profile), not in a platform
+credential vault; sessions are never cross-server by definition, so storage is keyed by
+enrollment. The server's `ParticipantCredential` machinery already behaves this way
+(hash-stored bearer, expiry, revocation); renaming it is cosmetic and deferred. Wire
+vocabulary is `session` ([W2 contract](handoff/W2-CONTRACT.md)).

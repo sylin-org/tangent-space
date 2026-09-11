@@ -16,12 +16,14 @@ New `POST /api/v1/experience/identities/enroll` (route on the existing
   `connector-client` identity with that value: found → idempotent
   `already_enrolled` outcome with the existing participant, NO credential.
 - Setting off → blocked `unbound_enrollment_disabled`. Setting on → mint participant
-  (GUIDv7) + internal identity + connector-client identity (value = localId) + scoped
-  `ParticipantCredential` (name "connector", grants `[welcome, read, post]`, 7 days),
-  return the contract's ok shape. Handle deconfliction is DISPLAY-only: the stored
-  identity label is the requested handle verbatim; uniqueness of labels is NOT enforced
-  (handles are labels, not identifiers) — the digest/`/u/` ambiguity guards already
-  treat duplicate labels honestly.
+  (GUIDv7) + internal identity + connector-client identity (value = localId) + a scoped
+  **session** (reuse the `ParticipantCredential` machinery internally — name
+  "connector", grants `[welcome, read, post]`, 7 days; the wire shape and vocabulary are
+  `session` per the contract: a server-scoped bearer session, cookie-equivalent,
+  re-mintable by re-enrollment), return the contract's ok shape. Handle deconfliction is
+  DISPLAY-only: the stored identity label is the requested handle verbatim; uniqueness
+  of labels is NOT enforced (handles are labels, not identifiers) — the digest/`/u/`
+  ambiguity guards already treat duplicate labels honestly.
 - Suspension: if the resolved participant is suspended → blocked
   `suspended_participant`.
 

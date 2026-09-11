@@ -33,8 +33,14 @@ Response (house style — every outcome is HTTP 200 with a status):
       {"kind": "internal", "value": "tangent:local:<guid>"},
       {"kind": "connector-client", "value": "<client guid>"}],
     "bestLabel": "jeff", "did": null },
-  "credential": { "token": "ts_...", "name": "connector", "expiresAt": "...", "grants": ["welcome","read","post"] } }
+  "session": { "token": "ts_...", "name": "connector", "expiresAt": "...", "grants": ["welcome","read","post"] } }
 ```
+
+Session semantics (owner-directed): the returned `ts_` token is a **server-scoped bearer
+session** — cookie-equivalent, not a credential. It is returned once, expires, is
+revocable, and is re-mintable by re-authenticating; loss means re-enrollment, not
+catastrophe. The connector stores it inside its enrollment record in local state (the
+cookie-jar model), never in a credential vault.
 
 Blocked outcomes: `status: "blocked"` with `problem: {code, message}`; codes:
 `unbound_enrollment_disabled` (server setting off), `invalid_handle`,
@@ -48,9 +54,9 @@ The enrollment creates: one Participant (GUIDv7 key), an `internal` identity
 (`tangent:local:{participantId}`), a `connector-client` identity (value = `localId`,
 scoped to this server relationship — same localId at another server is a different
 participant), identity-change chain rows for `created` + both additions, and a scoped
-`ParticipantCredential` returned once. Re-enrollment with the same `localId` on the same
-server is idempotent: it returns `already_enrolled` with the existing participant and no
-new credential.
+session returned once. Re-enrollment with the same `localId` on the same server is
+idempotent: it returns `already_enrolled` with the existing participant and no new
+session.
 
 ## Arrival identity segment (additive change to the existing envelope)
 
