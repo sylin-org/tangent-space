@@ -126,14 +126,14 @@
   $('atmosphere-off').addEventListener('click', () => change({ scene: 'none' }));
   $('atmosphere-reset').addEventListener('click', () => { local = {}; remember(); update(); restart(); $('atmosphere-status').textContent = 'Following this server’s atmosphere.'; });
   $('atmosphere-save').addEventListener('click', async () => {
-    if (!canManage || !participant?.did || saving) return;
-    const did = participant.did, s = settings(); saving = true; update();
+    if (!canManage || saving) return;
+    const actor = participant?.participantRef, s = settings(); saving = true; update();
     try {
-      const response = await fetch('/api/server', { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Tangent-Participant': did },
+      const response = await fetch('/api/server', { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backgroundScene: s.scene, backgroundColor: s.color, backgroundIntensity: s.intensity, backgroundMotion: s.motion, backgroundMouseSpotlight: s.mouseSpotlight }) });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || result.reason || 'The atmosphere could not be saved. Try again.');
-      if (participant?.did !== did) return;
+      if (participant?.participantRef !== actor) return;
       server = fromServer(result); local = {}; remember(); update(); restart();
       $('atmosphere-status').textContent = 'A new atmosphere. Everyone arriving here will see it.';
     } catch (error) { $('atmosphere-status').textContent = error.message; }
@@ -143,7 +143,7 @@
     return { ...defaults, ...sanitize({ scene: value?.backgroundScene, color: value?.backgroundColor, intensity: value?.backgroundIntensity, motion: value?.backgroundMotion, mouseSpotlight: value?.backgroundMouseSpotlight }) };
   }
   window.TangentAtmosphere = {
-    configure(value, actor) { server = fromServer(value); participant = actor; canManage = value?.canManage === true && !!actor?.did; update(); restart(); },
+    configure(value, actor) { server = fromServer(value); participant = actor; canManage = value?.canManage === true && !!actor?.participantRef; update(); restart(); },
     open() { $('atmosphere-open').click(); }
   };
   function pointerFrame() {

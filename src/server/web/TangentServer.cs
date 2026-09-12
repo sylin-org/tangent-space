@@ -15,7 +15,7 @@ public sealed class TangentServer(
     ServerGovernance site, TangentGovernance tangents, CompanionGovernance participants,
     RoomGovernance topics, ConversationService posts, ActivityService activity,
     SpacesService source, SourceReadiness readiness, TangentSpace.Participants.ParticipantProfiles profiles,
-    TangentSpace.Participants.ParticipantDirectory directory)
+    TangentSpace.Participants.ParticipantDirectory directory, LiveSessions live)
 {
     public TangentSpace.Participants.ParticipantProfiles Profiles { get; } = profiles;
     public ServerGovernance Site { get; } = site;
@@ -27,5 +27,6 @@ public sealed class TangentServer(
     public SpacesService Source { get; } = source;
     public SourceReadiness Readiness { get; } = readiness;
     public TangentSpace.Participants.ParticipantDirectory Directory { get; } = directory;
+    public LiveSessions Live { get; } = live;
 
 }

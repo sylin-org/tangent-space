@@ -23,7 +23,6 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         => Execute(async () =>
         {
             var did = ParticipationAccess.Require(User, ParticipationGrants.Post);
-            if (CheckExpectedParticipant(did) is { } mismatch) return mismatch;
             var receipt = await conversation.Post(did, roomKey, message, ct);
             return StatusCode(receipt.State == "pending" ? 202 : receipt.State == "accepted" ? 200 : 409,
                 new { receipt.OperationId, receipt.State, receipt.SourceUri, receipt.SourceCid, receipt.Detail });
@@ -34,7 +33,6 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         => Execute(async () =>
         {
             var did = await RequireChangeActor(roomKey, messageId, ct);
-            if (CheckExpectedParticipant(did) is { } mismatch) return mismatch;
             var result = await conversation.ChangePost(did, roomKey, messageId, input.Text, false, input.OperationId, ct,
                 facets: input.Facets);
             return StatusCode(result.State == "pending" ? 202 : result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
@@ -45,7 +43,6 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         => Execute(async () =>
         {
             var did = await RequireChangeActor(roomKey, messageId, ct);
-            if (CheckExpectedParticipant(did) is { } mismatch) return mismatch;
             var result = await conversation.ChangePost(did, roomKey, messageId, null, true, input.OperationId, ct);
             return StatusCode(result.State == "pending" ? 202 : result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
         });
@@ -55,7 +52,6 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         => Execute(async () =>
         {
             var did = ParticipationAccess.Require(User, ParticipationGrants.Post);
-            if (CheckExpectedParticipant(did) is { } mismatch) return mismatch;
             return Ok(await conversation.PendingMessages(did, roomKey, ct));
         });
 
@@ -74,13 +70,6 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
     [HttpPost("rebuild"), RoomMutation]
     public Task<IActionResult> Rebuild(string roomKey, CancellationToken ct)
         => Execute(async () => Ok(new { rebuilt = await conversation.Rebuild(ParticipationAccess.Require(User, ParticipationGrants.Read), roomKey, ct) }));
-
-    private ConflictObjectResult? CheckExpectedParticipant(string did)
-    {
-        var expected = Request.Headers["X-Tangent-Participant"];
-        return expected.Count > 0 && (expected.Count != 1 || expected[0] != did)
-            ? Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." }) : null;
-    }
 
     private async Task<string> RequireChangeActor(string roomKey, string messageId, CancellationToken ct)
     {

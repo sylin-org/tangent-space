@@ -34,4 +34,28 @@ public sealed class ActivityUpdatesTests
         Assert.True(await first.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
         Assert.True(await second.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task A_replaced_session_wakes_its_registered_connections_with_the_identity_event()
+    {
+        var sessions = new LiveSessions();
+        var wake = new TaskCompletionSource<LiveSessions.Identity>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registered = sessions.Register("session-a", wake);
+        sessions.Replaced("session-a", new LiveSessions.Identity("participant", "handle.test", "Your signed-in account changed."));
+        var identity = await wake.Task.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        Assert.Equal("participant", identity.ParticipantRef);
+        Assert.Equal("handle.test", identity.BestLabel);
+        Assert.Equal("Your signed-in account changed.", identity.Reason);
+    }
+
+    [Fact]
+    public void Replacing_an_unknown_session_or_a_retired_connection_is_a_no_op()
+    {
+        var sessions = new LiveSessions();
+        sessions.Replaced("unknown", new LiveSessions.Identity("participant", "handle.test", "reason"));
+        var wake = new TaskCompletionSource<LiveSessions.Identity>(TaskCreationOptions.RunContinuationsAsynchronously);
+        sessions.Register("session-b", wake).Dispose();
+        sessions.Replaced("session-b", new LiveSessions.Identity("participant", "handle.test", "reason"));
+        Assert.False(wake.Task.IsCompleted);
+    }
 }

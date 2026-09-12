@@ -49,6 +49,7 @@ public sealed class TangentModule : KoanModule
         services.AddTangentMcp();
         services.AddSingleton<ConversationService>();
         services.AddSingleton<ActivityService>();
+        services.AddSingleton<LiveSessions>();
         services.AddSingleton<Experience.ExperienceDigest>();
         services.AddSingleton<Experience.ExperienceService>();
         services.AddSingleton<SourceNotifications>();

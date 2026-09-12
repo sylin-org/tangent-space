@@ -37,7 +37,6 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         try
         {
             var actor = ReadActor();
-            if (actor is not null && ExpectedParticipantDiffers(actor)) return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             var topic = await hub.Topics.Describe(actor, topicId, ct);
             return topic is null || topic.TangentKey != tangentId ? NotFound() : Ok(topic);
         }
@@ -69,7 +68,6 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         try
         {
             var actor = Actor();
-            if (ExpectedParticipantDiffers(actor)) return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             var topic = await hub.Topics.Describe(actor, topicId, ct);
             if (topic is null || topic.TangentKey != tangentId) return NotFound();
             return Outcome(await hub.Topics.SetSettings(actor, topicId, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));
@@ -87,7 +85,6 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         {
             var actor = ReadActor();
             if (actor is null) return Unauthorized();
-            if (ExpectedParticipantDiffers(actor)) return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             // Resolve only the anchor key, then let the room policy and McpWindow enforce access.
             Message? message;
             using (EntityContext.NoCache())
@@ -110,7 +107,6 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         try
         {
             var actor = ReadActor();
-            if (actor is not null && ExpectedParticipantDiffers(actor)) return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             var value = await operation(actor);
             return value is null ? NotFound() : Ok(value);
         }
@@ -125,7 +121,6 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         try
         {
             var actor = Actor();
-            if (ExpectedParticipantDiffers(actor)) return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             return created ? StatusCode(StatusCodes.Status201Created, await operation(actor)) : Ok(await operation(actor));
         }
         catch (TangentRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
@@ -141,11 +136,6 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         return null;
     }
 
-    private bool ExpectedParticipantDiffers(string did)
-    {
-        var expected = Request.Headers["X-Tangent-Participant"];
-        return expected.Count > 0 && (expected.Count != 1 || expected[0] != did);
-    }
 
     private static int Status(TangentDenial denial) => denial switch
     {

@@ -1,4 +1,4 @@
-import { createAgentConnection } from './agent-connection.js?v=20260910-10';
+import { createAgentConnection } from './agent-connection.js?v=20260911-01';
 import { installTangentTools } from './webmcp.js?v=20260910-10';
 
 const $ = id => document.getElementById(id);

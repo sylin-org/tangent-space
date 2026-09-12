@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { createAgentConnection } from '../src/server/web/wwwroot/agent-connection.js';
 
 const token = 'tangent-fixture-credential-for-transport-tests';
-const participant = { did: 'did:plc:agent', handle: 'agent.example' };
+const participant = { participantRef: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', did: 'did:plc:agent', handle: 'agent.example' };
 const result = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const memory = () => { const values = new Map(); return { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) }; };
 
 test('agent requests omit human cookies, forbid redirects, and never expose credentials in identity', async () => {
   const calls = [];
   const connection = createAgentConnection({ fetch: async (path, options) => { calls.push({ path, options }); return result({ participant }); } });
-  await connection.connect(token, participant.did);
+  await connection.connect(token, participant.participantRef);
   await connection.api('/api/rooms/workshop/messages', { method: 'POST', body: { text: 'hello' } });
   assert.deepEqual(connection.identity(), participant);
   assert.equal(JSON.stringify(connection.identity()).includes(token), false);
@@ -38,7 +38,7 @@ test('revocation clears stored connection and cannot fall back to cookies', asyn
 
 test('a mismatched credential file cannot select its stated author', async () => {
   const connection = createAgentConnection({ fetch: async () => result({ participant }) });
-  await assert.rejects(connection.connect(token, 'did:plc:leo'), /expected Participant/);
+  await assert.rejects(connection.connect(token, '0f1e2d3c4b5a69788796a5b4c3d2e1f0'), /expected Participant/);
   assert.equal(connection.identity(), null);
 });
 
@@ -118,10 +118,14 @@ test('authenticated aggregate arrival and bounded activity use the verified agen
   await connection.connect(token);
   for (const path of ['/api/participation/arrival', '/api/tangents?page=2', '/api/activity?cursor=opaque', '/api/activity/wait?cursor=opaque']) {
     await connection.api(path);
-    assert.equal(calls.at(-1).options.headers['X-Tangent-Participant'], participant.did);
+    // Token-only sessions: identity verification is the bearer token, never a
+    // participant header echoing identity back at the server.
+    assert.equal(calls.at(-1).options.headers['X-Tangent-Participant'], undefined);
     assert.equal(calls.at(-1).options.headers.Authorization, 'Bearer ' + token);
     assert.equal(calls.at(-1).options.credentials, 'omit');
   }
-  for (const path of ['/api/participation/arrival/credentials', '/api/activity/../participation/credentials', '/api/tangents/members']) await assert.rejects(connection.api(path));
+  // /api/tangents/<key> is a legitimate single-segment shape the transport must allow
+  // (the server decides if the key exists); an unrelated multi-segment route rejects here.
+  for (const path of ['/api/participation/arrival/credentials', '/api/activity/../participation/credentials', '/api/tangents/members/roles']) await assert.rejects(connection.api(path));
   assert.equal(calls.length, 5);
 });

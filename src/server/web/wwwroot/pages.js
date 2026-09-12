@@ -85,13 +85,17 @@
   }
   function unavailable(status) {
     currentTangent = currentTopic = undefined;
-    $('server-welcome-title').textContent = status === 401 ? 'Sign in to continue.' : 'This conversation isn’t available.';
-    $('server-welcome-message').textContent = status === 401 ? 'Use your Atmosphere account to see what’s here for you.' : 'It may have moved, or your account may not have access.';
+    const denied = status === 403;
+    $('server-welcome-title').textContent = status === 401 ? 'Sign in to continue.'
+      : denied ? 'You don’t have access to this.' : 'This conversation isn’t available.';
+    $('server-welcome-message').textContent = status === 401 ? 'Use your Atmosphere account to see what’s here for you.'
+      : denied ? 'Your account can’t see this content. It may belong to another account, or access to it was removed.' : 'It may have moved, or your account may not have access.';
     $('hero-byline').hidden = $('server-motd').hidden = $('hero-image').hidden = true;
     $('hero-breadcrumbs').replaceChildren(link(currentSite?.name || 'Home', '/'), link('Tangents', '/tangents/'));
-    $('hero-actions').replaceChildren(link('Back to Tangents', '/tangents/', 'btn btn-quiet'));
+    $('hero-actions').replaceChildren(denied ? link('Explore Tangents', '/tangents/', 'btn btn-primary') : link('Back to Tangents', '/tangents/', 'btn btn-quiet'));
+    $('hero-actions').append(link(denied ? 'Back to home' : 'Home', '/', 'btn btn-quiet'));
     if (status === 401 || !currentSite?.participant) $('hero-actions').append(link('Sign in', '/sign-in/?return=' + encodeURIComponent(location.pathname), 'btn btn-primary'));
-    document.title = 'Conversation unavailable · Tangent Space';
+    document.title = (denied ? 'No access' : 'Conversation unavailable') + ' · Tangent Space';
   }
   window.TangentPages = { route, hero, prepare, tangentUrl, topicUrl, unavailable };
 })();

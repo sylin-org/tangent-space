@@ -18,9 +18,7 @@ public sealed class RoomMutationAttribute(string grant = ParticipationGrants.Man
             {
                 var principal = context.HttpContext.User;
                 if (!ParticipationAccess.UsesCredential(principal)) throw new UnauthorizedAccessException();
-                var did = ParticipationAccess.Require(principal, grant);
-                var expected = request.Headers["X-Tangent-Participant"];
-                if (expected.Count > 0 && (expected.Count != 1 || expected[0] != did)) throw new UnauthorizedAccessException();
+                ParticipationAccess.Require(principal, grant);
                 if (!string.Equals(request.ContentType?.Split(';',2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase))
                     context.Result = Failure(415, "Use application/json.");
             }

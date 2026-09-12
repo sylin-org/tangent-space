@@ -29,9 +29,6 @@ public sealed class ParticipantArrivalController(TangentServer hub, IOptions<Sit
             using var fresh = EntityContext.NoCache();
             var participantId = User.Identity?.IsAuthenticated == true ? ParticipationAccess.Require(User, ParticipationGrants.Welcome) : null;
             if (participantId is null && Request.Headers.ContainsKey("Authorization")) return Unauthorized();
-            var expected = Request.Headers["X-Tangent-Participant"];
-            if (expected.Count > 0 && (expected.Count != 1 || expected[0] != participantId))
-                return Conflict(new { reason = "Your connected account changed. Reconnect before continuing." });
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
             var participant = participantId is null ? null : await Participant.Get(participantId, ct);
             var credential = User.FindFirst(ParticipationConstants.CredentialClaim)?.Value;

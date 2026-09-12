@@ -19,8 +19,6 @@ public sealed class SourceStatusController(TangentServer hub) : ControllerBase
         {
             if (room is not null) Room.CheckKey(room);
             var did = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
-            if (ExpectedParticipantDiffers(did))
-                return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             var status = await readiness.Get(did, room, ct);
             return status.Reason is null
                 ? Ok(new { did = status.Did, canReadSource = status.CanReadSource, canWriteSource = status.CanWriteSource,
@@ -30,11 +28,5 @@ public sealed class SourceStatusController(TangentServer hub) : ControllerBase
         }
         catch (UnauthorizedAccessException) { return StatusCode(403, new { reason = "Your current access does not permit this operation." }); }
         catch (ArgumentException error) { return BadRequest(new { reason = error.Message }); }
-    }
-
-    private bool ExpectedParticipantDiffers(string did)
-    {
-        var expected = Request.Headers["X-Tangent-Participant"];
-        return expected.Count > 0 && (expected.Count != 1 || expected[0] != did);
     }
 }

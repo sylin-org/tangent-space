@@ -22,7 +22,7 @@ export function createAgentConnection({ fetch: send = globalThis.fetch.bind(glob
     const response = await send(path, { method, credentials: 'omit', redirect: 'error', cache: 'no-store',
       signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
       headers: { Accept: 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        ...(current ? { 'X-Tangent-Participant': current.participantRef } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body) });
     if (response.status === 401) {
       await response.body?.cancel();

@@ -117,24 +117,5 @@ public sealed class CommunityRulesTests
         Assert.Equal("space-pending", policy.Reason);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Stale_expected_participant_rejects_community_reads_and_mutations_before_service_access(bool multipleValues)
-    {
-        var context = new DefaultHttpContext
-        {
-            User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(AtprotoClaimTypes.Did, HostOwnerDid), new Claim(TangentSpace.Participation.ParticipationConstants.ParticipantClaim, HostOwner)], "cookie"))
-        };
-        context.Request.Headers["X-Tangent-Participant"] = multipleValues ? new StringValues([HostOwner, Member]) : Member;
-        var controller = new TangentsController(null!) { ControllerContext = new ControllerContext { HttpContext = context } };
 
-        var read = await controller.List(page: 1, ct: TestContext.Current.CancellationToken);
-        var mutation = await controller.SetMembership("kintsugi", Member, new ChangeTangentMembershipRequest(TangentRole.Member), TestContext.Current.CancellationToken);
-
-        Assert.IsType<ConflictObjectResult>(read);
-        Assert.IsType<ConflictObjectResult>(mutation);
-        Assert.Equal("no-store", context.Response.Headers.CacheControl);
-    }
 }

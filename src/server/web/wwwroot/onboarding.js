@@ -5,8 +5,8 @@
   function text(id, value) { $(id).textContent = value || ''; }
   async function send(path, body) {
     const response = await fetch(path, { method: 'POST', credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', 'X-Tangent-Participant': current.participant.participantRef },
-      body: JSON.stringify({ ...body, expectedParticipant: current.participant.participantRef }) });
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || result.reason || 'That step could not be completed. Please try again.');
     return result;
@@ -84,7 +84,7 @@
   $('first-tangent-form').addEventListener('input', preview);
   async function finish(skip) {
     await send('/api/onboarding/tangent', { skip, name: $('first-tangent-name').value.trim(), description: $('first-tangent-description').value.trim() });
-    try { sessionStorage.setItem('tangent-created', current.participant.did); } catch (_) { }
+    try { sessionStorage.setItem('tangent-created', current.participant.participantRef); } catch (_) { }
     location.assign('/');
   }
   $('first-tangent-form').addEventListener('submit', event => { event.preventDefault(); perform(() => finish(false)); });

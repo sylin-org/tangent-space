@@ -27,30 +27,53 @@ function fixture(respond = () => ({ messages: [] })) {
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.children = [...children]; }
     setAttribute(name, value) { this[name] = value; }
+    click() { this.emit('click'); }
     focus() {}
   }
   const elements = new Map();
   const get = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
-  const window = new Element(), document = new Element(), requests = [];
+  const window = new Element(), document = new Element(), requests = [], timers = [];
   Object.assign(document, { hidden: true, body: new Element(), getElementById: get, createElement: () => new Element(), querySelectorAll: () => get('room-list').children });
-  const location = { href: 'http://127.0.0.1:5220/?room=lounge' };
+  const route = { kind: 'topic', tangent: 'home', topic: 'lounge' };
+  window.TangentPages = { route,
+    tangentUrl: key => '/t/' + key + '/topics', topicUrl: (tangent, topic) => '/t/' + tangent + '/topics/' + topic,
+    hero() {}, prepare() {}, unavailable() {} };
+  const location = { href: 'http://127.0.0.1:5220/t/home/topics/lounge', assign: path => { location.href = new URL(path, location.href).href; }, replace: path => { location.href = new URL(path, location.href).href; } };
   class FormData { constructor() {} *[Symbol.iterator]() {} }
-  vm.runInNewContext(source, { window, document, location, URL, TextEncoder, AbortController, FormData, crypto: { randomUUID },
+  vm.runInNewContext(source, { window, document, location, URL, TextEncoder, TextDecoder, AbortController, FormData, crypto: { randomUUID }, setImmediate,
+    ReadableStream: class { },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout: () => { },
     history: { replaceState: (_state, _title, path) => { location.href = new URL(path, location.href).href; } },
     fetch: async (path, options) => {
       const request = { path, method: options.method, headers: options.headers, body: options.body && JSON.parse(options.body) }; requests.push(request);
       let data;
-      if (/^\/api\/rooms\/[^/]+$/.test(path)) data = { key: path.split('/').at(-1), title: path.split('/').at(-1), canRead: true, canWrite: true };
+      const clean = path.split('?')[0], segments = clean.split('/');
+      // The stubbed world answers the full route/load surface; `respond` stays the seam
+      // for pending lookups and writes, which is what these tests exercise.
+      if (path === '/api/server' || path.startsWith('/api/connections/status')) data = {};
+      else if (path === '/api/v1/tangents') data = { tangents: [] };
+      else if (/^\/api\/v1\/tangents\/[^/]+\/topics$/.test(clean)) data = { channels: [{ key: 'lounge', title: 'Lounge', tangentKey: 'home' }, { key: 'workshop', title: 'Workshop', tangentKey: 'home' }] };
+      else if (/^\/api\/v1\/tangents\/[^/]+\/topics\/[^/]+$/.test(clean)) data = { key: segments.at(-1), title: segments.at(-1), tangentKey: segments.at(-2), canRead: true, canWrite: true };
+      else if (/^\/api\/v1\/tangents\/[^/]+$/.test(clean)) data = { key: segments.at(-1), name: 'T-' + segments.at(-1), channels: [] };
+      else if (/^\/api\/rooms\/[^/]+$/.test(path)) data = { key: path.split('/').at(-1), title: path.split('/').at(-1), tangentKey: 'home', canRead: true, canWrite: true };
       else if (path.includes('/messages?')) data = { messages: [], freshness: 'checked' };
       else data = await respond(request);
       if (data instanceof Response) return data;
       return { ok: true, status: 200, json: async () => data };
     }
   });
-  return { get, requests, welcome(did = 'did:plc:alice', key = 'lounge', tangents) {
-    location.href = 'http://127.0.0.1:5220/?room=' + key;
-    window.emit('tangent:welcome', { detail: { participant: { did }, rooms: { rooms: [{ key: 'lounge', title: 'Lounge' }, { key: 'workshop', title: 'Workshop' }] }, ...(tangents ? { tangents } : {}) } });
-  }, choose(key) { get('room-list').children.find(element => element.dataset.key === key).emit('click'); },
+  let lastDetail = null;
+  return { get, requests, timers, document, welcome(did = 'did:plc:alice', key = 'lounge', tangents) {
+    route.topic = key;
+    location.href = 'http://127.0.0.1:5220/t/home/topics/' + key;
+    lastDetail = { participant: { participantRef: 'ref-' + did, did }, rooms: { rooms: [{ key: 'lounge', title: 'Lounge' }, { key: 'workshop', title: 'Workshop' }] }, ...(tangents ? { tangents } : {}) };
+    window.emit('tangent:welcome', { detail: lastDetail });
+  }, choose(key) {
+    // Room links navigate the browser: the page re-runs its welcome flow for the new route.
+    route.topic = key;
+    location.href = 'http://127.0.0.1:5220/t/home/topics/' + key;
+    if (lastDetail) window.emit('tangent:welcome', { detail: lastDetail });
+  },
   submit() { get('message-form').emit('submit'); },
   type(value) { get('message-text').value = value; get('message-text').emit('input'); } };
 }
@@ -202,11 +225,12 @@ test('failed recovery in one room or account does not block a successful check f
   assert.equal(f.get('send-message').disabled, false);
 });
 
-test('a private recovery lookup sends the displayed identity and a mismatch requires reloading', async () => {
+test('a private recovery lookup verifies by session token alone and a mismatch requires reloading', async () => {
   const f = fixture(() => new Response('{"reason":"Your signed-in account changed."}', { status: 409 }));
   f.welcome(); await settle();
   const lookup = f.requests.find(request => request.path.endsWith('/messages/pending'));
-  assert.equal(lookup.headers['X-Tangent-Participant'], 'did:plc:alice');
+  // Token-only sessions: no participant header echoes identity back at the server.
+  assert.equal(lookup.headers['X-Tangent-Participant'], undefined);
   assert.match(f.get('action-status').textContent, /signed-in account changed.*Reload/);
   assert.doesNotMatch(f.get('action-status').textContent, /Check for updates/);
   assert.equal(f.get('message-form').hidden, true);
@@ -215,4 +239,46 @@ test('a private recovery lookup sends the displayed identity and a mismatch requ
   f.submit(); await settle();
   assert.equal(f.requests.some(request => request.method === 'POST'), false);
   assert.equal(f.requests.some(request => request.path.includes('/messages?')), false);
+});
+
+test('an identity_changed push re-runs the welcome flow and acknowledges the new identity', async () => {
+  const encoder = new TextEncoder();
+  let clicks = 0;
+  const f = fixture(request => {
+    if (request.path.startsWith('/api/activity/events')) {
+      // One pushed event, then the stream parks like a quiet live connection.
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(encoder.encode('event: identity_changed\ndata: {"participantRef":"ref-did:plc:bob","bestLabel":"bob.example"}\n\n'));
+      } }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    }
+    if (/^\/api\/activity(\?|$)/.test(request.path)) return { checkpoint: 'c0', channels: [{ roomKey: 'lounge', lastSequence: 0 }] };
+    return { messages: [] };
+  });
+  f.document.hidden = false;
+  f.get('retry').addEventListener('click', () => { clicks++; });
+  f.welcome(); await settle();
+  assert.equal(clicks, 1, 'the page re-runs its own welcome flow');
+  assert.match(f.get('activity-status').textContent, /Updating/);
+  assert.ok(f.requests.some(request => /^\/api\/activity(\?|$)/.test(request.path)
+    && request.headers['X-Tangent-Participant'] === undefined), 'the stream authenticates by token only');
+  f.welcome('did:plc:bob'); await settle();
+  assert.match(f.get('action-status').textContent, /Now viewing as bob\.example/);
+});
+
+test('transient activity failures back off by doubling to a cap and reset on connection', async () => {
+  const f = fixture(request => {
+    if (request.path.startsWith('/api/activity/events')) return new Response('{}', { status: 500 });
+    if (/^\/api\/activity(\?|$)/.test(request.path)) return { checkpoint: 'c0', channels: [{ roomKey: 'lounge', lastSequence: 0 }] };
+    return {};
+  });
+  f.document.hidden = false;
+  f.welcome(); await settle();
+  const delays = [];
+  for (let attempt = 0; attempt < 5; attempt++) {
+    assert.ok(f.timers.length, 'a reconnect stays scheduled while failing');
+    const timer = f.timers.splice(0)[0];
+    delays.push(timer.ms);
+    timer.fn(); await settle();
+  }
+  assert.deepEqual(delays, [2000, 4000, 8000, 16000, 30000]);
 });

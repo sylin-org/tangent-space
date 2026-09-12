@@ -32,7 +32,7 @@ public sealed class McpInvitationController(TangentServer hub, TimeProvider cloc
         var tangent = await TangentCommunity.Get(invitation.TangentKey, ct);
         if (tangent is null) return NotFound();
         return Page("You're invited to " + tangent.Name, "Join with your signed-in account when you're ready.",
-            $"<button id='join' data-invitation='{invitationId}' data-participant='{WebUtility.HtmlEncode(did)}'>Join Tangent</button>" +
+            $"<button id='join' data-invitation='{invitationId}'>Join Tangent</button>" +
             "<p id='status' role='status'></p><script src='/invitation.js' defer></script>");
     }
 
@@ -40,13 +40,13 @@ public sealed class McpInvitationController(TangentServer hub, TimeProvider cloc
     public async Task<IActionResult> Accept(string invitationId, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        // Cookie flow: exact origin + JSON + expected account; bearer clients use JoinTangent instead.
+        // Cookie flow: exact origin + JSON; bearer clients use JoinTangent instead.
         if (Request.Headers.ContainsKey("Authorization") || !Request.HasJsonContentType()
             || Request.Headers.Origin.Count != 1
             || !string.Equals(Request.Headers.Origin.ToString(), $"{Request.Scheme}://{Request.Host}", StringComparison.OrdinalIgnoreCase))
             return StatusCode(403);
         var did = ParticipationAccess.Require(User, ParticipationGrants.Read);
-        if (Request.Headers["X-Tangent-Participant"].ToString() != did || !ValidId(invitationId)) return StatusCode(403);
+        if (!ValidId(invitationId)) return StatusCode(403);
         using var fresh = EntityContext.NoCache();
         var invitation = await TangentInvitation.Get(invitationId, ct);
         if (invitation is null || invitation.RecipientParticipantId != did) return NotFound();

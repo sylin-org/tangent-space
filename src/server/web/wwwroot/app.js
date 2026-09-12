@@ -175,7 +175,7 @@
         // the room client never invents a local replacement.
         if (window.TangentPages.route.kind === 'sign-in') return;
         return fetch('/api/v1/tangents', {
-          credentials: 'same-origin', headers: { Accept: 'application/json', ...(site.participant ? { 'X-Tangent-Participant': site.participant.participantRef } : {}) }, cache: 'no-store'
+          credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store'
         })
           .then(function (response) { return response.ok ? response.json() : null; })
           .catch(function () { return null; })

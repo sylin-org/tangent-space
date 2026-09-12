@@ -83,7 +83,6 @@ public sealed class ExperienceController(ExperienceService experience) : Control
         Response.Headers.CacheControl = "no-store";
         try
         {
-            CheckExpectedParticipant();
             return Ok(await operation(User));
         }
         catch (UnauthorizedAccessException)
@@ -112,14 +111,6 @@ public sealed class ExperienceController(ExperienceService experience) : Control
     private IActionResult Problem(ExperienceProblem problem, int status)
         => StatusCode(status, new { problem.Code, problem.Message, problem.Field, problem.Retryable });
 
-    private void CheckExpectedParticipant()
-    {
-        var expected = Request.Headers["X-Tangent-Participant"];
-        if (expected.Count == 0) return;
-        var participant = User.FindFirst(ParticipationConstants.ParticipantClaim)?.Value;
-        if (expected.Count != 1 || expected[0] != participant)
-            throw new UnauthorizedAccessException("Your signed-in account changed. Reload before continuing.");
-    }
 }
 
 public sealed record ExperienceCreatePostRequest(string RequestId, string Text, string? ReplyTo,

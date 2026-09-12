@@ -22,8 +22,6 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
         try
         {
             var actor = ReadActor();
-            if (actor is not null && ExpectedParticipantDiffers(actor))
-                return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             return Ok(await tangents.List(actor, page, channelPage, ct));
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
@@ -65,7 +63,6 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
         try
         {
             var actor = Actor();
-            if (ExpectedParticipantDiffers(actor)) return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
             return created ? StatusCode(StatusCodes.Status201Created, await operation(actor)) : Ok(await operation(actor));
         }
         catch (TangentRuleViolation denied) { return StatusCode(denied.Denial switch
@@ -84,9 +81,4 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
         }, new { reason = denied.Message, denial = denied.Denial }); }
     }
 
-    private bool ExpectedParticipantDiffers(string did)
-    {
-        var expected = Request.Headers["X-Tangent-Participant"];
-        return expected.Count > 0 && (expected.Count != 1 || expected[0] != did);
-    }
 }

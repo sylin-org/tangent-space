@@ -5,6 +5,7 @@
   const mentionCache = new Map();
   let liveController;
   let activityController, activityCursor, activityReconnect, activityActive = false;
+  let activityBackoff = 0, activityRecovering = false, activityRecoveryLabel = '', noticeTimer;
   let sourceReadiness, activeTangentKey, activitySignature = '', tangentNextPage;
   let routeTangent, routeTopics, routeFailure;
   const route = () => window.TangentPages?.route || { kind: 'home' };
@@ -25,6 +26,7 @@
   const show = (id, visible) => { $(id).hidden = !visible; };
   const field = (form, name) => $(form).elements.namedItem(name);
   function status(message, error = false) { text('action-status', message); show('action-status', !!message); $('action-status').classList.toggle('error', error); }
+  function notice(message) { status(message); if (noticeTimer) clearTimeout(noticeTimer); if (typeof setTimeout === 'function') noticeTimer = setTimeout(() => status(''), 8000); }
   function element(tag, className, value) { const node = document.createElement(tag); node.className = className; node.textContent = value; return node; }
   function safeAccent(value) { return /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#d88957'; }
   function currentTangents() { return Array.isArray(site?.tangents?.tangents) ? site.tangents.tangents : []; }
@@ -32,8 +34,7 @@
   function can(subject, action) { const actions = subject?.permissions?.allowedActions || subject?.allowedActions; return Array.isArray(actions) && actions.includes(action); }
   async function request(path, body, method = 'POST', signal) {
     const response = await fetch(path, { method: body === undefined ? 'GET' : method, credentials: 'same-origin', cache: 'no-store',
-      headers: { Accept: 'application/json', ...(site?.participant?.did ? { 'X-Tangent-Participant': site.participant.did } : {}),
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body), signal });
     const data = await response.json().catch(() => ({}));
     if (!response.ok && !['rejected', 'conflict'].includes(data.state)) { const error = new Error(data.reason || data.error || data.title || (response.status === 403 ? 'Your current access does not permit this action.' : 'This request could not be completed.')); error.status = response.status; throw error; }
@@ -223,7 +224,9 @@
     field('topic-form', 'topic').value = '';
     $('room-list').replaceChildren();
     show('room-content', false); show('more-rooms', false); show('choose-room', true);
-    text('choose-room', code === 401 ? 'Sign in to continue.' : 'This conversation isn’t available.');
+    text('choose-room', code === 401 ? 'Sign in to continue.'
+      : code === 403 ? 'You don’t have access to this conversation.'
+      : 'This conversation isn’t available.');
     updateHero();
   }
   function revokeSelectedRoom(code = 403) {
@@ -427,7 +430,7 @@
   }
   function beginEdit(li, message) {
     const current = li.querySelector('.message-text'); if (!current) return;
-    const key = room.key, mutationKey = site.participant.did + ':' + key + ':' + message.id;
+    const key = room.key, mutationKey = (site.participant?.participantRef || site.participant.did) + ':' + key + ':' + message.id;
     const saved = postMutations.get(mutationKey);
     if (saved?.method === 'DELETE') { status('A deletion is pending. Retry Delete to finish it.'); return; }
     const form = document.createElement('form'); form.className = 'message-edit-form';
@@ -448,7 +451,7 @@
   }
   function removeMessage(message) {
     if (!confirm(message.permissions?.allowedActions?.includes('removePost') ? 'Remove this post for everyone here?' : 'Delete this post?')) return;
-    const key = room.key, mutationKey = site.participant.did + ':' + key + ':' + message.id;
+    const key = room.key, mutationKey = (site.participant?.participantRef || site.participant.did) + ':' + key + ':' + message.id;
     if (postMutations.get(mutationKey)?.method === 'PATCH') { status('An edit is pending. Retry Edit to finish it.'); return; }
     const intent = postMutations.get(mutationKey) ?? { method: 'DELETE', body: { operationId: crypto.randomUUID() } };
     postMutations.set(mutationKey, intent);
@@ -526,12 +529,15 @@
       else if (line.startsWith('data:')) data += line.slice(5).trim();
     }
     if (id) activityCursor = id;
-    if ((event === 'activity' || event === 'reset') && data) {
+    if (event === 'identity_changed' && data) {
+      try { reloadIdentity(JSON.parse(data)); } catch (_) { reloadIdentity({}); }
+    }
+    else if ((event === 'activity' || event === 'reset') && data) {
       try { renderActivity(JSON.parse(data)); } catch (_) { text('activity-status', 'Live activity sent an unreadable update. Reconnecting…'); }
     }
   }
   async function startActivity() {
-    if (routeFailure || typeof ReadableStream === 'undefined' || activityController || !site?.participant?.did || !site?.tangents || document.hidden) return;
+    if (routeFailure || typeof ReadableStream === 'undefined' || activityController || !site?.participant?.participantRef || !site?.tangents || document.hidden) return;
     activityController = new AbortController(); const controller = activityController;
     try {
       const identity = identityEpoch;
@@ -540,8 +546,9 @@
       renderActivity(initial);
       const path = '/api/activity/events' + (activityCursor ? '?cursor=' + encodeURIComponent(activityCursor) : '');
       const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
-        headers: { Accept: 'text/event-stream', 'X-Tangent-Participant': site.participant.did } });
+        headers: { Accept: 'text/event-stream' } });
       if (!response.ok || !response.body) throw new Error('Activity stream could not be opened.');
+      activityBackoff = 0;
       activityActive = true;
       // A selected room may have opened its old wait just before the global
       // stream connected.  One page uses one live transport.
@@ -555,13 +562,31 @@
         if (buffer.length > 512 * 1024) throw new Error('Activity response exceeds the live connection limit.');
         const parts = buffer.split(/\r?\n\r?\n/); buffer = parts.pop(); parts.forEach(processSseBlock);
       }
-    } catch (_) {
+    } catch (error) {
       if (!controller.signal.aborted) text('activity-status', 'Live activity is reconnecting…');
     } finally {
       activityActive = false;
       if (activityController === controller) activityController = undefined;
-      if (!controller.signal.aborted && !document.hidden) activityReconnect = setTimeout(startActivity, 2500);
+      // Bounded backoff, not a fixed retry: transient failures slow the poll (2s doubling
+      // to a 30s cap) and a clean connection resets it.
+      if (!controller.signal.aborted && !document.hidden) {
+        activityBackoff = activityBackoff ? Math.min(activityBackoff * 2, 30000) : 2000;
+        activityReconnect = setTimeout(startActivity, activityBackoff);
+      }
     }
+  }
+  function reloadIdentity(detail) {
+    // Token-only sessions: the server pushed an identity_changed event for this session —
+    // the browser signed in as another account somewhere. The browser holds only the
+    // session token, so re-run the page's welcome flow; the tangent:welcome listener
+    // re-fetches the world as the current identity and acknowledges it.
+    if (activityRecovering) return;
+    activityRecovering = true;
+    activityRecoveryLabel = typeof detail?.bestLabel === 'string' ? detail.bestLabel : '';
+    text('activity-status', 'Your signed-in account changed. Updating…');
+    const retry = document.getElementById('retry');
+    if (retry && typeof retry.click === 'function') retry.click();
+    else status('Your signed-in account changed. Reload this page.', true);
   }
   function stopActivity() { if (typeof clearTimeout === 'function') clearTimeout(activityReconnect); activityController?.abort(); activityController = undefined; activityActive = false; }
   function renderDraft() {
@@ -596,13 +621,28 @@
     return list;
   };
   function size() { text('message-size', new TextEncoder().encode($('message-text').value).length + ' / 4096 bytes'); }
-  async function mutateRoom(suffix, body, method) { const key = room.key; await request(roomPath(key) + suffix, body, method); status('Saved.'); await refreshRooms(); if (room?.key === key) await choose(key); }
+  // Administrative surfaces follow the token's permissions: a denial means this identity no
+  // longer administers here, so route back to the landing page instead of a bare error.
+  function administrativeDenied() { location.assign('/'); }
+  async function mutateRoom(suffix, body, method) {
+    const key = room.key;
+    try { await request(roomPath(key) + suffix, body, method); }
+    catch (error) { if (error.status === 403) { administrativeDenied(); return; } throw error; }
+    status('Saved.'); await refreshRooms(); if (room?.key === key) await choose(key);
+  }
   window.TangentRooms = window.TangentRooms || {};
   window.TangentRooms.size = size;
   window.addEventListener('tangent:welcome', event => {
-    if (site?.participant?.did !== event.detail.participant?.did) {
+    let acknowledge = '';
+    if (site?.participant?.participantRef !== event.detail.participant?.participantRef) {
+      // Identity events re-render the world as the new participant. Drafts and pending
+      // outbound messages belong to the identity that wrote them; they are dropped here
+      // rather than silently re-attributed to the new account.
+      const recovered = activityRecovering;
       identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); recoveryBlocked.clear(); drafts.clear(); sending.clear(); restoring = undefined; room = null; reply = undefined; sourceReadiness = undefined; activeTangentKey = undefined; routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
+      activityRecovering = false; activityBackoff = 0;
       renderDraft(); show('room-content', false); show('choose-room', true); text('choose-room', 'Choose a room to see its topic and current access.'); status('');
+      if (recovered) acknowledge = 'Now viewing as ' + (event.detail.participant?.handle || activityRecoveryLabel || event.detail.participant?.did || event.detail.participant?.participantRef || 'another account') + '.';
     }
     site = event.detail;
     routeFailure = undefined;
@@ -610,7 +650,7 @@
     show('place', true); document.body.classList.add('has-rooms'); refreshServer();
     show('site-setup', site.participant?.isOwner === true || currentTangents().some(t => t.canCreateTopic === true));
     const identity = identityEpoch;
-    action(null, async () => {
+    const flow = action(null, async () => {
       try {
       const legacy = new URL(location.href).searchParams.get('room');
       if (legacy && route().kind === 'home') {
@@ -637,7 +677,10 @@
         throw error;
       }
     });
-    try { if (sessionStorage.getItem('tangent-created') === site.participant?.did) { sessionStorage.removeItem('tangent-created'); status('Your Tangent is ready. Make yourself at home.'); } } catch (_) { }
+    // The identity acknowledgment lands once the re-loaded world has settled, so opening
+    // the route cannot clear it again.
+    if (acknowledge) flow.then(() => { if (identity === identityEpoch) notice(acknowledge); });
+    try { if (sessionStorage.getItem('tangent-created') === site.participant?.participantRef) { sessionStorage.removeItem('tangent-created'); status('Your Tangent is ready. Make yourself at home.'); } } catch (_) { }
   });
   $('refresh-rooms').addEventListener('click', () => action($('refresh-rooms'), refreshRooms));
   $('return-to-tangents').addEventListener('click', () => {
@@ -675,14 +718,16 @@
     const body = Object.fromEntries(new FormData(event.target));
     body.name = body.name.trim(); body.description = body.description.trim(); body.motto = body.motto.trim(); body.artwork = body.artwork.trim();
     if (!body.name || !validArtwork(body.artwork)) throw new Error('Give this Tangent a name. Artwork must use HTTPS or a supplied sample.');
-    await request(tangentPath(tangent.key), body, 'PATCH');
+    try { await request(tangentPath(tangent.key), body, 'PATCH'); }
+    catch (error) { if (error.status === 403) { administrativeDenied(); return; } throw error; }
     await refreshTangents(); const updated = tangentByKey.get(tangent.key); if (updated) { activeTangentKey = updated.key; openTangentEditor(updated); }
     status('Tangent card saved.');
   }); });
   $('tangent-member-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
     const did = field('tangent-member-form', 'did').value.trim(), role = field('tangent-member-form', 'role').value;
     if (!activeTangentKey || !did) throw new Error('Choose a Tangent and enter a participant DID.');
-    await request('/api/tangents/' + encodeURIComponent(activeTangentKey) + '/members/' + encodeURIComponent(did), { role }, 'PUT');
+    try { await request('/api/tangents/' + encodeURIComponent(activeTangentKey) + '/members/' + encodeURIComponent(did), { role }, 'PUT'); }
+    catch (error) { if (error.status === 403) { administrativeDenied(); return; } throw error; }
     field('tangent-member-form', 'did').value = ''; status('Community role saved.'); await refreshTangents();
   }); });
   document.querySelectorAll('.art-sample').forEach(button => button.addEventListener('click', () => {
@@ -695,7 +740,7 @@
   $('topic-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/settings', { allowPostEditing: field('topic-settings-form', 'allowPostEditing').checked, isLocked: field('topic-settings-form', 'isLocked').checked, title: room.title, topic: field('topic-form', 'topic').value }, 'PATCH')); });
   $('server-atmosphere-open').addEventListener('click', () => window.TangentAtmosphere?.open());
   $('server-settings-toggle').addEventListener('click', () => { const panel = $('server-settings'), button = $('server-settings-toggle'); panel.open = !panel.open; panel.hidden = !panel.open; button.setAttribute('aria-expanded', String(panel.open)); if (panel.open) $('server-settings-form').elements.namedItem('name').focus(); });
-  $('server-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => { const body = Object.fromEntries(new FormData(event.target)); body.allowAgentTangentOwnership = field('server-settings-form', 'allowAgentTangentOwnership').checked; await request('/api/server', body, 'PATCH'); await refreshServer(); status('Server settings saved.'); }); });
+  $('server-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => { const body = Object.fromEntries(new FormData(event.target)); body.allowAgentTangentOwnership = field('server-settings-form', 'allowAgentTangentOwnership').checked; try { await request('/api/server', body, 'PATCH'); } catch (error) { if (error.status === 403) { administrativeDenied(); return; } throw error; } await refreshServer(); status('Server settings saved.'); }); });
   $('message-form').addEventListener('submit', event => {
     event.preventDefault();
     if (!room?.canWrite || sending.has(room.key) || recoveryBlocked.has(room.key) || restoring?.version === epoch) return;

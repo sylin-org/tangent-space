@@ -5,7 +5,7 @@ button?.addEventListener('click', async () => {
   status.textContent = 'Making room for you…'
   try {
     const response = await fetch(`/invite/${encodeURIComponent(button.dataset.invitation)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Tangent-Participant': button.dataset.participant },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: '{}', credentials: 'same-origin'
     })
     const result = await response.json()

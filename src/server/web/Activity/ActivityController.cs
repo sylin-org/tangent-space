@@ -9,6 +9,7 @@ namespace TangentSpace.Activity;
 public sealed class ActivityController(TangentServer hub) : ControllerBase
 {
     private ActivityService activity => hub.Activity;
+    private LiveSessions live => hub.Live;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -37,7 +38,6 @@ public sealed class ActivityController(TangentServer hub) : ControllerBase
         try
         {
             var did = RequireActor();
-            if (CheckExpectedParticipant(did)) { Response.StatusCode = StatusCodes.Status409Conflict; return; }
             var credential = User.FindFirst(ParticipationConstants.CredentialClaim)?.Value;
             Response.StatusCode = StatusCodes.Status200OK;
             Response.ContentType = "text/event-stream";
@@ -45,10 +45,26 @@ public sealed class ActivityController(TangentServer hub) : ControllerBase
             var current = await activity.Snapshot(did, credential, cursor, channelCursor, ct);
             await activity.EnsureSnapshotCurrent(did, credential, current, ct);
             await WriteEvent(current.ResetRequired ? "reset" : "activity", current, ct);
+            // Token-only sessions: the connection authenticates once at open, then registers
+            // under its session claim so a later sign-in that replaces this session can push
+            // an identity_changed event through it (docs/DECISIONS.md, 11 September 2026).
+            var session = User.FindFirst(ParticipationConstants.SessionClaim)?.Value;
+            var wake = new TaskCompletionSource<LiveSessions.Identity>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var registered = session is null ? null : live.Register(session, wake);
             var checkpoint = current.Checkpoint;
             while (!ct.IsCancellationRequested)
             {
-                var next = await activity.Wait(did, credential, checkpoint, channelCursor, ct);
+                var wait = activity.Wait(did, credential, checkpoint, channelCursor, ct);
+                if (wake.Task.IsCompleted || await Task.WhenAny(wait, wake.Task) != wait)
+                {
+                    // The browser signed in as someone else: deliver the event and close so
+                    // the page re-fetches its identity and reconnects under the new session.
+                    await Response.WriteAsync("event: identity_changed\ndata: "
+                        + JsonSerializer.Serialize(await wake.Task, Json) + "\n\n", ct);
+                    await Response.Body.FlushAsync(ct);
+                    return;
+                }
+                var next = await wait;
                 if (next.ResetRequired || !string.Equals(next.Checkpoint, checkpoint, StringComparison.Ordinal))
                 {
                     await activity.EnsureSnapshotCurrent(did, credential, next, ct);
@@ -94,7 +110,6 @@ public sealed class ActivityController(TangentServer hub) : ControllerBase
             try
             {
                 var did = RequireActor();
-                if (CheckExpectedParticipant(did)) return Conflict(new { reason = "Your signed-in account changed. Reload this page before continuing." });
                 return await operation(did, User.FindFirst(ParticipationConstants.CredentialClaim)?.Value);
             }
             catch (UnauthorizedAccessException) { return StatusCode(403, new { reason = "Your current access does not permit this operation." }); }
@@ -103,10 +118,4 @@ public sealed class ActivityController(TangentServer hub) : ControllerBase
     }
 
     private string RequireActor() => ParticipationAccess.Require(User, ParticipationGrants.Read);
-
-    private bool CheckExpectedParticipant(string did)
-    {
-        var expected = Request.Headers["X-Tangent-Participant"];
-        return expected.Count > 0 && (expected.Count != 1 || expected[0] != did);
-    }
 }
