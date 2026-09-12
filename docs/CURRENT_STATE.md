@@ -93,7 +93,7 @@ capability/source-policy tests passing. The coordinator inspected its work card 
 framework test execution is attributed to that agent. That was the state captured by the
 historical receipt; Koan later published the work. Tangent's local
 framework checkout is now reconciled from current Koan `origin/main` at `2fa19bb6c`, plus
-the reviewed static-header/auth-protocol/atproto contribution at `34f678d7c`. Q-05 empty
+the reviewed static-header/auth-protocol/atproto contribution at `a4ab9e860`. Q-05 empty
 transaction telemetry is adopted and verified in the deployed signed-in Topic path. The
 original provider measurements remain pinned historical baselines; K01/K02/Q03/Q04
 consumer/probe requalification remains open. MongoDB/PostgreSQL health experiments ran in an isolated lab. AGENTS.md

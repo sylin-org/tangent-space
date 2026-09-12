@@ -79,7 +79,7 @@ Adoption receipt: Tangent first isolated that three-file change onto its preserv
 framework checkout as `882bd550b653447467206c3f3e43cf04bef8c7d8`; its focused transaction
 spec passed **6/6**. After Koan published the fix, the contribution was rebuilt from current
 `origin/main` instead of replaying the backport. The resulting local contribution branch
-head is `34f678d7c`: current Koan plus the static-header correction, generic protocol seam,
+head is `a4ab9e860`: current Koan plus the static-header correction, generic protocol seam,
 native atproto connector, solution membership, and dependency floors. The old branch remains
 as a local recovery ref.
 
