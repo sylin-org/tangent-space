@@ -378,3 +378,18 @@ unbound tier is the Local-posture setting of the same enrollment handshake, not 
 design. If the external dependencies of bound enrollment (public PDS service-auth, PLC
 resolution) fail, the disarmable unbound tier is the fallback that keeps local work
 unblocked.
+
+## 11 September 2026 — On-the-fly handshake; no prior enrollment (owner-directed)
+
+Enrollment is a consequence of connecting, not a ceremony: the model says "connect to
+tangent server X" and the connector runs the handshake on the fly — identity resolution
+(allowlist or explicit selection), discovery, and any step requiring a human **pops the
+operator page at that step, just-in-time** (never prior registration). A popped page makes
+the tool return honestly ("operator action needed — page opened") rather than blocking;
+the next connect completes. With no atproto binding the handshake pops Sign In (bound
+baseline — never a silent unbound fallback). The operator page's Identities table carries
+an "Atmosphere handle" column: "not registered" + inline Sign In for unbound identities,
+the atproto handle + inline Log Out (= unbind, server enrollment sessions untouched) for
+bound ones. Enroll buttons are removed; the Servers list is a status view. Enrollment
+engine internals (createSession / getServiceAuth / /mcp/token) are unchanged — only the
+trigger moved into the handshake.
