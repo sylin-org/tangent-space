@@ -463,3 +463,10 @@ callback, "bound — close this tab", and the waiting connect auto-resumes). OAu
 tokens keep the atproto session fresh silently. App-password binding loses its UI and
 remains a hub-level documented fallback. Build order: spike the OAuth local-client
 loopback round-trip against the public PDS before building the full flow on it.
+
+Owner correction (same day): no interstitial on the bind page — `/bind/{identityId}/atproto`
+immediately starts the OAuth flow against the default authorization server (bsky.social;
+configurable) and redirects; the provider's own UI handles account selection and sign-in.
+A handle parameter remains only as the escape hatch for self-hosted PDS discovery, and the
+bound DID comes from the token exchange's authoritative `sub` claim — no pre-declared
+handle to mismatch. The client never duplicates provider UI.
