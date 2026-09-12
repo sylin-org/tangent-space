@@ -8,7 +8,12 @@ public sealed record ActivityChannel(string RoomKey, string TangentKey, int Unre
 
 public sealed record ActivitySnapshot(string Checkpoint, IReadOnlyList<ActivityEvent> Events, string? NextCursor,
     bool HasMore, bool ResetRequired, IReadOnlyList<ActivityChannel> Channels, bool ChannelsTruncated = false,
-    string? NextChannelCursor = null, bool ChannelsHasMore = false, bool ChannelsIncomplete = false);
+    string? NextChannelCursor = null, bool ChannelsHasMore = false, bool ChannelsIncomplete = false)
+{
+    /// <summary>Response context stamped by the authenticated browser endpoint, never caller authority.
+    /// A browser must re-resolve its identity before applying a response for another participant.</summary>
+    public string? ParticipantRef { get; init; }
+}
 
 internal sealed record ActivityCursor(string ParticipantId, string Consumer, long After, long? Boundary, DateTimeOffset ExpiresAt);
 internal sealed record ActivityChannelCursor(string ParticipantId, string Consumer, int Page, DateTimeOffset ExpiresAt);

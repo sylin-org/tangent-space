@@ -1,4 +1,5 @@
 using CarpaNet.Identity;
+using Koan.Data.Abstractions.Annotations;
 using Koan.Data.Core.Model;
 
 namespace TangentSpace.Participants;
@@ -6,6 +7,7 @@ namespace TangentSpace.Participants;
 /// <summary>One entry in a participant's identity collection. Exact-value lookup is one query
 /// on the composite key (kind + separator + value). The internal identity value is derived from
 /// the participant id and minted at creation; it is never written independently.</summary>
+[Index(Fields = [nameof(ParticipantId), nameof(Id)])]
 public sealed class ParticipantIdentity : Entity<ParticipantIdentity>
 {
     public const string AtprotoKind = "atproto";

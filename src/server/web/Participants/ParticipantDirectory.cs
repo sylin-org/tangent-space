@@ -1,3 +1,5 @@
+using Koan.Data.Abstractions;
+using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core;
 
 namespace TangentSpace.Participants;
@@ -106,39 +108,106 @@ public sealed class ParticipantDirectory(TimeProvider clock, IAtprotoHandleSourc
 
     /// <summary>The best label when one exists on any identity entry; null when only the derived
     /// internal DID would apply. Arrival/welcome packets use this to keep Did/Handle nullable.</summary>
-    public async Task<string?> LabelOf(string participantId, CancellationToken ct)
-        => (await LabelsFor([participantId], ct)).GetValueOrDefault(participantId);
+    public async Task<string?> LabelOf(string participantId, CancellationToken ct, bool resolveMissing = true)
+        => (await LabelsFor([participantId], ct, resolveMissing)).GetValueOrDefault(participantId);
 
-    /// <summary>Batch label resolution for bylines, digests and mentionables. A missing
-    /// participant id is simply absent from the result.</summary>
-    public async Task<IReadOnlyDictionary<string, string>> LabelsFor(IEnumerable<string> participantIds, CancellationToken ct)
+    internal const int LabelInputLimit = 4096;
+    internal const int LabelParticipantIdLimit = 128;
+    internal const int LabelQueryParticipants = 64;
+    internal const int LabelIdentityPageSize = 128;
+    internal const int LabelIdentityLimit = 32768;
+    internal const int LabelResolveConcurrency = 6;
+
+    /// <summary>Batch label resolution for bylines, digests and mentionables. Missing labels
+    /// are absent, never evidence of identity or authority. Admission counts raw input items
+    /// (including duplicates/nulls); excessive input or matching identity rows throws rather
+    /// than returning a silently incomplete label map. Callers with larger candidate sets
+    /// must window that set upstream. Label spelling, Unicode and blank-label behavior are
+    /// unchanged; equal-kind identities are selected by ordinal Id, not provider row order.</summary>
+    public async Task<IReadOnlyDictionary<string, string>> LabelsFor(IEnumerable<string> participantIds, CancellationToken ct, bool resolveMissing = true)
     {
-        var wanted = participantIds.Where(id => id is not null).Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (wanted.Count == 0) return result;
-        var byParticipant = new Dictionary<string, List<ParticipantIdentity>>(StringComparer.Ordinal);
-        foreach (var identity in await ParticipantIdentity.Query(value => value.Label != null || value.Kind == ParticipantIdentity.AtprotoKind, ct))
+        ArgumentNullException.ThrowIfNull(participantIds);
+        ct.ThrowIfCancellationRequested();
+        var wanted = new HashSet<string>(StringComparer.Ordinal);
+        var inputCount = 0;
+        foreach (var id in participantIds)
         {
-            if (!wanted.Contains(identity.ParticipantId)) continue;
-            (byParticipant.TryGetValue(identity.ParticipantId, out var list) ? list : byParticipant[identity.ParticipantId] = []).Add(identity);
+            ct.ThrowIfCancellationRequested();
+            if (++inputCount > LabelInputLimit)
+                throw new ArgumentException($"Label lookup accepts at most {LabelInputLimit} input items; window the participant set first.", nameof(participantIds));
+            if (id is null) continue;
+            if (id.Length > LabelParticipantIdLimit)
+                throw new ArgumentException($"A label lookup participant id may not exceed {LabelParticipantIdLimit} characters.", nameof(participantIds));
+            wanted.Add(id);
         }
-        var labels = await Task.WhenAll(wanted.Select(async participantId =>
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var identityCount = 0;
+        foreach (var ids in wanted.Chunk(LabelQueryParticipants))
         {
-            if (!byParticipant.TryGetValue(participantId, out var identities)) return (participantId, label: (string?)null);
-            var atproto = identities.FirstOrDefault(identity => identity.Kind == ParticipantIdentity.AtprotoKind);
-            var label = atproto?.Label;
-            if (string.IsNullOrWhiteSpace(label) && atproto is not null)
-                label = await handles.HandleOf(atproto.Value, ct);
-            label ??= identities
-                .OrderBy(identity => identity.Kind, StringComparer.Ordinal)
-                .FirstOrDefault(identity => identity.Label is { Length: > 0 })?.Label;
-            return (participantId, label);
-        }));
-        foreach (var (participantId, label) in labels)
-        {
-            if (label is { Length: > 0 }) result[participantId] = label;
+            var candidates = ids.ToDictionary(id => id, _ => new LabelCandidates(), StringComparer.Ordinal);
+            // Declare native IN explicitly. Array.Contains currently lowers to a CLR
+            // residual on the pinned compiler/runtime, which would scan unrelated rows.
+            var scope = Filter.All(Filter.In(nameof(ParticipantIdentity.ParticipantId), ids),
+                LinqFilterCompiler.Compile<ParticipantIdentity>(identity => identity.Label != null
+                    || identity.Kind == ParticipantIdentity.AtprotoKind));
+            string? after = null;
+            while (true)
+            {
+                var filter = after is null ? scope : Filter.All(scope,
+                    Filter.On(FieldPath.Of(nameof(ParticipantIdentity.Id)), FilterOperator.Gt, FilterValue.Of(after)));
+                var query = QueryDefinition.All.Where(filter); // QueryStream supplies the total Id order.
+                var pageCount = 0;
+                // Read only the first count-free provider page, then use its Id as the next
+                // predicate edge. Never continue Koan's OFFSET stream across mutable pages.
+                using (EntityContext.NoCache())
+                {
+                    await foreach (var identity in ParticipantIdentity.QueryStream(query, LabelIdentityPageSize, ct))
+                    {
+                        if (++identityCount > LabelIdentityLimit)
+                            throw new InvalidOperationException($"Label lookup exceeded {LabelIdentityLimit} matching identities; narrow the participant set.");
+                        candidates[identity.ParticipantId].Consider(identity);
+                        after = identity.Id;
+                        if (++pageCount == LabelIdentityPageSize) break;
+                    }
+                }
+                if (pageCount < LabelIdentityPageSize) break;
+            }
+            // Only two winners per requested participant survive a provider page. Resolve
+            // at most six at once, matching the handle source's width without allocating
+            // an input-wide task/waiter fan-out or serializing every network timeout.
+            foreach (var group in candidates.Chunk(LabelResolveConcurrency))
+            {
+                ct.ThrowIfCancellationRequested();
+                var labels = await Task.WhenAll(group.Select(async pair =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var label = pair.Value.Atproto?.Label;
+                    if (resolveMissing && string.IsNullOrWhiteSpace(label) && pair.Value.Atproto is { } atproto)
+                        label = await handles.HandleOf(atproto.Value, ct);
+                    return (pair.Key, Label: label ?? pair.Value.Fallback?.Label);
+                }));
+                foreach (var (participantId, label) in labels)
+                    if (label is { Length: > 0 }) result[participantId] = label;
+            }
         }
         return result;
+    }
+
+    private sealed class LabelCandidates
+    {
+        public ParticipantIdentity? Atproto { get; private set; }
+        public ParticipantIdentity? Fallback { get; private set; }
+
+        public void Consider(ParticipantIdentity identity)
+        {
+            if (identity.Kind == ParticipantIdentity.AtprotoKind
+                && (Atproto is null || StringComparer.Ordinal.Compare(identity.Id, Atproto.Id) < 0))
+                Atproto = identity;
+            if (identity.Label is not { Length: > 0 }) return;
+            var kindOrder = Fallback is null ? -1 : StringComparer.Ordinal.Compare(identity.Kind, Fallback.Kind);
+            if (kindOrder < 0 || kindOrder == 0 && StringComparer.Ordinal.Compare(identity.Id, Fallback!.Id) < 0)
+                Fallback = identity;
+        }
     }
 
     /// <summary>All identity entries of one participant, ordered best-first for display.</summary>
