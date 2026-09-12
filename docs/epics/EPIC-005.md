@@ -358,5 +358,7 @@ or a selected provider. Public batch capability observability Q03 was sent to Ko
 Koan later confirmed Q03 and returned implementation closeout for K01/K02/Q03, with
 framework regression suites passing (agent-reported; see the handoff). The coordinator
 inspected the changed source/work card. No native cross-Entity transaction was introduced.
-No framework commit/publication or Tangent pin/adoption happened; re-run consumer/probe
-qualification against the eventual adopted source before closing the P2 repair gate.
+Tangent now consumes current Koan `main` plus its reconciled auth/static contribution;
+Q-05's empty-scope correction is verified in the deployed Topic path. Re-run the bounded
+provider/query probes against the adopted K01/K02/Q03/Q04 source before closing the P2
+repair gate.

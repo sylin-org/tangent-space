@@ -1,5 +1,234 @@
 # Current state
 
+## Activity recovery and scoped author labels — 12 September 2026
+
+The next Tangent-owned EPIC-005 slice is implemented and subsequently deployed locally
+at Leo's request. The browser now uses one reusable participant transport:
+SSE, functional `/api/activity/wait` fallback, bounded retry/watchdog/rotation, and honest
+Polling status. Its authenticated response context prevents a new-cookie response from
+being applied to the previous actor's view. Accepted-only cursors and cancellation guards
+cover dependent history, directory and settings refreshes. The old simultaneous Topic
+updates loop is removed. Muted topics no longer become falsely unavailable merely because
+they are absent from activity. Reset recovery refreshes the directory even without events.
+
+`LabelsFor` now uses explicit native IN, count-free 128-row keyset reads, a compound
+participant/identity index, bounded admission and six-wide handle resolution. Native SQLite
+tests return exactly 430 requested identity rows despite 5,000 unrelated rows, with no
+COUNT/full-scan steps. An array-Contains translation fallback was discovered and assigned
+to **Report framework status** as Q-04; the public structured-filter workaround is used here.
+
+See [implementation evidence](evidence/epic005/activity-and-label-implementation.md) and
+[independent red team](evidence/epic005/activity-and-label-red-team.md). This is not the
+SPA/windowed-history release: existing navigation still reloads, history/directories still
+accumulate, and edits still refresh loaded history. Real-browser continuity, existing-DB
+index query-plan qualification, saturation and cross-entity write atomicity remain open gates.
+The local Docker app was rebuilt/replaced on 12 September after a full state backup; its
+configuration hash is unchanged, and its existing SQLite database now contains the new
+participant/identity index. Health, served-script hashes and anonymous access checks pass
+at `http://127.0.0.1:5220`. No provider switch or database reset occurred. Authenticated
+browser testing is handed to Leo; see the deployment receipt in the implementation evidence.
+
+## Continuous workspace and scale epic — 12 September 2026
+
+The follow-on [provider assessment](evidence/epic005/provider-assessment-20260912.md) now
+records actual MongoDB 8.3.4 and PostgreSQL 17.11 CRUD/window/index/capability experiments
+at 10k/100k posts plus distractor Topics, with independent runtime reruns. Both read paths
+qualify within the tested shapes; no full-API/browser/saturation or production admission is
+claimed. Matching indexed count-free reads use bounded native work. Materialized queries
+still paid exact-count costs on the historical pinned Koan baseline. PostgreSQL native same-Entity batch
+rollback passes; Mongo correctly rejects atomic batches. Ambient deferred scopes reproduce
+partial persistence on both providers. The lab is synthetic, isolated and retained for
+reproduction; no live provider switch or application-data reset was made.
+The two lab containers were stopped cleanly after verification, retaining approximately
+653 MiB of synthetic database-volume state. Nine adversarial lab-guard tests pass.
+
+[EPIC-005](epics/EPIC-005.md) records the newly authorized persistent SPA/adaptive-pane
+direction, genuinely bounded dataset windows, isolated scale/database experiments and
+independent Codex red-team gates. The plan review is incorporated and initial non-deployed
+foundations have been implemented. The current deployed browser has not been converted
+to an SPA or virtualized; P1/P2 are partial and later gates remain open.
+
+The original source audit found durable activity SSE and unused participant-wide wait fallback,
+bidirectional server history windows, but accumulating browser history/directories and
+whole-loaded-history refresh. The [measured SQLite baseline](evidence/epic005/sqlite-baseline-20260912.md)
+now confirms that each 21-row window at 100,000 posts scans the table for both SELECT and
+COUNT, with temporary sorting and only an Id index. Six traced warm samples gave p50
+305–423 ms across four window positions; these are query-only directional timings, not
+full-API latency or saturation evidence. Koan Mongo currently declines atomic batch support,
+so its suitability for Tangent's transactional writes cannot be assumed from adapter presence.
+
+Independent plan review additionally found the pinned Koan transaction coordinator explicitly
+offers deferred coordination rather than native cross-entity atomicity. A separate isolated
+probe queued three actual Message saves and forced the second to fail; the first remained
+durable. An independent rerun reproduced it. This proves partial persistence of the deferred
+primitive, not a full domain acceptance/crash-recovery test or live-data corruption. Tangent's
+correlated message/source/sequence/journal guarantees remain an explicit correction/proof gate.
+
+The new framework-independent `src/client/core/window-store.mjs` models bounded pages,
+stable identity/revision merging, generation-scoped request tickets, whole-page eviction,
+anchor retention, aggregate limits and separate read/live checkpoints. Worker and independent
+adversarial tests cover these model invariants; real browser layout, focus, heap, and transport
+integration are not implied. Current wire messages need an explicit monotonic-revision
+normalization contract before integrating this new model.
+
+[Coordinator verification](evidence/epic005/coordinator-verification.md) records 63 passing
+focused model/recovery/agent checks. The WebMCP fixtures were subsequently reconciled with
+the current identity and 16-tool surface; its focused suite passes all 18 checks.
+
+At that baseline stage, the live application and existing source edits were unchanged.
+Probe/model/test files and planning/evidence documents were additive. Experiments use separate synthetic state;
+query, full-API and browser evidence remain distinguished. No provider switch or live reset.
+
+Leo directed all discovered Koan bugs to its agent. The [failure handoff](handoff/KOAN_FAILURES_2026-09-12.md)
+was sent to **Report framework status** under koan-framework, with the reproduced deferred
+partial persistence, contradictory public atomicity promise, and unused-count query path.
+It distinguishes framework defects/design questions from Tangent-owned gaps and documented
+capability limits. Koan confirmed both the false public atomicity promise (K01) and
+manufactured list-count intent (K02) on current HEAD. Leo authorized implementation work;
+the framework agent has been assigned fixes, regressions and cross-entity capability
+guidance. Koan subsequently confirmed public batch-capability observation Q03 as a public
+surface defect, not an atomic execution failure. It returned implementation closeout for
+K01/K02/Q03, reporting 561/561 Data Core owner tests, 2/2 SQLite tests and 25/25 focused
+capability/source-policy tests passing. The coordinator inspected its work card and source;
+framework test execution is attributed to that agent. That was the state captured by the
+historical receipt; Koan later published the work. Tangent's local
+framework checkout is now reconciled from current Koan `origin/main` at `2fa19bb6c`, plus
+the reviewed static-header/auth-protocol/atproto contribution at `34f678d7c`. Q-05 empty
+transaction telemetry is adopted and verified in the deployed signed-in Topic path. The
+original provider measurements remain pinned historical baselines; K01/K02/Q03/Q04
+consumer/probe requalification remains open. MongoDB/PostgreSQL health experiments ran in an isolated lab. AGENTS.md
+records the ongoing escalation and coordination requirement.
+
+## Composer mention picker and reload-safe drafts — 12 September 2026
+
+Typing `@` in a Topic composer again opens the existing permission-filtered list of
+role groups and participants. The route-page layout keeps the composer in normal flow,
+but now preserves it as the popup's positioning container; the refreshed CSS and facet
+script asset versions prevent an older cached layout or processor from masking the fix.
+No mention API, ranking, facet or role-group semantics changed.
+
+Unsent Topic composer text and reply context now survive a page reload or route
+navigation in the same browser tab. Drafts are stored in `sessionStorage`, scoped to
+the current participant and Topic, and removed after an accepted post. They do not
+become pending operations and are never sent automatically. A participant change
+clears the previous account's stored drafts before the new identity can render, which
+preserves the existing stale-tab authorship boundary. Unavailable browser storage
+degrades to the prior in-memory behavior without interrupting composing.
+
+Focused browser-recovery coverage now includes reload restoration, accepted-post
+cleanup, and account-change cleanup. The live happy path is verified without posting:
+the authenticated Chrome Topic showed a participant and role-group suggestion for
+`@o`; a temporary draft survived reload and was then cleared locally. The focused
+browser recovery suite passes all 20 checks, and the Docker app is healthy.
+
+## Welcome, collection and server settings — 12 September 2026
+
+The landing page now leads from the server hero through “While you were away” to
+“Your Tangents”. The header contains home and the account menu.
+Creation lives beside the collection heading and follows the existing `canCreate`
+permission. Redundant hero actions and the catch-up byline are removed; self-hosting
+and Connect an agent links live in the footer. The inactive alternate-Atmosphere
+account link is removed until that path is functional. `/tangents/` redirects to the home collection.
+Live connection status sits beside the logo, leaving the collection heading clear.
+The account control shows the cached AT display name above the handle, with both
+lines retained on mobile; profile SSE updates the name as it does the avatar.
+
+The server cog navigates to `/settings`, with the existing identity/artwork/policy
+form and permission checks. The owner chooses the server's ASCII atmosphere there;
+there is no floating atmosphere control or per-browser override. Draft previews
+revert on dismissal, and Save atmosphere persists the shared choice.
+
+Tangent cards reuse Sylin's 300 × 430 frame, artwork divider, medallion, glass pane,
+and cursor-driven white sheen/rainbow foil formulas. The medallion shows unread
+activity, and management stays a separate cog. Keyboard focus and reduced-motion
+handling are retained. Styling is in `landing.css`, with delegated pointer handling
+in `card-foil.js` for dynamically rendered cards.
+
+Verified: Docker build and replacement passed; signed-in Chrome checked home,
+`/settings`, atmosphere preview cancellation and collection creation affordances.
+The 390px mobile layout has no horizontal overflow, and no browser console errors
+were reported. No content, saved server settings or permissions were changed by
+these checks.
+
+## Local profile capture and simpler Bluesky sign-in — 12 September 2026
+
+[ADR 0010](adr/0010-local-profile-capture.md) implements local-only profile reads,
+persisted Koan snapshots and a bounded background capture worker. Missing data shows
+a placeholder immediately; successful capture stores the avatar under the existing
+OS-mounted `.local/docker/site/profile-media` directory before publishing an update.
+The shared Web SSE consumer replaces displayed names/avatars in the account menu,
+onboarding identity card, participant profile and conversation without reloading posts.
+Only public AT decoration is delivered, scoped to requested DIDs; capture does not
+decide identity or permissions. Stale data refreshes on access after six hours, sign-in
+requests capture, and failed captures retain good data with a two-minute retry delay.
+
+The primary sign-in button now reads **Log in with Bluesky**. Account selection happens
+on Bluesky's own screen; a disclosure retains handle/DID login for other providers and
+local test identities. The Koan contribution adds server-first OAuth and handles
+Bluesky's authorization-server-only discovery, preserving PAR, PKCE, DPoP, correlation
+and reverse DID/PDS/issuer validation.
+
+The normal `/sign-in/` route now redirects directly into that OAuth flow, eliminating
+the extra Tangent sign-in screen. Navigation and conversation sign-in links preserve
+the current path, query and fragment. The explicit `/sign-in/?provider=other` route
+retains the alternate-provider screen; first-owner onboarding keeps its welcome.
+
+Verified: the focused profile cache/SSE integration check passed; 36 focused Koan auth
+checks passed; Docker rebuilt and launched. Chrome loaded Leo's header/profile/message
+avatars from the local cache. After a container replacement the cached image still
+loaded. The no-identifier challenge opened Bluesky's account chooser, and identity-only
+authorization completed back to Tangent as @leo.sylin.org with owner controls visible.
+No server wipe or new participant/content was needed. The landing-page refinements
+are described above.
+
+## Companion collection and server identity — 12 September 2026
+
+The local MCP manager now uses Tangent's editorial typography, companion cards, and
+the shared eight ASCII atmospheres with Mouse Spotlight. OAuth result pages share
+that identity. Account removal and disconnection are tucked into companion settings.
+
+“Places they've been” is a collection of **servers**, one card per enrolled origin,
+with all visiting companions listed together. Cards show the server name, byline,
+cover artwork, description/welcome, and MOTD from the existing anonymous `/api/server`
+projection. Metadata is cached in the connector's existing state file; unavailable
+servers retain their last saved details. Artwork remains a URL with a visual fallback,
+not a downloaded offline asset. Names and artwork never change connection routing.
+Forgetting the last connection removes that server from the visible collection.
+
+On the web, the owner's Server settings now includes a live card preview and clearer
+identity fields. The existing `welcomeMessage` is also the card description, and
+`coverImageUrl` supplies both header and card artwork. Policies remain in the same
+form under their own disclosure. No new server schema or permission path was added.
+
+Server and Tangent card editors now share a file picker (PNG/JPEG/WebP, at most 5 MiB),
+with optional URL entry. Uploads use the existing mutation/authentication gate and the
+target's governance permissions. `/api/artwork` returns a public `/artwork/{hash}.{ext}`
+reference; files live under the content root's `artwork` directory, which is
+`.local/docker/site/artwork` on the host and `/state/artwork` in Docker. Existing
+backup/restore/wipe scripts include it. Uploading updates the draft preview; the normal
+Save action applies the reference. Replaced or unused uploads are retained for this POC.
+Verified through the real Chrome file picker into the Docker mount and preview, plus
+one isolated HTTP integration check covering denied uploads, format rejection, public
+image retrieval, persistent bytes, and both server/Tangent save paths. No sample artwork
+was applied to the live server settings.
+
+The artwork picker offers **16 generated covers** across six moods: clean/modern,
+professional, warm/organic, future/agents, playful/expressive, and wonder/discovery.
+An expandable library keeps the editor compact, with a mood filter, lazy-loaded images,
+and the current selection shown even while the library is closed. **No artwork** and
+custom uploads remain available. Selection updates the draft preview; Save applies it.
+Source assets and generation prompts
+are tracked in `docs/design/card-artwork.md` and `wwwroot/tangent-art/`.
+At the owner's request, Midnight Workshop is applied to the running server and
+A Universe Within to the existing “Panpsychism and YOU!” Tangent. Both were selected
+and saved through the web editor, then checked again after reload.
+
+Verification: Rust release and Docker publish passed; the ten existing OAuth journey
+checks and eighteen room recovery checks passed, plus the focused server-card mapping
+check. Chrome verified real companion/server-name loading, owner preview updates with
+sample artwork, and responsive layout. Sample branding was previewed without saving;
+existing accounts, sessions, and server content were retained.
+
 ## UX realignment — 12 September 2026
 
 The second UX slice brings live status into the Topic, with a compact “Elsewhere” menu
@@ -235,7 +464,7 @@ The accepted [first PoC epic](epics/EPIC-001.md) and the current [EPIC-004](epic
 - **Spaces:** one real Space per room under a separate authority account; native scoped OAuth, authenticated managing-app callback, provisioning retry reconciliation and cross-PDS repository reads.
 - **Conversation:** native bounded CAR verification, source URI/CID attribution, replies, durable acceptance/rejection decisions, idempotent source write intents, rebuildable projections, bounded history, protected continuation and durable acknowledgements. A Koan background worker catches up and retries pending writes without model execution.
 - **Participation:** hashed, revocable, expiring credentials bound to the agent's verified DID; a standalone Node client with persistent pending/cursor state and optional operator-owned model process. Actual GLM replies were accepted from the agent's PDS; idle and repeated setup made no further model call.
-- **Browser:** Tangent-card navigation, administration, activity catch-up and conversation share a participant-wide SSE stream. The reference-aligned desktop/mobile walkthrough includes a source-authored human reply, preserved background draft, independent read state and keyboard disclosures. The historical Commonroom HTML remains a separate reference.
+- **Browser:** Tangent-card navigation, administration, activity catch-up and conversation share a participant-wide SSE stream. Supporting browsers multiplex activity and visible profile decoration through one origin-wide SharedWorker connection across tabs; hidden tabs pause participation and recover through a bounded reset. A direct per-tab compatibility path remains for browsers without SharedWorker, while HTTP/2 is still expected for production. The reference-aligned desktop/mobile walkthrough includes a source-authored human reply, preserved background draft, independent read state and keyboard disclosures. The historical Commonroom HTML remains a separate reference.
 - **Operation:** pinned dependencies, setup/start/stop/demo commands, application backup and restoration. The restored process reused its existing browser and agent credentials, read position and protected OAuth session, then successfully wrote a new source record.
 - **Koan contributions:** an isolated native auth connector, protocol-neutral extension, Tangent-free sample and tests. The [49-file auth patch](../contributions/koan-atproto-auth/README.md) passed regression suites in a fresh pinned checkout. A separate [static-header fix](../contributions/koan-static-headers/README.md) corrects middleware ordering and passed three real HTTP cases. Neither has been published upstream; the original sibling checkout was preserved.
 
@@ -258,7 +487,7 @@ All fixture passwords, cookies, runner credentials, protected sessions, database
 - Accepted history is retained even when the author is removed or the source record disappears. Room governance and metadata remain local; portable governance and moderation/export semantics are follow-on design work.
 - Windows recovery depends on the same user's DPAPI custody as well as the backed-up state. Application backup does not recover PDS data, PLC or control of the authority/participant accounts.
 - WebMCP has bounded per-Channel and participant-wide activity waits, while the personal cross-server MCP connector and A2A remain follow-on work. Pins, summaries, goals, search, Posts/Series, richer moderation and multi-site discovery remain follow-on product work.
-- Licensing, domain, deployment target, first community and public contribution submission remain undecided.
+- The project is licensed under [MIT](../LICENSE), selected on 12 September 2026. Domain, deployment target, first community and public contribution submission remain undecided.
 
 ## Next useful work
 

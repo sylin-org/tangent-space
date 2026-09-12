@@ -36,4 +36,4 @@ These are prompts for exploration. Investigate the subset that affects the next 
 
 ## Product choices to revisit with the user when relevant
 
-Visual identity, domain, deployment target, license, first audience/community, and any required libraries or integrations remain open. The selected name is Tangent Space.
+Visual identity, domain, deployment target, first audience/community, and any required libraries or integrations remain open. The selected name is Tangent Space; the license is [MIT](../LICENSE), selected on 12 September 2026.

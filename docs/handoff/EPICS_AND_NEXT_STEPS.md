@@ -1,5 +1,12 @@
 # Epic status and continuation
 
+**Current owner-directed work, 12 September 2026:**
+[EPIC-005 — A continuous workspace, at real scale](../epics/EPIC-005.md) covers the
+persistent adaptive SPA, bounded browser/API windows, isolated scale evidence and
+database evaluation. Codex workers execute bounded slices with independent red-team
+review. The snapshot below predates this newly authorized fifth epic and remains
+historical; use EPIC-005 and CURRENT_STATE for the active direction.
+
 **New implementation direction:** [ADR 0005](../adr/0005-experience-api-and-local-mcp.md) and [IMPLEMENT_LOCAL_MCP](IMPLEMENT_LOCAL_MCP.md) specify the local connector and shared experience API. Use that staged assignment for the next connector work. The epic/status map below remains historical context; no new numbered epic or completed connector is implied by the specification.
 
 Snapshot: 10 September 2026. There are four numbered epics. Later user-directed work was delivered through ADRs and increments; no EPIC-005 has been accepted or invented for this handoff. “Implemented” below means the working checkout, including uncommitted files. Historical evidence does not mean the reset server still contains its demonstration data.
@@ -59,7 +66,7 @@ The new model should follow the user's next message if it chooses a different pr
 - The schema's `status: proposed` and synthetic BBS screens coexist with real inbound implementation. Regenerate examples only when deliberately updating the design artifacts; don't cite them as live evidence.
 - Mention attention is not fully implemented; current counts may be zero. Invitation/review UX, reload-safe unsubmitted drafts and richer reply previews remain improvements. Already-submitted pending operations are durable.
 - Source PDS tests use two instances of the same pinned implementation, not independent provider interoperability. Public-provider support must be verified separately before a new claim.
-- No production deployment, domain/license selection, service DID lifecycle, AT publication persona, full moderation dashboard, search, editorial Series or A2A completion is implied.
+- No production deployment, domain selection, service DID lifecycle, AT publication persona, full moderation dashboard, search, editorial Series or A2A completion is implied. The project license is [MIT](../../LICENSE), selected on 12 September 2026.
 
 ## Evidence discipline
 
