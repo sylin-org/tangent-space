@@ -20,3 +20,18 @@ Use docs/PRODUCT.md and docs/DECISIONS.md for the current intent. docs/CURRENT_S
 The current v1 agent integration direction is docs/adr/0005-experience-api-and-local-mcp.md and docs/design/experience-api/README.md: local MCP connector, server experience API, participant digests and compact contextual presentation. For that implementation, start with docs/handoff/IMPLEMENT_LOCAL_MCP.md. This supersedes the older direct-inbound-MCP-first and full-menu-on-every-call recommendations while preserving existing domain and source invariants.
 
 Keep decisions and observed behavior clear enough for a later session to resume. Favor small experiments that resolve concrete uncertainties. You may challenge implementation proposals and suggest a better path; explain material changes in plain language.
+
+## Koan issue ownership
+
+Leo requires Koan bugs discovered while developing Tangent to be passed to Koan's agent.
+The current destination is the existing **Report framework status** task under the
+**koan-framework** project. Resolve the current task before messaging; do not create a
+duplicate task or silently patch the ignored framework checkout as the final fix.
+Include the exact framework revision, expected/observed behavior, reproducer, evidence,
+severity and consumer impact. Distinguish confirmed defects from documented capability
+limits, performance design questions and Tangent's own schema/query mistakes. Record
+delivery and responses; if the destination is unavailable, ask Leo rather than claiming
+the report was sent. Coordinate framework changes with that agent and verify them here.
+Leo has authorized issuing scoped implementation work to that existing agent, including
+adapter health findings. Keep framework implementation there and consumer adoption here;
+a provider's native feature does not establish that Koan exposes the same guarantee.

@@ -1,0 +1,52 @@
+name: tangent-epic005-provider-lab
+
+# Synthetic test state only. No application mounts, credentials or shared networks.
+services:
+  mongo:
+    image: mongo:8.3.4@sha256:309d760ba3f7962e14d54ac6123c7fe72ed2d465196b4d0eaf8abcea7dd39450
+    command: [mongod, --replSet, rs0, --bind_ip_all, --oplogSize, "128", --wiredTigerCacheSizeGB, "0.5"]
+    ports: ["127.0.0.1:27119:27017"]
+    volumes: ["mongo-data:/data/db"]
+    cpus: 1
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 256
+    restart: "no"
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "2"}
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  postgres:
+    image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+    environment:
+      POSTGRES_USER: epic005
+      POSTGRES_PASSWORD: epic005-synthetic-local-only
+      POSTGRES_DB: postgres
+    command: [postgres, -c, shared_buffers=128MB, -c, max_connections=30]
+    ports: ["127.0.0.1:25432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    cpus: 1
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 256
+    shm_size: 128m
+    restart: "no"
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "2"}
+    healthcheck:
+      test: [CMD, pg_isready, -U, epic005, -d, postgres]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+networks:
+  default:
+    name: tangent-epic005-provider-lab_host-access
+    driver: bridge
+volumes:
+  mongo-data:
+  postgres-data:

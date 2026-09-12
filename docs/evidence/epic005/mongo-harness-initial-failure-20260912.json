@@ -1,0 +1,124 @@
+{
+  "scope": "Actual Tangent Message / pinned Koan Mongo CRUD \u002B read microqueries and capability/fault experiments; no app API, source acceptance, live activity, browser or provider winner claim",
+  "started": "2026-09-12T18:05:47.1665829+00:00",
+  "finished": "2026-09-12T18:05:54.0612242+00:00",
+  "root": "E:\\repo\\github\\sylin-org\\tangent-space\\.local\\experiments\\epic005\\mongo-baseline-d0589937dccf4e7bb9e79a2c66b3992b",
+  "databaseName": "epic005_mongo_d0589937dccf4e7bb9e79a2c66b3992b",
+  "fixedEndpoint": "127.0.0.1:27119",
+  "replicaSet": "rs0",
+  "directConnection": true,
+  "databaseVersion": "8.3.4",
+  "mongoDriver": "MongoDB.Driver, Version=3.10.0.0, Culture=neutral, PublicKeyToken=94992a530f44e321",
+  "runtime": ".NET 10.0.12",
+  "os": "Microsoft Windows 10.0.26200",
+  "postsInHotRoom": 10000,
+  "sourceHashes": {
+    "src/server/web/Conversation/Message.cs": "dbee3b6dcecc1b4dd181f53999edd4ccbdff84046ad4e7084eee48ab13409e55",
+    "src/server/web/Conversation/ConversationService.History.cs": "d9a98c8cfe1b7bdb31e65342f452991f397ab3f81a8389cf792d60866d507f0d",
+    ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs": "cb1f3a4ce5e57614d79a71fe41bb568751b997322be62954ab5055b94b2e1738",
+    ".local/upstream/koan-framework/src/Connectors/Data/Mongo/MongoRepository.cs": "cec7aff60175eba9432e764f452810df302653954301297e0302f4c13845b442",
+    ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs": "de7c798997a33ccebfa379d325a600acc607561674015b9d47e6f1b2fdebbd65"
+  },
+  "hostStarted": false,
+  "applicationPortsOpened": [],
+  "credentialsLoaded": false,
+  "cpuAffinity": "3",
+  "peakWorkingSetBytes": 142295040,
+  "elapsedSeconds": 6.9090087,
+  "cpuSeconds": 1.78125,
+  "databaseStats": {
+    "db": "epic005_mongo_d0589937dccf4e7bb9e79a2c66b3992b",
+    "collections": 2,
+    "views": 0,
+    "objects": 4,
+    "avgObjSize": 679.75,
+    "dataSize": 2719.0,
+    "storageSize": 8192.0,
+    "indexes": 1,
+    "indexSize": 4096.0,
+    "totalSize": 12288.0,
+    "scaleFactor": 1,
+    "fsUsedSize": 87991517184.0,
+    "fsTotalSize": 1081101176832.0,
+    "ok": 1.0,
+    "$clusterTime": {
+      "clusterTime": {
+        "$timestamp": {
+          "t": 1789236354,
+          "i": 2
+        }
+      },
+      "signature": {
+        "hash": {
+          "$binary": {
+            "base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "subType": "00"
+          }
+        },
+        "keyId": 0
+      }
+    },
+    "operationTime": {
+      "$timestamp": {
+        "t": 1789236354,
+        "i": 2
+      }
+    }
+  },
+  "touchedCollections": [
+    "system.profile",
+    "TangentSpace.Conversation.Message"
+  ],
+  "outcomes": {
+    "firstFacadeSaveMs": 295.1991,
+    "actualTemplate": {
+      "_id": "mongo-hot-0000000001",
+      "roomKey": "hot",
+      "authorParticipantId": "synthetic-01",
+      "sourceUri": "at://synthetic.invalid/local.tangent.message/1",
+      "sourceCid": "synthetic-cid-1",
+      "sequence": 1,
+      "acceptedAt": {
+        "$date": "2026-01-01T00:00:01Z"
+      },
+      "content": {
+        "text": "Synthetic @member #scale 1 \u2014 caf\u00E9 \u65E5\u672C\u8A9E",
+        "createdAt": {
+          "$date": "2026-01-01T00:00:01Z"
+        },
+        "replyTo": null
+      },
+      "removed": false,
+      "removedAt": null,
+      "removedByParticipantId": null,
+      "editedAt": null,
+      "permissions": null,
+      "operationId": null,
+      "facets": [],
+      "ofMessageId": null,
+      "previousChangeId": null,
+      "changeClass": null,
+      "changeId": null
+    },
+    "crud": {
+      "create": true,
+      "read": true,
+      "unicodeAndDateRoundtrip": true,
+      "editAndTombstone": true,
+      "delete": true
+    }
+  },
+  "phases": [],
+  "failures": [
+    "System.NotSupportedException: The adapter backing Message does not expose a proved native atomic batch boundary. Remove RequireAtomic or route the Entity to an adapter that advertises and executes atomic batches."
+  ],
+  "diagnosticFailures": [],
+  "limitations": [
+    "Database profiling enabled during query timing; six serial warm samples, nearest-rank p95=max, directional only.",
+    "First shape call is not a cold-disk/cache-cleared claim; first facade Save includes initialization.",
+    "Raw BSON clone seed bypasses domain/lifecycle writes and uses synthetic non-protocol source labels. Accepted/content timestamps and sourceURI are inherited from the first row; read-query fixture only, not authoring fidelity.",
+    "No app hosted services started. Replica set native capabilities do not establish Koan cross-entity atomicity.",
+    "Compound index is added only in the isolated database; app index declarations remain unchanged.",
+    "Two logical CPU client affinity; lab DB separately limited by coordinator. Monitored client1.5GiB/DB5GiB/time10min bounds are not all hard quotas."
+  ]
+}

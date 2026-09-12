@@ -1,0 +1,1367 @@
+{
+  "scope": "Independent serial red-team reruns; adapter/query/capability evidence, not matched provider saturation or production admission",
+  "guardMockTests": {
+    "passed": 9,
+    "command": "node --test tests/provider-lab-red-team.test.mjs",
+    "failed": 0,
+    "invokesRealDocker": false
+  },
+  "finalRealGuard": {
+    "passed": true,
+    "freeHostRamMiB": 33492,
+    "totalDatabaseMiB": 651.71
+  },
+  "mongo": {
+    "command": "./probes/MongoProbe/run.ps1 -Posts 10000 -SkipBuild",
+    "rawResult": "E:\\repo\\github\\sylin-org\\tangent-space\\.local\\experiments\\epic005\\mongo-baseline-7b9d5abed0574b2f9bc853027be032b8/result.json",
+    "started": "2026-09-12T14:11:56.6995886-04:00",
+    "finished": "2026-09-12T14:12:00.4678088-04:00",
+    "database": "epic005_mongo_7b9d5abed0574b2f9bc853027be032b8",
+    "databaseVersion": "8.3.4",
+    "elapsedSeconds": 3.7750197,
+    "peakWorkingSetBytes": 167563264,
+    "sourceHashes": {
+      "src/server/web/Conversation/Message.cs": "dbee3b6dcecc1b4dd181f53999edd4ccbdff84046ad4e7084eee48ab13409e55",
+      "src/server/web/Conversation/ConversationService.History.cs": "d9a98c8cfe1b7bdb31e65342f452991f397ab3f81a8389cf792d60866d507f0d",
+      ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs": "cb1f3a4ce5e57614d79a71fe41bb568751b997322be62954ab5055b94b2e1738",
+      ".local/upstream/koan-framework/src/Koan.Data.Core/RepositoryFacade.cs": "e481eb29391fc2cd91aa833a714d2646cdcaa6ef0ef3375675c51068050abd63",
+      ".local/upstream/koan-framework/src/Connectors/Data/Mongo/MongoRepository.cs": "cec7aff60175eba9432e764f452810df302653954301297e0302f4c13845b442",
+      ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs": "de7c798997a33ccebfa379d325a600acc607561674015b9d47e6f1b2fdebbd65"
+    },
+    "failures": [],
+    "diagnosticFailures": [],
+    "crud": {
+      "create": true,
+      "read": true,
+      "unicodeAndDateRoundtrip": true,
+      "editAndTombstone": true,
+      "delete": true
+    },
+    "atomicRequirement": {
+      "rejected": true,
+      "error": "System.NotSupportedException: The adapter backing Message does not expose a proved native atomic batch boundary. Remove RequireAtomic or route the Entity to an adapter that advertises and executes atomic batches.",
+      "mutationCallbackInvoked": false,
+      "documentsUnchanged": true,
+      "observedCommands": [],
+      "batchCapabilities": "None"
+    },
+    "deferred": {
+      "failure": "Koan.Data.Core.Transactions.TransactionException: Deferred coordination 'tangent-room-policy-operation' failed after 1 completed operation(s). Its commit outcome is unknown and it will not be replayed. ---> MongoDB.Driver.MongoWriteException: A write operation resulted in an error. WriteError: { Category : \"Uncategorized\", Code : 121, Message : \"Plan executor error during update :: caused by :: Document failed validation\", Details : \"{ \"failingDocumentId\" : \"mongo-deferred-rejected-head\", \"details\" : { \"operatorName\" : \"$lte\", \"specifiedAs\" : { \"lastSequence\" : { \"$lte\" : 10 } }, \"reason\" : \"comparison failed\", \"consideredValue\" : 999 } }\" }. ---> MongoDB.Driver.MongoBulkWriteException`1[[MongoDB.Bson.BsonDocument, MongoDB.Bson, Version=3.10.0.0, Culture=neutral, PublicKeyToken=94992a530f44e321]]: A bulk write operation resulted in one or more errors. WriteErrors: [ { Category : \"Uncategorized\", Code : 121, Message : \"Plan executor error during update :: caused by :: Document failed validation\", Details : \"{ \"failingDocumentId\" : \"mongo-deferred-rejected-head\", \"details\" : { \"operatorName\" : \"$lte\", \"specifiedAs\" : { \"lastSequence\" : { \"$lte\" : 10 } }, \"reason\" : \"comparison failed\", \"consideredValue\" : 999 } }\" } ].",
+      "providerValidationFailure": true,
+      "firstMessageDurable": true,
+      "rejectedHeadDurable": false,
+      "thirdMessageDurable": false,
+      "partialCommitObserved": true,
+      "scope": "Actual Message → ActivityHead → Message saves in EntityContext deferred scope; external driver observes durable state. No native transaction invoked and no complete acceptance/restart proof."
+    },
+    "phases": [
+      {
+        "indexed": false,
+        "indexes": [
+          {
+            "v": 2,
+            "key": {
+              "_id": 1
+            },
+            "name": "_id_"
+          }
+        ],
+        "cases": [
+          {
+            "label": "beginning",
+            "p50Ms": 12.9273,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "p50Ms": 12.0451,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "p50Ms": 14.0244,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "p50Ms": 12.7876,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "noise-room",
+            "p50Ms": 9.4426,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "12002",
+                "keysExamined": "0",
+                "captureStartRetained": true
+              }
+            ]
+          }
+        ],
+        "firstStreamPage": {
+          "count": 21,
+          "commands": [
+            {
+              "type": "find",
+              "docsExamined": "12002",
+              "keysExamined": "0",
+              "captureStartRetained": true
+            }
+          ]
+        }
+      },
+      {
+        "indexed": true,
+        "indexes": [
+          {
+            "v": 2,
+            "key": {
+              "_id": 1
+            },
+            "name": "_id_"
+          },
+          {
+            "v": 2,
+            "key": {
+              "roomKey": 1,
+              "sequence": 1,
+              "_id": 1
+            },
+            "name": "epic005_room_sequence_id"
+          }
+        ],
+        "cases": [
+          {
+            "label": "beginning",
+            "p50Ms": 6.2969,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "0",
+                "keysExamined": "10000",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "21",
+                "keysExamined": "21",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "p50Ms": 5.9342,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "0",
+                "keysExamined": "5000",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "21",
+                "keysExamined": "21",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "p50Ms": 4.7252,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "0",
+                "keysExamined": "21",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "21",
+                "keysExamined": "21",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "p50Ms": 8.1716,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "0",
+                "keysExamined": "4999",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "21",
+                "keysExamined": "4999",
+                "captureStartRetained": true
+              }
+            ]
+          },
+          {
+            "label": "noise-room",
+            "p50Ms": 5.3144,
+            "commands": [
+              {
+                "type": "count",
+                "docsExamined": "0",
+                "keysExamined": "500",
+                "captureStartRetained": true
+              },
+              {
+                "type": "find",
+                "docsExamined": "21",
+                "keysExamined": "21",
+                "captureStartRetained": true
+              }
+            ]
+          }
+        ],
+        "firstStreamPage": {
+          "count": 21,
+          "commands": [
+            {
+              "type": "find",
+              "docsExamined": "21",
+              "keysExamined": "21",
+              "captureStartRetained": true
+            }
+          ]
+        }
+      }
+    ],
+    "limitations": [
+      "Database profiling enabled during query timing; six serial warm samples, nearest-rank p95=max, directional only.",
+      "First shape call is not a cold-disk/cache-cleared claim; first facade Save includes initialization.",
+      "Raw BSON clone seed bypasses domain/lifecycle writes and uses synthetic non-protocol source labels. Accepted/content timestamps and sourceURI are inherited from the first row; read-query fixture only, not authoring fidelity.",
+      "No app hosted services started. Replica set native capabilities do not establish Koan cross-entity atomicity.",
+      "Compound index is added only in the isolated database; app index declarations remain unchanged.",
+      "Two logical CPU client affinity; lab DB separately limited by coordinator. Monitored client1.5GiB/DB5GiB/time10min bounds are not all hard quotas."
+    ]
+  },
+  "postgres": {
+    "command": "./probes/PostgresProbe/run.ps1 -SkipBuild",
+    "rawResult": "E:\\repo\\github\\sylin-org\\tangent-space\\.local\\experiments\\epic005\\postgres-health-3331faf07309452c94897c03bd975a9c/result.json",
+    "schema": "epic005_pg_4e7de350cf0a4e33b331a1873dd62bfd",
+    "table": "Message_9c2534f9",
+    "started": "2026-09-12T14:12:09.9512303-04:00",
+    "finished": "2026-09-12T14:12:30.4898988-04:00",
+    "elapsedSeconds": 20.5387173,
+    "peakWorkingSetBytes": 155439104,
+    "settings": {
+      "server_version": "17.11 (Debian 17.11-1.pgdg12+2)",
+      "fsync": "on",
+      "synchronous_commit": "on",
+      "full_page_writes": "on",
+      "shared_buffers": "128MB",
+      "work_mem": "4MB",
+      "max_parallel_workers_per_gather": "2"
+    },
+    "sourceHashes": {
+      "src/server/web/Conversation/Message.cs": "dbee3b6dcecc1b4dd181f53999edd4ccbdff84046ad4e7084eee48ab13409e55",
+      ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs": "cb1f3a4ce5e57614d79a71fe41bb568751b997322be62954ab5055b94b2e1738",
+      ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/NpgsqlRepository.cs": "67efaf3db1306ba9d911713a84270ed59a9d2b5904fb3222bc404a7d4797ba6d",
+      ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/Runtime/NpgsqlDialect.cs": "be397930233a0d9c4cc4b28c659f89152ad3355b6af87e00ccc8054fc0fbd3dd",
+      ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs": "de7c798997a33ccebfa379d325a600acc607561674015b9d47e6f1b2fdebbd65",
+      ".local/upstream/koan-framework/src/Connectors/Data/Postgres/PostgresAdapterFactory.cs": "dc1589a52bd3881d61f96c70c6a7926a86b14392a98febcbf1522c1021f6e7b7"
+    },
+    "crudPassed": true,
+    "capabilities": {
+      "linq": true,
+      "boundedPaging": true,
+      "atomicBatch": true,
+      "bulkUpsert": true
+    },
+    "transactions": {
+      "nativeSameEntityBatch": {
+        "executionCapability": "None",
+        "atomicity": "Atomic",
+        "successIds": [
+          "epic005-batch-ok-first",
+          "epic005-batch-ok-second"
+        ],
+        "failure": "PostgresException: P0001: epic005 injected second-write failure",
+        "rowsAfterFailure": [],
+        "rollbackPassed": true
+      },
+      "ambientCoordinator": {
+        "scope": "Three same-entity Message.Save calls in application's named deferred coordinator, second SQL write rejected; independent connection inspects durable state. This is not a cross-entity domain acceptance test.",
+        "failure": "TransactionException: Deferred coordination 'tangent-room-policy-operation' failed after 1 completed operation(s). Its commit outcome is unknown and it will not be replayed.",
+        "rowsAfterFailure": [
+          "epic005-deferred-first"
+        ],
+        "partialCommitObserved": true
+      }
+    },
+    "publicFacadeCapabilityCaveat": "executionCapability=None is public BatchFacade metadata, not native Npgsql Batch Atomic capability or realized receipt.",
+    "measurements": [
+      {
+        "phase": "baseline-no-compound-index",
+        "hotPosts": 10000,
+        "cases": [
+          {
+            "label": "beginning",
+            "mode": "materialized-query",
+            "p50Ms": 36.2664,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 10000,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 2000
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 10000,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 2000
+              }
+            ]
+          },
+          {
+            "label": "beginning",
+            "mode": "first-stream-page",
+            "p50Ms": 36.619,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 10000,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 2000
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "mode": "materialized-query",
+            "p50Ms": 33.5254,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 5000,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 7000
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 5000,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 7000
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "mode": "first-stream-page",
+            "p50Ms": 25.3864,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 5000,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 7000
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "mode": "materialized-query",
+            "p50Ms": 20.136,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 11979
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 11979
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "mode": "first-stream-page",
+            "p50Ms": 16.0938,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 11979
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "mode": "materialized-query",
+            "p50Ms": 28.4906,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 4999,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 7001
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 4999,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 7001
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "mode": "first-stream-page",
+            "p50Ms": 22.7705,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 4999,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": 7001
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "baseline-no-compound-index",
+        "hotPosts": 100000,
+        "cases": [
+          {
+            "label": "beginning",
+            "mode": "materialized-query",
+            "p50Ms": 296.4024,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 33333,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 6667
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather",
+                "rows": 3,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 33333,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 6667
+              }
+            ]
+          },
+          {
+            "label": "beginning",
+            "mode": "first-stream-page",
+            "p50Ms": 199.8353,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 33333,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 6667
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "mode": "materialized-query",
+            "p50Ms": 191.5853,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 14,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16667,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23333
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather",
+                "rows": 3,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16667,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23333
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "mode": "first-stream-page",
+            "p50Ms": 105.8718,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16667,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23333
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "mode": "materialized-query",
+            "p50Ms": 96.7911,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 7,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 7,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 39993
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather",
+                "rows": 3,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 7,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 39993
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "mode": "first-stream-page",
+            "p50Ms": 59.328,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 7,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 7,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 39993
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "mode": "materialized-query",
+            "p50Ms": 192.7535,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16666,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23334
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather",
+                "rows": 3,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16666,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23334
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "mode": "first-stream-page",
+            "p50Ms": 110.2219,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather Merge",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Sort",
+                "rows": 21,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16666,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23334
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "isolated-expression-index",
+        "hotPosts": 100000,
+        "cases": [
+          {
+            "label": "beginning",
+            "mode": "materialized-query",
+            "p50Ms": 65.3019,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather",
+                "rows": 3,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 33333,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 6667
+              }
+            ]
+          },
+          {
+            "label": "beginning",
+            "mode": "first-stream-page",
+            "p50Ms": 8.148,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "mode": "materialized-query",
+            "p50Ms": 47.8948,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather",
+                "rows": 3,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16667,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23333
+              }
+            ]
+          },
+          {
+            "label": "middle-after",
+            "mode": "first-stream-page",
+            "p50Ms": 8.4509,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "mode": "materialized-query",
+            "p50Ms": 9.5949,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              }
+            ]
+          },
+          {
+            "label": "tail-after",
+            "mode": "first-stream-page",
+            "p50Ms": 9.508,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 21,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "mode": "materialized-query",
+            "p50Ms": 73.8345,
+            "countStatements": 1,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Incremental Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 22,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Gather",
+                "rows": 3,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Aggregate",
+                "rows": 1,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Seq Scan",
+                "rows": 16666,
+                "loops": 3,
+                "index": null,
+                "removedByFilter": 23334
+              }
+            ]
+          },
+          {
+            "label": "middle-before",
+            "mode": "first-stream-page",
+            "p50Ms": 9.6061,
+            "countStatements": 0,
+            "nodes": [
+              {
+                "node": "Limit",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Incremental Sort",
+                "rows": 21,
+                "loops": 1,
+                "index": null,
+                "removedByFilter": null
+              },
+              {
+                "node": "Index Scan",
+                "rows": 22,
+                "loops": 1,
+                "index": "epic005_room_sequence_id",
+                "removedByFilter": null
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "limitations": [
+      "Only first21 rows of QueryStream; no mutation-safe offset continuation claim.",
+      "One discarded first query plus six warm serial samples; nearest-rank p95 is max, not load-test tail latency.",
+      "Npgsql logging enabled and pooling disabled in this experiment; no cold-cache or matched-provider winner claim.",
+      "Native binaryCOPY fixture seed preserves actual storage template, uses fixed template timestamps and bypasses domain acceptance/lifecycle.",
+      "Same-entity batch atomicity is distinct from cross-entity domain acceptance and deferred coordinator semantics.",
+      "The explicit index exists only in this fresh disposable schema; no application/upstream mapping was modified."
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "status": "failed",
+  "stage": "building unstarted host and provisioning Message schema",
+  "started": "2026-09-12T18:09:10.8372746+00:00",
+  "finished": "2026-09-12T18:09:17.9560591+00:00",
+  "error": "System.InvalidOperationException: Unexpected provider selected: Koan.Data.Core.RepositoryFacade`2[TangentSpace.Conversation.Message,System.String]\r\n   at Program.<Main>$(String[] args) in <repo>\\probes\\PostgresProbe\\Program.cs:line 88\r\n   at Program.<Main>$(String[] args) in <repo>\\probes\\PostgresProbe\\Program.cs:line 238",
+  "partial": {
+    "schema": "epic005_pg_8bf0eb7b9fd24f25aca58a672576794e",
+    "endpoint": "127.0.0.1:25432",
+    "hostStarted": false,
+    "sourceHashes": {
+      "src/server/web/Conversation/Message.cs": "dbee3b6dcecc1b4dd181f53999edd4ccbdff84046ad4e7084eee48ab13409e55",
+      ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs": "cb1f3a4ce5e57614d79a71fe41bb568751b997322be62954ab5055b94b2e1738",
+      ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/NpgsqlRepository.cs": "67efaf3db1306ba9d911713a84270ed59a9d2b5904fb3222bc404a7d4797ba6d",
+      ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/Runtime/NpgsqlDialect.cs": "be397930233a0d9c4cc4b28c659f89152ad3355b6af87e00ccc8054fc0fbd3dd",
+      ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs": "de7c798997a33ccebfa379d325a600acc607561674015b9d47e6f1b2fdebbd65",
+      ".local/upstream/koan-framework/src/Connectors/Data/Postgres/PostgresAdapterFactory.cs": "dc1589a52bd3881d61f96c70c6a7926a86b14392a98febcbf1522c1021f6e7b7"
+    }
+  },
+  "scope": "Incomplete adapter health run; no passing claims for the failed stage.",
+  "classification": "harness-assertion-error",
+  "experiment": "postgres-health-172ffa91ea104152a497e7880215c973",
+  "correction": "IDataService.GetRepository returns RepositoryFacade. The guard now checks IDataService.GetScopeDiagnostics<Message,string>().AdapterName, which identifies the native NpgsqlRepository. No adapter workload or timing completed in this failed invocation; its fresh empty schema was retained.",
+  "successfulReplacementExperiment": "postgres-health-4546f279e5e641e6a8acf5cc910fb2a1"
+}

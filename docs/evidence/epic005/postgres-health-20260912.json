@@ -1,0 +1,2921 @@
+{
+  "scope": "Actual Tangent Message/Koan PostgreSQL adapter health and query microexperiment, not production admission or domain throughput",
+  "started": "2026-09-12T18:10:32.1551228+00:00",
+  "finished": "2026-09-12T18:10:56.8051792+00:00",
+  "schemaName": "epic005_pg_ec0e319a19454730992e0744a6ac8f24",
+  "table": "Message_9c2534f9",
+  "columns": [
+    {
+      "name": "Id",
+      "type": "text"
+    },
+    {
+      "name": "Json",
+      "type": "jsonb"
+    }
+  ],
+  "selectedRepository": "Koan.Data.Core.RepositoryFacade`2[[TangentSpace.Conversation.Message, TangentSpace, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null],[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+  "selectedAdapter": "NpgsqlRepository`2",
+  "capabilities": {
+    "linq": true,
+    "boundedPaging": true,
+    "atomicBatch": true,
+    "bulkUpsert": true
+  },
+  "crudPassed": true,
+  "endpoint": "127.0.0.1:25432",
+  "database": "postgres",
+  "credentials": "public synthetic lab fixture only; not copied from user state",
+  "hostStarted": false,
+  "runtime": ".NET 10.0.12",
+  "os": "Microsoft Windows 10.0.26200",
+  "koanAssembly": "Koan.Data.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+  "npgsqlAssembly": "Npgsql, Version=10.0.3.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7",
+  "settings": {
+    "server_version": "17.11 (Debian 17.11-1.pgdg12+2)",
+    "fsync": "on",
+    "synchronous_commit": "on",
+    "full_page_writes": "on",
+    "shared_buffers": "128MB",
+    "work_mem": "4MB",
+    "max_parallel_workers_per_gather": "2"
+  },
+  "originalIndexes": [
+    {
+      "name": "Message_9c2534f9_pkey",
+      "sql": "CREATE UNIQUE INDEX \"Message_9c2534f9_pkey\" ON epic005_pg_ec0e319a19454730992e0744a6ac8f24.\"Message_9c2534f9\" USING btree (\"Id\")"
+    }
+  ],
+  "indexSql": "CREATE INDEX \"epic005_room_sequence_id\" ON \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" ((\"Json\" #>> '{RoomKey}'), (((\"Json\" #>> '{Sequence}')::bigint)), \"Id\")",
+  "indexed": [
+    {
+      "name": "Message_9c2534f9_pkey",
+      "sql": "CREATE UNIQUE INDEX \"Message_9c2534f9_pkey\" ON epic005_pg_ec0e319a19454730992e0744a6ac8f24.\"Message_9c2534f9\" USING btree (\"Id\")"
+    },
+    {
+      "name": "epic005_room_sequence_id",
+      "sql": "CREATE INDEX epic005_room_sequence_id ON epic005_pg_ec0e319a19454730992e0744a6ac8f24.\"Message_9c2534f9\" USING btree (((\"Json\" #>> '{RoomKey}'::text[])), (((\"Json\" #>> '{Sequence}'::text[]))::bigint), \"Id\")"
+    }
+  ],
+  "seeds": [
+    {
+      "hotCount": 10000,
+      "nativeCopyElapsedMs": 416.0051,
+      "bypassesDomainWrites": true
+    },
+    {
+      "hotCount": 100000,
+      "nativeCopyElapsedMs": 2451.016,
+      "bypassesDomainWrites": true
+    }
+  ],
+  "measurements": [
+    {
+      "phase": "baseline-no-compound-index",
+      "hotPosts": 10000,
+      "distractorPostsPerTopic": 1000,
+      "totalPosts": 12000,
+      "cases": [
+        {
+          "label": "beginning",
+          "mode": "materialized-query",
+          "edge": 0,
+          "returned": 21,
+          "p50Ms": 39.4356,
+          "p95Ms": 44.4079,
+          "timingsMs": [
+            38.1624,
+            39.3418,
+            39.4356,
+            40.0343,
+            42.8552,
+            44.4079
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=22ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 0, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1048,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 1,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1048,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "top-N heapsort",
+                        "Sort Space Used": 46,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 1,
+                            "Actual Rows": 10000,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 2000,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.155,
+                  "Execution Time": 19.998
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=6ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 0, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Seq Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Plan Rows": 1,
+                        "Actual Rows": 10000,
+                        "Actual Loops": 1,
+                        "Rows Removed by Filter": 2000,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.077,
+                  "Execution Time": 5.023
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "beginning",
+          "mode": "first-stream-page",
+          "edge": 0,
+          "returned": 21,
+          "p50Ms": 35.4465,
+          "p95Ms": 39.2168,
+          "timingsMs": [
+            33.7739,
+            34.6632,
+            35.4465,
+            36.2348,
+            36.453,
+            39.2168
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=23ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 0, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 1,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "top-N heapsort",
+                        "Sort Space Used": 46,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 1,
+                            "Actual Rows": 10000,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 2000,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.089,
+                  "Execution Time": 21.333
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "mode": "materialized-query",
+          "edge": 5000,
+          "returned": 21,
+          "p50Ms": 31.5872,
+          "p95Ms": 41.8441,
+          "timingsMs": [
+            31.3164,
+            31.4072,
+            31.5872,
+            34.6173,
+            35.5716,
+            41.8441
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=14ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 5000, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                5000,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 1,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "top-N heapsort",
+                        "Sort Space Used": 46,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 1,
+                            "Actual Rows": 5000,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 7000,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '5000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.082,
+                  "Execution Time": 11.849
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=7ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 5000, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                5000,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Seq Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Plan Rows": 1,
+                        "Actual Rows": 5000,
+                        "Actual Loops": 1,
+                        "Rows Removed by Filter": 7000,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '5000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.377,
+                  "Execution Time": 6.397
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "mode": "first-stream-page",
+          "edge": 5000,
+          "returned": 21,
+          "p50Ms": 30.0553,
+          "p95Ms": 42.4836,
+          "timingsMs": [
+            25.2366,
+            29.2311,
+            30.0553,
+            30.1052,
+            33.1799,
+            42.4836
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=16ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 5000, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                5000,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 1,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "top-N heapsort",
+                        "Sort Space Used": 46,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 1,
+                            "Actual Rows": 5000,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 7000,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '5000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.122,
+                  "Execution Time": 19.816
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "mode": "materialized-query",
+          "edge": 9979,
+          "returned": 21,
+          "p50Ms": 26.9039,
+          "p95Ms": 38.4306,
+          "timingsMs": [
+            22.9736,
+            24.5401,
+            26.9039,
+            32.0569,
+            32.1397,
+            38.4306
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=10ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 9979, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                9979,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 1,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 53,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 1,
+                            "Actual Rows": 21,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 11979,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '9979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.126,
+                  "Execution Time": 3.666
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=6ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 9979, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                9979,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Seq Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Plan Rows": 1,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Filter": 11979,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '9979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.071,
+                  "Execution Time": 5.024
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "mode": "first-stream-page",
+          "edge": 9979,
+          "returned": 21,
+          "p50Ms": 16.7727,
+          "p95Ms": 20.8514,
+          "timingsMs": [
+            15.2818,
+            16.7069,
+            16.7727,
+            16.9329,
+            18.323,
+            20.8514
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=5ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 9979, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                9979,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 1,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "quicksort",
+                        "Sort Space Used": 53,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 1,
+                            "Actual Rows": 21,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 11979,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '9979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.058,
+                  "Execution Time": 3.314
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "mode": "materialized-query",
+          "edge": 5000,
+          "returned": 21,
+          "p50Ms": 32.9342,
+          "p95Ms": 35.1144,
+          "timingsMs": [
+            30.4405,
+            32.4574,
+            32.9342,
+            33.4762,
+            33.8961,
+            35.1144
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=13ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 5000, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                5000,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 20,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 20,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint) DESC",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "top-N heapsort",
+                        "Sort Space Used": 68,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 20,
+                            "Actual Rows": 4999,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 7001,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '5000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.069,
+                  "Execution Time": 12.104
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=5ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 5000, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                5000,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Seq Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Plan Rows": 20,
+                        "Actual Rows": 4999,
+                        "Actual Loops": 1,
+                        "Rows Removed by Filter": 7001,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '5000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.05,
+                  "Execution Time": 4.017
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "mode": "first-stream-page",
+          "edge": 5000,
+          "returned": 21,
+          "p50Ms": 26.5371,
+          "p95Ms": 32.4027,
+          "timingsMs": [
+            23.722,
+            26.4508,
+            26.5371,
+            26.7507,
+            31.5052,
+            32.4027
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=14ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 5000, 10000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                5000,
+                10000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 20,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 1045,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 20,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 1045,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint) DESC",
+                          "\"Id\""
+                        ],
+                        "Sort Method": "top-N heapsort",
+                        "Sort Space Used": 68,
+                        "Sort Space Type": "Memory",
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Plan Rows": 20,
+                            "Actual Rows": 4999,
+                            "Actual Loops": 1,
+                            "Rows Removed by Filter": 7001,
+                            "Shared Hit Blocks": 1045,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '5000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '10000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.061,
+                  "Execution Time": 12.151
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "explicitExactCount": {
+        "value": 12000,
+        "elapsedMs": 17.1811,
+        "statements": [
+          {
+            "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\"",
+            "Rendered": "Command execution completed (duration=3ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\""
+          }
+        ]
+      },
+      "databaseBytes": 16799411,
+      "workingSetBytes": 150503424
+    },
+    {
+      "phase": "baseline-no-compound-index",
+      "hotPosts": 100000,
+      "distractorPostsPerTopic": 10000,
+      "totalPosts": 120000,
+      "cases": [
+        {
+          "label": "beginning",
+          "mode": "materialized-query",
+          "edge": 0,
+          "returned": 21,
+          "p50Ms": 298.4854,
+          "p95Ms": 381.9844,
+          "timingsMs": [
+            291.7732,
+            293.0751,
+            298.4854,
+            370.9224,
+            379.5462,
+            381.9844
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=257ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 0, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 2,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6483,
+                    "Shared Read Blocks": 3816,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 6483,
+                        "Shared Read Blocks": 3816,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 21,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 6483,
+                            "Shared Read Blocks": 3816,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "top-N heapsort",
+                            "Sort Space Used": 46,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 33333,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 6667,
+                                "Shared Hit Blocks": 6353,
+                                "Shared Read Blocks": 3816,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.168,
+                  "Execution Time": 213.095
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=27ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 0, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6449,
+                    "Shared Read Blocks": 3720,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 3,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 6449,
+                        "Shared Read Blocks": 3720,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 6449,
+                            "Shared Read Blocks": 3720,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 33333,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 6667,
+                                "Shared Hit Blocks": 6449,
+                                "Shared Read Blocks": 3720,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.07,
+                  "Execution Time": 91.616
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "beginning",
+          "mode": "first-stream-page",
+          "edge": 0,
+          "returned": 21,
+          "p50Ms": 223.9282,
+          "p95Ms": 275.3458,
+          "timingsMs": [
+            203.5033,
+            209.7405,
+            223.9282,
+            271.2271,
+            273.2735,
+            275.3458
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=214ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 0, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 2,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 7347,
+                    "Shared Read Blocks": 2952,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 7347,
+                        "Shared Read Blocks": 2952,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 21,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 7347,
+                            "Shared Read Blocks": 2952,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "top-N heapsort",
+                            "Sort Space Used": 46,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 33333,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 6667,
+                                "Shared Hit Blocks": 7217,
+                                "Shared Read Blocks": 2952,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.072,
+                  "Execution Time": 211.882
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "mode": "materialized-query",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 195.7373,
+          "p95Ms": 288.969,
+          "timingsMs": [
+            194.0027,
+            194.1892,
+            195.7373,
+            196.6335,
+            262.1676,
+            288.969
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=110ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 2,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 8787,
+                    "Shared Read Blocks": 1512,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 8787,
+                        "Shared Read Blocks": 1512,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 21,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 8787,
+                            "Shared Read Blocks": 1512,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "top-N heapsort",
+                            "Sort Space Used": 46,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 16667,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23333,
+                                "Shared Hit Blocks": 8657,
+                                "Shared Read Blocks": 1512,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.069,
+                  "Execution Time": 113.286
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=89ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 8753,
+                    "Shared Read Blocks": 1416,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 3,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 8753,
+                        "Shared Read Blocks": 1416,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 8753,
+                            "Shared Read Blocks": 1416,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 16667,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23333,
+                                "Shared Hit Blocks": 8753,
+                                "Shared Read Blocks": 1416,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.074,
+                  "Execution Time": 89.575
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "mode": "first-stream-page",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 113.6127,
+          "p95Ms": 176.1429,
+          "timingsMs": [
+            107.9126,
+            112.3002,
+            113.6127,
+            174.6455,
+            175.5279,
+            176.1429
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=107ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 2,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 9647,
+                    "Shared Read Blocks": 652,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 9647,
+                        "Shared Read Blocks": 652,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 14,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 9647,
+                            "Shared Read Blocks": 652,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "top-N heapsort",
+                            "Sort Space Used": 46,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 16667,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23333,
+                                "Shared Hit Blocks": 9517,
+                                "Shared Read Blocks": 652,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.075,
+                  "Execution Time": 197.469
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "mode": "materialized-query",
+          "edge": 99979,
+          "returned": 21,
+          "p50Ms": 167.6135,
+          "p95Ms": 186.9312,
+          "timingsMs": [
+            116.7041,
+            167.2146,
+            167.6135,
+            171.3386,
+            185.2115,
+            186.9312
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=26ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 99979, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                99979,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 2,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10299,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10299,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 7,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10299,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "quicksort",
+                            "Sort Space Used": 34,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 7,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 39993,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '99979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.141,
+                  "Execution Time": 84.701
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=80ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 99979, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                99979,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10169,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 3,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10169,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10169,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 7,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 39993,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '99979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.053,
+                  "Execution Time": 20.9
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "mode": "first-stream-page",
+          "edge": 99979,
+          "returned": 21,
+          "p50Ms": 66.2851,
+          "p95Ms": 78.5941,
+          "timingsMs": [
+            28.6398,
+            29.3013,
+            66.2851,
+            71.5659,
+            76.9185,
+            78.5941
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=21ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 99979, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                99979,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 2,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10299,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10299,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 7,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10299,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "quicksort",
+                            "Sort Space Used": 25,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 1,
+                                "Actual Rows": 7,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 39993,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '99979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.069,
+                  "Execution Time": 20.751
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "mode": "materialized-query",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 191.2077,
+          "p95Ms": 263.7502,
+          "timingsMs": [
+            189.8226,
+            190.1653,
+            191.2077,
+            195.166,
+            201.1527,
+            263.7502
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=158ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10297,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 166,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10297,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 83,
+                            "Actual Rows": 21,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10297,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint) DESC",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "top-N heapsort",
+                            "Sort Space Used": 68,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 83,
+                                "Actual Rows": 16666,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23334,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.095,
+                  "Execution Time": 113.711
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=22ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10169,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 3,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10169,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10169,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 83,
+                                "Actual Rows": 16666,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23334,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.062,
+                  "Execution Time": 84.743
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "mode": "first-stream-page",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 180.7208,
+          "p95Ms": 195.1737,
+          "timingsMs": [
+            113.9801,
+            175.2768,
+            180.7208,
+            180.8368,
+            184.6927,
+            195.1737
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=186ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10297,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 166,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10297,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 83,
+                            "Actual Rows": 21,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10297,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Sort Key": [
+                              "(((\"Json\" #>> '{Sequence}'::text[]))::bigint) DESC",
+                              "\"Id\""
+                            ],
+                            "Sort Method": "top-N heapsort",
+                            "Sort Space Used": 68,
+                            "Sort Space Type": "Memory",
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 83,
+                                "Actual Rows": 16666,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23334,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.097,
+                  "Execution Time": 121.503
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "explicitExactCount": {
+        "value": 120000,
+        "elapsedMs": 91.3134,
+        "statements": [
+          {
+            "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\"",
+            "Rendered": "Command execution completed (duration=16ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\""
+          }
+        ]
+      },
+      "databaseBytes": 99391155,
+      "workingSetBytes": 148017152
+    },
+    {
+      "phase": "isolated-expression-index",
+      "hotPosts": 100000,
+      "distractorPostsPerTopic": 10000,
+      "totalPosts": 120000,
+      "cases": [
+        {
+          "label": "beginning",
+          "mode": "materialized-query",
+          "edge": 0,
+          "returned": 21,
+          "p50Ms": 88.2366,
+          "p95Ms": 90.5725,
+          "timingsMs": [
+            81.121,
+            87.7246,
+            88.2366,
+            88.2974,
+            89.0185,
+            90.5725
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=1ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 0, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Index Name": "epic005_room_sequence_id",
+                        "Scan Direction": "Forward",
+                        "Plan Rows": 100064,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Shared Hit Blocks": 5,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.307,
+                  "Execution Time": 0.073
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=71ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 0, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10169,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 3,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10169,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10169,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 41693,
+                                "Actual Rows": 33333,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 6667,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.088,
+                  "Execution Time": 91.734
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "beginning",
+          "mode": "first-stream-page",
+          "edge": 0,
+          "returned": 21,
+          "p50Ms": 10.5761,
+          "p95Ms": 11.8981,
+          "timingsMs": [
+            8.718,
+            9.9919,
+            10.5761,
+            11.416,
+            11.5545,
+            11.8981
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=1ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 0, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                0,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Index Name": "epic005_room_sequence_id",
+                        "Scan Direction": "Forward",
+                        "Plan Rows": 100064,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Shared Hit Blocks": 5,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '0'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.095,
+                  "Execution Time": 0.086
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "mode": "materialized-query",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 79.6562,
+          "p95Ms": 133.6036,
+          "timingsMs": [
+            43.5498,
+            65.9895,
+            79.6562,
+            89.2437,
+            97.6844,
+            133.6036
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=3ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Index Name": "epic005_room_sequence_id",
+                        "Scan Direction": "Forward",
+                        "Plan Rows": 41914,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Shared Hit Blocks": 6,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.135,
+                  "Execution Time": 0.152
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=32ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10169,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 3,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10169,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10169,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 17464,
+                                "Actual Rows": 16667,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23333,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.081,
+                  "Execution Time": 99.381
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "mode": "first-stream-page",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 13.4705,
+          "p95Ms": 24.8827,
+          "timingsMs": [
+            12.2163,
+            12.4659,
+            13.4705,
+            16.847,
+            20.5469,
+            24.8827
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=7ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Index Name": "epic005_room_sequence_id",
+                        "Scan Direction": "Forward",
+                        "Plan Rows": 41914,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Shared Hit Blocks": 6,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.089,
+                  "Execution Time": 0.076
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "mode": "materialized-query",
+          "edge": 99979,
+          "returned": 21,
+          "p50Ms": 14.0742,
+          "p95Ms": 16.3211,
+          "timingsMs": [
+            13.631,
+            13.8544,
+            14.0742,
+            14.8722,
+            16.3141,
+            16.3211
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=2ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 99979, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                99979,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 7,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Index Name": "epic005_room_sequence_id",
+                        "Scan Direction": "Forward",
+                        "Plan Rows": 7,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Shared Hit Blocks": 5,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '99979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.079,
+                  "Execution Time": 0.079
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=1ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 99979, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                99979,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Index Name": "epic005_room_sequence_id",
+                        "Scan Direction": "Forward",
+                        "Plan Rows": 7,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Shared Hit Blocks": 5,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '99979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.068,
+                  "Execution Time": 0.046
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "mode": "first-stream-page",
+          "edge": 99979,
+          "returned": 21,
+          "p50Ms": 11.1144,
+          "p95Ms": 15.7508,
+          "timingsMs": [
+            9.2231,
+            9.9562,
+            11.1144,
+            11.8435,
+            14.87,
+            15.7508
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=1ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint > $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint ASC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 99979, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                99979,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 7,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 5,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Relation Name": "Message_9c2534f9",
+                        "Alias": "Message_9c2534f9",
+                        "Index Name": "epic005_room_sequence_id",
+                        "Scan Direction": "Forward",
+                        "Plan Rows": 7,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Rows Removed by Index Recheck": 0,
+                        "Shared Hit Blocks": 5,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint > '99979'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.15,
+                  "Execution Time": 0.147
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "mode": "materialized-query",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 82.3198,
+          "p95Ms": 90.8758,
+          "timingsMs": [
+            60.7576,
+            82.2646,
+            82.3198,
+            86.7783,
+            87.549,
+            90.8758
+          ],
+          "countStatements": 1,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=1ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Incremental Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 58159,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 6,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint) DESC",
+                          "\"Id\""
+                        ],
+                        "Presorted Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)"
+                        ],
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Index Name": "epic005_room_sequence_id",
+                            "Scan Direction": "Backward",
+                            "Plan Rows": 58159,
+                            "Actual Rows": 22,
+                            "Actual Loops": 1,
+                            "Rows Removed by Index Recheck": 0,
+                            "Shared Hit Blocks": 6,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.115,
+                  "Execution Time": 0.098
+                }
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))",
+              "Rendered": "Command execution completed (duration=52ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3))\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Aggregate",
+                    "Parallel Aware": false,
+                    "Plan Rows": 1,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 10169,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 2,
+                        "Actual Rows": 3,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 10169,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Aggregate",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Plan Rows": 1,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Shared Hit Blocks": 10169,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Plans": [
+                              {
+                                "Node Type": "Seq Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": true,
+                                "Relation Name": "Message_9c2534f9",
+                                "Alias": "Message_9c2534f9",
+                                "Plan Rows": 24233,
+                                "Actual Rows": 16666,
+                                "Actual Loops": 3,
+                                "Rows Removed by Filter": 23334,
+                                "Shared Hit Blocks": 10169,
+                                "Shared Read Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Filter": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.107,
+                  "Execution Time": 25.342
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "mode": "first-stream-page",
+          "edge": 50000,
+          "returned": 21,
+          "p50Ms": 9.0799,
+          "p95Ms": 13.544,
+          "timingsMs": [
+            7.8214,
+            8.5733,
+            9.0799,
+            9.1309,
+            12.0664,
+            13.544
+          ],
+          "countStatements": 0,
+          "plans": [
+            {
+              "Sql": "SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0",
+              "Rendered": "Command execution completed (duration=1ms): SELECT \"Id\", \"Json\"::text AS \"Json\" FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\" WHERE ((((\"Json\" #>> '{RoomKey}') = $1) AND (((\"Json\" #>> '{Sequence}'))::bigint < $2)) AND (((\"Json\" #>> '{Sequence}'))::bigint <= $3)) ORDER BY ((\"Json\" #>> '{Sequence}'))::bigint DESC, \"Id\" ASC LIMIT 21 OFFSET 0\n  Parameters: [epic005-hot-topic, 50000, 100000]",
+              "knownPredicateParameters": [
+                "epic005-hot-topic",
+                50000,
+                100000
+              ],
+              "plan": [
+                {
+                  "Plan": {
+                    "Node Type": "Limit",
+                    "Parallel Aware": false,
+                    "Plan Rows": 21,
+                    "Actual Rows": 21,
+                    "Actual Loops": 1,
+                    "Shared Hit Blocks": 6,
+                    "Shared Read Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Incremental Sort",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Plan Rows": 58159,
+                        "Actual Rows": 21,
+                        "Actual Loops": 1,
+                        "Shared Hit Blocks": 6,
+                        "Shared Read Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Sort Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint) DESC",
+                          "\"Id\""
+                        ],
+                        "Presorted Key": [
+                          "(((\"Json\" #>> '{Sequence}'::text[]))::bigint)"
+                        ],
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Relation Name": "Message_9c2534f9",
+                            "Alias": "Message_9c2534f9",
+                            "Index Name": "epic005_room_sequence_id",
+                            "Scan Direction": "Backward",
+                            "Plan Rows": 58159,
+                            "Actual Rows": 22,
+                            "Actual Loops": 1,
+                            "Rows Removed by Index Recheck": 0,
+                            "Shared Hit Blocks": 6,
+                            "Shared Read Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Index Cond": "(((\"Json\" #>> '{RoomKey}'::text[]) = 'epic005-hot-topic'::text) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint < '50000'::bigint) AND (((\"Json\" #>> '{Sequence}'::text[]))::bigint <= '100000'::bigint))"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Planning Time": 0.154,
+                  "Execution Time": 0.112
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "explicitExactCount": {
+        "value": 120000,
+        "elapsedMs": 25.5543,
+        "statements": [
+          {
+            "Sql": "SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\"",
+            "Rendered": "Command execution completed (duration=18ms): SELECT COUNT(1) FROM \"epic005_pg_ec0e319a19454730992e0744a6ac8f24\".\"Message_9c2534f9\""
+          }
+        ]
+      },
+      "databaseBytes": 108861107,
+      "workingSetBytes": 151527424
+    }
+  ],
+  "transactions": {
+    "nativeSameEntityBatch": {
+      "atomicity": "Atomic",
+      "successIds": [
+        "epic005-batch-ok-first",
+        "epic005-batch-ok-second"
+      ],
+      "failure": "PostgresException: P0001: epic005 injected second-write failure",
+      "rowsAfterFailure": [],
+      "rollbackPassed": true,
+      "publicFacadeExecutionCapabilities": "None",
+      "capabilityNote": "ExecutionCapabilities was read on Message.Batch() public facade, which reports None. The pinned Npgsql native batch advertises Atomic; RequireAtomic receipt and injected rollback were tested successfully through the public facade. This is an observability mismatch, not an observed atomic execution failure."
+    },
+    "ambientCoordinator": {
+      "scope": "Three same-entity Message.Save calls in application's named deferred coordinator, second SQL write rejected; independent connection inspects durable state. This is not a cross-entity domain acceptance test.",
+      "failure": "TransactionException: Deferred coordination 'tangent-room-policy-operation' failed after 1 completed operation(s). Its commit outcome is unknown and it will not be replayed.",
+      "rowsAfterFailure": [
+        "epic005-deferred-first"
+      ],
+      "partialCommitObserved": true
+    }
+  },
+  "sourceHashes": {
+    "src/server/web/Conversation/Message.cs": "dbee3b6dcecc1b4dd181f53999edd4ccbdff84046ad4e7084eee48ab13409e55",
+    ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs": "cb1f3a4ce5e57614d79a71fe41bb568751b997322be62954ab5055b94b2e1738",
+    ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/NpgsqlRepository.cs": "67efaf3db1306ba9d911713a84270ed59a9d2b5904fb3222bc404a7d4797ba6d",
+    ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/Runtime/NpgsqlDialect.cs": "be397930233a0d9c4cc4b28c659f89152ad3355b6af87e00ccc8054fc0fbd3dd",
+    ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs": "de7c798997a33ccebfa379d325a600acc607561674015b9d47e6f1b2fdebbd65",
+    ".local/upstream/koan-framework/src/Connectors/Data/Postgres/PostgresAdapterFactory.cs": "dc1589a52bd3881d61f96c70c6a7926a86b14392a98febcbf1522c1021f6e7b7"
+  },
+  "elapsedSeconds": 24.6501927,
+  "processCpuAffinity": "3",
+  "processPeakWorkingSetBytes": 152748032,
+  "limitations": [
+    "Only first21 rows of QueryStream; no mutation-safe offset continuation claim.",
+    "One discarded first query plus six warm serial samples; nearest-rank p95 is max, not load-test tail latency.",
+    "Npgsql logging enabled and pooling disabled in this experiment; no cold-cache or matched-provider winner claim.",
+    "Native binaryCOPY fixture seed preserves actual storage template, uses fixed template timestamps and bypasses domain acceptance/lifecycle.",
+    "Same-entity batch atomicity is distinct from cross-entity domain acceptance and deferred coordinator semantics.",
+    "The explicit index exists only in this fresh disposable schema; no application/upstream mapping was modified."
+  ],
+  "experiment": "postgres-health-4546f279e5e641e6a8acf5cc910fb2a1",
+  "evidenceNote": "Compact publication retains executed SQL, rendered parameters, warm timings and structural EXPLAIN ANALYZE/BUFFERS evidence. Complete engine plan JSON remains in the ignored experiment result."
+}
