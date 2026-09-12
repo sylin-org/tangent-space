@@ -1,9 +1,12 @@
 # Native AT Protocol authentication contribution
 
-This is an unpublished, reviewable Koan source contribution against
+This directory retains a self-verifying, reviewable Koan source patch against
 `e07a84cc3f71a0867f1122b03b723cc80727e772` from
-<https://github.com/sylin-org/koan-framework>. No upstream commit, PR, or package
-publication was performed. The live sibling Koan checkout was not changed.
+<https://github.com/sylin-org/koan-framework>. The same contribution has since been
+reconciled onto current Koan `main` on branch `codex/tangent-atproto-auth`; that branch
+also includes solution membership and current dependency floors. No PR or package
+publication has been performed. The patch remains useful as the original independently
+reproducible review fixture.
 
 The Docker follow-up added isolated
 development PLC/socket routing and sanitized challenge failures. Public handles
@@ -113,3 +116,23 @@ SDK contribution candidates remain clearly separated: callback issuer/subject
 checks, mandatory PAR behavior, and checked revocation. This adapter retains its
 guards until corresponding upstream behavior is verified, regardless of method
 names or future SDK version claims.
+
+## Provider account selection
+
+The challenge now accepts an absent `identifier` for a Bluesky-first button:
+`/auth/atproto/challenge?return=/`. Account selection happens at Bluesky. Supplying
+one handle or DID still follows the existing identity-first path, including local
+test-account routing. Empty/duplicate identifiers remain invalid.
+
+The connector binds the discovered issuer before PAR and verifies the returned
+DID's PDS and issuer before staging/committing any credential. This implements the
+[AT OAuth server-first flow](https://atproto.com/specs/oauth#identity-authentication).
+The pinned SDK requires a small adaptation: its URL authorization path sends a
+login_hint and assumes the entryway is the PDS. The connector initiates PAR with
+SDK PKCE/DPoP primitives and resolves the callback's subject before SDK client
+construction. It never trusts a DID without the reverse issuer check. Existing
+validated broader local grants survive identity-only server-first sign-in.
+
+Focused verification: 36 `ProtocolGuards` cases pass, including loopback resource-server/AS-only PAR nonce
+retry/no-login-hint and subject/PDS/issuer rejection. Earlier verification receipts
+remain historical; this does not claim a newly completed public-provider callback.

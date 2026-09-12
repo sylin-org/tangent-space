@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "date": "2026-09-10",
+  "date": "2026-09-12",
   "repository": "https://github.com/sylin-org/koan-framework.git",
   "baseRevision": "e07a84cc3f71a0867f1122b03b723cc80727e772",
   "patch": "koan-atproto-auth.patch",
-  "patchSha256": "faf9e624dafdc7389cb5e0eba7589ff0da13b9464fae989ded75a1ccaf0681e0",
+  "patchSha256": "3939fc398901b5ef822b6238ca651744aa2978635d42970a525213e845e94969",
   "files": [
     {
       "path": "docs/guides/authentication-setup.md",
@@ -52,7 +52,7 @@
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/Hosting/AtprotoAuthenticationHandler.cs",
-      "gitBlob": "7d8dc5615715e90da54b45990dd7570e8f9ce28b"
+      "gitBlob": "4079538dc8ae5ec5287346461489bfef1a852ea5"
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/Hosting/AtprotoChallenge.cs",
@@ -104,11 +104,11 @@
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/Protocol/AtprotoSessions.cs",
-      "gitBlob": "910934f896100d0ea5d1e6b61b84714f2a3593fd"
+      "gitBlob": "370ede3e4285422b1e0f5c8bb3c186c7251fa138"
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/README.md",
-      "gitBlob": "e3ba9d6accadbe7e05344dd33b80f90b91d395a8"
+      "gitBlob": "495fa19023388ade86c20ed4e2f32e7b3c16afa8"
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/Storage/ProtectedAtprotoStore.cs",
@@ -116,11 +116,11 @@
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/Storage/VerifiedSessionStore.cs",
-      "gitBlob": "60eaf73307d1ea50a6e8c1bb5bd43c965d4a4932"
+      "gitBlob": "5f5b93c57d595e9b3d23c9cc887bf4afbfe778f9"
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/TECHNICAL.md",
-      "gitBlob": "17840bd69256f49dd030f5b4ae1c13caa040745b"
+      "gitBlob": "87e28c6d9058848421d4783b5748e0f4f7addd18"
     },
     {
       "path": "src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json",
@@ -172,7 +172,7 @@
     },
     {
       "path": "tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs",
-      "gitBlob": "0c4115e219dedb436c5d69cec97b3e777787e824"
+      "gitBlob": "a69133e11a6830185070fdd2b9d9721be8b58b80"
     },
     {
       "path": "tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs",

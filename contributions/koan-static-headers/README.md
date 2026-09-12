@@ -1,8 +1,11 @@
 # Static response security headers
 
-This separate, unpublished five-file Koan correction moves the existing security-header middleware before
+This separate five-file Koan correction moves the existing security-header middleware before
 default/static-file serving. Static HTML previously terminated the pipeline before receiving `X-Frame-Options`,
 `Referrer-Policy`, `X-Content-Type-Options`, or a configured CSP. Controllers already received those headers.
+
+The original layered patch remains self-verifying below. The same correction is also the first commit on the
+current Koan review branch `codex/tangent-atproto-auth`; no PR or package publication has been performed.
 
 The base is `e07a84cc3f71a0867f1122b03b723cc80727e772`. Tangent layers this correction after the separate
 `koan-atproto-auth` contribution. Its 49 postimages are validated before this

@@ -1,5 +1,5 @@
 diff --git a/docs/guides/authentication-setup.md b/docs/guides/authentication-setup.md
-index b6bed595a..6651579f2 100644
+index b6bed595ae4e0433719dc5138a1043bccecc19f2..6651579f2ef532b18ce5de81c1972d71159c8763 100644
 --- a/docs/guides/authentication-setup.md
 +++ b/docs/guides/authentication-setup.md
 @@ -4,12 +4,12 @@ domain: web
@@ -41,7 +41,7 @@ index b6bed595a..6651579f2 100644
  Every eligible provider appears in discovery and can be challenged by ID. Default election is deterministic:
 diff --git a/docs/workcards/tangent-atproto-auth-seam.md b/docs/workcards/tangent-atproto-auth-seam.md
 new file mode 100644
-index 000000000..ab4b826bc
+index 0000000000000000000000000000000000000000..ab4b826bcd140a8619279fabf025fcae109a0321
 --- /dev/null
 +++ b/docs/workcards/tangent-atproto-auth-seam.md
 @@ -0,0 +1,213 @@
@@ -260,7 +260,7 @@ index 000000000..ab4b826bc
 +**Risks:** Exact scope matching deliberately rejects provider normalization or expansion; callers must continue requesting canonical scope strings. A rejected newly issued grant is not installed locally; no automatic revocation is attempted because provider revocation could affect a pre-existing authorization.
 diff --git a/samples/AtprotoIdentity/.gitignore b/samples/AtprotoIdentity/.gitignore
 new file mode 100644
-index 000000000..a77ff4f98
+index 0000000000000000000000000000000000000000..a77ff4f9876a5561d10c5cee9073771cf2b051e2
 --- /dev/null
 +++ b/samples/AtprotoIdentity/.gitignore
 @@ -0,0 +1,4 @@
@@ -270,7 +270,7 @@ index 000000000..a77ff4f98
 +*.sqlite*
 diff --git a/samples/AtprotoIdentity/AtprotoIdentity.csproj b/samples/AtprotoIdentity/AtprotoIdentity.csproj
 new file mode 100644
-index 000000000..4deb9fd59
+index 0000000000000000000000000000000000000000..4deb9fd591eab1f92341fdda48c0a43cd2eecdda
 --- /dev/null
 +++ b/samples/AtprotoIdentity/AtprotoIdentity.csproj
 @@ -0,0 +1,14 @@
@@ -290,7 +290,7 @@ index 000000000..4deb9fd59
 +</Project>
 diff --git a/samples/AtprotoIdentity/Program.cs b/samples/AtprotoIdentity/Program.cs
 new file mode 100644
-index 000000000..3f1ae7cd4
+index 0000000000000000000000000000000000000000..3f1ae7cd423aafb638df63137f19f3152b87975a
 --- /dev/null
 +++ b/samples/AtprotoIdentity/Program.cs
 @@ -0,0 +1,6 @@
@@ -302,7 +302,7 @@ index 000000000..3f1ae7cd4
 +await app.RunAsync();
 diff --git a/samples/AtprotoIdentity/README.md b/samples/AtprotoIdentity/README.md
 new file mode 100644
-index 000000000..474eae99d
+index 0000000000000000000000000000000000000000..474eae99dd34ff6d0011211b6d7d52a064ed7f43
 --- /dev/null
 +++ b/samples/AtprotoIdentity/README.md
 @@ -0,0 +1,63 @@
@@ -371,7 +371,7 @@ index 000000000..474eae99d
 +local-provider proof unless the mode is explicitly set.
 diff --git a/samples/AtprotoIdentity/Web/IdentityController.cs b/samples/AtprotoIdentity/Web/IdentityController.cs
 new file mode 100644
-index 000000000..833b82651
+index 0000000000000000000000000000000000000000..833b8265185975f4db09f705b58785e456077f26
 --- /dev/null
 +++ b/samples/AtprotoIdentity/Web/IdentityController.cs
 @@ -0,0 +1,23 @@
@@ -400,7 +400,7 @@ index 000000000..833b82651
 +}
 diff --git a/samples/AtprotoIdentity/appsettings.Development.json b/samples/AtprotoIdentity/appsettings.Development.json
 new file mode 100644
-index 000000000..3a4357181
+index 0000000000000000000000000000000000000000..3a435718140a076fd02148ea84286f3f1095ceb9
 --- /dev/null
 +++ b/samples/AtprotoIdentity/appsettings.Development.json
 @@ -0,0 +1,23 @@
@@ -429,7 +429,7 @@ index 000000000..3a4357181
 +}
 diff --git a/samples/AtprotoIdentity/koan.lock.json b/samples/AtprotoIdentity/koan.lock.json
 new file mode 100644
-index 000000000..ddceaa16b
+index 0000000000000000000000000000000000000000..ddceaa16bd61ecd796ad4722606e7eb4041046c9
 --- /dev/null
 +++ b/samples/AtprotoIdentity/koan.lock.json
 @@ -0,0 +1,84 @@
@@ -519,7 +519,7 @@ index 000000000..ddceaa16b
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Controllers/AtprotoMetadataController.cs b/src/Connectors/Web/Auth/Atproto/Controllers/AtprotoMetadataController.cs
 new file mode 100644
-index 000000000..4d6a1f147
+index 0000000000000000000000000000000000000000..4d6a1f147905f441699185332e3a571d8718e5c5
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Controllers/AtprotoMetadataController.cs
 @@ -0,0 +1,27 @@
@@ -552,7 +552,7 @@ index 000000000..4d6a1f147
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/EXPLORATION.md b/src/Connectors/Web/Auth/Atproto/EXPLORATION.md
 new file mode 100644
-index 000000000..48cfbf94b
+index 0000000000000000000000000000000000000000..48cfbf94bf42b480829a9eac67951a15bcce9601
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/EXPLORATION.md
 @@ -0,0 +1,129 @@
@@ -687,10 +687,10 @@ index 000000000..48cfbf94b
 +Review-driven correctness work retains one native path: require PAR rather than accept the SDK's direct-authorization fallback; check current permission ceilings before session restoration and after token refresh; serialize callback session replacement with refresh/disconnect; and issue checked revocation with required client_id and SDK DPoP/nonce handling. These fixes are application integration/SDK contribution candidates, not new OAuth cryptography.
 diff --git a/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoAuthenticationHandler.cs b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoAuthenticationHandler.cs
 new file mode 100644
-index 000000000..7d8dc5615
+index 0000000000000000000000000000000000000000..4079538dc8ae5ec5287346461489bfef1a852ea5
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoAuthenticationHandler.cs
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,79 @@
 +using System.Security.Cryptography;
 +using System.Text;
 +using System.Text.Encodings.Web;
@@ -716,11 +716,13 @@ index 000000000..7d8dc5615
 +      {
 +        if (!sessions.Enabled) throw new InvalidOperationException("AT provider is inactive.");
 +        var identifier = Request.Query["identifier"];
-+        if (identifier.Count != 1 || string.IsNullOrWhiteSpace(identifier) || identifier.ToString().Length > 2048)
++        if (identifier.Count > 1 || (identifier.Count == 1 && (string.IsNullOrWhiteSpace(identifier) || identifier.ToString().Length > 2048)))
 +            throw new InvalidOperationException("Supply one account handle or DID as identifier.");
 +        GenerateCorrelationId(properties);
 +        var protectedProperties = Options.StateDataFormat.Protect(properties);
-+        var authorization = await sessions.Start(identifier.ToString().Trim(), properties, protectedProperties, Context.RequestAborted);
++        var authorization = identifier.Count == 0
++            ? await sessions.StartServer("https://bsky.social", properties, protectedProperties, Context.RequestAborted)
++            : await sessions.Start(identifier.ToString().Trim(), properties, protectedProperties, Context.RequestAborted);
 +        Response.Redirect(authorization);
 +      }
 +      catch (Exception exception) when (exception is not OperationCanceledException || !Context.RequestAborted.IsCancellationRequested)
@@ -770,7 +772,7 @@ index 000000000..7d8dc5615
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoChallenge.cs b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoChallenge.cs
 new file mode 100644
-index 000000000..a1cbf06db
+index 0000000000000000000000000000000000000000..a1cbf06dbc2129f8a1ea3d3580d77158589d0474
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoChallenge.cs
 @@ -0,0 +1,17 @@
@@ -793,7 +795,7 @@ index 000000000..a1cbf06db
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoProtocol.cs b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoProtocol.cs
 new file mode 100644
-index 000000000..686aeee8d
+index 0000000000000000000000000000000000000000..686aeee8d0abaee13a2cba6357f10a3a1f140b34
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Hosting/AtprotoProtocol.cs
 @@ -0,0 +1,67 @@
@@ -866,7 +868,7 @@ index 000000000..686aeee8d
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Infrastructure/AtprotoClaimTypes.cs b/src/Connectors/Web/Auth/Atproto/Infrastructure/AtprotoClaimTypes.cs
 new file mode 100644
-index 000000000..11a70b4a0
+index 0000000000000000000000000000000000000000..11a70b4a02f97dc386af623fe30fa2bbc2271768
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Infrastructure/AtprotoClaimTypes.cs
 @@ -0,0 +1,8 @@
@@ -880,7 +882,7 @@ index 000000000..11a70b4a0
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Infrastructure/Constants.cs b/src/Connectors/Web/Auth/Atproto/Infrastructure/Constants.cs
 new file mode 100644
-index 000000000..dba34f180
+index 0000000000000000000000000000000000000000..dba34f1806a250d83399fa5a37597b7134225513
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Infrastructure/Constants.cs
 @@ -0,0 +1,16 @@
@@ -902,7 +904,7 @@ index 000000000..dba34f180
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Initialization/AtprotoAuthModule.cs b/src/Connectors/Web/Auth/Atproto/Initialization/AtprotoAuthModule.cs
 new file mode 100644
-index 000000000..6e50d1687
+index 0000000000000000000000000000000000000000..6e50d16879a797f2091505f0a54df79a1ceaa20f
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Initialization/AtprotoAuthModule.cs
 @@ -0,0 +1,69 @@
@@ -977,7 +979,7 @@ index 000000000..6e50d1687
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj b/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj
 new file mode 100644
-index 000000000..7804fb829
+index 0000000000000000000000000000000000000000..7804fb829b1498826dd4974007ea2971803a3436
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj
 @@ -0,0 +1,17 @@
@@ -1000,7 +1002,7 @@ index 000000000..7804fb829
 +</Project>
 diff --git a/src/Connectors/Web/Auth/Atproto/Options/AtprotoAuthenticationOptions.cs b/src/Connectors/Web/Auth/Atproto/Options/AtprotoAuthenticationOptions.cs
 new file mode 100644
-index 000000000..e453480c1
+index 0000000000000000000000000000000000000000..e453480c1eb8b10682a8c028470ea4ff3f0ceeb0
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Options/AtprotoAuthenticationOptions.cs
 @@ -0,0 +1,8 @@
@@ -1014,7 +1016,7 @@ index 000000000..e453480c1
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Options/AtprotoOptions.cs b/src/Connectors/Web/Auth/Atproto/Options/AtprotoOptions.cs
 new file mode 100644
-index 000000000..b5df5159e
+index 0000000000000000000000000000000000000000..b5df5159eb379e267ad191b19bfbf6c20ebcffcd
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Options/AtprotoOptions.cs
 @@ -0,0 +1,22 @@
@@ -1042,7 +1044,7 @@ index 000000000..b5df5159e
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Properties/AssemblyInfo.cs b/src/Connectors/Web/Auth/Atproto/Properties/AssemblyInfo.cs
 new file mode 100644
-index 000000000..d2742dcbc
+index 0000000000000000000000000000000000000000..d2742dcbc273c106b1283b7c07c2bf91b5eb7fbf
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Properties/AssemblyInfo.cs
 @@ -0,0 +1,2 @@
@@ -1050,7 +1052,7 @@ index 000000000..d2742dcbc
 +[assembly: InternalsVisibleTo("Koan.Web.Auth.Atproto.Tests")]
 diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoDns.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoDns.cs
 new file mode 100644
-index 000000000..636b77a33
+index 0000000000000000000000000000000000000000..636b77a33bae17cd076ebe91c9fc622cc22ad9d6
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoDns.cs
 @@ -0,0 +1,19 @@
@@ -1075,7 +1077,7 @@ index 000000000..636b77a33
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoHttp.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoHttp.cs
 new file mode 100644
-index 000000000..8ca4f1685
+index 0000000000000000000000000000000000000000..8ca4f1685fd31726767cff8eb4e3023b84cc51e2
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoHttp.cs
 @@ -0,0 +1,97 @@
@@ -1178,7 +1180,7 @@ index 000000000..8ca4f1685
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoMissingScopesException.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoMissingScopesException.cs
 new file mode 100644
-index 000000000..ada6580be
+index 0000000000000000000000000000000000000000..ada6580bee16bffbcf513702cc02227a02915345
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoMissingScopesException.cs
 @@ -0,0 +1,5 @@
@@ -1189,10 +1191,10 @@ index 000000000..ada6580be
 +    : InvalidOperationException("The account provider did not grant all access required for this connection.");
 diff --git a/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoSessions.cs b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoSessions.cs
 new file mode 100644
-index 000000000..910934f89
+index 0000000000000000000000000000000000000000..370ede3e4285422b1e0f5c8bb3c186c7251fa138
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Protocol/AtprotoSessions.cs
-@@ -0,0 +1,324 @@
+@@ -0,0 +1,411 @@
 +using System.Collections.Concurrent;
 +using System.Net;
 +using System.Security.Claims;
@@ -1202,6 +1204,7 @@ index 000000000..910934f89
 +using System.Web;
 +using CarpaNet.Identity;
 +using CarpaNet.OAuth;
++using CarpaNet.OAuth.Crypto;
 +using CarpaNet.OAuth.Storage;
 +using Koan.Core;
 +using Koan.Web.Auth.Connector.Atproto.Infrastructure;
@@ -1329,6 +1332,75 @@ index 000000000..910934f89
 +            throw new InvalidOperationException("AT authorization requires successful PAR; direct authorization fallback is rejected.");
 +    }
 +
++    // CarpaNet alpha.5 adds a login_hint for URL input. Initiate server-first PAR
++    // explicitly so account selection belongs to the provider; reuse its PKCE/DPoP and callback.
++    internal async Task<string> StartServer(string server, AuthenticationProperties properties, string protectedProperties, CancellationToken ct)
++    {
++        if (!Enabled) throw new InvalidOperationException("AT provider is inactive.");
++        network.Validate(new Uri(server));
++        using var discovery = new AuthorizationServerDiscovery(network.Client, TimeSpan.Zero);
++        string issuer;
++        try { issuer = await discovery.DiscoverAuthorizationServerAsync(server, ct); }
++        catch (OAuthException error) when (error.ErrorCode == "resource_metadata_fetch_failed")
++        {
++            // An entryway such as bsky.social is an authorization server, not a PDS.
++            // Server-first discovery also permits its own AS metadata when no resource metadata exists.
++            issuer = server;
++        }
++        var metadata = await discovery.GetMetadataAsync(issuer, ct);
++        if (metadata.Issuer != issuer || string.IsNullOrWhiteSpace(metadata.PushedAuthorizationRequestEndpoint))
++            throw new InvalidOperationException("AT authorization server metadata is inconsistent or lacks required PAR.");
++        foreach (var endpoint in new[] { issuer, metadata.AuthorizationEndpoint, metadata.TokenEndpoint, metadata.PushedAuthorizationRequestEndpoint }) network.Validate(new Uri(endpoint!));
++        var explicitScopes = properties.Items.TryGetValue(Constants.RequestedScopes, out var requested);
++        var scopes = ScopesForSignIn(explicitScopes, explicitScopes ? JsonSerializer.Deserialize<string[]>(requested!)! : [Constants.BaseScope], null, AllowedScopes);
++        var scope = string.Join(' ', scopes);
++        var (verifier, challenge) = Pkce.Generate();
++        var state = Pkce.GenerateState();
++        using var key = await DPoPKeyPair.GenerateAsync();
++        await store.StoreAsync(state, new OAuthStateData
++        {
++            Issuer = issuer, PdsUrl = server, DPoPKey = key.ExportKeyPair(), Verifier = verifier,
++            AppState = JsonSerializer.Serialize(new Binding(null, null, issuer, scope, protectedProperties)),
++            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
++        }, ct);
++        try
++        {
++            string? nonce = null;
++            for (var attempt = 0; attempt < 2; attempt++)
++            {
++                using var request = new HttpRequestMessage(HttpMethod.Post, metadata.PushedAuthorizationRequestEndpoint);
++                request.Headers.Add("DPoP", await key.CreateProofAsync("POST", metadata.PushedAuthorizationRequestEndpoint, nonce));
++                request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
++                {
++                    ["client_id"] = ClientId, ["redirect_uri"] = RedirectUri, ["response_type"] = "code",
++                    ["state"] = state, ["code_challenge"] = challenge, ["code_challenge_method"] = "S256",
++                    ["scope"] = scope, ["dpop_jkt"] = key.Thumbprint
++                });
++                using var response = await network.Send(request, ct);
++                if (response.Headers.TryGetValues("DPoP-Nonce", out var values)) nonce = values.FirstOrDefault();
++                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
++                if (response.IsSuccessStatusCode && body.RootElement.TryGetProperty("request_uri", out var requestUri) && !string.IsNullOrWhiteSpace(requestUri.GetString()))
++                {
++                    var authorization = metadata.AuthorizationEndpoint + "?client_id=" + Uri.EscapeDataString(ClientId) + "&request_uri=" + Uri.EscapeDataString(requestUri.GetString()!);
++                    RequirePar(authorization, ClientId);
++                    return authorization;
++                }
++                if (attempt == 0 && nonce is not null && body.RootElement.TryGetProperty("error", out var error) && error.GetString() == "use_dpop_nonce") continue;
++                throw new InvalidOperationException("AT authorization request failed.");
++            }
++            throw new InvalidOperationException("AT authorization nonce negotiation failed.");
++        }
++        catch { await store.ConsumeAsync(state, CancellationToken.None); throw; }
++    }
++
++    internal static void RequireSubjectBinding(string? expectedDid, string? expectedPds, string expectedIssuer,
++        string actualDid, string actualPds, string actualIssuer, string clientPds)
++    {
++        if ((expectedDid is not null && expectedDid != actualDid) || (expectedPds is not null && expectedPds != actualPds) ||
++            expectedIssuer != actualIssuer || clientPds.TrimEnd('/') != actualPds)
++            throw new InvalidOperationException("AT authenticated subject/PDS/issuer mismatch.");
++    }
++
 +    internal static void RequireScopes(string? granted, IEnumerable<string> allowed)
 +    {
 +        var ceiling = allowed.ToHashSet(StringComparer.Ordinal);
@@ -1392,31 +1464,48 @@ index 000000000..910934f89
 +        var binding = JsonSerializer.Deserialize<Binding>(pending.AppState!)!;
 +        if (parameters.GetValues("state")?.Length != 1 || parameters.GetValues("iss")?.Length != 1 || parameters["iss"] != binding.Issuer || pending.Issuer != binding.Issuer)
 +        { await store.ConsumeAsync(state, ct); throw new InvalidOperationException("AT callback issuer mismatch."); }
-+        var staging = new VerifiedSessionStore(store);
-+        var oauth = OAuth(binding.Scope, binding.Did, staging);
++        var staging = new VerifiedSessionStore(store, binding.Did is null ? async (value, token) =>
++        {
++            // The SDK assumes the initial server is the PDS. Resolve the authenticated
++            // subject before it constructs its client, and reject an unrelated issuer.
++            var resolved = await Resolve(value.TokenSet.Sub, token);
++            RequireSubjectBinding(null, null, binding.Issuer, resolved.Did, resolved.Pds, resolved.Issuer, resolved.Pds);
++            value.TokenSet.Audience = resolved.Pds;
++        } : null);
++        var oauth = OAuth(binding.Scope, binding.Did ?? binding.Issuer, staging);
 +        ATProtoOAuthClient? client = null;
 +        try
 +        {
 +            client = await oauth.CallbackAsync(RedirectUri + query, ct);
 +            var identity = await Resolve(client.Did, ct);
-+            if (identity.Did != binding.Did || identity.Pds != binding.Pds || identity.Issuer != binding.Issuer || client.BaseUrl.ToString().TrimEnd('/') != binding.Pds)
-+                throw new InvalidOperationException("AT authenticated subject/PDS/issuer mismatch.");
++            RequireSubjectBinding(binding.Did, binding.Pds, binding.Issuer, identity.Did, identity.Pds, identity.Issuer, client.BaseUrl.ToString());
 +            RequireScopes(staging.GrantedScope, AllowedScopes);
 +            RequireRequestedScopes(staging.GrantedScope, binding.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 +            var gate = locks.GetOrAdd(client.Did, _ => new SemaphoreSlim(1));
 +            await gate.WaitAsync(ct);
 +            try
 +            {
-+                await staging.Commit(client.Did, ct);
-+                clients.TryGetValue(client.Did, out var replaced);
-+                clients[client.Did] = client;
-+                replaced?.Dispose();
++                var saved = await store.GetAsync(client.Did, ct);
++                var preserveGrant = binding.Did is null && !HasBroaderScopes(binding.Scope) && saved is not null && HasBroaderScopes(saved.TokenSet.Scope);
++                if (preserveGrant)
++                {
++                    ValidateSaved(saved!, identity);
++                    client.Dispose();
++                    oauth.Dispose();
++                }
++                else
++                {
++                    await staging.Commit(client.Did, ct);
++                    clients.TryGetValue(client.Did, out var replaced);
++                    clients[client.Did] = client;
++                    replaced?.Dispose();
++                }
 +            }
 +            finally { gate.Release(); }
 +            var claims = new ClaimsIdentity(Constants.Provider);
-+            claims.AddClaim(new Claim(ClaimTypes.NameIdentifier, client.Did));
-+            claims.AddClaim(new Claim("sub", client.Did));
-+            claims.AddClaim(new Claim(AtprotoClaimTypes.Did, client.Did));
++            claims.AddClaim(new Claim(ClaimTypes.NameIdentifier, identity.Did));
++            claims.AddClaim(new Claim("sub", identity.Did));
++            claims.AddClaim(new Claim(AtprotoClaimTypes.Did, identity.Did));
 +            if (identity.Handle is { } handle) { claims.AddClaim(new Claim(AtprotoClaimTypes.Handle, handle)); claims.AddClaim(new Claim(ClaimTypes.Name, handle)); }
 +            return new ClaimsPrincipal(claims);
 +        }
@@ -1515,14 +1604,14 @@ index 000000000..910934f89
 +        finally { gate.Release(); }
 +    }
 +
-+    private sealed record Binding(string Did, string Pds, string Issuer, string Scope, string Properties);
++    private sealed record Binding(string? Did, string? Pds, string Issuer, string Scope, string Properties);
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/README.md b/src/Connectors/Web/Auth/Atproto/README.md
 new file mode 100644
-index 000000000..e3ba9d6ac
+index 0000000000000000000000000000000000000000..495fa19023388ade86c20ed4e2f32e7b3c16afa8
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/README.md
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,130 @@
 +# AT Protocol sign-in
 +
 +Reference `Sylin.Koan.Web.Auth.Connector.Atproto` and keep `builder.Services.AddKoan()`.
@@ -1558,13 +1647,21 @@ index 000000000..e3ba9d6ac
 +the public OAuth client profile, with no client secret or confidential-client key;
 +provider session lifetime limits still apply.
 +
-+Send the browser to `/auth/atproto/challenge?identifier=<handle-or-DID>&return=<path>`.
++Send the browser to `/auth/atproto/challenge?return=<path>` for Bluesky account
++selection on its own authorization page. Keep
++`/auth/atproto/challenge?identifier=<handle-or-DID>&return=<path>` as the alternative
++for other providers or a specific account.
 +Koan validates the return destination and creates its ordinary authentication
 +cookie after the connector verifies correlation, issuer, account DID and PDS.
 +Use `AtprotoClaimTypes.Did` for protocol identity even if a local identity module
 +reconciles `ClaimTypes.NameIdentifier`. `AtprotoClaimTypes.Handle` is optional and
 +is emitted only after bidirectional handle verification. Neither email nor a
 +Bluesky profile is requested.
++
++Server-first sign-in binds the authorization server before the account is known.
++The returned DID is resolved to its PDS and authorization server before accepting
++the session. An identity-only sign-in keeps an existing validated broader local
++grant rather than overwriting room access with the new identity-only grant.
 +
 +## Request additional access deliberately
 +
@@ -1647,7 +1744,7 @@ index 000000000..e3ba9d6ac
 +HTTP 400 without disclosing provider responses or token material.
 diff --git a/src/Connectors/Web/Auth/Atproto/Storage/ProtectedAtprotoStore.cs b/src/Connectors/Web/Auth/Atproto/Storage/ProtectedAtprotoStore.cs
 new file mode 100644
-index 000000000..35edc5cb5
+index 0000000000000000000000000000000000000000..35edc5cb5360494c721010d8d181e86016c2c82e
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Storage/ProtectedAtprotoStore.cs
 @@ -0,0 +1,91 @@
@@ -1744,16 +1841,17 @@ index 000000000..35edc5cb5
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/Storage/VerifiedSessionStore.cs b/src/Connectors/Web/Auth/Atproto/Storage/VerifiedSessionStore.cs
 new file mode 100644
-index 000000000..60eaf7330
+index 0000000000000000000000000000000000000000..5f5b93c57d595e9b3d23c9cc887bf4afbfe778f9
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/Storage/VerifiedSessionStore.cs
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,33 @@
 +using CarpaNet.OAuth.Storage;
 +
 +namespace Koan.Web.Auth.Connector.Atproto.Storage;
 +
 +/// <summary>SDK callback writes stay private until browser, DID, PDS and issuer checks all pass.</summary>
-+internal sealed class VerifiedSessionStore(ProtectedAtprotoStore durable) : IOAuthSessionStore
++internal sealed class VerifiedSessionStore(ProtectedAtprotoStore durable,
++    Func<OAuthSessionData, CancellationToken, Task>? verifyInitial = null) : IOAuthSessionStore
 +{
 +    private OAuthSessionData? staged;
 +    private string? verifiedDid;
@@ -1766,12 +1864,12 @@ index 000000000..60eaf7330
 +        return durable.StoreAsync(did, staged, ct);
 +    }
 +
-+    public Task StoreAsync(string sub, OAuthSessionData value, CancellationToken cancellationToken = default)
++    public async Task StoreAsync(string sub, OAuthSessionData value, CancellationToken cancellationToken = default)
 +    {
 +        if (sub != value.TokenSet.Sub || (verifiedDid is not null && sub != verifiedDid)) throw new InvalidOperationException("AT token subject changed.");
-+        if (verifiedDid is not null) return durable.StoreAsync(sub, value, cancellationToken);
++        if (verifiedDid is not null) { await durable.StoreAsync(sub, value, cancellationToken); return; }
++        if (verifyInitial is not null) await verifyInitial(value, cancellationToken);
 +        staged = value;
-+        return Task.CompletedTask;
 +    }
 +
 +    public Task<OAuthSessionData?> GetAsync(string sub, CancellationToken cancellationToken = default)
@@ -1782,10 +1880,10 @@ index 000000000..60eaf7330
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/TECHNICAL.md b/src/Connectors/Web/Auth/Atproto/TECHNICAL.md
 new file mode 100644
-index 000000000..17840bd69
+index 0000000000000000000000000000000000000000..87e28c6d9058848421d4783b5748e0f4f7addd18
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/TECHNICAL.md
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,113 @@
 +# AT Protocol connector mechanics
 +
 +Web Auth owns provider election, return URL policy, sign-in contributors, cookies
@@ -1887,9 +1985,21 @@ index 000000000..17840bd69
 +Follow-up SDK contributions should cover callback issuer/token-subject checks and
 +binding validation explicitly. This adapter must not remove its guards merely
 +because a future SDK adds similarly named methods; rerun the negative evidence.
++
++Server-first entry (2026-09-12): a challenge without `identifier` starts at
++`https://bsky.social`. This follows https://atproto.com/specs/oauth#identity-authentication:
++bind issuer, omit login_hint, then resolve token subject to DID -> PDS -> issuer.
++CarpaNet alpha.5 incorrectly adds URL inputs as login hints and retains the entryway
++as its token audience. The connector uses its PKCE/DPoP primitives for the initial
++mandatory PAR and lets the staged session store resolve/check the subject and set
++the actual PDS before SDK client construction. Existing correlation, one-use state,
++permission ceilings, callback issuer binding and guarded transport remain in force.
++The focused ProtocolGuards run has 36 passing cases, including a real loopback PAR
++nonce exchange with no login hint and negative subject/issuer/PDS binding checks.
++No completed public-provider callback is claimed by that fixture.
 diff --git a/src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json b/src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json
 new file mode 100644
-index 000000000..4bb96bfe8
+index 0000000000000000000000000000000000000000..4bb96bfe8010deea3c377e3c34a8d1f2cc2cfa71
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/evidence/browser-2026-09-09.json
 @@ -0,0 +1,41 @@
@@ -1936,7 +2046,7 @@ index 000000000..4bb96bfe8
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json
 new file mode 100644
-index 000000000..d4dbeaa4a
+index 0000000000000000000000000000000000000000..d4dbeaa4a648d508809eade8c2f7b9f1295b561a
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-disconnect-2026-09-09.json
 @@ -0,0 +1,16 @@
@@ -1958,7 +2068,7 @@ index 000000000..d4dbeaa4a
 +}
 diff --git a/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json
 new file mode 100644
-index 000000000..b000ba158
+index 0000000000000000000000000000000000000000..b000ba1580c60e2655579b77fd400195e83b2eef
 --- /dev/null
 +++ b/src/Connectors/Web/Auth/Atproto/evidence/lifecycle-reauthorized-2026-09-09.json
 @@ -0,0 +1,16 @@
@@ -1980,7 +2090,7 @@ index 000000000..b000ba158
 +}
 diff --git a/src/Koan.Web.Auth.Abstractions/Providers/IAuthProtocol.cs b/src/Koan.Web.Auth.Abstractions/Providers/IAuthProtocol.cs
 new file mode 100644
-index 000000000..817bc7e00
+index 0000000000000000000000000000000000000000..817bc7e008eb8545a29d6d3e88a5b27bf196b867
 --- /dev/null
 +++ b/src/Koan.Web.Auth.Abstractions/Providers/IAuthProtocol.cs
 @@ -0,0 +1,22 @@
@@ -2007,7 +2117,7 @@ index 000000000..817bc7e00
 +    IReadOnlyList<string> Validate(string providerId, ProviderOptions options);
 +}
 diff --git a/src/Koan.Web.Auth.Abstractions/README.md b/src/Koan.Web.Auth.Abstractions/README.md
-index d8bc3ead5..58878b9ba 100644
+index d8bc3ead581ed73006cedfd86a35846b96dc546c..58878b9ba0d406be2d4cd62c640d679891a25ebb 100644
 --- a/src/Koan.Web.Auth.Abstractions/README.md
 +++ b/src/Koan.Web.Auth.Abstractions/README.md
 @@ -12,7 +12,8 @@ dotnet add package Sylin.Koan.Web.Auth.Abstractions
@@ -2021,7 +2131,7 @@ index d8bc3ead5..58878b9ba 100644
  ## Boundaries
  
 diff --git a/src/Koan.Web.Auth.Abstractions/TECHNICAL.md b/src/Koan.Web.Auth.Abstractions/TECHNICAL.md
-index e38d938b2..2e84f5f53 100644
+index e38d938b213106fcc52e2d338b8e62bcedf3d2af..2e84f5f534bd5b16e27cf672d90034b9d1789a82 100644
 --- a/src/Koan.Web.Auth.Abstractions/TECHNICAL.md
 +++ b/src/Koan.Web.Auth.Abstractions/TECHNICAL.md
 @@ -16,6 +16,11 @@ package implements or consumes these contracts and owns its own ordinary module
@@ -2037,7 +2147,7 @@ index e38d938b2..2e84f5f53 100644
  
  Provider composition and error posture are documented by `Sylin.Koan.Web.Auth`.
 diff --git a/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs b/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs
-index c5b73bb72..8b511f9a6 100644
+index c5b73bb729cb5224421b78d81dc7835a56791bd4..8b511f9a68260c5b704e688dcb225ab637501c88 100644
 --- a/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs
 +++ b/src/Koan.Web.Auth/Hosting/AuthSchemeSeeder.cs
 @@ -57,7 +57,7 @@ internal static class AuthSchemeSeeder
@@ -2064,7 +2174,7 @@ index c5b73bb72..8b511f9a6 100644
          }
      }
 diff --git a/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs b/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs
-index ab6d52de6..ef62e30ad 100644
+index ab6d52de66fcaee258ceb40419802213fcd131f3..ef62e30ad6fd464f85a817485d8157325b0fbee0 100644
 --- a/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs
 +++ b/src/Koan.Web.Auth/Providers/AuthProviderPlan.cs
 @@ -13,12 +13,26 @@ internal sealed class AuthProviderPlan : IAuthProviderCatalog
@@ -2176,7 +2286,7 @@ index ab6d52de6..ef62e30ad 100644
  
          return missing;
 diff --git a/src/Koan.Web.Auth/README.md b/src/Koan.Web.Auth/README.md
-index ba9a1e22b..b6d2adda9 100644
+index ba9a1e22ba58687a722603ca9761f3c7096c7b72..b6d2adda997fcf628771092f188c596ce57ff35c 100644
 --- a/src/Koan.Web.Auth/README.md
 +++ b/src/Koan.Web.Auth/README.md
 @@ -44,7 +44,7 @@ Register `https://your-app/auth/google/callback` with Google. Start sign-in at
@@ -2209,7 +2319,7 @@ index ba9a1e22b..b6d2adda9 100644
    issues OAuth tokens to clients.
  - Referencing `Sylin.Koan.Web.Auth` alone does not add a simulated provider. Use
 diff --git a/src/Koan.Web.Auth/TECHNICAL.md b/src/Koan.Web.Auth/TECHNICAL.md
-index 9aae50cea..c19a42c2b 100644
+index 9aae50cea1de40a41edcb384ca2a04a18cd8a176..c19a42c2b6317d5260ccf9b32ff6fb3c2642a2ce 100644
 --- a/src/Koan.Web.Auth/TECHNICAL.md
 +++ b/src/Koan.Web.Auth/TECHNICAL.md
 @@ -19,6 +19,9 @@ directly instead of depending on functional Web Auth merely to consume a contrac
@@ -2255,7 +2365,7 @@ index 9aae50cea..c19a42c2b 100644
  redirect to the elected provider when one exists.
 diff --git a/tests/Koan.Web.Auth.Atproto.Tests/Koan.Web.Auth.Atproto.Tests.csproj b/tests/Koan.Web.Auth.Atproto.Tests/Koan.Web.Auth.Atproto.Tests.csproj
 new file mode 100644
-index 000000000..b09bcbc4f
+index 0000000000000000000000000000000000000000..b09bcbc4ffdce2a6d0ef73f4dbd1f22f13fa447a
 --- /dev/null
 +++ b/tests/Koan.Web.Auth.Atproto.Tests/Koan.Web.Auth.Atproto.Tests.csproj
 @@ -0,0 +1,13 @@
@@ -2274,7 +2384,7 @@ index 000000000..b09bcbc4f
 +</Project>
 diff --git a/tests/Koan.Web.Auth.Atproto.Tests/LocalProviderLifecycle.cs b/tests/Koan.Web.Auth.Atproto.Tests/LocalProviderLifecycle.cs
 new file mode 100644
-index 000000000..bed93018b
+index 0000000000000000000000000000000000000000..bed93018b4299c75129b26ae74ec060a94a656f9
 --- /dev/null
 +++ b/tests/Koan.Web.Auth.Atproto.Tests/LocalProviderLifecycle.cs
 @@ -0,0 +1,107 @@
@@ -2387,10 +2497,10 @@ index 000000000..bed93018b
 +}
 diff --git a/tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs b/tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs
 new file mode 100644
-index 000000000..0c4115e21
+index 0000000000000000000000000000000000000000..a69133e11a6830185070fdd2b9d9721be8b58b80
 --- /dev/null
 +++ b/tests/Koan.Web.Auth.Atproto.Tests/ProtocolGuards.cs
-@@ -0,0 +1,219 @@
+@@ -0,0 +1,296 @@
 +using System.Net;
 +using CarpaNet.OAuth;
 +using CarpaNet.OAuth.Storage;
@@ -2399,6 +2509,11 @@ index 000000000..0c4115e21
 +using Koan.Web.Auth.Connector.Atproto.Protocol;
 +using Koan.Web.Auth.Connector.Atproto.Storage;
 +using Koan.Web.Auth.Options;
++using Koan.Web.Auth.Providers;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.Builder;
++using Microsoft.AspNetCore.Hosting;
++using Microsoft.AspNetCore.Http;
 +using Microsoft.AspNetCore.DataProtection;
 +using Microsoft.Extensions.FileProviders;
 +using Microsoft.Extensions.Hosting;
@@ -2409,6 +2524,72 @@ index 000000000..0c4115e21
 +
 +public sealed class ProtocolGuards
 +{
++    [Theory]
++    [InlineData(true)]
++    [InlineData(false)]
++    public async Task Server_first_PAR_omits_login_hint_and_retains_protected_state_through_nonce_retry(bool hasResourceMetadata)
++    {
++        var builder = WebApplication.CreateSlimBuilder();
++        builder.WebHost.UseUrls("http://127.0.0.1:0");
++        await using var provider = builder.Build();
++        string origin = "";
++        IFormCollection? pushed = null;
++        var attempts = 0;
++        provider.MapGet("/.well-known/oauth-protected-resource", () => hasResourceMetadata
++            ? Results.Json(new { resource = origin, authorization_servers = new[] { origin } }) : Results.NotFound());
++        provider.MapGet("/.well-known/oauth-authorization-server", () => Results.Json(new
++        {
++            issuer = origin, authorization_endpoint = origin + "/authorize", token_endpoint = origin + "/token",
++            pushed_authorization_request_endpoint = origin + "/par", response_types_supported = new[] { "code" },
++            code_challenge_methods_supported = new[] { "S256" }, dpop_signing_alg_values_supported = new[] { "ES256" }
++        }));
++        provider.MapPost("/par", async (HttpContext context) =>
++        {
++            pushed = await context.Request.ReadFormAsync();
++            Assert.True(context.Request.Headers.ContainsKey("DPoP"));
++            if (++attempts == 1)
++            {
++                context.Response.Headers["DPoP-Nonce"] = "fixture-nonce";
++                return Results.Json(new { error = "use_dpop_nonce" }, statusCode: 400);
++            }
++            return Results.Json(new { request_uri = "urn:fixture:request", expires_in = 60 }, statusCode: 201);
++        });
++        await provider.StartAsync();
++        origin = provider.Urls.Single();
++        var directory = Path.Combine(Path.GetTempPath(), "koan-atproto-" + Guid.NewGuid().ToString("N"));
++        var settings = Microsoft.Extensions.Options.Options.Create(new AtprotoOptions { SessionDirectory = directory, DevelopmentAllowedOrigins = [origin] });
++        var environment = new EnvironmentStub("Development");
++        using var store = new ProtectedAtprotoStore(DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(directory, "keys"))), settings, environment);
++        using var network = new AtprotoHttp(settings, environment);
++        var auth = new AuthOptions();
++        auth.Providers["atproto"] = new ProviderOptions { ClientId = "http://localhost?redirect_uri=http%3A%2F%2F127.0.0.1%3A5220%2Fauth%2Fatproto%2Fcallback" };
++        var sessions = new AtprotoSessions(store, network, settings, Microsoft.Extensions.Options.Options.Create(auth), new ServerCatalog(), environment);
++        var redirect = await sessions.StartServer(origin, new AuthenticationProperties(), "protected-browser-correlation", CancellationToken.None);
++        Assert.Equal(2, attempts);
++        Assert.NotNull(pushed);
++        Assert.False(pushed.ContainsKey("login_hint"));
++        Assert.Equal("S256", pushed["code_challenge_method"].ToString());
++        Assert.Equal("atproto", pushed["scope"].ToString());
++        var pending = store.Peek(pushed["state"].ToString());
++        Assert.NotNull(pending);
++        Assert.Equal(origin, pending.Issuer);
++        Assert.Contains("protected-browser-correlation", pending.AppState);
++        AtprotoSessions.RequirePar(redirect, auth.Providers["atproto"].ClientId!);
++        await provider.StopAsync();
++    }
++
++    [Fact]
++    public void Server_first_callback_requires_the_subjects_resolved_issuer_and_pds()
++    {
++        AtprotoSessions.RequireSubjectBinding(null, null, "https://entry.example", "did:plc:alice", "https://pds.example", "https://entry.example", "https://pds.example/");
++        Assert.Throws<InvalidOperationException>(() => AtprotoSessions.RequireSubjectBinding(null, null,
++            "https://entry.example", "did:plc:alice", "https://pds.example", "https://other.example", "https://pds.example"));
++        Assert.Throws<InvalidOperationException>(() => AtprotoSessions.RequireSubjectBinding(null, null,
++            "https://entry.example", "did:plc:alice", "https://pds.example", "https://entry.example", "https://entry.example"));
++        Assert.Throws<InvalidOperationException>(() => AtprotoSessions.RequireSubjectBinding("did:plc:bob", "https://pds.example",
++            "https://entry.example", "did:plc:alice", "https://pds.example", "https://entry.example", "https://pds.example"));
++    }
++
 +    [Theory]
 +    [InlineData("127.0.0.1")][InlineData("10.1.1.1")][InlineData("169.254.169.254")]
 +    [InlineData("100.100.100.200")][InlineData("::1")][InlineData("::ffff:127.0.0.1")]
@@ -2609,9 +2790,15 @@ index 000000000..0c4115e21
 +        public string ContentRootPath { get; set; } = Path.GetTempPath();
 +        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
 +    }
++    private sealed class ServerCatalog : IAuthProviderCatalog
++    {
++        public IReadOnlyList<AuthProviderInfo> Providers { get; } = [new("atproto", "AT Protocol", "atproto", "enabled", true, true, false, 200, "Local proof", null, null, ["atproto"], "/auth/atproto/challenge")];
++        public AuthProviderInfo? Default => Providers[0];
++        public AuthProviderInfo? Find(string? id) => id == "atproto" ? Default : null;
++    }
 +}
 diff --git a/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs b/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs
-index 143469f8e..5f94c1afc 100644
+index 143469f8e84b49fd0ad02625f6624b49c19db301..5f94c1afc5b7f5086078059f1f01e28822fc916b 100644
 --- a/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs
 +++ b/tests/Koan.Web.Auth.Tests/AuthProviderPlanTests.cs
 @@ -106,6 +106,118 @@ public sealed class AuthProviderPlanTests
@@ -2735,7 +2922,7 @@ index 143469f8e..5f94c1afc 100644
  
 diff --git a/tests/Koan.Web.Auth.Tests/AuthSchemeSeederTests.cs b/tests/Koan.Web.Auth.Tests/AuthSchemeSeederTests.cs
 new file mode 100644
-index 000000000..34b7b7edf
+index 0000000000000000000000000000000000000000..34b7b7edf7a316ee0cca2edf72cecfdcdc62c09a
 --- /dev/null
 +++ b/tests/Koan.Web.Auth.Tests/AuthSchemeSeederTests.cs
 @@ -0,0 +1,94 @@
@@ -2835,7 +3022,7 @@ index 000000000..34b7b7edf
 +}
 diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolFixture.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolFixture.cs
 new file mode 100644
-index 000000000..116970aee
+index 0000000000000000000000000000000000000000..116970aee64b71604b46dc0941e146623d333dba
 --- /dev/null
 +++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolFixture.cs
 @@ -0,0 +1,74 @@
@@ -2915,7 +3102,7 @@ index 000000000..116970aee
 +}
 diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolSpec.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolSpec.cs
 new file mode 100644
-index 000000000..3395b2ec7
+index 0000000000000000000000000000000000000000..3395b2ec79eeec35b25b30ffbb9f903fc05aef94
 --- /dev/null
 +++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/CustomProtocolSpec.cs
 @@ -0,0 +1,69 @@
@@ -2990,7 +3177,7 @@ index 000000000..3395b2ec7
 +}
 diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthProtocol.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthProtocol.cs
 new file mode 100644
-index 000000000..444bd9429
+index 0000000000000000000000000000000000000000..444bd94291780e5dd07c01e7ab96d95cec0f8456
 --- /dev/null
 +++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthProtocol.cs
 @@ -0,0 +1,10 @@
@@ -3006,7 +3193,7 @@ index 000000000..444bd9429
 +}
 diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthenticationHandler.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthenticationHandler.cs
 new file mode 100644
-index 000000000..e3a4d5734
+index 0000000000000000000000000000000000000000..e3a4d57340c0418327ed01d9f57a1ddeefe67ba1
 --- /dev/null
 +++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeAuthenticationHandler.cs
 @@ -0,0 +1,42 @@
@@ -3054,7 +3241,7 @@ index 000000000..e3a4d5734
 +}
 diff --git a/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeSignInPolicy.cs b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeSignInPolicy.cs
 new file mode 100644
-index 000000000..f71fc8f83
+index 0000000000000000000000000000000000000000..f71fc8f83766cdfc0fe37baff294d05ed2f8865c
 --- /dev/null
 +++ b/tests/Suites/Auth/Koan.Web.Auth.Integration.Tests/CustomProtocol/ProbeSignInPolicy.cs
 @@ -0,0 +1,14 @@

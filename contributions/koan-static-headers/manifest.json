@@ -3,7 +3,7 @@
   "date": "2026-09-09",
   "repository": "https://github.com/sylin-org/koan-framework.git",
   "baseRevision": "e07a84cc3f71a0867f1122b03b723cc80727e772",
-  "requiredAuthPatchSha256": "faf9e624dafdc7389cb5e0eba7589ff0da13b9464fae989ded75a1ccaf0681e0",
+  "requiredAuthPatchSha256": "3939fc398901b5ef822b6238ca651744aa2978635d42970a525213e845e94969",
   "patch": "koan-static-headers.patch",
   "patchSha256": "10ad8038f6ee244afa340435f784dd1c1aa6380af552445c341d7739db7dc836",
   "files": [
