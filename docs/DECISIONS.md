@@ -438,3 +438,16 @@ trigger is a transition: the guard response carries who the principal now is, an
 re-loads its world as the new identity (drafts preserved) with a brief "now viewing as"
 acknowledgment. Manual "reload this page" resolutions are the v1 of this guard, not the
 shape.
+
+## 11 September 2026 — Token-only sessions; server-pushed identity events (owner-directed)
+
+The browser stores exactly one thing: the session token. Identity is never cached for
+verification — user info comes from the server (`/me` shape; the arrival endpoint already
+carries it) and pages re-fetch on demand. The X-Tangent-Participant double-submit
+convention and its guard are removed entirely (their whole drift/mismatch failure class
+stops existing). A legitimate account switch is a server-push event: sign-in notifies the
+session it replaces, and that session's SSE connections emit `identity_changed`; every
+open page re-fetches its identity and re-renders. Post-switch access is ordinary 403
+routing: no-longer-visible content gets a proper "you don't have access" page;
+administrative surfaces redirect to the landing page. Detection-by-polling and manual
+reload prompts are gone.
