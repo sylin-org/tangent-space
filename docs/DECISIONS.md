@@ -470,3 +470,15 @@ configurable) and redirects; the provider's own UI handles account selection and
 A handle parameter remains only as the escape hatch for self-hosted PDS discovery, and the
 bound DID comes from the token exchange's authoritative `sub` claim — no pre-declared
 handle to mismatch. The client never duplicates provider UI.
+
+## 12 September 2026 — Byline labels and the Discord-like UI direction (owner-directed)
+
+Bug fix first: proof-minted participants (service-proof exchange) must carry their atproto
+handle as the identity label — the verifier already resolves the DID document for keys, so
+it harvests the handle (alsoKnownAs) there and labels/refreshes the identity; existing
+records backfill on next exchange. The UI never needs to show a bare GUID/internal id.
+
+Design direction recorded for the renderer: a Discord-like conversation surface — avatars,
+display names, handles in bylines — with avatars sourced from atproto profile records
+(the existing PDS profile cache). Structure and identity remain server-authoritative;
+this is presentation only.
