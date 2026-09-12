@@ -451,3 +451,15 @@ open page re-fetches its identity and re-renders. Post-switch access is ordinary
 routing: no-longer-visible content gets a proper "you don't have access" page;
 administrative surfaces redirect to the landing page. Detection-by-polling and manual
 reload prompts are gone.
+
+## 11 September 2026 — Fixed ports and OAuth binding pages (owner-directed)
+
+The Tangent server keeps http://127.0.0.1:5220; the connector's operator page gets a fixed
+default port **5219** (stable URL; both ports overridable via environment/configuration).
+The operator page carries NO atmosphere sign-in form: binding happens at
+`/bind/{identityId}/{provider}` served by the connector, running the same atproto OAuth
+mechanism the site uses (browser redirect to the provider's authorize page, loopback
+callback, "bound — close this tab", and the waiting connect auto-resumes). OAuth refresh
+tokens keep the atproto session fresh silently. App-password binding loses its UI and
+remains a hub-level documented fallback. Build order: spike the OAuth local-client
+loopback round-trip against the public PDS before building the full flow on it.
