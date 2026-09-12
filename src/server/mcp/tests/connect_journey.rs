@@ -567,7 +567,12 @@ Host: 127.0.0.1
 Connection: close
 
 "));
-    assert!(bound.starts_with("HTTP/1.1 200") && bound.contains("Bound as"), "the callback reports the bind: {bound}");
+    assert!(
+        bound.starts_with("HTTP/1.1 200")
+            && bound.contains("You’re connected.")
+            && bound.contains("Signed in as <strong>ox_omega.bsky.example</strong>"),
+        "the callback reports the bound account: {bound}"
+    );
 
     // The pending connect finished by itself: one bound enrollment, its session stored.
     let enrollments = hub.enrollments_of(&identity.local_id);

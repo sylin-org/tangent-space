@@ -69,6 +69,12 @@ impl ExperiencePort for UreqExperience {
         }
     }
 
+    fn server_profile(&self, origin: &str) -> Result<Value, ExperienceError> {
+        let request = self.agent.get(&format!("{origin}/api/server"))
+            .timeout(Duration::from_secs(2));
+        dispatch(request, None, false)
+    }
+
     fn exchange(&self, origin: &str, path: &str, body: &Value, bearer: &str) -> Result<Value, ExperienceError> {
         atproto_request(&self.agent, "POST", &format!("{origin}{path}"), Some(bearer), Some(body))
     }

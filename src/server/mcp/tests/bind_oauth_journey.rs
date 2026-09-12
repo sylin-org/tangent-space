@@ -150,7 +150,7 @@ fn the_bind_route_starts_the_flow_immediately_and_binds_the_authenticated_accoun
     let callback_page = drive_bind(address, &server, &identity.local_id, None);
     assert!(callback_page.starts_with("HTTP/1.1 200"), "the callback answers: {callback_page}");
     assert!(callback_page.contains("Signed in as <strong>lumen.bsky.example</strong>"), "the success page names the handle: {callback_page}");
-    assert!(callback_page.contains("you can close this tab"), "the tab is freed honestly: {callback_page}");
+    assert!(callback_page.contains("close this tab"), "the tab is freed honestly: {callback_page}");
 
     // The waiting connect finished by itself: one bound enrollment with a stored session.
     let enrollments = hub.enrollments_of(&identity.local_id);

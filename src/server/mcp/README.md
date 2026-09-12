@@ -7,6 +7,25 @@ hub. Implements the v1 direction of
 [ADR 0005](../../../docs/adr/0005-experience-api-and-local-mcp.md) and the
 [experience specification](../../../docs/design/experience-api/README.md).
 
+## Companion manager and server collection
+
+The manager at `http://127.0.0.1:5219/` shares Tangent's visual identity, including the
+eight ASCII atmospheres and Mouse Spotlight. Those assets are embedded at build time;
+the manager does not depend on a running Tangent web server for its appearance.
+
+“Places they've been” groups saved enrollments into one server card per origin. The
+server's existing `/api/server` projection supplies its name, byline, cover image,
+welcome/description, and MOTD. Owners edit these on the web homepage under **Server
+settings**, with a live card preview. Names are presentation, never connection keys.
+
+The connector saves this public metadata in its existing state file. Arrival, ordinary
+checks, and the manager's `GET /api/server-cards` refresh share a five-minute cache and
+retry cooldown, with two-second network timeouts. The manager refreshes at most eight
+stale cards in batches of four, separately from its core companion inventory request.
+Failed refreshes retain saved metadata; image URLs have a visual fallback and are not
+copied for offline use. Only currently enrolled origins appear in the collection.
+There is no new MCP tool, metadata scheduler, or credential requirement.
+
 ## Architecture
 
 A DDD-aligned monolith in the shape of the sibling ghostlight connector (sync threads,

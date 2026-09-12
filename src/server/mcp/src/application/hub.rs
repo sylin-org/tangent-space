@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use crate::adapters::atproto_oauth::{self, AtprotoOauth, BindStart};
 use crate::adapters::operator::DEFAULT_PAGE_URL;
-use crate::adapters::store::StateStore;
+use crate::adapters::store::{ServerCard, StateStore};
 use crate::application::bus::EventBus;
 use crate::application::contract::{self, ExperienceDto};
 use crate::application::operations::{decode, Operation, ViewMode};
@@ -147,6 +147,8 @@ pub struct ConnectorHub {
     /// Connect and the operator auto-resume can never double-refresh one session. The
     /// map itself grows one entry per identity that ever refreshes.
     refresh_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    /// Public card refresh attempts are shared across identities visiting one origin.
+    server_card_attempts: Mutex<HashMap<String, i64>>,
     /// Arms the single sweeper thread on the first recorded pending connect.
     sweep_once: std::sync::Once,
 }
@@ -166,6 +168,7 @@ impl ConnectorHub {
             bind_flights: Mutex::new(Vec::new()),
             bind_flight_ttl_ms: AtomicI64::new(atproto_oauth::FLIGHT_TTL_MS),
             refresh_locks: Mutex::new(HashMap::new()),
+            server_card_attempts: Mutex::new(HashMap::new()),
             sweep_once: std::sync::Once::new(),
         }
     }
@@ -1513,6 +1516,64 @@ impl ConnectorHub {
             .collect()
     }
 
+    /// Immediate collection snapshot, grouped by enrolled origin. Missing or offline
+    /// servers still have an honest address card; no network runs while rendering it.
+    pub fn server_cards(&self) -> Vec<ServerCard> {
+        let store = self.lock_store().expect("state lock");
+        let mut origins: Vec<_> = store.companions().iter().map(|entry| entry.origin.clone()).collect();
+        origins.sort();
+        origins.dedup();
+        origins.into_iter().map(|origin| {
+            store.server_card(&origin).unwrap_or_else(|| ServerCard { origin, ..Default::default() })
+        }).collect()
+    }
+
+    /// Optional operator refresh, independent of the page's core inventory request.
+    /// Four concurrent requests at most; ordinary checks and arrivals share its cache.
+    pub fn refresh_server_cards(&self) -> Vec<ServerCard> {
+        let now = now_millis();
+        let cards: Vec<_> = self.server_cards().into_iter().filter(|card| {
+            now.saturating_sub(card.refreshed_at) >= 5 * 60 * 1000
+                && !self.server_card_attempts.lock().expect("card refresh lock")
+                    .get(&card.origin).is_some_and(|at| now.saturating_sub(*at) < 5 * 60 * 1000)
+        }).take(8).collect();
+        for group in cards.chunks(4) {
+            std::thread::scope(|scope| {
+                for card in group {
+                    scope.spawn(move || self.refresh_server_card(&card.origin));
+                }
+            });
+        }
+        self.server_cards()
+    }
+
+    fn refresh_server_card(&self, origin: &str) {
+        const FRESH_MS: i64 = 5 * 60 * 1000;
+        let now = now_millis();
+        {
+            let store = self.lock_store().expect("state lock");
+            if !store.companions().iter().any(|entry| entry.origin == origin)
+                || store.server_card(origin).is_some_and(|card| now.saturating_sub(card.refreshed_at) < FRESH_MS) {
+                return;
+            }
+        }
+        {
+            let mut attempts = self.server_card_attempts.lock().expect("card refresh lock");
+            if attempts.get(origin).is_some_and(|at| now.saturating_sub(*at) < FRESH_MS) {
+                return;
+            }
+            attempts.insert(origin.to_string(), now);
+        }
+        let Ok(raw) = self.port.server_profile(origin) else { return };
+        let Some(card) = project_server_card(origin, &raw, now) else { return };
+        let mut store = self.lock_store().expect("state lock");
+        // A forgotten enrollment must not be resurrected by an in-flight request.
+        if store.companions().iter().any(|entry| entry.origin == origin) {
+            store.set_server_card(card);
+            let _ = store.save();
+        }
+    }
+
     /// Attribution wrapper for operator-page mutations: the same invoked/completed pair
     /// every intake records, with the `Operator` channel.
     fn attributed<T>(&self, action: &str, run: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
@@ -1846,6 +1907,7 @@ impl ConnectorHub {
             bound
         };
         self.events.publish(DomainEvent::ContextArrived { context_id: bound.context_id.clone(), origin: companion.origin.clone() });
+        self.refresh_server_card(&companion.origin);
         self.finish("Arrive", &companion, Some(&bound), ViewMode::Orientation, raw, parsed, false)
     }
 
@@ -2200,6 +2262,7 @@ impl ConnectorHub {
                 }
             }
         }
+        self.refresh_server_card(&companion.origin);
         Ok(summary)
     }
 
@@ -2385,6 +2448,61 @@ fn enroll_transport_error(error: &ExperienceError) -> String {
         }
         ExperienceError::Application { code, message } => format!("{code}: {message}"),
         ExperienceError::Transport(detail) => detail.clone(),
+    }
+}
+
+/// Presentation fields are bounded and cannot change a connection's destination.
+fn project_server_card(origin: &str, raw: &Value, refreshed_at: i64) -> Option<ServerCard> {
+    fn field(raw: &Value, name: &str, limit: usize) -> String {
+        raw.get(name).and_then(Value::as_str).unwrap_or_default().trim()
+            .chars().filter(|c| !c.is_control() || matches!(c, '\n' | '\t')).take(limit).collect()
+    }
+    // An unrelated JSON endpoint must not replace a previously captured server card.
+    let name = field(raw, "name", 120);
+    if name.is_empty() { return None; }
+    let image = field(raw, "coverImageUrl", 2049);
+    let safe_image = image.len() <= 2048
+        && !image.chars().any(|c| c.is_control() || matches!(c, '\\' | '\'' | '"'));
+    let cover_image_url = if safe_image && image.starts_with('/') && !image.starts_with("//") {
+        format!("{origin}{image}")
+    } else if safe_image && image.starts_with("https://")
+        && image[8..].split(['/', '?', '#']).next().is_some_and(|host| !host.is_empty() && !host.contains('@') && !host.chars().any(char::is_whitespace)) {
+        image
+    } else { String::new() };
+    Some(ServerCard {
+        origin: origin.to_string(),
+        name,
+        description: field(raw, "welcomeMessage", 4096),
+        byline: field(raw, "byline", 240),
+        cover_image_url,
+        motd: field(raw, "motd", 4096),
+        owner_participant_id: field(raw, "ownerParticipantId", 256),
+        refreshed_at,
+    })
+}
+
+#[cfg(test)]
+mod server_card_checks {
+    use super::*;
+
+    #[test]
+    fn server_card_keeps_enrolled_origin_and_rejects_unsafe_art() {
+        let origin = "https://garage.example";
+        let mut profile = json!({
+            "name": "Leo's Garage", "welcomeMessage": "A place to make things.",
+            "coverImageUrl": "/art/garage.png", "origin": "https://unrelated.example"
+        });
+        let card = project_server_card(origin, &profile, 42).unwrap();
+        assert_eq!(card.origin, origin);
+        assert_eq!(card.cover_image_url, "https://garage.example/art/garage.png");
+        assert_eq!(card.description, "A place to make things.");
+        assert_eq!(project_server_card("http://127.0.0.1:5220", &profile, 42).unwrap().cover_image_url,
+            "http://127.0.0.1:5220/art/garage.png");
+        for image in ["//unrelated.example/art.png", "javascript:alert(1)", "https://user:pass@example.com/art.png", "/\\unrelated.example/art.png"] {
+            profile["coverImageUrl"] = json!(image);
+            assert!(project_server_card(origin, &profile, 42).unwrap().cover_image_url.is_empty());
+        }
+        assert!(project_server_card(origin, &json!({"status":"ok"}), 42).is_none());
     }
 }
 

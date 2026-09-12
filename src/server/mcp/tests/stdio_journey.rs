@@ -188,7 +188,13 @@ fn the_stdio_edge_negotiates_and_serves_the_fourteen_tools() {
     // Every model-facing request carried the bearer session, and no token leaked into
     // any response text.
     let requests = server.requests();
-    assert!(requests.iter().all(|request| request.bearer.contains("Bearer")), "missing bearer on {:?}", requests.iter().map(|request| request.path.clone()).collect::<Vec<_>>());
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.path == "/api/server" || request.bearer.contains("Bearer")),
+        "missing bearer outside the public server profile on {:?}",
+        requests.iter().map(|request| request.path.clone()).collect::<Vec<_>>()
+    );
     let _ = context;
 }
 

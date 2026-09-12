@@ -18,11 +18,27 @@ const STATE_FILE: &str = "state.json";
 const JOURNAL_FILE: &str = "pending-writes.jsonl";
 const JOURNAL_LINE_LIMIT: u64 = 256 * 1024;
 
+/// Public presentation only. The enrolled origin remains the routing identity.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerCard {
+    pub origin: String,
+    pub name: String,
+    pub description: String,
+    pub byline: String,
+    pub cover_image_url: String,
+    pub motd: String,
+    pub owner_participant_id: String,
+    pub refreshed_at: i64,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct StateFile {
     version: u32,
     #[serde(default)]
     identities: Vec<Identity>,
+    #[serde(default)]
+    server_cards: HashMap<String, ServerCard>,
     /// The loopback operator page URL (token included) of the long-running process
     /// currently hosting it, so a Connect in ANY process can pop that page at the
     /// sign-in anchor. Cookie-jar class by design (owner decision): the page token is
@@ -114,6 +130,14 @@ impl StateStore {
     }
 
     // ----- sessions -----
+
+    pub fn server_card(&self, origin: &str) -> Option<ServerCard> {
+        self.state.server_cards.get(origin).cloned()
+    }
+
+    pub fn set_server_card(&mut self, card: ServerCard) {
+        self.state.server_cards.insert(card.origin.clone(), card);
+    }
 
     /// The bearer session of one enrollment. The token is handed only to the port layer;
     /// it never renders, logs or journals.

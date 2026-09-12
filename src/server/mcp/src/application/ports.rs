@@ -49,6 +49,11 @@ pub trait ExperiencePort: Send + Sync {
     /// document). No Authorization header. Error bodies of this surface use an
     /// `error` code field, which the adapter surfaces as `Application`.
     fn discover(&self, origin: &str, path: &str) -> Result<Value, ExperienceError>;
+    /// Optional public presentation metadata. No credential is sent; adapters should
+    /// use a short timeout and never follow redirects. Absence does not affect arrival.
+    fn server_profile(&self, _origin: &str) -> Result<Value, ExperienceError> {
+        Err(ExperienceError::Unreachable)
+    }
     /// One cheap reachability probe: a short-timeout GET whose body is discarded; any
     /// HTTP answer counts as reachable, only a transport failure does not. Used by
     /// Connect's waiting branch to decide whether a recorded operator page is alive

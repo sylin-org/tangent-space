@@ -47,6 +47,22 @@ const SSE_CLIENT_LIMIT: usize = 4;
 /// SSE keepalive cadence: a comment frame that also proves the peer is still there.
 const SSE_KEEPALIVE: Duration = Duration::from_secs(15);
 const INDEX_HTML: &str = include_str!("operator.html");
+const OPERATOR_STYLE: &str = include_str!("operator.css");
+
+// Both products use the same bounded ASCII renderer and accessible appearance controls.
+// Embed the assets so the local manager remains one self-contained executable.
+fn atmosphere_assets() -> String {
+    let controls = include_str!("../../../web/wwwroot/atmosphere.js")
+        .replace("Use server settings", "Use default settings");
+    format!("<style>{}</style><script>{}</script><script>{controls}</script>",
+        include_str!("../../../web/wwwroot/atmosphere.css"),
+        include_str!("../../../web/wwwroot/ascii-scenes.js"))
+}
+
+fn operator_index() -> String {
+    INDEX_HTML.replace("/* TANGENT_OPERATOR_STYLE */", OPERATOR_STYLE)
+        .replace("<!-- TANGENT_ATMOSPHERE -->", &atmosphere_assets())
+}
 /// The operator page's fixed default port (owner direction): a stable URL any Connect
 /// can name. Overridable via `--port` or `TANGENT_CONNECTOR_PORT`; `0` stays ephemeral
 /// (tests and parallel runs).
@@ -488,6 +504,7 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
         ("POST", ["enrollments", companion_id, "forget"]) => {
             finish(hub.forget_enrollment(companion_id), |_| ok_json(json!({ "forgotten": companion_id })))
         }
+        ("GET", ["server-cards"]) => ApiResponse(200, ok_json(json!({ "servers": hub.refresh_server_cards() })), None),
         ("GET", ["status"]) => {
             let enrollments: Vec<Value> = hub
                 .enrollment_statuses()
@@ -522,9 +539,9 @@ fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, _body:
             if parameters.iter().any(|(name, _)| name == "state") {
                 return bind_callback(hub, &parameters, root_url);
             }
-            ApiResponse(200, Value::String(INDEX_HTML.to_string()), None)
+            ApiResponse(200, Value::String(operator_index()), None)
         }
-        ("GET", ["index.html"]) => ApiResponse(200, Value::String(INDEX_HTML.to_string()), None),
+        ("GET", ["index.html"]) => ApiResponse(200, Value::String(operator_index()), None),
         ("GET", ["bind", local_id, provider]) => {
             if *provider != BIND_PROVIDER_ATPROTO {
                 return not_found_page(&format!(
@@ -592,25 +609,13 @@ fn html_escape(value: &str) -> String {
 
 /// The shared skeleton of the bind flow's small pages.
 fn bind_skeleton(title: &str, body: &str) -> String {
-    format!(
-        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
-         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
-         <meta name=\"theme-color\" content=\"#111016\">\n\
-         <title>{title} · Tangent</title>\n<style>\n\
-         :root {{ color-scheme:dark; font:15px/1.65 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#111016; color:#f3eee6; }}\n\
-         * {{ box-sizing:border-box; }} body {{ margin:0; }}\n\
-         header {{ max-width:1056px; margin:auto; padding:24px 32px; border-bottom:1px solid #ffffff18; }}\n\
-         header a {{ font:500 21px Georgia,serif; color:#f3eee6; text-decoration:none; }} header span {{ color:#f6c45c; margin-right:8px; }}\n\
-         main {{ max-width:580px; margin:clamp(35px,10vh,110px) auto; padding:40px; border:1px solid #f6c45c30; border-radius:20px; background:radial-gradient(ellipse at 0 0,#3d2c3a,transparent 75%),#1b1821; }}\n\
-         h1 {{ font:500 clamp(32px,5vw,43px)/1.15 Georgia,serif; letter-spacing:-.03em; margin:12px 0 23px; }} p {{ margin:0 0 20px; }}\n\
-         .eyebrow {{ font:10px/1.5 ui-monospace,monospace; letter-spacing:.17em; color:#f6c45c; text-transform:uppercase; }}\n\
-         .muted {{ color:#b8afbd; font-size:13px; }} .account {{ font-size:17px; overflow-wrap:anywhere; }} .error {{ color:#f6ada6; overflow-wrap:anywhere; }}\n\
-         a {{ color:#f6c45c; text-underline-offset:4px; }} .button {{ display:inline-flex; padding:11px 18px; background:#f6c45c; color:#261b0d; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; margin:4px 0 16px; }}\n\
-         .button:hover {{ background:#ffd47b; }} :focus-visible {{ outline:2px solid #f6c45c; outline-offset:5px; }}\n\
-         details {{ border-top:1px solid #ffffff18; margin-top:24px; padding-top:17px; font-size:12px; }} summary {{ cursor:pointer; color:#b8afbd; }} details p {{ margin:15px 0 0; }} code {{ overflow-wrap:anywhere; font:12px ui-monospace,monospace; }}\n\
-         @media(max-width:640px) {{ header {{ padding:20px 22px; }} main {{ margin:32px 18px; padding:28px 24px; }} }}\n\
-         </style>\n</head>\n<body>\n<header><a href=\"/\"><span aria-hidden=\"true\">✦</span>Tangent</a></header>\n<main>{body}</main>\n</body>\n</html>\n"
-    )
+    let style = OPERATOR_STYLE;
+    let atmosphere = atmosphere_assets();
+    format!(r##"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111016"><title>{title} · Tangent</title><style>{style}</style></head>
+<body class="auth-page"><header class="masthead"><a class="brand" href="/"><span aria-hidden="true">✦</span> Tangent <small>Companions</small></a><span class="local-badge">ON YOUR COMPUTER</span></header>
+<main>{body}</main>{atmosphere}</body></html>"##)
 }
 
 /// The callback's result page: success names the bound handle and frees the tab; a
@@ -767,6 +772,7 @@ fn identity_with_atproto(
 fn enrollment_json(entry: &crate::domain::identity::CompanionEntry, available: bool) -> Value {
     json!({
         "companionId": entry.companion_id,
+        "identityId": entry.local_id,
         "origin": entry.origin,
         "participantRef": entry.participant_ref,
         "did": entry.did,
