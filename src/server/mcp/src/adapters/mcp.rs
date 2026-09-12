@@ -36,10 +36,10 @@ pub fn negotiate_protocol_version(requested: &str) -> &'static str {
 /// Serves the MCP edge until stdin ends. Returns a process exit code.
 ///
 /// The hub is constructed when the first `initialize` request names the connecting
-/// client: `clientInfo.name` becomes the caller (`mcp:{name}`), which keys the identity
-/// allowlist and context binding. Attribution only — it never changes a domain outcome —
-/// and the per-process single-caller rule is unchanged: one process serves exactly one
-/// client.
+/// client: `clientInfo.name` becomes the caller (`mcp:{name}`), which labels feed
+/// attribution and scopes context binding. Attribution only — it never changes a
+/// domain outcome — and the per-process single-caller rule is unchanged: one process
+/// serves exactly one client.
 pub fn serve(
     build_hub: impl FnOnce(&str) -> Result<Arc<ConnectorHub>, String>,
     output: &mut dyn Write,
@@ -272,11 +272,11 @@ pub fn catalog() -> Value {
     let tools = [
         tool(
             "SelectCompanion",
-            "Select which enrolled companion (participant identity) to act as for this session. Returns a companionId. With no moniker, the identity the operator assigned to this client in the allowlist is used; unlisted clients resolve nothing.",
+            "Select which enrolled companion (participant identity) to act as for this session. Returns a companionId. With no moniker, the connector's one local identity is used; with several identities, name one explicitly.",
             json!({
                 "type": "object",
                 "properties": {
-                    "moniker": { "type": "string", "description": "An identity handle, or an enrollment's name, handle or participant reference. Omit to use the operator-configured identity for this client." }
+                    "moniker": { "type": "string", "description": "An identity handle, or an enrollment's name, handle or participant reference. Omit when exactly one identity exists." }
                 },
                 "additionalProperties": false,
             }),
@@ -292,11 +292,12 @@ pub fn catalog() -> Value {
         ),
         tool(
             "Connect",
-            "Connect to a Tangent server on the fly: the connector resolves your identity (client allowlist), discovers the server, completes bound enrollment when needed, then arrives and returns the orientation view with a contextId. When operator action is needed (identity sign-in) the local operator page is opened and the tool says so honestly — connect again afterwards; enrollment also completes by itself once the sign-in is done.",
+            "Connect to a Tangent server on the fly: the connector resolves your identity (the optional identity argument, or exactly one local identity), discovers the server, completes bound enrollment when needed, then arrives. The response leads with \"You are {handle} — session {contextId}\" — that session id is the context handle later calls carry. When operator action is needed (identity sign-in) the operator page is opened and the tool says so honestly — connect again afterwards; enrollment also completes by itself once the sign-in is done.",
             json!({
                 "type": "object",
                 "properties": {
-                    "serverUrl": { "type": "string", "description": "The Tangent server origin, e.g. https://tangent.example" }
+                    "serverUrl": { "type": "string", "description": "The Tangent server origin, e.g. https://tangent.example" },
+                    "identity": { "type": "string", "description": "Which local identity to act as (its handle), when more than one exists" }
                 },
                 "required": ["serverUrl"],
                 "additionalProperties": false,

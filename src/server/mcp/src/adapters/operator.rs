@@ -1,10 +1,13 @@
-//! The operator spoke: a loopback-only web page for identity, allowlist and enrollment
-//! stewardship. Hand-rolled minimal HTTP/1.1 in the house style — request line, headers
-//! and a Content-Length body under an 8 KiB header cap and a 1 MiB body cap, GET/POST
-//! only, `Connection: close`, a 30 s read timeout. The page is an inert embedded string;
-//! every `/api/*` JSON call crosses the SAME hub as the CLI and MCP intakes (attribution
-//! channel `Operator`). A one-time token generated at startup gates the API, compared in
-//! constant time. Nothing but the startup banner is ever printed to stdout.
+//! The operator spoke: a loopback-only web page for identity and enrollment stewardship.
+//! Hand-rolled minimal HTTP/1.1 in the house style — request line, headers and a
+//! Content-Length body under an 8 KiB header cap and a 1 MiB body cap, GET/POST only,
+//! `Connection: close`, a 30 s read timeout, JSON-only bodies, no CORS headers. The page
+//! is an inert embedded string; every `/api/*` JSON call crosses the SAME hub as the CLI
+//! and MCP intakes (attribution channel `Operator`). Structural local-only guarantees
+//! (loopback bind, method/caps discipline) carry the trust: the operator is the trust
+//! root and a local process can read state.json directly anyway, so the page carries no
+//! interactive token (owner correction). Nothing but the startup banner is ever printed
+//! to stdout.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -19,7 +22,7 @@ use crate::adapters::lockfile::DataDirLock;
 use crate::adapters::{browser, tray};
 use crate::application::hub::ConnectorHub;
 use crate::domain::events::DomainEvent;
-use crate::domain::identity::{CallerId, ClientRule};
+use crate::domain::identity::CallerId;
 use crate::{build_hub, data_directory};
 
 const HEADER_LIMIT: usize = 8 * 1024;
@@ -85,41 +88,49 @@ pub fn operator(rest: &[String]) -> i32 {
         }
     };
     let bound_port = listener.local_addr().map(|address| address.port()).unwrap_or_default();
-    let token = generate_token();
-    let url = format!("http://127.0.0.1:{bound_port}/?token={token}");
+    let url = format!("http://127.0.0.1:{bound_port}/");
     println!("Tangent connector operator page: {url}");
-    println!("This address and its one-time token are printed once; restart the verb to get a new one.");
+    println!("This address lives for the life of this process; the connector records it in its state so any Connect can pop this page.");
+    // The page URL is recorded in memory AND durable state (P4): a Connect in any
+    // process — the CLI one-shots included — pops this page at the sign-in anchor.
+    hub.announce_operator_page(&url);
     if open_browser {
         // Guarded like every other spawn path: TANGENT_CONNECTOR_NO_BROWSER=1 covers
         // the startup open too (tests, headless hosts).
         let _ = browser::open_guarded(&url);
     }
-    // The tray's Quit releases the data-directory lock before exiting the process.
+    // The tray's Quit releases the data-directory lock and clears the recorded page
+    // URL before exiting the process.
     let quit_lock = lock.clone();
+    let quit_hub = hub.clone();
     tray::spawn(
         hub.clone(),
         url,
         Box::new(move || {
+            quit_hub.clear_persisted_operator_page();
             quit_lock.release();
             std::process::exit(0);
         }),
     );
+    let serving = listener.try_clone().expect("clone listener");
+    let serve_hub = hub.clone();
     let server = std::thread::Builder::new()
         .name("tangent-operator".into())
-        .spawn(move || serve(listener, hub, token))
+        .spawn(move || serve(serving, serve_hub))
         .expect("operator server thread");
     // The server thread owns the listener; the tray's Quit exits the process. Either
-    // path releases the lock (Drop here, release() in the quit hook).
+    // path releases the lock (Drop here, release() in the quit hook) and clears the
+    // recorded page URL.
     let _ = server.join();
+    hub.clear_persisted_operator_page();
     0
 }
 
 /// The accept loop: one short-lived connection thread per request (`Connection: close`);
 /// an SSE feed connection is the one deliberate exception and stays open. A failed
-/// accept pauses briefly and continues — a transient socket-level error must not end
-/// the verb. Shared with the in-process serve mode and tests, which pass their own
-/// listener and token.
-pub fn serve(listener: TcpListener, hub: Arc<ConnectorHub>, token: String) {
+/// accept pauses briefly and continues — a transient socket-level error must not end the
+/// verb. Shared with the in-process serve mode and tests, which pass their own listener.
+pub fn serve(listener: TcpListener, hub: Arc<ConnectorHub>) {
     let sse_clients = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming() {
         let stream = match stream {
@@ -130,9 +141,8 @@ pub fn serve(listener: TcpListener, hub: Arc<ConnectorHub>, token: String) {
             }
         };
         let hub = hub.clone();
-        let token = token.clone();
         let sse_clients = sse_clients.clone();
-        std::thread::spawn(move || serve_connection(stream, hub, token, sse_clients));
+        std::thread::spawn(move || serve_connection(stream, hub, sse_clients));
     }
 }
 
@@ -193,7 +203,7 @@ fn read_line_capped(reader: &mut impl BufRead, buffer: &mut String, cap: usize) 
 /// unterminated peer cannot grow memory first and fail later; a mid-request IO error
 /// just drops that connection — the verb keeps serving. `GET /api/events` is the one
 /// exception: it becomes a held-open SSE feed.
-fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, token: String, sse_clients: Arc<AtomicUsize>) {
+fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<AtomicUsize>) {
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
     let mut reader = BufReader::new(match stream.try_clone() {
         Ok(clone) => clone,
@@ -221,7 +231,6 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, token: String, ss
         return;
     }
     let mut content_length: usize = 0;
-    let mut token_header: Option<String> = None;
     let mut budget = HEADER_LIMIT;
     loop {
         let mut header = String::new();
@@ -243,9 +252,6 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, token: String, ss
         if let Some(value) = lowered.strip_prefix("content-length:") {
             content_length = value.trim().parse().unwrap_or(0);
         }
-        if let Some(value) = lowered.strip_prefix("x-tangent-token:") {
-            token_header = Some(value.trim().to_string());
-        }
     }
     if content_length > BODY_LIMIT {
         let _ = respond(&mut writer, 413, problem_json("body_too_large", "body exceeds 1 MiB"));
@@ -255,37 +261,25 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, token: String, ss
     if content_length > 0 && reader.read_exact(&mut body_bytes).is_err() {
         return;
     }
-    // The live activity feed (A1): EventSource cannot set headers, so the token rides
-    // the query string exactly like the page's other calls. The connection is handed
-    // to the streaming handler and never returns here.
+    // The live activity feed (A1): the connection is handed to the streaming handler
+    // and never returns here.
     if method == "GET" && target.split('?').next() == Some("/api/events") {
-        let provided = token_header
-            .or_else(|| {
-                target.split_once('?').and_then(|(_, query)| {
-                    query.split('&').find_map(|pair| pair.strip_prefix("token=").map(str::to_string))
-                })
-            })
-            .unwrap_or_default();
-        if !token_matches(&token, &provided) {
-            let _ = respond(&mut writer, 401, problem_json("unauthorized", "this page needs the one-time token from the tangent-connector operator command"));
-        } else {
-            stream_events(writer, hub, sse_clients);
-        }
+        stream_events(writer, hub, sse_clients);
         return;
     }
     let body: Value = serde_json::from_slice(&body_bytes).unwrap_or(Value::Null);
-    let response = route(&hub, &token, &method, &target, token_header.as_deref(), &body);
+    let response = route(&hub, &method, &target, &body);
     let _ = respond(&mut writer, response.0, response.1);
 }
 
 /// The SSE feed (owner addendum): the one deliberate exception to this server's
 /// one-response-per-connection shape — the response is held open and written as
 /// events arrive. Frames are the existing `DomainEvent` vocabulary serialized as
-/// `data:` JSON (the page reads `kind` from the payload). The token-bearing
-/// `OperatorPageReady` is deliberately skipped: it is journal-recovery material, not
-/// feed material. A keepalive comment every [`SSE_KEEPALIVE`] keeps intermediaries
-/// honest and surfaces a vanished peer as a write error; past [`SSE_CLIENT_LIMIT`]
-/// concurrent clients the refusal is an honest 503 JSON problem.
+/// `data:` JSON (the page reads `kind` from the payload). The `OperatorPageReady`
+/// event is deliberately skipped: it is journal material, not feed material. A
+/// keepalive comment every [`SSE_KEEPALIVE`] keeps intermediaries honest and surfaces
+/// a vanished peer as a write error; past [`SSE_CLIENT_LIMIT`] concurrent clients the
+/// refusal is an honest 503 JSON problem.
 fn stream_events(mut writer: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<AtomicUsize>) {
     if sse_clients.fetch_add(1, Ordering::AcqRel) >= SSE_CLIENT_LIMIT {
         sse_clients.fetch_sub(1, Ordering::AcqRel);
@@ -336,29 +330,18 @@ impl Drop for SseSlot {
 
 struct ApiResponse(u16, Value);
 
-fn route(hub: &ConnectorHub, token: &str, method: &str, target: &str, token_header: Option<&str>, body: &Value) -> ApiResponse {
-    let (path, query) = match target.split_once('?') {
+fn route(hub: &ConnectorHub, method: &str, target: &str, body: &Value) -> ApiResponse {
+    let (path, _query) = match target.split_once('?') {
         Some((path, query)) => (path, query),
         None => (target, ""),
     };
-    // The embedded page is inert HTML+JS: served without the token. Everything under
-    // /api/ always compares the token (header or query) — no exceptions, no bypass paths.
+    // The embedded page is inert HTML+JS: served plainly. Everything under /api/ is the
+    // same local-only trust boundary (loopback bind, GET/POST, caps, JSON bodies).
     if !path.starts_with("/api/") {
         return match (method, path) {
             ("GET", "/") | ("GET", "/index.html") => ApiResponse(200, Value::String(INDEX_HTML.to_string())),
             _ => ApiResponse(404, problem_json("not_found", "only the operator page and /api/* live here")),
         };
-    }
-    let provided = token_header
-        .map(str::to_string)
-        .or_else(|| {
-            query.split('&').find_map(|pair| {
-                pair.strip_prefix("token=").map(|value| value.to_string())
-            })
-        })
-        .unwrap_or_default();
-    if !token_matches(token, &provided) {
-        return ApiResponse(401, problem_json("unauthorized", "this page needs the one-time token from the tangent-connector operator command"));
     }
     let segments: Vec<&str> = path.trim_start_matches("/api/").split('/').filter(|segment| !segment.is_empty()).collect();
     match (method, segments.as_slice()) {
@@ -420,32 +403,6 @@ fn route(hub: &ConnectorHub, token: &str, method: &str, target: &str, token_head
         }
         ("POST", ["enrollments", companion_id, "forget"]) => {
             finish(hub.forget_enrollment(companion_id), |_| ok_json(json!({ "forgotten": companion_id })))
-        }
-        ("GET", ["allowlist"]) => {
-            let rules: Vec<Value> = hub
-                .client_rules()
-                .iter()
-                .map(|rule| json!({ "clientName": rule.client_name, "localId": rule.local_id }))
-                .collect();
-            ApiResponse(200, ok_json(json!({ "rules": rules })))
-        }
-        ("POST", ["allowlist"]) => {
-            let mut rules = Vec::new();
-            let Some(list) = body.get("rules").and_then(Value::as_array) else {
-                return ApiResponse(400, problem_json("bad_request", "body needs a rules array"));
-            };
-            for rule in list {
-                let Some(client_name) = rule.get("clientName").and_then(Value::as_str) else {
-                    return ApiResponse(400, problem_json("bad_request", "each rule needs a clientName"));
-                };
-                let local_id = match rule.get("localId") {
-                    None | Some(Value::Null) => None,
-                    Some(Value::String(value)) => Some(value.clone()),
-                    Some(_) => return ApiResponse(400, problem_json("bad_request", "localId must be a string or null")),
-                };
-                rules.push(ClientRule { client_name: client_name.to_string(), local_id });
-            }
-            finish(hub.set_client_rules(rules), |_| ok_json(json!({ "rules": Value::Null })))
         }
         ("GET", ["status"]) => {
             let enrollments: Vec<Value> = hub
@@ -593,46 +550,10 @@ fn respond(writer: &mut TcpStream, status: u16, body: Value) -> std::io::Result<
     writer.flush()
 }
 
-/// 32 random bytes as hex (two v4 uuids), the one-time operator token. Shared with the
-/// serve verb, which hosts this same server in-process.
-pub fn generate_token() -> String {
-    let mut bytes = Vec::with_capacity(32);
-    bytes.extend_from_slice(uuid::Uuid::new_v4().as_bytes());
-    bytes.extend_from_slice(uuid::Uuid::new_v4().as_bytes());
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-/// Constant-time comparison: the length difference is folded into the same accumulator
-/// as the byte differences, so timing does not reveal how much matched.
-fn token_matches(expected: &str, provided: &str) -> bool {
-    let expected = expected.as_bytes();
-    let provided = provided.as_bytes();
-    let mut difference = (expected.len() as u16) ^ (provided.len() as u16);
-    for (a, b) in expected.iter().zip(provided.iter()) {
-        difference |= u16::from(a ^ b);
-    }
-    difference == 0
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Cursor;
-
-    #[test]
-    fn tokens_compare_without_early_exit() {
-        assert!(token_matches("0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef"));
-        assert!(!token_matches("0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdee"));
-        assert!(!token_matches("0123456789abcdef0123456789abcdef", ""));
-        assert!(!token_matches("0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef0"));
-    }
-
-    #[test]
-    fn the_token_is_32_bytes_of_hex() {
-        let token = generate_token();
-        assert_eq!(token.len(), 64);
-        assert!(token.chars().all(|character| character.is_ascii_hexdigit()));
-    }
 
     #[test]
     fn capped_reads_consume_one_line_at_a_time_and_refuse_oversize() {

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::attention::{AttentionRecord, AttentionState, ATTENTION_RECORD_LIMIT};
-use crate::domain::identity::{AtprotoSession, CallerId, ClientRule, CompanionEntry, Identity, LocalContext};
+use crate::domain::identity::{AtprotoSession, CallerId, CompanionEntry, Identity, LocalContext};
 use crate::domain::policy::{AttentionPolicy, PolicyLedger};
 use crate::domain::writes::PendingWrite;
 
@@ -23,8 +23,13 @@ struct StateFile {
     version: u32,
     #[serde(default)]
     identities: Vec<Identity>,
+    /// The loopback operator page URL (token included) of the long-running process
+    /// currently hosting it, so a Connect in ANY process can pop that page at the
+    /// sign-in anchor. Cookie-jar class by design (owner decision): the page token is
+    /// user-profile state, the same exposure class as the sessions above; cleared on
+    /// clean shutdown and re-checked for reachability before use.
     #[serde(default)]
-    client_rules: Vec<ClientRule>,
+    operator_page_url: Option<String>,
     #[serde(default)]
     companions: Vec<CompanionEntry>,
     /// Bearer sessions per enrollment, keyed by companion id. Sessions live in
@@ -196,37 +201,27 @@ impl StateStore {
     }
 
     /// Removes one identity. Enrollments must be gone first (the hub cascades them);
-    /// dangling client rules pointing at it are dropped, and its atproto session goes too.
+    /// its atproto session goes too.
     pub fn remove_identity(&mut self, local_id: &str) {
         self.state.identities.retain(|identity| identity.local_id != local_id);
         self.state.atproto_sessions.remove(local_id);
-        for rule in &mut self.state.client_rules {
-            if rule.local_id.as_deref() == Some(local_id) {
-                rule.local_id = None;
-            }
-        }
     }
 
-    // ----- client allowlist -----
+    // ----- the running operator page (cross-process discovery) -----
 
-    pub fn client_rules(&self) -> &[ClientRule] {
-        &self.state.client_rules
+    /// The operator page URL a long-running process recorded (token included), if any.
+    pub fn operator_page_url(&self) -> Option<String> {
+        self.state.operator_page_url.clone()
     }
 
-    /// Replaces the allowlist. One rule per client name — duplicates dedupe with the
-    /// last occurrence winning, matching the documented semantics; the caller validates
-    /// referenced identities.
-    pub fn set_client_rules(&mut self, rules: Vec<ClientRule>) {
-        let mut deduped: Vec<ClientRule> = Vec::new();
-        for rule in rules {
-            deduped.retain(|existing| existing.client_name != rule.client_name);
-            deduped.push(rule);
-        }
-        self.state.client_rules = deduped;
+    /// Records the operator page URL this process hosts. Callers save afterwards.
+    pub fn set_operator_page_url(&mut self, url: &str) {
+        self.state.operator_page_url = Some(url.to_string());
     }
 
-    pub fn client_rule(&self, client_name: &str) -> Option<ClientRule> {
-        self.state.client_rules.iter().find(|rule| rule.client_name == client_name).cloned()
+    /// Clears the recorded operator page URL (clean shutdown). Callers save afterwards.
+    pub fn clear_operator_page_url(&mut self) {
+        self.state.operator_page_url = None;
     }
 
     // ----- companions (enrollments) -----

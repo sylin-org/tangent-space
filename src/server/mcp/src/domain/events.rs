@@ -22,21 +22,23 @@ pub enum DomainEvent {
     WriteSettled { request_id: String, state: String },
     ToolInvoked { channel: IntakeChannel, tool: String },
     ToolCompleted { channel: IntakeChannel, tool: String, status: String, text_bytes: usize },
-    /// The serve-mode operator page became ready. Deliberate exception to the no-secrets
-    /// rule (W2-D brief): the URL carries the one-time page token so the operator can
-    /// recover it from the local diagnostics journal after stderr scrolls away. The
-    /// journal is user-profile state, never model-visible output. The SSE feed skips it.
+    /// The serve-mode operator page became ready. The loopback URL is journal material
+    /// (the operator's recovery path once stderr has scrolled away) and state material
+    /// (any process's Connect pops this page); it is never model-visible output. The
+    /// SSE feed skips it.
     OperatorPageReady { url: String },
     /// The on-the-fly handshake's live progress (owner addendum): narration for the
     /// operator page's activity feed. Presentation-only — never a token, password,
     /// proof or session value. `identity` is the identity handle; `code` on failure is
-    /// the honest problem code the model saw.
-    ConnectStarted { origin: String },
-    ConnectResolved { origin: String, identity: String },
-    ConnectWaitingForOperator { origin: String, identity: String, needed: String },
-    ConnectOperatorCompleted { origin: String, identity: String },
-    ConnectEnrolled { origin: String, identity: String },
-    ConnectArrived { origin: String, identity: String },
-    ConnectFailed { origin: String, identity: String, code: String },
+    /// the honest problem code the model saw; `initiator` names who started this
+    /// connect ("model (via {client})" for MCP tool calls, "operator (CLI)" for the
+    /// command line, "operator (page)" for page-driven actions and the auto-resume).
+    ConnectStarted { origin: String, initiator: String },
+    ConnectResolved { origin: String, identity: String, initiator: String },
+    ConnectWaitingForOperator { origin: String, identity: String, needed: String, initiator: String },
+    ConnectOperatorCompleted { origin: String, identity: String, initiator: String },
+    ConnectEnrolled { origin: String, identity: String, initiator: String },
+    ConnectArrived { origin: String, identity: String, initiator: String },
+    ConnectFailed { origin: String, identity: String, code: String, initiator: String },
     Shutdown { reason: String },
 }

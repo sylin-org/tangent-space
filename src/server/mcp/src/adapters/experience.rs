@@ -13,6 +13,9 @@ use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext}
 const RESPONSE_LIMIT: u64 = 512 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const WAIT_TIMEOUT: Duration = Duration::from_secs(25);
+/// The reachability probe's whole budget: a loopback operator page answers in
+/// milliseconds, so anything slower is honestly treated as not running.
+const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 
 pub struct UreqExperience {
     agent: ureq::Agent,
@@ -54,6 +57,16 @@ impl ExperiencePort for UreqExperience {
 
     fn discover(&self, origin: &str, path: &str) -> Result<Value, ExperienceError> {
         atproto_request(&self.agent, "GET", &format!("{origin}{path}"), None, None)
+    }
+
+    fn probe(&self, origin: &str) -> Result<(), ExperienceError> {
+        let outcome = self.agent.request("GET", &format!("{origin}/")).timeout(PROBE_TIMEOUT).call();
+        match outcome {
+            // Any answer — including an HTTP error status — proves the page is running;
+            // the body is deliberately unread. Only a transport failure is unreachable.
+            Ok(_) | Err(ureq::Error::Status(_, _)) => Ok(()),
+            Err(ureq::Error::Transport(_)) => Err(ExperienceError::Unreachable),
+        }
     }
 
     fn exchange(&self, origin: &str, path: &str, body: &Value, bearer: &str) -> Result<Value, ExperienceError> {

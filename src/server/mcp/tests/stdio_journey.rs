@@ -190,14 +190,15 @@ fn the_stdio_edge_negotiates_and_serves_the_fourteen_tools() {
 }
 
 #[test]
-fn serve_mode_hosts_the_operator_page_with_a_stderr_token_and_pure_stdout() {
+fn serve_mode_hosts_the_operator_page_with_a_clean_url_and_pure_stdout() {
     let home = std::env::temp_dir().join(format!("tangent-connector-serve-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).expect("temp dir");
 
     let mut peer = Peer::spawn(&["serve"], &home);
 
-    // The one-time startup URL goes to stderr — never stdout.
+    // The plain loopback URL goes to stderr — never stdout, and never a token (the
+    // owner correction removed it; the URL is a clean process-lifetime address).
     let mut operator_url = None;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while std::time::Instant::now() < deadline {
@@ -208,12 +209,11 @@ fn serve_mode_hosts_the_operator_page_with_a_stderr_token_and_pure_stdout() {
         }
     }
     let url = operator_url.expect("the operator page URL is on stderr");
-    assert!(url.starts_with("http://127.0.0.1:") && url.contains("?token="), "loopback URL with token: {url}");
-    // The startup line says the page answers only once a client has connected (the
-    // listener exists from the start; the server thread joins at initialize).
+    assert!(url.starts_with("http://127.0.0.1:") && url.ends_with('/'), "clean loopback URL, no query: {url}");
+    assert!(!url.contains("token"), "the page carries no token: {url}");
+    // The startup line says the connector records the address so any Connect can pop it.
     let follow_up = peer.stderr.recv_timeout(std::time::Duration::from_secs(10)).expect("second stderr line");
-    assert!(follow_up.contains("once a client has connected"), "line was: {follow_up}");
-    let token = url.rsplit("token=").next().unwrap_or_default().to_string();
+    assert!(follow_up.contains("records it in its state"), "line was: {follow_up}");
     let port: u16 = url.trim_start_matches("http://127.0.0.1:").split(['/', '?']).next().unwrap_or_default().parse().expect("port");
 
     // stdout stays empty before any JSON-RPC traffic: it is protocol-owned.
@@ -231,7 +231,7 @@ fn serve_mode_hosts_the_operator_page_with_a_stderr_token_and_pure_stdout() {
     exchanges.push(tools.clone());
     assert_eq!(tools["result"]["tools"].as_array().expect("tools").len(), 14);
 
-    // OpenRegistration under the no-browser guard: ok, and the URL/token never render.
+    // OpenRegistration under the no-browser guard: ok, and the URL never renders.
     peer.send(&json!({
         "jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": { "name": "OpenRegistration", "arguments": {} }
@@ -243,10 +243,10 @@ fn serve_mode_hosts_the_operator_page_with_a_stderr_token_and_pure_stdout() {
     assert!(text.contains("Opened the local operator page"), "text was: {text}");
     for exchange in &exchanges {
         let rendered = serde_json::to_string(exchange).unwrap_or_default();
-        assert!(!rendered.contains(&token), "the page token never reaches stdout: {rendered}");
+        assert!(!rendered.contains(&url), "the page URL never reaches stdout: {rendered}");
     }
 
-    // The in-process operator server is reachable on loopback with the startup token.
+    // The in-process operator server is reachable on loopback, plainly.
     let get = |request: &str| {
         let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");
         stream.write_all(request.as_bytes()).expect("write");
@@ -255,29 +255,31 @@ fn serve_mode_hosts_the_operator_page_with_a_stderr_token_and_pure_stdout() {
         stream.read_to_end(&mut raw).expect("read");
         String::from_utf8_lossy(&raw).to_string()
     };
-    let page = get(&format!("GET /?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"));
+    let page = get("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     assert!(page.starts_with("HTTP/1.1 200"), "page was: {page}");
     assert!(page.contains("Atmosphere handle"), "the Atmosphere-handle column is served");
     assert!(
         !page.contains("enroll-bound") && !page.contains("Enroll unbound") && !page.contains("Enroll with bound"),
         "no enroll buttons remain on the page"
     );
-    let api = get(&format!("GET /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"));
+    let api = get("GET /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     assert!(api.starts_with("HTTP/1.1 200") && api.contains("\"status\":\"ok\""), "api was: {api}");
-    let bare = get("GET /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-    assert!(bare.starts_with("HTTP/1.1 401"), "bare api was: {bare}");
 
-    // The startup URL (token included) is recoverable from the diagnostics journal.
+    // The startup URL is recoverable from the diagnostics journal, and the connector
+    // recorded it in state so any process's Connect can pop this page (P4).
     let journal = std::fs::read_to_string(home.join("connector.log")).unwrap_or_default();
     assert!(journal.contains("operator_page_ready") && journal.contains(&url), "journal was: {journal}");
+    let state = std::fs::read_to_string(home.join("state.json")).unwrap_or_default();
+    assert!(state.contains(&format!("\"operator_page_url\": \"{url}\"")), "state was: {state}");
 }
 
 /// The live-deadlock journey against the real binary (serve mode hosts the operator
-/// page in-process, exactly like the live run): an allowlisted MCP client Connects, the
-/// handshake waits for the operator and pops the page, the popped tab refreshes its
-/// identity list, a polling client Connects again, and the operator mutates identities —
-/// every step must answer promptly. Before the re-entrant-lock fix, the page's identity
-/// fetch froze the whole hub: the second Connect and every operator mutation hung.
+/// page in-process, exactly like the live run): an MCP client Connects with the one
+/// local identity (auto-resolution — the allowlist is gone), the handshake waits for
+/// the operator and pops the page, the popped tab refreshes its identity list, a
+/// polling client Connects again, and the operator mutates identities — every step must
+/// answer promptly. Before the re-entrant-lock fix, the page's identity fetch froze the
+/// whole hub: the second Connect and every operator mutation hung.
 #[test]
 fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
     let server = FakeServer::start();
@@ -286,8 +288,7 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
     std::fs::create_dir_all(&home).expect("temp dir");
 
     let mut peer = Peer::spawn(&["serve"], &home);
-    // The startup URL and its note are the only stderr lines; the page answers once a
-    // client has connected (the server thread joins the hub at initialize).
+    // The startup URL and its note are the only stderr lines.
     let mut operator_url = None;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while std::time::Instant::now() < deadline {
@@ -298,7 +299,6 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
         }
     }
     let url = operator_url.expect("the operator page URL is on stderr");
-    let token = url.rsplit("token=").next().unwrap_or_default().to_string();
     let port: u16 = url.trim_start_matches("http://127.0.0.1:").split(['/', '?']).next().unwrap_or_default().parse().expect("port");
 
     peer.send(&json!({
@@ -309,8 +309,8 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
     assert_eq!(initialized["result"]["serverInfo"]["name"], json!("tangent-connector"));
     peer.send(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
 
-    // Operator setup through the page API this same process hosts: one identity, and
-    // the allowlist rule that lets the MCP client 'zcode' resolve it.
+    // Operator setup through the page API this same process hosts: one identity — the
+    // single identity every connect then acts as automatically.
     let http = |request: &str| {
         let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");
         stream.write_all(request.as_bytes()).expect("write");
@@ -324,20 +324,12 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
     };
     let create_body = json!({ "handle": "ox_omega", "displayName": null }).to_string();
     let created = http(&format!(
-        "POST /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{create_body}",
+        "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{create_body}",
         create_body.len()
     ))
     .expect("identity creation answered");
     assert!(created.contains("\"status\":\"ok\""), "create was: {created}");
-    let local_id = created.split("\"localId\":\"").nth(1).unwrap_or_default().split('"').next().unwrap_or_default().to_string();
-    assert!(!local_id.is_empty(), "local id parsed from: {created}");
-    let allow_body = format!("{{\"rules\":[{{\"clientName\":\"zcode\",\"localId\":\"{local_id}\"}}]}}");
-    let allowed = http(&format!(
-        "POST /api/allowlist?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{allow_body}",
-        allow_body.len()
-    ))
-    .expect("allowlist save answered");
-    assert!(allowed.contains("\"status\":\"ok\""), "allowlist was: {allowed}");
+    assert!(created.contains("ox_omega"), "create was: {created}");
 
     // Connect #1: waiting for the operator — the honest blocked return, page popped.
     peer.send(&json!({
@@ -352,7 +344,7 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
 
     // The popped tab boots and fetches its identity list — the exact freeze point of
     // the live deadlock. It must answer, with the identity and its binding status.
-    let listed = http(&format!("GET /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"))
+    let listed = http("GET /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
         .expect("the popped page's identity fetch answered");
     assert!(listed.starts_with("HTTP/1.1 200"), "identity list was: {listed}");
     assert!(listed.contains("ox_omega") && listed.contains("\"atproto\":null"), "list was: {listed}");
@@ -373,7 +365,7 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
     // The operator's mutation during the pending connect still answers.
     let mutate_body = json!({ "handle": "ox_second", "displayName": null }).to_string();
     let mutated = http(&format!(
-        "POST /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{mutate_body}",
+        "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{mutate_body}",
         mutate_body.len()
     ))
     .expect("operator.create_identity answered during the pending connect");

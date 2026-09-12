@@ -98,6 +98,7 @@ struct PendingConnect {
     local_id: String,
     handle: String,
     origin: String,
+    initiator: String,
     recorded_at: i64,
 }
 
@@ -141,11 +142,34 @@ impl ConnectorHub {
         self.events.clone()
     }
 
-    /// Records the operator page URL this process hosts (token included). The URL never
-    /// enters model-visible output; only the internal browser open uses it.
+    /// Records this process's own operator page URL in memory. The URL never enters
+    /// model-visible output; only the internal browser open uses it. The full recording
+    /// (memory + durable state for cross-process Connects) is
+    /// [`ConnectorHub::announce_operator_page`].
     pub fn set_operator_page_url(&self, url: &str) {
         if let Ok(mut slot) = self.operator_page_url.lock() {
             *slot = Some(url.to_string());
+        }
+    }
+
+    /// Records the operator page URL this process hosts: in memory for this process's
+    /// own opens, and in durable state so a Connect in ANY process (the CLI one-shots)
+    /// can pop this page at the sign-in anchor. Cookie-jar class by design — same
+    /// exposure class as the per-enrollment sessions.
+    pub fn announce_operator_page(&self, url: &str) {
+        self.set_operator_page_url(url);
+        if let Ok(mut store) = self.lock_store() {
+            store.set_operator_page_url(url);
+            let _ = store.save();
+        }
+    }
+
+    /// Clears the persisted operator page URL on clean shutdown, so later Connects are
+    /// not pointed at a page that died with this process.
+    pub fn clear_persisted_operator_page(&self) {
+        if let Ok(mut store) = self.lock_store() {
+            store.clear_operator_page_url();
+            let _ = store.save();
         }
     }
 
@@ -161,6 +185,15 @@ impl ConnectorHub {
             None => "create-identity".to_string(),
         };
         Some(registration_target(&page, &anchor))
+    }
+
+    /// The browser target a sign-in pop for this identity would open (this process's
+    /// own page, or a recorded reachable one, with the per-identity bind anchor).
+    /// Test-visible mirror of the internal resolution, so the anchor is assertable
+    /// under the no-browser guard without spawning anything.
+    pub fn sign_in_target_url(&self, local_id: &str) -> Option<String> {
+        let (page, _) = self.sign_in_page()?;
+        Some(format!("{page}#{}", bind_anchor(local_id)))
     }
 
     /// Opens one browser target once per process (F2). Returns whether THIS call is the
@@ -642,16 +675,18 @@ impl ConnectorHub {
 
     // ---------- the on-the-fly handshake (Connect) ----------
 
-    /// `Connect { serverUrl }` — the on-the-fly handshake (owner-directed): the model
-    /// says "connect to server X" and enrollment is a consequence, not a ceremony.
-    /// (a) the acting identity resolves through the client allowlist — never a guess,
-    /// never machine-wide; (b) discovery against the operator-supplied origin; (c) with
-    /// no usable atproto binding the handshake pops the operator page at that
-    /// identity's sign-in anchor and returns honestly — NEVER a silent unbound
-    /// fallback; (d) with a binding, enrollment runs only when no usable
+    /// `Connect { serverUrl, identity? }` — the on-the-fly handshake (owner-directed):
+    /// the model says "connect to server X" and enrollment is a consequence, not a
+    /// ceremony. (a) the acting identity resolves by behavior — an explicit `identity`
+    /// argument (exact match), or exactly one local identity, for every intake alike;
+    /// (b) discovery against the operator-supplied origin; (c) with no usable atproto
+    /// binding the handshake pops the operator page (this process's own, or a recorded
+    /// reachable one) at that identity's sign-in anchor and returns honestly — NEVER a
+    /// silent unbound fallback; (d) with a binding, enrollment runs only when no usable
     /// enrollment/session exists for the origin, and the handshake exits through
-    /// `Arrive`'s orientation view. `SelectCompanion` + `Arrive` stay the explicit path.
-    fn connect(&self, server_url: &str) -> ToolOutcome {
+    /// `Arrive`'s orientation view led by the "You are … — session …" line (P2).
+    /// `SelectCompanion` + `Arrive` stay the explicit path.
+    fn connect(&self, server_url: &str, identity_arg: Option<&str>, initiator: &str) -> ToolOutcome {
         let Some(canonical) = refs::acceptable_origin(server_url) else {
             return self.problem_outcome(
                 "Connect",
@@ -660,62 +695,74 @@ impl ConnectorHub {
                 None,
             );
         };
-        self.events.publish(DomainEvent::ConnectStarted { origin: canonical.clone() });
-        let identity = match self.resolve_caller_identity() {
+        let identity = match self.resolve_connect_identity(identity_arg) {
             Ok(identity) => identity,
             Err(reason) => {
-                self.connect_failed(&canonical, "", "identity_selection_required");
+                self.connect_failed(&canonical, "", "identity_selection_required", initiator);
                 return self.identity_question(&reason);
             }
         };
-        self.events.publish(DomainEvent::ConnectResolved {
-            origin: canonical.clone(),
-            identity: identity.handle.clone(),
-        });
+        // P5a coalescing: a live pending for this (identity, origin) means the waiting
+        // state is already narrated on the feed — a looping caller's repeated Connects
+        // refresh the pending but stay silent until state changes (sign-in, age-out, a
+        // different identity or origin).
+        let repeated = self.touch_pending_connect(&identity.local_id, &canonical);
+        if !repeated {
+            self.events.publish(DomainEvent::ConnectStarted { origin: canonical.clone(), initiator: initiator.to_string() });
+            self.events.publish(DomainEvent::ConnectResolved {
+                origin: canonical.clone(),
+                identity: identity.handle.clone(),
+                initiator: initiator.to_string(),
+            });
+        }
         // Discovery before any operator attention is requested: a server that cannot
         // do the proof exchange is an honest error, never a popped page.
         if let Err(error) = self.discover_proof_spec(&canonical) {
             let outcome = self.enrollment_problem("Connect", &error);
-            self.connect_failed(&canonical, &identity.handle, &problem_code_of(&outcome));
+            self.connect_failed(&canonical, &identity.handle, &problem_code_of(&outcome), initiator);
             return outcome;
         }
         if !self.usable_binding(&identity.local_id) {
-            return self.pop_sign_in(&identity, &canonical);
+            return self.pop_sign_in(&identity, &canonical, repeated, initiator);
         }
         self.clear_pending_bind(&identity.local_id);
-        self.connect_finish(&identity, &canonical)
+        // The wait (if any) is over: this connect finishes model-side, so its pending
+        // must not linger into a duplicate auto-resume.
+        self.drop_pending_connect(&identity.local_id, &canonical);
+        self.connect_finish(&identity, &canonical, initiator)
     }
 
-    /// Allowlist-only identity resolution for the on-the-fly handshake — the same rule
-    /// `SelectCompanion` applies without a moniker. An unlisted MCP client (and the CLI
-    /// and operator intakes, always) resolves nothing; the honest answer is a question.
-    fn resolve_caller_identity(&self) -> Result<Identity, String> {
+    /// Identity resolution is behavior, not configuration (owner correction): an explicit
+    /// argument resolves exactly (handle or local id) with an honest miss; otherwise
+    /// exactly one local identity resolves automatically for every intake — the MCP
+    /// edge, the CLI and the operator channel alike — while zero or several resolve
+    /// nothing, honestly, even when a choice would seem obvious.
+    fn resolve_connect_identity(&self, identity_arg: Option<&str>) -> Result<Identity, String> {
         let store = self.lock_store().expect("state lock");
-        let Some(client) = self.caller.mcp_client_name() else {
-            return Err("This intake never auto-resolves an identity".to_string());
-        };
-        let Some(rule) = store.client_rule(client) else {
-            return Err(format!("MCP client '{client}' is not in the connector's identity allowlist"));
-        };
-        let Some(local_id) = rule.local_id.as_deref() else {
-            return Err(format!("MCP client '{client}' is listed without an identity"));
-        };
-        store
-            .identity(local_id)
-            .ok_or_else(|| "The allowlist names an identity that no longer exists".to_string())
+        if let Some(argument) = identity_arg {
+            return store
+                .identity_by_moniker(argument)
+                .ok_or_else(|| format!("No local identity matches '{argument}'"));
+        }
+        let identities = store.identities();
+        match identities.len() {
+            0 => Err("No local identity exists yet".to_string()),
+            1 => Ok(identities[0].clone()),
+            _ => Err("Multiple local identities exist".to_string()),
+        }
     }
 
     /// The honest unresolvable-identity answer: why resolution failed, which identities
-    /// exist, and the two ways forward. Never a guess, never machine-wide.
+    /// exist, and the explicit way forward. Never a guess, never machine-wide.
     fn identity_question(&self, reason: &str) -> ToolOutcome {
         let handles: Vec<String> = self.identities().iter().map(|identity| identity.handle.clone()).collect();
         let message = if handles.is_empty() {
             format!(
-                "{reason}, and no local identity exists yet. Ask the operator to create one (OpenRegistration opens the operator page), then connect again."
+                "{reason}. Ask the operator to create one (OpenRegistration opens the operator page), then connect again."
             )
         } else {
             format!(
-                "{reason}. Available identities: {}. Ask which one is yours, then have the operator record it in the connector's client allowlist (tangent-connector operator) and connect again — or select explicitly with SelectCompanion and Arrive.",
+                "{reason}. Available identities: {}. Ask which one is yours, then connect again with identity set to one of them.",
                 handles.join(" · ")
             )
         };
@@ -746,35 +793,66 @@ impl ConnectorHub {
         self.operator_page_url.lock().ok()?.clone()
     }
 
+    /// The operator page a sign-in pop should open, and whether THIS process hosts it.
+    /// Order (P4): this process's own page first (trusted — it is in-process and alive);
+    /// otherwise the page URL the current long-running process recorded in state, but
+    /// only after one cheap reachability probe, so a stale record from an unclean
+    /// shutdown points no one at a dead port.
+    fn sign_in_page(&self) -> Option<(String, bool)> {
+        if let Some(page) = self.page_url() {
+            return Some((page, true));
+        }
+        let recorded = {
+            let store = self.lock_store().ok()?;
+            store.operator_page_url()?
+        };
+        let origin = page_origin(&recorded)?;
+        match self.port.probe(&origin) {
+            Ok(()) => Some((recorded, false)),
+            Err(_) => None,
+        }
+    }
+
     /// The waiting-for-operator branch (c): pops the operator page at this identity's
     /// sign-in anchor (guarded, once per target per process), records the pending
     /// connect so the handshake auto-resumes when the operator completes the binding,
     /// narrates it on the feed, and returns the honest outcome. No enrollment side
-    /// effect happens on this branch.
-    fn pop_sign_in(&self, identity: &Identity, canonical: &str) -> ToolOutcome {
+    /// effect happens on this branch. `repeated` (P5a) means an identical pending is
+    /// already narrated: the pending refreshes but the feed stays quiet.
+    fn pop_sign_in(&self, identity: &Identity, canonical: &str, repeated: bool, initiator: &str) -> ToolOutcome {
         if let Ok(mut slot) = self.pending_bind.lock() {
             *slot = Some(identity.local_id.clone());
         }
-        self.record_pending_connect(identity, canonical);
-        self.events.publish(DomainEvent::ConnectWaitingForOperator {
-            origin: canonical.to_string(),
-            identity: identity.handle.clone(),
-            needed: format!("sign in identity '{}': an atproto handle and app password", identity.handle),
-        });
-        let opened = self.page_url().map(|page| {
-            self.open_page_once(&format!("{page}#{}", bind_anchor(&identity.local_id)))
+        if !repeated {
+            self.record_pending_connect(identity, canonical, initiator);
+            self.events.publish(DomainEvent::ConnectWaitingForOperator {
+                origin: canonical.to_string(),
+                identity: identity.handle.clone(),
+                needed: format!("sign in identity '{}': an atproto handle and app password", identity.handle),
+                initiator: initiator.to_string(),
+            });
+        }
+        let page = self.sign_in_page();
+        let opened = page.as_ref().map(|(url, in_process)| {
+            let target = format!("{url}#{}", bind_anchor(&identity.local_id));
+            let fresh = self.open_page_once(&target);
+            (fresh, *in_process)
         });
         let message = match opened {
-            Some(true) => format!(
+            Some((true, true)) => format!(
                 "operator action needed — page opened to sign in identity '{}'; ask the operator, then connect again. The connect also finishes by itself once the sign-in is done.",
                 identity.handle
             ),
-            Some(false) => format!(
+            Some((true, false)) => format!(
+                "operator action needed — page opened to sign in identity '{}'; ask the operator, then connect again.",
+                identity.handle
+            ),
+            Some((false, _)) => format!(
                 "operator action needed — page already opened to sign in identity '{}'; ask the operator, then connect again.",
                 identity.handle
             ),
             None => format!(
-                "operator action needed — the local operator page is not running in this process. Ask the operator to start tangent-connector (serve or the operator verb), sign in identity '{}', then connect again.",
+                "operator action needed — no reachable operator page is running. Ask the operator to start tangent-connector operator to sign in identity '{}', then connect again.",
                 identity.handle
             ),
         };
@@ -788,7 +866,7 @@ impl ConnectorHub {
     /// enrollment is unusable for every operation, so the honest re-enroll path is
     /// forget + bound exchange (the same one the CLI documents). An existing enrollment
     /// (of either tier) with its session intact is used as-is.
-    fn connect_enroll(&self, identity: &Identity, canonical: &str) -> Result<String, String> {
+    fn connect_enroll(&self, identity: &Identity, canonical: &str, initiator: &str) -> Result<String, String> {
         let mut forget: Option<String> = None;
         let mut ready: Option<String> = None;
         {
@@ -811,34 +889,78 @@ impl ConnectorHub {
         self.events.publish(DomainEvent::ConnectEnrolled {
             origin: canonical.to_string(),
             identity: identity.handle.clone(),
+            initiator: initiator.to_string(),
         });
         Ok(entry.companion_id)
     }
 
     /// Enroll-if-needed then arrive, publishing the handshake's live tail events and
-    /// answering with `Arrive`'s orientation outcome. Shared by the model-facing
-    /// connect and the service-side auto-resume so both narrate identically. A PDS
-    /// session that died mid-flight pops the sign-in page again (just-in-time re-bind).
-    fn connect_finish(&self, identity: &Identity, canonical: &str) -> ToolOutcome {
-        match self.connect_enroll(identity, canonical) {
+    /// answering with `Arrive`'s orientation outcome led by the P2 line — "You are
+    /// {handle} — session {contextId}": the session id IS the context handle later
+    /// calls carry. Shared by the model-facing connect and the service-side
+    /// auto-resume so both narrate identically. A PDS session that died mid-flight
+    /// pops the sign-in page again (just-in-time re-bind).
+    fn connect_finish(&self, identity: &Identity, canonical: &str, initiator: &str) -> ToolOutcome {
+        match self.connect_enroll(identity, canonical, initiator) {
             Ok(companion_id) => {
-                let outcome = self.arrive(&companion_id, canonical);
+                let mut outcome = self.arrive(&companion_id, canonical);
                 if outcome.is_error {
-                    self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome));
+                    self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome), initiator);
                 } else {
+                    let context_id = outcome
+                        .structured
+                        .pointer("/connector/contextId")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    outcome.text = format!("You are {} — session {context_id}\n{}", identity.handle, outcome.text);
+                    if let Some(connector) = outcome.structured.get_mut("connector").and_then(Value::as_object_mut) {
+                        connector.insert("identityHandle".into(), json!(identity.handle));
+                    }
                     self.events.publish(DomainEvent::ConnectArrived {
                         origin: canonical.to_string(),
                         identity: identity.handle.clone(),
+                        initiator: initiator.to_string(),
                     });
                 }
                 outcome
             }
-            Err(error) if error.starts_with("atproto_session_expired") => self.pop_sign_in(identity, canonical),
+            Err(error) if error.starts_with("atproto_session_expired") => {
+                self.pop_sign_in(identity, canonical, false, initiator)
+            }
             Err(error) => {
                 let outcome = self.enrollment_problem("Connect", &error);
-                self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome));
+                self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome), initiator);
                 outcome
             }
+        }
+    }
+
+    /// Whether an identical waiting connect is already pending (P5a coalescing), and if
+    /// so refreshes it: the looping caller keeps the auto-resume window open while its
+    /// repeated Connects stay silent on the feed.
+    fn touch_pending_connect(&self, local_id: &str, origin: &str) -> bool {
+        self.pending_connects
+            .lock()
+            .map(|mut pendings| {
+                let now = now_millis();
+                let mut found = false;
+                for entry in pendings.iter_mut() {
+                    if entry.local_id == local_id && entry.origin == origin {
+                        entry.recorded_at = now;
+                        found = true;
+                    }
+                }
+                found
+            })
+            .unwrap_or(false)
+    }
+
+    /// Drops the pending for one (identity, origin): the connect finished model-side,
+    /// so a later binding must not resume it a second time.
+    fn drop_pending_connect(&self, local_id: &str, origin: &str) {
+        if let Ok(mut pendings) = self.pending_connects.lock() {
+            pendings.retain(|entry| !(entry.local_id == local_id && entry.origin == origin));
         }
     }
 
@@ -849,11 +971,12 @@ impl ConnectorHub {
     /// a looping model's repeated Connects each refresh the pending but spawn nothing,
     /// and the sweeper touches the pending list only briefly, once per sweep — it can
     /// never contend with the store, the operator page, or a Connect in flight.
-    fn record_pending_connect(&self, identity: &Identity, canonical: &str) {
+    fn record_pending_connect(&self, identity: &Identity, canonical: &str, initiator: &str) {
         let pending = PendingConnect {
             local_id: identity.local_id.clone(),
             handle: identity.handle.clone(),
             origin: canonical.to_string(),
+            initiator: initiator.to_string(),
             recorded_at: now_millis(),
         };
         {
@@ -893,6 +1016,7 @@ impl ConnectorHub {
                             origin: entry.origin,
                             identity: entry.handle,
                             code: "operator_timeout: the pending connect aged out waiting for the operator".into(),
+                            initiator: entry.initiator,
                         });
                     }
                 });
@@ -924,16 +1048,19 @@ impl ConnectorHub {
             self.events.publish(DomainEvent::ConnectOperatorCompleted {
                 origin: pending.origin.clone(),
                 identity: identity.handle.clone(),
+                // The resume is always armed by an operator action on the page.
+                initiator: "operator (page)".to_string(),
             });
-            let _ = self.connect_finish(&identity, &pending.origin);
+            let _ = self.connect_finish(&identity, &pending.origin, "operator (page)");
         }
     }
 
-    fn connect_failed(&self, origin: &str, identity: &str, code: &str) {
+    fn connect_failed(&self, origin: &str, identity: &str, code: &str, initiator: &str) {
         self.events.publish(DomainEvent::ConnectFailed {
             origin: origin.to_string(),
             identity: identity.to_string(),
             code: code.to_string(),
+            initiator: initiator.to_string(),
         });
     }
 
@@ -947,7 +1074,7 @@ impl ConnectorHub {
         self.problem_outcome(tool, &code, &message, None)
     }
 
-    // ---------- identities and the client allowlist (operator surface) ----------
+    // ---------- identities (operator surface) ----------
 
     pub fn create_identity(&self, handle: &str, display_name: Option<&str>) -> Result<crate::domain::identity::Identity, String> {
         self.attributed("operator.create_identity", || {
@@ -1038,30 +1165,6 @@ impl ConnectorHub {
         store.companions().iter().map(|entry| (entry.clone(), store.has_session(&entry.companion_id))).collect()
     }
 
-    pub fn client_rules(&self) -> Vec<crate::domain::identity::ClientRule> {
-        let store = self.lock_store().expect("state lock");
-        store.client_rules().to_vec()
-    }
-
-    pub fn set_client_rules(&self, rules: Vec<crate::domain::identity::ClientRule>) -> Result<(), String> {
-        self.attributed("operator.set_allowlist", || {
-            for rule in &rules {
-                if rule.client_name.trim().is_empty() || rule.client_name.chars().count() > 100 {
-                    return Err("a client name is 1-100 characters".to_string());
-                }
-                if let Some(local_id) = &rule.local_id {
-                    let store = self.lock_store()?;
-                    if store.identity(local_id).is_none() {
-                        return Err(format!("allowlist names unknown identity '{local_id}'"));
-                    }
-                }
-            }
-            let mut store = self.lock_store()?;
-            store.set_client_rules(rules);
-            store.save()
-        })
-    }
-
     /// Read-only attention/pending-write state per enrollment, for the operator page.
     pub fn enrollment_statuses(&self) -> Vec<EnrollmentStatus> {
         let store = self.lock_store().expect("state lock");
@@ -1137,7 +1240,8 @@ impl ConnectorHub {
     pub fn execute(&self, channel: IntakeChannel, operation: Operation) -> ToolOutcome {
         let tool = operation.tool_name();
         self.events.publish(DomainEvent::ToolInvoked { channel, tool: tool.to_string() });
-        let outcome = self.dispatch(operation);
+        let initiator = self.initiator_label(channel);
+        let outcome = self.dispatch(operation, &initiator);
         self.events.publish(DomainEvent::ToolCompleted {
             channel,
             tool: tool.to_string(),
@@ -1147,11 +1251,22 @@ impl ConnectorHub {
         outcome
     }
 
-    fn dispatch(&self, operation: Operation) -> ToolOutcome {
+    /// The feed's initiator label (P5b): who started this call. MCP tool calls are the
+    /// model acting through a named client; the command line and the operator page are
+    /// the operator.
+    fn initiator_label(&self, channel: IntakeChannel) -> String {
+        match channel {
+            IntakeChannel::Mcp => format!("model (via {})", self.caller.mcp_client_name().unwrap_or("stdio")),
+            IntakeChannel::Cli => "operator (CLI)".to_string(),
+            IntakeChannel::Operator => "operator (page)".to_string(),
+        }
+    }
+
+    fn dispatch(&self, operation: Operation, initiator: &str) -> ToolOutcome {
         match operation {
             Operation::SelectCompanion { moniker } => self.select_companion(moniker.as_deref()),
             Operation::OpenRegistration => self.open_registration(),
-            Operation::Connect { server_url } => self.connect(&server_url),
+            Operation::Connect { server_url, identity } => self.connect(&server_url, identity.as_deref(), initiator),
             Operation::Arrive { companion_id, server_url } => self.arrive(&companion_id, &server_url),
             Operation::ListTangents { context_id, cursor } => {
                 self.with_context("ListTangents", &context_id, ViewMode::Compact, |frame| {
@@ -1271,9 +1386,9 @@ impl ConnectorHub {
     }
 
     /// Selection resolves an identity first, then one of its enrollments. Without a
-    /// moniker the only permitted source is the connecting client's allowlist rule: an
-    /// unlisted MCP client (and the CLI, always) resolves nothing — never a guess, never
-    /// machine-wide, even when exactly one identity exists.
+    /// moniker the acting identity resolves by behavior — exactly one local identity is
+    /// used (every intake alike); zero or several resolve nothing, honestly, and the
+    /// answer is a question — never a guess, never machine-wide.
     fn select_companion(&self, moniker: Option<&str>) -> ToolOutcome {
         let store = self.lock_store().expect("state lock");
         match moniker {
@@ -1291,28 +1406,18 @@ impl ConnectorHub {
                 let instruction = |detail: String| {
                     self.problem_outcome("SelectCompanion", "identity_selection_required", &detail, None)
                 };
-                let Some(client) = self.caller.mcp_client_name() else {
-                    return instruction(
-                        "This intake never auto-selects an identity. Pass a moniker: an identity handle, or an enrollment's name, handle or participant reference."
-                        .to_string(),
-                    );
-                };
-                let Some(rule) = store.client_rule(client) else {
-                    return instruction(format!(
-                        "MCP client '{client}' is not in the connector's identity allowlist. Ask the operator to assign it an identity in the operator page (tangent-connector operator), or pass a moniker."
-                    ));
-                };
-                let Some(local_id) = rule.local_id.as_deref() else {
-                    return instruction(format!(
-                        "MCP client '{client}' is listed without an identity. Ask the operator to choose one in the operator page, or pass a moniker."
-                    ));
-                };
-                let Some(identity) = store.identity(local_id) else {
-                    return instruction(
-                        "The allowlist names an identity that no longer exists. Ask the operator to fix the allowlist, or pass a moniker.".to_string(),
-                    );
-                };
-                self.select_enrollment_of(&store, &identity)
+                let identities = store.identities();
+                match identities.len() {
+                    0 => instruction(
+                        "No local identity exists yet. Ask the operator to create one (the operator page), or pass a moniker."
+                            .to_string(),
+                    ),
+                    1 => self.select_enrollment_of(&store, &identities[0]),
+                    _ => instruction(format!(
+                        "Multiple local identities exist: {}. Ask which one is yours, or pass a moniker (an identity handle).",
+                        identities.iter().map(|identity| identity.handle.clone()).collect::<Vec<_>>().join(" · ")
+                    )),
+                }
             }
         }
     }
@@ -1337,9 +1442,9 @@ impl ConnectorHub {
     /// so the human operator can create an identity or complete a pending sign-in. The
     /// anchor is routed (R3): after a `Connect` popped sign-in for one identity, this
     /// opens that identity's bind anchor; the default is the identity-creation view.
-    /// The URL — with its one-time token — is constructed internally; it never renders
-    /// into the tool response or any view, so the model never sees the token. Nothing
-    /// auto-runs: signing in and enrolling remain operator actions on that page.
+    /// The URL is constructed internally; it never renders into the tool response or
+    /// any view. Nothing auto-runs: signing in and enrolling remain operator actions on
+    /// that page.
     /// Once per process (F2): a second call answers honestly instead of spawning
     /// another tab for a looping model.
     fn open_registration(&self) -> ToolOutcome {
@@ -1962,6 +2067,20 @@ pub fn registration_target(page_url: &str, anchor: &str) -> String {
 /// The per-identity sign-in anchor on the operator page (R2): `bind-{localId}`.
 pub fn bind_anchor(local_id: &str) -> String {
     format!("bind-{local_id}")
+}
+
+/// The origin (`scheme://host:port`) of a page URL, for the reachability probe. Pure
+/// construction; a URL without the expected shape answers `None` (honestly unprobeable).
+fn page_origin(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    let authority = rest.split('/').next()?;
+    if authority.is_empty() {
+        return None;
+    }
+    Some(format!("{scheme}://{authority}"))
 }
 
 /// The honest problem code of a tool outcome, for feed narration. Outcomes without a

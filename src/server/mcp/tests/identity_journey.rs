@@ -1,9 +1,10 @@
-//! W2-A identity journeys: identity CRUD and handle uniqueness, per-caller allowlist
-//! resolution (listed → resolve; listed-None and unlisted → instruction, even with one
-//! identity; CLI → never), the W2-contract enrollment exchange against the fake server
-//! (ok path, local and server `already_enrolled`, blocked `unbound_enrollment_disabled`),
-//! the legacy-enrollment drop at load, and the operator listener's token gate. All data
-//! is synthetic.
+//! W2-A identity journeys: identity CRUD and handle uniqueness, behavior-based identity
+//! resolution (exactly one identity → auto-resolve for every intake; several → honest
+//! selection question; zero → creation instruction), the W2-contract enrollment exchange
+//! against the fake server (ok path, local and server `already_enrolled`, blocked
+//! `unbound_enrollment_disabled`), the legacy-enrollment drop at load, and the operator
+//! listener's local-only discipline (no token — the owner correction). All data is
+//! synthetic.
 
 mod common;
 
@@ -19,7 +20,7 @@ use tangent_connector::adapters::store::StateStore;
 use tangent_connector::application::bus::EventBus;
 use tangent_connector::application::hub::ConnectorHub;
 use tangent_connector::application::ports::ExperiencePort;
-use tangent_connector::domain::identity::{CallerId, ClientRule};
+use tangent_connector::domain::identity::CallerId;
 use tangent_connector::domain::intake::IntakeChannel;
 
 fn workspace(label: &str, caller: CallerId) -> Arc<ConnectorHub> {
@@ -93,33 +94,34 @@ fn delete_refuses_while_enrollments_exist_and_cascades_when_confirmed() {
     assert!(hub.store().lock().unwrap().companion(&companion_id).is_none(), "the enrollment cascades");
 }
 
-// ---------- allowlist resolution ----------
+// ---------- behavior-based resolution (every intake alike) ----------
 
 #[test]
-fn a_listed_client_resolves_its_identity_and_only_its_identity() {
+fn the_one_identity_resolves_automatically_for_every_intake() {
     let server = FakeServer::start();
-    let hub = mcp_workspace("listed", "codex-host");
+    let hub = workspace("one-identity", CallerId("cli".into()));
     let (local_id, companion_id) = enrolled_unbound(&hub, &server, "lumen");
-    hub.set_client_rules(vec![ClientRule { client_name: "codex-host".into(), local_id: Some(local_id) }])
-        .expect("allowlist");
 
-    let outcome = select(&hub, None);
+    // The CLI intake resolves exactly like the MCP intake: no moniker, one identity.
+    let outcome = hub.invoke(IntakeChannel::Cli, "SelectCompanion", &json!({}));
     assert!(!outcome.is_error, "text: {}", outcome.text);
     assert_eq!(
         outcome.structured.pointer("/connector/companionId").and_then(Value::as_str),
         Some(companion_id.as_str())
     );
-    // An explicit moniker still works for a listed client.
-    assert!(!select(&hub, Some("lumen")).is_error);
+    // An explicit moniker still works alongside the automatic resolution.
+    let by_moniker = hub.invoke(IntakeChannel::Mcp, "SelectCompanion", &json!({ "moniker": "lumen" }));
+    assert!(!by_moniker.is_error, "text: {}", by_moniker.text);
+    let _ = local_id;
 }
 
 #[test]
-fn a_listed_client_without_an_identity_resolves_nothing() {
+fn several_identities_resolve_nothing_without_an_explicit_choice() {
     let server = FakeServer::start();
-    let hub = mcp_workspace("listed-none", "codex-host");
-    enrolled_unbound(&hub, &server, "lumen");
-    hub.set_client_rules(vec![ClientRule { client_name: "codex-host".into(), local_id: None }])
-        .expect("allowlist");
+    let hub = mcp_workspace("two-identities", "codex-host");
+    let _ = enrolled_unbound(&hub, &server, "alpha");
+    let beta = hub.create_identity("beta", None).expect("identity");
+    let _ = beta;
 
     let outcome = select(&hub, None);
     assert!(outcome.is_error);
@@ -127,38 +129,21 @@ fn a_listed_client_without_an_identity_resolves_nothing() {
         outcome.structured.pointer("/problem/code").and_then(Value::as_str),
         Some("identity_selection_required")
     );
-    assert!(outcome.text.contains("operator"), "instruction names the operator path: {}", outcome.text);
+    assert!(outcome.text.contains("alpha") && outcome.text.contains("beta"), "both handles are listed: {}", outcome.text);
+    assert!(outcome.text.contains("moniker"), "the instruction names the explicit path: {}", outcome.text);
 }
 
 #[test]
-fn an_unlisted_client_resolves_nothing_even_with_one_identity() {
-    let server = FakeServer::start();
-    let hub = mcp_workspace("unlisted", "codex-host");
-    enrolled_unbound(&hub, &server, "lumen");
-    // A rule exists — for a different client.
-    hub.set_client_rules(vec![ClientRule { client_name: "some-other-host".into(), local_id: None }])
-        .expect("allowlist");
-
+fn no_identities_point_at_creation() {
+    let hub = mcp_workspace("zero-identities", "codex-host");
     let outcome = select(&hub, None);
     assert!(outcome.is_error);
     assert_eq!(
         outcome.structured.pointer("/problem/code").and_then(Value::as_str),
         Some("identity_selection_required")
     );
-    // With exactly one identity present, resolution still never happens silently.
-    let identities = hub.identities();
-    assert_eq!(identities.len(), 1);
-}
-
-#[test]
-fn the_command_line_never_auto_resolves() {
-    let hub = workspace("cli-never", CallerId("cli".into()));
-    let outcome = hub.invoke(IntakeChannel::Cli, "SelectCompanion", &json!({}));
-    assert!(outcome.is_error);
-    assert_eq!(
-        outcome.structured.pointer("/problem/code").and_then(Value::as_str),
-        Some("identity_selection_required")
-    );
+    assert!(outcome.text.contains("No local identity exists yet"), "text: {}", outcome.text);
+    assert!(outcome.text.contains("operator"), "the instruction names the operator path: {}", outcome.text);
 }
 
 // ---------- the W2-contract enrollment exchange ----------
@@ -269,9 +254,10 @@ fn legacy_enrollments_are_dropped_once_and_the_drop_persists() {
     let dropped = store.take_dropped_enrollments();
     assert_eq!(dropped.len(), 1);
     assert_eq!((dropped[0].0.as_str(), dropped[0].1.as_str()), ("cmp_legacy01", "old"));
-    // Additive serde defaults: no identities and no allowlist means empty, not malformed.
+    // Additive serde defaults: no identities and no operator page means empty, not
+    // malformed (the old client_rules field, when present, is simply ignored).
     assert!(store.identities().is_empty());
-    assert!(store.client_rules().is_empty());
+    assert_eq!(store.operator_page_url(), None);
     // A second launch finds nothing left to drop — EnrollmentDropped journals once.
     let mut again = StateStore::open(&dir).expect("reopen");
     assert!(again.take_dropped_enrollments().is_empty());
@@ -343,26 +329,6 @@ fn one_identity_at_two_servers_keeps_distinct_working_sessions() {
     assert!(!again.is_error, "b still participates after forgetting a: {}", again.text);
 }
 
-// ---------- allowlist bookkeeping ----------
-
-#[test]
-fn allowlist_rules_dedupe_by_client_name_with_the_last_winning() {
-    let hub = workspace("dedupe", CallerId("cli".into()));
-    let alpha = hub.create_identity("alpha", None).expect("identity");
-    let beta = hub.create_identity("beta", None).expect("identity");
-    hub.set_client_rules(vec![
-        ClientRule { client_name: "codex-host".into(), local_id: Some(alpha.local_id.clone()) },
-        ClientRule { client_name: "codex-host".into(), local_id: Some(beta.local_id.clone()) },
-        ClientRule { client_name: "other-host".into(), local_id: None },
-    ])
-    .expect("allowlist");
-
-    let rules = hub.client_rules();
-    assert_eq!(rules.len(), 2, "one rule per client name: {:?}", rules);
-    let codex = rules.iter().find(|rule| rule.client_name == "codex-host").expect("codex rule");
-    assert_eq!(codex.local_id.as_deref(), Some(beta.local_id.as_str()), "the last occurrence wins");
-}
-
 // ---------- the operator listener ----------
 
 fn http_round_trip(stream: &mut TcpStream, request: &str) -> (String, String) {
@@ -375,23 +341,25 @@ fn http_round_trip(stream: &mut TcpStream, request: &str) -> (String, String) {
     (head.to_string(), body.to_string())
 }
 
+/// The owner correction removed the page token: the operator is the trust root, a local
+/// process can read state.json anyway, and the browser drive-by class is blocked
+/// structurally (loopback bind, GET/POST only, caps, JSON bodies, no CORS). The page and
+/// its API answer plainly on loopback; the ceremony routes are gone.
 #[test]
-fn the_operator_api_refuses_missing_or_wrong_tokens_and_accepts_right_ones() {
-    let hub = workspace("operator-auth", CallerId("operator".into()));
+fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
+    let hub = workspace("operator-plain", CallerId("operator".into()));
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let address = listener.local_addr().unwrap();
-    let token = "0123456789abcdef0123456789abcdef".to_string();
     {
         let hub = hub.clone();
-        let token = token.clone();
         let serving = listener.try_clone().expect("clone listener");
         std::thread::Builder::new()
             .name("operator-under-test".into())
-            .spawn(move || tangent_connector::adapters::operator::serve(serving, hub, token))
+            .spawn(move || tangent_connector::adapters::operator::serve(serving, hub))
             .expect("server thread");
     }
 
-    // Static asset without a token: inert HTML, served.
+    // The page itself: inert HTML, served plainly.
     let mut page = TcpStream::connect(address).expect("connect");
     let (head, body) = http_round_trip(&mut page, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
@@ -400,37 +368,23 @@ fn the_operator_api_refuses_missing_or_wrong_tokens_and_accepts_right_ones() {
     // sign-in anchors exist for the Connect handshake to open.
     assert!(!body.contains("enroll-bound") && !body.contains("Enroll unbound") && !body.contains("Enroll with bound"), "no enroll buttons remain: {body}");
     assert!(body.contains("bind-"), "the per-identity bind anchors are wired");
+    // The allowlist section is gone too (owner correction: resolution is behavior).
+    assert!(!body.contains("allowlist") && !body.contains("Allowlist"), "no allowlist UI remains: {body}");
 
-    // API without a token: 401 JSON refusal.
+    // The API reads plainly — no token anywhere (structural absence: the generator is
+    // gone from the codebase, so there is nothing to present).
     let mut bare = TcpStream::connect(address).expect("connect");
     let (head, body) = http_round_trip(&mut bare, "GET /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-    assert!(head.starts_with("HTTP/1.1 401"), "head was: {head}");
-    assert!(body.contains("\"unauthorized\""), "body was: {body}");
-
-    // API with a wrong token (header form): still refused.
-    let mut wrong = TcpStream::connect(address).expect("connect");
-    let (head, _) = http_round_trip(
-        &mut wrong,
-        "GET /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: deadbeef\r\nConnection: close\r\n\r\n",
-    );
-    assert!(head.starts_with("HTTP/1.1 401"), "head was: {head}");
-
-    // Correct token via query: works.
-    let mut via_query = TcpStream::connect(address).expect("connect");
-    let (head, body) = http_round_trip(
-        &mut via_query,
-        &format!("GET /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"),
-    );
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
     assert!(body.contains("\"status\":\"ok\""), "body was: {body}");
 
-    // Correct token via header: creating an identity through the API.
-    let mut via_header = TcpStream::connect(address).expect("connect");
+    // A mutation works plainly: creating an identity through the API.
+    let mut via_post = TcpStream::connect(address).expect("connect");
     let payload = json!({ "handle": "lumen", "displayName": "Lumen" }).to_string();
     let (head, body) = http_round_trip(
-        &mut via_header,
+        &mut via_post,
         &format!(
-            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
             payload.len()
         ),
     );
@@ -438,14 +392,24 @@ fn the_operator_api_refuses_missing_or_wrong_tokens_and_accepts_right_ones() {
     assert!(body.contains("\"handle\":\"lumen\""), "body was: {body}");
     assert_eq!(hub.identities().len(), 1, "the mutation crossed the same hub");
 
-    // The enroll API routes are gone too (R2): enrollment lives in the Connect
-    // handshake and the hub/CLI disarm tier, never on this page's API.
+    // The enroll API routes are gone (R2), and the allowlist routes are gone (owner
+    // correction): both answer an honest 404.
     let mut enroll_attempt = TcpStream::connect(address).expect("connect");
     let (head, _) = http_round_trip(
         &mut enroll_attempt,
-        &format!(
-            "POST /api/identities/00000000000000000000000000000000/enroll HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
-        ),
+        "POST /api/identities/00000000000000000000000000000000/enroll HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
     );
     assert!(head.starts_with("HTTP/1.1 404"), "the enroll route is gone: {head}");
+    let mut allowlist_read = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(
+        &mut allowlist_read,
+        "GET /api/allowlist HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+    );
+    assert!(head.starts_with("HTTP/1.1 404"), "the allowlist read route is gone: {head}");
+    let mut allowlist_write = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(
+        &mut allowlist_write,
+        "POST /api/allowlist HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+    );
+    assert!(head.starts_with("HTTP/1.1 404"), "the allowlist write route is gone: {head}");
 }

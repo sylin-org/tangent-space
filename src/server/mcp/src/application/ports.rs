@@ -39,6 +39,11 @@ pub trait ExperiencePort: Send + Sync {
     /// document). No Authorization header. Error bodies of this surface use an
     /// `error` code field, which the adapter surfaces as `Application`.
     fn discover(&self, origin: &str, path: &str) -> Result<Value, ExperienceError>;
+    /// One cheap reachability probe: a short-timeout GET whose body is discarded; any
+    /// HTTP answer counts as reachable, only a transport failure does not. Used by
+    /// Connect's waiting branch to decide whether a recorded operator page is alive
+    /// before popping it.
+    fn probe(&self, origin: &str) -> Result<(), ExperienceError>;
     /// POST the bound service-proof exchange (`/mcp/token`): the bearer is the
     /// short-lived proof JWT. Distinct error surface: 503/401/403 bodies carry
     /// `error` codes the hub maps to honest operator wording.

@@ -69,10 +69,10 @@ fn usage() {
          \n\
          serve [--force]                MCP stdio server (the agent-facing intake);
                                         also hosts the loopback operator page in-process
-                                        (its one-time URL goes to stderr, never stdout)\n\
+                                        (its URL goes to stderr, never stdout)\n\
          operator [--port N] [--no-open] [--force]\n\
-                                        local operator web page + tray (identities,\n\
-                                        client allowlist, enrollments, status)\n\
+                                        local operator web page + tray (identities,
+                                        Atmosphere sign-in, enrollments, status)\n\
          call <tool> [json] [--view V]  invoke one participation tool through the same hub\n\
          call --stdin [--json]          read `<tool> <json>` lines from standard input\n\
          catalog [--json]               list the tool catalog\n\
@@ -108,9 +108,9 @@ fn serve(rest: &[String]) -> i32 {
             return EXIT_FAILED;
         }
     };
-    // The SAME loopback operator server the operator verb hosts, in-process. Its
-    // one-time startup token goes to stderr and the diagnostics journal — NEVER
-    // stdout, which is protocol-owned JSON-RPC and nothing else.
+    // The SAME loopback operator server the operator verb hosts, in-process. Its URL
+    // goes to stderr and the diagnostics journal — NEVER stdout, which is
+    // protocol-owned JSON-RPC and nothing else.
     let listener = match TcpListener::bind(("127.0.0.1", 0)) {
         Ok(listener) => listener,
         Err(error) => {
@@ -119,25 +119,25 @@ fn serve(rest: &[String]) -> i32 {
         }
     };
     let bound_port = listener.local_addr().map(|address| address.port()).unwrap_or_default();
-    let token = operator::generate_token();
-    let url = format!("http://127.0.0.1:{bound_port}/?token={token}");
+    let url = format!("http://127.0.0.1:{bound_port}/");
     eprintln!("Tangent connector operator page: {url}");
-    eprintln!("This address and its one-time token are printed once; the page answers once a client has connected. Restart the process to get a new one.");
+    eprintln!("This address lives for the life of this process; the connector records it in its state so any Connect can pop this page.");
     // The hub is constructed when the initialize request names the connecting client;
-    // clientInfo.name becomes the caller (attribution + allowlist key, never a domain
+    // clientInfo.name becomes the caller (attribution + feed labeling, never a domain
     // input). One process still serves exactly one client. The operator server joins
     // at that moment, sharing the one hub (one state store, one lock).
+    let build_data_dir = data_dir.clone();
     let build = move |client_name: &str| -> Result<Arc<ConnectorHub>, String> {
-        let hub = build_hub(CallerId(format!("mcp:{client_name}")), data_dir.clone())?;
-        // The URL (token included) enters the diagnostics journal — the operator's
-        // recovery path once stderr has scrolled away — and no model-visible surface.
+        let hub = build_hub(CallerId(format!("mcp:{client_name}")), build_data_dir.clone())?;
+        // The URL enters the diagnostics journal (the operator's recovery path once
+        // stderr has scrolled away) and durable state (so a Connect in any process —
+        // the CLI one-shots included — can pop this page); no model-visible surface.
         hub.events().publish(DomainEvent::OperatorPageReady { url: url.clone() });
-        hub.set_operator_page_url(&url);
+        hub.announce_operator_page(&url);
         let operator_hub = hub.clone();
-        let operator_token = token.clone();
         std::thread::Builder::new()
             .name("tangent-operator".into())
-            .spawn(move || operator::serve(listener, operator_hub, operator_token))
+            .spawn(move || operator::serve(listener, operator_hub))
             .expect("operator server thread");
         let (auto, poll_seconds) = {
             let store = hub.store().lock().expect("state lock");
@@ -150,8 +150,16 @@ fn serve(rest: &[String]) -> i32 {
     };
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    mcp::serve(build, &mut out)
+    let code = mcp::serve(build, &mut out);
+    // Clean shutdown (stdin ended): the operator page died with this process, so the
+    // recorded URL must not point a later Connect at a dead port. The reachability
+    // probe would catch it too, but honest state beats a probe.
+    if let Ok(mut store) = tangent_connector::adapters::store::StateStore::open(&data_dir) {
+        store.clear_operator_page_url();
+        let _ = store.save();
+    }
     // stdin ended: the lock releases on drop as the process winds down.
+    code
 }
 
 // ---------- the CLI intake ----------

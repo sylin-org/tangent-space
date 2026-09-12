@@ -7,14 +7,15 @@ use serde::{Deserialize, Serialize};
 
 /// The local caller identity. stdio v1 admits exactly one operator-approved caller per
 /// process; the field exists so a later daemon does not silently merge principals. For the
-/// MCP intake the caller is `mcp:{clientInfo.name}`; the connector keys the client
-/// allowlist on that suffix.
+/// MCP intake the caller is `mcp:{clientInfo.name}`; the CLI and operator intakes are
+/// `cli` and `operator`. Attribution and feed labeling only — identity resolution is the
+/// same behavior for every caller.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallerId(pub String);
 
 impl CallerId {
     /// The `clientInfo.name` this caller was admitted under, when it is an MCP caller.
-    /// The CLI caller has none: CLI verbs never auto-resolve an identity.
+    /// Used for feed attribution ("model (via {client})"), never for a domain decision.
     pub fn mcp_client_name(&self) -> Option<&str> {
         self.0.strip_prefix("mcp:")
     }
@@ -120,17 +121,6 @@ pub struct AtprotoSession {
     pub pds: String,
     /// Epoch milliseconds of the `createSession` that produced this session.
     pub obtained_at: i64,
-}
-
-/// One clientInfo allowlist rule. `local_id: None` means "ask, never auto-resolve": a
-/// connecting MCP client resolves nothing until the operator records an exact identity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClientRule {
-    /// The `clientInfo.name` an MCP client connects under (exact, case-sensitive).
-    pub client_name: String,
-    /// The identity this client acts as, or `None` to require explicit selection.
-    #[serde(default)]
-    pub local_id: Option<String>,
 }
 
 /// A participation context: caller + enrollment + canonical origin + credential binding.
