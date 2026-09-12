@@ -412,3 +412,14 @@ binding pops the operator page when one is running (page URL persisted in state)
 returns honest instructions otherwise — the next Connect completes the handshake by
 itself (CLI calls are naturally re-entrant; serve-process auto-resume remains a
 convenience).
+
+## 11 September 2026 — Permissive-PoC principle (owner-directed)
+
+Product-grade guards must not be wired as PoC prerequisites. Defaults during the PoC are
+**permissive with honesty**: one identity resolves automatically and every response names
+who is acting; ambiguity asks; misses state what is missing. Restrictions (per-client
+identity pinning, posture gates, admission controls) arrive deliberately with the posture
+work, never ahead of the mechanism being proven. First application: the MCP client
+allowlist — never requested as a gate — is removed from the resolution path entirely
+(single-identity auto-use; multiple → ask; per-client pinning may return as an optional
+refinement when shared machines matter).
