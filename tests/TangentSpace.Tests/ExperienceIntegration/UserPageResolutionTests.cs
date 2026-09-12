@@ -121,10 +121,18 @@ public sealed class UserPageResolutionTests : IAsyncLifetime
     [Fact]
     public async Task The_profile_api_accepts_a_handle_and_returns_the_canonical_did_data()
     {
+        const string avatarFile = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png";
         app.Services.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>().Set(
             "tangent-profile:" + ExperienceWebApp.AgentDid,
-            new ParticipantProfile(ExperienceWebApp.AgentDid, ExperienceWebApp.AgentHandle,
-                "A familiar companion", "Here for the conversation.", "https://example.test/avatar.png", "loaded"));
+            new ParticipantProfileSnapshot
+            {
+                Id = ExperienceWebApp.AgentDid,
+                DisplayName = "A familiar companion",
+                Description = "Here for the conversation.",
+                AvatarFile = avatarFile,
+                CapturedAt = DateTimeOffset.UtcNow,
+                RetryAfter = DateTimeOffset.UtcNow.AddHours(1)
+            });
         using var response = await app.Http.GetAsync($"/api/participants/{ExperienceWebApp.AgentHandle}/profile");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -134,7 +142,8 @@ public sealed class UserPageResolutionTests : IAsyncLifetime
         Assert.Equal(ExperienceWebApp.AgentDid, data.GetProperty("did").GetString());
         Assert.Equal(ExperienceWebApp.AgentHandle, data.GetProperty("handle").GetString());
         Assert.Equal("A familiar companion", data.GetProperty("displayName").GetString());
-        Assert.Equal("https://example.test/avatar.png", data.GetProperty("avatar").GetString());
+        Assert.Equal("/api/profile-cache/avatar?did=" + Uri.EscapeDataString(ExperienceWebApp.AgentDid)
+            + "&v=" + avatarFile, data.GetProperty("avatar").GetString());
         Assert.StartsWith("/u/", data.GetProperty("profileUrl").GetString());
         var posts = data.GetProperty("posts").EnumerateArray().ToArray();
         Assert.NotEmpty(posts);

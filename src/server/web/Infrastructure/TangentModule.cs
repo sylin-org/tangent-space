@@ -44,6 +44,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<TangentServer>();
         services.AddMemoryCache();
         services.AddSingleton<TangentSpace.Participants.ParticipantProfiles>();
+        services.AddHostedService<TangentSpace.Participants.ProfileCapture>();
         services.AddSingleton<ServerGovernance>();
         services.AddOptions<SpacesOptions>().BindConfiguration(SpacesOptions.Configuration);
         services.AddOptions<TangentSpace.Conversation.ConversationOptions>().BindConfiguration(TangentSpace.Conversation.ConversationOptions.Configuration);

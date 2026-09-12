@@ -135,8 +135,14 @@ public sealed class ParticipationTests
         services.AddAuthentication(options => options.DefaultAuthenticateScheme = CookieAuthentication.CookieScheme)
             .AddScheme<AuthenticationSchemeOptions, CookieFixtureHandler>(CookieAuthentication.CookieScheme, _ => { });
         services.AddParticipation();
+        services.AddSingleton<IAtprotoHandleSource, NoAtprotoHandles>();
         services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
         return services.BuildServiceProvider();
+    }
+
+    private sealed class NoAtprotoHandles : IAtprotoHandleSource
+    {
+        public Task<string?> HandleOf(string did, CancellationToken ct) => Task.FromResult<string?>(null);
     }
 
     // This fixture tests scheme selection only; real browser OAuth has a separate end-to-end proof.

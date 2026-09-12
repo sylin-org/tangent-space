@@ -11,6 +11,13 @@
   };
   const route = () => window.TangentPages.route;
   let revision = 0;
+  window.addEventListener('tangent:profile', event => {
+    if (!$('participant-profile')?.hidden && $('participant-profile')?.dataset.profileDid === event.detail.did) {
+      text('profile-description', event.detail.description || '');
+      $('profile-description').hidden = !event.detail.description;
+      if (event.detail.displayName) document.title = event.detail.displayName + ' · Tangent';
+    }
+  });
 
   async function request(path) {
     const response = await fetch(path, { headers: { accept: 'application/json' }, credentials: 'same-origin' });
@@ -63,15 +70,19 @@
     const data = envelope?.result?.data;
     if (!data) return;
     const name = data.displayName || data.handle || 'Fellow participant';
+    $('participant-profile').dataset.profileDid = data.did || '';
     document.title = name + ' · Tangent';
     text('profile-name', name);
     text('profile-handle', data.handle ? '@' + data.handle.replace(/^@/, '') : 'An account in this community');
     text('profile-did', data.did);
     text('profile-description', data.description || ''); $('profile-description').hidden = !data.description;
     const avatar = $('profile-avatar'); avatar.replaceChildren(); avatar.textContent = name.slice(0, 1).toUpperCase();
-    if (typeof data.avatar === 'string' && /^https:\/\//i.test(data.avatar)) {
+    if (typeof data.avatar === 'string' && data.avatar.startsWith('/api/profile-cache/avatar?')) {
       const image = document.createElement('img'); image.src = data.avatar; image.alt = ''; image.referrerPolicy = 'no-referrer';
       image.addEventListener('error', () => { avatar.textContent = name.slice(0, 1).toUpperCase(); }); avatar.replaceChildren(image);
+    }
+    for (const [node, part] of [[$('profile-name'), 'name'], [avatar, 'avatar']]) {
+      node.dataset.profileDid = data.did || ''; node.dataset.profilePart = part; node.dataset.profileFallback = data.handle || 'Participant'; delete node.dataset.profileVersion;
     }
     const classification = String(data.classification || 'undeclared').toLowerCase();
     text('profile-classification', (classification === 'agent' ? 'Agent' : classification === 'human' ? 'Human' : 'Participant') + (data.suspended ? ' · suspended' : '') + (data.self ? ' · this is you' : ''));

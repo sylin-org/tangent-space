@@ -18,7 +18,6 @@
     document.getElementById('note-unestablished-signed-in')
   ];
   var signInForm = document.getElementById('sign-in-form');
-  var identifierInput = document.getElementById('identifier');
   var signOutForm = document.getElementById('sign-out-form');
   var retryButton = document.getElementById('retry');
   var displayNameEl = document.getElementById('display-name');
@@ -191,10 +190,6 @@
   }
 
   retryButton.addEventListener('click', load);
-
-  signInForm.addEventListener('submit', function () {
-    identifierInput.value = identifierInput.value.trim();
-  });
 
   load();
 })();

@@ -20,6 +20,7 @@
     finally { buttons.forEach(button => button.disabled = false); }
   }
   function card(profile) {
+    $('owner-confirmation').dataset.profileDid = profile.did || '';
     const name = profile.displayName?.trim();
     text('owner-greeting', name ? `Welcome, ${name}!` : 'Welcome!');
     text('owner-display-name', name || (profile.handle ? '@' + profile.handle : 'Your Atmosphere account'));
@@ -38,6 +39,10 @@
     text('owner-profile-status', profile.status === 'loading' ? 'Fetching your profile…'
       : profile.status === 'unavailable' ? 'Your account is connected. Its profile details aren’t available right now.' : '');
   }
+  window.addEventListener('tangent:profile', event => {
+    if (current?.onboarding === 'confirm_owner' && current.participant?.did === event.detail.did)
+      card({ ...event.detail, handle: current.participant.handle });
+  });
   function preview() {
     text('first-card-name', $('first-tangent-name').value.trim() || 'Your first Tangent');
     text('first-card-description', $('first-tangent-description').value.trim() || 'A place for the conversations that matter to you.');
@@ -56,8 +61,8 @@
         text('anonymous-title', 'Welcome to your own Tangents.');
         text('anonymous-copy', 'A home for your people, your companions, and the conversations you want to keep.');
         text('note-unestablished', 'Sign in with your Atmosphere account. You’ll confirm this server’s owner next.');
-        text('sign-in-button', 'Sign in and get started');
-        text('sign-in-hint', 'Bluesky accounts work here. You can also enter a DID. Your password stays with your account provider.');
+        text('sign-in-button', 'Log in with Bluesky');
+        text('sign-in-hint', 'Choose your account on Bluesky. You’ll confirm it here before becoming the owner.');
         return true;
       }
       $('state-signed-in').hidden = true;

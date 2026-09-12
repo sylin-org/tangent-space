@@ -9,8 +9,7 @@ namespace TangentSpace.Web;
 public sealed class PagesController(IWebHostEnvironment environment) : ControllerBase
 {
     [HttpGet("/onboarding/")]
-    [HttpGet("/sign-in/")]
-    [HttpGet("/tangents/")]
+    [HttpGet("/settings")]
     [HttpGet("/t/{tangent}/topics")]
     [HttpGet("/t/{tangent}/topics/{topic}")]
     [HttpGet("/t/{tangent}/{post}")]
@@ -19,6 +18,21 @@ public sealed class PagesController(IWebHostEnvironment environment) : Controlle
         Response.Headers.CacheControl = "no-store";
         return PhysicalFile(Path.Combine(environment.WebRootPath, "index.html"), "text/html; charset=utf-8");
     }
+
+    [HttpGet("/sign-in/")]
+    public IActionResult SignIn([FromQuery(Name = "return")] string? returnTo, [FromQuery] string? provider)
+    {
+        // The usual sign-in goes straight to the provider's own account chooser.
+        // Keep an explicit alternative for custom Atmosphere providers and test identities.
+        if (provider == "other") return Page();
+        Response.Headers.CacheControl = "no-store";
+        var destination = Url.IsLocalUrl(returnTo) && !returnTo!.Any(char.IsControl)
+            && !returnTo.StartsWith("/sign-in", StringComparison.OrdinalIgnoreCase) ? returnTo : "/";
+        return Redirect("/auth/atproto/challenge?return=" + Uri.EscapeDataString(destination));
+    }
+
+    [HttpGet("/tangents/")]
+    public IActionResult Tangents() => Redirect("/#tangent-return");
 
     /// <summary>The participant resolver page. Identity-level routing only — suspension and
     /// policy never influence it; the profile API keeps all gating. Non-canonical forms redirect

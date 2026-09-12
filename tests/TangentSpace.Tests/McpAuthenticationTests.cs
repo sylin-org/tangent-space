@@ -9,10 +9,12 @@ using Koan.Core.Hosting.App;
 using Koan.Data.Core;
 using Koan.Testing.Integration;
 using Koan.Web.Auth.Connector.Atproto;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Org.BouncyCastle.Crypto.EC;
@@ -520,6 +522,7 @@ public sealed class McpAuthenticationTests
                     services.AddKoan();
                     services.AddTangentMcpAuthentication();
                     services.AddSingleton<IServiceProofKeySource>(new FakeKeySource(keys));
+                    services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment(root));
                 })
                 .StartAsync();
             AppHost.Current = host.Services;
@@ -535,6 +538,16 @@ public sealed class McpAuthenticationTests
             await Host.DisposeAsync();
             TestHooks.ResetDataConfigs();
         }
+    }
+
+    private sealed class TestWebHostEnvironment(string root) : IWebHostEnvironment
+    {
+        public string ApplicationName { get; set; } = nameof(McpAuthenticationTests);
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+        public string WebRootPath { get; set; } = Path.Combine(root, "wwwroot");
+        public string EnvironmentName { get; set; } = "Testing";
+        public string ContentRootPath { get; set; } = root;
+        public IFileProvider ContentRootFileProvider { get; set; } = new PhysicalFileProvider(root);
     }
 
     [Fact]
