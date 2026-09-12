@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { installTangentTools } from '../src/server/web/wwwroot/webmcp.js';
 
-const agent = { did: 'did:plc:mgxxqowf6nnd3btckqjq573l', handle: 'tangent-agent.test2' };
-const human = { did: 'did:plc:5rqf45qvouvadvz26a4m4al3', handle: 'leo.sylin.org' };
+const agent = { participantRef: '11111111111111111111111111111111', did: 'did:plc:mgxxqowf6nnd3btckqjq573l', handle: 'tangent-agent.test2' };
+const human = { participantRef: '22222222222222222222222222222222', did: 'did:plc:5rqf45qvouvadvz26a4m4al3', handle: 'leo.sylin.org' };
 const operationId = 'fba06f04-514d-4d27-a0a9-025c0587eb24';
 const replyTo = {
   uri: 'at://did:plc:yblwluenzocgiqpmu4ip7six/space/local.tangent.room/tangent-workshop/did:plc:6c26drqwrk5yavtnnjuvpvdf/local.tangent.message/op-human',
   cid: 'bafyreieu5hkiljchkxp2l6lghteaxp23z6fwvqgufkdtfbtbmvun7oo7nq'
 };
-const post = { key: 'tangent-workshop', expectedDid: agent.did, operationId, text: 'An attributed reply.', replyTo };
+const post = { key: 'tangent-workshop', expectedParticipant: agent.participantRef, operationId, text: 'An attributed reply.', replyTo };
 const unpack = value => JSON.parse(value.content[0].text);
 
 async function fixture(respond = () => ({})) {
@@ -29,10 +29,10 @@ async function fixture(respond = () => ({})) {
     call: (name, input = {}, signal) => definitions.get(name).execute(input, { signal }) };
 }
 
-test('native registration exposes ten fixed tools with accurate read and untrusted-content hints', async () => {
+test('native registration exposes sixteen fixed tools with accurate read and untrusted-content hints', async () => {
   const f = await fixture();
-  assert.equal(f.definitions.size, 10);
-  const readOnly = ['tangent_arrive', 'tangent_list_tangents', 'tangent_list_channels', 'tangent_read_channel',
+  assert.equal(f.definitions.size, 16);
+  const readOnly = ['tangent_get_server', 'tangent_arrive', 'tangent_list_tangents', 'tangent_list_channels', 'tangent_read_channel',
     'tangent_wait_updates', 'tangent_get_updates', 'tangent_wait_activity'];
   for (const [name, definition] of f.definitions) {
     assert.equal(definition.inputSchema.additionalProperties, false);
@@ -50,7 +50,7 @@ test('post and acknowledgement reject changed identity before any request', asyn
   f.setIdentity(human);
   for (const [name, input] of [
     ['tangent_post_message', post],
-    ['tangent_mark_read', { key: post.key, expectedDid: agent.did, cursor: 'opaque-resume' }]
+    ['tangent_mark_read', { key: post.key, expectedParticipant: agent.participantRef, cursor: 'opaque-resume' }]
   ]) {
     const response = await f.call(name, input);
     assert.equal(response.isError, true);
@@ -75,7 +75,7 @@ test('pending receipts preserve the exact operation and do not acknowledge or re
     assert.equal(request.path, '/api/rooms/tangent-workshop/messages');
     assert.equal(request.method, 'POST');
     assert.deepEqual(request.body, { operationId, text: post.text, replyTo });
-    assert.equal(Object.hasOwn(request.body, 'expectedDid'), false);
+    assert.equal(Object.hasOwn(request.body, 'expectedParticipant'), false);
     assert.equal(Object.hasOwn(request.body, 'authorDid'), false);
   }
   assert.equal(JSON.stringify(f.activity).includes(post.text), false);
@@ -156,7 +156,7 @@ test('read continuation and explicit rereading use distinct bounded endpoints; m
     '/api/rooms/tangent-workshop/messages?cursor=opaque%2B%2F%3D%3Fcursor'
   ]);
   assert.equal(f.requests.every(request => request.method === 'GET'), true);
-  await f.call('tangent_mark_read', { key: post.key, expectedDid: agent.did, cursor: 'resume-next' });
+  await f.call('tangent_mark_read', { key: post.key, expectedParticipant: agent.participantRef, cursor: 'resume-next' });
   assert.equal(f.requests.at(-1).path, '/api/rooms/tangent-workshop/read-position');
   assert.deepEqual(f.requests.at(-1).body, { cursor: 'resume-next' });
 });
