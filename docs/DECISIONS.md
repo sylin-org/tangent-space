@@ -393,3 +393,9 @@ the atproto handle + inline Log Out (= unbind, server enrollment sessions untouc
 bound ones. Enroll buttons are removed; the Servers list is a status view. Enrollment
 engine internals (createSession / getServiceAuth / /mcp/token) are unchanged — only the
 trigger moved into the handshake.
+
+Addendum (same day): the honest return ends the MODEL's call, not the service's work — a
+popped-page connect keeps running connector-side, the operator page receives live progress
+over SSE (a subscriber on the existing event bus; waiting-for-you states included), and a
+connect waiting on operator sign-in auto-resumes service-side when the binding completes
+(the model's next connect finds the session ready; abandoned waits age out honestly).
