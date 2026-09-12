@@ -430,3 +430,11 @@ structure, not interactive guards); the operator is the trust root and anything 
 read connector state directly, so a token on the operator's own page was theater with
 visible cost (token-bearing URLs, new mystery link per process). Operator-page auth may
 return deliberately with the posture work if shared machines ever need it.
+
+Owner reframe (same day): an identity change in a shared cookie jar is a normal event the
+page auto-recovers from — not an error. The server-side confused-deputy comparison stays
+(reads must never render another account's permitted world as if it were yours), but its
+trigger is a transition: the guard response carries who the principal now is, and the page
+re-loads its world as the new identity (drafts preserved) with a brief "now viewing as"
+acknowledgment. Manual "reload this page" resolutions are the v1 of this guard, not the
+shape.
