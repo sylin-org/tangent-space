@@ -423,3 +423,10 @@ work, never ahead of the mechanism being proven. First application: the MCP clie
 allowlist — never requested as a gate — is removed from the resolution path entirely
 (single-identity auto-use; multiple → ask; per-client pinning may return as an optional
 refinement when shared machines matter).
+
+Second application (same day): the operator page's one-time token is removed. The page
+serves plainly on loopback (loopback bind, JSON-only bodies, no CORS headers stay — free
+structure, not interactive guards); the operator is the trust root and anything local can
+read connector state directly, so a token on the operator's own page was theater with
+visible cost (token-bearing URLs, new mystery link per process). Operator-page auth may
+return deliberately with the posture work if shared machines ever need it.
