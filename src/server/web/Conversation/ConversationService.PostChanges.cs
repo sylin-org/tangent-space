@@ -1,6 +1,4 @@
-using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Koan.Data.Core;
 using Koan.Data.Core.Model;
 using TangentSpace.Activity;
@@ -114,11 +112,11 @@ public sealed partial class ConversationService
                         {
                             // D2a: provided facets ride the new version; absent facets re-detect
                             // deterministically. The pre-edit structure rides its snapshot.
-                            var effective = await EffectiveFacets(change.Text!, facets, token);
+                            var effective = await MessageFacets.Effective(change.Text!, change.Facets, token);
                             await SnapshotChange(current, change.Text!, effective, embedder, token);
                             current.Content = new MessageContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
                             current.EditedAt = clock.GetUtcNow();
-                            current.Facets = effective;
+                            current.Facets = change.Facets;
                         }
                         await current.Save(token);
                         change.State = change.Delete ? "deleted" : "accepted";
@@ -182,9 +180,10 @@ public sealed partial class ConversationService
                     }
                     else
                     {
-                        // Spaces records carry no facets: the live row keeps the honest drop and the
-                        // pre-edit structure rides its snapshot, so each era's shape survives.
-                        await SnapshotChange(current, change.Text!, null, embedder, token);
+                        // Source records carry no facet package; classify the same derivation that
+                        // the Message save hook will apply to this new live version.
+                        var effective = await MessageFacets.Effective(change.Text!, null, token);
+                        await SnapshotChange(current, change.Text!, effective, embedder, token);
                         current.Content = new MessageContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
                         current.SourceCid = record!.Cid;
                         current.EditedAt = clock.GetUtcNow();
@@ -237,118 +236,4 @@ public sealed partial class ConversationService
         live.ChangeId = snapshot.Id;
     }
 
-    /// <summary>Facets for the edited live row (D2a): provided facets win; absent facets degrade to
-    /// deterministic server re-detection. Computed at application time only — the idempotency
-    /// conflict check compares the ledger's remembered client-sent payload instead.</summary>
-    private async Task<IReadOnlyList<PostFacet>?> EffectiveFacets(string? text, IReadOnlyList<PostFacet>? provided, CancellationToken token)
-        => text is null || provided is { Count: > 0 } ? provided : await DetectFacets(text, token);
-
-    // The candidate rules mirror the digest parser (Experience/ExperienceMentions.cs), which offers
-    // no offset-bearing API: the regexes, code-fence handling, token boundaries, trailing-punctuation
-    // trim, exact-handle resolution and ambiguity guard are copied verbatim and must stay in step.
-    [GeneratedRegex(@"(?<![\w@])@(?<handle>[A-Za-z0-9][A-Za-z0-9.-]{1,252})", RegexOptions.CultureInvariant)]
-    private static partial Regex HandleToken();
-
-    [GeneratedRegex(@"(?<![\w:])did:(?<method>[a-z]+):(?<identifier>[A-Za-z0-9._:%-]{1,512})", RegexOptions.CultureInvariant)]
-    private static partial Regex DidToken();
-
-    /// <summary>Server-side facet re-detection: mention facets from @handle and DID tokens that
-    /// resolve to exactly one stored participant, group facets from @admins/@moderators/@members
-    /// when no stored handle claims the spelling. One facet per distinct target at its first
-    /// occurrence; the create-path bound of 32 applies; anything unresolved is left as plain text.
-    /// Ranges are absolute whole-text UTF-8 byte offsets: each pass tracks the byte offset of the
-    /// current line's start (raw segment bytes plus one byte per '\n'), matching what the composer
-    /// mints and the renderer expects.</summary>
-    private async Task<IReadOnlyList<PostFacet>?> DetectFacets(string text, CancellationToken token)
-    {
-        var facets = new List<PostFacet>();
-        var targets = new HashSet<string>(StringComparer.Ordinal);
-        var inFence = false;
-        var lineStart = 0;
-        foreach (var rawLine in text.Split('\n'))
-        {
-            var line = rawLine.TrimEnd('\r');
-            var trimmed = line.TrimStart();
-            if (trimmed.StartsWith("```", StringComparison.Ordinal)) inFence = !inFence;
-            else if (!inFence)
-            {
-                foreach (Match match in HandleToken().Matches(line))
-                {
-                    var handle = match.Groups["handle"].Value.TrimEnd('.', ',', '!', '?', ';', ':', ')', ']', '"', '\'');
-                    if (handle.Length < 2) continue;
-                    var resolved = await ResolveHandle(handle.ToLowerInvariant(), token);
-                    if (resolved is null || !targets.Add(resolved)) continue;
-                    facets.Add(At(lineStart, line, match.Index, "@" + handle, PostFacet.Mention, did: resolved));
-                }
-                foreach (Match match in DidToken().Matches(line))
-                {
-                    var did = match.Value.TrimEnd('.', ',', '!', '?', ';', ':', ')', ']', '"', '\'');
-                    if (did.Length is < 9 or > 576 || !targets.Add(did) || await directory.ByDid(did, token) is null) continue;
-                    facets.Add(At(lineStart, line, match.Index, did, PostFacet.Mention, did: did));
-                }
-            }
-            // The raw segment (including any '\r') plus one byte for the '\n' separator.
-            lineStart += Encoding.UTF8.GetByteCount(rawLine) + 1;
-        }
-        var claims = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var storedLabels = (await ParticipantIdentity.Query(value => value.Label != null, token))
-            .Select(entry => entry.Label!.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var group in PostFacet.Groups)
-            if (storedLabels.Contains(group))
-                claims.Add(group);
-        inFence = false;
-        lineStart = 0;
-        foreach (var rawLine in text.Split('\n'))
-        {
-            var line = rawLine.TrimEnd('\r');
-            var trimmed = line.TrimStart();
-            if (trimmed.StartsWith("```", StringComparison.Ordinal)) inFence = !inFence;
-            else if (!inFence)
-            {
-                foreach (var group in PostFacet.Groups)
-                {
-                    if (claims.Contains(group) || !targets.Add(group)) continue;
-                    var spelled = "@" + group;
-                    var index = line.IndexOf(spelled, StringComparison.OrdinalIgnoreCase);
-                    while (index >= 0)
-                    {
-                        var after = index + spelled.Length;
-                        var boundaryBefore = index == 0 || char.IsWhiteSpace(line[index - 1]);
-                        var boundaryAfter = after >= line.Length || char.IsPunctuation(line[after]) || char.IsWhiteSpace(line[after]);
-                        if (boundaryBefore && boundaryAfter)
-                        {
-                            facets.Add(At(lineStart, line, index, spelled, PostFacet.Group, value: group));
-                            break;
-                        }
-                        index = line.IndexOf(spelled, index + 1, StringComparison.OrdinalIgnoreCase);
-                    }
-                }
-            }
-            // The raw segment (including any '\r') plus one byte for the '\n' separator.
-            lineStart += Encoding.UTF8.GetByteCount(rawLine) + 1;
-        }
-        return facets.Count == 0 ? null : PostFacets.Check(text, facets.OrderBy(facet => facet.Start).ToList());
-    }
-
-    /// <summary>An exact label match resolves to a participant's perennial identity value only
-    /// when exactly one participant carries that label — the digest parser's ambiguity guard.</summary>
-    private async Task<string?> ResolveHandle(string lowered, CancellationToken token)
-    {
-        string? holder = null;
-        foreach (var entry in await ParticipantIdentity.Query(value => value.Label != null, token))
-        {
-            if (!string.Equals(lowered, entry.Label!.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
-            if (holder is not null && holder != entry.ParticipantId) return null;
-            holder = entry.ParticipantId;
-        }
-        return holder is null ? null : await directory.PerennialValue(holder, token);
-    }
-
-    /// <summary>A facet range in whole-text absolute UTF-8 byte offsets: the line's start offset
-    /// plus the line-relative prefix bytes, then the token's own byte length.</summary>
-    private static PostFacet At(int lineStart, string line, int charIndex, string token, string kind, string? did = null, string? value = null)
-    {
-        var start = lineStart + Encoding.UTF8.GetByteCount(line[..charIndex]);
-        return new PostFacet { Kind = kind, Start = start, End = start + Encoding.UTF8.GetByteCount(token), Did = did, Value = value };
-    }
 }

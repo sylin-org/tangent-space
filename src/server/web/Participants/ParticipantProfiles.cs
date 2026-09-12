@@ -13,20 +13,31 @@ public sealed record ParticipantProfile(string Did, string? Handle, string? Disp
 public sealed class ParticipantProfiles(AtprotoSessions sessions, AtprotoHttp network, IMemoryCache cache,
     ParticipantDirectory directory)
 {
+    private readonly SemaphoreSlim requests = new(6, 6);
+
     /// <summary>Profile decoration for an atproto identity: reads the atproto repo of the DID the
     /// participant currently holds. Labels come from the identity collection, never the row.</summary>
     public async Task<ParticipantProfile> Read(string participantId, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var did = await directory.AtprotoDidOf(participantId, ct) ?? throw new UnauthorizedAccessException();
+        var did = await directory.AtprotoDidOf(participantId, ct);
         var handle = await directory.LabelOf(participantId, ct);
+        if (did is null)
+            return new ParticipantProfile(ParticipantIdentity.InternalValue(participantId), handle, handle, null, null, "local");
         if (cache.TryGetValue<ParticipantProfile>("tangent-profile:" + did, out var saved) && saved is not null)
             return saved with { Handle = handle };
         var profile = new ParticipantProfile(did, handle, null, null, null, "unavailable");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        // The budget includes queue time: a page with many new authors cannot serialize
+        // dozens of provider timeouts. Optional decoration always yields to conversation.
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        var entered = false;
         try
         {
+            await requests.WaitAsync(timeout.Token);
+            entered = true;
+            if (cache.TryGetValue<ParticipantProfile>("tangent-profile:" + did, out saved) && saved is not null)
+                return saved with { Handle = handle };
             var document = await sessions.ResolveDid(did, timeout.Token);
             var pds = document.PdsEndpoint?.TrimEnd('/') ?? throw new InvalidOperationException();
             var expected = "at://" + did + "/app.bsky.actor.profile/self";
@@ -52,6 +63,7 @@ public sealed class ParticipantProfiles(AtprotoSessions sessions, AtprotoHttp ne
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception) { /* Missing profile or unavailable provider leaves the verified account usable. */ }
+        finally { if (entered) requests.Release(); }
         cache.Set("tangent-profile:" + did, profile, TimeSpan.FromMinutes(profile.Status == "loaded" ? 5 : 1));
         return profile;
     }

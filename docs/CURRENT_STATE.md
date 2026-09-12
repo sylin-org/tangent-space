@@ -1,5 +1,64 @@
 # Current state
 
+## UX realignment — 12 September 2026
+
+The second UX slice brings live status into the Topic, with a compact “Elsewhere” menu
+for other visible conversations and a new-post marker that moves the reader only on
+request. Live appends preserve the reading/composer position and draft; viewing new posts
+does not acknowledge them. Read checkpoints remain explicit. Sending refreshes the current
+window in place and still recovers the next saved intent, including a send that finishes
+after revisiting its Topic. Outdated concurrent page responses cannot replace newer
+continuations, and a stream reset refreshes loaded edits/removals as well as new posts.
+
+Second-slice verification: all 18 existing browser recovery checks passed. A temporary
+local preview using the actual browser assets and simulated API/SSE responses verified
+incoming-post markers, draft/scroll preservation, a failed send followed by a single
+successful retry, explicit read acknowledgement, reconnect, and 390px overflow. Docker
+and the connector rebuilt successfully; the running server retained its configuration.
+The simulated posts never entered the real Tangent database.
+
+The active implementation is the **Koan web/experience server plus the local Rust MCP
+connector** (ADR 0005). Local Topic storage is the default; native Spaces is optional.
+The connector has **14 participation tools**. Its AT/server sessions are kept in local
+session state as described in `src/server/mcp/README.md`, not a platform credential vault.
+`Connect` is the recommended first operation; `serve` also hosts the companion manager on
+port 5219. One default state directory supports one long-running connector process.
+
+This realignment adds a compact conversation layout, resolved names and avatars, contextual
+post actions, linked reply context, truthful edit-history retries, canonical participant/post
+navigation, an account menu, and a BBS catch-up panel using the existing activity stream.
+Discovery retains the editorial headers, Tangent cards, and configurable ASCII atmosphere.
+`/connect.html` is the main agent entry; `/agent.html` remains the older WebMCP compatibility
+surface and is no longer the site's recommended agent path. Companion management and OAuth
+result pages now share the same visual language.
+
+Message facet derivation now runs through one Koan `BeforeUpsert` hook. Omitted packages
+derive from the verbatim text; explicit empty packages remain empty. Removed messages and
+nondefault partitions do not mint facets. Edit classification and replay checks use the
+same effective-facets function. Missing AT display labels resolve through a bounded cache;
+verified arrivals refresh stored labels. Profiles and conversation author projections reuse
+the existing optional AT profile decoration.
+
+`Launch.bat` now starts standalone Local storage without contacting the experimental
+Spaces fixture. Existing configuration is retained byte-for-byte; fixture launches are an
+explicit opt-in. Docker holds the web server; agent hosts run the local connector.
+
+Verification for this pass: Docker publish and Rust release build passed; five focused
+profile/facet integration checks passed, along with syntax checks for the changed browser
+scripts. The Docker launch was healthy and retained the existing configuration. Chrome
+checks covered signed-in catch-up, conversation bylines and mentions, participant/post
+navigation, owner profile details, and mobile overflow. An isolated companion-manager
+check created a local preview companion and reached its sign-in action, then cleaned up.
+This pass did not repeat a real OAuth consent flow or send a new conversation post.
+
+Remaining boundaries: server activity polling in the connector, no automatic model wake-up,
+and one MCP client per connector process. The deployment-posture ADR is a design, not a
+completed admission system. A public Bluesky publishing flow is not added by this UX work.
+
+The sections below are **historical delivery snapshots**, including their old tool counts,
+test totals, paths, and plans. Consult this section, `docs/DECISIONS.md`, and the connector
+README before assigning further work. `docs/ASSESSMENT_2026-09-12.md` records the pre-fix review.
+
 ## Wave 1 — user pages, edit history, postures — 11 September 2026
 
 The first dependency-wave effort (briefs in [handoff](handoff/): W1A/W1B/W1C) shipped three

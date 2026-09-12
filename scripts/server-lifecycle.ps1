@@ -10,8 +10,8 @@
 # Build: verify the pinned framework contribution, then docker compose build tangent
 #   (web) and cargo build --release (mcp). No stop, no wipe and no protocol-network
 #   interaction.
-# Launch: delegate to scripts/start-docker.ps1 (configuration retention, fixture marker
-#   validation, then start only the Tangent service). The mcp server is launched by its
+# Launch: delegate to scripts/start-docker.ps1 (retain config or create a standalone
+#   configuration, then start only Tangent; fixture infrastructure is opt-in). The mcp server is launched by its
 #   hosts (agent applications run `tangent-connector serve`; operators use the CLI), so
 #   launch reports its binary path instead of starting a process.
 [CmdletBinding()]
@@ -22,6 +22,8 @@ param(
     [switch]$WhatIf,
     [switch]$Build,
     [switch]$MigrateWindowsState,
+    [switch]$UseFixtureNetwork,
+    [string]$FixtureFile,
     [scriptblock]$CommandRunner,
     [scriptblock]$FrameworkPreparer,
     [scriptblock]$Prompt
@@ -209,7 +211,8 @@ if (-not ($TangentLifecycleSkipMain -or $global:TangentLifecycleSkipMain)) {
             Invoke-McpConnectorBuild -RepoRoot $repoRoot -CommandRunner $CommandRunner
         }
         'Launch' {
-            $launchArguments = @{ Build = [bool]$Build; MigrateWindowsState = [bool]$MigrateWindowsState }
+            $launchArguments = @{ Build = [bool]$Build; MigrateWindowsState = [bool]$MigrateWindowsState; UseFixtureNetwork = [bool]$UseFixtureNetwork }
+            if ($FixtureFile) { $launchArguments.FixtureFile = $FixtureFile }
             if ($CommandRunner) { $launchArguments.CommandRunner = $CommandRunner }
             & (Join-Path $repoRoot 'scripts/start-docker.ps1') @launchArguments
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

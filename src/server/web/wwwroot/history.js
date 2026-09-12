@@ -25,9 +25,10 @@
   async function readSnapshots(messageId) {
     const response = await fetch(historyPath(messageId),
       { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
-    if (!response.ok) return null;
-    const rows = await response.json().catch(() => null);
-    return Array.isArray(rows) ? rows : null;
+    if (!response.ok) { const error = new Error('History is unavailable.'); error.status = response.status; throw error; }
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('History could not be read.');
+    return rows;
   }
 
   /// Newest-first order by the snapshot chain: the live row's changeId names the newest
@@ -56,7 +57,7 @@
     if (!did) return '';
     if (context.viewerDid && did === context.viewerDid) return 'You';
     const handle = typeof context.handles?.[did] === 'string' ? context.handles[did] : context.resolved?.[did]?.handle;
-    return handle ? '@' + handle.replace(/^@/, '') : did;
+    return context.resolved?.[did]?.displayName || (handle ? '@' + handle.replace(/^@/, '') : 'Participant');
   }
 
   /// Compact change chips from the snapshot's own ChangeClass: mention and group deltas
@@ -64,7 +65,7 @@
   /// distance as a percentage, and the semantic distance only when the axis carried a
   /// number — with the classifier id in the title. Every value comes from the payload.
   function chipHolder(changeClass, context) {
-    const holder = element('p', 'history-chips', '');
+    const holder = element('div', 'history-chips', '');
     const delta = changeClass && typeof changeClass === 'object' ? changeClass.facetDelta : null;
     if (delta && typeof delta === 'object') {
       for (const did of Array.isArray(delta.mentionsRemoved) ? delta.mentionsRemoved : [])
@@ -76,15 +77,14 @@
       for (const name of Array.isArray(delta.groupsAdded) ? delta.groupsAdded : [])
         holder.append(element('span', 'history-chip', '+@' + name));
     }
-    const surface = typeof changeClass?.surfaceDistance === 'number' && Number.isFinite(changeClass.surfaceDistance)
-      ? Math.round(changeClass.surfaceDistance * 100) + '%' : null;
-    if (surface !== null) holder.append(element('span', 'history-chip', 'surface ' + surface));
-    const semantic = typeof changeClass?.semanticDistance === 'number' && Number.isFinite(changeClass.semanticDistance)
-      ? changeClass.semanticDistance : null;
-    if (semantic !== null) {
-      const chip = element('span', 'history-chip', 'semantic ' + semantic);
-      if (typeof changeClass.classifier === 'string' && changeClass.classifier) chip.title = 'Classified by ' + changeClass.classifier;
-      holder.append(chip);
+    const metrics = [];
+    if (Number.isFinite(changeClass?.surfaceDistance)) metrics.push('Text difference: ' + Math.round(changeClass.surfaceDistance * 100) + '%');
+    if (Number.isFinite(changeClass?.semanticDistance)) metrics.push('Semantic distance: ' + changeClass.semanticDistance);
+    if (metrics.length) {
+      const details = element('details', 'history-metrics', '');
+      details.append(element('summary', '', 'Change analysis'), element('p', 'hint', metrics.join(' · ')));
+      if (changeClass.classifier) details.append(element('p', 'hint', 'Classifier: ' + changeClass.classifier));
+      holder.append(details);
     }
     return holder.childElementCount ? holder : null;
   }
@@ -108,22 +108,35 @@
   }
 
   async function fill(details, message, context) {
+    details.querySelector('.history-body')?.remove();
     const body = element('div', 'history-body', '');
-    body.append(element('p', 'hint', 'Loading recorded revisions\u2026'));
+    body.setAttribute('aria-live', 'polite');
+    body.append(element('p', 'hint', 'Loading earlier versions…'));
     details.append(body);
-    const rows = await readSnapshots(message.id).catch(() => null);
+    let rows;
+    try { rows = await readSnapshots(message.id); }
+    catch (error) {
+      if (!details.isConnected) return;
+      const restricted = [401, 403].includes(error.status);
+      body.replaceChildren(element('p', 'hint', restricted ? 'Earlier versions aren’t available to this account.' : 'Earlier versions couldn’t be loaded. Your post is still here.'));
+      if (!restricted) {
+        const retry = element('button', 'btn btn-quiet', 'Try again'); retry.type = 'button';
+        retry.addEventListener('click', () => fill(details, message, context)); body.append(retry);
+      }
+      return;
+    }
     if (!details.isConnected) return;
     body.replaceChildren();
-    // An unreachable surface and an honestly empty or gated response read the same way:
-    // no recorded revisions, never an error tone.
-    const eras = rows ? orderedEras(rows, message.changeId) : [];
+    const eras = orderedEras(rows, message.changeId);
     if (!eras.length) {
-      body.append(element('p', 'hint', 'No recorded revisions.'));
+      // The history endpoint may filter rows by permission; an empty response cannot
+      // establish that a revision never existed.
+      body.append(element('p', 'hint', 'No earlier versions are available to you.'));
       return;
     }
     for (const row of eras.slice(0, MAX_ERAS)) body.append(eraNode(row, context));
     if (eras.length > MAX_ERAS || rows.length >= FETCH_SIZE)
-      body.append(element('p', 'hint', 'Older revisions omitted.'));
+      body.append(element('p', 'hint', 'Showing the most recent available versions.'));
   }
 
   /// The disclosure rooms.js wires under an edited post: closed until opened, keyboard
@@ -133,7 +146,7 @@
     if (!message || typeof message.id !== 'string') return null;
     const details = document.createElement('details');
     details.className = 'source-details history-details';
-    const summary = element('summary', '', 'Edited \u00b7 view history');
+    const summary = element('summary', '', 'Edited · history');
     if (message.editedAt) summary.title = 'Last edited ' + new Date(message.editedAt).toLocaleString();
     details.append(summary);
     let loaded = false;

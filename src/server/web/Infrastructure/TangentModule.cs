@@ -24,6 +24,14 @@ public sealed class TangentModule : KoanModule
 {
     public override void Register(IServiceCollection services)
     {
+        Message.Lifecycle.BeforeUpsert(async context =>
+        {
+            var message = context.Current;
+            if (string.IsNullOrWhiteSpace(Koan.Data.Core.EntityContext.Current?.Partition)
+                && !message.Removed && message.OfMessageId is null && message.Facets is null)
+                message.Facets = await MessageFacets.Effective(message.Content.Text, null, context.CancellationToken);
+            return context.Proceed();
+        });
         services.AddOptions<SiteOptions>().BindConfiguration(TangentConstants.SiteConfiguration)
             .Validate(o => !string.IsNullOrWhiteSpace(o.Name) && o.Name.Length <= 120, "Set Tangent:Site:Name to a name of 1–120 characters.")
             .Validate(o => string.IsNullOrWhiteSpace(o.OwnerDid) || IdentityResolver.IsValidDid(o.OwnerDid), "Tangent:Site:OwnerDid must be blank for first-login ownership, or a valid AT DID.")
@@ -32,6 +40,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<PolicyGate>();
         services.AddSingleton<Arrival>();
         services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
+        services.AddSingleton<TangentSpace.Participants.IAtprotoHandleSource, TangentSpace.Participants.AtprotoHandleResolver>();
         services.AddSingleton<TangentServer>();
         services.AddMemoryCache();
         services.AddSingleton<TangentSpace.Participants.ParticipantProfiles>();

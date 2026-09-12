@@ -151,7 +151,7 @@ public sealed class ExperienceDigest(
                 // Direct mentions use deterministic token resolution against the recipient's
                 // canonical identity; ambiguous or quoted/code occurrences do not count.
                 var candidates = ExperienceMentions.Candidates(message.Content.Text);
-                if (ExperienceMentions.Addresses(candidates, recipientDid, recipientHandle)
+                if (message.Facets is null && ExperienceMentions.Addresses(candidates, recipientDid, recipientHandle)
                     && await ResolvesUnambiguously(candidates, did, recipientHandle, token))
                 {
                     addressedPosts.Add(message.Id);
@@ -161,7 +161,7 @@ public sealed class ExperienceDigest(
                 // Group mentions expand to current holders of the scoped roles: the group is
                 // resolved at digest time, never stored in anyone's words (ADR 0008).
                 var knownHandles = handles.Select(pair => pair.Value).Where(value => value is not null).Cast<string>().ToList();
-                var groups = ExperienceMentions.GroupCandidates(message.Content.Text, knownHandles)
+                var groups = (message.Facets is null ? ExperienceMentions.GroupCandidates(message.Content.Text, knownHandles) : [])
                     .Concat((message.Facets ?? []).Where(facet => facet.Kind == Conversation.PostFacet.Group)
                         .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal)))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();

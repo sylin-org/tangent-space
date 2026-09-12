@@ -48,6 +48,11 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
     public Task<IActionResult> SetMembership(string tangentKey, string targetDid, ChangeTangentMembershipRequest request, CancellationToken ct)
         => Execute(actor => tangents.SetMembership(actor, tangentKey, targetDid, request.Role, ct));
 
+    [RoomMutation]
+    [HttpPut("{tangentKey}/roles/{targetIdentifier}")]
+    public Task<IActionResult> SetRole(string tangentKey, string targetIdentifier, ChangeCompanionRoleRequest request, CancellationToken ct)
+        => Execute(actor => hub.Participants.SetRole(actor, tangentKey, null, targetIdentifier, request.Role, ct));
+
     private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);
 
     private string? ReadActor()

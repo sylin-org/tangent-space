@@ -143,7 +143,8 @@ public sealed record ExperiencePostDto(string Ref, string AuthorRef, string Auth
     IReadOnlyList<Conversation.PostFacet>? Facets = null);
 
 /// <summary>Read-time label for a facet-bound identity (ADR 0008): fresh from the participant table.</summary>
-public sealed record ExperienceResolution(string? Handle, string? DisplayName, string Classification);
+public sealed record ExperienceResolution(string? Handle, string? DisplayName, string Classification,
+    string? Avatar = null, string? ProfileUrl = null);
 
 public sealed record ExperienceUpdatesData(string ScopeRef);
 
@@ -163,7 +164,9 @@ public sealed record ExperienceMentionablesData(IReadOnlyList<ExperienceMentiona
 
 public sealed record ExperienceProfileData(string ParticipantRef, string? Did, string? Handle, string Classification,
     string JoinedAt, bool Self, bool Suspended, IReadOnlyList<ExperienceProfileRole> Roles,
-    IReadOnlyList<ExperiencePostDto> Posts, bool MorePosts);
+    IReadOnlyList<ExperiencePostDto> Posts, bool MorePosts,
+    string? DisplayName = null, string? Description = null, string? Avatar = null, string? ProfileUrl = null,
+    IReadOnlyDictionary<string, Conversation.ParticipantResolution>? Resolved = null);
 
 public sealed record ExperienceProfileRole(string Scope, string Key, string Label, string Role);
 

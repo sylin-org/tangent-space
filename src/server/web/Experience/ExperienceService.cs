@@ -175,7 +175,8 @@ public sealed partial class ExperienceService(
             new ExperienceResult(new ExperienceTopicData(stored.Title, ExperienceDigest.Preview(stored.Topic, 480),
                 posts, window.Position, window.Resolved is null ? null
                     : window.Resolved.ToDictionary(pair => pair.Key, pair => new ExperienceResolution(
-                        pair.Value.Handle, pair.Value.DisplayName, pair.Value.Classification))), null, null),
+                        pair.Value.Handle, pair.Value.DisplayName, pair.Value.Classification,
+                        pair.Value.Avatar, pair.Value.ProfileUrl))), null, null),
             (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
             new ExperienceContinuation(null, null, window.OlderCursor, window.NewerCursor, window.ReadCursor, null),
             actions,
@@ -268,7 +269,7 @@ public sealed partial class ExperienceService(
             replySource = new SourceReference(anchor.SourceUri, anchor.SourceCid);
         }
         var payload = new Dictionary<string, string?> { ["text"] = text, ["replyTo"] = replyTo,
-            ["facets"] = facets is null || facets.Count == 0 ? ""
+            ["facets"] = facets is null ? "<auto>"
                 : string.Join("|", facets.OrderBy(facet => facet.Start).Select(facet => facet.Canonical())) };
         return await requests.Run(RegistryCredential(principal), participantId, requestId, async () =>
         {

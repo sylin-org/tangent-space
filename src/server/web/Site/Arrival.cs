@@ -9,7 +9,7 @@ namespace TangentSpace.Site;
 
 // This host-owned operation coordinates two records. Tangent runs one writer process.
 public sealed class Arrival(IOptions<SiteOptions> options, IOptions<ConversationOptions> conversation, TimeProvider clock, PolicyGate gate,
-    TangentSpace.Participants.ParticipantDirectory directory)
+    TangentSpace.Participants.ParticipantDirectory directory, IAtprotoHandleSource handles)
 {
     public async Task CheckConfiguration(CancellationToken ct)
     {
@@ -47,6 +47,8 @@ public sealed class Arrival(IOptions<SiteOptions> options, IOptions<Conversation
     /// both persist under the directory's mint gate, sharing one discipline with source ingest.</summary>
     public async Task<Participant> Enter(string verifiedDid, string? verifiedHandle, CancellationToken ct)
     {
+        // Optional account decoration must not occupy the server-wide policy gate.
+        verifiedHandle ??= await handles.HandleOf(verifiedDid, ct);
         await gate.Enter(ct);
         try
         {

@@ -1,19 +1,19 @@
 function New-TangentLocalConfiguration {
     param($Fixture, [string]$ManagingApp, [string]$Origin, [string]$StateDirectory, [string]$OwnerDid = '')
-    $owner = @($Fixture.accounts | Where-Object role -eq 'owner')[0]
-    # Preserve the native launcher's fixture default; Docker passes an explicit blank owner.
-    if (-not $PSBoundParameters.ContainsKey('OwnerDid')) { $OwnerDid = $owner.did }
+    # Standalone starts unclaimed; preserve the native fixture launcher's explicit mode.
+    if ($Fixture -and -not $PSBoundParameters.ContainsKey('OwnerDid')) { $OwnerDid = @($Fixture.accounts | Where-Object role -eq 'owner')[0].did }
     if ($OwnerDid -and $OwnerDid -notmatch '^did:[a-z]+:[A-Za-z0-9._:%-]+$') { throw 'OwnerDid must be blank or a valid AT DID.' }
-    $authority = @($Fixture.accounts | Where-Object role -eq 'authority')[0]
-    $participantScope = "space:local.tangent.room?authority=$($authority.did)&collection=local.tangent.message&action=read&action=create&action=update&action=delete"
-    $authorityScope = "space:local.tangent.room?authority=$($authority.did)&collection=local.tangent.message&action=read_self&action=read&manage=create"
-    $scopes = @('atproto', $participantScope, $authorityScope)
+    $scopes = @('atproto')
+    if ($Fixture) {
+        $authority = @($Fixture.accounts | Where-Object role -eq 'authority')[0]
+        $participantScope = "space:local.tangent.room?authority=$($authority.did)&collection=local.tangent.message&action=read&action=create&action=update&action=delete"
+        $authorityScope = "space:local.tangent.room?authority=$($authority.did)&collection=local.tangent.message&action=read_self&action=read&manage=create"
+        $scopes += @($participantScope, $authorityScope)
+    }
     $clientId = 'http://localhost?redirect_uri=' + [Uri]::EscapeDataString("$Origin/auth/atproto/callback") + '&scope=' + [Uri]::EscapeDataString(($scopes -join ' '))
 $settings = [ordered]@{
     Logging = @{ LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning' } }
-    Tangent = @{ Site = @{ Name = 'Tangent Space'; OwnerDid = $OwnerDid }; Spaces = @{ AuthorityDid = $authority.did; ManagingApp = $ManagingApp
-        # This origin was actually tested and rejected experimental Spaces consent. The compatible fixtures do not use it.
-        UnsupportedProviderOrigins = @('https://cortinarius.us-west.host.bsky.network') } }
+    Tangent = @{ Site = @{ Name = 'Tangent Space'; OwnerDid = $OwnerDid }; Conversation = @{ Storage = 'Local' } }
     Koan = @{
         Identity = @{ Posture = 'Closed'; SeedDevUsers = $false }
         Security = @{ Trust = @{ DevIdentity = @{ Enabled = $false } } }
@@ -25,16 +25,21 @@ $settings = [ordered]@{
             PreferredProviderId = 'atproto'
             Providers = @{ atproto = @{ Type = 'atproto'; ClientId = $clientId; Scopes = $scopes } }
             Atproto = @{
-                PlcDirectory = 'https://plc.directory'; DevelopmentPlcDirectory = $fixture.plc
+                PlcDirectory = 'https://plc.directory'
                 SessionDirectory = ($StateDirectory.TrimEnd('/') + '/oauth')
                 MaximumResponseBytes = 8388608
-                DevelopmentAllowedOrigins = @($fixture.plc, $fixture.pds1, $fixture.pds2)
-                DevelopmentHandles = @{}
             }
         } }
     }
 }
-foreach ($account in $fixture.accounts) { $settings.Koan.Web.Auth.Atproto.DevelopmentHandles[$account.handle] = $account.did }
+if ($Fixture) {
+    $settings.Tangent.Spaces = @{ AuthorityDid = $authority.did; ManagingApp = $ManagingApp
+        UnsupportedProviderOrigins = @('https://cortinarius.us-west.host.bsky.network') }
+    $settings.Koan.Web.Auth.Atproto.DevelopmentPlcDirectory = $Fixture.plc
+    $settings.Koan.Web.Auth.Atproto.DevelopmentAllowedOrigins = @($Fixture.plc, $Fixture.pds1, $Fixture.pds2)
+    $settings.Koan.Web.Auth.Atproto.DevelopmentHandles = @{}
+    foreach ($account in $Fixture.accounts) { $settings.Koan.Web.Auth.Atproto.DevelopmentHandles[$account.handle] = $account.did }
+}
 
 return $settings
 }
@@ -52,10 +57,10 @@ function Save-TangentDockerConfiguration {
         Write-Verbose "Retained existing configuration byte-for-byte: $settingsPath"
         return [pscustomobject]@{ status = 'retained'; path = $settingsPath }
     }
-    if (-not $ManagingApp) { throw 'A managing-app service registration is required to generate a fresh configuration.' }
+    if ($Fixture -and -not $ManagingApp) { throw 'A managing-app service registration is required to generate a fresh fixture configuration.' }
     $settings = New-TangentLocalConfiguration -Fixture $Fixture -ManagingApp $ManagingApp -Origin $Origin -StateDirectory '/state' -OwnerDid $OwnerDid
     # In Docker the fixture origins are reached through the host gateway while their URLs stay unchanged.
-    $settings.Koan.Web.Auth.Atproto.DevelopmentConnectHost = 'host.docker.internal'
+    if ($Fixture) { $settings.Koan.Web.Auth.Atproto.DevelopmentConnectHost = 'host.docker.internal' }
     $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding utf8
     return [pscustomobject]@{ status = 'created'; path = $settingsPath }
 }

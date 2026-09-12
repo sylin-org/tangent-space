@@ -50,7 +50,8 @@ public static class PostFacets
 {
     public static IReadOnlyList<PostFacet>? Check(string text, IReadOnlyList<PostFacet>? facets)
     {
-        if (facets is null || facets.Count == 0) return null;
+        if (facets is null) return null;
+        if (facets.Count == 0) return [];
         if (facets.Count > 32) throw new ArgumentException("A post carries at most 32 facets.");
         var bytes = System.Text.Encoding.UTF8.GetByteCount(text);
         var ordered = facets.Select(facet =>

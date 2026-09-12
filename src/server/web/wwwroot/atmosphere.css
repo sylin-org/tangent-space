@@ -1,7 +1,8 @@
 /* Light lives behind the interface; text and controls retain their own surfaces. */
 body.atmosphere-on,body.atmosphere-on:not(.onboarding-active)[data-page] { background:#0b0d14; }
 #ascii-atmosphere { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; transition:opacity .6s; }
-body.atmosphere-on>main,body.atmosphere-on>.masthead { position:relative; z-index:1; }
+body.atmosphere-on>main { position:relative; z-index:1; }
+body.atmosphere-on>.masthead { position:relative; z-index:2; }
 body.atmosphere-on .masthead { background:#111016cc; backdrop-filter:blur(14px); }
 body.atmosphere-on #server-welcome { background:linear-gradient(110deg,#15131bc9,#15131b40); }
 body.atmosphere-on #server-welcome::after { background:linear-gradient(0deg,#0c0c1490,transparent); }

@@ -1,5 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Koan.Data.Core;
+using Microsoft.Extensions.DependencyInjection;
+using TangentSpace.Conversation;
 using Xunit;
 
 namespace TangentSpace.Tests.ExperienceIntegration;
@@ -25,6 +28,47 @@ public sealed class FacetIntegrationTests : IAsyncLifetime
         using var response = await app.Http.PostAsJsonAsync($"/api/v1/experience/topics/{topicKey}/posts", body);
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
+    }
+
+    [Fact]
+    public async Task Direct_save_mints_facets_but_preserves_explicit_empty_and_archived_eras()
+    {
+        var text = "Hello 🌙\n@" + ExperienceWebApp.AgentHandle + "\n@admins";
+        Message Fresh() => new() { Id = Guid.CreateVersion7().ToString(), RoomKey = ExperienceWebApp.TopicKey,
+            AuthorParticipantId = app.HumanParticipantId, Content = new(text, DateTimeOffset.UtcNow, null) };
+        var live = Fresh();
+        await live.Save();
+        var stored = (await Message.Get(live.Id))!;
+        Assert.Contains(stored.Facets!, facet => facet.Did == ExperienceWebApp.AgentDid
+            && facet.Start == System.Text.Encoding.UTF8.GetByteCount("Hello 🌙\n"));
+        Assert.Contains(stored.Facets!, facet => facet.Kind == PostFacet.Group && facet.Value == "admins");
+
+        var explicitEmpty = Fresh(); explicitEmpty.Facets = [];
+        await explicitEmpty.Save();
+        Assert.Empty((await Message.Get(explicitEmpty.Id))!.Facets!);
+        var snapshot = Fresh(); snapshot.OfMessageId = live.Id;
+        await snapshot.Save(Message.ChangelogPartition);
+        Assert.Null((await Message.Get(snapshot.Id, Message.ChangelogPartition))!.Facets);
+        var archive = Fresh();
+        await archive.Save("archive");
+        Assert.Null((await Message.Get(archive.Id, "archive"))!.Facets);
+        var removed = Fresh(); removed.Removed = true;
+        await removed.Save();
+        Assert.Null((await Message.Get(removed.Id))!.Facets);
+    }
+
+    [Fact]
+    public async Task Auto_faceted_post_replays_without_a_false_conflict()
+    {
+        var service = app.Services.GetRequiredService<ConversationService>();
+        var body = new PostMessage("hook-replay", "Hello @" + ExperienceWebApp.HumanHandle, null);
+        var first = await service.Post(app.AgentParticipantId, ExperienceWebApp.TopicKey, body, default);
+        var second = await service.Post(app.AgentParticipantId, ExperienceWebApp.TopicKey, body, default);
+        Assert.Equal("accepted", first.State);
+        Assert.Equal("accepted", second.State);
+        var stored = await Message.Query(message => message.OperationId == "hook-replay");
+        Assert.Single(stored);
+        Assert.Contains(stored[0].Facets!, facet => facet.Did == ExperienceWebApp.HumanDid);
     }
 
     [Fact]

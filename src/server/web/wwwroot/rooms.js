@@ -21,10 +21,42 @@
   const drafts = new Map();
   const sending = new Map();
   const rendered = new Set();
+  const visibleMessages = new Map();
+  const newPosts = new Set();
+  let acknowledgedSequence = -1, displayedSequence = 0, historyRevision = 0;
+  let refreshingHistory = false;
+  let queuedHistoryRefresh;
   const roomPath = key => '/api/rooms/' + encodeURIComponent(key);
   const text = (id, value) => { $(id).textContent = value ?? ''; };
   const show = (id, visible) => { $(id).hidden = !visible; };
   const field = (form, name) => $(form).elements.namedItem(name);
+  function connectionStatus(message, state = activityActive ? 'live' : 'connecting') {
+    text('activity-status', message);
+    text('conversation-connection', state === 'live' ? 'Live' : state === 'reconnecting' ? 'Reconnecting…' : message);
+    $('conversation-connection').dataset.state = state;
+    $('conversation-connection').title = message;
+  }
+  function readingAnchor() {
+    const composer = $('message-form');
+    const focused = composer.contains?.(document.activeElement) ? composer : null;
+    const node = focused || [...$('messages').children].find(item => { const rect = item.getBoundingClientRect?.(); return rect && rect.bottom > 0 && rect.top < window.innerHeight; });
+    return node ? { id: node.id, top: node.getBoundingClientRect().top } : null;
+  }
+  function restoreReadingAnchor(anchor) {
+    const node = anchor && document.getElementById(anchor.id);
+    if (node?.getBoundingClientRect) window.scrollBy(0, node.getBoundingClientRect().top - anchor.top);
+  }
+  function updateNewPosts() {
+    show('conversation-updates', newPosts.size > 0);
+    text('new-posts-count', newPosts.size + (newPosts.size === 1 ? ' new post' : ' new posts'));
+  }
+  function checkpointState() {
+    const visible = route().kind !== 'post' && rendered.size > 0 && !!resumeCursor;
+    show('read-checkpoint', visible); show('acknowledge', visible);
+    $('acknowledge').disabled = acknowledgedSequence >= displayedSequence;
+    text('acknowledge', acknowledgedSequence >= displayedSequence ? 'Read position saved' : 'Mark these posts as read');
+    text('read-state-note', nextCursor ? 'More posts follow. This marks only the posts loaded here.' : 'This marks only the posts loaded here.');
+  }
   function status(message, error = false) { text('action-status', message); show('action-status', !!message); $('action-status').classList.toggle('error', error); }
   function notice(message) { status(message); if (noticeTimer) clearTimeout(noticeTimer); if (typeof setTimeout === 'function') noticeTimer = setTimeout(() => status(''), 8000); }
   function element(tag, className, value) { const node = document.createElement(tag); node.className = className; node.textContent = value; return node; }
@@ -71,7 +103,7 @@
   async function action(button, work) {
     if (button) button.disabled = true;
     try { await work(); } catch (error) { status(error.message || 'The site could not be reached. Try again.', true); }
-    finally { if (button === $('send-message')) renderDraft(); else if (button) button.disabled = false; }
+    finally { if (button === $('send-message')) renderDraft(); else if (button === $('acknowledge')) checkpointState(); else if (button) button.disabled = false; }
   }
   function listRooms(listing, append = false) {
     if (!append) $('room-list').replaceChildren();
@@ -157,6 +189,9 @@
     show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || tangent.canManage || tangent.isOwner || tangent.canCreateTopic === true));
     show('site-setup', site?.participant?.isOwner === true || tangent.canCreateTopic === true || can(tangent, 'createTopic'));
     show('tangent-members', !!(tangent.canManage || tangent.isOwner));
+    $('tangent-admin-choice').hidden = !tangent.isOwner;
+    $('tangent-admin-choice').disabled = !tangent.isOwner;
+    if (!tangent.isOwner && field('tangent-member-form', 'role').value === 'Admin') field('tangent-member-form', 'role').value = 'Member';
     openTangentEditor(tangent);
     if (key) action(null, () => choose(key));
     else { rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; document.body.classList.remove('conversation-open'); show('room-content', false); show('choose-room', true); text('choose-room', channels.length ? 'Choose a topic to join the conversation.' : 'No topics here yet. Start one when you are ready.'); }
@@ -195,6 +230,26 @@
     const incomplete = site?.tangents?.directoryIncomplete || site?.tangents?.channelsIncomplete;
     text('directory-note', !incomplete ? '' : site?.tangents?.directoryIncomplete ? 'The directory is bounded while the server checks what this account can see. Load more or narrow to a Tangent.' : 'Some channel lists are bounded. Open a Tangent to continue browsing its channels.');
     show('directory-note', !!incomplete);
+    renderCatchUp();
+  }
+  function renderCatchUp() {
+    const section = $('catch-up'), list = $('catch-up-list');
+    if (!section || !list) return;
+    const entries = currentTangents().flatMap(tangent => (tangent.channels || []).map(topic => ({ tangent, topic, activity: activityFor(topic.key) })))
+      .filter(entry => entry.activity.unreadCount > 0 || entry.activity.directReplies > 0)
+      .sort((a, b) => (b.activity.directReplies || 0) - (a.activity.directReplies || 0) || (b.activity.unreadCount || 0) - (a.activity.unreadCount || 0));
+    section.hidden = route().kind !== 'home' || !site?.participant || !entries.length;
+    list.replaceChildren();
+    for (const { tangent, topic, activity } of entries.slice(0, 3)) {
+      const item = document.createElement('li'), link = element('a', 'catch-up-link', '');
+      link.href = topicUrl(tangent.key, topic.key);
+      const context = element('span', 'catch-up-context', tangent.name);
+      context.append(element('strong', '', topic.title));
+      const count = activity.unreadCountCapped ? '50+' : String(activity.unreadCount || 0);
+      const label = activity.directReplies > 0 ? activity.directReplies + (activity.directReplies === 1 ? ' reply to you' : ' replies to you') : count + (activity.unreadCount === 1 ? ' new post' : ' new posts');
+      link.append(context, element('span', 'catch-up-count', label), element('span', 'catch-up-arrow', '↗')); item.append(link); list.append(item);
+    }
+    $('catch-up-more').hidden = entries.length <= 3;
   }
   async function refreshTangents() {
     const directory = (await request('/api/v1/tangents')).data;
@@ -216,7 +271,7 @@
     site.tangents.nextPage = page.nextPage; site.tangents.directoryIncomplete = !!page.directoryIncomplete; site.tangents.channelsIncomplete = !!page.channelsIncomplete;
     renderTangents();
   }
-  function resetMessages() { liveController?.abort(); rendered.clear(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); text('freshness', ''); }
+  function resetMessages() { liveController?.abort(); historyRevision++; rendered.clear(); visibleMessages.clear(); newPosts.clear(); updateNewPosts(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); show('read-checkpoint', false); text('freshness', ''); }
   function unavailableRoute(code) {
     routeFailure = code; epoch++; resetMessages(); stopActivity(); room = null; reply = undefined; sourceReadiness = undefined;
     routeTangent = routeTopics = undefined;
@@ -269,7 +324,7 @@
   async function choose(key) {
     if (route().kind === 'post') return openPost();
     rememberDraft();
-    const version = ++epoch; resetMessages(); room = null; reply = undefined;
+    const version = ++epoch; resetMessages(); room = null; reply = undefined; acknowledgedSequence = -1;
     show('room-content', false); text('choose-room', 'Opening room…'); show('choose-room', true); status('');
     const data = (await request(route().tangent ? tangentPath(route().tangent) + '/topics/' + encodeURIComponent(key) : roomPath(key))).data;
     if (version !== epoch) return;
@@ -324,9 +379,14 @@
     if (route().kind === 'post') return refreshOpenHistory();
     if (!key) return;
     try {
+      const revision = historyRevision, liveAppend = !!cursor && cursor === resumeCursor && !nextCursor;
       const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : fromStart ? '?from=start' : ''))).data;
       if (version !== epoch || room?.key !== key) return;
-      renderPage(page);
+      if (revision !== historyRevision) {
+        if (!nextCursor && resumeCursor) return historyPage(resumeCursor, version, key);
+        return;
+      }
+      renderPage(page, true, liveAppend);
       startLive();
     } catch (error) {
       if (version !== epoch) return;
@@ -335,18 +395,51 @@
     }
   }
   async function refreshOpenHistory(force = false) {
+    if (refreshingHistory) { queuedHistoryRefresh = { key: room?.key, force: force || queuedHistoryRefresh?.force }; return; }
     if (!room?.canRead || !force && document.querySelector('.message-edit-form')) return;
-    const key = room.key, version = epoch;
-    if (route().kind === 'post') {
-      try {
+    const key = room.key, version = epoch, revision = historyRevision;
+    refreshingHistory = true;
+    try {
+      let pages = [], topic;
+      if (route().kind === 'post') {
         const result = (await request(tangentPath(route().tangent) + '/posts/' + encodeURIComponent(route().post))).data;
-        if (version !== epoch || room?.key !== key) return;
-        resetMessages(); renderRoom(result.topic); renderPage(result.window, false);
-      } catch (error) {
-        if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status);
-        throw error;
+        pages = [result.window]; topic = result.topic;
+      } else {
+        // Keep the loaded reading window, not just the first page, on an edit or removal.
+        const count = rendered.size, cursors = new Set(); let cursor, loaded = 0;
+        do {
+          const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '?from=start'))).data;
+          pages.push(page); loaded += page.messages?.length || 0;
+          cursor = page.nextCursor;
+          if (!cursor || cursors.has(cursor) || !page.messages?.length) break;
+          cursors.add(cursor);
+        } while (loaded < count && version === epoch);
       }
-    } else { resetMessages(); await historyPage(undefined, version, key, true); }
+      if (version !== epoch || room?.key !== key || !force && document.querySelector('.message-edit-form')) return;
+      if (revision !== historyRevision) { queuedHistoryRefresh = { key, force }; return; }
+      const anchor = readingAnchor(), previousPosts = new Set(rendered), previousNewPosts = new Set(newPosts);
+      const open = [...$('messages').querySelectorAll('details[open]')].map(node => ({ post: node.closest('.message').id, kind: node.className }));
+      resetMessages(); if (topic) renderRoom(topic);
+      for (const page of pages) renderPage(page, route().kind !== 'post');
+      for (const message of visibleMessages.values()) {
+        if (previousNewPosts.has(message.id) || !previousPosts.has(message.id) && message.authorParticipantId !== site.participant?.participantRef && route().kind !== 'post') newPosts.add(message.id);
+      }
+      for (const id of newPosts) document.getElementById('post-' + id)?.classList.add('message-new');
+      updateNewPosts();
+      for (const state of open) {
+        const detail = [...(document.getElementById(state.post)?.querySelectorAll('details') || [])].find(node => node.className === state.kind);
+        if (detail) detail.open = true;
+      }
+      restoreReadingAnchor(anchor);
+      startLive();
+    } catch (error) {
+      if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status);
+      throw error;
+    } finally {
+      refreshingHistory = false;
+      const queued = queuedHistoryRefresh; queuedHistoryRefresh = undefined;
+      if (queued?.key === room?.key && queued) action(null, () => refreshOpenHistory(queued.force));
+    }
   }
   async function refreshSourceReadiness() {
     const key = room?.key, identity = identityEpoch, version = epoch;
@@ -372,61 +465,99 @@
       // readiness endpoint must not be mistaken for account consent.
     }
   }
-  function renderPage(page, nativeHistory = true) {
+  function participantLabel(id, page) {
+    const profile = page.resolved?.[id] || {};
+    const handle = profile.handle || page.authorHandles?.[id] || '';
+    return { ...profile, handle, name: profile.displayName || (handle ? '@' + handle.replace(/^@/, '') : 'Participant'),
+      href: profile.profileUrl?.startsWith('/u/') ? profile.profileUrl : '/u/' + encodeURIComponent(profile.value || id) };
+  }
+  function replyPreview(reference) {
+    const message = [...visibleMessages.values()].find(item => item.sourceUri === reference?.uri);
+    return message ? { message, text: message.deleted || message.removed ? 'This post was removed.' : message.content?.text || 'Post' } : null;
+  }
+  function renderPage(page, nativeHistory = true, liveAppend = false) {
+      const anchor = liveAppend ? readingAnchor() : null;
+      historyRevision++;
+      for (const message of page.messages || []) visibleMessages.set(message.id, message);
       for (const message of page.messages || []) {
         if (rendered.has(message.id)) continue;
         rendered.add(message.id);
         const li = element('li', 'message', '');
         li.id = 'post-' + message.id;
         if (route().kind === 'post' && message.id === route().post) { li.classList.add('message-anchor'); li.setAttribute('aria-current', 'true'); }
-        const byline = element('div', 'message-byline', '');
-        let bylineProfileSlot;
         const isYou = message.authorParticipantId === site.participant?.participantRef;
-        const handle = typeof page.authorHandles?.[message.authorParticipantId] === 'string' ? page.authorHandles[message.authorParticipantId] : '';
-        const shown = isYou ? 'You' : handle ? '@' + handle.replace(/^@/, '') : message.authorParticipantId;
-        const initial = (handle || message.authorParticipantId).replace(/^@/, '').slice(0, 1).toUpperCase() || '•';
-        const avatar = element('span', 'message-avatar', initial); avatar.title = message.authorParticipantId;
-        const author = element('strong', 'message-author', shown); author.title = message.authorParticipantId;
-        if (!isYou) { const profileLink = document.createElement('a'); profileLink.href = '/u/' + encodeURIComponent(handle || page.resolved?.[message.authorParticipantId]?.value || message.authorParticipantId); profileLink.className = 'author-link'; profileLink.append(author); bylineProfileSlot = profileLink; }
-        else bylineProfileSlot = author;
-        byline.append(avatar, bylineProfileSlot, element('time', '', new Date(message.acceptedAt).toLocaleString()));
-        const permalink = element('a', 'post-permalink', 'Permalink');
-        permalink.href = '/t/' + encodeURIComponent(room.tangentKey) + '/' + encodeURIComponent(message.id);
-        byline.append(permalink);
+        if (liveAppend && !isYou) { newPosts.add(message.id); li.classList.add('message-new'); }
+        const profile = participantLabel(message.authorParticipantId, page);
+        const handle = profile.handle;
+        const avatarLink = element('a', 'message-avatar', profile.name.replace(/^@/, '').slice(0, 1).toUpperCase());
+        avatarLink.href = profile.href; avatarLink.setAttribute('aria-label', 'View ' + profile.name + '’s profile');
+        if (typeof profile.avatar === 'string' && profile.avatar.startsWith('https://')) {
+          const image = document.createElement('img'); image.src = profile.avatar; image.alt = ''; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
+          image.addEventListener('error', () => image.remove(), { once: true }); avatarLink.append(image);
+        }
+        li.append(avatarLink);
+        const byline = element('div', 'message-byline', '');
+        const author = element('a', 'message-author author-link', profile.name); author.href = profile.href;
+        byline.append(author);
+        if (isYou) byline.append(element('span', 'message-you', 'you'));
+        if (handle && profile.displayName) byline.append(element('span', 'message-handle', '@' + handle.replace(/^@/, '')));
+        if (profile.classification && !['Undeclared', 'Human'].includes(profile.classification)) byline.append(element('span', 'message-kind', profile.classification));
+        const date = new Date(message.acceptedAt);
+        const timestamp = element('time', 'message-time', date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }));
+        timestamp.dateTime = message.acceptedAt; timestamp.title = date.toLocaleString(); byline.append(timestamp);
         li.append(byline);
         const content = message.content || {}, deleted = message.removed === true || message.deleted === true;
-        if (content.replyTo) li.append(element('p', 'hint reply-label', 'In reply to an earlier message'));
-        li.append(deleted ? element('p', 'message-text', 'This message was removed.')
+        if (content.replyTo) {
+          const preview = replyPreview(content.replyTo);
+          const label = preview ? participantLabel(preview.message.authorParticipantId, page).name + ' · ' + preview.text.replace(/\s+/g, ' ').slice(0, 150) : 'Reply to an earlier post';
+          const context = element(preview ? 'a' : 'p', 'reply-label', '↳ ' + label);
+          if (preview) { context.href = '#post-' + preview.message.id; context.title = preview.text; }
+          li.append(context);
+        }
+        li.append(deleted ? element('p', 'message-text message-removed', 'This post was removed.')
           : window.TangentFacets?.renderFacetedText?.(content.text, message.facets, page.resolved)
             || element('p', 'message-text', content.text));
-        // Edit-history affordance (W2-C): the disclosure's meta line reads "Edited · view history"
-        // and history.js renders the recorded eras on first open; without history.js the post
-        // keeps its plain edited marker. Removed rows never carry the affordance.
+        const actions = message.permissions?.allowedActions || room.permissions?.allowedActions || [];
+        const mayEdit = !deleted && actions.includes('editOwnPost') && isYou && !message._editing;
+        const mayDelete = !deleted && (actions.includes('deleteOwnPost') && isYou || actions.includes('removePost'));
+        const footer = element('div', 'message-footer', '');
         if (!deleted && (message.editedAt || message.changeId)) {
           const historyViewer = window.TangentHistory?.disclosure?.(message,
             { handles: page.authorHandles, resolved: page.resolved, viewerDid: site.participant?.participantRef });
-          li.append(historyViewer || element('span', 'message-edited', message.editedAt
-            ? 'Edited ' + new Date(message.editedAt).toLocaleString() : 'Edited'));
+          footer.append(historyViewer || element('span', 'message-edited', 'Edited'));
         }
-        const details = element('details', 'source-details', ''); details.append(element('summary', '', 'Source and identity'));
-        details.append(element('p', 'did', message.authorParticipantId), element('p', 'did', message.sourceUri), element('p', 'did', message.sourceCid)); li.append(details);
-        const actions = message.permissions?.allowedActions || room.permissions?.allowedActions || [];
-        const own = isYou;
-        if (room.canWrite && !deleted) { const button = element('button', 'btn btn-quiet', 'Reply'); button.type = 'button'; button.addEventListener('click', () => { if (pending.has(room.key)) return status('Finish or retry the pending message first.'); drafts.set(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } }); renderDraft(); if (!isYou) window.TangentFacets?.replyMention?.(page.resolved?.[message.authorParticipantId]?.value || message.authorParticipantId, handle); $('message-text').focus(); }); li.append(button); }
-        const mayEdit = !deleted && (actions.includes('editOwnPost') && own) && !message._editing;
-        const mayDelete = !deleted && ((actions.includes('deleteOwnPost') && own) || actions.includes('removePost'));
-        if (mayEdit || mayDelete) {
-          const controls = element('span', 'message-controls', '');
-          if (mayEdit) { const edit = element('button', 'btn btn-quiet', 'Edit'); edit.type = 'button'; edit.addEventListener('click', () => beginEdit(li, message)); controls.append(edit); }
-          if (mayDelete) { const remove = element('button', 'btn btn-quiet', actions.includes('removePost') && !own ? 'Remove' : 'Delete'); remove.type = 'button'; remove.addEventListener('click', () => removeMessage(message)); controls.append(remove); }
-          li.append(controls);
+        if (room.canWrite && !deleted) {
+          const button = element('button', 'btn btn-quiet message-reply', 'Reply'); button.type = 'button';
+          button.addEventListener('click', () => {
+            if (pending.has(room.key)) return status('Finish or retry the pending message first.');
+            drafts.set(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } });
+            renderDraft();
+            if (!isYou) window.TangentFacets?.replyMention?.(profile.value || message.authorParticipantId, handle);
+            rememberDraft(); $('message-text').focus();
+          }); footer.append(button);
         }
-        $('messages').append(li);
+        li.append(footer);
+        const menu = element('details', 'message-menu', '');
+        const summary = element('summary', '', '···'); summary.setAttribute('aria-label', 'Actions for post by ' + profile.name); summary.title = 'Post actions'; menu.append(summary);
+        const controls = element('div', 'message-menu-panel', '');
+        const permalink = element('a', 'post-permalink', 'Open post'); permalink.href = '/t/' + encodeURIComponent(room.tangentKey) + '/' + encodeURIComponent(message.id); controls.append(permalink);
+        if (mayEdit) { const edit = element('button', 'btn btn-quiet', 'Edit post'); edit.type = 'button'; edit.addEventListener('click', () => { menu.open = false; beginEdit(li, message); }); controls.append(edit); }
+        if (mayDelete) { const remove = element('button', 'btn btn-quiet message-danger', actions.includes('removePost') && !isYou ? 'Remove post' : 'Delete post'); remove.type = 'button'; remove.addEventListener('click', () => { menu.open = false; removeMessage(message); }); controls.append(remove); }
+        const details = element('details', 'source-details', ''); details.append(element('summary', '', 'Source details'));
+        for (const value of [message.authorParticipantId, message.sourceUri, message.sourceCid]) if (value) details.append(element('p', 'did', value));
+        controls.append(details); menu.append(controls);
+        menu.addEventListener('keydown', event => { if (event.key === 'Escape') { menu.open = false; summary.focus(); } });
+        menu.addEventListener('toggle', () => { if (menu.open) document.querySelectorAll('.message-menu[open]').forEach(other => { if (other !== menu) other.open = false; }); });
+        li.append(menu); $('messages').append(li);
       }
       nextCursor = nativeHistory ? page.nextCursor : undefined; resumeCursor = nativeHistory ? page.resumeCursor : undefined;
-      show('more-messages', !!nextCursor); show('acknowledge', nativeHistory && rendered.size > 0 && !!resumeCursor);
-      const freshness = { 'writer-checked': 'Latest notified writer verified against its source.', checked: 'Checked against source repositories.', 'catching-up': 'Catching up with source repositories.', unavailable: 'Source unavailable. Showing retained messages.', 'authority-reauthorization-required': 'The site connection needs to be renewed by its owner.', 'not-yet-checked': 'Source reconciliation has not completed yet.' };
-      text('freshness', (freshness[page.freshness] || 'Source status is pending.') + (page.lastCheckedAt ? ' Last complete check: ' + new Date(page.lastCheckedAt).toLocaleString() : '') + (!rendered.size ? ' No messages here yet.' : ''));
+      displayedSequence = nextCursor ? Math.max(0, ...[...visibleMessages.values()].map(message => message.sequence || 0)) : page.boundary || 0;
+      show('more-messages', !!nextCursor); checkpointState(); updateNewPosts();
+      const freshness = { 'writer-checked': 'Latest source update received.', checked: 'Up to date with the source.', 'catching-up': 'Catching up with the source…', unavailable: 'The source is unavailable. You can still read saved posts.', 'authority-reauthorization-required': 'The owner needs to reconnect this Topic’s source.', 'not-yet-checked': 'Checking for source updates…' };
+      const state = room.spaceState === 'Local' ? '' : freshness[page.freshness] || 'Checking for source updates…';
+      text('freshness', state + (!rendered.size ? ' No posts yet. Start the conversation.' : ''));
+      show('freshness', !!$('freshness').textContent.trim());
+      restoreReadingAnchor(anchor);
   }
   function beginEdit(li, message) {
     const current = li.querySelector('.message-text'); if (!current) return;
@@ -468,16 +599,18 @@
     const version = epoch, key = room.key;
     try {
       while (!controller.signal.aborted && version === epoch) {
+        const revision = historyRevision;
         const page = (await request(roomPath(key) + '/updates?cursor=' + encodeURIComponent(resumeCursor), undefined, 'GET', controller.signal)).data;
         if (controller.signal.aborted || version !== epoch) return;
-        renderPage(page);
+        if (revision !== historyRevision) continue;
+        renderPage(page, true, true);
         if (nextCursor) break;
       }
     } catch (error) {
       if (controller.signal.aborted || version !== epoch) return;
       if (error.status === 401 || error.status === 403) {
         revokeSelectedRoom(error.status);
-      } else text('freshness', 'Live updates paused. Use Check for updates to reconnect.');
+      } else { text('freshness', 'Live updates paused. Use Check for updates to reconnect.'); show('freshness', true); }
     } finally { controller.abort(); }
   }
   function renderActivity(snapshot) {
@@ -493,7 +626,7 @@
     const selectedTangent = tangentByKey.get(room?.tangentKey || activeTangentKey);
     const state = snapshot.channelsIncomplete ? 'Live activity is connected. This overview is incomplete because the directory reached its current scan limit.' : snapshot.channelsTruncated ? 'Live activity is connected. This overview shows up to 100 visible topics.' : selectedTangent?.channelsIncomplete ? 'Live activity is connected. This Tangent’s topic directory is incomplete.' : selectedTangent?.nextChannelsPage ? 'Live activity is connected. This Tangent has more visible topics to load.' : snapshot.resetRequired ? 'Activity reconnected. Some earlier markers may need a fresh check.' : 'Live activity is connected.';
     const compactLive = state === 'Live activity is connected.';
-    text('activity-status', compactLive ? 'Live' : state);
+    connectionStatus(activityActive ? compactLive ? 'Live' : state : 'Connecting…');
     $('activity-status').title = state;
     $('activity-status').setAttribute('aria-label', state);
     if (changed) {
@@ -504,11 +637,23 @@
       if (room) document.querySelectorAll('.room-link').forEach(button => button.setAttribute('aria-current', String(button.dataset.key === room.key)));
     }
     const selected = room ? activityByRoom.get(room.key) : undefined;
+    const elsewhere = currentTangents().flatMap(tangent => (tangent.channels || []).map(topic => ({ tangent, topic, activity: activityFor(topic.key) })))
+      .filter(entry => entry.topic.key !== room?.key && (entry.activity.unreadCount > 0 || entry.activity.directReplies > 0))
+      .sort((a, b) => (b.activity.directReplies || 0) - (a.activity.directReplies || 0));
+    show('conversation-elsewhere', elsewhere.length > 0);
+    text('elsewhere-label', 'Elsewhere · ' + elsewhere.length + (elsewhere.length === 1 ? ' topic' : ' topics'));
+    $('elsewhere-links').replaceChildren();
+    for (const { tangent, topic, activity } of elsewhere.slice(0, 3)) {
+      const count = activity.unreadCountCapped ? '50+' : activity.unreadCount;
+      const link = element('a', '', tangent.name + ' / ' + topic.title + ' · ' + (activity.directReplies > 0 ? 'reply to you' : count + ' new'));
+      link.href = topicUrl(tangent.key, topic.key); $('elsewhere-links').append(link);
+    }
+    if (elsewhere.length > 3) { const link = element('a', '', 'See all Tangents →'); link.href = '/tangents/'; $('elsewhere-links').append(link); }
     const completeOverview = !snapshot.channelsTruncated && !snapshot.channelsHasMore && !snapshot.channelsIncomplete;
     if (room?.canRead && completeOverview && !selected) { revokeSelectedRoom(); refreshTangents().catch(() => {}); return; }
     const shouldRefresh = room && (snapshot.resetRequired || (Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room.key)) || selected?.lastSequence !== previousSequence);
     const messageEvent = Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room?.key && ['MessageChanged', 'MessageEdited', 'MessageDeleted', 'PostChanged', 'PostDeleted'].includes(event.kind));
-    if ((messageEvent || route().kind === 'post' && shouldRefresh) && room?.canRead) action(null, refreshOpenHistory);
+    if ((messageEvent || snapshot.resetRequired || route().kind === 'post' && shouldRefresh) && room?.canRead) action(null, refreshOpenHistory);
     else if (shouldRefresh && room.canRead && !nextCursor && resumeCursor) action(null, () => historyPage(resumeCursor, epoch, room.key));
     if (snapshot.resetRequired || snapshot.events?.some(event => event?.kind === 'ParticipantChanged')) refreshServer();
     if (Array.isArray(snapshot.events) && snapshot.events.some(event => ['TangentChanged', 'RoomChanged', 'MembershipChanged', 'ParticipantChanged'].includes(event?.kind))) {
@@ -518,7 +663,7 @@
           try { const current = (await request(tangentPath(room.tangentKey) + '/topics/' + encodeURIComponent(key))).data; if (version === epoch && room?.key === key) renderRoom(current); }
           catch (error) { if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status); }
         }
-      }).catch(() => text('activity-status', 'Live activity is connected; the directory will refresh when you reopen it.'));
+      }).catch(() => connectionStatus('Live activity is connected; the directory will refresh when you reopen it.'));
     }
   }
   function processSseBlock(block) {
@@ -533,7 +678,7 @@
       try { reloadIdentity(JSON.parse(data)); } catch (_) { reloadIdentity({}); }
     }
     else if ((event === 'activity' || event === 'reset') && data) {
-      try { renderActivity(JSON.parse(data)); } catch (_) { text('activity-status', 'Live activity sent an unreadable update. Reconnecting…'); }
+      try { renderActivity(JSON.parse(data)); } catch (_) { connectionStatus('Live activity sent an unreadable update. Reconnecting…', 'reconnecting'); }
     }
   }
   async function startActivity() {
@@ -554,7 +699,7 @@
       // stream connected.  One page uses one live transport.
       liveController?.abort();
       if ($('freshness').textContent === 'Live updates paused. Use Check for updates to reconnect.') text('freshness', '');
-      text('activity-status', 'Live'); $('activity-status').title = 'Live activity is connected.'; $('activity-status').setAttribute('aria-label', 'Live activity is connected.');
+      connectionStatus('Live', 'live'); $('activity-status').title = 'Live activity is connected.'; $('activity-status').setAttribute('aria-label', 'Live activity is connected.');
       const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = '';
       while (!controller.signal.aborted) {
         const packet = await reader.read(); if (packet.done) break;
@@ -563,13 +708,14 @@
         const parts = buffer.split(/\r?\n\r?\n/); buffer = parts.pop(); parts.forEach(processSseBlock);
       }
     } catch (error) {
-      if (!controller.signal.aborted) text('activity-status', 'Live activity is reconnecting…');
+      if (!controller.signal.aborted) connectionStatus('Live activity is reconnecting…', 'reconnecting');
     } finally {
       activityActive = false;
       if (activityController === controller) activityController = undefined;
       // Bounded backoff, not a fixed retry: transient failures slow the poll (2s doubling
       // to a 30s cap) and a clean connection resets it.
       if (!controller.signal.aborted && !document.hidden) {
+        connectionStatus('Live activity is reconnecting…', 'reconnecting');
         activityBackoff = activityBackoff ? Math.min(activityBackoff * 2, 30000) : 2000;
         activityReconnect = setTimeout(startActivity, activityBackoff);
       }
@@ -583,7 +729,7 @@
     if (activityRecovering) return;
     activityRecovering = true;
     activityRecoveryLabel = typeof detail?.bestLabel === 'string' ? detail.bestLabel : '';
-    text('activity-status', 'Your signed-in account changed. Updating…');
+    connectionStatus('Your signed-in account changed. Updating…', 'connecting');
     const retry = document.getElementById('retry');
     if (retry && typeof retry.click === 'function') retry.click();
     else status('Your signed-in account changed. Reload this page.', true);
@@ -604,7 +750,8 @@
     show('pending-message', !!intent);
     $('reconnect-room-access').href = '/api/connections/rooms?room=' + encodeURIComponent(room?.key || '');
     show('reconnect-room-access', reconnect);
-    text('reply-context', reply ? 'Replying to this message.' : ''); show('reply-context', !!reply); show('cancel-reply', !!reply && !intent);
+    const preview = replyPreview(reply);
+    text('reply-context', reply ? 'Replying to: ' + (preview?.text.replace(/\s+/g, ' ').slice(0, 140) || 'an earlier post') : ''); show('reply-context', !!reply); show('cancel-reply', !!reply && !intent);
     size();
   }
   function rememberDraft() { if (room?.key && !pending.has(room.key)) drafts.set(room.key, { text: $('message-text').value, replyTo: reply }); }
@@ -647,6 +794,7 @@
     site = event.detail;
     routeFailure = undefined;
     if (['sign-in', 'onboarding'].includes(route().kind)) return;
+    if (route().kind === 'participant') { refreshServer(); show('place', false); startActivity(); return; }
     show('place', true); document.body.classList.add('has-rooms'); refreshServer();
     show('site-setup', site.participant?.isOwner === true || currentTangents().some(t => t.canCreateTopic === true));
     const identity = identityEpoch;
@@ -670,6 +818,15 @@
         if (identity !== identityEpoch) return;
         if (route().kind === 'topic') await choose(route().topic);
         else if (route().kind === 'post') await openPost();
+        if (location.hash === '#tangent-members' && (routeTangent.canManage || routeTangent.isOwner)) {
+          const participant = new URL(location.href).searchParams.get('participant');
+          if (participant && participant.length <= 2048) {
+            $('community-settings').open = true; $('tangent-members').open = true;
+            field('tangent-member-form', 'did').value = participant;
+            field('tangent-member-form', 'did').focus();
+            $('tangent-members').scrollIntoView({ block: 'center' });
+          }
+        }
       }
       updateHero(); startActivity();
       } catch (error) {
@@ -690,11 +847,26 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) { liveController?.abort(); stopActivity(); } else { startLive(); startActivity(); } });
   $('more-rooms').addEventListener('click', () => action($('more-rooms'), () => refreshRooms(true)));
   $('more-messages').addEventListener('click', () => action($('more-messages'), () => historyPage(nextCursor)));
+  $('view-new-posts').addEventListener('click', () => {
+    const first = [...newPosts].map(id => document.getElementById('post-' + id)).find(Boolean);
+    newPosts.clear(); updateNewPosts();
+    if (first) { first.tabIndex = -1; first.focus({ preventScroll: true }); first.scrollIntoView({ block: 'start', behavior: 'auto' }); }
+  });
+  $('conversation-elsewhere').addEventListener('keydown', event => { if (event.key === 'Escape') { $('conversation-elsewhere').open = false; $('elsewhere-label').focus(); } });
   $('message-text').addEventListener('input', () => { size(); rememberDraft(); });
   $('cancel-reply').addEventListener('click', () => { drafts.set(room.key, { text: $('message-text').value }); renderDraft(); });
   $('provision-room').addEventListener('click', () => action($('provision-room'), () => mutateRoom('/provision', {})));
-  $('sync-room').addEventListener('click', () => action($('sync-room'), async () => { const key = room.key; status('Checking source repositories…'); await request(roomPath(key) + '/sync', {}); if (room?.key === key) { status(''); await choose(key); } }));
-  $('acknowledge').addEventListener('click', () => action($('acknowledge'), async () => { if (route().kind === 'post' || !resumeCursor) return; await request(roomPath(room.key) + '/read-position', { cursor: resumeCursor }); status('Your read position is saved.'); }));
+  $('sync-room').addEventListener('click', () => action($('sync-room'), async () => { const key = room.key; status(room.spaceState === 'Local' ? 'Checking for updates…' : 'Checking source repositories…'); await request(roomPath(key) + '/sync', {}); if (room?.key === key) { status(''); await choose(key); } }));
+  $('acknowledge').addEventListener('click', () => action($('acknowledge'), async () => {
+    if (route().kind === 'post' || !resumeCursor) return;
+    const key = room.key, version = epoch, cursor = resumeCursor, sequence = displayedSequence;
+    await request(roomPath(key) + '/read-position', { cursor });
+    if (version !== epoch || room?.key !== key) return;
+    acknowledgedSequence = Math.max(acknowledgedSequence, sequence);
+    for (const id of newPosts) if ((visibleMessages.get(id)?.sequence ?? Infinity) <= sequence) newPosts.delete(id);
+    for (const message of visibleMessages.values()) if (message.sequence <= sequence) document.getElementById('post-' + message.id)?.classList.remove('message-new');
+    updateNewPosts(); checkpointState();
+  }));
   $('create-room').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
     const body = Object.fromEntries(new FormData(event.target));
     if (activeTangentKey) {
@@ -725,10 +897,9 @@
   }); });
   $('tangent-member-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
     const did = field('tangent-member-form', 'did').value.trim(), role = field('tangent-member-form', 'role').value;
-    if (!activeTangentKey || !did) throw new Error('Choose a Tangent and enter a participant DID.');
-    try { await request('/api/tangents/' + encodeURIComponent(activeTangentKey) + '/members/' + encodeURIComponent(did), { role }, 'PUT'); }
-    catch (error) { if (error.status === 403) { administrativeDenied(); return; } throw error; }
-    field('tangent-member-form', 'did').value = ''; status('Community role saved.'); await refreshTangents();
+    if (!activeTangentKey || !did) throw new Error('Choose a Tangent and enter an account handle or DID.');
+    await request('/api/tangents/' + encodeURIComponent(activeTangentKey) + '/roles/' + encodeURIComponent(did), { role }, 'PUT');
+    field('tangent-member-form', 'did').value = ''; status('Tangent role saved.'); await refreshTangents();
   }); });
   document.querySelectorAll('.art-sample').forEach(button => button.addEventListener('click', () => {
     const artwork = button.dataset.artwork;
@@ -770,9 +941,22 @@
           if (draft?.text === intent.text && draft.replyTo?.uri === intent.replyTo?.uri && draft.replyTo?.cid === intent.replyTo?.cid) drafts.delete(key);
         } else drafts.set(key, { text: intent.text, replyTo: intent.replyTo });
         if (room?.key === key) {
-          const completionVersion = epoch + 1;
-          reply = undefined; renderDraft(); await choose(key);
-          if (identity === identityEpoch && epoch === completionVersion && room?.key === key) status(receipt.state === 'accepted' ? 'Message sent.' : 'This message did not meet the room’s current rules.', receipt.state !== 'accepted');
+          const completionVersion = epoch;
+          const completionCurrent = () => identity === identityEpoch && completionVersion === epoch && room?.key === key;
+          reply = undefined; renderDraft();
+          // Refresh in place. Reloading the Topic would discard the reading window and
+          // move the composer. Recover the next saved intent without re-entering it.
+          await restorePending(completionVersion, key);
+          if (completionCurrent()) {
+            status(receipt.state === 'accepted' ? 'Post sent.' : 'This post did not meet the topic’s current rules.', receipt.state !== 'accepted');
+            try {
+              if (route().kind === 'post') await refreshOpenHistory();
+              else if (!nextCursor) await historyPage(resumeCursor, completionVersion, key, !resumeCursor);
+            } catch (error) {
+              if (completionCurrent() && receipt.state === 'accepted') status('Post sent. The conversation could not refresh; use Check for updates to see it.', true);
+              else throw error;
+            }
+          }
         }
       } catch (error) { if (current()) throw error; }
       finally { if (sending.get(key) === intent) sending.delete(key); }

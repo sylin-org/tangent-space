@@ -4,6 +4,7 @@
   const parts = location.pathname.split('/').filter(Boolean).map(value => { try { return decodeURIComponent(value); } catch (_) { return ''; } });
   const route = { kind: 'home' };
   if (['onboarding', 'sign-in', 'tangents'].includes(parts[0])) route.kind = parts[0];
+  else if (parts[0] === 'u' && parts[1]) { route.kind = 'participant'; route.identifier = parts[1]; }
   else if (parts[0] === 't' && parts[1]) {
     route.tangent = parts[1];
     if (parts[2] === 'topics') { route.kind = parts[3] ? 'topic' : 'topics'; route.topic = parts[3]; }
@@ -25,6 +26,7 @@
   let currentSite, currentTangent, currentTopic;
   function hero(site, tangent, topic) {
     currentSite = site;
+    if (route.kind === 'participant') { $('server-welcome').hidden = true; $('server-settings-toggle').hidden = true; return; }
     if (tangent) currentTangent = tangent;
     if (topic) currentTopic = topic;
     tangent = currentTangent; topic = currentTopic;
@@ -35,10 +37,10 @@
     $('server-welcome-title').textContent = title;
     $('hero-eyebrow').textContent = reading ? 'Topic' : nested ? 'Tangent · Topics' : route.kind === 'tangents' ? 'The Tangent collection' : 'The bulletin board';
     $('server-welcome-message').textContent = reading ? topic?.topic || '' : nested ? tangent?.description || '' : route.kind === 'tangents' ? 'Small worlds. Shared interests. A place to belong.' : server.welcomeMessage || 'Welcome. Make room for the next thought.';
-    const byline = nested ? tangent?.motto : server.byline;
+    const byline = reading ? '' : nested ? tangent?.motto : server.byline;
     $('hero-byline').textContent = byline || ''; $('hero-byline').hidden = !byline;
     $('server-motd').textContent = server.motd || ''; $('server-motd').hidden = route.kind !== 'home' || !server.motd;
-    const image = nested ? tangent?.artwork || server.coverImageUrl : server.coverImageUrl;
+    const image = reading ? null : nested ? tangent?.artwork || server.coverImageUrl : server.coverImageUrl;
     const valid = typeof image === 'string' && (/^https:\/\//i.test(image) || /^\/(?!\/)/.test(image)) && !/[\u0000-\u001f\\]/.test(image);
     $('hero-image').hidden = !valid;
     if (valid) { $('hero-image').src = image; $('hero-image').onerror = () => { $('hero-image').hidden = true; }; }
@@ -70,6 +72,17 @@
     if (!site.participant) $('activity-status').textContent = 'Sign in for your updates';
     const authentication = ['onboarding', 'sign-in'].includes(route.kind);
     $('nav-sign-in').hidden = !!site.participant;
+    const account = $('nav-account');
+    account.hidden = !site.participant;
+    if (site.participant) {
+      const person = site.participant;
+      account.querySelector('summary').setAttribute('aria-label', 'Account menu for ' + (person.handle || 'you'));
+      $('nav-account-name').textContent = person.handle ? '@' + person.handle.replace(/^@/, '') : 'Your account';
+      $('nav-account-mark').textContent = (person.handle || 'You').slice(0, 1).toUpperCase();
+      $('nav-profile').href = '/u/' + encodeURIComponent(person.did || 'tangent:local:' + person.participantRef);
+      $('nav-account-role').textContent = person.isOwner ? 'Server owner' : 'Signed in';
+      $('nav-sign-out').hidden = !site.signOut;
+    }
     $('state-anonymous').hidden = authentication ? !!site.participant : true;
     const requested = new URLSearchParams(location.search).get('return');
     const returnTo = requested && /^\/(?!\/)/.test(requested) && !/[\\\u0000-\u001f]/.test(requested) ? requested : '/';
@@ -98,4 +111,18 @@
     document.title = (denied ? 'No access' : 'Conversation unavailable') + ' · Tangent Space';
   }
   window.TangentPages = { route, hero, prepare, tangentUrl, topicUrl, unavailable };
+  $('nav-sign-out').addEventListener('click', () => $('sign-out-form').requestSubmit());
+  document.addEventListener('click', event => { if (!$('nav-account').contains(event.target)) $('nav-account').open = false; });
+  $('nav-account').addEventListener('keydown', event => {
+    if (event.key === 'Escape') { $('nav-account').open = false; $('nav-account').querySelector('summary').focus(); }
+  });
+  for (const [formId, titleField] of [['create-tangent', 'name'], ['create-room', 'title']]) {
+    const form = $(formId), title = form.elements.namedItem(titleField), key = form.elements.namedItem('key');
+    let automatic = true;
+    key.addEventListener('input', () => { automatic = !key.value; });
+    title.addEventListener('input', () => {
+      if (automatic) key.value = title.value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64).replace(/-$/, '');
+    });
+    form.addEventListener('reset', () => { automatic = true; });
+  }
 })();

@@ -33,3 +33,7 @@ public sealed record CreateTangentChannelRequest(
 [JsonObject(MissingMemberHandling = MissingMemberHandling.Error)]
 public sealed record ChangeTangentMembershipRequest(
     [property: JsonProperty(Required = Required.Always)] TangentRole Role);
+
+[JsonObject(MissingMemberHandling = MissingMemberHandling.Error)]
+public sealed record ChangeCompanionRoleRequest(
+    [property: JsonProperty(Required = Required.Always)] CompanionRole Role);

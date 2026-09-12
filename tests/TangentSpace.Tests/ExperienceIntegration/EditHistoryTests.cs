@@ -243,7 +243,10 @@ public sealed class EditHistoryTests : IAsyncLifetime
 
         var fenced = "```\n@leo.experience.test\n```\nDone.";
         await Edit(messageId, fenced, "edit-op-detect-4");
-        Assert.True(AbsentOrNull(await LiveMessage(fenced), "facets"));
+        Assert.Equal(0, Get(await LiveMessage(fenced), "facets").GetArrayLength());
+        var optedOut = "Keep @leo.experience.test as plain text.";
+        await Edit(messageId, optedOut, "edit-op-detect-5", Array.Empty<object>());
+        Assert.Equal(0, Get(await LiveMessage(optedOut), "facets").GetArrayLength());
     }
 
     [Fact]

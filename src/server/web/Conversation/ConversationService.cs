@@ -11,7 +11,7 @@ namespace TangentSpace.Conversation;
 
 public sealed partial class ConversationService(RoomGovernance governance, SpacesService spaces,
     IOptions<SpacesOptions> options, TimeProvider clock, IDataProtectionProvider protection, ILogger<ConversationService> logger,
-    SourceReadiness sourceReadiness, TangentSpace.Participants.ParticipantDirectory directory) : IDisposable
+    SourceReadiness sourceReadiness, TangentSpace.Participants.ParticipantDirectory directory, ParticipantProfiles profiles) : IDisposable
 {
     private readonly SemaphoreSlim writes = new(1, 1);
     private readonly SemaphoreSlim sync = new(1, 1);
@@ -45,24 +45,27 @@ public sealed partial class ConversationService(RoomGovernance governance, Space
         foreach (var target in targets)
             if (await ResolveHolder(target, ct) is { } holder && holders.TryAdd(target, holder))
                 labelKeys.Add(holder.Id);
-        var labels = await directory.LabelsFor(labelKeys, ct);
+        var presentations = (await Task.WhenAll(labelKeys.Distinct(StringComparer.Ordinal).Select(async id =>
+            (Id: id, Profile: await profiles.Read(id, ct)))))
+            .ToDictionary(value => value.Id, value => value.Profile, StringComparer.Ordinal);
         foreach (var author in authors)
         {
             var participant = await Participant.Get(author, ct);
             if (participant is null) continue;
-            resolved[author] = new ParticipantResolution(
-                labels.GetValueOrDefault(author) is { Length: > 0 and <= 253 } handle ? handle : null,
-                null, participant.Classification.ToString(), await directory.PerennialValue(author, ct));
+            var profile = presentations[author];
+            resolved[author] = Present(profile, participant.Classification.ToString(), profile.Did);
         }
         foreach (var target in targets)
         {
             if (resolved.ContainsKey(target) || !holders.TryGetValue(target, out var holder)) continue;
-            resolved[target] = new ParticipantResolution(
-                labels.GetValueOrDefault(holder.Id) is { Length: > 0 and <= 253 } handle ? handle : null,
-                null, holder.Classification.ToString(), target);
+            resolved[target] = Present(presentations[holder.Id], holder.Classification.ToString(), target);
         }
         return resolved;
     }
+
+    private static ParticipantResolution Present(ParticipantProfile profile, string classification, string value)
+        => new(profile.Handle is { Length: > 0 and <= 253 } handle ? handle : null,
+            profile.DisplayName, classification, value, profile.Avatar, "/u/" + Uri.EscapeDataString(value));
 
     /// <summary>One facet target's current holder: an atproto DID through the identity row, a
     /// tangent:local value through the participant it derives from. Misses are honest.</summary>

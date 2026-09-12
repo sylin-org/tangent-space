@@ -137,7 +137,7 @@ public sealed partial class ConversationService
             if (existing is { } found)
             {
                 if (found.Removed || found.Content.Text != input.Text || found.Content.ReplyTo != input.ReplyTo
-                    || Canonical(found.Facets) != Canonical(facets))
+                    || Canonical(found.Facets) != Canonical(await MessageFacets.Effective(input.Text, facets, token)))
                 {
                     conflict = true;
                     return true;
@@ -189,6 +189,6 @@ public sealed partial class ConversationService
 
     /// <summary>Canonical facet payload for the idempotency conflict check.</summary>
     private static string Canonical(IReadOnlyList<PostFacet>? facets)
-        => facets is null || facets.Count == 0 ? ""
+        => facets is null ? "<auto>"
             : string.Join("|", facets.OrderBy(facet => facet.Start).ThenBy(facet => facet.Kind).Select(facet => facet.Canonical()));
 }

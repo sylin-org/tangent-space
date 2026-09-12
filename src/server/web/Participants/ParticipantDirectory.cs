@@ -6,7 +6,7 @@ namespace TangentSpace.Participants;
 /// lookup, display label and canonicalization goes through this directory; nothing else scans
 /// the identity collection for authority. Display order is atproto label &gt; any other
 /// identity label &gt; the derived internal DID.</summary>
-public sealed class ParticipantDirectory(TimeProvider clock)
+public sealed class ParticipantDirectory(TimeProvider clock, IAtprotoHandleSource handles)
 {
     /// <summary>The mint discipline: participant creation is serialized process-wide by this
     /// async semaphore so a concurrent sign-in and source ingest for the same foreign DID can
@@ -75,7 +75,7 @@ public sealed class ParticipantDirectory(TimeProvider clock)
             var returning = await Participant.Get(atproto.ParticipantId, ct)
                 ?? throw new InvalidOperationException("The atproto identity has no participant; creation is its only writer.");
             returning.Return(atproto, now);
-            atproto.Relabel(verifiedHandle);
+            if (!string.IsNullOrWhiteSpace(verifiedHandle)) atproto.Relabel(verifiedHandle);
             await returning.Save(ct);
             await atproto.Save(ct);
             return returning;
@@ -117,18 +117,25 @@ public sealed class ParticipantDirectory(TimeProvider clock)
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (wanted.Count == 0) return result;
         var byParticipant = new Dictionary<string, List<ParticipantIdentity>>(StringComparer.Ordinal);
-        foreach (var identity in await ParticipantIdentity.Query(value => value.Label != null, ct))
+        foreach (var identity in await ParticipantIdentity.Query(value => value.Label != null || value.Kind == ParticipantIdentity.AtprotoKind, ct))
         {
             if (!wanted.Contains(identity.ParticipantId)) continue;
             (byParticipant.TryGetValue(identity.ParticipantId, out var list) ? list : byParticipant[identity.ParticipantId] = []).Add(identity);
         }
-        foreach (var participantId in wanted)
+        var labels = await Task.WhenAll(wanted.Select(async participantId =>
         {
-            if (!byParticipant.TryGetValue(participantId, out var identities)) continue;
+            if (!byParticipant.TryGetValue(participantId, out var identities)) return (participantId, label: (string?)null);
             var atproto = identities.FirstOrDefault(identity => identity.Kind == ParticipantIdentity.AtprotoKind);
-            var label = atproto?.Label ?? identities
+            var label = atproto?.Label;
+            if (string.IsNullOrWhiteSpace(label) && atproto is not null)
+                label = await handles.HandleOf(atproto.Value, ct);
+            label ??= identities
                 .OrderBy(identity => identity.Kind, StringComparer.Ordinal)
                 .FirstOrDefault(identity => identity.Label is { Length: > 0 })?.Label;
+            return (participantId, label);
+        }));
+        foreach (var (participantId, label) in labels)
+        {
             if (label is { Length: > 0 }) result[participantId] = label;
         }
         return result;

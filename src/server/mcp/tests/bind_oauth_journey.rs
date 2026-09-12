@@ -149,7 +149,7 @@ fn the_bind_route_starts_the_flow_immediately_and_binds_the_authenticated_accoun
     // no interstitial: the GET is the start.
     let callback_page = drive_bind(address, &server, &identity.local_id, None);
     assert!(callback_page.starts_with("HTTP/1.1 200"), "the callback answers: {callback_page}");
-    assert!(callback_page.contains("Bound as <strong>lumen.bsky.example</strong>"), "the success page names the handle: {callback_page}");
+    assert!(callback_page.contains("Signed in as <strong>lumen.bsky.example</strong>"), "the success page names the handle: {callback_page}");
     assert!(callback_page.contains("you can close this tab"), "the tab is freed honestly: {callback_page}");
 
     // The waiting connect finished by itself: one bound enrollment with a stored session.
@@ -246,7 +246,7 @@ fn a_state_mismatch_or_missing_issuer_binds_nothing() {
     let _real_callback = start_bind(address, &server, &identity.local_id, None);
     let forged = get(address, "/?code=code-999&state=forged-state&iss=http://127.0.0.1:1");
     assert!(forged.starts_with("HTTP/1.1 200"), "the failure still renders a page: {forged}");
-    assert!(forged.contains("state_mismatch") && forged.contains("Bind failed"), "the failure names the code: {forged}");
+    assert!(forged.contains("state_mismatch") && forged.contains("Sign-in didn’t finish"), "the failure names the code: {forged}");
     assert!(hub.identity(&identity.local_id).unwrap().bound_did.is_none(), "nothing was bound");
     assert!(hub.store().lock().unwrap().atproto_session(&identity.local_id).is_none(), "no session was stored");
 
@@ -291,7 +291,7 @@ fn an_aged_out_bind_flight_is_refused_honestly() {
     std::thread::sleep(std::time::Duration::from_millis(25));
     let path = callback.strip_prefix(&format!("http://{address}")).unwrap_or(&callback);
     let late = get(address, path);
-    assert!(late.contains("bind_expired") && late.contains("Bind failed"), "the aged-out flight refuses: {late}");
+    assert!(late.contains("bind_expired") && late.contains("Sign-in didn’t finish"), "the aged-out flight refuses: {late}");
     assert!(hub.identity(&identity.local_id).unwrap().bound_did.is_none(), "nothing was bound");
     assert!(hub.store().lock().unwrap().atproto_session(&identity.local_id).is_none(), "no session was stored");
 }
@@ -306,7 +306,7 @@ fn the_handle_escape_hatch_still_discovers_the_self_hosted_path() {
     // `?handle=` runs the discovery path BEFORE the flow: resolver, DID document,
     // the PDS's protected-resource metadata, the AS metadata — then the PAR.
     let callback_page = drive_bind(address, &server, &identity.local_id, Some("selfhosted.example"));
-    assert!(callback_page.contains("Bound as <strong>selfhosted.example</strong>"), "the discovery path completes: {callback_page}");
+    assert!(callback_page.contains("Signed in as <strong>selfhosted.example</strong>"), "the discovery path completes: {callback_page}");
 
     let requests = server.requests();
     let par_position = requests.iter().position(|request| request.path == "/oauth/par").expect("the PAR request");
@@ -368,12 +368,12 @@ fn the_pds_nonce_cache_saves_the_second_mint_one_round_trip() {
 
     // The default flow signs in as the provider's LAST registered account.
     let first_bind = drive_bind(address, &server, &one.local_id, None);
-    assert!(first_bind.contains("Bound as <strong>first.bsky.example</strong>"), "the first identity binds: {first_bind}");
+    assert!(first_bind.contains("Signed in as <strong>first.bsky.example</strong>"), "the first identity binds: {first_bind}");
     // The `?handle=` discovery path re-points the provider's session at the second
     // account (the default flow would re-sign the last resolved DID).
     server.add_account("second.bsky.example", "unused-password", "did:plc:second");
     let second_bind = drive_bind(address, &server, &two.local_id, Some("second.bsky.example"));
-    assert!(second_bind.contains("Bound as <strong>second.bsky.example</strong>"), "the second identity binds: {second_bind}");
+    assert!(second_bind.contains("Signed in as <strong>second.bsky.example</strong>"), "the second identity binds: {second_bind}");
 
     hub.enroll_bound(&one.local_id, server.origin()).expect("the first bound enrollment");
     hub.enroll_bound(&two.local_id, server.origin()).expect("the second bound enrollment");
@@ -405,7 +405,7 @@ fn an_expired_oauth_session_refreshes_silently_before_use() {
     let identity = hub.create_identity("wanderer", None).expect("identity");
 
     let callback_page = drive_bind(address, &server, &identity.local_id, None);
-    assert!(callback_page.contains("Bound as <strong>wanderer.bsky.example</strong>"), "the bind completed: {callback_page}");
+    assert!(callback_page.contains("Signed in as <strong>wanderer.bsky.example</strong>"), "the bind completed: {callback_page}");
     let stale = hub.store().lock().unwrap().atproto_session(&identity.local_id).expect("session").access_jwt;
 
     // The enrollment uses the PDS session: the stale token must refresh first (silently

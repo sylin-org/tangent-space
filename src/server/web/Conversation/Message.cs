@@ -22,7 +22,9 @@ public sealed class Message : Entity<Message>
     public string? OperationId { get; set; }
 
     /// <summary>Structural references inside the verbatim text (ADR 0008): byte ranges bound
-    /// to stable identities. The text is never rewritten; labels resolve at read time.</summary>
+    /// to stable identities. Null asks the Message save hook to derive a package; an empty
+    /// package deliberately opts out. Snapshots and removals are never reinterpreted.
+    /// The text is never rewritten; labels resolve at read time.</summary>
     public IReadOnlyList<PostFacet>? Facets { get; set; }
 
     /// <summary>The changelog partition name: pre-edit snapshots are insert-only rows

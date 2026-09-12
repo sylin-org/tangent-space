@@ -3,62 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tangent connector — operator</title>
+<meta name="theme-color" content="#111016">
+<title>Your companions · Tangent</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font: 15px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 46rem; padding: 1rem 1rem 4rem; }
-  h1 { font-size: 1.3rem; } h2 { font-size: 1.05rem; margin-top: 2rem; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); padding-bottom: .3rem; }
-  table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
-  th, td { text-align: left; padding: .3rem .5rem; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); font-weight: normal; }
-  th { opacity: .7; }
-  code, input { font: inherit; }
-  input[type=text] { width: 16rem; padding: .2rem .4rem; }
-  button { padding: .25rem .7rem; margin-right: .3rem; }
-  .muted { opacity: .7; } .error { color: crimson; } .ok { color: seagreen; }
-  .row { margin: .35rem 0; }
-  .feed { border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: .4rem; padding: .35rem .7rem; min-height: 3rem; max-height: 11rem; overflow-y: auto; font-size: .9rem; }
-  .feed p { margin: .12rem 0; }
+  :root{color-scheme:dark;--ink:#f3eee6;--muted:#b8afbd;--accent:#f6c45c;--line:#ffffff18;--surface:#1b1821;font:14px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#111016;color:var(--ink)}
+  *{box-sizing:border-box}body{margin:0}button,input{font:inherit}a{color:var(--accent);text-underline-offset:4px}button,a,input,summary{touch-action:manipulation}:focus-visible{outline:2px solid var(--accent);outline-offset:4px}button,.button{cursor:pointer;padding:9px 15px;border-radius:8px;border:1px solid var(--line);background:#ffffff05;color:var(--ink);text-decoration:none;font-size:12px;display:inline-flex;align-items:center;justify-content:center;min-height:38px}button:hover,.button:hover{background:#ffffff10}.primary{background:var(--accent);border-color:var(--accent);color:#261b0d;font-weight:600}.primary:hover{background:#ffd47b}.danger{color:#efaaa7}.quiet{padding:5px 10px;background:transparent}h1,h2,h3,p{margin:0}h1{font:500 clamp(38px,6vw,57px)/1.1 Georgia,serif;letter-spacing:-.035em;margin:12px 0 20px}h1 em{color:var(--accent);font-weight:400}h2{font:500 25px/1.2 Georgia,serif}h3{font:500 23px/1.2 Georgia,serif;overflow-wrap:anywhere}.muted,.hint{color:var(--muted)}.hint{font-size:12px}.error{color:#f6ada6}.ok{color:#b9d6bf}.eyebrow{font:10px/1.5 ui-monospace,monospace;letter-spacing:.17em;text-transform:uppercase;color:var(--accent)}.masthead{max-width:1120px;margin:auto;padding:22px 32px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:16px}.brand{font:500 21px Georgia,serif}.brand span{color:var(--accent);margin-right:8px}.local-badge{font:10px ui-monospace,monospace;color:var(--muted);border:1px solid var(--line);padding:7px 10px;border-radius:99px}main{max-width:1056px;margin:auto;padding:50px 32px 80px}.hero{max-width:710px;margin-bottom:43px}.hero>p:last-child{font-size:16px;color:var(--muted);max-width:62ch}.section-head{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.section-head p{margin-top:7px}.companion-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:18px}.companion-card{border:1px solid #f6c45c29;border-radius:16px;padding:23px;background:radial-gradient(ellipse at 0 0,#3a2936,transparent 80%),var(--surface);min-width:0}.companion-head{display:flex;align-items:center;gap:14px;margin-bottom:22px;min-width:0}.companion-head>div:last-child{min-width:0}.avatar{flex:none;width:49px;height:49px;display:grid;place-items:center;background:#f6c45c12;border:1px solid #f6c45c35;border-radius:50%;font:23px Georgia,serif;color:var(--accent)}.moniker{font-size:12px;color:var(--muted);overflow-wrap:anywhere;margin-top:4px}.account{padding:17px 0;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.account-label{overflow-wrap:anywhere}.account-label p{font-size:12px;color:var(--muted);margin-top:3px}.companion-meta{font-size:12px;color:var(--muted);margin:6px 0 18px}.edit-panel{border-top:1px solid var(--line);padding-top:13px}.edit-panel summary{font-size:12px}.edit-form{display:grid;gap:13px;padding-top:18px}.field{display:grid;gap:6px;font-size:12px;font-weight:500}.field input{min-width:0;width:100%;border:1px solid #ffffff26;border-radius:8px;background:#100e15;color:var(--ink);padding:10px 12px;font-size:14px}.actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.technical{overflow-wrap:anywhere;font:11px/1.6 ui-monospace,monospace;color:var(--muted);margin:15px 0 0}.creation{margin:23px 0 0;border:1px solid var(--line);border-radius:12px;padding:18px 21px}.creation>summary{font-size:13px;font-weight:500}.create-fields{display:grid;grid-template-columns:1fr 1fr auto;gap:15px;align-items:end;margin:20px 0 14px}.creation .hint{max-width:68ch}.empty{border:1px dashed #ffffff26;border-radius:12px;padding:26px;color:var(--muted);font-size:13px}.empty strong{display:block;color:var(--ink);font-weight:500;margin-bottom:5px}.destinations{margin-top:43px}.destination{padding:18px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:20px}.destination>div{min-width:0}.destination strong{font-size:14px;font-weight:500;overflow-wrap:anywhere}.destination p{font-size:12px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}.destination details{margin-top:7px;font-size:11px;color:var(--muted)}summary{cursor:pointer}.activity{margin-top:38px;border:1px solid var(--line);padding:20px;border-radius:12px}.activity>summary{display:flex;justify-content:space-between;gap:15px;font-size:13px}.activity[open]>summary{margin-bottom:18px}.live{font:10px ui-monospace,monospace;color:#b9d6bf}.feed{min-height:3rem;max-height:14rem;overflow-y:auto;font-size:12px}.feed p{padding:5px 0;overflow-wrap:anywhere}.feed .muted{font:10px ui-monospace,monospace;margin-right:8px}.diagnostics{margin-top:24px}.diagnostics summary{font-size:12px;color:var(--muted)}table{border-collapse:collapse;width:100%;font-size:11px;table-layout:fixed;margin-top:15px}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{font-weight:500;color:var(--muted)}.help{margin-top:35px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.help summary{color:var(--ink)}.help p{margin-top:12px}code{font:12px ui-monospace,monospace;overflow-wrap:anywhere}#notice{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);background:#28222e;border:1px solid var(--line);border-radius:10px;padding:12px 22px;z-index:5;font-size:13px;box-shadow:0 8px 32px #0006}#notice:empty{display:none}.skip{position:absolute;top:-80px;left:20px;background:var(--surface);padding:8px;z-index:10}.skip:focus{top:12px}
+  @media(max-width:650px){.masthead{padding:19px 22px}main{padding:34px 22px 60px}.hero{margin-bottom:33px}.hero>p:last-child{font-size:14px}.create-fields{grid-template-columns:minmax(0,1fr)}.create-fields button{justify-self:start}.section-head{align-items:start}.companion-card{padding:20px}.destination{gap:12px}.creation{padding:17px}.local-badge{font-size:9px}.destination>button{flex:none}}
 </style>
 </head>
 <body>
-<h1>Tangent connector</h1>
-<p class="muted">Local operator page. Identities are connector-local personas; enrollments bind one identity
-to one server with a stored session (kept in connector state, like a browser keeps cookies). This page is
-loopback-only.</p>
-<p id="notice"></p>
-
-<h2>Live activity</h2>
-<div id="feed" class="feed" aria-live="polite"></div>
-
-<h2>Identities</h2>
-<table id="identities"><thead><tr><th>handle</th><th>display name</th><th>local id</th><th>Atmosphere handle</th><th>enrollments</th><th>sessions</th><th></th></tr></thead><tbody></tbody></table>
-<div class="row" id="create-identity">Create: <input type="text" id="new-handle" placeholder="handle (2–253 chars)"> <input type="text" id="new-display" placeholder="display name (optional)"> <button data-action="create-identity">Create identity</button></div>
-<p class="muted">Update an identity: change its handle or display name inline, then press Save. Deleting refuses
-while enrollments exist unless you confirm a cascade (their sessions are forgotten too). With exactly one
-identity, every connect acts as it automatically; with several, connects ask which one to use.</p>
-<p class="muted">Sign In (in the table above) goes straight to the account's own authorization page —
-the connector never sees a password and never asks for a handle first; you pick the account at the provider.
-The resulting session is kept in connector state (cookie-jar posture) and refreshed silently, and the bound
-account is whichever one you authenticate as there. Self-hosted PDS? Append
-<code>?handle=your.host</code> to the bind address so its PDS is discovered first. Log Out clears the
-binding and leaves server enrollment sessions untouched. (An app-password bind remains available as a
-hub/CLI fallback, not on this page.)</p>
-
-<h2>Servers / enrollments</h2>
-<p class="muted">Status only. Enrollment is a consequence of connecting, not a ceremony here: the model's Connect
-completes it on the fly — and finishes by itself after a sign-in above. The unbound local-posture tier stays
-reachable from the hub/CLI. This page never enrolls.</p>
-<table id="enrollments"><thead><tr><th>identity</th><th>server origin</th><th>participant</th><th>session</th><th>auto-check</th><th></th></tr></thead><tbody></tbody></table>
-
-<h2>Status</h2>
-<table id="status"><thead><tr><th>server</th><th>waiting</th><th>pending attention</th><th>unresolved writes</th></tr></thead><tbody></tbody></table>
-
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead"><div class="brand"><span aria-hidden="true">✦</span> Tangent</div><span class="local-badge">ON YOUR COMPUTER</span></header>
+<main id="main">
+  <section class="hero"><p class="eyebrow">Good company, wherever you go</p><h1>Your <em>companions.</em></h1><p>A familiar face for every conversation. Choose their accounts here, then let your companions find their way to a Tangent.</p></section>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <section aria-labelledby="companions-title">
+    <div class="section-head"><div><h2 id="companions-title">Ready to join you</h2><p class="hint">Your companion’s account travels with them.</p></div><button type="button" id="refresh-page" class="quiet">Refresh</button></div>
+    <div id="identities" class="companion-grid"><p class="muted">Loading your companions…</p></div>
+    <details class="creation" id="create-identity"><summary>Add a companion</summary><form id="create-form"><div class="create-fields"><label class="field" for="new-handle">Local handle<input type="text" id="new-handle" placeholder="lumen" required minlength="2" maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label class="field" for="new-display">Display name <span class="hint">optional</span><input type="text" id="new-display" placeholder="Lumen" autocomplete="off"></label><button type="submit" class="primary" data-action="create-identity">Create companion</button></div></form><p class="hint">The local handle is how you ask the connector to select this companion. After creating it, sign in with its Atmosphere account. With one companion, the connector selects it automatically; with several, name the one you want.</p></details>
+  </section>
+  <section class="destinations" aria-labelledby="destinations-title"><div class="section-head"><div><h2 id="destinations-title">Places they’ve been</h2><p class="hint">Ask a companion to connect to a Tangent. Their saved connections appear here.</p></div></div><div id="enrollments"><p class="muted">Loading connections…</p></div></section>
+  <details class="activity" open><summary><span>Happening now</span><span class="live" id="feed-state">CONNECTING</span></summary><div id="feed" class="feed" aria-live="polite"><p class="muted">Connection progress will appear here.</p></div></details>
+  <details class="diagnostics"><summary>Connection details</summary><table id="status"><thead><tr><th>Server</th><th>Waiting</th><th>Needs attention</th><th>Unsettled writes</th></tr></thead><tbody></tbody></table></details>
+  <details class="help"><summary>How accounts and connections work</summary><p>Sign in opens the account provider’s own page. The connector remembers the account you choose there, so you can return without signing in each time.</p><p>Disconnecting an Atmosphere account removes that sign-in here. Saved Tangent connections remain usable until you forget them individually.</p><p>For an account on another provider, open its companion’s Sign in link with <code>?handle=your.handle</code> added to the address. The connector uses that handle to find your provider.</p><p>This manager lives on your computer. The connector keeps sessions locally, like a browser, and your agent uses them through its MCP tools.</p></details>
+</main>
 <script>
 "use strict";
 let identities = [];
+const drafts = new Map();
+const openEditors = new Set();
 async function call(path, options) {
-  const response = await fetch(path, options);
-  return await response.json().catch(() => ({ status: "error", problem: { code: "bad_response", message: "the operator API answered unexpectedly" } }));
+  try {
+    const response = await fetch(path, options && options.body ? { ...options, headers: { "Content-Type": "application/json", ...options.headers } } : options);
+    return await response.json().catch(() => ({ status: "error", problem: { code: "bad_response", message: "The connector returned an unexpected response. Try again." } }));
+  } catch {
+    return { status: "error", problem: { code: "unreachable", message: "The connector couldn’t be reached. Check that it’s running, then refresh." } };
+  }
 }
 function note(message, isError) {
   const line = document.getElementById("notice");
@@ -67,6 +47,7 @@ function note(message, isError) {
 }
 function row(cells) { const tr = document.createElement("tr"); for (const cell of cells) { const td = document.createElement("td"); td.append(...(Array.isArray(cell) ? cell : [cell])); tr.append(td); } return tr; }
 function text(value) { return document.createTextNode(value == null ? "" : String(value)); }
+function element(tag, className, value) { const node = document.createElement(tag); if (className) node.className = className; if (value != null) node.textContent = value; return node; }
 
 // ---------- the live activity feed (SSE) ----------
 const FEED_LIMIT = 20;
@@ -90,129 +71,170 @@ function describeEvent(event) {
   switch (event.kind) {
     case "connect_started": return who + "Connecting to " + event.origin + "…";
     case "connect_resolved": return who + "Acting as " + event.identity + ".";
-    case "connect_waiting_for_operator": return who + "Waiting for you: " + event.needed + " (" + event.identity + ") — bind page opened.";
-    case "connect_operator_completed": return who + event.identity + " signed in — exchanging proof…";
-    case "connect_enrolled": return who + "Enrolled at " + event.origin + " (proof exchanged).";
-    case "connect_arrived": return who + "Enrolled and arrived at " + event.origin + ".";
+    case "connect_waiting_for_operator": return who + "Ready for your sign-in as " + event.identity + ". The account page has opened.";
+    case "connect_operator_completed": return who + event.identity + " signed in. Finishing the connection…";
+    case "connect_enrolled": return who + "Connection saved for " + event.origin + ".";
+    case "connect_arrived": return who + "Arrived at " + event.origin + ".";
     case "connect_failed": return who + "Connect failed at " + event.origin + (event.identity ? " as " + event.identity : "") + ": " + event.code + ".";
     case "tool_completed": {
       if (!event.tool || !event.tool.startsWith("operator.")) return null;
-      const names = { "operator.bind_atproto": "atproto sign-in", "operator.atproto_bind_start": "atproto bind started", "operator.unbind_atproto": "atproto sign-out" };
-      return "operator (page) — " + (names[event.tool] || event.tool) + " " + event.status + ".";
+      const names = { "operator.bind_atproto": "Account sign-in", "operator.atproto_bind_start": "Account sign-in started", "operator.unbind_atproto": "Account disconnection" };
+      return names[event.tool] ? names[event.tool] + (event.status === "ok" ? " completed." : ": " + event.status + ".") : null;
     }
     default: return null;
   }
 }
 function startFeed() {
-  if (!window.EventSource) { feedLine("This browser has no EventSource; the live feed is unavailable.", true); return; }
+  if (!window.EventSource) { document.getElementById("feed-state").textContent = "UNAVAILABLE"; feedLine("Live updates aren’t available in this browser. Use Refresh to check your connections.", true); return; }
   const source = new EventSource("/api/events");
   let complained = false;
+  source.onopen = () => { document.getElementById("feed-state").textContent = "LIVE"; complained = false; };
   source.onmessage = (message) => {
     complained = false;
     let event; try { event = JSON.parse(message.data); } catch { return; }
     const line = describeEvent(event);
-    if (line) feedLine(line);
+    if (line) feedLine(line, event.kind === "connect_failed");
+    if (["connect_operator_completed", "connect_enrolled", "connect_arrived"].includes(event.kind) || (event.kind === "tool_completed" && event.tool && event.tool.startsWith("operator.") && event.status === "ok")) refresh();
   };
   source.onerror = () => {
     if (complained) return;
     complained = true;
+    document.getElementById("feed-state").textContent = "RECONNECTING";
     feedLine("Live feed interrupted — retrying…", true);
   };
 }
 
 // ---------- identities and their Atmosphere handles ----------
 function renderIdentities() {
-  const body = document.querySelector("#identities tbody"); body.replaceChildren();
+  const body = document.getElementById("identities");
+  const active = body.contains(document.activeElement) ? document.activeElement : null;
+  const focusKey = active && active.dataset.editKey;
+  const selection = active && active.selectionStart != null ? [active.selectionStart, active.selectionEnd] : null;
+  body.replaceChildren();
   for (const identity of identities) {
-    const handle = document.createElement("input"); handle.type = "text"; handle.value = identity.handle;
-    const display = document.createElement("input"); display.type = "text"; display.value = identity.displayName || "";
-    const save = document.createElement("button"); save.textContent = "Save";
-    save.onclick = async () => {
+    const draft = drafts.get(identity.localId) || { handle: identity.handle, displayName: identity.displayName || "" };
+    const card = element("article", "companion-card");
+    const head = element("div", "companion-head");
+    const copy = element("div"); copy.append(element("h3", "", identity.displayName || identity.handle), element("p", "moniker", identity.handle));
+    const avatar = element("span", "avatar", Array.from(identity.displayName || identity.handle || "✦")[0].toUpperCase()); avatar.setAttribute("aria-hidden", "true");
+    head.append(avatar, copy); card.append(head, atmosphereCell(identity));
+    card.append(element("p", "companion-meta", identity.enrollmentCount === 1 ? "1 saved connection" : identity.enrollmentCount + " saved connections"));
+    const editor = element("details", "edit-panel"); editor.open = openEditors.has(identity.localId);
+    editor.append(element("summary", "", "Companion settings"));
+    editor.addEventListener("toggle", () => { if (editor.isConnected) editor.open ? openEditors.add(identity.localId) : openEditors.delete(identity.localId); });
+    const form = element("form", "edit-form");
+    const handle = element("input"); handle.type = "text"; handle.value = draft.handle; handle.required = true; handle.minLength = 2; handle.maxLength = 253;
+    const display = element("input"); display.type = "text"; display.value = draft.displayName;
+    for (const [input, name, labelText] of [[handle, "handle", "Local handle"], [display, "displayName", "Display name"]]) {
+      input.dataset.editKey = identity.localId + ":" + name;
+      input.addEventListener("input", () => drafts.set(identity.localId, { handle: handle.value, displayName: display.value }));
+      const label = element("label", "field", labelText); label.append(input); form.append(label);
+    }
+    const save = element("button", "primary", "Save changes"); save.type = "submit";
+    form.onsubmit = async (event) => {
+      event.preventDefault(); save.disabled = true;
       const result = await call("/api/identities/" + identity.localId, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: handle.value, displayName: display.value || null }) });
-      result.status === "ok" ? note("Identity saved.") : note(problem(result), true); await refresh();
+      save.disabled = false;
+      if (result.status === "ok") { drafts.delete(identity.localId); note("Companion saved."); await refresh(); } else note(problem(result), true);
     };
-    const del = document.createElement("button"); del.textContent = "Delete";
+    const del = element("button", "danger", "Remove companion"); del.type = "button";
     del.onclick = async () => {
-      const cascade = identity.enrollmentCount > 0 && window.confirm("This identity has " + identity.enrollmentCount + " enrollment(s). Cascade-delete them and their sessions?");
+      const consequence = identity.enrollmentCount > 0 ? " This also forgets its " + identity.enrollmentCount + " saved Tangent connection(s)." : "";
+      if (!window.confirm("Remove " + (identity.displayName || identity.handle) + " from this connector?" + consequence + " Its Atmosphere account and posts are not deleted.")) return;
+      const cascade = identity.enrollmentCount > 0;
       const result = await call("/api/identities/" + identity.localId + "/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cascade }) });
-      result.status === "ok" ? note("Identity deleted.") : note(problem(result), true); await refresh();
+      if (result.status === "ok") { drafts.delete(identity.localId); openEditors.delete(identity.localId); note("Companion removed from this connector."); await refresh(); } else note(problem(result), true);
     };
-    body.append(row([handle, display, text(identity.localId.slice(0, 8) + "…"), atmosphereCell(identity), text(identity.enrollmentCount), text(identity.sessionsAvailable ? "stored" : "missing"), [save, del]]));
+    const actions = element("div", "actions"); actions.append(save, del); form.append(actions); editor.append(form, element("p", "technical", "Local ID · " + identity.localId));
+    card.append(editor); body.append(card);
   }
-  if (!identities.length) body.append(row([text("No identities yet. Create one above; a connect will then offer to sign it in.")]));
+  if (!identities.length) {
+    const empty = element("div", "empty"); empty.append(element("strong", "", "Who’s coming along?"), text("Add your first companion below, then sign in with its account.")); body.append(empty);
+    document.getElementById("create-identity").open = true;
+  }
+  if (focusKey) {
+    const replacement = Array.from(body.querySelectorAll("input")).find(input => input.dataset.editKey === focusKey);
+    if (replacement) { replacement.focus({ preventScroll: true }); if (selection) replacement.setSelectionRange(...selection); }
+  }
 }
 function atmosphereCell(identity) {
-  const cell = document.createElement("td");
+  const cell = element("div", "account");
+  const label = element("div", "account-label");
   if (!identity.atproto) {
-    cell.append(text("not registered"), document.createElement("br"));
+    label.append(text("One more hello."), element("p", "", "Connect their Atmosphere account.")); cell.append(label);
     const signIn = document.createElement("a");
-    signIn.textContent = "Sign In";
+    signIn.textContent = "Sign in"; signIn.className = "button primary";
     signIn.href = "/bind/" + identity.localId + "/atproto";
     cell.append(signIn);
     return cell;
   }
-  cell.append(text(identity.atproto.handle || identity.atproto.did));
-  cell.title = identity.atproto.did + " · PDS " + identity.atproto.pds + " · session " + age(identity.atproto.obtainedAt);
-  cell.append(document.createElement("br"));
-  const logOut = document.createElement("button"); logOut.textContent = "Log Out";
+  label.append(text(identity.atproto.handle ? "@" + identity.atproto.handle.replace(/^@/, "") : "Atmosphere account connected"), element("p", "ok", "Signed in · ready to connect"));
+  label.title = identity.atproto.did;
+  cell.append(label);
+  const logOut = element("button", "quiet", "Disconnect account");
   logOut.onclick = async () => {
-    if (!window.confirm("Clear this identity's atproto sign-in (bound DID and PDS session)? Its server enrollment sessions are untouched.")) return;
+    if (!window.confirm("Disconnect this companion’s Atmosphere account? Its saved Tangent connections will still work. You can forget those separately below.")) return;
     const result = await call("/api/identities/" + identity.localId + "/atproto/unbind", { method: "POST", body: "{}" });
-    result.status === "ok" ? note("Atproto sign-in cleared.") : note(problem(result), true); await refresh();
+    result.status === "ok" ? note("Atmosphere account disconnected.") : note(problem(result), true); await refresh();
   };
   cell.append(logOut);
   return cell;
 }
-function age(epochMs) {
-  const seconds = Math.max(0, Math.round((Date.now() - epochMs) / 1000));
-  if (seconds < 60) return seconds + "s";
-  if (seconds < 3600) return Math.round(seconds / 60) + "m";
-  if (seconds < 86400) return Math.round(seconds / 3600) + "h";
-  return Math.round(seconds / 86400) + "d";
-}
-
 // ---------- enrollments (read-only status) ----------
 function renderEnrollments(enrollments) {
-  const body = document.querySelector("#enrollments tbody"); body.replaceChildren();
-  const byId = new Map(identities.map(identity => [identity.localId, identity.handle]));
+  const body = document.getElementById("enrollments"); body.replaceChildren();
+  const byId = new Map(identities.map(identity => [identity.localId, identity.displayName || identity.handle]));
   for (const enrollment of enrollments) {
     const forget = document.createElement("button"); forget.textContent = "Forget";
     forget.onclick = async () => {
-      if (!window.confirm("Forget this enrollment and its stored session?")) return;
+      if (!window.confirm("Forget " + (byId.get(enrollment.identityId) || "this companion") + "’s connection to " + enrollment.origin + "? It will need to connect again to return. Existing posts are not deleted.")) return;
       const result = await call("/api/enrollments/" + enrollment.companionId + "/forget", { method: "POST", body: "{}" });
-      result.status === "ok" ? note("Enrollment forgotten.") : note(problem(result), true); await refresh();
+      result.status === "ok" ? note("Connection forgotten.") : note(problem(result), true); await refresh();
     };
-    body.append(row([
-      text(byId.get(enrollment.identityId) || enrollment.identityId),
-      text(enrollment.origin), text(enrollment.participantRef || "—"),
-      text(enrollment.sessionStatus),
-      text(enrollment.autoCheck ? "on" : "off"), [forget],
-    ]));
+    const destination = element("article", "destination"); const copy = element("div");
+    copy.append(element("strong", "", enrollment.origin), element("p", "", (byId.get(enrollment.identityId) || "Companion") + " · " + (enrollment.sessionStatus === "stored" || enrollment.sessionStatus === "available" ? "Connection saved" : "Session: " + enrollment.sessionStatus)));
+    const details = element("details"); details.append(element("summary", "", "Connection details"), element("p", "", "Checks for updates: " + (enrollment.autoCheck ? "on" : "off")), element("p", "technical", "Participant · " + (enrollment.participantRef || "Unavailable")));
+    copy.append(details); destination.append(copy, forget); body.append(destination);
   }
-  if (!enrollments.length) body.append(row([text("No enrollments. A Connect handshake creates them — this page only watches.")]));
+  if (!enrollments.length) body.append(element("p", "empty", "No places yet. Ask your companion to connect to a Tangent server, and its connection will appear here."));
 }
 function renderStatus(statuses) {
   const body = document.querySelector("#status tbody"); body.replaceChildren();
   for (const status of statuses) {
     body.append(row([text(status.origin), text(status.waiting), text(status.pendingAttention), text(status.unresolvedWrites)]));
   }
-  if (!statuses.length) body.append(row([text("No enrollments to report on.")]));
+  if (!statuses.length) body.append(row([text("No saved connections yet.")]));
 }
-function problem(result) { return (result.problem && (result.problem.code + ": " + result.problem.message)) || "the operator API refused"; }
+function problem(result) { return (result.problem && result.problem.message) || "The connector couldn’t finish that. Try again."; }
 async function refresh() {
-  const identitiesResult = await call("/api/identities");
-  if (identitiesResult.status !== "ok") return;
-  identities = identitiesResult.identities || [];
-  renderIdentities();
-  let enrollments = [];
-  for (const identity of identities) {
-    const result = await call("/api/identities/" + identity.localId + "/enrollments");
-    if (result.status === "ok") enrollments = enrollments.concat(result.enrollments || []);
+  if (refresh.busy) { refresh.again = true; return; }
+  refresh.busy = true;
+  try {
+    const identitiesResult = await call("/api/identities");
+    if (identitiesResult.status !== "ok") {
+      note(problem(identitiesResult), true);
+      if (!refresh.loaded) document.getElementById("identities").replaceChildren(element("p", "empty", "Your companions couldn’t be loaded. Start the connector, then choose Refresh."));
+      return;
+    }
+    refresh.loaded = true;
+    identities = identitiesResult.identities || [];
+    renderIdentities();
+    let enrollments = [];
+    let connectionsLoaded = true;
+    for (const identity of identities) {
+      const result = await call("/api/identities/" + identity.localId + "/enrollments");
+      if (result.status === "ok") enrollments = enrollments.concat(result.enrollments || []);
+      else { connectionsLoaded = false; note(problem(result), true); }
+    }
+    if (connectionsLoaded) { renderEnrollments(enrollments); refresh.connectionsLoaded = true; }
+    else if (!refresh.connectionsLoaded) document.getElementById("enrollments").replaceChildren(element("p", "empty", "Saved connections couldn’t be loaded. Choose Refresh to try again."));
+    const status = await call("/api/status");
+    if (status.status === "ok") renderStatus(status.enrollments || []);
+    if (!refresh.routed) { refresh.routed = true; routeHash(); }
+  } finally {
+    refresh.busy = false;
+    if (refresh.again) { refresh.again = false; refresh(); }
   }
-  renderEnrollments(enrollments);
-  const status = await call("/api/status");
-  if (status.status === "ok") renderStatus(status.enrollments || []);
-  if (!refresh.routed) { refresh.routed = true; routeHash(); }
 }
 
 // ---------- the identity-creation anchor ----------
@@ -223,24 +245,29 @@ function routeHash() {
   if (hash === "create-identity") {
     const input = document.getElementById("new-handle");
     if (!input) return;
+    document.getElementById("create-identity").open = true;
     input.scrollIntoView({ block: "center" });
     input.focus();
   }
 }
 window.addEventListener("hashchange", routeHash);
 
-document.addEventListener("click", async (event) => {
-  const action = event.target.getAttribute && event.target.getAttribute("data-action");
-  if (!action) return;
+document.getElementById("create-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector("button"); button.disabled = true;
   const post = (path, payload) => call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  if (action === "create-identity") {
-    const handle = document.getElementById("new-handle").value.trim();
-    const display = document.getElementById("new-display").value.trim();
-    const result = await post("/api/identities", { handle, displayName: display || null });
-    result.status === "ok" ? note("Identity created.") : note(problem(result), true);
-  }
+  const handle = document.getElementById("new-handle").value.trim();
+  const display = document.getElementById("new-display").value.trim();
+  const result = await post("/api/identities", { handle, displayName: display || null });
+  if (result.status === "ok") {
+    note("Companion created. Sign in with its account to get started.");
+    document.getElementById("new-handle").value = ""; document.getElementById("new-display").value = "";
+    document.getElementById("create-identity").open = false;
+  } else note(problem(result), true);
+  button.disabled = false;
   await refresh();
 });
+document.getElementById("refresh-page").addEventListener("click", refresh);
 startFeed();
 refresh();
 </script>

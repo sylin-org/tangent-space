@@ -38,9 +38,9 @@ public sealed class ServiceProofExchange(ServiceProofAuthentication proofs, Arri
         try
         {
             ct.ThrowIfCancellationRequested();
-            // Preserve a previously verified display handle; a first autonomous arrival carries none.
-            string? display = (await directory.ByDid(verified.IssuerDid, ct)) is { } known ? await directory.LabelOf(known.Id, ct) : null;
-            try { await arrival.Enter(verified.IssuerDid, display, ct); }
+            // Arrival resolves the verified account's document label and refreshes it on the
+            // identity row. A missing public profile never changes proof authority.
+            try { await arrival.Enter(verified.IssuerDid, null, ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception error) when (error is InvalidOperationException or UnauthorizedAccessException)
             {

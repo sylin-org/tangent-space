@@ -3,6 +3,8 @@ param(
     [switch]$Build,
     # Explicit opt-in for the one-time legacy Windows state migration. Never automatic.
     [switch]$MigrateWindowsState,
+    # Experimental Spaces fixtures are opt-in; standalone Local storage is the default.
+    [switch]$UseFixtureNetwork,
     # Internal seams used only by scripts/test-server-lifecycle.ps1. Defaults exercise the real system.
     [string]$StateRoot,
     [string]$FixtureFile,
@@ -50,21 +52,26 @@ $windowsStateMigrator = if ($WindowsStateMigrator) { $WindowsStateMigrator } els
 }
 Push-Location $repoRoot
 try {
-    # Read-only fixture validation. This script never restarts, recreates or stops the
-    # disposable Spaces network container; it only reads fixtures.json and the health URL.
-    $fixturePath = if ($FixtureFile) { [IO.Path]::GetFullPath($FixtureFile, $repoRoot) } else { Join-Path $repoRoot '.local/spaces-network/fixtures.json' }
-    if (-not (Test-Path -LiteralPath $fixturePath)) {
-        throw "The disposable Spaces network is not initialized. Start it once with: ./probes/spaces-network/start.ps1 -Build (keep an existing network running; recreating it creates new DIDs). Then launch Tangent again."
+    $fixtureMode = $UseFixtureNetwork -or [bool]$FixtureFile
+    if ($MigrateWindowsState -and -not $fixtureMode) { throw 'Legacy Windows migration requires -UseFixtureNetwork (or -FixtureFile) to identify its source network.' }
+    $fixture = $null
+    $networkId = $null
+    # Only an explicitly requested fixture launch contacts the disposable test network.
+    if ($fixtureMode) {
+        $fixturePath = if ($FixtureFile) { [IO.Path]::GetFullPath($FixtureFile, $repoRoot) } else { Join-Path $repoRoot '.local/spaces-network/fixtures.json' }
+        if (-not (Test-Path -LiteralPath $fixturePath)) {
+            throw "The disposable Spaces network is not initialized. Start it once with: ./probes/spaces-network/start.ps1 -Build (keep an existing network running; recreating it creates new DIDs). Then launch Tangent again."
+        }
+        $fixture = Get-Content -LiteralPath $fixturePath -Raw | ConvertFrom-Json
+        if ($fixture.status -ne 'ready') {
+            throw "The disposable Spaces network is not ready (status: $($fixture.status)). Start it once with: ./probes/spaces-network/start.ps1 -Build and wait for http://localhost:2585/health to report status 'passed'. Do not restart or recreate an existing network."
+        }
+        $health = & $healthProbe $Port
+        if ($health.status -ne 'passed') {
+            throw "The protocol test network baseline did not pass (health: $($health.status)). Start it once with: ./probes/spaces-network/start.ps1 -Build and wait for http://localhost:2585/health to report status 'passed'. Do not restart or recreate an existing network."
+        }
+        $networkId = ([DateTimeOffset]$fixture.startedAt).ToUnixTimeMilliseconds()
     }
-    $fixture = Get-Content -LiteralPath $fixturePath -Raw | ConvertFrom-Json
-    if ($fixture.status -ne 'ready') {
-        throw "The disposable Spaces network is not ready (status: $($fixture.status)). Start it once with: ./probes/spaces-network/start.ps1 -Build and wait for http://localhost:2585/health to report status 'passed'. Do not restart or recreate an existing network."
-    }
-    $health = & $healthProbe $Port
-    if ($health.status -ne 'passed') {
-        throw "The protocol test network baseline did not pass (health: $($health.status)). Start it once with: ./probes/spaces-network/start.ps1 -Build and wait for http://localhost:2585/health to report status 'passed'. Do not restart or recreate an existing network."
-    }
-    $networkId = ([DateTimeOffset]$fixture.startedAt).ToUnixTimeMilliseconds()
 
     # State directory: default <repo>/.local/docker/site, always strictly inside <repo>/.local/docker.
     $allowedRoot = Join-Path $repoRoot '.local/docker'
@@ -80,10 +87,12 @@ try {
     $state = Join-Path $stateRootPath 'site'
     New-Item -ItemType Directory -Path $state -Force | Out-Null
 
-    $marker = Set-TangentNetworkMarker -HostStateDirectory $state -NetworkId $networkId
-    Write-Output "Fixture network marker $($marker.status) (networkId $($marker.networkId))."
+    if ($fixtureMode) {
+        $marker = Set-TangentNetworkMarker -HostStateDirectory $state -NetworkId $networkId
+        Write-Output "Fixture network marker $($marker.status) (networkId $($marker.networkId))."
+    }
 
-    if (Test-Path -LiteralPath (Join-Path $state 'appsettings.json')) {
+    if (-not $fixtureMode -or (Test-Path -LiteralPath (Join-Path $state 'appsettings.json'))) {
         # Repeat launch: the existing configuration is retained byte-for-byte and the
         # fixture container is not contacted for registration.
         $service = $null
@@ -94,7 +103,6 @@ try {
         $service = & $registrar $repoRoot $Port
         if (-not $service -or -not $service.managingApp) { throw 'Tangent managing-app fixture registration failed.' }
     }
-    $owner = @($fixture.accounts | Where-Object role -eq 'owner')[0]
     $managingApp = if ($service) { $service.managingApp } else { '' }
     $configuration = Save-TangentDockerConfiguration -Fixture $fixture -ManagingApp $managingApp -Origin "http://127.0.0.1:$Port" -HostStateDirectory $state -OwnerDid ''
     Write-Output "Configuration $($configuration.status): $($configuration.path)"
@@ -105,7 +113,7 @@ try {
     if ($MigrateWindowsState) {
         $migration = & $windowsStateMigrator $repoRoot $networkId $state
         Write-Output "Legacy Windows state migration: $migration"
-    } elseif (Test-Path -LiteralPath (Join-Path (Join-Path $repoRoot ".local/tangent/$networkId/site") 'tangent.sqlite')) {
+    } elseif ($fixtureMode -and (Test-Path -LiteralPath (Join-Path (Join-Path $repoRoot ".local/tangent/$networkId/site") 'tangent.sqlite'))) {
         Write-Output 'Legacy Windows state is present but was not migrated. Use -MigrateWindowsState to migrate it explicitly.'
     }
 

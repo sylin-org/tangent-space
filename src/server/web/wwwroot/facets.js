@@ -25,6 +25,7 @@
   let activeIndex = -1;       // highlighted popup row
   let tokenStart = -1;        // char index where the in-progress @token begins
   let composing = false;      // popup open
+  let lookupVersion = 0;
 
   const draftFacets = new Map(); // room key -> [{kind,start,end,did,value,label}]
 
@@ -64,7 +65,11 @@
   async function open(textarea, prefix) {
     const roomKey = window.TangentRooms?.currentRoomKey?.();
     if (!roomKey) return close();
-    const list = await window.TangentRooms.mentionables(roomKey, prefix);
+    const version = ++lookupVersion;
+    let list;
+    try { list = await window.TangentRooms.mentionables(roomKey, prefix); }
+    catch (_) { if (version === lookupVersion) close(); return; }
+    if (version !== lookupVersion || roomKey !== window.TangentRooms?.currentRoomKey?.() || document.activeElement !== textarea) return;
     targets = list || [];
     if (!targets.length) return close();
     composing = true; activeIndex = 0;
@@ -73,6 +78,8 @@
       const row = document.createElement('div');
       row.className = 'mention-row' + (index === 0 ? ' active' : '');
       row.setAttribute('role', 'option');
+      row.id = 'mention-option-' + index;
+      row.setAttribute('aria-selected', String(index === 0));
       row.dataset.index = String(index);
       const label = document.createElement('span');
       label.className = 'mention-label';
@@ -88,6 +95,9 @@
       return row;
     }));
     node.hidden = false;
+    textarea.setAttribute('aria-controls', node.id);
+    textarea.setAttribute('aria-expanded', 'true');
+    textarea.setAttribute('aria-activedescendant', 'mention-option-0');
     position(textarea, node);
   }
 
@@ -116,7 +126,8 @@
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       activeIndex = (activeIndex + (event.key === 'ArrowDown' ? 1 : -1) + targets.length) % targets.length;
-      node.querySelectorAll('.mention-row').forEach((row, index) => row.classList.toggle('active', index === activeIndex));
+      node.querySelectorAll('.mention-row').forEach((row, index) => { row.classList.toggle('active', index === activeIndex); row.setAttribute('aria-selected', String(index === activeIndex)); });
+      textarea.setAttribute('aria-activedescendant', 'mention-option-' + activeIndex);
       node.querySelectorAll('.mention-row')[activeIndex]?.scrollIntoView({ block: 'nearest' });
     } else if (event.key === 'Enter' || event.key === 'Tab') {
       event.preventDefault();
@@ -151,9 +162,10 @@
     textarea.focus();
     window.TangentRooms?.size();
     sizeFacets(textarea);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function close() { composing = false; activeIndex = -1; const node = $('mention-popup'); if (node) node.hidden = true; }
+  function close() { lookupVersion++; composing = false; activeIndex = -1; const node = $('mention-popup'); if (node) node.hidden = true; const input = $('message-text'); input?.setAttribute('aria-expanded', 'false'); input?.removeAttribute('aria-activedescendant'); }
 
   // ----- facet bookkeeping -----
   /// Drop facets whose range no longer matches their recorded label (edits shift ranges;
@@ -192,6 +204,8 @@
     if (!textarea || !roomKey || !handle) return;
     const insert = '@' + handle + ' ';
     const byteStart = 0;
+    if (textarea.value.startsWith(insert)) return;
+    for (const facet of facetsOf(roomKey)) { facet.start += byteLength(insert); facet.end += byteLength(insert); }
     textarea.value = insert + textarea.value;
     textarea.setSelectionRange(insert.length, insert.length);
     facetsOf(roomKey).push({ kind: 'mention', start: byteStart, end: byteStart + byteLength(insert.trim()), did: authorValue, label: handle });
@@ -220,8 +234,8 @@
         const resolution = resolved?.[facet.did];
         const anchor = document.createElement('a');
         anchor.className = 'mention';
-        anchor.href = '/u/' + encodeURIComponent(resolution?.handle ?? facet.did);
-        anchor.textContent = resolution?.handle ? '@' + resolution.handle : segment;
+        anchor.href = resolution?.profileUrl?.startsWith('/u/') ? resolution.profileUrl : '/u/' + encodeURIComponent(resolution?.value || facet.did);
+        anchor.textContent = resolution?.handle ? '@' + resolution.handle.replace(/^@/, '') : resolution?.displayName ? '@' + resolution.displayName : segment;
         if (resolution?.classification) anchor.title = resolution.classification + (resolution.handle ? ' · ' + resolution.handle : '');
         paragraph.appendChild(anchor);
       } else if (facet.kind === 'group') {

@@ -12,13 +12,15 @@ docker compose up -d --wait tangent
 
 For code changes, run `Build.bat`, then `Launch.bat`. The existing `./scripts/start-docker.ps1 -Build` entry point is also retained. The build publishes for Linux inside the pinned .NET SDK image; the runtime image contains published output and a curl health check. Build context excludes private application state, OAuth files, keys and fixture passwords. SourceLink is disabled for the source archive build, which intentionally excludes Git internals. The separately verified Koan contribution and pinned base identify the source.
 
-The `tangent-spaces-network` container is existing external development infrastructure. Its ports 2582–2585 and disposable identities are intentionally preserved; Compose does not recreate or stop it. A fresh checkout starts it using `probes/spaces-network/start.ps1 -Build` before the app. It is not a durable PDS deployment: restarting it creates new accounts. Do not restart it to restart Tangent.
+`Launch.bat` starts standalone Tangent with Local conversation storage. It does not read Spaces fixtures, contact port 2585, or require a test network. Missing configuration is created with an unclaimed owner, public AT sign-in (`atproto` identity scope), and SQLite under `/state`. Existing `appsettings.json` is retained byte-for-byte, including any owner choices and provider configuration.
+
+Experimental Spaces testing is explicit: `Launch.bat -UseFixtureNetwork` (or `-FixtureFile path/to/fixtures.json`). Only that mode validates the fixture health and network marker and registers a managing application for fresh configuration. Start the disposable network separately with `probes/spaces-network/start.ps1 -Build` when needed. Its ports 2582–2585 and identities are external to Tangent; the launcher never recreates or stops it. Restarting that network creates new accounts. Selecting fixture mode does not rewrite an existing standalone configuration.
 
 ## State and migration
 
 The app binds `.local/docker/site` to `/state`. It holds SQLite, instance configuration, protected OAuth storage and the persistent Linux Data Protection key ring. `/health/ready` drives Docker health. Logs rotate at three 10 MB files and can be viewed directly in Docker Desktop.
 
-Only with explicit `start-docker.ps1 -MigrateWindowsState`, the launcher stops the known Windows `site` process, creates its consistent backup under `.local/backups`, and copies its SQLite database and any journal files into the new Docker state directory. It never overwrites an existing Docker database. Participants, ownership, room rules, source decisions, conversation projections, credential hashes and durable read positions are retained. `migration.json` records the original backup. The original Windows directory and DPAPI keys remain intact.
+Only with explicit `start-docker.ps1 -UseFixtureNetwork -MigrateWindowsState`, the launcher stops the known Windows `site` process, creates its consistent backup under `.local/backups`, and copies its SQLite database and any journal files into the new Docker state directory. It never overwrites an existing Docker database. Participants, ownership, room rules, source decisions, conversation projections, credential hashes and durable read positions are retained. `migration.json` records the original backup. The original Windows directory and DPAPI keys remain intact.
 
 DPAPI-protected Windows login keys cannot be used by the Linux container. Sign in again and reconnect the authority/room grants. For the disposable demo:
 
@@ -45,17 +47,17 @@ Restore only while the app is stopped, to a new state directory and against the 
 
 Public accounts use `https://plc.directory`. Only DIDs and handles explicitly listed in `DevelopmentHandles` use `DevelopmentPlcDirectory`. In Docker, the exact fixture origins connect through `host.docker.internal`, while their URLs, issuer identities, HTTP Host and DPoP audiences stay unchanged. Public destinations keep guarded public HTTPS transport. These routing options are rejected outside Development.
 
-The reported `leo.sylin.org` challenge now reaches the real Bluesky authorization page with HTTP 302. Password entry and consent remain with the user/provider; a complete public-account sign-in is not claimed by that redirect test. Missing or unresolvable identifiers return a sanitized retry page rather than HTTP 500. Signing in does not establish a public provider's experimental Spaces support. On an unclaimed server with blank OwnerDid, the first verified sign-in establishes site ownership; an explicit OwnerDid reserves it for that account.
+The reported `leo.sylin.org` challenge now reaches the real Bluesky authorization page with HTTP 302. Password entry and consent remain with the user/provider; a complete public-account sign-in is not claimed by that redirect test. Missing or unresolvable identifiers return a sanitized retry page rather than HTTP 500. Signing in does not establish a public provider's experimental Spaces support. On an unclaimed server with blank OwnerDid, a verified sign-in opens owner confirmation; an explicit OwnerDid reserves it for that account.
 
 ## Build, launch and reset
 
 - `Build.bat`: prepares the pinned Koan contribution and builds the Tangent image. It does not stop the running app.
-- `Launch.bat`: validates the existing test network, creates missing configuration, preserves existing configuration byte-for-byte, and starts only the Tangent service.
+- `Launch.bat`: creates missing standalone configuration, preserves existing configuration byte-for-byte, and starts only the Tangent service. Test-network validation requires explicit `-UseFixtureNetwork` or `-FixtureFile`.
 - `Wipe.bat`: prints the resolved state directory and requires typing `WIPE`. It stops/removes only the app container, then deletes `.local/docker/site`, including config, SQLite and journals, OAuth state, Data Protection keys and network marker. `Wipe.bat -WhatIf` previews the operation. Backups, source fixtures and the external network are retained.
 
 After a wipe, run Build and Launch. Blank OwnerDid lets the first verified account claim ownership; the browser then offers the existing name/channel setup. Alternatively, edit `.local/docker/site/appsettings.json` before the first sign-in and restart the app with an explicit owner DID. Once claimed, ownership is persisted in SQLite and cannot be transferred by changing configuration. Legacy Windows data is never migrated automatically after a reset.
 
-The app's entire content root is the Windows bind mount: `.local/docker/site` → `/state`. This includes `appsettings.json`, `tangent.sqlite` and WAL/SHM, `oauth/`, `data/keys/`, `koan.lock.json`, and `network.json`. Durable Participants, memberships, local configuration entities, activity, MCP companion/context handles and receipts live in SQLite. Recreating the app container preserves these files. Docker stdout logs rotate independently; use Docker Desktop or `docker compose logs -f tangent`.
+The app's entire content root is the Windows bind mount: `.local/docker/site` → `/state`. This includes `appsettings.json`, `tangent.sqlite` and WAL/SHM, `oauth/`, `data/keys/`, `koan.lock.json`, and, for fixture mode, `network.json`. Durable Participants, memberships, local configuration entities, activity, MCP companion/context handles and receipts live in SQLite. Recreating the app container preserves these files. Docker stdout logs rotate independently; use Docker Desktop or `docker compose logs -f tangent`.
 
 The source test PDS/PLC processes remain disposable infrastructure. Their host evidence files are not a durable backup of source accounts or repositories. The lifecycle scripts deliberately leave this network running. App-state persistence does not make the test network production storage.
 
@@ -70,6 +72,6 @@ Run `pwsh -File scripts/test-server-lifecycle.ps1` for isolated safety and confi
 ./Launch.bat
 ```
 
-Backup briefly stops the app for a consistent SQLite copy and resumes it if it was running. The snapshot includes the entire mounted state and a file-hash manifest. Restore verifies that snapshot, asks for `RESTORE`, stops/removes only the app container, saves the displaced state under `.local/backups/before-restore-*`, and copies the snapshot into `.local/docker/site`. It leaves the app stopped for Launch. Both support `-WhatIf`. Restore expects the same disposable source network; these copies do not recreate its PDS/PLC accounts.
+Backup briefly stops the app for a consistent SQLite copy and resumes it if it was running. The snapshot includes the entire mounted state and a file-hash manifest. Restore verifies that snapshot, asks for `RESTORE`, stops/removes only the app container, saves the displaced state under `.local/backups/before-restore-*`, and copies the snapshot into `.local/docker/site`. It leaves the app stopped for Launch. Both support `-WhatIf`. For Topics using experimental Spaces storage, restore also requires their original source network; these copies do not recreate its PDS/PLC accounts. Standalone Local Topics have no test-network dependency.
 
 A real backup was created at `.local/backups/docker-before-final-mcp`; the app resumed healthy. Current user state was not wiped or restored. No second Tangent instance was created.

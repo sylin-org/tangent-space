@@ -595,11 +595,21 @@ fn bind_skeleton(title: &str, body: &str) -> String {
     format!(
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
-         <title>Tangent connector — {title}</title>\n<style>\n\
-         :root {{ color-scheme: light dark; }}\n\
-         body {{ font: 15px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 34rem; padding: 2rem 1rem 4rem; }}\n\
-         h1 {{ font-size: 1.2rem; }}\n.muted {{ opacity: .7; }}\n.error {{ color: crimson; }}\n.ok {{ color: seagreen; }}\n\
-         </style>\n</head>\n<body>\n{body}\n</body>\n</html>\n"
+         <meta name=\"theme-color\" content=\"#111016\">\n\
+         <title>{title} · Tangent</title>\n<style>\n\
+         :root {{ color-scheme:dark; font:15px/1.65 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#111016; color:#f3eee6; }}\n\
+         * {{ box-sizing:border-box; }} body {{ margin:0; }}\n\
+         header {{ max-width:1056px; margin:auto; padding:24px 32px; border-bottom:1px solid #ffffff18; }}\n\
+         header a {{ font:500 21px Georgia,serif; color:#f3eee6; text-decoration:none; }} header span {{ color:#f6c45c; margin-right:8px; }}\n\
+         main {{ max-width:580px; margin:clamp(35px,10vh,110px) auto; padding:40px; border:1px solid #f6c45c30; border-radius:20px; background:radial-gradient(ellipse at 0 0,#3d2c3a,transparent 75%),#1b1821; }}\n\
+         h1 {{ font:500 clamp(32px,5vw,43px)/1.15 Georgia,serif; letter-spacing:-.03em; margin:12px 0 23px; }} p {{ margin:0 0 20px; }}\n\
+         .eyebrow {{ font:10px/1.5 ui-monospace,monospace; letter-spacing:.17em; color:#f6c45c; text-transform:uppercase; }}\n\
+         .muted {{ color:#b8afbd; font-size:13px; }} .account {{ font-size:17px; overflow-wrap:anywhere; }} .error {{ color:#f6ada6; overflow-wrap:anywhere; }}\n\
+         a {{ color:#f6c45c; text-underline-offset:4px; }} .button {{ display:inline-flex; padding:11px 18px; background:#f6c45c; color:#261b0d; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; margin:4px 0 16px; }}\n\
+         .button:hover {{ background:#ffd47b; }} :focus-visible {{ outline:2px solid #f6c45c; outline-offset:5px; }}\n\
+         details {{ border-top:1px solid #ffffff18; margin-top:24px; padding-top:17px; font-size:12px; }} summary {{ cursor:pointer; color:#b8afbd; }} details p {{ margin:15px 0 0; }} code {{ overflow-wrap:anywhere; font:12px ui-monospace,monospace; }}\n\
+         @media(max-width:640px) {{ header {{ padding:20px 22px; }} main {{ margin:32px 18px; padding:28px 24px; }} }}\n\
+         </style>\n</head>\n<body>\n<header><a href=\"/\"><span aria-hidden=\"true\">✦</span>Tangent</a></header>\n<main>{body}</main>\n</body>\n</html>\n"
     )
 }
 
@@ -608,18 +618,23 @@ fn bind_skeleton(title: &str, body: &str) -> String {
 fn bind_result_page(success: bool, message: &str) -> ApiResponse {
     let body = if success {
         format!(
-            "<h1>Bound</h1>\n<p class=\"ok\">Bound as <strong>{}</strong> — you can close this tab.</p>\n\
-             <p class=\"muted\">The connector keeps the session (refreshing it silently). A waiting connect, if any, finished by itself.</p>\n",
+            "<p class=\"eyebrow\">A familiar face, ready to return</p><h1>You’re connected.</h1>\n\
+             <p class=\"account\">Signed in as <strong>{}</strong></p>\n\
+             <p class=\"muted\">Your companion’s account is ready. The connector remembers this sign-in for future visits and continues any waiting connection.</p>\n\
+             <a class=\"button\" href=\"/\">Back to your companions</a>\n\
+             <p class=\"muted\">You can also close this tab and return to your agent app.</p>\n",
             html_escape(message)
         )
     } else {
         format!(
-            "<h1>Bind failed</h1>\n<p class=\"error\">{}</p>\n\
-             <p class=\"muted\"><a href=\"/\">Return to the operator page</a> and use its Sign In to start again.</p>\n",
+            "<p class=\"eyebrow\">Let’s try that again</p><h1>Sign-in didn’t finish.</h1>\n\
+             <p class=\"muted\">We couldn’t connect your companion’s account. Return to the manager and choose Sign in to start again.</p>\n\
+             <a class=\"button\" href=\"/\">Back to your companions</a>\n\
+             <details><summary>What happened</summary><p class=\"error\">{}</p></details>\n",
             html_escape(message)
         )
     };
-    ApiResponse(200, Value::String(bind_skeleton("bind result", &body)), None)
+    ApiResponse(200, Value::String(bind_skeleton(if success { "Account connected" } else { "Sign-in didn’t finish" }, &body)), None)
 }
 
 /// A bind that could not even start (default authorization server unreachable,
@@ -627,19 +642,21 @@ fn bind_result_page(success: bool, message: &str) -> ApiResponse {
 /// honest reason with a way back to retry.
 fn bind_problem_page(problem: &str, local_id: &str) -> ApiResponse {
     let body = format!(
-        "<h1>Bind could not start</h1>\n<p class=\"error\">{}</p>\n\
-         <p class=\"muted\"><a href=\"/bind/{}/{}\">Try again</a>, or <a href=\"/\">return to the operator page</a>. \
-         Self-hosted account? Append <code>?handle=your.host</code> to the bind address so the connector discovers its PDS.</p>\n",
+        "<p class=\"eyebrow\">A little interruption</p><h1>We couldn’t open sign-in.</h1>\n\
+         <p class=\"muted\">The account connection couldn’t be started. Try again, or return to your companions.</p>\n\
+         <details><summary>What happened</summary><p class=\"error\">{}</p></details>\n\
+         <p><a class=\"button\" href=\"/bind/{}/{}\">Try again</a></p><p class=\"muted\"><a href=\"/\">Back to your companions</a></p>\n\
+         <details><summary>Using another account provider?</summary><p class=\"muted\">Add <code>?handle=your.handle</code> to the sign-in address. The connector will use that handle to find your provider.</p></details>\n",
         html_escape(problem),
         html_escape(local_id),
         BIND_PROVIDER_ATPROTO
     );
-    ApiResponse(200, Value::String(bind_skeleton("bind refused", &body)), None)
+    ApiResponse(200, Value::String(bind_skeleton("Sign-in unavailable", &body)), None)
 }
 
 fn not_found_page(message: &str) -> ApiResponse {
-    let body = format!("<h1>Not found</h1>\n<p class=\"error\">{}</p>\n<p class=\"muted\"><a href=\"/\">Back to the operator page</a></p>\n", html_escape(message));
-    ApiResponse(404, Value::String(bind_skeleton("not found", &body)), None)
+    let body = format!("<p class=\"eyebrow\">Let’s find your way back</p><h1>This page isn’t here.</h1>\n<p class=\"muted\">Your companion manager is just one step away.</p>\n<a class=\"button\" href=\"/\">Back to your companions</a>\n<details><summary>Page details</summary><p class=\"error\">{}</p></details>\n", html_escape(message));
+    ApiResponse(404, Value::String(bind_skeleton("Page not found", &body)), None)
 }
 
 // ---------- tiny query/form parsing (bounded, strict enough for loopback forms) ----------
