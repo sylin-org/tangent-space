@@ -1,0 +1,417 @@
+{
+  "scope": "Actual Message.Query/Koan/SQLite read micro-query; not full API, domain writes, SSE, transactions or browser proof",
+  "started": "2026-09-12T17:36:55.1903266+00:00",
+  "finished": "2026-09-12T17:37:09.6132268+00:00",
+  "root": "E:\\repo\\github\\sylin-org\\tangent-space\\.local\\experiments\\epic005\\sqlite-baseline-b8036f8930d94aa09d9f57b85a9f7e70",
+  "database": "E:\\repo\\github\\sylin-org\\tangent-space\\.local\\experiments\\epic005\\sqlite-baseline-b8036f8930d94aa09d9f57b85a9f7e70\\baseline.sqlite",
+  "deterministicSeed": "epic005-sqlite-v1",
+  "processCpuAffinity": "15",
+  "runtime": ".NET 10.0.12",
+  "os": "Microsoft Windows 10.0.26200",
+  "machine": "LEO-DESKTOP-01",
+  "sqliteVersion": "3.53.3",
+  "koanAssembly": "Koan.Data.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+  "appAssembly": "TangentSpace, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+  "hostStarted": false,
+  "portsOpened": [],
+  "credentialsLoaded": false,
+  "processPeakWorkingSetBytes": 150618112,
+  "processCpuSeconds": 15.328125,
+  "elapsedSeconds": 14.4233688,
+  "settings": {
+    "journal_mode": "delete",
+    "synchronous": 2,
+    "page_size": 4096,
+    "cache_size": -2000,
+    "temp_store": 0
+  },
+  "schema": [
+    {
+      "name": "TangentSpace.Conversation.Message",
+      "sql": "CREATE TABLE \u0022TangentSpace.Conversation.Message\u0022 (\u0022Id\u0022 TEXT NOT NULL, \u0022Json\u0022 TEXT, PRIMARY KEY (\u0022Id\u0022))"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "sqlite_autoindex_TangentSpace.Conversation.Message_1",
+      "sql": null
+    }
+  ],
+  "tiers": [
+    {
+      "posts": 10000,
+      "bulkSeedElapsedMs": 259.1977,
+      "databaseBytes": 8941568,
+      "processWorkingSetBytes": 145457152,
+      "cases": [
+        {
+          "label": "beginning",
+          "edge": 0,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 40.2527,
+          "p95Ms": 52.9376,
+          "minMs": 38.9617,
+          "maxMs": 52.9376,
+          "timingsMs": [
+            38.9617,
+            39.3429,
+            40.2527,
+            41.4881,
+            45.3247,
+            52.9376
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 0)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) ASC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 21,
+              "FullScanSteps": 9999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 200166,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 0)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000))",
+              "Milliseconds": 18,
+              "FullScanSteps": 9999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 140015,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "edge": 5000,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 40.6863,
+          "p95Ms": 44.0931,
+          "minMs": 38.1206,
+          "maxMs": 44.0931,
+          "timingsMs": [
+            38.1206,
+            39.3293,
+            40.6863,
+            41.3024,
+            41.5423,
+            44.0931
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 5000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) ASC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 18,
+              "FullScanSteps": 9999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 140166,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 5000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000))",
+              "Milliseconds": 20,
+              "FullScanSteps": 9999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 110015,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "edge": 9979,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 37.4387,
+          "p95Ms": 52.4246,
+          "minMs": 32.5943,
+          "maxMs": 52.4246,
+          "timingsMs": [
+            32.5943,
+            35.8358,
+            37.4387,
+            39.7575,
+            44.8864,
+            52.4246
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 9979)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) ASC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 23,
+              "FullScanSteps": 9999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 80418,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 9979)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000))",
+              "Milliseconds": 15,
+              "FullScanSteps": 9999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 80141,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "edge": 5000,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 48.2196,
+          "p95Ms": 57.6395,
+          "minMs": 42.3313,
+          "maxMs": 57.6395,
+          "timingsMs": [
+            42.3313,
+            46.9151,
+            48.2196,
+            52.7953,
+            53.1049,
+            57.6395
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C 5000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) DESC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 27,
+              "FullScanSteps": 9999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 160066,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C 5000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 10000))",
+              "Milliseconds": 19,
+              "FullScanSteps": 9999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 110009,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "posts": 100000,
+      "bulkSeedElapsedMs": 1354.2189,
+      "databaseBytes": 89399296,
+      "processWorkingSetBytes": 141017088,
+      "cases": [
+        {
+          "label": "beginning",
+          "edge": 0,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 374.5038,
+          "p95Ms": 386.3168,
+          "minMs": 368.5595,
+          "maxMs": 386.3168,
+          "timingsMs": [
+            368.5595,
+            370.8609,
+            374.5038,
+            379.4178,
+            382.775,
+            386.3168
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 0)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) ASC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 201,
+              "FullScanSteps": 99999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 2000166,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 0)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000))",
+              "Milliseconds": 176,
+              "FullScanSteps": 99999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 1400015,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-after",
+          "edge": 50000,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 337.8857,
+          "p95Ms": 348.2653,
+          "minMs": 322.7292,
+          "maxMs": 348.2653,
+          "timingsMs": [
+            322.7292,
+            328.5368,
+            337.8857,
+            346.2864,
+            346.8903,
+            348.2653
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 50000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) ASC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 180,
+              "FullScanSteps": 99999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 1400166,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 50000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000))",
+              "Milliseconds": 167,
+              "FullScanSteps": 99999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 1100015,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "tail-after",
+          "edge": 99979,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 305.4411,
+          "p95Ms": 331.7844,
+          "minMs": 296.0822,
+          "maxMs": 331.7844,
+          "timingsMs": [
+            296.0822,
+            302.5511,
+            305.4411,
+            310.012,
+            313.9613,
+            331.7844
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 99979)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) ASC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 153,
+              "FullScanSteps": 99999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 800418,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003E 99979)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000))",
+              "Milliseconds": 142,
+              "FullScanSteps": 99999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 800141,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "middle-before",
+          "edge": 50000,
+          "returned": 21,
+          "warmSamples": 6,
+          "p50Ms": 423.2389,
+          "p95Ms": 469.6053,
+          "minMs": 416.2319,
+          "maxMs": 469.6053,
+          "timingsMs": [
+            416.2319,
+            421.1934,
+            423.2389,
+            429.7466,
+            447.5554,
+            469.6053
+          ],
+          "statements": [
+            {
+              "Sql": "SELECT koan_row.\u0022Id\u0022, koan_row.\u0022Json\u0022 FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C 50000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000)) ORDER BY CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) DESC, koan_row.\u0022Id\u0022 ASC LIMIT 21 OFFSET 0",
+              "Milliseconds": 259,
+              "FullScanSteps": 99999,
+              "SortOperations": 1,
+              "VirtualMachineSteps": 1600066,
+              "plan": [
+                "SCAN koan_row",
+                "USE TEMP B-TREE FOR ORDER BY"
+              ]
+            },
+            {
+              "Sql": "SELECT COUNT(1) FROM \u0022TangentSpace.Conversation.Message\u0022 AS koan_row WHERE (((json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022RoomKey\u0022\u0027) = \u0027epic005-hot-topic\u0027) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C 50000)) AND (CAST(json_extract(koan_row.\u0022Json\u0022, \u0027$.\u0022Sequence\u0022\u0027) AS NUMERIC) \u003C= 100000))",
+              "Milliseconds": 161,
+              "FullScanSteps": 99999,
+              "SortOperations": 0,
+              "VirtualMachineSteps": 1100009,
+              "plan": [
+                "SCAN koan_row"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "transactionFailure": {
+    "scope": "Three Message.Save calls in the application\u0027s named EntityContext.Transaction primitive; SQL trigger fails second; independent post-scope connection inspects durable state. Not full acceptance/API or process-crash proof.",
+    "transactionName": "tangent-room-policy-operation",
+    "queuedIds": [
+      "epic005-tx-first",
+      "epic005-tx-second",
+      "epic005-tx-third"
+    ],
+    "failure": "Koan.Data.Core.Transactions.TransactionException: Deferred coordination \u0027tangent-room-policy-operation\u0027 failed after 1 completed operation(s). Its commit outcome is unknown and it will not be replayed.",
+    "persistedIds": [
+      "epic005-tx-first"
+    ],
+    "partialCommitObserved": true
+  },
+  "sourceHashes": {
+    "src/server/web/Conversation/Message.cs": "dbee3b6dcecc1b4dd181f53999edd4ccbdff84046ad4e7084eee48ab13409e55",
+    "src/server/web/Conversation/ConversationService.History.cs": "d9a98c8cfe1b7bdb31e65342f452991f397ab3f81a8389cf792d60866d507f0d",
+    "src/server/web/Conversation/ConversationService.McpWindow.cs": "06eb81276a0c567fe1c8f8c141772950df1f3c8463d8b8c523a0086f793eba94",
+    ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs": "cb1f3a4ce5e57614d79a71fe41bb568751b997322be62954ab5055b94b2e1738",
+    ".local/upstream/koan-framework/src/Connectors/Data/Sqlite/Runtime/SqliteRepository.cs": "b1f30be5e8d4ec560f5a7c7556252554d3d3b6f7f707841eddc3014086ee4983",
+    ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs": "de7c798997a33ccebfa379d325a600acc607561674015b9d47e6f1b2fdebbd65"
+  },
+  "percentileConvention": "nearest rank: sorted[ceil(p * n) - 1]; 6 warm serial samples, p95 equals max",
+  "traceErrors": [],
+  "limitations": [
+    "Six serial warm samples: max is reported as nearest-rank p95; this is not a load-test percentile.",
+    "No OS cache flush or cold-disk claim.",
+    "Direct bulk seed bypasses acceptance, Message lifecycle and real transactions; one Message.Save provisions the schema.",
+    "No index added, no count/query tuning applied; default count behavior is captured as-is.",
+    "100k ceiling for first baseline; million-post/provider/saturation proofs remain pending."
+  ]
+}
