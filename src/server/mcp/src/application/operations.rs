@@ -1,5 +1,5 @@
-//! The small stable tool vocabulary and its argument decoding. Twelve participation tools;
-//! setup and stewardship live in the CLI, not the model-facing catalog.
+//! The small stable tool vocabulary and its argument decoding. Fourteen participation
+//! tools; setup and stewardship live in the CLI, not the model-facing catalog.
 
 use serde_json::Value;
 
@@ -8,6 +8,14 @@ pub enum Operation {
     /// `None` asks the connector to resolve the acting identity from the connecting
     /// client's allowlist rule (MCP only); the CLI never auto-resolves.
     SelectCompanion { moniker: Option<String> },
+    /// Attention, not execution: browser-open the local operator page's
+    /// identity-creation view for the human operator. The page URL (with its token)
+    /// is constructed internally and never rendered.
+    OpenRegistration,
+    /// The on-the-fly handshake: resolve the acting identity (client allowlist),
+    /// discover the server, enroll bound when needed, arrive. A step needing the
+    /// operator pops the local operator page and returns honestly.
+    Connect { server_url: String },
     Arrive { companion_id: String, server_url: String },
     ListTangents { context_id: String, cursor: Option<String> },
     ListTopics { context_id: String, tangent_ref: String, cursor: Option<String> },
@@ -39,6 +47,8 @@ impl Operation {
     pub fn tool_name(&self) -> &'static str {
         match self {
             Self::SelectCompanion { .. } => "SelectCompanion",
+            Self::OpenRegistration => "OpenRegistration",
+            Self::Connect { .. } => "Connect",
             Self::Arrive { .. } => "Arrive",
             Self::ListTangents { .. } => "ListTangents",
             Self::ListTopics { .. } => "ListTopics",
@@ -109,6 +119,14 @@ pub fn decode(tool: &str, arguments: &Value) -> Result<Operation, String> {
     let view = || -> Result<ViewMode, String> { ViewMode::parse(optional("view")?.as_deref()) };
     match tool {
         "SelectCompanion" => Ok(Operation::SelectCompanion { moniker: optional("moniker")? }),
+        "OpenRegistration" => {
+            if !arguments.as_object().map(serde_json::Map::is_empty).unwrap_or(false) {
+                // Deliberately no arguments: the URL and token are constructed internally.
+                return Err("OpenRegistration takes no arguments".into());
+            }
+            Ok(Operation::OpenRegistration)
+        }
+        "Connect" => Ok(Operation::Connect { server_url: string("serverUrl")? }),
         "Arrive" => Ok(Operation::Arrive { companion_id: string("companionId")?, server_url: string("serverUrl")? }),
         "ListTangents" => Ok(Operation::ListTangents { context_id: string("contextId")?, cursor: optional("cursor")? }),
         "ListTopics" => Ok(Operation::ListTopics {

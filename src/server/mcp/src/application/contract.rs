@@ -177,6 +177,89 @@ pub struct EnrollCredentialDto {
     pub grants: Vec<String>,
 }
 
+/// The bound service-proof exchange: `POST {origin}/mcp/token` with the proof JWT as
+/// bearer. The top-level `token` is the participant session (custody crosses directly;
+/// never rendered, journaled or echoed); `credential.participantId` is the server's
+/// canonical participant reference for the enrollment record.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoundExchangeDto {
+    #[serde(default)]
+    pub profile: String,
+    #[serde(default)]
+    pub credential: Option<BoundCredentialDto>,
+    #[serde(default)]
+    pub token: String,
+}
+
+/// The credential view the exchange returns alongside the token.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoundCredentialDto {
+    #[serde(default)]
+    pub participant_id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub grants: Vec<String>,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+}
+
+/// The `/.well-known/tangent-mcp` discovery document, as far as the connector reads it:
+/// the service-proof audience (the DID proofs must name) and the exchange method.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveryDto {
+    #[serde(default)]
+    pub service_proof: Option<ServiceProofDto>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceProofDto {
+    #[serde(default)]
+    pub audience: String,
+    #[serde(default)]
+    pub method: String,
+}
+
+/// The PDS `createSession` response, as far as the connector reads it: the account's
+/// DID and handle, the access token (custody crosses directly), and the DID document
+/// naming the authoritative PDS endpoint.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSessionDto {
+    #[serde(default)]
+    pub did: String,
+    #[serde(default)]
+    pub handle: String,
+    #[serde(default)]
+    pub access_jwt: String,
+    #[serde(default)]
+    pub did_doc: Option<Value>,
+}
+
+impl CreateSessionDto {
+    /// The authoritative PDS origin from the DID document's `#atproto_pds` service
+    /// entry, when present.
+    pub fn pds_endpoint(&self) -> Option<&str> {
+        let services = self.did_doc.as_ref()?.get("service")?.as_array()?;
+        services
+            .iter()
+            .find(|service| service.get("id").and_then(Value::as_str) == Some("#atproto_pds"))
+            .and_then(|service| service.get("serviceEndpoint").and_then(Value::as_str))
+    }
+}
+
+/// The PDS `getServiceAuth` response: the short-lived proof JWT.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceAuthDto {
+    #[serde(default)]
+    pub token: String,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttentionDto {

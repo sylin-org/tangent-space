@@ -104,6 +104,24 @@ impl CompanionEntry {
     }
 }
 
+/// The atproto session one identity holds after the operator binds an app password:
+/// the PDS-issued bearer (`accessJwt`, cookie-jar posture — same exposure class as the
+/// per-enrollment sessions) plus where to reach the PDS again. The app password itself is
+/// NEVER part of this record: it exists in memory for the one `createSession` request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AtprotoSession {
+    /// The bound account's DID (`did:plc:…`); mirrors the identity's `bound_did`.
+    pub did: String,
+    /// The handle the PDS confirmed (canonical form, no leading `@`).
+    pub handle: String,
+    /// The PDS access token used for `getServiceAuth`. Session state, not a vault secret.
+    pub access_jwt: String,
+    /// Canonical PDS origin for follow-up service-auth requests.
+    pub pds: String,
+    /// Epoch milliseconds of the `createSession` that produced this session.
+    pub obtained_at: i64,
+}
+
 /// One clientInfo allowlist rule. `local_id: None` means "ask, never auto-resolve": a
 /// connecting MCP client resolves nothing until the operator records an exact identity.
 #[derive(Debug, Clone, Serialize, Deserialize)]

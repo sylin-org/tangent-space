@@ -16,7 +16,9 @@
   button { padding: .25rem .7rem; margin-right: .3rem; }
   .muted { opacity: .7; } .error { color: crimson; } .ok { color: seagreen; }
   .row { margin: .35rem 0; }
-  .deferred { margin-top: 2rem; padding: .8rem 1rem; border: 1px dashed color-mix(in srgb, currentColor 35%, transparent); opacity: .8; }
+  input[type=password] { width: 12rem; padding: .2rem .4rem; }
+  .feed { border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: .4rem; padding: .35rem .7rem; min-height: 3rem; max-height: 11rem; overflow-y: auto; font-size: .9rem; }
+  .feed p { margin: .12rem 0; }
 </style>
 </head>
 <body>
@@ -26,31 +28,39 @@ to one server with a stored session (kept in connector state, like a browser kee
 loopback-only and carries a one-time token.</p>
 <p id="notice"></p>
 
+<h2>Live activity</h2>
+<div id="feed" class="feed" aria-live="polite"></div>
+
 <h2>Identities</h2>
-<table id="identities"><thead><tr><th>handle</th><th>display name</th><th>local id</th><th>enrollments</th><th>sessions</th><th></th></tr></thead><tbody></tbody></table>
-<div class="row">Create: <input type="text" id="new-handle" placeholder="handle (2–253 chars)"> <input type="text" id="new-display" placeholder="display name (optional)"> <button data-action="create-identity">Create identity</button></div>
+<table id="identities"><thead><tr><th>handle</th><th>display name</th><th>local id</th><th>Atmosphere handle</th><th>enrollments</th><th>sessions</th><th></th></tr></thead><tbody></tbody></table>
+<div class="row" id="create-identity">Create: <input type="text" id="new-handle" placeholder="handle (2–253 chars)"> <input type="text" id="new-display" placeholder="display name (optional)"> <button data-action="create-identity">Create identity</button></div>
 <p class="muted">Update an identity: change its handle or display name inline, then press Save. Deleting refuses
 while enrollments exist unless you confirm a cascade (their sessions are forgotten too).</p>
 
+<h2>Atmosphere sign-in</h2>
+<div class="row" id="bind-form"><select id="bind-identity"></select> <input type="text" id="bind-handle" placeholder="atproto handle (e.g. someone.bsky.social)"> <input type="password" id="bind-password" placeholder="app password" autocomplete="off"> <input type="text" id="bind-pds" placeholder="PDS origin (optional; bsky.social default)"> <button data-action="bind-atproto">Sign In</button></div>
+<p class="muted">Sign an identity in to its atproto account (e.g. Bluesky) with an <em>app password</em> — create one
+in the account's privacy settings; never use the account's main password. The connector exchanges it for a
+PDS session kept in connector state (cookie-jar posture); the password itself is used for the one sign-in
+request and is never stored, logged or echoed. Sign In again to replace an expired session; Log Out (in the
+table above) clears the binding and leaves server enrollment sessions untouched.</p>
+
 <h2>Client allowlist</h2>
-<p class="muted">An MCP client that calls SelectCompanion without a moniker resolves exactly the identity recorded
-for its <code>clientInfo.name</code>. A rule without an identity — like an unlisted client — resolves nothing.
-The allowlist is a guard against silent wrong-identity action on this machine, not an authentication boundary.</p>
+<p class="muted">An MCP client that calls SelectCompanion or Connect without naming an identity resolves exactly the
+identity recorded for its <code>clientInfo.name</code>. A rule without an identity — like an unlisted client —
+resolves nothing. The allowlist is a guard against silent wrong-identity action on this machine, not an
+authentication boundary.</p>
 <table id="allowlist"><thead><tr><th>MCP client name</th><th>identity</th></tr></thead><tbody></tbody></table>
 <div class="row"><input type="text" id="rule-client" placeholder="MCP clientInfo.name"> <select id="rule-identity"></select> <button data-action="add-rule">Add rule</button> <button data-action="save-rules">Save allowlist</button></div>
 
 <h2>Servers / enrollments</h2>
+<p class="muted">Status only. Enrollment is a consequence of connecting, not a ceremony here: the model's Connect
+completes it on the fly — and finishes by itself after a sign-in above. The unbound local-posture tier stays
+reachable from the hub/CLI. This page never enrolls.</p>
 <table id="enrollments"><thead><tr><th>identity</th><th>server origin</th><th>participant</th><th>session</th><th>auto-check</th><th></th></tr></thead><tbody></tbody></table>
-<div class="row">Enroll an identity at a server (unbound enrollment; the server issues a session stored in
-connector state): <select id="enroll-identity"></select> <input type="text" id="enroll-origin" placeholder="https://tangent.example"> <button data-action="enroll">Enroll</button></div>
 
 <h2>Status</h2>
 <table id="status"><thead><tr><th>server</th><th>waiting</th><th>pending attention</th><th>unresolved writes</th></tr></thead><tbody></tbody></table>
-
-<div class="deferred">
-<button disabled>Sign in with atproto — coming in a later wave</button>
-<p class="muted">Identity binding to an atproto DID (OAuth, delegated key, or operator-browser consent) is designed but not implemented in this wave. Identities above are the unbound tier.</p>
-</div>
 
 <script>
 "use strict";
@@ -71,6 +81,58 @@ function note(message, isError) {
 function row(cells) { const tr = document.createElement("tr"); for (const cell of cells) { const td = document.createElement("td"); td.append(...(Array.isArray(cell) ? cell : [cell])); tr.append(td); } return tr; }
 function text(value) { return document.createTextNode(value == null ? "" : String(value)); }
 
+// ---------- the live activity feed (SSE) ----------
+const FEED_LIMIT = 20;
+const feedLines = [];
+function feedLine(line, isError) {
+  feedLines.push({ text: line, isError, at: new Date() });
+  while (feedLines.length > FEED_LIMIT) feedLines.shift();
+  const feed = document.getElementById("feed");
+  feed.replaceChildren(...feedLines.map(entry => {
+    const p = document.createElement("p");
+    if (entry.isError) p.className = "error";
+    const stamp = document.createElement("span"); stamp.className = "muted";
+    stamp.textContent = entry.at.toLocaleTimeString() + "  ";
+    p.append(stamp, text(entry.text));
+    return p;
+  }));
+  feed.scrollTop = feed.scrollHeight;
+}
+function describeEvent(event) {
+  switch (event.kind) {
+    case "connect_started": return "Connecting to " + event.origin + "…";
+    case "connect_resolved": return "Acting as " + event.identity + ".";
+    case "connect_waiting_for_operator": return "Waiting for you: " + event.needed + " (" + event.identity + ") — form below.";
+    case "connect_operator_completed": return event.identity + " signed in — exchanging proof…";
+    case "connect_enrolled": return "Enrolled at " + event.origin + " (proof exchanged).";
+    case "connect_arrived": return "Enrolled and arrived at " + event.origin + ".";
+    case "connect_failed": return "Connect failed at " + event.origin + (event.identity ? " as " + event.identity : "") + ": " + event.code + ".";
+    case "tool_completed": {
+      if (!event.tool || !event.tool.startsWith("operator.")) return null;
+      const names = { "operator.bind_atproto": "atproto sign-in", "operator.unbind_atproto": "atproto sign-out" };
+      return (names[event.tool] || event.tool) + " — " + event.status + ".";
+    }
+    default: return null;
+  }
+}
+function startFeed() {
+  if (!window.EventSource) { feedLine("This browser has no EventSource; the live feed is unavailable.", true); return; }
+  const source = new EventSource("/api/events?token=" + encodeURIComponent(token));
+  let complained = false;
+  source.onmessage = (message) => {
+    complained = false;
+    let event; try { event = JSON.parse(message.data); } catch { return; }
+    const line = describeEvent(event);
+    if (line) feedLine(line);
+  };
+  source.onerror = () => {
+    if (complained) return;
+    complained = true;
+    feedLine("Live feed interrupted — retrying…", true);
+  };
+}
+
+// ---------- identities and their Atmosphere handles ----------
 function renderIdentities() {
   const body = document.querySelector("#identities tbody"); body.replaceChildren();
   for (const identity of identities) {
@@ -87,10 +149,43 @@ function renderIdentities() {
       const result = await call("/api/identities/" + identity.localId + "/delete", { method: "POST", headers: { "Content-Type": "application/json", "X-Tangent-Token": token }, body: JSON.stringify({ cascade }) });
       result.status === "ok" ? note("Identity deleted.") : note(problem(result), true); await refresh();
     };
-    body.append(row([handle, display, text(identity.localId.slice(0, 8) + "…"), text(identity.enrollmentCount), text(identity.sessionsAvailable ? "stored" : "missing"), [save, del]]));
+    body.append(row([handle, display, text(identity.localId.slice(0, 8) + "…"), atmosphereCell(identity), text(identity.enrollmentCount), text(identity.sessionsAvailable ? "stored" : "missing"), [save, del]]));
   }
-  if (!identities.length) body.append(row([text("No identities yet. Create one above, then enroll it at a server below.")]));
+  if (!identities.length) body.append(row([text("No identities yet. Create one above; a connect will then offer to sign it in.")]));
 }
+function atmosphereCell(identity) {
+  const cell = document.createElement("td");
+  if (!identity.atproto) {
+    cell.append(text("not registered"), document.createElement("br"));
+    const signIn = document.createElement("button"); signIn.textContent = "Sign In";
+    signIn.onclick = () => {
+      const target = "#bind-" + identity.localId;
+      if (location.hash === target) routeHash(); else location.hash = target;
+    };
+    cell.append(signIn);
+    return cell;
+  }
+  cell.append(text(identity.atproto.handle || identity.atproto.did));
+  cell.title = identity.atproto.did + " · PDS " + identity.atproto.pds + " · session " + age(identity.atproto.obtainedAt);
+  cell.append(document.createElement("br"));
+  const logOut = document.createElement("button"); logOut.textContent = "Log Out";
+  logOut.onclick = async () => {
+    if (!window.confirm("Clear this identity's atproto sign-in (bound DID and PDS session)? Its server enrollment sessions are untouched.")) return;
+    const result = await call("/api/identities/" + identity.localId + "/atproto/unbind", { method: "POST", headers: { "X-Tangent-Token": token }, body: "{}" });
+    result.status === "ok" ? note("Atproto sign-in cleared.") : note(problem(result), true); await refresh();
+  };
+  cell.append(logOut);
+  return cell;
+}
+function age(epochMs) {
+  const seconds = Math.max(0, Math.round((Date.now() - epochMs) / 1000));
+  if (seconds < 60) return seconds + "s";
+  if (seconds < 3600) return Math.round(seconds / 60) + "m";
+  if (seconds < 86400) return Math.round(seconds / 3600) + "h";
+  return Math.round(seconds / 86400) + "d";
+}
+
+// ---------- allowlist ----------
 function renderAllowlist() {
   const body = document.querySelector("#allowlist tbody"); body.replaceChildren();
   for (const rule of rules) {
@@ -112,6 +207,8 @@ function identitySelect() {
   }
   return select;
 }
+
+// ---------- enrollments (read-only status) ----------
 function renderEnrollments(enrollments) {
   const body = document.querySelector("#enrollments tbody"); body.replaceChildren();
   const byId = new Map(identities.map(identity => [identity.localId, identity.handle]));
@@ -129,9 +226,7 @@ function renderEnrollments(enrollments) {
       text(enrollment.autoCheck ? "on" : "off"), [forget],
     ]));
   }
-  if (!enrollments.length) body.append(row([text("No enrollments. Enroll an identity at a server above.")]));
-  const fill = identitySelect();
-  document.getElementById("enroll-identity").replaceChildren(...fill.children);
+  if (!enrollments.length) body.append(row([text("No enrollments. A Connect handshake creates them — this page only watches.")]));
 }
 function renderStatus(statuses) {
   const body = document.querySelector("#status tbody"); body.replaceChildren();
@@ -146,6 +241,7 @@ async function refresh() {
   if (identitiesResult.status !== "ok") return;
   identities = identitiesResult.identities || [];
   renderIdentities(); renderAllowlist();
+  document.getElementById("bind-identity").replaceChildren(...identitySelect().children);
   let enrollments = [];
   for (const identity of identities) {
     const result = await call("/api/identities/" + identity.localId + "/enrollments");
@@ -156,7 +252,32 @@ async function refresh() {
   if (status.status === "ok") renderStatus(status.enrollments || []);
   const allowlist = await call("/api/allowlist");
   if (allowlist.status === "ok") { rules = allowlist.rules || []; renderAllowlist(); }
+  if (!refresh.routed) { refresh.routed = true; routeHash(); }
 }
+
+// ---------- per-identity anchors ----------
+// #create-identity focuses identity creation; #bind-{localId} focuses the sign-in form
+// with that identity already chosen (the anchor a Connect handshake opens).
+function routeHash() {
+  const hash = location.hash.slice(1);
+  if (hash === "create-identity") {
+    const input = document.getElementById("new-handle");
+    if (!input) return;
+    input.scrollIntoView({ block: "center" });
+    input.focus();
+    return;
+  }
+  if (hash.startsWith("bind-")) {
+    const localId = hash.slice(5);
+    if (!identities.some(identity => identity.localId === localId)) return;
+    document.getElementById("bind-identity").value = localId;
+    const form = document.getElementById("bind-form");
+    form.scrollIntoView({ block: "center" });
+    document.getElementById("bind-handle").focus();
+  }
+}
+window.addEventListener("hashchange", routeHash);
+
 document.addEventListener("click", async (event) => {
   const action = event.target.getAttribute && event.target.getAttribute("data-action");
   if (!action) return;
@@ -178,15 +299,20 @@ document.addEventListener("click", async (event) => {
     const result = await post("/api/allowlist", { rules });
     result.status === "ok" ? note("Allowlist saved.") : note(problem(result), true);
   }
-  if (action === "enroll") {
-    const localId = document.getElementById("enroll-identity").value;
-    const origin = document.getElementById("enroll-origin").value.trim();
-    if (!localId) { note("Pick an identity to enroll.", true); return; }
-    const result = await post("/api/identities/" + localId + "/enroll", { origin });
-    result.status === "ok" ? note("Enrolled; the session is stored.") : note(problem(result), true);
+  if (action === "bind-atproto") {
+    const localId = document.getElementById("bind-identity").value;
+    const handle = document.getElementById("bind-handle").value.trim();
+    const password = document.getElementById("bind-password").value;
+    const pds = document.getElementById("bind-pds").value.trim() || null;
+    if (!localId) { note("Pick an identity to sign in.", true); return; }
+    if (!handle || !password) { note("The atproto handle and app password are both required.", true); return; }
+    const result = await post("/api/identities/" + localId + "/atproto/bind", { handle, appPassword: password, pds });
+    document.getElementById("bind-password").value = "";
+    result.status === "ok" ? note("Signed in; the atproto session is stored. A waiting connect finishes by itself.") : note(problem(result), true);
   }
   await refresh();
 });
+startFeed();
 refresh();
 </script>
 </body>

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::attention::{AttentionRecord, AttentionState, ATTENTION_RECORD_LIMIT};
-use crate::domain::identity::{CallerId, ClientRule, CompanionEntry, Identity, LocalContext};
+use crate::domain::identity::{AtprotoSession, CallerId, ClientRule, CompanionEntry, Identity, LocalContext};
 use crate::domain::policy::{AttentionPolicy, PolicyLedger};
 use crate::domain::writes::PendingWrite;
 
@@ -33,6 +33,11 @@ struct StateFile {
     /// not a vault secret. Two enrollments of one identity hold two distinct entries.
     #[serde(default)]
     sessions: HashMap<String, String>,
+    /// Atproto sessions per identity, keyed by the identity's local id. Same cookie-jar
+    /// posture as `sessions` (owner decision): the PDS `accessJwt` is a session token,
+    /// not a vault secret. The app password that produced a session is never stored.
+    #[serde(default)]
+    atproto_sessions: HashMap<String, AtprotoSession>,
     #[serde(default)]
     contexts: Vec<LocalContext>,
     #[serde(default)]
@@ -120,6 +125,24 @@ impl StateStore {
         self.state.sessions.contains_key(companion_id)
     }
 
+    // ----- atproto sessions (per identity) -----
+
+    /// The atproto session one identity holds. The token is handed only to the port layer;
+    /// it never renders, logs or journals.
+    pub fn atproto_session(&self, local_id: &str) -> Option<AtprotoSession> {
+        self.state.atproto_sessions.get(local_id).cloned()
+    }
+
+    /// Stores (or replaces — re-bind) the identity's atproto session.
+    pub fn set_atproto_session(&mut self, local_id: &str, session: AtprotoSession) {
+        self.state.atproto_sessions.insert(local_id.to_string(), session);
+    }
+
+    /// Clears the identity's atproto session (unbind / identity cascade).
+    pub fn remove_atproto_session(&mut self, local_id: &str) {
+        self.state.atproto_sessions.remove(local_id);
+    }
+
     pub fn policy(&self) -> AttentionPolicy {
         self.state.policy.clone().unwrap_or_default()
     }
@@ -173,9 +196,10 @@ impl StateStore {
     }
 
     /// Removes one identity. Enrollments must be gone first (the hub cascades them);
-    /// dangling client rules pointing at it are dropped.
+    /// dangling client rules pointing at it are dropped, and its atproto session goes too.
     pub fn remove_identity(&mut self, local_id: &str) {
         self.state.identities.retain(|identity| identity.local_id != local_id);
+        self.state.atproto_sessions.remove(local_id);
         for rule in &mut self.state.client_rules {
             if rule.local_id.as_deref() == Some(local_id) {
                 rule.local_id = None;

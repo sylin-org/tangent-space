@@ -29,40 +29,105 @@ pub struct Received {
     pub body: Value,
 }
 
+/// The fake server's proof audience (a synthetic fixture service DID).
+pub const AUDIENCE: &str = "did:plc:fixture-tangent-server";
+
+/// One synthetic atproto account the fake PDS knows.
+#[derive(Debug, Clone)]
+pub struct FakeAccount {
+    pub handle: String,
+    pub password: String,
+    pub did: String,
+    /// When set, createSession still succeeds but getServiceAuth rejects the session —
+    /// the "PDS session expired, re-bind" scenario.
+    pub expiring: bool,
+}
+
+/// Script modes of the bound-exchange surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(dead_code)]
+pub enum BoundMode {
+    /// The full recipe works: discovery → getServiceAuth → /mcp/token.
+    #[default]
+    Ready,
+    /// Discovery answers 503 `exchange_unconfigured` (no proof audience).
+    AudienceUnconfigured,
+    /// Discovery advertises a different exchange method.
+    WrongMethod,
+    /// Discovery's audience carries characters that would inject query structure if
+    /// the client failed to percent-encode.
+    TamperedAudience,
+    /// `/mcp/token` rejects every proof with 401 `invalid_service_proof`.
+    RejectProofs,
+    /// `/mcp/token` answers 403 `participant_suspended`.
+    Suspended,
+}
+
+/// Shared mutable state of the bound-exchange surface.
+#[derive(Clone)]
+pub struct BoundScript {
+    pub mode: BoundMode,
+    accounts: Arc<Mutex<Vec<FakeAccount>>>,
+    proofs: Arc<Mutex<std::collections::HashMap<String, bool>>>,
+    counter: Arc<Mutex<u32>>,
+}
+
+impl BoundScript {
+    fn new(mode: BoundMode) -> Self {
+        Self {
+            mode,
+            accounts: Arc::new(Mutex::new(Vec::new())),
+            proofs: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            counter: Arc::new(Mutex::new(0)),
+        }
+    }
+}
+
 /// A scripted experience API. Responses are synthetic; the post registry gives the
 /// crash-retry scenario its statefulness, and the enrollment registry implements the W2
-/// contract's unbound-enrollment exchange (idempotent per client localId).
+/// contract's unbound-enrollment exchange (idempotent per client localId). The same
+/// listener also plays the bound-exchange roles: the Tangent server's discovery document
+/// and `/mcp/token`, and the account's PDS (`createSession` / `getServiceAuth`).
 #[allow(dead_code)]
 pub struct FakeServer {
     pub requests: Arc<Mutex<Vec<Received>>>,
     posts: Arc<Mutex<HashMap<String, u32>>>,
     enrollments: Arc<Mutex<HashSet<String>>>,
     unbound_disabled: bool,
+    bound: BoundScript,
     origin: String,
 }
 
 impl FakeServer {
     pub fn start() -> Self {
-        Self::start_with(false)
+        Self::start_with(false, BoundMode::Ready)
     }
 
     /// A server with the unbound-enrollment setting switched off.
     #[allow(dead_code)]
     pub fn start_with_unbound_disabled() -> Self {
-        Self::start_with(true)
+        Self::start_with(true, BoundMode::Ready)
     }
 
-    fn start_with(unbound_disabled: bool) -> Self {
+    /// A server whose bound-exchange surface is in the given mode.
+    #[allow(dead_code)]
+    pub fn start_bound_with(mode: BoundMode) -> Self {
+        Self::start_with(false, mode)
+    }
+
+    fn start_with(unbound_disabled: bool, bound_mode: BoundMode) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let url = origin(&listener);
         let requests = Arc::new(Mutex::new(Vec::new()));
         let posts = Arc::new(Mutex::new(HashMap::new()));
         let enrollments = Arc::new(Mutex::new(HashSet::new()));
+        let bound = BoundScript::new(bound_mode);
         let server = Self {
             requests: requests.clone(),
             posts: posts.clone(),
             enrollments: enrollments.clone(),
             unbound_disabled,
+            bound: bound.clone(),
             origin: url.clone(),
         };
         std::thread::Builder::new()
@@ -73,14 +138,37 @@ impl FakeServer {
                     let requests = requests.clone();
                     let posts = posts.clone();
                     let enrollments = enrollments.clone();
+                    let bound = bound.clone();
                     let origin = url.clone();
                     std::thread::spawn(move || {
-                        serve_connection(stream, requests, posts, enrollments, unbound_disabled, origin)
+                        serve_connection(stream, requests, posts, enrollments, unbound_disabled, bound, origin)
                     });
                 }
             })
             .expect("server thread");
         server
+    }
+
+    /// Registers a synthetic atproto account the fake PDS will accept at createSession.
+    #[allow(dead_code)]
+    pub fn add_account(&self, handle: &str, password: &str, did: &str) {
+        self.bound.accounts.lock().unwrap().push(FakeAccount {
+            handle: handle.to_string(),
+            password: password.to_string(),
+            did: did.to_string(),
+            expiring: false,
+        });
+    }
+
+    /// Like [`FakeServer::add_account`], but the minted PDS session is already expired.
+    #[allow(dead_code)]
+    pub fn add_expiring_account(&self, handle: &str, password: &str, did: &str) {
+        self.bound.accounts.lock().unwrap().push(FakeAccount {
+            handle: handle.to_string(),
+            password: password.to_string(),
+            did: did.to_string(),
+            expiring: true,
+        });
     }
 
     pub fn origin(&self) -> &str {
@@ -110,6 +198,7 @@ fn serve_connection(
     posts: Arc<Mutex<HashMap<String, u32>>>,
     enrollments: Arc<Mutex<HashSet<String>>>,
     unbound_disabled: bool,
+    bound: BoundScript,
     origin: String,
 ) {
     let mut reader = BufReader::new(match stream.try_clone() {
@@ -159,7 +248,7 @@ fn serve_connection(
             let _ = writer.flush();
             continue;
         }
-        match respond(&method, &path, &body, &posts, &enrollments, unbound_disabled, &origin) {
+        match respond(&method, &path, &body, &bearer, &posts, &enrollments, unbound_disabled, &bound, &origin) {
             Script::Body(status, payload) => {
                 let text = serde_json::to_string(&payload).unwrap().replace("ORIGIN", &origin);
                 let reason = match status {
@@ -196,13 +285,157 @@ fn respond(
     method: &str,
     path: &str,
     body: &Value,
+    bearer: &str,
     posts: &Arc<Mutex<HashMap<String, u32>>>,
     enrollments: &Arc<Mutex<HashSet<String>>>,
     unbound_disabled: bool,
+    bound: &BoundScript,
     origin: &str,
 ) -> Script {
     let clean = path.split('?').next().unwrap_or(path);
     match (method, clean) {
+        // ---- the bound-exchange surface (discovery + PDS + /mcp/token) ----
+        ("GET", "/.well-known/tangent-mcp") => match bound.mode {
+            BoundMode::AudienceUnconfigured => Script::Body(503, json!({ "error": "exchange_unconfigured" })),
+            BoundMode::WrongMethod => Script::Body(200, json!({
+                "serviceProof": { "method": "com.atproto.simplespace.checkUserAccess", "audience": AUDIENCE },
+            })),
+            BoundMode::TamperedAudience => Script::Body(200, json!({
+                "serviceProof": { "method": "local.tangent.mcp.exchange", "audience": "did:plc:fixture&lxm=evil&exp=99999999999" },
+            })),
+            _ => Script::Body(200, json!({
+                "protocolVersion": "2026-07-28",
+                "authenticationProfile": "atproto_service_proof_exchange",
+                "standardMcpOAuthAuthorizationSupport": false,
+                "serviceProof": {
+                    "method": "local.tangent.mcp.exchange",
+                    "audience": AUDIENCE,
+                    "algorithms": ["ES256", "ES256K"],
+                    "transport": "authorization_header",
+                    "endpoint": format!("{origin}/mcp/token"),
+                },
+                "endpoints": { "mcp": format!("{origin}/mcp"), "token": format!("{origin}/mcp/token") },
+            })),
+        },
+        // The fake PDS sign-in: identifier + app password → PDS session.
+        ("POST", "/xrpc/com.atproto.server.createSession") => {
+            let identifier = body
+                .get("identifier")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .trim_start_matches('@')
+                .to_ascii_lowercase();
+            let password = body.get("password").and_then(Value::as_str).unwrap_or_default();
+            let account = bound
+                .accounts
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .find(|account| account.handle.to_ascii_lowercase() == identifier)
+                .cloned();
+            match account {
+                Some(account) if account.password == password => {
+                    let port = origin.rsplit(':').next().unwrap_or("0");
+                    let access = if account.expiring {
+                        format!("sat_expired_{port}_{}", account.handle)
+                    } else {
+                        format!("sat_{port}_{}", account.handle)
+                    };
+                    Script::Body(200, json!({
+                        "did": account.did,
+                        "handle": account.handle,
+                        "accessJwt": access,
+                        "refreshJwt": format!("rt_{port}"),
+                        "didDoc": {
+                            "id": account.did,
+                            "service": [ { "id": "#atproto_pds", "type": "AtprotoPds", "serviceEndpoint": origin } ]
+                        }
+                    }))
+                }
+                _ => Script::Body(401, json!({ "error": "AuthenticationRequired", "message": "Invalid identifier or password" })),
+            }
+        }
+        // The fake PDS service-auth mint: session bearer, aud/lxm/exp query discipline.
+        ("GET", "/xrpc/com.atproto.server.getServiceAuth") => {
+            let token = bearer.strip_prefix("Bearer ").unwrap_or_default();
+            if !token.starts_with("sat_") {
+                return Script::Body(401, json!({ "error": "InvalidToken", "message": "authentication required" }));
+            }
+            if token.starts_with("sat_expired") {
+                return Script::Body(401, json!({ "error": "ExpiredToken", "message": "token has expired" }));
+            }
+            let query = path.split_once('?').map(|(_, query)| query.to_string()).unwrap_or_default();
+            let param = |name: &str| -> Option<String> {
+                query.split('&').find_map(|pair| pair.strip_prefix(&format!("{name}=")).map(percent_decode))
+            };
+            match param("lxm").as_deref() {
+                Some("local.tangent.mcp.exchange") => {}
+                other => {
+                    return Script::Body(
+                        400,
+                        json!({ "error": "InvalidRequest", "message": format!("unsupported lxm {other:?}") }),
+                    )
+                }
+            }
+            match param("aud") {
+                Some(audience) if audience.starts_with("did:") => {}
+                _ => return Script::Body(400, json!({ "error": "InvalidRequest", "message": "aud must be a DID" })),
+            }
+            match param("exp").and_then(|value| value.parse::<i64>().ok()) {
+                // The server's accepted window: a near-future expiry around now+120 s.
+                Some(exp) if (now_secs()..=now_secs() + 130).contains(&exp) => {}
+                _ => return Script::Body(400, json!({ "error": "InvalidRequest", "message": "exp outside the accepted window" })),
+            }
+            let port = origin.rsplit(':').next().unwrap_or("0");
+            let mut counter = bound.counter.lock().unwrap();
+            *counter += 1;
+            let proof = format!("proof_{port}_{counter}");
+            bound.proofs.lock().unwrap().insert(proof.clone(), false);
+            Script::Body(200, json!({ "token": proof }))
+        }
+        // The proof exchange: one-time proof bearer → Tangent session.
+        ("POST", "/mcp/token") => {
+            let provided = bearer.strip_prefix("Bearer ").unwrap_or_default().to_string();
+            if !provided.starts_with("proof_") {
+                return Script::Body(401, json!({ "error": "invalid_service_proof" }));
+            }
+            if bound.mode == BoundMode::Suspended {
+                return Script::Body(403, json!({ "error": "participant_suspended" }));
+            }
+            if bound.mode == BoundMode::RejectProofs {
+                return Script::Body(401, json!({ "error": "invalid_service_proof" }));
+            }
+            let mut proofs = bound.proofs.lock().unwrap();
+            match proofs.get_mut(&provided) {
+                Some(spent) if !*spent => {
+                    *spent = true;
+                    let port = origin.rsplit(':').next().unwrap_or("0");
+                    let suffix = provided.rsplit('_').next().unwrap_or("0");
+                    let name = body.get("name").and_then(Value::as_str).unwrap_or("mcp");
+                    let grants = body
+                        .get("grants")
+                        .cloned()
+                        .unwrap_or_else(|| json!(["welcome", "read", "post"]));
+                    Script::Body(200, json!({
+                        "profile": "atproto_service_proof_exchange",
+                        "credential": {
+                            "participantId": format!("prt_bound_{port}_{suffix}"),
+                            "name": name,
+                            "grants": grants,
+                            "createdAt": "2026-09-11T00:00:00Z",
+                            "expiresAt": "2026-09-18T00:00:00Z",
+                            "revokedAt": null,
+                        },
+                        "token": format!("ts_bound_{port}_{suffix}"),
+                    }))
+                }
+                // A consumed or unknown proof: the replay denial.
+                _ => Script::Body(401, json!({ "error": "invalid_service_proof" })),
+            }
+        }
+        // ---- the experience API ----
         ("GET", "/api/v1/experience") => Script::Body(200, arrival()),
         ("GET", "/api/v1/experience/tangents") => Script::Body(200, tangents()),
         ("GET", "/api/v1/experience/tangents/home/topics") => Script::Body(200, topics()),
@@ -466,4 +699,40 @@ impl EventRecorder {
         }
         observed
     }
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Minimal percent-decoding for query parameters the fake PDS reads back.
+fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' if index + 3 <= bytes.len() => {
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok();
+                match hex.and_then(|hex| u8::from_str_radix(hex, 16).ok()) {
+                    Some(byte) => {
+                        out.push(byte);
+                        index += 3;
+                    }
+                    None => {
+                        out.push(bytes[index]);
+                        index += 1;
+                    }
+                }
+            }
+            byte => {
+                out.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).to_string()
 }

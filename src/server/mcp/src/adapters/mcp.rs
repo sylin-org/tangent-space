@@ -267,7 +267,7 @@ fn read_line(reader: &mut impl BufRead, buffer: &mut String) -> Result<usize, Fr
     Ok(buffer.len())
 }
 
-/// The stable tool catalog. Twelve participation tools; setup and stewardship stay in the CLI.
+/// The stable tool catalog. Fourteen participation tools; setup and stewardship stay in the CLI.
 pub fn catalog() -> Value {
     let tools = [
         tool(
@@ -278,6 +278,27 @@ pub fn catalog() -> Value {
                 "properties": {
                     "moniker": { "type": "string", "description": "An identity handle, or an enrollment's name, handle or participant reference. Omit to use the operator-configured identity for this client." }
                 },
+                "additionalProperties": false,
+            }),
+        ),
+        tool(
+            "OpenRegistration",
+            "Open the local operator page in the operator's browser so a human can create an identity or complete a pending sign-in (attention, not execution: nothing runs automatically). Ask the operator when they are done.",
+            json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false,
+            }),
+        ),
+        tool(
+            "Connect",
+            "Connect to a Tangent server on the fly: the connector resolves your identity (client allowlist), discovers the server, completes bound enrollment when needed, then arrives and returns the orientation view with a contextId. When operator action is needed (identity sign-in) the local operator page is opened and the tool says so honestly — connect again afterwards; enrollment also completes by itself once the sign-in is done.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "serverUrl": { "type": "string", "description": "The Tangent server origin, e.g. https://tangent.example" }
+                },
+                "required": ["serverUrl"],
                 "additionalProperties": false,
             }),
         ),
@@ -458,7 +479,7 @@ fn tool(name: &str, description: &str, input_schema: Value) -> Value {
         "inputSchema": input_schema,
         "annotations": {
             "title": name,
-            "readOnlyHint": matches!(name, "SelectCompanion" | "Arrive" | "ListTangents" | "ListTopics" | "ReadTopic" | "GetUpdates" | "GetOperation"),
+            "readOnlyHint": matches!(name, "SelectCompanion" | "OpenRegistration" | "Arrive" | "ListTangents" | "ListTopics" | "ReadTopic" | "GetUpdates" | "GetOperation"),
         }
     })
 }
@@ -476,15 +497,16 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_is_the_twelve_participation_tools() {
+    fn the_catalog_is_the_fourteen_participation_tools() {
         let catalog_value = catalog();
         let tools = catalog_value.as_array().unwrap();
         let names: Vec<&str> = tools.iter().filter_map(|entry| entry.get("name").and_then(Value::as_str)).collect();
         assert_eq!(
             names,
             vec![
-                "SelectCompanion", "Arrive", "ListTangents", "ListTopics", "ReadTopic", "CreatePost",
-                "GetUpdates", "MarkRead", "JoinTangent", "LeaveTangent", "SetWatch", "GetOperation"
+                "SelectCompanion", "OpenRegistration", "Connect", "Arrive", "ListTangents", "ListTopics",
+                "ReadTopic", "CreatePost", "GetUpdates", "MarkRead", "JoinTangent", "LeaveTangent",
+                "SetWatch", "GetOperation"
             ]
         );
         for entry in tools {

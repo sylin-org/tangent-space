@@ -395,7 +395,11 @@ fn the_operator_api_refuses_missing_or_wrong_tokens_and_accepts_right_ones() {
     let mut page = TcpStream::connect(address).expect("connect");
     let (head, body) = http_round_trip(&mut page, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
-    assert!(body.contains("Sign in with atproto — coming in a later wave"), "the deferred control carries the exact copy");
+    assert!(body.contains("Atmosphere handle"), "the Atmosphere-handle column is live on the page");
+    // The enroll buttons are gone (R2): the page never enrolls, and the per-identity
+    // sign-in anchors exist for the Connect handshake to open.
+    assert!(!body.contains("enroll-bound") && !body.contains("Enroll unbound") && !body.contains("Enroll with bound"), "no enroll buttons remain: {body}");
+    assert!(body.contains("bind-"), "the per-identity bind anchors are wired");
 
     // API without a token: 401 JSON refusal.
     let mut bare = TcpStream::connect(address).expect("connect");
@@ -433,4 +437,15 @@ fn the_operator_api_refuses_missing_or_wrong_tokens_and_accepts_right_ones() {
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
     assert!(body.contains("\"handle\":\"lumen\""), "body was: {body}");
     assert_eq!(hub.identities().len(), 1, "the mutation crossed the same hub");
+
+    // The enroll API routes are gone too (R2): enrollment lives in the Connect
+    // handshake and the hub/CLI disarm tier, never on this page's API.
+    let mut enroll_attempt = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(
+        &mut enroll_attempt,
+        &format!(
+            "POST /api/identities/00000000000000000000000000000000/enroll HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+        ),
+    );
+    assert!(head.starts_with("HTTP/1.1 404"), "the enroll route is gone: {head}");
 }

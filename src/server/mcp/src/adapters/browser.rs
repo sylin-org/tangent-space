@@ -29,6 +29,26 @@ pub fn open(url: &str) {
     let _ = browser_command(url).spawn();
 }
 
+/// Tests and headless environments set this to skip browser spawns; the URL is still
+/// constructed and asserted by the caller.
+pub const NO_BROWSER_ENV: &str = "TANGENT_CONNECTOR_NO_BROWSER";
+
+/// Whether a browser spawn is allowed for a given value of [`NO_BROWSER_ENV`].
+pub fn spawn_allowed(flag: Option<&str>) -> bool {
+    flag != Some("1")
+}
+
+/// Opens the URL detached unless the no-browser guard is set. Returns whether a spawn
+/// was attempted (the guard answers `false` without touching the platform).
+pub fn open_guarded(url: &str) -> bool {
+    let flag = std::env::var(NO_BROWSER_ENV).ok();
+    if !spawn_allowed(flag.as_deref()) {
+        return false;
+    }
+    open(url);
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,5 +72,13 @@ mod tests {
             assert_eq!(program, "xdg-open");
             assert_eq!(arguments, vec![url.to_string()]);
         }
+    }
+
+    #[test]
+    fn the_no_browser_guard_disables_spawning_only_when_set_to_one() {
+        assert!(spawn_allowed(None), "unset means spawns are allowed");
+        assert!(spawn_allowed(Some("0")), "only the exact value 1 disables");
+        assert!(spawn_allowed(Some("")));
+        assert!(!spawn_allowed(Some("1")), "the guard value disables spawns");
     }
 }

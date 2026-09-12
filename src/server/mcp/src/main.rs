@@ -5,6 +5,7 @@
 //! model-facing catalog.
 
 use std::io::{BufRead, Write};
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -16,6 +17,7 @@ use tangent_connector::adapters::mcp;
 use tangent_connector::adapters::operator;
 use tangent_connector::adapters::poller;
 use tangent_connector::application::hub::ConnectorHub;
+use tangent_connector::domain::events::DomainEvent;
 use tangent_connector::domain::identity::CallerId;
 use tangent_connector::domain::intake::IntakeChannel;
 use tangent_connector::{build_hub, data_directory};
@@ -44,6 +46,7 @@ fn run(arguments: &[String]) -> i32 {
         "call" => call(rest),
         "catalog" => catalog(rest),
         "enroll" => enroll(rest),
+        "enroll-unbound" => enroll_unbound(rest),
         "identities" => identities(rest),
         "companions" => companions(rest),
         "check" => check(rest),
@@ -64,7 +67,9 @@ fn usage() {
     eprintln!(
         "tangent-connector — the personal local MCP connector for Tangent\n\
          \n\
-         serve [--force]                MCP stdio server (the agent-facing intake)\n\
+         serve [--force]                MCP stdio server (the agent-facing intake);
+                                        also hosts the loopback operator page in-process
+                                        (its one-time URL goes to stderr, never stdout)\n\
          operator [--port N] [--no-open] [--force]\n\
                                         local operator web page + tray (identities,\n\
                                         client allowlist, enrollments, status)\n\
@@ -72,6 +77,10 @@ fn usage() {
          call --stdin [--json]          read `<tool> <json>` lines from standard input\n\
          catalog [--json]               list the tool catalog\n\
          enroll --name N --server URL --token-file P [--identity I] [--no-auto-check]\n\
+                                        manual import of an existing session token\n\
+         enroll-unbound --identity I --server URL\n\
+                                        unbound enrollment (the local-posture disarm\n\
+                                        tier; no DID proof — deliberate CLI-only path)
          identities [--json]            list local identities\n\
          companions [--json]            list enrollments (companions)\n\
          check [--name N]               run one background digest check (no model)\n\
@@ -99,11 +108,37 @@ fn serve(rest: &[String]) -> i32 {
             return EXIT_FAILED;
         }
     };
+    // The SAME loopback operator server the operator verb hosts, in-process. Its
+    // one-time startup token goes to stderr and the diagnostics journal — NEVER
+    // stdout, which is protocol-owned JSON-RPC and nothing else.
+    let listener = match TcpListener::bind(("127.0.0.1", 0)) {
+        Ok(listener) => listener,
+        Err(error) => {
+            eprintln!("cannot bind the operator listener: {error}");
+            return EXIT_FAILED;
+        }
+    };
+    let bound_port = listener.local_addr().map(|address| address.port()).unwrap_or_default();
+    let token = operator::generate_token();
+    let url = format!("http://127.0.0.1:{bound_port}/?token={token}");
+    eprintln!("Tangent connector operator page: {url}");
+    eprintln!("This address and its one-time token are printed once; the page answers once a client has connected. Restart the process to get a new one.");
     // The hub is constructed when the initialize request names the connecting client;
     // clientInfo.name becomes the caller (attribution + allowlist key, never a domain
-    // input). One process still serves exactly one client.
+    // input). One process still serves exactly one client. The operator server joins
+    // at that moment, sharing the one hub (one state store, one lock).
     let build = move |client_name: &str| -> Result<Arc<ConnectorHub>, String> {
         let hub = build_hub(CallerId(format!("mcp:{client_name}")), data_dir.clone())?;
+        // The URL (token included) enters the diagnostics journal — the operator's
+        // recovery path once stderr has scrolled away — and no model-visible surface.
+        hub.events().publish(DomainEvent::OperatorPageReady { url: url.clone() });
+        hub.set_operator_page_url(&url);
+        let operator_hub = hub.clone();
+        let operator_token = token.clone();
+        std::thread::Builder::new()
+            .name("tangent-operator".into())
+            .spawn(move || operator::serve(listener, operator_hub, operator_token))
+            .expect("operator server thread");
         let (auto, poll_seconds) = {
             let store = hub.store().lock().expect("state lock");
             let auto = store.companions().iter().filter(|entry| entry.auto_check).map(|entry| entry.companion_id.clone()).collect();
@@ -312,6 +347,60 @@ fn enroll(rest: &[String]) -> i32 {
         }
         Err(error) => {
             eprintln!("enrollment failed: {error}");
+            EXIT_FAILED
+        }
+    }
+}
+
+/// Unbound enrollment from the CLI — the disarm tier (R2): the page no longer enrolls,
+/// so this verb and the hub method are the deliberate remaining paths for the
+/// local-posture setting of the same handshake.
+fn enroll_unbound(rest: &[String]) -> i32 {
+    let mut identity = None;
+    let mut server = None;
+    let mut remaining = rest.iter();
+    while let Some(argument) = remaining.next() {
+        match argument.as_str() {
+            "--identity" => identity = remaining.next().cloned(),
+            "--server" => server = remaining.next().cloned(),
+            other => {
+                eprintln!("unknown enroll-unbound option {other}");
+                return EXIT_USAGE;
+            }
+        }
+    }
+    let (Some(identity), Some(server)) = (identity, server) else {
+        eprintln!("enroll-unbound requires --identity and --server");
+        return EXIT_USAGE;
+    };
+    let hub = match build_hub(CallerId("cli".into()), data_directory()) {
+        Ok(hub) => hub,
+        Err(error) => {
+            eprintln!("cannot open connector state: {error}");
+            return EXIT_FAILED;
+        }
+    };
+    let local_id = {
+        let store = hub.store().lock().expect("state lock");
+        store.identity_by_moniker(&identity).map(|found| found.local_id)
+    };
+    let Some(local_id) = local_id else {
+        eprintln!("no local identity matches '{identity}'; create one first (operator page or identities command)");
+        return EXIT_USAGE;
+    };
+    match hub.enroll_unbound(&local_id, &server) {
+        Ok(entry) => {
+            println!(
+                "Enrolled identity {identity} unbound at {} — participant {}, session kept in connector state.\n\
+                 companionId: {} (no DID proof; the server's local-posture tier)",
+                entry.origin,
+                entry.participant_ref,
+                entry.companion_id
+            );
+            EXIT_OK
+        }
+        Err(error) => {
+            eprintln!("unbound enrollment failed: {error}");
             EXIT_FAILED
         }
     }

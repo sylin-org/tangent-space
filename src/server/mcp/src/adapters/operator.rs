@@ -8,6 +8,8 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,6 +18,7 @@ use serde_json::{json, Value};
 use crate::adapters::lockfile::DataDirLock;
 use crate::adapters::{browser, tray};
 use crate::application::hub::ConnectorHub;
+use crate::domain::events::DomainEvent;
 use crate::domain::identity::{CallerId, ClientRule};
 use crate::{build_hub, data_directory};
 
@@ -25,6 +28,11 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// Settling pause after a failed accept, so a persistent socket-level failure cannot
 /// spin the loop hot.
 const ACCEPT_ERROR_PAUSE: Duration = Duration::from_millis(100);
+/// Concurrent SSE feed clients this server will hold open. A small bound: each pins a
+/// connection thread, and one operator needs at most a couple of tabs.
+const SSE_CLIENT_LIMIT: usize = 4;
+/// SSE keepalive cadence: a comment frame that also proves the peer is still there.
+const SSE_KEEPALIVE: Duration = Duration::from_secs(15);
 const INDEX_HTML: &str = include_str!("operator.html");
 
 /// Entry point of the `operator` verb. Owns stdout for its banner; the MCP edge is a
@@ -82,7 +90,9 @@ pub fn operator(rest: &[String]) -> i32 {
     println!("Tangent connector operator page: {url}");
     println!("This address and its one-time token are printed once; restart the verb to get a new one.");
     if open_browser {
-        browser::open(&url);
+        // Guarded like every other spawn path: TANGENT_CONNECTOR_NO_BROWSER=1 covers
+        // the startup open too (tests, headless hosts).
+        let _ = browser::open_guarded(&url);
     }
     // The tray's Quit releases the data-directory lock before exiting the process.
     let quit_lock = lock.clone();
@@ -104,11 +114,13 @@ pub fn operator(rest: &[String]) -> i32 {
     0
 }
 
-/// The accept loop: one short-lived connection thread per request (`Connection: close`).
-/// A failed accept pauses briefly and continues — a transient socket-level error must
-/// not end the verb. Shared with the in-process tests, which pass their own listener
-/// and token.
+/// The accept loop: one short-lived connection thread per request (`Connection: close`);
+/// an SSE feed connection is the one deliberate exception and stays open. A failed
+/// accept pauses briefly and continues — a transient socket-level error must not end
+/// the verb. Shared with the in-process serve mode and tests, which pass their own
+/// listener and token.
 pub fn serve(listener: TcpListener, hub: Arc<ConnectorHub>, token: String) {
+    let sse_clients = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming() {
         let stream = match stream {
             Ok(stream) => stream,
@@ -119,7 +131,8 @@ pub fn serve(listener: TcpListener, hub: Arc<ConnectorHub>, token: String) {
         };
         let hub = hub.clone();
         let token = token.clone();
-        std::thread::spawn(move || serve_connection(stream, hub, token));
+        let sse_clients = sse_clients.clone();
+        std::thread::spawn(move || serve_connection(stream, hub, token, sse_clients));
     }
 }
 
@@ -178,8 +191,9 @@ fn read_line_capped(reader: &mut impl BufRead, buffer: &mut String, cap: usize) 
 /// One request per connection (`Connection: close`), parsed under the caps. The request
 /// line and every header are read incrementally against the 8 KiB header budget, so an
 /// unterminated peer cannot grow memory first and fail later; a mid-request IO error
-/// just drops that connection — the verb keeps serving.
-fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, token: String) {
+/// just drops that connection — the verb keeps serving. `GET /api/events` is the one
+/// exception: it becomes a held-open SSE feed.
+fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, token: String, sse_clients: Arc<AtomicUsize>) {
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
     let mut reader = BufReader::new(match stream.try_clone() {
         Ok(clone) => clone,
@@ -241,9 +255,83 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, token: String) {
     if content_length > 0 && reader.read_exact(&mut body_bytes).is_err() {
         return;
     }
+    // The live activity feed (A1): EventSource cannot set headers, so the token rides
+    // the query string exactly like the page's other calls. The connection is handed
+    // to the streaming handler and never returns here.
+    if method == "GET" && target.split('?').next() == Some("/api/events") {
+        let provided = token_header
+            .or_else(|| {
+                target.split_once('?').and_then(|(_, query)| {
+                    query.split('&').find_map(|pair| pair.strip_prefix("token=").map(str::to_string))
+                })
+            })
+            .unwrap_or_default();
+        if !token_matches(&token, &provided) {
+            let _ = respond(&mut writer, 401, problem_json("unauthorized", "this page needs the one-time token from the tangent-connector operator command"));
+        } else {
+            stream_events(writer, hub, sse_clients);
+        }
+        return;
+    }
     let body: Value = serde_json::from_slice(&body_bytes).unwrap_or(Value::Null);
     let response = route(&hub, &token, &method, &target, token_header.as_deref(), &body);
     let _ = respond(&mut writer, response.0, response.1);
+}
+
+/// The SSE feed (owner addendum): the one deliberate exception to this server's
+/// one-response-per-connection shape — the response is held open and written as
+/// events arrive. Frames are the existing `DomainEvent` vocabulary serialized as
+/// `data:` JSON (the page reads `kind` from the payload). The token-bearing
+/// `OperatorPageReady` is deliberately skipped: it is journal-recovery material, not
+/// feed material. A keepalive comment every [`SSE_KEEPALIVE`] keeps intermediaries
+/// honest and surfaces a vanished peer as a write error; past [`SSE_CLIENT_LIMIT`]
+/// concurrent clients the refusal is an honest 503 JSON problem.
+fn stream_events(mut writer: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<AtomicUsize>) {
+    if sse_clients.fetch_add(1, Ordering::AcqRel) >= SSE_CLIENT_LIMIT {
+        sse_clients.fetch_sub(1, Ordering::AcqRel);
+        let _ = respond(&mut writer, 503, problem_json("sse_clients_busy", "too many live activity feeds are open; close one and reload"));
+        return;
+    }
+    let _guard = SseSlot { count: sse_clients };
+    // Subscribe BEFORE the response head is written: a client that has seen the head
+    // can then never miss a later event (the channel buffers in between).
+    let receiver = hub.events().subscribe();
+    let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-store\r\n\r\n";
+    if writer.write_all(head.as_bytes()).is_err() || writer.flush().is_err() {
+        return;
+    }
+    loop {
+        match receiver.recv_timeout(SSE_KEEPALIVE) {
+            Ok(event) => {
+                if matches!(event, DomainEvent::OperatorPageReady { .. }) {
+                    continue;
+                }
+                let data = serde_json::to_string(&event)
+                    .unwrap_or_else(|_| "{\"kind\":\"unserializable\"}".to_string());
+                let frame = format!("data: {data}\n\n");
+                if writer.write_all(frame.as_bytes()).is_err() || writer.flush().is_err() {
+                    return;
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                if writer.write_all(b": keepalive\n\n").is_err() || writer.flush().is_err() {
+                    return;
+                }
+            }
+            Err(RecvTimeoutError::Disconnected) => return,
+        }
+    }
+}
+
+/// Decrements the live SSE client count when the feed ends, however it ends.
+struct SseSlot {
+    count: Arc<AtomicUsize>,
+}
+
+impl Drop for SseSlot {
+    fn drop(&mut self) {
+        self.count.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 struct ApiResponse(u16, Value);
@@ -305,9 +393,25 @@ fn route(hub: &ConnectorHub, token: &str, method: &str, target: &str, token_head
                 .collect();
             ApiResponse(200, ok_json(json!({ "enrollments": enrollments })))
         }
-        ("POST", ["identities", local_id, "enroll"]) => {
-            let origin = body.get("origin").and_then(Value::as_str).unwrap_or_default();
-            finish(hub.enroll_unbound(local_id, origin), |entry| ok_json(json!({ "enrollment": enrollment_json(&entry, true) })))
+        // Enrollment deliberately has no route here (R2): it is a consequence of
+        // connecting (the Connect handshake) or an explicit hub/CLI action — the disarm
+        // tier — never an operator-page ceremony. The old enroll routes are gone.
+        ("POST", ["identities", local_id, "atproto", "bind"]) => {
+            let handle = body.get("handle").and_then(Value::as_str).unwrap_or_default();
+            let password = body.get("appPassword").and_then(Value::as_str).unwrap_or_default();
+            let pds = match body.get("pds") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(value)) if value.trim().is_empty() => None,
+                Some(Value::String(value)) => Some(value.as_str()),
+                Some(_) => return ApiResponse(400, problem_json("bad_request", "pds must be a string or null")),
+            };
+            let bound = hub.bind_atproto(local_id, handle, password, pds);
+            // The response carries the identity view (with binding status) only — never
+            // the app password and never the atproto session token.
+            finish(bound, |identity| ok_json(json!({ "identity": identity_with_atproto(hub, &identity) })))
+        }
+        ("POST", ["identities", local_id, "atproto", "unbind"]) => {
+            finish(hub.unbind_atproto(local_id), |identity| ok_json(json!({ "identity": identity_json(&identity) })))
         }
         ("POST", ["enrollments", companion_id, "forget"]) => {
             finish(hub.forget_enrollment(companion_id), |_| ok_json(json!({ "forgotten": companion_id })))
@@ -367,7 +471,7 @@ fn identity_list(hub: &ConnectorHub) -> Vec<Value> {
             .iter()
             .map(|identity| {
                 let count = store.companions_of(&identity.local_id).len();
-                (identity.local_id.clone(), identity_json(identity), count)
+                (identity.local_id.clone(), identity_with_atproto(hub, identity), count)
             })
             .collect()
     };
@@ -394,6 +498,22 @@ fn identity_json(identity: &crate::domain::identity::Identity) -> Value {
         "boundDid": identity.bound_did,
         "createdAt": identity.created_at,
     })
+}
+
+/// The identity view plus its atproto binding status: what is bound, where, and how old
+/// the session is — never the access token, never the app password.
+fn identity_with_atproto(hub: &ConnectorHub, identity: &crate::domain::identity::Identity) -> Value {
+    let mut value = identity_json(identity);
+    value["atproto"] = match hub.atproto_binding(&identity.local_id) {
+        Some(binding) => json!({
+            "did": binding.did,
+            "handle": binding.handle,
+            "pds": binding.pds,
+            "obtainedAt": binding.obtained_at,
+        }),
+        None => Value::Null,
+    };
+    value
 }
 
 /// Session STATUS only: whether the enrollment holds one — never the token value.
@@ -467,8 +587,9 @@ fn respond(writer: &mut TcpStream, status: u16, body: Value) -> std::io::Result<
     writer.flush()
 }
 
-/// 32 random bytes as hex (two v4 uuids), the one-time operator token.
-fn generate_token() -> String {
+/// 32 random bytes as hex (two v4 uuids), the one-time operator token. Shared with the
+/// serve verb, which hosts this same server in-process.
+pub fn generate_token() -> String {
     let mut bytes = Vec::with_capacity(32);
     bytes.extend_from_slice(uuid::Uuid::new_v4().as_bytes());
     bytes.extend_from_slice(uuid::Uuid::new_v4().as_bytes());

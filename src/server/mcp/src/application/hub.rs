@@ -5,7 +5,7 @@
 //! and never changes a domain outcome. Adapters (HTTP client, poller, store) are the
 //! remaining spokes; none of them talks to another directly.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
@@ -16,7 +16,7 @@ use crate::application::contract::{self, ExperienceDto};
 use crate::application::operations::{decode, Operation, ViewMode};
 use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext};
 use crate::domain::events::DomainEvent;
-use crate::domain::identity::{valid_handle, CallerId, CompanionEntry, LocalContext};
+use crate::domain::identity::{valid_handle, AtprotoSession, CallerId, CompanionEntry, Identity, LocalContext};
 use crate::domain::intake::IntakeChannel;
 use crate::domain::refs;
 use crate::domain::writes::PendingWrite;
@@ -25,6 +25,18 @@ use crate::presentation::perspective::Perspective;
 use crate::presentation::{render, RenderInput};
 
 pub const DELIVERY_MODE: &str = "tool_response_only";
+/// The exact exchange method of the atproto service-proof profile. Fixed by protocol;
+/// the server's discovery document must agree, or the enrollment refuses honestly.
+pub const EXCHANGE_LXM: &str = "local.tangent.mcp.exchange";
+/// Proof lifetime requested from the PDS; the server's accepted window is now+120 s.
+const PROOF_EXPIRY_SECONDS: i64 = 120;
+/// The public PDS used when the operator does not name one explicitly; the authoritative
+/// origin from the account's DID document replaces it when the PDS reports one.
+pub const DEFAULT_PDS: &str = "https://bsky.social";
+/// How long a waiting-for-operator connect stays resumable before it ages out honestly.
+/// Live coordination state, not durable enrollment state — ten minutes of operator
+/// attention is the whole budget.
+pub const PENDING_CONNECT_TIMEOUT_MS: i64 = 10 * 60 * 1000;
 
 /// A completed tool invocation: deterministic view text plus canonical structured facts.
 pub struct ToolOutcome {
@@ -42,6 +54,15 @@ pub struct EnrollmentStatus {
     pub waiting: i64,
     pub pending_attention: usize,
     pub unresolved_writes: usize,
+}
+
+/// Read-only atproto binding status for the operator page: what is bound and how old
+/// the session is — never the access token.
+pub struct AtprotoBinding {
+    pub did: String,
+    pub handle: String,
+    pub pds: String,
+    pub obtained_at: i64,
 }
 
 impl ToolOutcome {
@@ -65,20 +86,91 @@ pub struct CallFrame {
     pub context_id: String,
 }
 
+/// One waiting-for-operator handshake the connector resumes by itself once the operator
+/// completes the binding (owner addendum). In-memory only: live coordination, never
+/// durable state — a restart simply asks the model to connect again.
+#[derive(Clone)]
+struct PendingConnect {
+    local_id: String,
+    handle: String,
+    origin: String,
+    recorded_at: i64,
+}
+
 pub struct ConnectorHub {
     port: Arc<dyn ExperiencePort>,
     store: Mutex<StateStore>,
     events: Arc<EventBus>,
     caller: CallerId,
+    /// The loopback operator page URL this process hosts (serve mode), set once at
+    /// startup so `OpenRegistration` can construct the browser target internally.
+    operator_page_url: Mutex<Option<String>>,
+    /// The identity whose sign-in a `Connect` popped last (R3): routes the next
+    /// `OpenRegistration` to that identity's bind anchor instead of identity creation.
+    pending_bind: Mutex<Option<String>>,
+    /// Browser targets already opened by this process (F2): a looping model must not
+    /// spawn one tab per retry. Keyed by the full target URL, so distinct anchors stay
+    /// distinct.
+    opened_pages: Mutex<HashSet<String>>,
+    /// Waiting-for-operator connects (A3), shared with their timeout sweepers.
+    pending_connects: Arc<Mutex<Vec<PendingConnect>>>,
 }
 
 impl ConnectorHub {
     pub fn new(port: Arc<dyn ExperiencePort>, store: StateStore, events: Arc<EventBus>, caller: CallerId) -> Self {
-        Self { port, store: Mutex::new(store), events, caller }
+        Self {
+            port,
+            store: Mutex::new(store),
+            events,
+            caller,
+            operator_page_url: Mutex::new(None),
+            pending_bind: Mutex::new(None),
+            opened_pages: Mutex::new(HashSet::new()),
+            pending_connects: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     pub fn events(&self) -> Arc<EventBus> {
         self.events.clone()
+    }
+
+    /// Records the operator page URL this process hosts (token included). The URL never
+    /// enters model-visible output; only the internal browser open uses it.
+    pub fn set_operator_page_url(&self, url: &str) {
+        if let Ok(mut slot) = self.operator_page_url.lock() {
+            *slot = Some(url.to_string());
+        }
+    }
+
+    /// The browser target `OpenRegistration` opens. Never rendered into a view, a tool
+    /// response or the journal; this accessor exists for the internal open and tests.
+    /// The anchor is routed (R3): a pending sign-in popped by `Connect` wins over the
+    /// default identity-creation view.
+    pub fn registration_target_url(&self) -> Option<String> {
+        let page = self.operator_page_url.lock().ok()?.clone()?;
+        let pending = self.pending_bind.lock().ok().and_then(|slot| slot.clone());
+        let anchor = match pending.as_deref() {
+            Some(local_id) => bind_anchor(local_id),
+            None => "create-identity".to_string(),
+        };
+        Some(registration_target(&page, &anchor))
+    }
+
+    /// Opens one browser target once per process (F2). Returns whether THIS call is the
+    /// first to open it — a repeated target answers `false` without spawning, so a
+    /// looping model cannot pile up tabs. First-ness is independent of the no-browser
+    /// guard: a guarded first call is still the one that "opened" the page.
+    fn open_page_once(&self, target: &str) -> bool {
+        let fresh = self
+            .opened_pages
+            .lock()
+            .map(|mut opened| opened.insert(target.to_string()))
+            .unwrap_or(false);
+        if !fresh {
+            return false;
+        }
+        let _ = crate::adapters::browser::open_guarded(target);
+        true
     }
 
     /// Manual enrollment: import an existing session token, verify the participant
@@ -268,6 +360,553 @@ impl ConnectorHub {
             store.save()?;
             Ok(())
         })
+    }
+
+    // ---------- atproto binding (operator surface) ----------
+
+    /// Binds one identity to an atproto account: the operator supplies a handle and an
+    /// app password, the connector exchanges them for a PDS session (`createSession`)
+    /// and records it in connector state (cookie-jar posture) with the identity's
+    /// `bound_did`. The app password exists in memory for exactly this one request —
+    /// it is never persisted, logged or echoed. Binding again replaces the session
+    /// (the documented re-bind path on expiry); existing enrollments keep their own
+    /// Tangent sessions untouched. A successful bind also clears any pending sign-in
+    /// routing (R3) and resumes every waiting-for-operator connect for this identity
+    /// (A3) — the handshake finishes connector-side, no model involved.
+    pub fn bind_atproto(
+        &self,
+        local_id: &str,
+        handle: &str,
+        app_password: &str,
+        pds: Option<&str>,
+    ) -> Result<Identity, String> {
+        let outcome = self.attributed("operator.bind_atproto", || {
+            let supplied = handle.trim().trim_start_matches('@');
+            if supplied.is_empty() || supplied.chars().count() > 253 || supplied.chars().any(|c| c.is_whitespace()) {
+                return Err("invalid_handle: an atproto handle is 1-253 characters without whitespace".to_string());
+            }
+            if app_password.is_empty() || app_password.len() > 1024 {
+                return Err("invalid_password: an app password is 1-1024 bytes".to_string());
+            }
+            let pds_origin = refs::acceptable_origin(pds.unwrap_or(DEFAULT_PDS)).ok_or_else(|| {
+                "invalid_pds: the PDS origin must be HTTPS, or explicit loopback HTTP for development".to_string()
+            })?;
+            {
+                let store = self.lock_store()?;
+                store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+            }
+            // The one and only journey of the app password: the createSession body. It
+            // leaves scope when this closure returns.
+            let body = json!({ "identifier": supplied, "password": app_password });
+            let raw = self
+                .port
+                .enroll(&pds_origin, "/xrpc/com.atproto.server.createSession", &body)
+                .map_err(|error| pds_signin_error(&error))?;
+            let session: contract::CreateSessionDto = serde_json::from_value(raw)
+                .map_err(|error| format!("malformed createSession response: {error}"))?;
+            if session.did.is_empty() || !session.did.starts_with("did:") {
+                return Err("the PDS confirmed the sign-in without a usable DID".to_string());
+            }
+            if session.access_jwt.is_empty() {
+                return Err("the PDS confirmed the sign-in without a session".to_string());
+            }
+            // The DID document names the authoritative PDS; when it does not (or is not
+            // an acceptable origin), the endpoint we just used stands.
+            let authoritative = session.pds_endpoint().and_then(refs::acceptable_origin).unwrap_or(pds_origin);
+            let mut store = self.lock_store()?;
+            let mut updated = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+            updated.bound_did = Some(session.did.clone());
+            store.upsert_identity(updated.clone())?;
+            store.set_atproto_session(
+                local_id,
+                AtprotoSession {
+                    did: session.did,
+                    handle: session.handle.trim().trim_start_matches('@').to_string(),
+                    access_jwt: session.access_jwt,
+                    pds: authoritative,
+                    obtained_at: now_millis(),
+                },
+            );
+            store.save()?;
+            Ok(updated)
+        });
+        if outcome.is_ok() {
+            self.clear_pending_bind(local_id);
+            self.resume_pending_connects(local_id);
+        }
+        outcome
+    }
+
+    /// Clears one identity's atproto session and `bound_did`. Existing enrollments and
+    /// their Tangent sessions are untouched — those are per enrollment, not per binding.
+    pub fn unbind_atproto(&self, local_id: &str) -> Result<crate::domain::identity::Identity, String> {
+        self.attributed("operator.unbind_atproto", || {
+            let mut store = self.lock_store()?;
+            let mut identity = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+            identity.bound_did = None;
+            store.upsert_identity(identity.clone())?;
+            store.remove_atproto_session(local_id);
+            store.save()?;
+            Ok(identity)
+        })
+    }
+
+    /// Read-only atproto binding status (did, handle, PDS, session age) — never the
+    /// access token.
+    pub fn atproto_binding(&self, local_id: &str) -> Option<AtprotoBinding> {
+        let store = self.lock_store().ok()?;
+        store.atproto_session(local_id).map(|session| AtprotoBinding {
+            did: session.did,
+            handle: session.handle,
+            pds: session.pds,
+            obtained_at: session.obtained_at,
+        })
+    }
+
+    /// Shared discovery step of the bound handshake: reads the server's own
+    /// `/.well-known/tangent-mcp` document and validates that it offers exactly the
+    /// service-proof exchange this connector speaks. The proof audience comes from the
+    /// server, never hardcoded. Used by `enroll_bound` and by `Connect`'s pre-flight
+    /// (an unusable server is an honest error before any operator attention is asked).
+    fn discover_proof_spec(&self, canonical: &str) -> Result<contract::ServiceProofDto, String> {
+        let raw = self
+            .port
+            .discover(canonical, "/.well-known/tangent-mcp")
+            .map_err(|error| discovery_error(&error))?;
+        let discovery: contract::DiscoveryDto = serde_json::from_value(raw)
+            .map_err(|error| format!("malformed discovery document: {error}"))?;
+        let proof_spec = discovery.service_proof.ok_or_else(|| {
+            "no_service_proof: this server offers no service-proof enrollment; use the unbound enrollment path".to_string()
+        })?;
+        if proof_spec.method != EXCHANGE_LXM {
+            return Err(format!(
+                "exchange_method_mismatch: the server expects '{}', but this connector speaks only '{EXCHANGE_LXM}'",
+                proof_spec.method
+            ));
+        }
+        if !proof_spec.audience.starts_with("did:") || proof_spec.audience.len() > 512 {
+            return Err("invalid_audience: the server's proof audience is not a DID".to_string());
+        }
+        Ok(proof_spec)
+    }
+
+    /// Bound enrollment — the primary path: verify the server's discovery document,
+    /// have the identity's PDS mint a service-auth proof for exactly that audience, and
+    /// exchange the proof at `/mcp/token` for a Tangent session stored per enrollment.
+    /// The proof JWT is ephemeral (created and consumed here); the audience comes from
+    /// the server, never hardcoded; the token never renders, logs or journals.
+    pub fn enroll_bound(&self, local_id: &str, origin: &str) -> Result<CompanionEntry, String> {
+        self.attributed("operator.enroll_bound", || {
+            let canonical = refs::acceptable_origin(origin)
+                .ok_or_else(|| "Use one HTTPS server origin, or explicit loopback HTTP for development".to_string())?;
+            let (identity, atproto, already) = {
+                let store = self.lock_store()?;
+                let identity = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+                let atproto = store.atproto_session(local_id);
+                let already = store.enrollment_at(local_id, &canonical).is_some();
+                (identity, atproto, already)
+            };
+            if already {
+                return Err(
+                    "already_enrolled: this identity already holds a session for that server. Use the existing enrollment, or forget it first to re-enroll."
+                        .to_string(),
+                );
+            }
+            let Some(bound_did) = identity.bound_did.clone() else {
+                return Err(
+                    "atproto_binding_required: bind this identity to an atproto account on the operator page first".to_string(),
+                );
+            };
+            let Some(atproto) = atproto else {
+                return Err(
+                    "atproto_session_missing: the atproto session is gone (it may have expired). Re-bind the identity on the operator page."
+                        .to_string(),
+                );
+            };
+            if atproto.did != bound_did {
+                return Err(
+                    "atproto_binding_stale: the bound DID and the stored atproto session disagree. Re-bind the identity on the operator page."
+                        .to_string(),
+                );
+            }
+
+            // Step 1 — discovery: the proof audience comes from the server's own document.
+            let proof_spec = self.discover_proof_spec(&canonical)?;
+
+            // Step 2 — the PDS mints the proof: the discovery audience, the exact
+            // exchange method, and an expiry inside the server's accepted window.
+            // Percent-encoding the parameters means a crafted audience or origin can
+            // never inject query structure into the request.
+            let exp = now_millis() / 1000 + PROOF_EXPIRY_SECONDS;
+            let auth_path = format!(
+                "/xrpc/com.atproto.server.getServiceAuth?aud={}&lxm={}&exp={}",
+                encode(&proof_spec.audience),
+                encode(EXCHANGE_LXM),
+                exp
+            );
+            let pds_context = RequestContext {
+                origin: atproto.pds.clone(),
+                credential: atproto.access_jwt.clone(),
+                participant_ref: String::new(),
+            };
+            let raw = self.port.get(&pds_context, &auth_path).map_err(|error| service_auth_error(&error))?;
+            let auth: contract::ServiceAuthDto = serde_json::from_value(raw)
+                .map_err(|error| format!("malformed getServiceAuth response: {error}"))?;
+            if auth.token.is_empty() {
+                return Err("the PDS returned no service-auth token".to_string());
+            }
+
+            // Step 3 — the exchange. Grants are bounded to welcome/read/post; manage is
+            // explicitly never requested.
+            let body = json!({ "name": identity.handle, "lifetimeDays": 7, "grants": ["welcome", "read", "post"] });
+            let raw = self
+                .port
+                .exchange(&canonical, "/mcp/token", &body, &auth.token)
+                .map_err(|error| exchange_error(&error))?;
+            let exchanged: contract::BoundExchangeDto = serde_json::from_value(raw)
+                .map_err(|error| format!("malformed exchange response: {error}"))?;
+            if exchanged.token.is_empty() {
+                return Err("the server confirmed the exchange without a session".to_string());
+            }
+            let credential = exchanged
+                .credential
+                .ok_or_else(|| "the server confirmed the exchange without a credential view".to_string())?;
+            if credential.participant_id.is_empty() {
+                return Err("the server did not confirm a participant reference".to_string());
+            }
+
+            let mut store = self.lock_store()?;
+            // Re-check under the write lock: a concurrent intake may have enrolled this
+            // (identity, origin) while the exchange was in flight. The freshly issued
+            // session is then discarded server-side untouched, and the honest answer is
+            // already_enrolled with the existing enrollment intact.
+            if let Some(existing) = store.enrollment_at(local_id, &canonical) {
+                return Err(format!(
+                    "already_enrolled: identity '{}' gained an enrollment at {canonical} during the exchange ({}); use it, or forget it first to re-enroll",
+                    identity.handle, existing.companion_id
+                ));
+            }
+            // The Tangent session is stored per enrollment, keyed by its fresh companion
+            // id — one identity at two servers keeps two distinct sessions, and the
+            // identity-level atproto session is a third, separate thing.
+            let companion_id = format!("cmp_{}", crate::adapters::store::short_uuid());
+            let entry = CompanionEntry {
+                companion_id,
+                local_id: identity.local_id.clone(),
+                name: identity.handle.clone(),
+                origin: canonical,
+                participant_ref: credential.participant_id,
+                did: Some(bound_did),
+                display_name: identity.display_name.clone().or(Some(atproto.handle.clone())),
+                handle: Some(atproto.handle.clone()),
+                enrolled_at: now_millis(),
+                auto_check: true,
+            };
+            store.upsert_companion(entry.clone());
+            store.set_session(&entry.companion_id, &exchanged.token);
+            store.save()?;
+            drop(store);
+            self.events.publish(DomainEvent::CompanionSelected { companion_id: entry.companion_id.clone() });
+            Ok(entry)
+        })
+    }
+
+    // ---------- the on-the-fly handshake (Connect) ----------
+
+    /// `Connect { serverUrl }` — the on-the-fly handshake (owner-directed): the model
+    /// says "connect to server X" and enrollment is a consequence, not a ceremony.
+    /// (a) the acting identity resolves through the client allowlist — never a guess,
+    /// never machine-wide; (b) discovery against the operator-supplied origin; (c) with
+    /// no usable atproto binding the handshake pops the operator page at that
+    /// identity's sign-in anchor and returns honestly — NEVER a silent unbound
+    /// fallback; (d) with a binding, enrollment runs only when no usable
+    /// enrollment/session exists for the origin, and the handshake exits through
+    /// `Arrive`'s orientation view. `SelectCompanion` + `Arrive` stay the explicit path.
+    fn connect(&self, server_url: &str) -> ToolOutcome {
+        let Some(canonical) = refs::acceptable_origin(server_url) else {
+            return self.problem_outcome(
+                "Connect",
+                "invalid_arguments",
+                "Use one HTTPS server origin, or explicit loopback HTTP for development.",
+                None,
+            );
+        };
+        self.events.publish(DomainEvent::ConnectStarted { origin: canonical.clone() });
+        let identity = match self.resolve_caller_identity() {
+            Ok(identity) => identity,
+            Err(reason) => {
+                self.connect_failed(&canonical, "", "identity_selection_required");
+                return self.identity_question(&reason);
+            }
+        };
+        self.events.publish(DomainEvent::ConnectResolved {
+            origin: canonical.clone(),
+            identity: identity.handle.clone(),
+        });
+        // Discovery before any operator attention is requested: a server that cannot
+        // do the proof exchange is an honest error, never a popped page.
+        if let Err(error) = self.discover_proof_spec(&canonical) {
+            let outcome = self.enrollment_problem("Connect", &error);
+            self.connect_failed(&canonical, &identity.handle, &problem_code_of(&outcome));
+            return outcome;
+        }
+        if !self.usable_binding(&identity.local_id) {
+            return self.pop_sign_in(&identity, &canonical);
+        }
+        self.clear_pending_bind(&identity.local_id);
+        self.connect_finish(&identity, &canonical)
+    }
+
+    /// Allowlist-only identity resolution for the on-the-fly handshake — the same rule
+    /// `SelectCompanion` applies without a moniker. An unlisted MCP client (and the CLI
+    /// and operator intakes, always) resolves nothing; the honest answer is a question.
+    fn resolve_caller_identity(&self) -> Result<Identity, String> {
+        let store = self.lock_store().expect("state lock");
+        let Some(client) = self.caller.mcp_client_name() else {
+            return Err("This intake never auto-resolves an identity".to_string());
+        };
+        let Some(rule) = store.client_rule(client) else {
+            return Err(format!("MCP client '{client}' is not in the connector's identity allowlist"));
+        };
+        let Some(local_id) = rule.local_id.as_deref() else {
+            return Err(format!("MCP client '{client}' is listed without an identity"));
+        };
+        store
+            .identity(local_id)
+            .ok_or_else(|| "The allowlist names an identity that no longer exists".to_string())
+    }
+
+    /// The honest unresolvable-identity answer: why resolution failed, which identities
+    /// exist, and the two ways forward. Never a guess, never machine-wide.
+    fn identity_question(&self, reason: &str) -> ToolOutcome {
+        let handles: Vec<String> = self.identities().iter().map(|identity| identity.handle.clone()).collect();
+        let message = if handles.is_empty() {
+            format!(
+                "{reason}, and no local identity exists yet. Ask the operator to create one (OpenRegistration opens the operator page), then connect again."
+            )
+        } else {
+            format!(
+                "{reason}. Available identities: {}. Ask which one is yours, then have the operator record it in the connector's client allowlist (tangent-connector operator) and connect again — or select explicitly with SelectCompanion and Arrive.",
+                handles.join(" · ")
+            )
+        };
+        self.problem_outcome("Connect", "identity_selection_required", &message, None)
+    }
+
+    /// Whether the identity holds an atproto binding usable for the proof exchange: a
+    /// `bound_did` with a matching stored session. This is local staleness only — the
+    /// PDS may still refuse the session, which the exchange maps honestly.
+    fn usable_binding(&self, local_id: &str) -> bool {
+        let Ok(store) = self.lock_store() else { return false };
+        let Some(identity) = store.identity(local_id) else { return false };
+        match store.atproto_session(local_id) {
+            Some(session) => identity.bound_did.as_deref() == Some(session.did.as_str()),
+            None => false,
+        }
+    }
+
+    fn clear_pending_bind(&self, local_id: &str) {
+        if let Ok(mut slot) = self.pending_bind.lock() {
+            if slot.as_deref() == Some(local_id) {
+                *slot = None;
+            }
+        }
+    }
+
+    fn page_url(&self) -> Option<String> {
+        self.operator_page_url.lock().ok()?.clone()
+    }
+
+    /// The waiting-for-operator branch (c): pops the operator page at this identity's
+    /// sign-in anchor (guarded, once per target per process), records the pending
+    /// connect so the handshake auto-resumes when the operator completes the binding,
+    /// narrates it on the feed, and returns the honest outcome. No enrollment side
+    /// effect happens on this branch.
+    fn pop_sign_in(&self, identity: &Identity, canonical: &str) -> ToolOutcome {
+        if let Ok(mut slot) = self.pending_bind.lock() {
+            *slot = Some(identity.local_id.clone());
+        }
+        self.record_pending_connect(identity, canonical);
+        self.events.publish(DomainEvent::ConnectWaitingForOperator {
+            origin: canonical.to_string(),
+            identity: identity.handle.clone(),
+            needed: format!("sign in identity '{}': an atproto handle and app password", identity.handle),
+        });
+        let opened = self.page_url().map(|page| {
+            self.open_page_once(&format!("{page}#{}", bind_anchor(&identity.local_id)))
+        });
+        let message = match opened {
+            Some(true) => format!(
+                "operator action needed — page opened to sign in identity '{}'; ask the operator, then connect again. The connect also finishes by itself once the sign-in is done.",
+                identity.handle
+            ),
+            Some(false) => format!(
+                "operator action needed — page already opened to sign in identity '{}'; ask the operator, then connect again.",
+                identity.handle
+            ),
+            None => format!(
+                "operator action needed — the local operator page is not running in this process. Ask the operator to start tangent-connector (serve or the operator verb), sign in identity '{}', then connect again.",
+                identity.handle
+            ),
+        };
+        let code = if opened.is_some() { "operator_action_needed" } else { "operator_page_unavailable" };
+        self.problem_outcome("Connect", code, &message, None)
+    }
+
+    /// The (d) step shared by `Connect` and the auto-resume: with a usable binding,
+    /// ensure an enrollment with a live session for exactly this origin, then arrive.
+    /// Enrollment runs only when no usable enrollment/session exists — a session-less
+    /// enrollment is unusable for every operation, so the honest re-enroll path is
+    /// forget + bound exchange (the same one the CLI documents). An existing enrollment
+    /// (of either tier) with its session intact is used as-is.
+    fn connect_enroll(&self, identity: &Identity, canonical: &str) -> Result<String, String> {
+        let mut forget: Option<String> = None;
+        let mut ready: Option<String> = None;
+        {
+            let store = self.lock_store()?;
+            if let Some(entry) = store.enrollment_at(&identity.local_id, canonical) {
+                if store.has_session(&entry.companion_id) {
+                    ready = Some(entry.companion_id);
+                } else {
+                    forget = Some(entry.companion_id);
+                }
+            }
+        }
+        if let Some(broken) = forget {
+            let _ = self.forget_enrollment(&broken);
+        }
+        if let Some(ready) = ready {
+            return Ok(ready);
+        }
+        let entry = self.enroll_bound(&identity.local_id, canonical)?;
+        self.events.publish(DomainEvent::ConnectEnrolled {
+            origin: canonical.to_string(),
+            identity: identity.handle.clone(),
+        });
+        Ok(entry.companion_id)
+    }
+
+    /// Enroll-if-needed then arrive, publishing the handshake's live tail events and
+    /// answering with `Arrive`'s orientation outcome. Shared by the model-facing
+    /// connect and the service-side auto-resume so both narrate identically. A PDS
+    /// session that died mid-flight pops the sign-in page again (just-in-time re-bind).
+    fn connect_finish(&self, identity: &Identity, canonical: &str) -> ToolOutcome {
+        match self.connect_enroll(identity, canonical) {
+            Ok(companion_id) => {
+                let outcome = self.arrive(&companion_id, canonical);
+                if outcome.is_error {
+                    self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome));
+                } else {
+                    self.events.publish(DomainEvent::ConnectArrived {
+                        origin: canonical.to_string(),
+                        identity: identity.handle.clone(),
+                    });
+                }
+                outcome
+            }
+            Err(error) if error.starts_with("atproto_session_expired") => self.pop_sign_in(identity, canonical),
+            Err(error) => {
+                let outcome = self.enrollment_problem("Connect", &error);
+                self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome));
+                outcome
+            }
+        }
+    }
+
+    /// Records one waiting-for-operator connect (A3) and arms its honest age-out: if
+    /// the operator never completes (or abandons) the sign-in, the pending connect is
+    /// dropped after [`PENDING_CONNECT_TIMEOUT_MS`] with a feed event — never silently.
+    fn record_pending_connect(&self, identity: &Identity, canonical: &str) {
+        let pending = PendingConnect {
+            local_id: identity.local_id.clone(),
+            handle: identity.handle.clone(),
+            origin: canonical.to_string(),
+            recorded_at: now_millis(),
+        };
+        {
+            let mut pendings = match self.pending_connects.lock() {
+                Ok(pendings) => pendings,
+                Err(_) => return,
+            };
+            // One pending per (identity, origin): a repeated connect refreshes it.
+            pendings.retain(|entry| !(entry.local_id == pending.local_id && entry.origin == pending.origin));
+            pendings.push(pending.clone());
+        }
+        let pendings = self.pending_connects.clone();
+        let events = self.events();
+        let local_id = pending.local_id;
+        let handle = pending.handle;
+        let origin = pending.origin;
+        let recorded_at = pending.recorded_at;
+        std::thread::Builder::new()
+            .name("tangent-connect-timeout".into())
+            .spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(PENDING_CONNECT_TIMEOUT_MS as u64));
+                let expired = pendings
+                    .lock()
+                    .map(|mut pendings| {
+                        let mut expired = false;
+                        pendings.retain(|entry| {
+                            let same = entry.local_id == local_id && entry.origin == origin && entry.recorded_at == recorded_at;
+                            if same {
+                                expired = true;
+                            }
+                            !same
+                        });
+                        expired
+                    })
+                    .unwrap_or(false);
+                if expired {
+                    events.publish(DomainEvent::ConnectFailed {
+                        origin,
+                        identity: handle,
+                        code: "operator_timeout: the pending connect aged out waiting for the operator".into(),
+                    });
+                }
+            })
+            .ok();
+    }
+
+    /// The auto-resume (A3), armed right after an operator completed a binding: every
+    /// fresh pending connect for that identity finishes by itself — no model involved —
+    /// through the same enroll-and-arrive steps with the same live progress. The
+    /// model's next Connect or Arrive simply finds the enrollment and session ready.
+    fn resume_pending_connects(&self, local_id: &str) {
+        let resumes: Vec<PendingConnect> = {
+            let Ok(mut pendings) = self.pending_connects.lock() else { return };
+            let now = now_millis();
+            let (due, keep): (Vec<_>, Vec<_>) = pendings
+                .drain(..)
+                .partition(|entry| entry.local_id == local_id && now.saturating_sub(entry.recorded_at) < PENDING_CONNECT_TIMEOUT_MS);
+            pendings.extend(keep);
+            due
+        };
+        for pending in resumes {
+            let Some(identity) = self.identity(&pending.local_id) else { continue };
+            self.events.publish(DomainEvent::ConnectOperatorCompleted {
+                origin: pending.origin.clone(),
+                identity: identity.handle.clone(),
+            });
+            let _ = self.connect_finish(&identity, &pending.origin);
+        }
+    }
+
+    fn connect_failed(&self, origin: &str, identity: &str, code: &str) {
+        self.events.publish(DomainEvent::ConnectFailed {
+            origin: origin.to_string(),
+            identity: identity.to_string(),
+            code: code.to_string(),
+        });
+    }
+
+    /// Maps an enrollment-engine `Err(String)` (its own "code: message" discipline)
+    /// onto the honest tool problem outcome — the same split the operator API applies.
+    fn enrollment_problem(&self, tool: &str, error: &str) -> ToolOutcome {
+        let (code, message) = match error.split_once(": ") {
+            Some((code, message)) => (code.to_string(), message.to_string()),
+            None => ("blocked".to_string(), error.to_string()),
+        };
+        self.problem_outcome(tool, &code, &message, None)
     }
 
     // ---------- identities and the client allowlist (operator surface) ----------
@@ -464,6 +1103,8 @@ impl ConnectorHub {
     fn dispatch(&self, operation: Operation) -> ToolOutcome {
         match operation {
             Operation::SelectCompanion { moniker } => self.select_companion(moniker.as_deref()),
+            Operation::OpenRegistration => self.open_registration(),
+            Operation::Connect { server_url } => self.connect(&server_url),
             Operation::Arrive { companion_id, server_url } => self.arrive(&companion_id, &server_url),
             Operation::ListTangents { context_id, cursor } => {
                 self.with_context("ListTangents", &context_id, ViewMode::Compact, |frame| {
@@ -642,6 +1283,51 @@ impl ConnectorHub {
                     enrollments.len(),
                     enrollments.iter().map(|entry| format!("{} ({})", entry.companion_id, entry.origin)).collect::<Vec<_>>().join(", ")
                 ), None),
+        }
+    }
+
+    /// Attention, not execution (ADR 0009 invariant): browser-open the operator page
+    /// so the human operator can create an identity or complete a pending sign-in. The
+    /// anchor is routed (R3): after a `Connect` popped sign-in for one identity, this
+    /// opens that identity's bind anchor; the default is the identity-creation view.
+    /// The URL — with its one-time token — is constructed internally; it never renders
+    /// into the tool response or any view, so the model never sees the token. Nothing
+    /// auto-runs: signing in and enrolling remain operator actions on that page.
+    /// Once per process (F2): a second call answers honestly instead of spawning
+    /// another tab for a looping model.
+    fn open_registration(&self) -> ToolOutcome {
+        let Some(target) = self.registration_target_url() else {
+            return self.problem_outcome(
+                "OpenRegistration",
+                "operator_page_unavailable",
+                "The local operator page is not running in this process. Ask the operator to start tangent-connector (serve or the operator verb) with its operator page.",
+                None,
+            );
+        };
+        let (text, registration) = if self.open_page_once(&target) {
+            (
+                "Opened the local operator page for the operator to create or bind an identity; ask the operator when done.",
+                "operator_page",
+            )
+        } else {
+            (
+                "The operator page is already open for the operator to create or bind an identity; ask the operator when done.",
+                "operator_page_already_open",
+            )
+        };
+        ToolOutcome {
+            is_error: false,
+            status: "ok".into(),
+            text: text.into(),
+            structured: json!({
+                "experience": null,
+                "problem": null,
+                "connector": {
+                    "view": "compact",
+                    "deliveryMode": DELIVERY_MODE,
+                    "registration": registration,
+                }
+            }),
         }
     }
 
@@ -1213,6 +1899,90 @@ fn enroll_transport_error(error: &ExperienceError) -> String {
         ExperienceError::Unreachable => "the server could not be reached".to_string(),
         ExperienceError::Unauthorized => "the enrollment endpoint rejected the request".to_string(),
         ExperienceError::Application { code, message } => format!("{code}: {message}"),
+        ExperienceError::Transport(detail) => detail.clone(),
+    }
+}
+
+/// The browser target of one operator-page anchor. Pure construction, so tests can
+/// assert the URL under the no-browser guard without spawning anything.
+pub fn registration_target(page_url: &str, anchor: &str) -> String {
+    format!("{page_url}#{anchor}")
+}
+
+/// The per-identity sign-in anchor on the operator page (R2): `bind-{localId}`.
+pub fn bind_anchor(local_id: &str) -> String {
+    format!("bind-{local_id}")
+}
+
+/// The honest problem code of a tool outcome, for feed narration. Outcomes without a
+/// problem (or unrenderable ones) report the generic blocked shape.
+fn problem_code_of(outcome: &ToolOutcome) -> String {
+    outcome
+        .structured
+        .pointer("/problem/code")
+        .and_then(Value::as_str)
+        .unwrap_or("blocked")
+        .to_string()
+}
+
+/// Honest operator wording when the PDS refuses the app-password sign-in.
+fn pds_signin_error(error: &ExperienceError) -> String {
+    match error {
+        ExperienceError::Unreachable => "the PDS could not be reached; check the PDS origin and the network".to_string(),
+        ExperienceError::Unauthorized => "the PDS rejected the handle or app password".to_string(),
+        ExperienceError::Application { code, message } => format!("the PDS refused the sign-in ({code}): {message}"),
+        ExperienceError::Transport(detail) => detail.clone(),
+    }
+}
+
+/// Honest operator wording for a refused discovery document. The 503 family on this
+/// surface all means one thing: the server has no proof audience configured.
+fn discovery_error(error: &ExperienceError) -> String {
+    match error {
+        ExperienceError::Unreachable => "the server could not be reached".to_string(),
+        ExperienceError::Unauthorized => "the discovery document refused the request".to_string(),
+        ExperienceError::Application { code, message } => match code.as_str() {
+            "exchange_unconfigured" | "public_origin_unconfigured" | "exchange_unavailable" => {
+                "exchange_unavailable: this server has no proof audience configured (service-proof enrollment is off there)".to_string()
+            }
+            other => format!("the discovery document was refused ({other}): {message}"),
+        },
+        ExperienceError::Transport(detail) => detail.clone(),
+    }
+}
+
+/// Honest operator wording when the PDS refuses the service-auth request. A rejection
+/// here is almost always an expired PDS session: the message says to re-bind.
+fn service_auth_error(error: &ExperienceError) -> String {
+    match error {
+        ExperienceError::Unreachable => "the PDS could not be reached; re-try, or re-bind the identity if the PDS moved".to_string(),
+        ExperienceError::Unauthorized => {
+            "atproto_session_expired: the PDS session was rejected (it may have expired). Re-bind the identity on the operator page.".to_string()
+        }
+        ExperienceError::Application { code, message } => format!("the PDS refused the service-auth request ({code}): {message}"),
+        ExperienceError::Transport(detail) => detail.clone(),
+    }
+}
+
+/// Honest operator wording for the `/mcp/token` exchange outcomes: 503 → no proof
+/// audience configured; 401 → the proof was rejected (invalid or replayed); 403 → the
+/// participant is suspended there.
+fn exchange_error(error: &ExperienceError) -> String {
+    match error {
+        ExperienceError::Unreachable => "the server could not be reached".to_string(),
+        ExperienceError::Unauthorized => {
+            "invalid_service_proof: the server rejected the proof (invalid or already used); enroll again".to_string()
+        }
+        ExperienceError::Application { code, message } => match code.as_str() {
+            "exchange_unavailable" | "exchange_unconfigured" | "public_origin_unconfigured" => {
+                format!("exchange_unavailable: this server has no proof audience configured ({message})")
+            }
+            "participant_suspended" => format!("participant_suspended: the server reports this identity is suspended there ({message})"),
+            "invalid_service_proof" | "service_proof_required" => {
+                format!("invalid_service_proof: the server rejected the proof ({message}); enroll again")
+            }
+            other => format!("the server blocked the exchange ({other}): {message}"),
+        },
         ExperienceError::Transport(detail) => detail.clone(),
     }
 }

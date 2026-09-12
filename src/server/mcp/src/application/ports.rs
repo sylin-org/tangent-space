@@ -35,4 +35,12 @@ pub trait ExperiencePort: Send + Sync {
     /// POST the pre-credential enrollment exchange (W2 contract). No Authorization
     /// header: the call happens before any credential exists.
     fn enroll(&self, origin: &str, path: &str, body: &Value) -> Result<Value, ExperienceError>;
+    /// GET a pre-credential server document (the atproto service-proof discovery
+    /// document). No Authorization header. Error bodies of this surface use an
+    /// `error` code field, which the adapter surfaces as `Application`.
+    fn discover(&self, origin: &str, path: &str) -> Result<Value, ExperienceError>;
+    /// POST the bound service-proof exchange (`/mcp/token`): the bearer is the
+    /// short-lived proof JWT. Distinct error surface: 503/401/403 bodies carry
+    /// `error` codes the hub maps to honest operator wording.
+    fn exchange(&self, origin: &str, path: &str, body: &Value, bearer: &str) -> Result<Value, ExperienceError>;
 }

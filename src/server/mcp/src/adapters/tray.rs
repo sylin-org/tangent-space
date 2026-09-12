@@ -92,7 +92,11 @@ fn run(hub: Arc<ConnectorHub>, url: String, quit: Box<dyn FnOnce() + Send>) -> R
         .spawn(move || loop {
             match MenuEvent::receiver().recv() {
                 Ok(event) => match event.id.0.as_str() {
-                    "open" => browser::open(&url),
+                    // Guarded like every other spawn path: TANGENT_CONNECTOR_NO_BROWSER=1
+                    // covers the tray open too.
+                    "open" => {
+                        let _ = browser::open_guarded(&url);
+                    }
                     "quit" => {
                         menu_hub.events().publish(DomainEvent::Shutdown { reason: "tray quit".into() });
                         // The hook exits the process; take() satisfies FnOnce in a loop.
