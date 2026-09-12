@@ -482,3 +482,11 @@ Design direction recorded for the renderer: a Discord-like conversation surface 
 display names, handles in bylines — with avatars sourced from atproto profile records
 (the existing PDS profile cache). Structure and identity remain server-authoritative;
 this is presentation only.
+
+Owner correction (12 September): facet minting is ONE mechanism at the persistence
+boundary — a Koan save-interception hook on the Message entity — never per-call-site
+processing in services. Every writer gets it; sharp edges are part of the rule: tombstone
+saves never mint (removed rows deliberately clear facets), changelog-partition snapshots
+carry their era's facets verbatim (no minting outside the default partition), provided
+facets (including explicitly empty) pass through, and the idempotency conflict check uses
+the same pure effective-facets function the hook applies.
