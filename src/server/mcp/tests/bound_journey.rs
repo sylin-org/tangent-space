@@ -371,7 +371,7 @@ fn open_registration_opens_the_identity_view_without_ever_showing_the_token() {
 
     hub.set_operator_page_url("http://127.0.0.1:59999/?token=page-secret-1");
     // URL construction is pure and assertable without any browser.
-    assert_eq!(registration_target("http://127.0.0.1:1/?token=x", "create-identity"), "http://127.0.0.1:1/?token=x#create-identity");
+    assert_eq!(registration_target("http://127.0.0.1:1/?token=x", "#create-identity"), "http://127.0.0.1:1/?token=x#create-identity");
     assert_eq!(
         hub.registration_target_url().as_deref(),
         Some("http://127.0.0.1:59999/?token=page-secret-1#create-identity")

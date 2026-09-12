@@ -26,6 +26,9 @@ impl Peer {
             .env("TANGENT_CONNECTOR_HOME", home)
             // Browser spawns are guarded in tests; URLs are still constructed.
             .env("TANGENT_CONNECTOR_NO_BROWSER", "1")
+            // Tests run in parallel: the operator page takes an ephemeral port instead
+            // of the fixed default 5219 (the fixed-port discipline has its own tests).
+            .env("TANGENT_CONNECTOR_PORT", "0")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

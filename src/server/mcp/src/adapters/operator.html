@@ -16,7 +16,6 @@
   button { padding: .25rem .7rem; margin-right: .3rem; }
   .muted { opacity: .7; } .error { color: crimson; } .ok { color: seagreen; }
   .row { margin: .35rem 0; }
-  input[type=password] { width: 12rem; padding: .2rem .4rem; }
   .feed { border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: .4rem; padding: .35rem .7rem; min-height: 3rem; max-height: 11rem; overflow-y: auto; font-size: .9rem; }
   .feed p { margin: .12rem 0; }
 </style>
@@ -37,14 +36,11 @@ loopback-only.</p>
 <p class="muted">Update an identity: change its handle or display name inline, then press Save. Deleting refuses
 while enrollments exist unless you confirm a cascade (their sessions are forgotten too). With exactly one
 identity, every connect acts as it automatically; with several, connects ask which one to use.</p>
-
-<h2>Atmosphere sign-in</h2>
-<div class="row" id="bind-form"><select id="bind-identity"></select> <input type="text" id="bind-handle" placeholder="atproto handle (e.g. someone.bsky.social)"> <input type="password" id="bind-password" placeholder="app password" autocomplete="off"> <input type="text" id="bind-pds" placeholder="PDS origin (optional; bsky.social default)"> <button data-action="bind-atproto">Sign In</button></div>
-<p class="muted">Sign an identity in to its atproto account (e.g. Bluesky) with an <em>app password</em> — create one
-in the account's privacy settings; never use the account's main password. The connector exchanges it for a
-PDS session kept in connector state (cookie-jar posture); the password itself is used for the one sign-in
-request and is never stored, logged or echoed. Sign In again to replace an expired session; Log Out (in the
-table above) clears the binding and leaves server enrollment sessions untouched.</p>
+<p class="muted">Sign In (in the table above) opens the atproto bind page: you type the account handle and
+authenticate on the account's own authorization page — the connector never sees a password. The resulting
+session is kept in connector state (cookie-jar posture) and refreshed silently. Log Out clears the binding
+and leaves server enrollment sessions untouched. (An app-password bind remains available as a hub/CLI
+fallback, not on this page.)</p>
 
 <h2>Servers / enrollments</h2>
 <p class="muted">Status only. Enrollment is a consequence of connecting, not a ceremony here: the model's Connect
@@ -92,14 +88,14 @@ function describeEvent(event) {
   switch (event.kind) {
     case "connect_started": return who + "Connecting to " + event.origin + "…";
     case "connect_resolved": return who + "Acting as " + event.identity + ".";
-    case "connect_waiting_for_operator": return who + "Waiting for you: " + event.needed + " (" + event.identity + ") — form below.";
+    case "connect_waiting_for_operator": return who + "Waiting for you: " + event.needed + " (" + event.identity + ") — bind page opened.";
     case "connect_operator_completed": return who + event.identity + " signed in — exchanging proof…";
     case "connect_enrolled": return who + "Enrolled at " + event.origin + " (proof exchanged).";
     case "connect_arrived": return who + "Enrolled and arrived at " + event.origin + ".";
     case "connect_failed": return who + "Connect failed at " + event.origin + (event.identity ? " as " + event.identity : "") + ": " + event.code + ".";
     case "tool_completed": {
       if (!event.tool || !event.tool.startsWith("operator.")) return null;
-      const names = { "operator.bind_atproto": "atproto sign-in", "operator.unbind_atproto": "atproto sign-out" };
+      const names = { "operator.bind_atproto": "atproto sign-in", "operator.atproto_bind_start": "atproto bind started", "operator.unbind_atproto": "atproto sign-out" };
       return "operator (page) — " + (names[event.tool] || event.tool) + " " + event.status + ".";
     }
     default: return null;
@@ -147,11 +143,9 @@ function atmosphereCell(identity) {
   const cell = document.createElement("td");
   if (!identity.atproto) {
     cell.append(text("not registered"), document.createElement("br"));
-    const signIn = document.createElement("button"); signIn.textContent = "Sign In";
-    signIn.onclick = () => {
-      const target = "#bind-" + identity.localId;
-      if (location.hash === target) routeHash(); else location.hash = target;
-    };
+    const signIn = document.createElement("a");
+    signIn.textContent = "Sign In";
+    signIn.href = "/bind/" + identity.localId + "/atproto";
     cell.append(signIn);
     return cell;
   }
@@ -161,7 +155,7 @@ function atmosphereCell(identity) {
   const logOut = document.createElement("button"); logOut.textContent = "Log Out";
   logOut.onclick = async () => {
     if (!window.confirm("Clear this identity's atproto sign-in (bound DID and PDS session)? Its server enrollment sessions are untouched.")) return;
-      const result = await call("/api/identities/" + identity.localId + "/atproto/unbind", { method: "POST", body: "{}" });
+    const result = await call("/api/identities/" + identity.localId + "/atproto/unbind", { method: "POST", body: "{}" });
     result.status === "ok" ? note("Atproto sign-in cleared.") : note(problem(result), true); await refresh();
   };
   cell.append(logOut);
@@ -176,16 +170,6 @@ function age(epochMs) {
 }
 
 // ---------- enrollments (read-only status) ----------
-function identitySelect() {
-  const select = document.createElement("select");
-  const none = document.createElement("option"); none.value = ""; none.textContent = "(pick an identity)";
-  select.append(none);
-  for (const identity of identities) {
-    const option = document.createElement("option"); option.value = identity.localId; option.textContent = identity.handle;
-    select.append(option);
-  }
-  return select;
-}
 function renderEnrollments(enrollments) {
   const body = document.querySelector("#enrollments tbody"); body.replaceChildren();
   const byId = new Map(identities.map(identity => [identity.localId, identity.handle]));
@@ -218,7 +202,6 @@ async function refresh() {
   if (identitiesResult.status !== "ok") return;
   identities = identitiesResult.identities || [];
   renderIdentities();
-  document.getElementById("bind-identity").replaceChildren(...identitySelect().children);
   let enrollments = [];
   for (const identity of identities) {
     const result = await call("/api/identities/" + identity.localId + "/enrollments");
@@ -230,9 +213,9 @@ async function refresh() {
   if (!refresh.routed) { refresh.routed = true; routeHash(); }
 }
 
-// ---------- per-identity anchors ----------
-// #create-identity focuses identity creation; #bind-{localId} focuses the sign-in form
-// with that identity already chosen (the anchor a Connect handshake opens).
+// ---------- the identity-creation anchor ----------
+// #create-identity focuses identity creation. Sign-in anchors are /bind pages now —
+// separate routes the connector serves, opened directly by a waiting Connect.
 function routeHash() {
   const hash = location.hash.slice(1);
   if (hash === "create-identity") {
@@ -240,15 +223,6 @@ function routeHash() {
     if (!input) return;
     input.scrollIntoView({ block: "center" });
     input.focus();
-    return;
-  }
-  if (hash.startsWith("bind-")) {
-    const localId = hash.slice(5);
-    if (!identities.some(identity => identity.localId === localId)) return;
-    document.getElementById("bind-identity").value = localId;
-    const form = document.getElementById("bind-form");
-    form.scrollIntoView({ block: "center" });
-    document.getElementById("bind-handle").focus();
   }
 }
 window.addEventListener("hashchange", routeHash);
@@ -262,17 +236,6 @@ document.addEventListener("click", async (event) => {
     const display = document.getElementById("new-display").value.trim();
     const result = await post("/api/identities", { handle, displayName: display || null });
     result.status === "ok" ? note("Identity created.") : note(problem(result), true);
-  }
-  if (action === "bind-atproto") {
-    const localId = document.getElementById("bind-identity").value;
-    const handle = document.getElementById("bind-handle").value.trim();
-    const password = document.getElementById("bind-password").value;
-    const pds = document.getElementById("bind-pds").value.trim() || null;
-    if (!localId) { note("Pick an identity to sign in.", true); return; }
-    if (!handle || !password) { note("The atproto handle and app password are both required.", true); return; }
-    const result = await post("/api/identities/" + localId + "/atproto/bind", { handle, appPassword: password, pds });
-    document.getElementById("bind-password").value = "";
-    result.status === "ok" ? note("Signed in; the atproto session is stored. A waiting connect finishes by itself.") : note(problem(result), true);
   }
   await refresh();
 });

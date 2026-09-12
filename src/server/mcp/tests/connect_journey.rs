@@ -304,12 +304,12 @@ fn connect_with_no_binding_pops_the_sign_in_page_and_enrolls_nothing() {
     let rendered = serde_json::to_string(&outcome.structured).unwrap_or_default();
     assert!(!rendered.contains("59999"), "structured was: {rendered}");
 
-    // R3: OpenRegistration now routes to this identity's bind anchor.
+    // R3: OpenRegistration now routes to this identity's bind page.
     assert_eq!(
         hub.registration_target_url().as_deref(),
-        Some(format!("http://127.0.0.1:59999/#{}", bind_anchor(&identity.local_id)).as_str())
+        Some(format!("http://127.0.0.1:59999/{}", bind_anchor(&identity.local_id)).as_str())
     );
-    assert_eq!(registration_target("http://127.0.0.1:1/", &bind_anchor("abc")), "http://127.0.0.1:1/#bind-abc");
+    assert_eq!(registration_target("http://127.0.0.1:1/", &bind_anchor("abc")), "http://127.0.0.1:1/bind/abc/atproto");
 
     // A looping model's repeated connect does not spawn another tab: honest already-opened.
     let second = connect(&hub, server.origin());
@@ -374,10 +374,10 @@ fn a_pageless_connect_pops_the_recorded_reachable_page_at_the_bind_anchor() {
     assert_eq!(code_of(&outcome), "operator_action_needed");
     assert!(outcome.text.contains("page opened"), "the recorded page was popped: {}", outcome.text);
     assert!(outcome.text.contains("sign in identity 'ox_omega'"), "text: {}", outcome.text);
-    // The guarded open targets exactly that page at this identity's bind anchor.
+    // The guarded open targets exactly that page's bind route for this identity.
     assert_eq!(
         hub.sign_in_target_url(&identity.local_id).as_deref(),
-        Some(format!("{page_url}#{}", bind_anchor(&identity.local_id)).as_str())
+        Some(format!("{page_url}{}", bind_anchor(&identity.local_id)).as_str())
     );
     // The CLI one-shot is honestly told a later connect completes the handshake (the
     // auto-resume belongs to the page-hosting process, not to this dead one-shot).
@@ -416,6 +416,17 @@ fn an_unreachable_recorded_page_gets_the_honest_start_operator_instruction() {
 
 // ---------- the auto-resume and the SSE feed (owner addendum) ----------
 
+/// The socket address behind one of the fake server's origins.
+fn server_addr(origin: &str) -> std::net::SocketAddr {
+    use std::net::ToSocketAddrs as _;
+    origin
+        .trim_start_matches("http://")
+        .to_socket_addrs()
+        .expect("resolve")
+        .next()
+        .expect("an address")
+}
+
 fn http_round_trip(stream: &mut TcpStream, request: &str) -> String {
     stream.write_all(request.as_bytes()).expect("write request");
     stream.flush().expect("flush");
@@ -440,6 +451,11 @@ fn a_waiting_connect_auto_resumes_when_the_operator_signs_in_with_live_sse() {
     let server = FakeServer::start();
     server.add_account("ox_omega.bsky.example", "app-pass-2", "did:plc:ox");
     let hub = mcp_workspace("resume", "codex-host");
+    // The bind flow resolves identities against the fake, not the public resolvers.
+    hub.set_atproto_oauth(tangent_connector::adapters::atproto_oauth::AtprotoOauth::with_origins(
+        server.origin(),
+        server.origin(),
+    ));
     let identity = hub.create_identity("ox_omega", None).expect("identity");
 
     // The operator server this page-and-feed journey runs against. The page URL is a
@@ -502,25 +518,58 @@ fn a_waiting_connect_auto_resumes_when_the_operator_signs_in_with_live_sse() {
     wait_for(&received, "connect_waiting_for_operator", Duration::from_secs(10));
     assert!(hub.enrollments_of(&identity.local_id).is_empty(), "nothing enrolled while waiting");
 
-    // The operator completes the sign-in on the page (the API the form calls — plainly,
-    // no token). The response returns only after the auto-resume has run: enrollment
-    // plus arrival, connector-side, no model involved.
+    // The operator completes the sign-in on the connector-served bind page: the form
+    // POST redirects to the fake authorization server, which (auto-approving) redirects
+    // back to the operator page's loopback root with code+state; that callback response
+    // returns only after the auto-resume has run: enrollment plus arrival, connector-
+    // side, no model involved.
     let mut binder = TcpStream::connect(address).expect("connect");
-    let payload = json!({
-        "handle": "ox_omega.bsky.example",
-        "appPassword": "app-pass-2",
-        "pds": server.origin(),
-    })
-    .to_string();
-    let bound = http_round_trip(
+    let payload = "handle=ox_omega.bsky.example".to_string();
+    let started = http_round_trip(
         &mut binder,
         &format!(
-            "POST /api/identities/{}/atproto/bind HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            "POST /bind/{}/atproto HTTP/1.1
+Host: 127.0.0.1
+Content-Type: application/x-www-form-urlencoded
+Content-Length: {}
+Connection: close
+
+{payload}",
             identity.local_id,
             payload.len()
         ),
     );
-    assert!(bound.starts_with("HTTP/1.1 200") && bound.contains("\"status\":\"ok\""), "bind was: {bound}");
+    assert!(started.starts_with("HTTP/1.1 302"), "the bind page redirects to the authorize URL: {started}");
+    let authorize = started
+        .lines()
+        .find_map(|line| line.strip_prefix("Location: "))
+        .expect("authorize location")
+        .trim()
+        .to_string();
+    assert!(authorize.starts_with(&format!("{}/oauth/authorize", server.origin())), "authorize on the fake AS: {authorize}");
+    let mut follower = TcpStream::connect(server_addr(server.origin())).expect("connect to AS");
+    let authorize_path = authorize.strip_prefix(server.origin()).unwrap_or(&authorize);
+    let redirected = http_round_trip(&mut follower, &format!("GET {authorize_path} HTTP/1.1
+Host: as
+Connection: close
+
+"));
+    assert!(redirected.starts_with("HTTP/1.1 302"), "the AS redirects to the loopback callback: {redirected}");
+    let callback = redirected
+        .lines()
+        .find_map(|line| line.strip_prefix("Location: "))
+        .expect("callback location")
+        .trim()
+        .to_string();
+    assert!(callback.starts_with(&format!("http://{address}/?")), "the callback lands on the operator page root: {callback}");
+    let mut finisher = TcpStream::connect(address).expect("connect");
+    let callback_path = callback.strip_prefix(&format!("http://{address}")).unwrap_or(&callback);
+    let bound = http_round_trip(&mut finisher, &format!("GET {callback_path} HTTP/1.1
+Host: 127.0.0.1
+Connection: close
+
+"));
+    assert!(bound.starts_with("HTTP/1.1 200") && bound.contains("Bound as"), "the callback reports the bind: {bound}");
 
     // The pending connect finished by itself: one bound enrollment, its session stored.
     let enrollments = hub.enrollments_of(&identity.local_id);

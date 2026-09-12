@@ -105,10 +105,14 @@ impl CompanionEntry {
     }
 }
 
-/// The atproto session one identity holds after the operator binds an app password:
-/// the PDS-issued bearer (`accessJwt`, cookie-jar posture — same exposure class as the
-/// per-enrollment sessions) plus where to reach the PDS again. The app password itself is
-/// NEVER part of this record: it exists in memory for the one `createSession` request.
+/// The atproto session one identity holds after the operator binds an account — via
+/// atproto OAuth (the `/bind` pages) or an app password (the hub-level fallback): the
+/// PDS-issued bearer (`accessJwt`, cookie-jar posture — same exposure class as the
+/// per-enrollment sessions) plus where to reach the PDS again. The app password itself
+/// is NEVER part of this record: it exists in memory for the one `createSession`
+/// request. OAuth sessions additionally carry their refresh token and DPoP key so the
+/// connector can silently renew them — the same cookie-jar session state, never a vault
+/// secret.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtprotoSession {
     /// The bound account's DID (`did:plc:…`); mirrors the identity's `bound_did`.
@@ -117,9 +121,19 @@ pub struct AtprotoSession {
     pub handle: String,
     /// The PDS access token used for `getServiceAuth`. Session state, not a vault secret.
     pub access_jwt: String,
+    /// The OAuth refresh token (`/bind` sessions only; `None` for app-password ones).
+    #[serde(default)]
+    pub refresh_jwt: Option<String>,
     /// Canonical PDS origin for follow-up service-auth requests.
     pub pds: String,
-    /// Epoch milliseconds of the `createSession` that produced this session.
+    /// The authorization server origin that issued the OAuth tokens, for silent refresh.
+    #[serde(default)]
+    pub authserver: Option<String>,
+    /// The session's DPoP ES256 private key, base64url SEC1 bytes (`/bind` sessions
+    /// only) — required material for the refresh request.
+    #[serde(default)]
+    pub dpop_key: Option<String>,
+    /// Epoch milliseconds of the sign-in that produced this session.
     pub obtained_at: i64,
 }
 

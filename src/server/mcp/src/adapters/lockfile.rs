@@ -83,6 +83,12 @@ fn describe_holder(path: &Path) -> String {
     }
 }
 
+/// What the state directory's lock file says about its current holder — the honest
+/// naming used by bind refusals and other cross-process diagnostics. Reads only.
+pub fn holder_of(data_dir: &Path) -> String {
+    describe_holder(&data_dir.join(LOCK_FILE))
+}
+
 fn now_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

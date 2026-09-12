@@ -365,9 +365,12 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
     assert!(body.contains("Atmosphere handle"), "the Atmosphere-handle column is live on the page");
     // The enroll buttons are gone (R2): the page never enrolls, and the per-identity
-    // sign-in anchors exist for the Connect handshake to open.
+    // bind pages exist for the Connect handshake to open.
     assert!(!body.contains("enroll-bound") && !body.contains("Enroll unbound") && !body.contains("Enroll with bound"), "no enroll buttons remain: {body}");
-    assert!(body.contains("bind-"), "the per-identity bind anchors are wired");
+    assert!(body.contains("/bind/"), "the per-identity bind pages are wired");
+    // The sign-in form is gone (owner direction): binding is an OAuth page, never a
+    // password form on the operator page.
+    assert!(!body.contains("type=\"password\"") && !body.contains("appPassword"), "no password form remains: {body}");
     // The allowlist section is gone too (owner correction: resolution is behavior).
     assert!(!body.contains("allowlist") && !body.contains("Allowlist"), "no allowlist UI remains: {body}");
 

@@ -5,7 +5,6 @@
 //! model-facing catalog.
 
 use std::io::{BufRead, Write};
-use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -72,7 +71,9 @@ fn usage() {
                                         (its URL goes to stderr, never stdout)\n\
          operator [--port N] [--no-open] [--force]\n\
                                         local operator web page + tray (identities,
-                                        Atmosphere sign-in, enrollments, status)\n\
+                                        atproto sign-in via /bind pages, enrollments,\n\
+                                        status). Fixed default port 5219 (stable URL);\n\
+                                        TANGENT_CONNECTOR_PORT or --port overrides\n\
          call <tool> [json] [--view V]  invoke one participation tool through the same hub\n\
          call --stdin [--json]          read `<tool> <json>` lines from standard input\n\
          catalog [--json]               list the tool catalog\n\
@@ -86,7 +87,8 @@ fn usage() {
          check [--name N]               run one background digest check (no model)\n\
          forget --name N                remove an enrollment and its stored session\n\
          \n\
-         Environment: TANGENT_CONNECTOR_HOME (state directory)."
+         Environment: TANGENT_CONNECTOR_HOME (state directory);\n\
+         TANGENT_CONNECTOR_PORT (operator page port; default 5219, 0 = ephemeral)."
     );
 }
 
@@ -108,20 +110,28 @@ fn serve(rest: &[String]) -> i32 {
             return EXIT_FAILED;
         }
     };
-    // The SAME loopback operator server the operator verb hosts, in-process. Its URL
-    // goes to stderr and the diagnostics journal — NEVER stdout, which is
+    // The SAME loopback operator server the operator verb hosts, in-process — on the
+    // same fixed default port (stable URL; TANGENT_CONNECTOR_PORT or --port overrides).
+    // Its URL goes to stderr and the diagnostics journal — NEVER stdout, which is
     // protocol-owned JSON-RPC and nothing else.
-    let listener = match TcpListener::bind(("127.0.0.1", 0)) {
+    let port = match tangent_connector::adapters::operator::resolve_operator_port(None) {
+        Ok(port) => port,
+        Err(error) => {
+            eprintln!("{error}");
+            return EXIT_FAILED;
+        }
+    };
+    let listener = match tangent_connector::adapters::operator::bind_listener(&data_dir, port) {
         Ok(listener) => listener,
         Err(error) => {
-            eprintln!("cannot bind the operator listener: {error}");
+            eprintln!("{error}");
             return EXIT_FAILED;
         }
     };
     let bound_port = listener.local_addr().map(|address| address.port()).unwrap_or_default();
     let url = format!("http://127.0.0.1:{bound_port}/");
     eprintln!("Tangent connector operator page: {url}");
-    eprintln!("This address lives for the life of this process; the connector records it in its state so any Connect can pop this page.");
+    eprintln!("The connector records it in its state so any Connect can pop this page.");
     // The hub is constructed when the initialize request names the connecting client;
     // clientInfo.name becomes the caller (attribution + feed labeling, never a domain
     // input). One process still serves exactly one client. The operator server joins

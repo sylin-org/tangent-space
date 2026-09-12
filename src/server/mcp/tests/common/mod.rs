@@ -1,7 +1,10 @@
 //! Shared test support: a scripted fake Tangent experience server speaking just enough HTTP
 //! for ureq, with per-request recording for assertions. All data is synthetic and labelled so.
 //! The placeholder `ORIGIN` in scripted payloads is replaced with the listener's real origin,
-//! because the connector validates references against the exact canonical origin.
+//! because the connector validates references against the exact canonical origin. The same
+//! listener also plays the whole atproto OAuth cast: the handle resolver, the PLC-style DID
+//! directory, the PDS's protected-resource metadata, and a fake authorization server (PAR +
+//! authorize redirect + token/refresh with real DPoP-proof validation).
 
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -83,6 +86,57 @@ impl BoundScript {
     }
 }
 
+/// One pushed authorization request the fake authorization server parked.
+#[derive(Clone)]
+struct ParRecord {
+    #[allow(dead_code)]
+    client_id: String,
+    redirect_uri: String,
+    state: String,
+    code_challenge: String,
+    dpop: p256::ecdsa::VerifyingKey,
+}
+
+/// The fake authorization server's live state: parked pushed requests, issued codes and
+/// refresh tokens, the DPoP jti replay guard, and the initial token lifetime knob.
+#[derive(Clone)]
+struct OauthScript {
+    pars: Arc<Mutex<std::collections::HashMap<String, ParRecord>>>,
+    codes: Arc<Mutex<std::collections::HashMap<String, (ParRecord, String)>>>,
+    refresh_tokens: Arc<Mutex<std::collections::HashMap<String, String>>>,
+    jtis: Arc<Mutex<std::collections::HashSet<String>>>,
+    counter: Arc<Mutex<u32>>,
+    /// Lifetime baked into newly issued (not refreshed) access tokens — the
+    /// refresh-before-use scenario shrinks it.
+    initial_lifetime_secs: Arc<Mutex<u64>>,
+    /// The DID whose document the resolver last served — the account the auto-approving
+    /// authorize endpoint signs in as.
+    last_resolved_did: Arc<Mutex<Option<String>>>,
+}
+
+impl OauthScript {
+    fn new() -> Self {
+        Self {
+            pars: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            codes: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            refresh_tokens: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            jtis: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            counter: Arc::new(Mutex::new(0)),
+            initial_lifetime_secs: Arc::new(Mutex::new(7200)),
+            last_resolved_did: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn next(&self, prefix: &str) -> String {
+        let mut counter = self.counter.lock().unwrap();
+        *counter += 1;
+        format!("{prefix}{}", *counter)
+    }
+}
+
+/// The DPoP nonce the fake authorization server demands on the token endpoint.
+const FAKE_DPOP_NONCE: &str = "fake-dpop-nonce-1";
+
 /// A scripted experience API. Responses are synthetic; the post registry gives the
 /// crash-retry scenario its statefulness, and the enrollment registry implements the W2
 /// contract's unbound-enrollment exchange (idempotent per client localId). The same
@@ -95,6 +149,7 @@ pub struct FakeServer {
     enrollments: Arc<Mutex<HashSet<String>>>,
     unbound_disabled: bool,
     bound: BoundScript,
+    oauth: OauthScript,
     origin: String,
 }
 
@@ -122,12 +177,14 @@ impl FakeServer {
         let posts = Arc::new(Mutex::new(HashMap::new()));
         let enrollments = Arc::new(Mutex::new(HashSet::new()));
         let bound = BoundScript::new(bound_mode);
+        let oauth = OauthScript::new();
         let server = Self {
             requests: requests.clone(),
             posts: posts.clone(),
             enrollments: enrollments.clone(),
             unbound_disabled,
             bound: bound.clone(),
+            oauth: oauth.clone(),
             origin: url.clone(),
         };
         std::thread::Builder::new()
@@ -139,9 +196,10 @@ impl FakeServer {
                     let posts = posts.clone();
                     let enrollments = enrollments.clone();
                     let bound = bound.clone();
+                    let oauth = oauth.clone();
                     let origin = url.clone();
                     std::thread::spawn(move || {
-                        serve_connection(stream, requests, posts, enrollments, unbound_disabled, bound, origin)
+                        serve_connection(stream, requests, posts, enrollments, unbound_disabled, bound, oauth, origin)
                     });
                 }
             })
@@ -175,6 +233,13 @@ impl FakeServer {
         &self.origin
     }
 
+    /// Shrinks the lifetime baked into newly issued access tokens (seconds), for the
+    /// silent-refresh scenario. Refreshed tokens always come back long-lived.
+    #[allow(dead_code)]
+    pub fn set_oauth_token_lifetime(&self, seconds: u64) {
+        *self.oauth.initial_lifetime_secs.lock().unwrap() = seconds;
+    }
+
     pub fn requests(&self) -> Vec<Received> {
         self.requests.lock().unwrap().clone()
     }
@@ -199,6 +264,7 @@ fn serve_connection(
     enrollments: Arc<Mutex<HashSet<String>>>,
     unbound_disabled: bool,
     bound: BoundScript,
+    oauth: OauthScript,
     origin: String,
 ) {
     let mut reader = BufReader::new(match stream.try_clone() {
@@ -216,6 +282,9 @@ fn serve_connection(
         let path = parts.next().unwrap_or_default().to_string();
         let mut content_length = 0usize;
         let mut bearer = String::new();
+        let mut dpop = String::new();
+        let mut dpop_nonce = String::new();
+        let mut content_type = String::new();
         loop {
             let mut header = String::new();
             if reader.read_line(&mut header).unwrap_or(0) == 0 {
@@ -231,12 +300,32 @@ fn serve_connection(
             if let Some(value) = header.strip_prefix("Authorization:") {
                 bearer = value.trim().to_string();
             }
+            if let Some(value) = header.strip_prefix("DPoP:") {
+                dpop = value.trim().to_string();
+            }
+            if let Some(value) = header.strip_prefix("DPoP-Nonce:") {
+                dpop_nonce = value.trim().to_string();
+            }
+            if let Some(value) = header.to_ascii_lowercase().strip_prefix("content-type:") {
+                content_type = value.trim().to_string();
+            }
         }
         let mut body_bytes = vec![0u8; content_length];
         if content_length > 0 && reader.read_exact(&mut body_bytes).is_err() {
             return;
         }
-        let body: Value = serde_json::from_slice(&body_bytes).unwrap_or(Value::Null);
+        // Form posts (the OAuth surface) record as a JSON object of their pairs.
+        let body = if content_type.starts_with("application/x-www-form-urlencoded") {
+            let text = String::from_utf8_lossy(&body_bytes);
+            let mut object = serde_json::Map::new();
+            for pair in text.split('&').filter(|pair| !pair.is_empty()) {
+                let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
+                object.insert(percent_decode(name), Value::String(percent_decode(value)));
+            }
+            Value::Object(object)
+        } else {
+            serde_json::from_slice(&body_bytes).unwrap_or(Value::Null)
+        };
         requests.lock().unwrap().push(Received {
             method: method.clone(),
             path: path.clone(),
@@ -248,11 +337,13 @@ fn serve_connection(
             let _ = writer.flush();
             continue;
         }
-        match respond(&method, &path, &body, &bearer, &posts, &enrollments, unbound_disabled, &bound, &origin) {
+        let extras = RequestExtras { dpop, dpop_nonce };
+        match respond(&method, &path, &body, &bearer, &posts, &enrollments, unbound_disabled, &bound, &oauth, &origin, &extras) {
             Script::Body(status, payload) => {
                 let text = serde_json::to_string(&payload).unwrap().replace("ORIGIN", &origin);
                 let reason = match status {
                     200 => "OK",
+                    201 => "Created",
                     401 => "Unauthorized",
                     409 => "Conflict",
                     _ => "Status",
@@ -269,15 +360,44 @@ fn serve_connection(
                 let _ = writer.write_all(text.as_bytes());
                 let _ = writer.flush();
             }
+            // The authorize endpoint's answer: a redirect to the loopback callback.
+            Script::Moved(location) => {
+                let head = format!(
+                    "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                );
+                let _ = writer.write_all(head.as_bytes());
+                let _ = writer.flush();
+                return;
+            }
+            // The DPoP nonce challenge (RFC 9449): the error body plus the nonce header.
+            Script::NonceChallenge(status, payload, nonce) => {
+                let text = serde_json::to_string(&payload).unwrap();
+                let head = format!(
+                    "HTTP/1.1 {status} Status\r\nContent-Type: application/json\r\nDPoP-Nonce: {nonce}\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n",
+                    text.len()
+                );
+                let _ = writer.write_all(head.as_bytes());
+                let _ = writer.write_all(text.as_bytes());
+                let _ = writer.flush();
+            }
             // A lost response: the connection dies without an answer.
             Script::Lost => return,
         }
     }
 }
 
-/// What the scripted server answers: a status plus JSON body, or a dropped connection.
+/// The OAuth-surface headers one request carried (proof + nonce).
+struct RequestExtras {
+    dpop: String,
+    dpop_nonce: String,
+}
+
+/// What the scripted server answers: a status plus JSON body, a redirect, a DPoP nonce
+/// challenge, or a dropped connection.
 enum Script {
     Body(u16, Value),
+    Moved(String),
+    NonceChallenge(u16, Value, String),
     Lost,
 }
 
@@ -290,10 +410,218 @@ fn respond(
     enrollments: &Arc<Mutex<HashSet<String>>>,
     unbound_disabled: bool,
     bound: &BoundScript,
+    oauth: &OauthScript,
     origin: &str,
+    extras: &RequestExtras,
 ) -> Script {
     let clean = path.split('?').next().unwrap_or(path);
     match (method, clean) {
+        // ---- the atproto OAuth cast (resolver, DID directory, AS metadata, PAR, authorize, token) ----
+        ("GET", "/xrpc/com.atproto.identity.resolveHandle") => {
+            let handle = query_param(path, "handle").unwrap_or_default().to_ascii_lowercase();
+            let account = bound
+                .accounts
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .find(|account| account.handle.to_ascii_lowercase() == handle)
+                .cloned();
+            match account {
+                Some(account) => Script::Body(200, json!({ "did": account.did })),
+                None => Script::Body(400, json!({ "error": "InvalidRequest", "message": "unable to resolve handle" })),
+            }
+        }
+        _ if clean.starts_with("/did:") => {
+            let did = clean.trim_start_matches('/');
+            let account = bound
+                .accounts
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .find(|account| account.did == did)
+                .cloned();
+            match account {
+                Some(account) => {
+                    *oauth.last_resolved_did.lock().unwrap() = Some(account.did.clone());
+                    Script::Body(
+                        200,
+                        json!({
+                            "@context": ["https://www.w3.org/ns/did/v1"],
+                            "id": account.did,
+                            "alsoKnownAs": [format!("at://{}", account.handle)],
+                            "verificationMethod": [],
+                            "service": [
+                                { "id": "#atproto_pds", "type": "AtprotoPds", "serviceEndpoint": origin }
+                            ],
+                        }),
+                    )
+                }
+                None => Script::Body(404, json!({ "error": "NotFound", "message": "did not found" })),
+            }
+        }
+        ("GET", "/.well-known/oauth-protected-resource") => Script::Body(
+            200,
+            json!({
+                "authorization_servers": [origin],
+                "bearer_methods_supported": ["header"],
+                "resource": origin,
+                "resource_documentation": "https://atproto.com",
+                "scopes_supported": [],
+            }),
+        ),
+        ("GET", "/.well-known/oauth-authorization-server") => Script::Body(
+            200,
+            json!({
+                "issuer": origin,
+                "authorization_endpoint": format!("{origin}/oauth/authorize"),
+                "token_endpoint": format!("{origin}/oauth/token"),
+                "pushed_authorization_request_endpoint": format!("{origin}/oauth/par"),
+                "require_pushed_authorization_requests": true,
+                "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
+                "dpop_signing_alg_values_supported": ["ES256"],
+                "scopes_supported": ["atproto"],
+                "response_types_supported": ["code"],
+                "grant_types_supported": ["authorization_code", "refresh_token"],
+                "code_challenge_methods_supported": ["S256"],
+                "redirect_uris": ["http://127.0.0.1/", "http://[::1]/"],
+            }),
+        ),
+        ("POST", "/oauth/par") => {
+            // The local-client profile, strictly: loopback client id, loopback redirect
+            // with an empty path, atproto scope, PKCE S256, and NO nonce (the pushed
+            // request_uri replaces it — the public server refuses a nonce; so do we).
+            if body.get("nonce").is_some_and(|value| !value.is_null()) {
+                return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported \"nonce\" parameter" }));
+            }
+            if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
+                return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
+            }
+            let redirect = body.get("redirect_uri").and_then(Value::as_str).unwrap_or_default().to_string();
+            let redirect_ok = redirect.starts_with("http://127.0.0.1")
+                || redirect.starts_with("http://[::1]")
+                || redirect.starts_with("http://localhost");
+            // Loopback root only: exactly the scheme slashes plus the trailing slash.
+            let path_ok = redirect.matches('/').count() == 3 && redirect.ends_with('/');
+            if !redirect_ok || !path_ok {
+                return Script::Body(400, json!({ "error": "invalid_request", "error_description": format!("Invalid redirect_uri {redirect}") }));
+            }
+            if body.get("response_type").and_then(Value::as_str) != Some("code") {
+                return Script::Body(400, json!({ "error": "invalid_request", "error_description": "response_type must be code" }));
+            }
+            if !body
+                .get("scope")
+                .and_then(Value::as_str)
+                .is_some_and(|scope| scope.split(' ').any(|part| part == "atproto"))
+            {
+                return Script::Body(400, json!({ "error": "invalid_scope", "error_description": "the atproto scope is required" }));
+            }
+            let state_ok = body
+                .get("state")
+                .and_then(Value::as_str)
+                .is_some_and(|state| !state.is_empty());
+            let challenge = body.get("code_challenge").and_then(Value::as_str).unwrap_or_default().to_string();
+            let method = body.get("code_challenge_method").and_then(Value::as_str).unwrap_or_default().to_string();
+            if !state_ok || challenge.len() < 40 || method != "S256" {
+                return Script::Body(400, json!({ "error": "invalid_request", "error_description": "state and an S256 code_challenge are required" }));
+            }
+            let record = match validate_dpop(extras, "POST", &format!("{origin}/oauth/par"), None, oauth) {
+                Ok(key) => ParRecord {
+                    client_id: "http://localhost".into(),
+                    redirect_uri: redirect,
+                    state: body.get("state").and_then(Value::as_str).unwrap_or_default().to_string(),
+                    code_challenge: challenge,
+                    dpop: key,
+                },
+                Err(problem) => return Script::Body(401, json!({ "error": "invalid_dpop_proof", "error_description": problem })),
+            };
+            let request_uri = oauth.next("urn:ietf:params:oauth:request_uri:req-");
+            oauth.pars.lock().unwrap().insert(request_uri.clone(), record);
+            Script::Body(201, json!({ "request_uri": request_uri, "expires_in": 299 }))
+        }
+        ("GET", "/oauth/authorize") => {
+            let client_id = query_param(path, "client_id").unwrap_or_default();
+            let request_uri = query_param(path, "request_uri").unwrap_or_default();
+            if client_id != "http://localhost" {
+                return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
+            }
+            // Auto-approval: the fake acts as the account whose DID document was just
+            // resolved (the tight resolve→PAR→authorize sequence of one bind).
+            let did = oauth.last_resolved_did.lock().unwrap().clone();
+            let record = oauth.pars.lock().unwrap().remove(&request_uri);
+            match (record, did) {
+                (Some(record), Some(did)) => {
+                    let code = oauth.next("code-");
+                    oauth.codes.lock().unwrap().insert(code.clone(), (record.clone(), did));
+                    // RFC 9207 issuer identification rides the redirect.
+                    Script::Moved(format!(
+                        "{}?code={}&state={}&iss={}",
+                        record.redirect_uri, code, record.state, origin
+                    ))
+                }
+                _ => Script::Body(400, json!({ "error": "invalid_request", "error_description": "unknown or consumed request_uri" })),
+            }
+        }
+        ("POST", "/oauth/token") => {
+            // The DPoP nonce dance first: a request without the nonce is challenged once.
+            if extras.dpop_nonce != FAKE_DPOP_NONCE {
+                return Script::NonceChallenge(
+                    401,
+                    json!({ "error": "use_dpop_nonce", "error_description": "DPoP nonce missing" }),
+                    FAKE_DPOP_NONCE.into(),
+                );
+            }
+            let grant = body.get("grant_type").and_then(Value::as_str).unwrap_or_default();
+            match grant {
+                "authorization_code" => {
+                    let code = body.get("code").and_then(Value::as_str).unwrap_or_default().to_string();
+                    let issued = { oauth.codes.lock().unwrap().remove(&code) };
+                    let Some((record, did)) = issued else {
+                        return Script::Body(400, json!({ "error": "invalid_grant", "error_description": "unknown or used code" }));
+                    };
+                    if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
+                        return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
+                    }
+                    if body.get("redirect_uri").and_then(Value::as_str) != Some(record.redirect_uri.as_str()) {
+                        return Script::Body(400, json!({ "error": "invalid_request", "error_description": "redirect_uri mismatch" }));
+                    }
+                    // PKCE: the verifier must hash to the pushed challenge.
+                    let verifier = body.get("code_verifier").and_then(Value::as_str).unwrap_or_default();
+                    let computed = b64url(&sha256(verifier.as_bytes()));
+                    if verifier.len() < 43 || computed != record.code_challenge {
+                        return Script::Body(400, json!({ "error": "invalid_grant", "error_description": "PKCE verification failed" }));
+                    }
+                    // DPoP: valid proof, signed by the key the PAR bound.
+                    let key = match validate_dpop(extras, "POST", &format!("{origin}/oauth/token"), Some(FAKE_DPOP_NONCE), oauth) {
+                        Ok(key) => key,
+                        Err(problem) => return Script::Body(401, json!({ "error": "invalid_dpop_proof", "error_description": problem })),
+                    };
+                    if key.to_encoded_point(false) != record.dpop.to_encoded_point(false) {
+                        return Script::Body(401, json!({ "error": "invalid_dpop_proof", "error_description": "the token key differs from the PAR key" }));
+                    }
+                    let lifetime = *oauth.initial_lifetime_secs.lock().unwrap();
+                    issue_tokens(oauth, &did, lifetime as i64)
+                }
+                "refresh_token" => {
+                    let refresh = body.get("refresh_token").and_then(Value::as_str).unwrap_or_default().to_string();
+                    let did = oauth.refresh_tokens.lock().unwrap().remove(&refresh);
+                    let Some(did) = did else {
+                        return Script::Body(400, json!({ "error": "invalid_grant", "error_description": "unknown or used refresh token" }));
+                    };
+                    if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
+                        return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
+                    }
+                    if let Err(problem) = validate_dpop(extras, "POST", &format!("{origin}/oauth/token"), Some(FAKE_DPOP_NONCE), oauth) {
+                        return Script::Body(401, json!({ "error": "invalid_dpop_proof", "error_description": problem }));
+                    }
+                    // Refreshed tokens are always long-lived (the knob shapes only the
+                    // initial issuance the scenario wants stale).
+                    issue_tokens(oauth, &did, 7200)
+                }
+                _ => Script::Body(400, json!({ "error": "unsupported_grant_type", "error_description": format!("unsupported grant {grant:?}") })),
+            }
+        }
         // ---- the bound-exchange surface (discovery + PDS + /mcp/token) ----
         ("GET", "/.well-known/tangent-mcp") => match bound.mode {
             BoundMode::AudienceUnconfigured => Script::Body(503, json!({ "error": "exchange_unconfigured" })),
@@ -360,7 +688,10 @@ fn respond(
         // The fake PDS service-auth mint: session bearer, aud/lxm/exp query discipline.
         ("GET", "/xrpc/com.atproto.server.getServiceAuth") => {
             let token = bearer.strip_prefix("Bearer ").unwrap_or_default();
-            if !token.starts_with("sat_") {
+            // App-password sessions are sat_-prefixed; OAuth sessions are JWT-shaped.
+
+            let is_session = token.starts_with("sat_") || (token.split('.').count() == 3 && token.starts_with("ey"));
+            if !is_session {
                 return Script::Body(401, json!({ "error": "InvalidToken", "message": "authentication required" }));
             }
             if token.starts_with("sat_expired") {
@@ -699,6 +1030,165 @@ impl EventRecorder {
         }
         observed
     }
+}
+
+// ---------- the fake authorization server's helpers ----------
+
+/// One decoded query parameter of a request path.
+fn query_param(path: &str, name: &str) -> Option<String> {
+    let query = path.split_once('?')?.1;
+    query.split('&').find_map(|pair| {
+        pair.strip_prefix(&format!("{name}=")).map(percent_decode)
+    })
+}
+
+/// Issues one access+refresh pair for a DID: the access token is JWT-shaped (the
+/// connector parses `exp` from it), the refresh token rotates and is remembered.
+fn issue_tokens(oauth: &OauthScript, did: &str, lifetime_secs: i64) -> Script {
+    let now = now_secs();
+    let access = format!(
+        "{}.{}.{}",
+        b64url(br#"{"alg":"ES256","typ":"atproto+jwt"}"#),
+        b64url(format!("{{\"exp\":{},\"sub\":\"{did}\"}}", now + lifetime_secs).as_bytes()),
+        b64url(&[7u8; 64])
+    );
+    let refresh = oauth.next("rt_oauth");
+    oauth.refresh_tokens.lock().unwrap().insert(refresh.clone(), did.to_string());
+    Script::Body(
+        200,
+        json!({
+            "access_token": access,
+            "refresh_token": refresh,
+            "token_type": "DPoP",
+            "expires_in": lifetime_secs,
+            "scope": "atproto",
+            "sub": did,
+        }),
+    )
+}
+
+/// Validates one DPoP proof the way the real authorization server would: ES256
+/// signature over the compact signing input by the header's own JWK, the profile
+/// claims (typ/alg, htm/htu, iat window, exp), the nonce when one is expected, and a
+/// jti replay guard. Answers the verified public key.
+fn validate_dpop(
+    extras: &RequestExtras,
+    htm: &str,
+    htu: &str,
+    expected_nonce: Option<&str>,
+    oauth: &OauthScript,
+) -> Result<p256::ecdsa::VerifyingKey, String> {
+    use p256::ecdsa::signature::Verifier;
+
+    let proof = if extras.dpop.is_empty() { return Err("no DPoP header".into()) } else { extras.dpop.clone() };
+    let segments: Vec<&str> = proof.split('.').collect();
+    if segments.len() != 3 {
+        return Err("not a compact JWS".into());
+    }
+    let header: Value = serde_json::from_slice(&b64url_decode(segments[0]).ok_or("bad header b64")?).map_err(|_| "header is not JSON")?;
+    let payload: Value = serde_json::from_slice(&b64url_decode(segments[1]).ok_or("bad payload b64")?).map_err(|_| "payload is not JSON")?;
+    let signature = b64url_decode(segments[2]).ok_or("bad signature b64")?;
+    if signature.len() != 64 {
+        return Err("the ES256 signature is not 64 raw bytes".into());
+    }
+    if header.get("typ").and_then(Value::as_str) != Some("dpop+jwt") || header.get("alg").and_then(Value::as_str) != Some("ES256") {
+        return Err("wrong typ/alg".into());
+    }
+    let jwk = header.get("jwk").ok_or("no jwk in the header")?;
+    if jwk.get("kty").and_then(Value::as_str) != Some("EC") || jwk.get("crv").and_then(Value::as_str) != Some("P-256") {
+        return Err("wrong jwk curve".into());
+    }
+    let x = b64url_decode(jwk.get("x").and_then(Value::as_str).ok_or("no x")?).ok_or("bad x")?;
+    let y = b64url_decode(jwk.get("y").and_then(Value::as_str).ok_or("no y")?).ok_or("bad y")?;
+    if x.len() != 32 || y.len() != 32 {
+        return Err("wrong coordinate size".into());
+    }
+    let mut sec1 = Vec::with_capacity(65);
+    sec1.push(0x04);
+    sec1.extend_from_slice(&x);
+    sec1.extend_from_slice(&y);
+    let public = p256::PublicKey::from_sec1_bytes(&sec1).map_err(|_| "the jwk is not a curve point")?;
+    let verifying = p256::ecdsa::VerifyingKey::from(public);
+    let signature = p256::ecdsa::Signature::from_slice(&signature).map_err(|_| "bad signature")?;
+    verifying
+        .verify(format!("{}.{}", segments[0], segments[1]).as_bytes(), &signature)
+        .map_err(|_| "the signature does not verify".to_string())?;
+    if payload.get("htm").and_then(Value::as_str) != Some(htm) {
+        return Err("wrong htm".into());
+    }
+    if payload.get("htu").and_then(Value::as_str) != Some(htu) {
+        return Err("wrong htu".into());
+    }
+    let now = now_secs();
+    let iat = payload.get("iat").and_then(Value::as_i64).ok_or("no iat")?;
+    if !(now - 60..=now + 300).contains(&iat) {
+        return Err("iat outside the accepted window".into());
+    }
+    if payload.get("exp").and_then(Value::as_i64).is_some_and(|exp| exp < now) {
+        return Err("the proof expired".into());
+    }
+    let jti = payload.get("jti").and_then(Value::as_str).unwrap_or_default().to_string();
+    if jti.is_empty() {
+        return Err("no jti".into());
+    }
+    if !oauth.jtis.lock().unwrap().insert(jti) {
+        return Err("jti replayed".into());
+    }
+    if let Some(expected) = expected_nonce {
+        if payload.get("nonce").and_then(Value::as_str) != Some(expected) {
+            return Err("wrong nonce".into());
+        }
+    }
+    Ok(verifying)
+}
+
+/// Strict base64url decode (unpadded alphabet only).
+fn b64url_decode(text: &str) -> Option<Vec<u8>> {
+    let table: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = Vec::with_capacity(text.len() * 3 / 4);
+    let mut buffer: u32 = 0;
+    let mut bits = 0u32;
+    for byte in text.bytes() {
+        let value = table.iter().position(|candidate| *candidate == byte)? as u32;
+        buffer = (buffer << 6) | value;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+        }
+    }
+    if bits >= 6 {
+        return None;
+    }
+    Some(out)
+}
+
+/// Standard base64url (unpadded).
+fn b64url(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(ALPHABET[(triple >> 18) as usize & 63] as char);
+        out.push(ALPHABET[(triple >> 12) as usize & 63] as char);
+        if chunk.len() > 1 {
+            out.push(ALPHABET[(triple >> 6) as usize & 63] as char);
+        }
+        if chunk.len() > 2 {
+            out.push(ALPHABET[triple as usize & 63] as char);
+        }
+    }
+    out
+}
+
+fn sha256(data: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.finalize().into()
 }
 
 fn now_secs() -> i64 {

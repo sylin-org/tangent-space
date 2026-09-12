@@ -1,7 +1,9 @@
 //! The adapters (spokes): stdio MCP edge, command-line edge, operator web page, tray,
-//! browser opener, HTTP experience client, durable store (with per-enrollment sessions), the
-//! data-directory lock, background checker, diagnostics journal, and host delivery.
+//! browser opener, HTTP experience client, atproto OAuth client, durable store (with
+//! per-enrollment sessions), the data-directory lock, background checker, diagnostics
+//! journal, and host delivery.
 
+pub mod atproto_oauth;
 pub mod browser;
 pub mod delivery;
 pub mod diagnostics;

@@ -1,13 +1,18 @@
-//! The operator spoke: a loopback-only web page for identity and enrollment stewardship.
-//! Hand-rolled minimal HTTP/1.1 in the house style — request line, headers and a
-//! Content-Length body under an 8 KiB header cap and a 1 MiB body cap, GET/POST only,
-//! `Connection: close`, a 30 s read timeout, JSON-only bodies, no CORS headers. The page
-//! is an inert embedded string; every `/api/*` JSON call crosses the SAME hub as the CLI
-//! and MCP intakes (attribution channel `Operator`). Structural local-only guarantees
-//! (loopback bind, method/caps discipline) carry the trust: the operator is the trust
-//! root and a local process can read state.json directly anyway, so the page carries no
-//! interactive token (owner correction). Nothing but the startup banner is ever printed
-//! to stdout.
+//! The operator spoke: a loopback-only web page for identity and enrollment stewardship,
+//! on a fixed default port (5219 — stable URL; `TANGENT_CONNECTOR_PORT` or `--port`
+//! overrides, 0 stays ephemeral for tests). Hand-rolled minimal HTTP/1.1 in the house
+//! style — request line, headers and a Content-Length body under an 8 KiB header cap
+//! and a 1 MiB body cap, GET/POST only, `Connection: close`, a 30 s read timeout,
+//! JSON-only `/api/*` bodies (form-encoding appears exactly once: the bind pages' one
+//! handle field), no CORS headers. The pages are inert embedded strings; every `/api/*`
+//! JSON call crosses the SAME hub as the CLI and MCP intakes (attribution channel
+//! `Operator`). The `/bind/{identityId}/{provider}` pages carry the atproto OAuth bind
+//! flow; the authorization servers' loopback redirect (root path only, per the public
+//! local-client profile) lands on `/` with code+state and renders the result page.
+//! Structural local-only guarantees (loopback bind, method/caps discipline) carry the
+//! trust: the operator is the trust root and a local process can read state.json
+//! directly anyway, so the page carries no interactive token (owner correction). Nothing
+//! but the startup banner is ever printed to stdout.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -37,6 +42,55 @@ const SSE_CLIENT_LIMIT: usize = 4;
 /// SSE keepalive cadence: a comment frame that also proves the peer is still there.
 const SSE_KEEPALIVE: Duration = Duration::from_secs(15);
 const INDEX_HTML: &str = include_str!("operator.html");
+/// The operator page's fixed default port (owner direction): a stable URL any Connect
+/// can name. Overridable via `--port` or `TANGENT_CONNECTOR_PORT`; `0` stays ephemeral
+/// (tests and parallel runs).
+pub const DEFAULT_PORT: u16 = 5219;
+/// The deterministic page URL that goes with [`DEFAULT_PORT`].
+pub const DEFAULT_PAGE_URL: &str = "http://127.0.0.1:5219/";
+/// The one bind provider this connector serves today.
+const BIND_PROVIDER_ATPROTO: &str = "atproto";
+
+/// The port the operator page serves on: the `--port` flag wins, then
+/// `TANGENT_CONNECTOR_PORT`, then the fixed default. `0` means ephemeral (tests).
+pub fn resolve_operator_port(flag: Option<u16>) -> Result<u16, String> {
+    port_from(flag, std::env::var("TANGENT_CONNECTOR_PORT").ok().as_deref())
+}
+
+/// The pure decision behind [`resolve_operator_port`], so the discipline is assertable
+/// without touching the process environment.
+pub fn port_from(flag: Option<u16>, environment: Option<&str>) -> Result<u16, String> {
+    if let Some(port) = flag {
+        return Ok(port);
+    }
+    match environment.map(str::trim) {
+        None | Some("") => Ok(DEFAULT_PORT),
+        Some(value) => value.parse::<u16>().map_err(|_| {
+            format!("TANGENT_CONNECTOR_PORT must be a port number (0 for an ephemeral port), not '{value}'")
+        }),
+    }
+}
+
+/// Binds the operator listener on loopback. An in-use fixed port is an honest refusal
+/// naming what is known about the holder: the data-directory lock's record and the
+/// page URL the durable state last recorded (the lockfile covers one connector
+/// process; the bind conflict may be any listener on that port).
+pub fn bind_listener(data_dir: &std::path::Path, port: u16) -> Result<TcpListener, String> {
+    match TcpListener::bind(("127.0.0.1", port)) {
+        Ok(listener) => Ok(listener),
+        Err(error) if port != 0 && error.kind() == std::io::ErrorKind::AddrInUse => Err(format!(
+            "cannot host the operator page on 127.0.0.1:{port}: another process is already listening there \n             (state lock: {}; last recorded operator page: {}). \n             Stop whatever holds the port, or choose another with --port or TANGENT_CONNECTOR_PORT.",
+            crate::adapters::lockfile::holder_of(data_dir),
+            recorded_page_url(data_dir).unwrap_or_else(|| "none recorded".to_string()),
+        )),
+        Err(error) => Err(format!("cannot bind the operator listener on 127.0.0.1:{port}: {error}")),
+    }
+}
+
+/// The operator page URL durable state last recorded, when state is readable at all.
+fn recorded_page_url(data_dir: &std::path::Path) -> Option<String> {
+    crate::adapters::store::StateStore::open(data_dir).ok().and_then(|store| store.operator_page_url())
+}
 
 /// Entry point of the `operator` verb. Owns stdout for its banner; the MCP edge is a
 /// separate process and never runs here.
@@ -72,25 +126,37 @@ pub fn operator(rest: &[String]) -> i32 {
             return 4;
         }
     };
-    let hub = match build_hub(CallerId("operator".into()), data_dir) {
+    let hub = match build_hub(CallerId("operator".into()), data_dir.clone()) {
         Ok(hub) => hub,
         Err(error) => {
             eprintln!("cannot open connector state: {error}");
             return 4;
         }
     };
+    let port = match resolve_operator_port(port) {
+        Ok(port) => port,
+        Err(error) => {
+            eprintln!("{error}");
+            return 1;
+        }
+    };
     // Loopback only: the listener binds 127.0.0.1, never anything reachable off-machine.
-    let listener = match TcpListener::bind(("127.0.0.1", port.unwrap_or(0))) {
+    // The default port is fixed (stable URL); an in-use port is a refusal naming the holder.
+    let listener = match bind_listener(&data_dir, port) {
         Ok(listener) => listener,
         Err(error) => {
-            eprintln!("cannot bind the operator listener: {error}");
+            eprintln!("{error}");
             return 4;
         }
     };
     let bound_port = listener.local_addr().map(|address| address.port()).unwrap_or_default();
     let url = format!("http://127.0.0.1:{bound_port}/");
     println!("Tangent connector operator page: {url}");
-    println!("This address lives for the life of this process; the connector records it in its state so any Connect can pop this page.");
+    if bound_port == DEFAULT_PORT {
+        println!("This address is the connector's fixed default; it is recorded in state so any Connect can pop this page.");
+    } else {
+        println!("This address lives for the life of this process; the connector records it in its state so any Connect can pop this page.");
+    }
     // The page URL is recorded in memory AND durable state (P4): a Connect in any
     // process — the CLI one-shots included — pops this page at the sign-in anchor.
     hub.announce_operator_page(&url);
@@ -205,6 +271,11 @@ fn read_line_capped(reader: &mut impl BufRead, buffer: &mut String, cap: usize) 
 /// exception: it becomes a held-open SSE feed.
 fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<AtomicUsize>) {
     let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
+    // The loopback root this server answers on — the OAuth bind's redirect target.
+    let root_url = stream
+        .local_addr()
+        .map(|address| format!("http://127.0.0.1:{}/", address.port()))
+        .unwrap_or_else(|_| DEFAULT_PAGE_URL.to_string());
     let mut reader = BufReader::new(match stream.try_clone() {
         Ok(clone) => clone,
         Err(_) => return,
@@ -215,7 +286,7 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         Ok(Some(_)) => {}
         Ok(None) | Err(CappedError::Io) => return,
         Err(CappedError::OverLimit) => {
-            let _ = respond(&mut writer, 400, problem_json("headers_too_large", "request line exceeds 8 KiB"));
+            let _ = respond(&mut writer, 400, problem_json("headers_too_large", "request line exceeds 8 KiB"), None);
             return;
         }
     }
@@ -223,14 +294,15 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
     let method = parts.next().unwrap_or_default().to_string();
     let target = parts.next().unwrap_or_default().to_string();
     if method.is_empty() || target.is_empty() {
-        let _ = respond(&mut writer, 400, problem_json("bad_request", "malformed request line"));
+        let _ = respond(&mut writer, 400, problem_json("bad_request", "malformed request line"), None);
         return;
     }
     if method != "GET" && method != "POST" {
-        let _ = respond(&mut writer, 405, problem_json("method_not_allowed", "GET and POST only"));
+        let _ = respond(&mut writer, 405, problem_json("method_not_allowed", "GET and POST only"), None);
         return;
     }
     let mut content_length: usize = 0;
+    let mut content_type = String::new();
     let mut budget = HEADER_LIMIT;
     loop {
         let mut header = String::new();
@@ -240,7 +312,7 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
             }
             Ok(None) | Err(CappedError::Io) => return,
             Err(CappedError::OverLimit) => {
-                let _ = respond(&mut writer, 400, problem_json("headers_too_large", "headers exceed 8 KiB"));
+                let _ = respond(&mut writer, 400, problem_json("headers_too_large", "headers exceed 8 KiB"), None);
                 return;
             }
         }
@@ -252,9 +324,12 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         if let Some(value) = lowered.strip_prefix("content-length:") {
             content_length = value.trim().parse().unwrap_or(0);
         }
+        if let Some(value) = lowered.strip_prefix("content-type:") {
+            content_type = value.trim().to_string();
+        }
     }
     if content_length > BODY_LIMIT {
-        let _ = respond(&mut writer, 413, problem_json("body_too_large", "body exceeds 1 MiB"));
+        let _ = respond(&mut writer, 413, problem_json("body_too_large", "body exceeds 1 MiB"), None);
         return;
     }
     let mut body_bytes = vec![0u8; content_length];
@@ -267,9 +342,20 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         stream_events(writer, hub, sse_clients);
         return;
     }
-    let body: Value = serde_json::from_slice(&body_bytes).unwrap_or(Value::Null);
-    let response = route(&hub, &method, &target, &body);
-    let _ = respond(&mut writer, response.0, response.1);
+    // JSON for the /api/* surface; form-encoding for the bind pages' one field.
+    let body = if content_type.starts_with("application/x-www-form-urlencoded") {
+        RequestBody::Form(parse_form(&String::from_utf8_lossy(&body_bytes)))
+    } else {
+        RequestBody::Json(serde_json::from_slice(&body_bytes).unwrap_or(Value::Null))
+    };
+    let response = route(&hub, &method, &target, &body, &root_url);
+    let _ = respond(&mut writer, response.0, response.1, response.2.as_deref());
+}
+
+/// A request body in either of the two encodings these surfaces accept.
+enum RequestBody {
+    Json(Value),
+    Form(Vec<(String, String)>),
 }
 
 /// The SSE feed (owner addendum): the one deliberate exception to this server's
@@ -283,7 +369,7 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
 fn stream_events(mut writer: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<AtomicUsize>) {
     if sse_clients.fetch_add(1, Ordering::AcqRel) >= SSE_CLIENT_LIMIT {
         sse_clients.fetch_sub(1, Ordering::AcqRel);
-        let _ = respond(&mut writer, 503, problem_json("sse_clients_busy", "too many live activity feeds are open; close one and reload"));
+        let _ = respond(&mut writer, 503, problem_json("sse_clients_busy", "too many live activity feeds are open; close one and reload"), None);
         return;
     }
     let _guard = SseSlot { count: sse_clients };
@@ -328,24 +414,26 @@ impl Drop for SseSlot {
     }
 }
 
-struct ApiResponse(u16, Value);
+struct ApiResponse(u16, Value, Option<String>);
 
-fn route(hub: &ConnectorHub, method: &str, target: &str, body: &Value) -> ApiResponse {
-    let (path, _query) = match target.split_once('?') {
+/// The route table. The embedded page is inert HTML+JS; the `/bind/{identityId}/{provider}`
+/// pages carry the OAuth bind flow (atproto today; any other provider is an honest 404);
+/// everything under /api/ is the same local-only trust boundary (loopback bind, GET/POST,
+/// caps, JSON bodies).
+fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, root_url: &str) -> ApiResponse {
+    let (path, query) = match target.split_once('?') {
         Some((path, query)) => (path, query),
         None => (target, ""),
     };
-    // The embedded page is inert HTML+JS: served plainly. Everything under /api/ is the
-    // same local-only trust boundary (loopback bind, GET/POST, caps, JSON bodies).
     if !path.starts_with("/api/") {
-        return match (method, path) {
-            ("GET", "/") | ("GET", "/index.html") => ApiResponse(200, Value::String(INDEX_HTML.to_string())),
-            _ => ApiResponse(404, problem_json("not_found", "only the operator page and /api/* live here")),
-        };
+        return html_routes(hub, method, path, query, body, root_url);
     }
+    let RequestBody::Json(body) = body else {
+        return ApiResponse(400, problem_json("bad_request", "the API surface speaks JSON only"), None);
+    };
     let segments: Vec<&str> = path.trim_start_matches("/api/").split('/').filter(|segment| !segment.is_empty()).collect();
     match (method, segments.as_slice()) {
-        ("GET", ["identities"]) => ApiResponse(200, ok_json(json!({ "identities": identity_list(hub) }))),
+        ("GET", ["identities"]) => ApiResponse(200, ok_json(json!({ "identities": identity_list(hub) })), None),
         ("POST", ["identities"]) => {
             let handle = body.get("handle").and_then(Value::as_str).unwrap_or_default();
             let display = body.get("displayName").and_then(Value::as_str);
@@ -356,7 +444,7 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &Value) -> ApiRes
             let display = match body.get("displayName") {
                 None | Some(Value::Null) => None,
                 Some(Value::String(value)) => Some(Some(value.as_str())),
-                Some(_) => return ApiResponse(400, problem_json("bad_request", "displayName must be a string or null")),
+                Some(_) => return ApiResponse(400, problem_json("bad_request", "displayName must be a string or null"), None),
             };
             finish(hub.update_identity(local_id, handle, display), |identity| ok_json(json!({ "identity": identity_json(&identity) })))
         }
@@ -366,7 +454,7 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &Value) -> ApiRes
         }
         ("GET", ["identities", local_id, "enrollments"]) => {
             if hub.identity(local_id).is_none() {
-                return ApiResponse(200, blocked_json("unknown_identity", "no identity matches that id"));
+                return ApiResponse(200, blocked_json("unknown_identity", "no identity matches that id"), None);
             }
             let enrollments: Vec<Value> = hub
                 .enrollment_inventory()
@@ -374,28 +462,15 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &Value) -> ApiRes
                 .filter(|(entry, _)| entry.local_id == *local_id)
                 .map(|(entry, available)| enrollment_json(&entry, available))
                 .collect();
-            ApiResponse(200, ok_json(json!({ "enrollments": enrollments })))
+            ApiResponse(200, ok_json(json!({ "enrollments": enrollments })), None)
         }
         // Enrollment deliberately has no route here (R2): it is a consequence of
         // connecting (the Connect handshake) or an explicit hub/CLI action — the disarm
         // tier — never an operator-page ceremony. The old enroll routes are gone.
-        ("POST", ["identities", local_id, "atproto", "bind"]) => {
-            let handle = body.get("handle").and_then(Value::as_str).unwrap_or_default();
-            let password = body.get("appPassword").and_then(Value::as_str).unwrap_or_default();
-            let pds = match body.get("pds") {
-                None | Some(Value::Null) => None,
-                Some(Value::String(value)) if value.trim().is_empty() => None,
-                Some(Value::String(value)) => Some(value.as_str()),
-                Some(_) => return ApiResponse(400, problem_json("bad_request", "pds must be a string or null")),
-            };
-            let bound = hub.bind_atproto(local_id, handle, password, pds);
-            // The response carries the identity view (with binding status) only — never
-            // the app password and never the atproto session token. The binding read
-            // happens here, after `bind_atproto` returned and released its guards.
-            finish(bound, |identity| {
-                ok_json(json!({ "identity": identity_with_atproto(&identity, hub.atproto_binding(&identity.local_id)) }))
-            })
-        }
+        //
+        // The app-password bind route is gone too (owner direction): binding happens on
+        // the /bind pages over OAuth; the hub-level password method remains the
+        // documented non-UI fallback (CLI/tests), not a page surface.
         ("POST", ["identities", local_id, "atproto", "unbind"]) => {
             finish(hub.unbind_atproto(local_id), |identity| {
                 ok_json(json!({ "identity": identity_with_atproto(&identity, hub.atproto_binding(&identity.local_id)) }))
@@ -419,10 +494,212 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &Value) -> ApiRes
                     })
                 })
                 .collect();
-            ApiResponse(200, ok_json(json!({ "enrollments": enrollments })))
+            ApiResponse(200, ok_json(json!({ "enrollments": enrollments })), None)
         }
-        _ => ApiResponse(404, problem_json("not_found", "no such operator API route")),
+        _ => ApiResponse(404, problem_json("not_found", "no such operator API route"), None),
     }
+}
+
+/// The human surfaces: the operator page, the OAuth bind pages, and the loopback
+/// callback that lands on `/` (the atproto local-client redirect rule — the public
+/// authorization server only ever redirects to `http://127.0.0.1[:port]/`).
+fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, body: &RequestBody, root_url: &str) -> ApiResponse {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').filter(|segment| !segment.is_empty()).collect();
+    match (method, segments.as_slice()) {
+        ("GET", []) => {
+            // The OAuth callback: `state` in the query means an authorization server
+            // answered us. Anything else is a plain page load.
+            let parameters = parse_query(query);
+            if parameters.iter().any(|(name, _)| name == "state") {
+                return bind_callback(hub, &parameters, root_url);
+            }
+            ApiResponse(200, Value::String(INDEX_HTML.to_string()), None)
+        }
+        ("GET", ["index.html"]) => ApiResponse(200, Value::String(INDEX_HTML.to_string()), None),
+        ("GET", ["bind", local_id, provider]) => {
+            if *provider != BIND_PROVIDER_ATPROTO {
+                return not_found_page(&format!(
+                    "Unknown bind provider '{provider}' — only '{}' lives here.",
+                    BIND_PROVIDER_ATPROTO
+                ));
+            }
+            let Some(identity) = hub.identity(local_id) else {
+                return not_found_page("No local identity matches that id — open the operator page and pick one.");
+            };
+            let page = include_str!("bind.html")
+                .replace("__IDENTITY__", &html_escape(&identity.handle))
+                .replace("__ACTION__", &html_escape(path));
+            ApiResponse(200, Value::String(page), None)
+        }
+        ("POST", ["bind", local_id, provider]) => {
+            if *provider != BIND_PROVIDER_ATPROTO {
+                return not_found_page(&format!(
+                    "Unknown bind provider '{provider}' — only '{}' lives here.",
+                    BIND_PROVIDER_ATPROTO
+                ));
+            }
+            if hub.identity(local_id).is_none() {
+                return not_found_page("No local identity matches that id — open the operator page and pick one.");
+            }
+            let RequestBody::Form(form) = body else {
+                return bad_request_page("The bind form posts its handle field (form-encoded).");
+            };
+            let handle = form
+                .iter()
+                .find(|(name, _)| name == "handle")
+                .map(|(_, value)| value.trim())
+                .unwrap_or_default();
+            if handle.is_empty() {
+                return bad_request_page("Type the account's atproto handle first.");
+            }
+            match hub.begin_atproto_bind(local_id, handle, root_url) {
+                Ok(authorize_url) => ApiResponse(302, Value::String(String::new()), Some(authorize_url)),
+                Err(problem) => bind_problem_page(&problem, local_id),
+            }
+        }
+        _ => not_found_page("only the operator page, its /bind pages and /api/* live here"),
+    }
+}
+
+/// The loopback callback (redirect target of the bind flow): a provider error renders
+/// an honest failure naming its code; a code+state pair completes the bind and renders
+/// the close-your-tab page. The waiting connect (if any) finished by itself inside the
+/// hub — this page only reports.
+fn bind_callback(hub: &ConnectorHub, parameters: &[(String, String)], root_url: &str) -> ApiResponse {
+    let parameter = |name: &str| parameters.iter().find(|(key, _)| key == name).map(|(_, value)| value.as_str());
+    if let Some(error) = parameter("error") {
+        let description = parameter("error_description").unwrap_or_default();
+        return bind_result_page(false, &format!("provider_refused: {error}: {description}"));
+    }
+    let state = parameter("state").unwrap_or_default();
+    let code = parameter("code").unwrap_or_default();
+    if state.is_empty() {
+        return bind_result_page(false, "invalid_callback: the callback carried no state");
+    }
+    match hub.complete_atproto_bind(state, code, parameter("iss"), root_url) {
+        Ok(handle) => bind_result_page(true, &handle),
+        Err(problem) => bind_result_page(false, &problem),
+    }
+}
+
+// ---------- the small HTML surfaces (hand-rolled, escaped, inert) ----------
+
+/// Minimal HTML escaping for the few values interpolated into pages.
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('\"', "&quot;")
+}
+
+/// The shared skeleton of the bind flow's small pages.
+fn bind_skeleton(title: &str, body: &str) -> String {
+    format!(
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
+         <title>Tangent connector — {title}</title>\n<style>\n\
+         :root {{ color-scheme: light dark; }}\n\
+         body {{ font: 15px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 34rem; padding: 2rem 1rem 4rem; }}\n\
+         h1 {{ font-size: 1.2rem; }}\n.muted {{ opacity: .7; }}\n.error {{ color: crimson; }}\n.ok {{ color: seagreen; }}\n\
+         </style>\n</head>\n<body>\n{body}\n</body>\n</html>\n"
+    )
+}
+
+/// The callback's result page: success names the bound handle and frees the tab; a
+/// failure names the failure code honestly.
+fn bind_result_page(success: bool, message: &str) -> ApiResponse {
+    let body = if success {
+        format!(
+            "<h1>Bound</h1>\n<p class=\"ok\">Bound as <strong>{}</strong> — you can close this tab.</p>\n\
+             <p class=\"muted\">The connector keeps the session (refreshing it silently). A waiting connect, if any, finished by itself.</p>\n",
+            html_escape(message)
+        )
+    } else {
+        format!(
+            "<h1>Bind failed</h1>\n<p class=\"error\">{}</p>\n\
+             <p class=\"muted\">Start again from the operator page's Sign In, or <a href=\"/\">return to it</a>.</p>\n",
+            html_escape(message)
+        )
+    };
+    ApiResponse(200, Value::String(bind_skeleton("bind result", &body)), None)
+}
+
+/// A bind that could not even start (resolution, discovery, PAR): the operator sees the
+/// honest reason with a way back to retry.
+fn bind_problem_page(problem: &str, local_id: &str) -> ApiResponse {
+    let body = format!(
+        "<h1>Bind could not start</h1>\n<p class=\"error\">{}</p>\n\
+         <p class=\"muted\"><a href=\"/bind/{}/{}\">Try again</a> or <a href=\"/\">return to the operator page</a>.</p>\n",
+        html_escape(problem),
+        html_escape(local_id),
+        BIND_PROVIDER_ATPROTO
+    );
+    ApiResponse(200, Value::String(bind_skeleton("bind refused", &body)), None)
+}
+
+fn not_found_page(message: &str) -> ApiResponse {
+    let body = format!("<h1>Not found</h1>\n<p class=\"error\">{}</p>\n<p class=\"muted\"><a href=\"/\">Back to the operator page</a></p>\n", html_escape(message));
+    ApiResponse(404, Value::String(bind_skeleton("not found", &body)), None)
+}
+
+fn bad_request_page(message: &str) -> ApiResponse {
+    let body = format!("<h1>Bad request</h1>\n<p class=\"error\">{}</p>\n<p class=\"muted\"><a href=\"/\">Back to the operator page</a></p>\n", html_escape(message));
+    ApiResponse(400, Value::String(bind_skeleton("bad request", &body)), None)
+}
+
+// ---------- tiny query/form parsing (bounded, strict enough for loopback forms) ----------
+
+/// Splits one `a=1&b=2` string into decoded pairs; `+` reads as space.
+fn parse_pairs(raw: &str) -> Vec<(String, String)> {
+    raw.split('&')
+        .filter(|pair| !pair.is_empty())
+        .filter_map(|pair| {
+            let (name, value) = pair.split_once('=')?;
+            Some((percent_decode_form(name), percent_decode_form(value)))
+        })
+        .collect()
+}
+
+fn parse_query(query: &str) -> Vec<(String, String)> {
+    parse_pairs(query)
+}
+
+fn parse_form(body: &str) -> Vec<(String, String)> {
+    parse_pairs(body)
+}
+
+/// Minimal percent-decoding plus `+`-as-space (the form convention).
+fn percent_decode_form(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => {
+                out.push(b' ');
+                index += 1;
+            }
+            b'%' if index + 3 <= bytes.len() => {
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok();
+                match hex.and_then(|hex| u8::from_str_radix(hex, 16).ok()) {
+                    Some(byte) => {
+                        out.push(byte);
+                        index += 3;
+                    }
+                    None => {
+                        out.push(bytes[index]);
+                        index += 1;
+                    }
+                }
+            }
+            byte => {
+                out.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).to_string()
 }
 
 fn identity_list(hub: &ConnectorHub) -> Vec<Value> {
@@ -495,13 +772,13 @@ fn enrollment_json(entry: &crate::domain::identity::CompanionEntry, available: b
 
 fn finish<T>(result: Result<T, String>, render: impl FnOnce(T) -> Value) -> ApiResponse {
     match result {
-        Ok(value) => ApiResponse(200, render(value)),
+        Ok(value) => ApiResponse(200, render(value), None),
         Err(message) => {
             let (code, text) = match message.split_once(": ") {
                 Some((code, text)) => (code.to_string(), text.to_string()),
                 None => ("blocked".to_string(), message),
             };
-            ApiResponse(200, blocked_json(&code, &text))
+            ApiResponse(200, blocked_json(&code, &text), None)
         }
     }
 }
@@ -527,13 +804,19 @@ fn problem_json(code: &str, message: &str) -> Value {
     blocked_json(code, message)
 }
 
-fn respond(writer: &mut TcpStream, status: u16, body: Value) -> std::io::Result<()> {
+fn respond(writer: &mut TcpStream, status: u16, body: Value, location: Option<&str>) -> std::io::Result<()> {
     let (content_type, bytes) = match body {
-        Value::String(html) => ("text/html; charset=utf-8", html.into_bytes()),
+        Value::String(html) => {
+            // An empty HTML string is an empty body (the redirect case).
+            let content_type = if html.is_empty() { "text/plain; charset=utf-8" } else { "text/html; charset=utf-8" };
+            (content_type, html.into_bytes())
+        }
         other => ("application/json", serde_json::to_vec(&other).unwrap_or_default()),
     };
     let reason = match status {
         200 => "OK",
+        201 => "Created",
+        302 => "Found",
         400 => "Bad Request",
         401 => "Unauthorized",
         404 => "Not Found",
@@ -541,10 +824,14 @@ fn respond(writer: &mut TcpStream, status: u16, body: Value) -> std::io::Result<
         413 => "Payload Too Large",
         _ => "Error",
     };
-    let head = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+    let mut head = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n",
         bytes.len()
     );
+    if let Some(location) = location {
+        head.push_str(&format!("Location: {location}\r\n"));
+    }
+    head.push_str("\r\n");
     writer.write_all(head.as_bytes())?;
     writer.write_all(&bytes)?;
     writer.flush()

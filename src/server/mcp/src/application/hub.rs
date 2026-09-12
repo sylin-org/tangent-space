@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 
+use crate::adapters::atproto_oauth::{self, AtprotoOauth, BindStart};
+use crate::adapters::operator::DEFAULT_PAGE_URL;
 use crate::adapters::store::StateStore;
 use crate::application::bus::EventBus;
 use crate::application::contract::{self, ExperienceDto};
@@ -37,6 +39,17 @@ pub const DEFAULT_PDS: &str = "https://bsky.social";
 /// Live coordination state, not durable enrollment state — ten minutes of operator
 /// attention is the whole budget.
 pub const PENDING_CONNECT_TIMEOUT_MS: i64 = 10 * 60 * 1000;
+/// In-flight OAuth binds parked at once, across identities. A small bound: each pins
+/// one DPoP key and one pushed request; an operator drives at most a few tabs.
+const BIND_FLIGHT_LIMIT: usize = 8;
+
+/// One started, not-yet-completed OAuth bind (in memory only — live coordination
+/// state, like a pending connect). Keyed by its OAuth `state`; single use.
+struct BindFlight {
+    local_id: String,
+    created_at: i64,
+    start: BindStart,
+}
 /// Age-out scan cadence: one shared sweeper thread wakes at this period and drops
 /// expired pendings, so a looping model's repeated Connects (each refreshing the
 /// pending) can never pile up one sleeping thread per call.
@@ -119,6 +132,11 @@ pub struct ConnectorHub {
     opened_pages: Mutex<HashSet<String>>,
     /// Waiting-for-operator connects (A3), shared with the one age-out sweeper.
     pending_connects: Arc<Mutex<Vec<PendingConnect>>>,
+    /// The atproto OAuth client (the `/bind` flow's outbound spoke). Replaceable before
+    /// serving (tests point the resolution origins at their fake).
+    atproto_oauth: Arc<Mutex<Arc<AtprotoOauth>>>,
+    /// Started OAuth binds, keyed by their OAuth `state` value.
+    bind_flights: Mutex<Vec<BindFlight>>,
     /// Arms the single sweeper thread on the first recorded pending connect.
     sweep_once: std::sync::Once,
 }
@@ -134,8 +152,26 @@ impl ConnectorHub {
             pending_bind: Mutex::new(None),
             opened_pages: Mutex::new(HashSet::new()),
             pending_connects: Arc::new(Mutex::new(Vec::new())),
+            atproto_oauth: Arc::new(Mutex::new(Arc::new(AtprotoOauth::new()))),
+            bind_flights: Mutex::new(Vec::new()),
             sweep_once: std::sync::Once::new(),
         }
+    }
+
+    /// Replaces the atproto OAuth client (tests point its resolution origins at a fake
+    /// authorization server). Call before serving; the bind flow reads it per request.
+    pub fn set_atproto_oauth(&self, client: AtprotoOauth) {
+        if let Ok(mut slot) = self.atproto_oauth.lock() {
+            *slot = Arc::new(client);
+        }
+    }
+
+    /// The current atproto OAuth client (cloned out — never held across network I/O).
+    fn oauth(&self) -> Arc<AtprotoOauth> {
+        self.atproto_oauth
+            .lock()
+            .map(|slot| slot.clone())
+            .unwrap_or_default()
     }
 
     pub fn events(&self) -> Arc<EventBus> {
@@ -182,18 +218,18 @@ impl ConnectorHub {
         let pending = self.pending_bind.lock().ok().and_then(|slot| slot.clone());
         let anchor = match pending.as_deref() {
             Some(local_id) => bind_anchor(local_id),
-            None => "create-identity".to_string(),
+            None => "#create-identity".to_string(),
         };
         Some(registration_target(&page, &anchor))
     }
 
     /// The browser target a sign-in pop for this identity would open (this process's
-    /// own page, or a recorded reachable one, with the per-identity bind anchor).
-    /// Test-visible mirror of the internal resolution, so the anchor is assertable
+    /// own page, or a recorded reachable one, at the identity's bind page).
+    /// Test-visible mirror of the internal resolution, so the target is assertable
     /// under the no-browser guard without spawning anything.
     pub fn sign_in_target_url(&self, local_id: &str) -> Option<String> {
         let (page, _) = self.sign_in_page()?;
-        Some(format!("{page}#{}", bind_anchor(local_id)))
+        Some(format!("{page}{}", bind_anchor(local_id)))
     }
 
     /// Opens one browser target once per process (F2). Returns whether THIS call is the
@@ -453,21 +489,19 @@ impl ConnectorHub {
             // The DID document names the authoritative PDS; when it does not (or is not
             // an acceptable origin), the endpoint we just used stands.
             let authoritative = session.pds_endpoint().and_then(refs::acceptable_origin).unwrap_or(pds_origin);
-            let mut store = self.lock_store()?;
-            let mut updated = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
-            updated.bound_did = Some(session.did.clone());
-            store.upsert_identity(updated.clone())?;
-            store.set_atproto_session(
+            let updated = self.store_atproto_session(
                 local_id,
                 AtprotoSession {
                     did: session.did,
                     handle: session.handle.trim().trim_start_matches('@').to_string(),
                     access_jwt: session.access_jwt,
+                    refresh_jwt: None,
                     pds: authoritative,
+                    authserver: None,
+                    dpop_key: None,
                     obtained_at: now_millis(),
                 },
-            );
-            store.save()?;
+            )?;
             Ok(updated)
         });
         if outcome.is_ok() {
@@ -475,6 +509,20 @@ impl ConnectorHub {
             self.resume_pending_connects(local_id);
         }
         outcome
+    }
+
+    /// Stores (or replaces) one identity's atproto session and mirrors the DID onto the
+    /// identity's `bound_did`. The shared write tail of both binding paths — the
+    /// app-password fallback and the OAuth `/bind` flow — so enrollments and reads see
+    /// one consistent shape. Existing enrollments keep their own Tangent sessions.
+    fn store_atproto_session(&self, local_id: &str, session: AtprotoSession) -> Result<Identity, String> {
+        let mut store = self.lock_store()?;
+        let mut updated = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+        updated.bound_did = Some(session.did.clone());
+        store.upsert_identity(updated.clone())?;
+        store.set_atproto_session(local_id, session);
+        store.save()?;
+        Ok(updated)
     }
 
     /// Clears one identity's atproto session and `bound_did`. Existing enrollments and
@@ -489,6 +537,142 @@ impl ConnectorHub {
             store.save()?;
             Ok(identity)
         })
+    }
+
+    // ---------- atproto OAuth binding (the /bind pages) ----------
+
+    /// Starts one identity's OAuth bind (the `/bind` page's POST): resolves the handle,
+    /// discovers the authorization server, pushes the authorization request (PAR, PKCE,
+    /// DPoP-bound) and parks the in-flight state. Answers the authorize URL the
+    /// operator's browser is redirected to. Starting a new bind for the same identity
+    /// replaces its in-flight one; different identities bind concurrently. All network
+    /// I/O happens outside every guard (W2-A).
+    pub fn begin_atproto_bind(&self, local_id: &str, handle: &str, redirect_uri: &str) -> Result<String, String> {
+        self.attributed("operator.atproto_bind_start", || {
+            {
+                let store = self.lock_store()?;
+                store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+            }
+            let start = self.oauth().start(handle, redirect_uri)?;
+            let authorize_url = start.authorize_url.clone();
+            if let Ok(mut flights) = self.bind_flights.lock() {
+                let now = now_millis();
+                // Age out, then keep one bind at a time per identity.
+                flights.retain(|flight| now.saturating_sub(flight.created_at) < atproto_oauth::FLIGHT_TTL_MS);
+                flights.retain(|flight| flight.local_id != local_id);
+                flights.push(BindFlight { local_id: local_id.to_string(), created_at: now, start });
+                while flights.len() > BIND_FLIGHT_LIMIT {
+                    flights.remove(0);
+                }
+            }
+            Ok(authorize_url)
+        })
+    }
+
+    /// Completes one OAuth bind (the loopback callback): validates the state (and the
+    /// issuer, when the callback carries one), exchanges the code for tokens, stores the
+    /// session — refresh token and DPoP key included, cookie-jar posture — and answers
+    /// the bound handle for the success page. The waiting-connect hook runs on success,
+    /// exactly like the app-password path: pending connects for this identity finish by
+    /// themselves.
+    pub fn complete_atproto_bind(&self, state: &str, code: &str, issuer: Option<&str>, redirect_uri: &str) -> Result<String, String> {
+        let mut bound_local: Option<String> = None;
+        let outcome = self.attributed("operator.bind_atproto", || {
+            let flight = {
+                let mut flights = match self.bind_flights.lock() {
+                    Ok(flights) => flights,
+                    Err(_) => return Err("state lock poisoned".to_string()),
+                };
+                let position = flights
+                    .iter()
+                    .position(|flight| flight.start.state == state)
+                    .ok_or_else(|| {
+                        "state_mismatch: no started bind matches that state (it may have expired or already completed); start the bind again".to_string()
+                    })?;
+                let flight = flights.remove(position);
+                if now_millis().saturating_sub(flight.created_at) >= atproto_oauth::FLIGHT_TTL_MS {
+                    return Err("bind_expired: this bind started too long ago; start it again".to_string());
+                }
+                flight
+            };
+            if let Some(issuer) = issuer {
+                if refs::acceptable_origin(issuer).as_deref() != Some(flight.start.authserver.as_str()) {
+                    return Err(format!(
+                        "issuer_mismatch: the callback claims issuer {issuer}, but the bind started with {}",
+                        flight.start.authserver
+                    ));
+                }
+            }
+            let tokens = self.oauth().exchange(&flight.start, code, redirect_uri)?;
+            if let Some(subject) = tokens.sub.as_deref() {
+                if subject != flight.start.did {
+                    return Err(
+                        "account_mismatch: the authorized account resolves to a different DID than the bind started with; start the bind again".to_string(),
+                    );
+                }
+            }
+            let handle = flight.start.handle.clone();
+            let local_id = flight.local_id.clone();
+            self.store_atproto_session(
+                &local_id,
+                AtprotoSession {
+                    did: flight.start.did.clone(),
+                    handle: handle.clone(),
+                    access_jwt: tokens.access_token,
+                    refresh_jwt: tokens.refresh_token,
+                    pds: flight.start.pds.clone(),
+                    authserver: Some(flight.start.authserver.clone()),
+                    dpop_key: Some(flight.start.dpop_key.clone()),
+                    obtained_at: now_millis(),
+                },
+            )?;
+            bound_local = Some(local_id);
+            Ok(handle)
+        });
+        if outcome.is_ok() {
+            if let Some(local_id) = bound_local {
+                self.clear_pending_bind(&local_id);
+                self.resume_pending_connects(&local_id);
+            }
+        }
+        outcome
+    }
+
+    /// Silent refresh before use (the OAuth bind's promise): an access token inside its
+    /// refresh margin is renewed from the stored refresh token with the session's DPoP
+    /// key, and the renewed session is stored before the caller proceeds. App-password
+    /// sessions carry no refresh material and pass through; a token without a readable
+    /// expiry is used as-is (the PDS refuses it honestly if stale). A failed refresh is
+    /// the honest expired-session error — never a silent unbound fallback.
+    fn refresh_atproto_if_stale(&self, local_id: &str, session: AtprotoSession) -> Result<AtprotoSession, String> {
+        let (Some(refresh), Some(authserver), Some(key)) = (&session.refresh_jwt, &session.authserver, &session.dpop_key) else {
+            return Ok(session);
+        };
+        if !atproto_oauth::access_needs_refresh(&session.access_jwt, now_millis() / 1000) {
+            return Ok(session);
+        }
+        match self.oauth().refresh(authserver, refresh, key) {
+            Ok(tokens) => {
+                if let Some(subject) = tokens.sub.as_deref() {
+                    if subject != session.did {
+                        return Err(
+                            "atproto_session_expired: the refresh returned a different account. Re-bind the identity on its bind page.".to_string(),
+                        );
+                    }
+                }
+                let mut renewed = session;
+                renewed.access_jwt = tokens.access_token;
+                if let Some(rotated) = tokens.refresh_token {
+                    renewed.refresh_jwt = Some(rotated);
+                }
+                renewed.obtained_at = now_millis();
+                self.store_atproto_session(local_id, renewed.clone())?;
+                Ok(renewed)
+            }
+            Err(_) => Err(
+                "atproto_session_expired: the PDS session could not be renewed (it may have expired or been revoked). Re-bind the identity on its bind page.".to_string(),
+            ),
+        }
     }
 
     /// Read-only atproto binding status (did, handle, PDS, session age) — never the
@@ -591,6 +775,9 @@ impl ConnectorHub {
                         .to_string(),
                 );
             }
+            // Silent refresh before use: an OAuth access token inside its margin renews
+            // here, outside every guard (W2-A); the renewed session is already stored.
+            let atproto = self.refresh_atproto_if_stale(local_id, atproto)?;
 
             // Step 1 — discovery: the proof audience comes from the server's own document.
             let proof_spec = self.discover_proof_spec(&canonical)?;
@@ -797,20 +984,25 @@ impl ConnectorHub {
     /// Order (P4): this process's own page first (trusted — it is in-process and alive);
     /// otherwise the page URL the current long-running process recorded in state, but
     /// only after one cheap reachability probe, so a stale record from an unclean
-    /// shutdown points no one at a dead port.
+    /// shutdown points no one at a dead port. The fixed-port world adds one last
+    /// honest probe: with the deterministic default URL, a host that is running can be
+    /// found even when no record survived.
     fn sign_in_page(&self) -> Option<(String, bool)> {
         if let Some(page) = self.page_url() {
             return Some((page, true));
         }
         let recorded = {
             let store = self.lock_store().ok()?;
-            store.operator_page_url()?
+            store.operator_page_url()
         };
-        let origin = page_origin(&recorded)?;
-        match self.port.probe(&origin) {
-            Ok(()) => Some((recorded, false)),
-            Err(_) => None,
+        for candidate in recorded.into_iter().chain([DEFAULT_PAGE_URL.to_string()]) {
+            if let Some(origin) = page_origin(&candidate) {
+                if self.port.probe(&origin).is_ok() {
+                    return Some((candidate, false));
+                }
+            }
         }
+        None
     }
 
     /// The waiting-for-operator branch (c): pops the operator page at this identity's
@@ -828,13 +1020,13 @@ impl ConnectorHub {
             self.events.publish(DomainEvent::ConnectWaitingForOperator {
                 origin: canonical.to_string(),
                 identity: identity.handle.clone(),
-                needed: format!("sign in identity '{}': an atproto handle and app password", identity.handle),
+                needed: format!("sign in identity '{}': its atproto account (the bind page opens in the browser)", identity.handle),
                 initiator: initiator.to_string(),
             });
         }
         let page = self.sign_in_page();
         let opened = page.as_ref().map(|(url, in_process)| {
-            let target = format!("{url}#{}", bind_anchor(&identity.local_id));
+            let target = format!("{url}{}", bind_anchor(&identity.local_id));
             let fresh = self.open_page_once(&target);
             (fresh, *in_process)
         });
@@ -2059,14 +2251,18 @@ fn enroll_transport_error(error: &ExperienceError) -> String {
 }
 
 /// The browser target of one operator-page anchor. Pure construction, so tests can
-/// assert the URL under the no-browser guard without spawning anything.
+/// assert the URL under the no-browser guard without spawning anything. The anchor
+/// carries its own sigil: `#create-identity` (a fragment) or `bind/{localId}/atproto`
+/// (the connector-served bind page, a path).
 pub fn registration_target(page_url: &str, anchor: &str) -> String {
-    format!("{page_url}#{anchor}")
+    format!("{page_url}{anchor}")
 }
 
-/// The per-identity sign-in anchor on the operator page (R2): `bind-{localId}`.
+/// The per-identity sign-in target on the operator page (R2): the connector-served
+/// `/bind` page `bind/{localId}/atproto` — a path, not a fragment, since the bind flow
+/// is its own route now.
 pub fn bind_anchor(local_id: &str) -> String {
-    format!("bind-{local_id}")
+    format!("bind/{local_id}/atproto")
 }
 
 /// The origin (`scheme://host:port`) of a page URL, for the reachability probe. Pure
