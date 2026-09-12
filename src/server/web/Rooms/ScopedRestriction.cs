@@ -13,11 +13,11 @@ public sealed class ScopedRestriction : Entity<ScopedRestriction>
     public const int MaximumReasonLength = 280;
     public RestrictionScope Scope { get; set; }
     public string ScopeKey { get; set; } = "";
-    public string ParticipantDid { get; set; } = "";
+    public string ParticipantId { get; set; } = "";
     public RestrictionKind Kind { get; set; }
     public DateTimeOffset? Until { get; set; }
     public string Reason { get; set; } = "";
-    public string ActorDid { get; set; } = "";
+    public string ActorParticipantId { get; set; } = "";
     public DateTimeOffset ChangedAt { get; set; }
 
     public static string Key(RestrictionScope scope, string scopeKey, string participantDid)
@@ -38,9 +38,9 @@ public sealed class ScopedRestriction : Entity<ScopedRestriction>
             throw new RoomRuleViolation(RoomDenial.InvalidInput, "A restriction reason must contain 1–280 characters.");
         return new ScopedRestriction
         {
-            Id = Key(scope, scopeKey, targetDid), Scope = scope, ScopeKey = scopeKey, ParticipantDid = targetDid,
+            Id = Key(scope, scopeKey, targetDid), Scope = scope, ScopeKey = scopeKey, ParticipantId = targetDid,
             Kind = kind, Until = kind == RestrictionKind.Timeout ? until : null, Reason = reason.Trim(),
-            ActorDid = actorDid, ChangedAt = now
+            ActorParticipantId = actorDid, ChangedAt = now
         };
     }
 }

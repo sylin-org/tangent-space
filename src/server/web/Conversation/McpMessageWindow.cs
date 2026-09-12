@@ -6,5 +6,5 @@ public sealed record McpMessageWindow(IReadOnlyList<Message> Messages, string? O
     IReadOnlyDictionary<string, string> AuthorHandles,
     IReadOnlyDictionary<string, ParticipantResolution>? Resolved = null);
 
-internal sealed record McpHistoryCursor(string Did, string Room, long Boundary, long Edge, bool Older,
+internal sealed record McpHistoryCursor(string ParticipantId, string Room, long Boundary, long Edge, bool Older,
     DateTimeOffset ExpiresAt);

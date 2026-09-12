@@ -29,18 +29,18 @@ public sealed partial class McpOperationDispatcher
         }
         try
         {
-            window = await conversation.McpWindow(context.ParticipantDid, destination.Room, args.Cursor, anchorId, args.Limit, ct);
+            window = await conversation.McpWindow(context.ParticipantId, destination.Room, args.Cursor, anchorId, args.Limit, ct);
         }
         catch (ArgumentException error)
         {
             if (error.Message.Contains("cursor", StringComparison.Ordinal))
             {
-                return await Problem("ReadChannel", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantDid, context.CredentialId, ct),
+                return await Problem("ReadChannel", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantId, context.CredentialId, ct),
                     McpProblem.Of(McpProblemCodes.CursorExpired, "This history cursor expired or no longer matches. Open a fresh window explicitly."),
                     calls: [NextCall("ReadChannel", "Open the conversation", McpJson.Arguments(new Dictionary<string, string?>
                         { ["contextId"] = context.Id, ["channelRef"] = args.ChannelRef }))],
                     available: ["ReadChannel", "GetUpdates"],
-                    did: context.ParticipantDid, credential: context.CredentialId, ct: ct);
+                    participantId: context.ParticipantId, credential: context.CredentialId, ct: ct);
             }
             throw new McpInvalidArgumentsException(args.AroundMessageRef is null ? "cursor" : "aroundMessageRef", error.Message);
         }
@@ -56,7 +56,7 @@ public sealed partial class McpOperationDispatcher
                 { ["contextId"] = context.Id, ["channelRef"] = args.ChannelRef })));
         return Assemble("ReadChannel", "ok", context.CompanionId, context.Id, identity, place,
             new McpResult(data, null, null),
-            await ActivitySegment(context.ParticipantDid, context.CredentialId, destination.Tangent, destination.Room, ct),
+            await ActivitySegment(context.ParticipantId, context.CredentialId, destination.Tangent, destination.Room, ct),
             new McpNext(DefaultAvailable(place, selected: true), calls));
     }
 
@@ -66,7 +66,7 @@ public sealed partial class McpOperationDispatcher
         McpArguments.CheckText(args.Text);
         var destination = ChannelDestination(args.ChannelRef, "channelRef");
         ParticipationAccess.Require(principal, ParticipationGrants.Post);
-        var currentPolicy = await conversation.ReadPolicy(context.ParticipantDid, destination.Room, ct);
+        var currentPolicy = await conversation.ReadPolicy(context.ParticipantId, destination.Room, ct);
         if (!currentPolicy.CanWrite) throw new UnauthorizedAccessException();
         SourceReference? replyTo = null;
         if (args.ReplyTo is { } reference)
@@ -84,17 +84,17 @@ public sealed partial class McpOperationDispatcher
         // Register before the side effect under the per-key gate; a crash reconciles through the same
         // durable WriteIntent at the namespaced operation id below.
         var payload = new Dictionary<string, string?> { ["text"] = args.Text, ["replyTo"] = args.ReplyTo };
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "PostMessage",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "PostMessage",
                 destination.Room, payload, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("PostMessage", principal, context, identity, registration.Record, ct);
             // Namespace the underlying operation id to this credential+DID so the same requestId under a
             // different runtime authorization can never collide in the shared write-intent key space.
             var operationId = registration.Record.NamespacedOperationId
-                ?? McpRequestRecord.BuildOperationId(context.CredentialId, context.ParticipantDid, args.RequestId);
-            var intent = await conversation.Post(context.ParticipantDid, destination.Room,
+                ?? McpRequestRecord.BuildOperationId(context.CredentialId, context.ParticipantId, args.RequestId);
+            var intent = await conversation.Post(context.ParticipantId, destination.Room,
                 new PostMessage(operationId, args.Text, replyTo), ct);
             return await PostOutcome(principal, context, identity, destination, args, intent, registration.Record, ct);
         }, ct);
@@ -110,39 +110,35 @@ public sealed partial class McpOperationDispatcher
         if (intent.State == "accepted")
         {
             string? resultRef = null;
-            var authorHandle = context.ParticipantDid;
             using (var fresh = EntityContext.NoCache())
             {
                 var projected = (await Message.Query(
                     message => message.RoomKey == destination.Room && message.SourceUri == intent.SourceUri
                         && message.SourceCid == intent.SourceCid, One(), ct)).FirstOrDefault();
                 if (projected is not null)
-                {
                     resultRef = refs.Message(destination.Tangent, destination.Room, projected.Id);
-                    var author = await Participants.Participant.Get(projected.AuthorDid, ct);
-                    if (author?.Handle is { Length: > 0 }) authorHandle = author.Handle;
-                }
             }
-            var message = new McpMessageDto(resultRef ?? intent.Id, context.ParticipantDid, authorHandle,
+            var message = new McpMessageDto(resultRef ?? intent.Id, context.ParticipantId,
+                await hub.Directory.BestLabel(context.ParticipantId, ct),
                 intent.Content.Text, Format(intent.Content.CreatedAt), args.ReplyTo, false);
             var data = new McpPostData(message);
             await requests.Complete(record, "completed", resultRef, SerializeData(data), ct);
             var receipt = new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", resultRef, null);
             return Assemble("PostMessage", "ok", context.CompanionId, context.Id, identity, place,
                 new McpResult(data, receipt, null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, destination.Tangent, destination.Room, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, destination.Tangent, destination.Room, ct),
                 new McpNext(DefaultAvailable(place, selected: true),
                     [NextCall("ReadChannel", "Open the conversation", McpJson.Arguments(new Dictionary<string, string?>
                         { ["contextId"] = context.Id, ["channelRef"] = args.ChannelRef }))]));
         }
-        var readiness = await ReadinessOf(context.ParticipantDid, ct);
+        var readiness = await ReadinessOf(context.ParticipantId, ct);
         if (intent.State == "rejected")
         {
             await requests.Complete(record, "rejected", null, null, ct);
             return await Problem("PostMessage", context.CompanionId, context.Id, identity, place,
                 McpProblem.Of(McpProblemCodes.SourceUnsupported, "The source rejected this message. Inspect the receipt."),
                 calls: [checkOperation], available: ["GetOperation", "ReadChannel"],
-                did: context.ParticipantDid, credential: context.CredentialId, ct: ct);
+                participantId: context.ParticipantId, credential: context.CredentialId, ct: ct);
         }
         // Pending: the durable WriteIntent is the saved action; never a fake local message.
         await requests.Complete(record, "pending", null, null, ct);
@@ -154,12 +150,12 @@ public sealed partial class McpOperationDispatcher
                 : McpProblem.Of(McpProblemCodes.SourcePermissionMissing, "Your message is saved. The operator must connect native room access before this request can finish.");
             return Assemble("PostMessage", "blocked", context.CompanionId, context.Id, identity, place with { Readiness = readiness },
                 new McpResult(null, receiptPending, problem),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, null, null, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, null, null, ct),
                 new McpNext(["GetOperation"], [checkOperation]));
         }
         return Assemble("PostMessage", "pending", context.CompanionId, context.Id, identity, place,
             new McpResult(null, receiptPending, null),
-            await ActivitySegment(context.ParticipantDid, context.CredentialId, destination.Tangent, destination.Room, ct),
+            await ActivitySegment(context.ParticipantId, context.CredentialId, destination.Tangent, destination.Room, ct),
             new McpNext(["GetOperation", "ReadChannel"], [checkOperation]));
     }
 
@@ -171,21 +167,21 @@ public sealed partial class McpOperationDispatcher
         {
             if (refs.ParseChannel(scope) is { } channel)
             {
-                await conversation.ReadPolicy(context.ParticipantDid, channel.RoomKey, ct);
+                await conversation.ReadPolicy(context.ParticipantId, channel.RoomKey, ct);
                 tangentScope = channel.TangentKey;
                 roomScope = channel.RoomKey;
             }
             else if (refs.ParseTangent(scope) is { } tangent)
             {
-                if (!await tangents.CanAccess(context.ParticipantDid, tangent, ct)) throw new UnauthorizedAccessException();
+                if (!await tangents.CanAccess(context.ParticipantId, tangent, ct)) throw new UnauthorizedAccessException();
                 tangentScope = tangent;
             }
             else if (scope != refs.ServerRef) throw new McpInvalidArgumentsException("scopeRef", "Copy a server, channel or tangent reference returned by this server.");
         }
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
-        var snapshot = await SnapshotActivity(context.ParticipantDid, context.CredentialId, args.Cursor, tangentScope, roomScope, args.Limit, ct);
+        var snapshot = await SnapshotActivity(context.ParticipantId, context.CredentialId, args.Cursor, tangentScope, roomScope, args.Limit, ct);
         var serverPlace = new McpPlace("server", await SiteLabel(ct), refs.ServerRef, null, null,
-            GrantPermissions(principal), await ReadinessOf(context.ParticipantDid, ct));
+            GrantPermissions(principal), await ReadinessOf(context.ParticipantId, ct));
         var calls = new List<McpNextCall>();
         if (snapshot.Notices.Count > 0)
             calls.Add(NextCall("ReadChannel", "Open the conversation", McpJson.Arguments(new Dictionary<string, string?>
@@ -195,7 +191,7 @@ public sealed partial class McpOperationDispatcher
                 { ["contextId"] = context.Id, ["scopeRef"] = args.ScopeRef ?? refs.ServerRef, ["cursor"] = continuation })));
         return Assemble("GetUpdates", "ok", context.CompanionId, context.Id, identity, serverPlace,
             new McpResult(new McpUpdatesData(snapshot.Notices, snapshot.Continuation, snapshot.Checkpoint, snapshot.Incomplete), null, null),
-            await ActivitySegment(context.ParticipantDid, context.CredentialId, null, null, ct),
+            await ActivitySegment(context.ParticipantId, context.CredentialId, null, null, ct),
             new McpNext(DefaultAvailable(serverPlace, selected: true), calls));
     }
 
@@ -205,9 +201,9 @@ public sealed partial class McpOperationDispatcher
         var destination = ChannelDestination(args.ChannelRef, "channelRef");
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var payload = new Dictionary<string, string?> { ["readCursor"] = args.ReadCursor };
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "MarkRead",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "MarkRead",
                 destination.Room, payload, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("MarkRead", principal, context, identity, registration.Record, ct);
@@ -216,17 +212,17 @@ public sealed partial class McpOperationDispatcher
             long sequence;
             try
             {
-                sequence = await conversation.Acknowledge(context.ParticipantDid, destination.Room, args.ReadCursor, ct);
+                sequence = await conversation.Acknowledge(context.ParticipantId, destination.Room, args.ReadCursor, ct);
             }
             catch (ArgumentException error)
             {
                 var invalid = error.Message.Contains("resume", StringComparison.Ordinal) || error.Message.Contains("Acknowledge", StringComparison.Ordinal);
-                return await Problem("MarkRead", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantDid, context.CredentialId, ct),
+                return await Problem("MarkRead", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantId, context.CredentialId, ct),
                     McpProblem.Of(invalid ? McpProblemCodes.InvalidArguments : McpProblemCodes.CursorExpired,
                         invalid ? "Acknowledge a read cursor returned with a history page."
                             : "This read cursor expired or belongs to another participant. Open a fresh window.", "readCursor"),
                     available: ["ReadChannel", "GetUpdates"],
-                    did: context.ParticipantDid, credential: context.CredentialId, ct: ct);
+                    participantId: context.ParticipantId, credential: context.CredentialId, ct: ct);
             }
             string? throughRef = null;
             using (var fresh = EntityContext.NoCache())
@@ -240,7 +236,7 @@ public sealed partial class McpOperationDispatcher
             var place = await ChannelPlace(context, destination, ct);
             return Assemble("MarkRead", "ok", context.CompanionId, context.Id, identity, place,
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", null, null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, destination.Tangent, destination.Room, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, destination.Tangent, destination.Room, ct),
                 new McpNext(DefaultAvailable(place, selected: true),
                     [NextCall("ReadChannel", "Open the conversation", McpJson.Arguments(new Dictionary<string, string?>
                         { ["contextId"] = context.Id, ["channelRef"] = args.ChannelRef }))]));
@@ -258,7 +254,7 @@ public sealed partial class McpOperationDispatcher
 
     private async Task<McpPlace> ChannelPlace(McpContext context, (string Tangent, string Room) destination, CancellationToken ct)
     {
-        var policy = await conversation.ReadPolicy(context.ParticipantDid, destination.Room, ct);
+        var policy = await conversation.ReadPolicy(context.ParticipantId, destination.Room, ct);
         using var fresh = EntityContext.NoCache();
         var room = await Room.Get(destination.Room, ct);
         var tangent = await TangentCommunity.Get(destination.Tangent, ct);
@@ -267,7 +263,7 @@ public sealed partial class McpOperationDispatcher
         if (policy.CanRead) permissions.Add("read");
         if (policy.CanWrite) permissions.Add("post");
         return new McpPlace("channel", Preview(label, 160), refs.ServerRef, refs.Tangent(destination.Tangent),
-            refs.Channel(destination.Tangent, destination.Room), permissions, await ReadinessOf(context.ParticipantDid, ct));
+            refs.Channel(destination.Tangent, destination.Room), permissions, await ReadinessOf(context.ParticipantId, ct));
     }
 
     private async Task<List<McpMessageDto>> ToDtos(string tangentKey, string roomKey, IReadOnlyList<Message> messages,
@@ -285,8 +281,8 @@ public sealed partial class McpOperationDispatcher
                     .FirstOrDefault();
                 replyTo = projection is null ? null : refs.Message(tangentKey, roomKey, projection.Id);
             }
-            dtos.Add(new McpMessageDto(refs.Message(tangentKey, roomKey, message.Id), message.AuthorDid,
-                handles.GetValueOrDefault(message.AuthorDid, message.AuthorDid), message.Removed ? "" : message.Content.Text,
+            dtos.Add(new McpMessageDto(refs.Message(tangentKey, roomKey, message.Id), message.AuthorParticipantId,
+                handles.GetValueOrDefault(message.AuthorParticipantId, message.AuthorParticipantId), message.Removed ? "" : message.Content.Text,
                 Format(message.AcceptedAt), replyTo, message.Removed, message.Permissions, message.EditedAt is {} edited ? Format(edited) : null));
         }
         return dtos;

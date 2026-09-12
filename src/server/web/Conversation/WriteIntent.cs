@@ -5,7 +5,7 @@ namespace TangentSpace.Conversation;
 public sealed class WriteIntent : Entity<WriteIntent>
 {
     public string RoomKey { get; set; } = "";
-    public string AuthorDid { get; set; } = "";
+    public string AuthorParticipantId { get; set; } = "";
     public string OperationId { get; set; } = "";
     public string RecordKey { get; set; } = "";
     public string SpaceUri { get; set; } = "";

@@ -19,9 +19,9 @@ public sealed partial class ExperienceService
     /// with live member counts. Everything is policy-filtered to what this actor may see.</summary>
     public async Task<ExperienceResponse> Mentionables(ClaimsPrincipal principal, string topicKey, string? prefix, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        var identity = await IdentityOf(did, ct);
+        var identity = await IdentityOf(participantId, ct);
         Rooms.Room? stored;
         TangentCommunity? tangentRow;
         using (EntityContext.NoCache())
@@ -32,8 +32,8 @@ public sealed partial class ExperienceService
         if (stored is null || tangentRow is null)
             return Problem("mentionables", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
-                did: did, credential: credential, ct: ct);
-        var policy = await conversation.ReadPolicy(did, topicKey, ct);
+                participantId: participantId, credential: credential, ct: ct);
+        var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         if (!policy.CanRead) throw new UnauthorizedAccessException();
 
         var needle = (prefix ?? "").Trim().TrimStart('@').ToLowerInvariant();
@@ -41,41 +41,43 @@ public sealed partial class ExperienceService
 
         // Candidate participants: Tangent members, the authors of this Topic's recent
         // history, and the site owner — the people a mention here can plausibly mean.
-        var candidateDids = new HashSet<string>(StringComparer.Ordinal);
+        var candidates = new HashSet<string>(StringComparer.Ordinal);
         IReadOnlyList<TangentMembership> members;
         using (EntityContext.NoCache())
         {
             members = await TangentMembership.Query(value => value.TangentKey == tangentRow.Id, ct);
-            foreach (var membership in members) candidateDids.Add(membership.ParticipantDid);
+            foreach (var membership in members) candidates.Add(membership.ParticipantId);
             var authors = await Message.Query(message => message.RoomKey == topicKey, RecentAuthors(), ct);
-            foreach (var message in authors) candidateDids.Add(message.AuthorDid);
+            foreach (var message in authors) candidates.Add(message.AuthorParticipantId);
             var site = await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
-            if (site is { OwnerDid.Length: > 0 }) candidateDids.Add(site.OwnerDid);
+            if (site is { OwnerParticipantId.Length: > 0 }) candidates.Add(site.OwnerParticipantId);
         }
-        candidateDids.Remove(did);
+        candidates.Remove(participantId);
 
-        var badges = members.ToDictionary(member => member.ParticipantDid,
+        var badges = members.ToDictionary(member => member.ParticipantId,
             member => member.Role switch { TangentRole.Admin => "admin", TangentRole.Reader => "reader", _ => "member" },
             StringComparer.Ordinal);
         using (EntityContext.NoCache())
         {
             if ((await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct)) is { } siteRow)
-                badges[siteRow.OwnerDid] = "owner";
+                badges[siteRow.OwnerParticipantId] = "owner";
         }
 
         var entries = new List<ExperienceMentionable>();
         using (EntityContext.NoCache())
         {
-            foreach (var candidate in candidateDids)
+            var labels = await hub.Directory.LabelsFor(candidates, ct);
+            foreach (var candidate in candidates)
             {
                 var participant = await Participant.Get(candidate, ct);
                 if (participant is null || participant.IsSuspended) continue;
-                var handle = participant.Handle ?? "";
-                var rank = Rank(needle, handle, participant.Id);
+                var label = labels.GetValueOrDefault(candidate) ?? "";
+                var rank = Rank(needle, label, participant.Id);
                 if (rank is null) continue;
-                entries.Add(new ExperienceMentionable("participant", handle.Length > 0 ? handle : participant.Id,
-                    LabelOf(participant), participant.Id, participant.Classification.ToString(),
-                    badges.GetValueOrDefault(candidate), rank.Value));
+                // The mention target is the perennial identity value: the DID when held, else the internal DID.
+                entries.Add(new ExperienceMentionable("participant", label.Length > 0 ? label : participant.Id,
+                    label.Length > 0 ? label : participant.Id, await hub.Directory.PerennialValue(candidate, ct),
+                    participant.Classification.ToString(), badges.GetValueOrDefault(candidate), rank.Value));
             }
         }
 
@@ -98,24 +100,21 @@ public sealed partial class ExperienceService
         var chosen = entries.OrderBy(entry => entry.Rank).ThenBy(entry => entry.Label, StringComparer.Ordinal)
             .Take(MentionablesLimit).ToList();
         return await Assemble("mentionables", ExperienceStatus.Ok, identity,
-            await TopicPlaceOf(principal, did, tangentRow.Id, topicKey, ct),
+            await TopicPlaceOf(principal, participantId, tangentRow.Id, topicKey, ct),
             new ExperienceResult(new ExperienceMentionablesData(chosen, stored.Title), null, null),
-            (await digest.Page(did, credential, null, tangentRow.Id, topicKey, 3, ct)).Attention,
-            Empty(), [], null, null, did, credential, ct);
+            (await digest.Page(participantId, credential, null, tangentRow.Id, topicKey, 3, ct)).Attention,
+            Empty(), [], null, null, participantId, credential, ct);
     }
 
-    private static int? Rank(string needle, string handle, string did)
+    private static int? Rank(string needle, string handle, string participantId)
     {
         if (needle.Length == 0) return 50;
         var lowered = handle.ToLowerInvariant();
         if (lowered.StartsWith(needle, StringComparison.Ordinal)) return lowered.Length == needle.Length ? 0 : 10;
-        if (did.StartsWith(needle, StringComparison.Ordinal)) return 20;
+        if (participantId.StartsWith(needle, StringComparison.Ordinal)) return 20;
         if (lowered.Contains(needle, StringComparison.Ordinal)) return 30;
         return null;
     }
-
-    private static string LabelOf(Participant participant)
-        => participant.Handle is { Length: > 0 } handle ? handle : participant.Id;
 
     private static int MembersOf(string group, IReadOnlyList<TangentMembership> members) => group switch
     {

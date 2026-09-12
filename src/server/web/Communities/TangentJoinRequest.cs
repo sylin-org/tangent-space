@@ -8,11 +8,11 @@ namespace TangentSpace.Communities;
 public sealed class TangentJoinRequest : Entity<TangentJoinRequest>
 {
     public string TangentKey { get; set; } = "";
-    public string ParticipantDid { get; set; } = "";
+    public string ParticipantId { get; set; } = "";
     public DateTimeOffset RequestedAt { get; set; }
     public DateTimeOffset? DecidedAt { get; set; }
     public bool? Accepted { get; set; }
-    public string DecidedByDid { get; set; } = "";
+    public string DecidedByParticipantId { get; set; } = "";
 
     public bool Pending => DecidedAt is null;
 
@@ -21,7 +21,7 @@ public sealed class TangentJoinRequest : Entity<TangentJoinRequest>
 
     public static TangentJoinRequest Open(string tangentKey, string participantDid, DateTimeOffset now) => new()
     {
-        Id = Key(tangentKey, participantDid), TangentKey = tangentKey, ParticipantDid = participantDid, RequestedAt = now
+        Id = Key(tangentKey, participantDid), TangentKey = tangentKey, ParticipantId = participantDid, RequestedAt = now
     };
 
     public void Decide(string actorDid, bool accepted, DateTimeOffset now)
@@ -29,6 +29,6 @@ public sealed class TangentJoinRequest : Entity<TangentJoinRequest>
         if (!Pending) throw new TangentRuleViolation(TangentDenial.InvalidInput, "This admission request was already decided.");
         DecidedAt = now;
         Accepted = accepted;
-        DecidedByDid = actorDid;
+        DecidedByParticipantId = actorDid;
     }
 }

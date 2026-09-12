@@ -15,7 +15,7 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     public string Motto { get; set; } = "";
     public string Accent { get; set; } = "";
     public string Artwork { get; set; } = "";
-    public string OwnerDid { get; set; } = "";
+    public string OwnerParticipantId { get; set; } = "";
     public bool OpenToSignedIn { get; set; }
     public bool AllowMemberTopics { get; set; } = true;
     // Manual-approval admission queues durable join requests instead of granting membership.
@@ -33,30 +33,30 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     public static TangentCommunity Create(TangentSite? site, string actorDid, string key, string name, string? description,
         string? motto, string? accent, string? artwork, DateTimeOffset now)
     {
-        if (site is null || !site.IsOwner(actorDid) || !IdentityResolver.IsValidDid(actorDid))
+        if (site is null || !site.IsOwner(actorDid) || !Participant.IsValidId(actorDid))
             throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the persisted site owner can create a Tangent.");
         CheckKey(key); CheckCard(name, description, motto, accent, artwork);
         return new TangentCommunity
         {
             Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto), Accent = Clean(accent), Artwork = Clean(artwork),
-            OwnerDid = actorDid, CreatedAt = now, UpdatedAt = now, PolicyRevision = 1, SetupComplete = true
+            OwnerParticipantId = actorDid, CreatedAt = now, UpdatedAt = now, PolicyRevision = 1, SetupComplete = true
         };
     }
 
     internal static TangentCommunity CreateForAuthorizedActor(TangentSite site, string actorDid, string ownerDid, string key,
         string name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)
     {
-        if (!site.IsOwner(ownerDid) || !IdentityResolver.IsValidDid(actorDid))
+        if (!site.IsOwner(ownerDid) || !Participant.IsValidId(actorDid))
             throw new TangentRuleViolation(TangentDenial.Forbidden, "The server owner must authorize Tangent creation.");
         CheckKey(key); CheckCard(name, description, motto, accent, artwork);
         return new TangentCommunity { Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto),
-            Accent = Clean(accent), Artwork = Clean(artwork), OwnerDid = actorDid, CreatedAt = now, UpdatedAt = now,
+            Accent = Clean(accent), Artwork = Clean(artwork), OwnerParticipantId = actorDid, CreatedAt = now, UpdatedAt = now,
             PolicyRevision = 1, SetupComplete = true };
     }
 
     internal static TangentCommunity Home(TangentSite site, DateTimeOffset now) => new()
     {
-        Id = HomeKey, Name = site.Name, Description = "", Motto = "", Accent = "", Artwork = "", OwnerDid = site.OwnerDid,
+        Id = HomeKey, Name = site.Name, Description = "", Motto = "", Accent = "", Artwork = "", OwnerParticipantId = site.OwnerParticipantId,
         OpenToSignedIn = true, CreatedAt = site.EstablishedAt == default ? now : site.EstablishedAt, UpdatedAt = now, PolicyRevision = 1
     };
 
@@ -78,7 +78,7 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
         Accent = Clean(accent ?? Accent); Artwork = Clean(artwork ?? Artwork); UpdatedAt = now; PolicyRevision = checked(PolicyRevision + 1); SetupComplete = true;
     }
 
-    public bool IsOwner(string? did) => string.Equals(OwnerDid, did, StringComparison.Ordinal);
+    public bool IsOwner(string? participantId) => string.Equals(OwnerParticipantId, participantId, StringComparison.Ordinal);
 
     public void ChangeTopicCreation(string actorDid, bool allowMemberTopics, DateTimeOffset now, bool authorized = false)
     {
@@ -149,17 +149,17 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
         _ => (false, false)
     };
 
-    public bool CanParticipate(string? did, TangentMembership? membership)
+    public bool CanParticipate(string? participantId, TangentMembership? membership)
     {
-        if (membership is not null && (membership.TangentKey != Id || membership.ParticipantDid != did
-            || membership.Id != TangentMembership.Key(Id, did ?? "") || !Enum.IsDefined(membership.Role)))
+        if (membership is not null && (membership.TangentKey != Id || membership.ParticipantId != participantId
+            || membership.Id != TangentMembership.Key(Id, participantId ?? "") || !Enum.IsDefined(membership.Role)))
             throw new TangentRuleViolation(TangentDenial.MembershipMismatch, "The community membership does not belong to this Tangent and participant.");
-        if (IsOwner(did)) return true;
+        if (IsOwner(participantId)) return true;
         // A durable removal is an explicit override, including for an otherwise open home.
         if (membership?.Role == TangentRole.Removed) return false;
         // Left is a voluntary departure, not a ban: open admission still applies, closed tangents need a new grant.
         return membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader
-            || OpenToSignedIn && did is not null && IdentityResolver.IsValidDid(did);
+            || OpenToSignedIn && participantId is not null && Participant.IsValidId(participantId);
     }
 
     public static void CheckKey(string key)

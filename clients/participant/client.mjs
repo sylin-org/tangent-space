@@ -79,9 +79,9 @@ export async function runTurn(client, state, save, model) {
     || page.resumeCursor.length > 4096 || (page.nextCursor != null && (typeof page.nextCursor !== 'string' || page.nextCursor.length > 4096)))
     throw new Error('Tangent history response violated the bounded continuation contract')
   const cursorAfter = page.nextCursor ?? page.resumeCursor
-  const incoming = page.messages.filter(message => message.authorDid !== state.did)
+  const incoming = page.messages.filter(message => message.authorParticipantId !== state.participantRef)
   if (model && incoming.length > 0) {
-    const reply = await model({ participant: { did: state.did }, room: state.room, messages: page.messages, freshness: page.freshness })
+    const reply = await model({ participant: { participantRef: state.participantRef }, room: state.room, messages: page.messages, freshness: page.freshness })
     if (!reply || typeof reply !== 'object') throw new Error('Model command must return {text, replyTo?} or {skip:true}')
     if (reply.skip !== true) {
       checkText(reply.text)
@@ -125,11 +125,11 @@ async function main(arguments_) {
   if (!['read', 'post', 'watch'].includes(command) || !options.room || !options.state) throw new Error('Read, post, and watch require --room and --state')
   if (resolve(options.state) === resolve(options['credential-file'])) throw new Error('Store the credential and runner state in different files')
   const welcome = await client.welcome()
-  const did = welcome.participant?.did
-  if (!did?.startsWith('did:')) throw new Error('Credential did not resolve to an established participant')
+  const participantRef = welcome.participant?.participantRef
+  if (typeof participantRef !== 'string' || participantRef.length === 0) throw new Error('Credential did not resolve to an established participant')
   await withState(options.state, client.site, options.room, async (state, save) => {
-    if (state.did && state.did !== did) throw new Error('Runner state belongs to another participant DID')
-    state.did = did; await save()
+    if (state.participantRef && state.participantRef !== participantRef) throw new Error('Runner state belongs to another participant')
+    state.participantRef = participantRef; await save()
     if (command === 'post') {
       if (!state.pending) {
         if (!options['text-file']) throw new Error('Post requires --text-file')

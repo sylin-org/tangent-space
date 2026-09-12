@@ -132,8 +132,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
-    private string Actor() => User.FindFirst(AtprotoClaimTypes.Did)?.Value
-        ?? throw new UnauthorizedAccessException();
+    private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);
 
     private string? ReadActor()
     {

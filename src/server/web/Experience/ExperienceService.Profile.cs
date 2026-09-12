@@ -22,24 +22,26 @@ public sealed partial class ExperienceService
         var credential = CredentialOf(principal);
         var identity = await IdentityOf(viewer, ct);
         // Identifier resolution precedes policy: an unknown, stale, or ambiguous identifier is the
-        // same honest miss regardless of form; the profile data stays keyed by the DID.
+        // same honest miss regardless of form; the profile data stays keyed by the participant id.
         (Participant Participant, string MatchedForm)? resolved;
         using (EntityContext.NoCache())
-            resolved = await ParticipantLookup.TryResolveByIdentifier(identifier, ct);
+            resolved = await hub.Directory.ByIdentifier(identifier, ct);
         if (resolved is not { } match || match.Participant.IsSuspended && match.Participant.Id != viewer)
             return Problem("participant_profile", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "No participant is registered under that identity."),
-                did: viewer, credential: credential, ct: ct);
+                participantId: viewer, credential: credential, ct: ct);
 
         var participant = match.Participant;
-        var did = participant.Id;
-        var self = string.Equals(did, viewer, StringComparison.Ordinal);
+        var participantId = participant.Id;
+        var self = string.Equals(participantId, viewer, StringComparison.Ordinal);
         var roles = new List<ExperienceProfileRole>();
+        var label = await hub.Directory.LabelOf(participantId, ct);
+        var did = await hub.Directory.AtprotoDidOf(participantId, ct);
         using (EntityContext.NoCache())
         {
             var site = await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
-            if (site?.IsOwner(did) == true) roles.Add(new("server", "", "This server", "owner"));
-            foreach (var membership in await TangentMembership.Query(value => value.ParticipantDid == did, ct))
+            if (site?.IsOwner(participantId) == true) roles.Add(new("server", "", "This server", "owner"));
+            foreach (var membership in await TangentMembership.Query(value => value.ParticipantId == participantId, ct))
             {
                 var tangent = await TangentCommunity.Get(membership.TangentKey, ct);
                 roles.Add(new("tangent", membership.TangentKey,
@@ -51,7 +53,7 @@ public sealed partial class ExperienceService
         var posts = new List<ExperiencePostDto>();
         IReadOnlyList<Message> scanned;
         using (EntityContext.NoCache())
-            scanned = await Message.Query(message => message.AuthorDid == did, RecentPosts(), ct);
+            scanned = await Message.Query(message => message.AuthorParticipantId == participantId, RecentPosts(), ct);
         foreach (var message in scanned)
         {
             if (posts.Count >= ProfilePostLimit) break;
@@ -59,8 +61,8 @@ public sealed partial class ExperienceService
             if (description is null || !description.CanRead) continue;
             string? replyTo = null;
             posts.Add(new ExperiencePostDto(
-                refs.Message(description.TangentKey, message.RoomKey, message.Id), did,
-                participant.Handle ?? did, message.Removed ? "" : message.Content.Text, replyTo,
+                refs.Message(description.TangentKey, message.RoomKey, message.Id), participantId,
+                label ?? participantId, message.Removed ? "" : message.Content.Text, replyTo,
                 refs.Origin + "/tangents/" + description.TangentKey + "/posts/" + message.Id + "/",
                 Format(message.AcceptedAt), message.EditedAt is { } edited ? Format(edited) : null, message.Removed,
                 message.Facets));
@@ -76,14 +78,14 @@ public sealed partial class ExperienceService
             {
                 var canAppoint = await companions.CanAdminister(viewer, tangent.Key, null, ct);
                 if (canAppoint && !self)
-                    actions.Add(new("set_role", refs.Tangent(tangent.Key), null, $"Set {participant.Handle ?? did}'s role in {tangent.Label}"));
+                    actions.Add(new("set_role", refs.Tangent(tangent.Key), null, $"Set {label ?? participantId}'s role in {tangent.Label}"));
             }
         }
 
         return await Assemble("participant_profile", ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(new ExperienceProfileData(
-                did, participant.Handle, participant.Classification.ToString(),
+                participantId, did, label, participant.Classification.ToString(),
                 Format(participant.JoinedAt), self, participant.IsSuspended, roles, posts,
                 posts.Count >= ProfilePostLimit), null, null),
             (await digest.Page(viewer, credential, null, null, null, 3, ct)).Attention,

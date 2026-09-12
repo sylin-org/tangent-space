@@ -26,7 +26,7 @@ public sealed class McpInvitationController(TangentServer hub, TimeProvider cloc
                 $"<input type='hidden' name='return' value='/invite/{invitationId}'><button>Sign in</button></form>");
         using var fresh = EntityContext.NoCache();
         var invitation = await TangentInvitation.Get(invitationId, ct);
-        if (invitation is null || invitation.RecipientDid != did || !invitation.Usable(clock.GetUtcNow()))
+        if (invitation is null || invitation.RecipientParticipantId != did || !invitation.Usable(clock.GetUtcNow()))
             return Page("This invitation isn't available", "It may have expired, been used, or belong to another account.", "<a href='/'>Return to Tangent</a>");
         // The recipient can review the name carried by their own still-live invitation.
         var tangent = await TangentCommunity.Get(invitation.TangentKey, ct);
@@ -49,7 +49,7 @@ public sealed class McpInvitationController(TangentServer hub, TimeProvider cloc
         if (Request.Headers["X-Tangent-Participant"].ToString() != did || !ValidId(invitationId)) return StatusCode(403);
         using var fresh = EntityContext.NoCache();
         var invitation = await TangentInvitation.Get(invitationId, ct);
-        if (invitation is null || invitation.RecipientDid != did) return NotFound();
+        if (invitation is null || invitation.RecipientParticipantId != did) return NotFound();
         try
         {
             await companions.Join(did, invitation.TangentKey, invitationId, ct);

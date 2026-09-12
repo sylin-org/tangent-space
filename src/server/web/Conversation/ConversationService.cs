@@ -11,7 +11,7 @@ namespace TangentSpace.Conversation;
 
 public sealed partial class ConversationService(RoomGovernance governance, SpacesService spaces,
     IOptions<SpacesOptions> options, TimeProvider clock, IDataProtectionProvider protection, ILogger<ConversationService> logger,
-    SourceReadiness sourceReadiness) : IDisposable
+    SourceReadiness sourceReadiness, TangentSpace.Participants.ParticipantDirectory directory) : IDisposable
 {
     private readonly SemaphoreSlim writes = new(1, 1);
     private readonly SemaphoreSlim sync = new(1, 1);
@@ -27,26 +27,56 @@ public sealed partial class ConversationService(RoomGovernance governance, Space
     public void Dispose() { writes.Dispose(); sync.Dispose(); }
 
     /// <summary>Read-time resolution for every author and facet-referenced participant in a
-    /// page (ADR 0008): fresh labels for stable identities, bounded to distinct DIDs.</summary>
-    internal static async Task<IReadOnlyDictionary<string, ParticipantResolution>?> ResolveParticipants(
+    /// page (ADR 0008): fresh labels for stable identity values, bounded to distinct targets.
+    /// Authors resolve by participant id, facet targets by their perennial value; both live in
+    /// one map because the two key spaces never collide.</summary>
+    internal async Task<IReadOnlyDictionary<string, ParticipantResolution>?> ResolveParticipants(
         IReadOnlyList<Message> messages, CancellationToken ct)
     {
-        var dids = messages.Select(message => message.AuthorDid)
-            .Concat(messages.Where(message => message.Facets is not null).SelectMany(message => message.Facets!)
-                .Where(facet => facet.Kind == PostFacet.Mention && facet.Did is not null).Select(facet => facet.Did!))
+        var authors = messages.Select(message => message.AuthorParticipantId)
             .Distinct(StringComparer.Ordinal).Take(32).ToList();
-        if (dids.Count == 0) return null;
+        var targets = messages.Where(message => message.Facets is not null).SelectMany(message => message.Facets!)
+            .Where(facet => facet.Kind == PostFacet.Mention && facet.Did is not null).Select(facet => facet.Did!)
+            .Distinct(StringComparer.Ordinal).Take(32).ToList();
+        if (authors.Count == 0 && targets.Count == 0) return null;
         var resolved = new Dictionary<string, ParticipantResolution>(StringComparer.Ordinal);
-        foreach (var did in dids)
+        var labelKeys = new List<string>(authors);
+        var holders = new Dictionary<string, Participant>(StringComparer.Ordinal);
+        foreach (var target in targets)
+            if (await ResolveHolder(target, ct) is { } holder && holders.TryAdd(target, holder))
+                labelKeys.Add(holder.Id);
+        var labels = await directory.LabelsFor(labelKeys, ct);
+        foreach (var author in authors)
         {
-            var participant = await Participant.Get(did, ct);
+            var participant = await Participant.Get(author, ct);
             if (participant is null) continue;
-            resolved[did] = new ParticipantResolution(
-                participant.Handle is { Length: > 0 and <= 253 } handle ? handle : null,
-                null, participant.Classification.ToString());
+            resolved[author] = new ParticipantResolution(
+                labels.GetValueOrDefault(author) is { Length: > 0 and <= 253 } handle ? handle : null,
+                null, participant.Classification.ToString(), await directory.PerennialValue(author, ct));
+        }
+        foreach (var target in targets)
+        {
+            if (resolved.ContainsKey(target) || !holders.TryGetValue(target, out var holder)) continue;
+            resolved[target] = new ParticipantResolution(
+                labels.GetValueOrDefault(holder.Id) is { Length: > 0 and <= 253 } handle ? handle : null,
+                null, holder.Classification.ToString(), target);
         }
         return resolved;
     }
+
+    /// <summary>One facet target's current holder: an atproto DID through the identity row, a
+    /// tangent:local value through the participant it derives from. Misses are honest.</summary>
+    private async Task<Participant?> ResolveHolder(string target, CancellationToken ct)
+    {
+        if (target.StartsWith("did:", StringComparison.Ordinal)) return await directory.ByDid(target, ct);
+        if (target.StartsWith(Participants.ParticipantLookup.LocalPrefix, StringComparison.Ordinal))
+        {
+            var participant = await Participant.Get(target[Participants.ParticipantLookup.LocalPrefix.Length..], ct);
+            return participant is null ? null : await directory.ByInternal(participant.Id, ct);
+        }
+        return null;
+    }
+
 
     private static QueryDefinition Window<T>(string property, int page, int size)
     {

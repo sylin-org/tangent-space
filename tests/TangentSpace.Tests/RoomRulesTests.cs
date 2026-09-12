@@ -11,12 +11,13 @@ namespace TangentSpace.Tests;
 
 public sealed class RoomRulesTests
 {
-    private const string Owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
-    private const string Manager = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
-    private const string Agent = "did:plc:cccccccccccccccccccccccc";
-    private const string OtherManager = "did:plc:dddddddddddddddddddddddd";
+    private const string OwnerDid = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+    private static readonly string Owner = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string Manager = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string Agent = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string OtherManager = TangentSpace.Participants.Participant.NewIdentifier();
     private static readonly DateTimeOffset Now = new(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
-    private static TangentSite Site() => TangentSite.Establish(new SiteOptions { Name = "Tangent", OwnerDid = Owner }, Owner, Now);
+    private static TangentSite Site() => TangentSite.Establish(new SiteOptions { Name = "Tangent", OwnerDid = OwnerDid }, OwnerDid, Owner, Now);
 
     [Fact]
     public void Creation_requires_the_persisted_site_owner_and_starts_pending()
@@ -27,7 +28,7 @@ public sealed class RoomRulesTests
         var room = Room.Create(site, Owner, "lounge", " Lounge ", RoomAdmission.SignedIn, Now);
         Assert.Equal("lounge", room.Id);
         Assert.Equal("Lounge", room.Title);
-        Assert.Equal(Owner, room.CreatorOwnerDid);
+        Assert.Equal(Owner, room.CreatorParticipantId);
         Assert.Equal(1, room.PolicyRevision);
         Assert.Equal(RoomSpaceState.Pending, room.SpaceState);
         Assert.Null(room.SpaceUri);
@@ -100,7 +101,7 @@ public sealed class RoomRulesTests
         Assert.False(room.CurrentPolicy(site, Agent, reader).CanWrite);
         var removed = room.ChangeMembership(site, Manager, manager, Agent, reader, RoomRole.Removed, Now);
         Assert.False(room.CurrentPolicy(site, Agent, removed).CanRead);
-        Assert.Equal(Manager, removed.ChangedByDid);
+        Assert.Equal(Manager, removed.ChangedByParticipantId);
         Assert.Equal(room.PolicyRevision, removed.PolicyRevision);
     }
 
@@ -118,7 +119,7 @@ public sealed class RoomRulesTests
         Assert.Throws<RoomRuleViolation>(() => room.ChangeAdmission(site, Manager, RoomAdmission.SignedIn, Now));
         Assert.Equal(revision, room.PolicyRevision);
         Assert.Equal(RoomRole.Manager, other.Role);
-        Assert.Equal(Owner, room.CreatorOwnerDid);
+        Assert.Equal(Owner, room.CreatorParticipantId);
         Assert.Equal(RoomAdmission.InvitationOnly, room.Admission);
     }
 

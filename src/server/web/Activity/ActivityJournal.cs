@@ -15,8 +15,8 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
     public ActivityKind Kind { get; set; }
     public string RoomKey { get; set; } = "";
     public string TangentKey { get; set; } = "home";
-    public string? ActorDid { get; set; }
-    public string? TargetDid { get; set; }
+    public string? ActorParticipantId { get; set; }
+    public string? TargetParticipantId { get; set; }
     public long? MessageSequence { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
 
@@ -33,8 +33,8 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
             Kind = kind,
             RoomKey = roomKey,
             TangentKey = string.IsNullOrWhiteSpace(tangentKey) ? "home" : tangentKey,
-            ActorDid = actorDid,
-            TargetDid = targetDid,
+            ActorParticipantId = actorDid,
+            TargetParticipantId = targetDid,
             MessageSequence = messageSequence,
             OccurredAt = occurredAt ?? DateTimeOffset.UtcNow
         };

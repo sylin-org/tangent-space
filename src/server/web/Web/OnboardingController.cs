@@ -20,12 +20,12 @@ public sealed class OnboardingController(TangentServer hub) : ControllerBase
     public async Task<IActionResult> Finish(FirstTangentRequest request, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var did = ParticipationAccess.Require(User, ParticipationGrants.Manage);
-        if (request.ExpectedDid != did) return Conflict(new { error = "Your account changed. Reload before continuing." });
-        try { return Ok(await hub.Tangents.CompleteOnboarding(did, request.Name, request.Description, request.Skip, ct)); }
+        var participantId = ParticipationAccess.Require(User, ParticipationGrants.Manage);
+        if (request.ExpectedParticipant != participantId) return Conflict(new { error = "Your account changed. Reload before continuing." });
+        try { return Ok(await hub.Tangents.CompleteOnboarding(participantId, request.Name, request.Description, request.Skip, ct)); }
         catch (UnauthorizedAccessException) { return StatusCode(403); }
         catch (TangentRuleViolation ex) { return BadRequest(new { error = ex.Message }); }
     }
 }
 
-public sealed record FirstTangentRequest(string ExpectedDid, string? Name = null, string? Description = null, bool Skip = false);
+public sealed record FirstTangentRequest(string ExpectedParticipant, string? Name = null, string? Description = null, bool Skip = false);

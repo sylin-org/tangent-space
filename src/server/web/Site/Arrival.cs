@@ -8,7 +8,8 @@ using TangentSpace.Rooms;
 namespace TangentSpace.Site;
 
 // This host-owned operation coordinates two records. Tangent runs one writer process.
-public sealed class Arrival(IOptions<SiteOptions> options, IOptions<ConversationOptions> conversation, TimeProvider clock, PolicyGate gate)
+public sealed class Arrival(IOptions<SiteOptions> options, IOptions<ConversationOptions> conversation, TimeProvider clock, PolicyGate gate,
+    TangentSpace.Participants.ParticipantDirectory directory)
 {
     public async Task CheckConfiguration(CancellationToken ct)
     {
@@ -17,7 +18,7 @@ public sealed class Arrival(IOptions<SiteOptions> options, IOptions<Conversation
         {
             using var fresh = EntityContext.NoCache();
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            site?.CheckConfiguredOwner(options.Value);
+            if (site is not null) await site.CheckConfiguredOwner(options.Value, ct);
             await AdoptLocalStorageDefault(ct);
         }
         finally { gate.Exit(); }
@@ -40,7 +41,11 @@ public sealed class Arrival(IOptions<SiteOptions> options, IOptions<Conversation
         }
     }
 
-    public async Task Enter(string verifiedDid, string? verifiedHandle, CancellationToken ct)
+    /// <summary>One verified atproto arrival: first arrival enrolls a new participant (GUIDv7
+    /// spine, internal identity, atproto identity carrying the handle as its label); a return
+    /// matches the atproto identity value and refreshes its label. Enrollment and label refresh
+    /// both persist under the directory's mint gate, sharing one discipline with source ingest.</summary>
+    public async Task<Participant> Enter(string verifiedDid, string? verifiedHandle, CancellationToken ct)
     {
         await gate.Enter(ct);
         try
@@ -48,14 +53,11 @@ public sealed class Arrival(IOptions<SiteOptions> options, IOptions<Conversation
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(TangentConstants.ArrivalTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            site?.CheckConfiguredOwner(options.Value);
-            var now = clock.GetUtcNow();
-            var participant = await Participant.Get(verifiedDid, ct);
-            if (participant is null) participant = Participant.FirstArrival(verifiedDid, verifiedHandle, now);
-            else participant.Return(verifiedDid, verifiedHandle, now);
-            await participant.Save(ct);
+            if (site is not null) await site.CheckConfiguredOwner(options.Value, ct);
+            var participant = await directory.ArriveAtproto(verifiedDid, verifiedHandle, clock.GetUtcNow(), ct);
             // Arrival establishes participant identity only. Server ownership requires an explicit human declaration.
             await EntityContext.Commit(ct);
+            return participant;
         }
         finally { gate.Exit(); }
     }

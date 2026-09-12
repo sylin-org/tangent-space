@@ -21,7 +21,7 @@ internal static class SpaceCarVerifier
     public static VerifiedSpaceRepo Verify(byte[] car, string expectedSpace, string expectedAuthor,
         ResolvedAuthorKey key, bool expectValues = true)
     {
-        Require(key.AuthorDid == expectedAuthor, "Resolved key belongs to a different author");
+        Require(key.SubjectDid == expectedAuthor, "Resolved key belongs to a different author");
         PreflightFrames(car);
         using var reader = new CarReader(car);
         Require(reader.Header.Version == 1 && reader.Header.Roots.Count == 2, "Expected two CAR roots");

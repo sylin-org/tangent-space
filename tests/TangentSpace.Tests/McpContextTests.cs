@@ -36,7 +36,7 @@ public sealed class McpContextTests
         var (selection, created) = McpSelection.Issue("credential-hash", Did, Now);
         Assert.True(created);
         Assert.Equal("credential-hash", selection.CredentialId);
-        Assert.Equal(Did, selection.ParticipantDid);
+        Assert.Equal(Did, selection.ParticipantId);
         Assert.True(selection.IsUsable(Now.AddHours(23)));
         Assert.False(selection.IsUsable(Now.AddHours(25)));
     }
@@ -64,7 +64,7 @@ public sealed class McpContextTests
         context.Touch(Now.AddHours(12));
         selection.Touch(Now.AddHours(12));
         Assert.Equal("credential-hash", context.CredentialId);
-        Assert.Equal(Did, context.ParticipantDid);
+        Assert.Equal(Did, context.ParticipantId);
         Assert.Equal(selection.Id, context.CompanionId);
         Assert.Equal("https://tangent.example", context.Origin);
         Assert.True(context.IsUsable(Now.AddHours(35)));
@@ -89,37 +89,37 @@ public sealed class McpContextTests
     {
         // Rows persisted before the companion split carry no companion or origin; they must read
         // as unbound so resolve treats them as expired instead of resurrecting them.
-        var legacy = new McpContext { Id = "ctx_legacy", CredentialId = "credential-hash", ParticipantDid = Did };
+        var legacy = new McpContext { Id = "ctx_legacy", CredentialId = "credential-hash", ParticipantId = Did };
         Assert.False(legacy.IsBound);
     }
 
+    private static readonly string ParticipantId = Participants.Participant.NewIdentifier();
+
     [Fact]
-    public void Moniker_matches_the_stored_handle_with_or_without_one_leading_at()
+    public void Moniker_matches_an_identity_value_or_label_with_or_without_one_leading_at()
     {
-        var participant = new Participants.Participant
+        var participant = new Participants.Participant { Id = ParticipantId, JoinedAt = Now };
+        var identities = new Participants.ParticipantIdentity[]
         {
-            Id = Did, Handle = "lumen.example", JoinedAt = Now
+            Participants.ParticipantIdentity.Atproto(ParticipantId, Did, "lumen.example", Now),
+            Participants.ParticipantIdentity.Internal(ParticipantId, Now)
         };
-        Assert.True(CompanionIdentity.Matches("lumen.example", participant, Did));
-        Assert.True(CompanionIdentity.Matches("@lumen.example", participant, Did));
-        Assert.True(CompanionIdentity.Matches("Lumen.Example", participant, Did));
-        Assert.True(CompanionIdentity.Matches(Did, participant, Did));
-        Assert.False(CompanionIdentity.Matches("someone.example", participant, Did));
-        Assert.False(CompanionIdentity.Matches("@@lumen.example", participant, Did));
-        Assert.False(CompanionIdentity.Matches("", participant, Did));
+        Assert.True(CompanionIdentity.Matches("lumen.example", participant, identities));
+        Assert.True(CompanionIdentity.Matches("@lumen.example", participant, identities));
+        Assert.True(CompanionIdentity.Matches("Lumen.Example", participant, identities));
+        Assert.True(CompanionIdentity.Matches(Did, participant, identities));
+        Assert.True(CompanionIdentity.Matches(identities[1].Value, participant, identities));
+        Assert.False(CompanionIdentity.Matches("someone.example", participant, identities));
+        Assert.False(CompanionIdentity.Matches("@@lumen.example", participant, identities));
+        Assert.False(CompanionIdentity.Matches("", participant, identities));
     }
 
     [Fact]
-    public void Display_name_derives_from_handle_without_leaking_secrets()
+    public void Display_name_derives_from_the_best_label_without_leaking_secrets()
     {
-        var participant = new Participants.Participant
-        {
-            Id = Did, Handle = "lumen.example", JoinedAt = Now
-        };
-        Assert.Equal("lumen.example", CompanionIdentity.ActingAs(participant, Did));
-        Assert.Equal("lumen", CompanionIdentity.DisplayName(participant, Did));
-        var bare = new Participants.Participant { Id = Did, JoinedAt = Now };
-        Assert.Equal(Did, CompanionIdentity.DisplayName(bare, Did));
+        Assert.Equal("lumen.example", CompanionIdentity.ActingAs("lumen.example", Did));
+        Assert.Equal("lumen", CompanionIdentity.DisplayName("lumen.example", Did));
+        Assert.Equal(Did, CompanionIdentity.DisplayName(null, Did));
     }
 }
 

@@ -42,6 +42,14 @@ public sealed class McpAuthenticationTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
+    /// <summary>The participant id currently holding one atproto DID (tests enroll through
+    /// arrival/exchange, so the identity row always exists).</summary>
+    private static async Task<string> Pid(string did, CancellationToken ct = default)
+    {
+        using var fresh = EntityContext.NoCache();
+        return (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(did), ct))!.ParticipantId;
+    }
+
     /// <summary>Generates real signing keys and DID documents per issuer DID. Key resolution is faked; signature verification never is.</summary>
     private sealed class ProofKeys
     {
@@ -266,16 +274,16 @@ public sealed class McpAuthenticationTests
     [Fact]
     public void Manage_grant_is_bounded_and_requires_explicit_permission()
     {
-        var did = "did:plc:mcptestmanageaaaaaaaaaaa";
+        var participant = TangentSpace.Participants.Participant.NewIdentifier();
         var now = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
         var grants = new[] { ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage };
-        Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(did, "mcp", 1, grants, now));
-        var (credential, _) = ParticipantCredential.Issue(did, "mcp", 1, grants, now, managementPermitted: true);
+        Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(participant, "mcp", 1, grants, now));
+        var (credential, _) = ParticipantCredential.Issue(participant, "mcp", 1, grants, now, managementPermitted: true);
         Assert.Equal(grants, credential.Grants);
-        Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(did, "mcp", 1,
+        Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(participant, "mcp", 1,
             [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage, ParticipationGrants.Manage], now, true));
         var principal = ParticipationCredentials.Principal(credential);
-        Assert.Equal(did, ParticipationAccess.Require(principal, ParticipationGrants.Manage));
+        Assert.Equal(participant, ParticipationAccess.Require(principal, ParticipationGrants.Manage));
     }
 
     [Fact]
@@ -289,18 +297,19 @@ public sealed class McpAuthenticationTests
         var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Mcp.McpRequests>();
         var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
-        await server.Claim(owner, humanDeclaration: true, CancellationToken.None);
-        await tangents.Create(owner, "atomic-invites", "Atomic invitations", null, null, null, null, CancellationToken.None);
-        await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", owner, "invite-once", async () =>
+        await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
+        await tangents.Create(await Pid(owner), "atomic-invites", "Atomic invitations", null, null, null, null, CancellationToken.None);
+        var ownerId = await Pid(owner);
+        await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", ownerId, "invite-once", async () =>
         {
-            var registered = await requests.Register("runtime", owner, "invite-once", "InviteParticipant", "atomic-invites",
+            var registered = await requests.Register("runtime", ownerId, "invite-once", "InviteParticipant", "atomic-invites",
                 new Dictionary<string, string?> { ["target"] = target }, CancellationToken.None);
             requests.CompleteWithDomain(registered.Record, raw => ("completed", null,
                 ((TangentSpace.Communities.TangentInvitationResult)raw!).InvitationId));
-            await companions.Invite(owner, "atomic-invites", target, TangentSpace.Communities.CompanionRole.Member, CancellationToken.None);
+            await companions.Invite(ownerId, "atomic-invites", target, TangentSpace.Communities.CompanionRole.Member, CancellationToken.None);
             throw new IOException("Simulated lost response after commit");
         }, CancellationToken.None));
-        var receipt = await requests.Find("runtime", owner, "invite-once", CancellationToken.None);
+        var receipt = await requests.Find("runtime", ownerId, "invite-once", CancellationToken.None);
         Assert.Equal("completed", receipt!.State);
         using (EntityContext.NoCache())
         {
@@ -308,7 +317,7 @@ public sealed class McpAuthenticationTests
             Assert.Single(invitations);
             Assert.Equal(invitations[0].Id, receipt.ResultData);
         }
-        var retry = await requests.Run("runtime", owner, "invite-once", () => requests.Register("runtime", owner, "invite-once",
+        var retry = await requests.Run("runtime", ownerId, "invite-once", () => requests.Register("runtime", ownerId, "invite-once",
             "InviteParticipant", "atomic-invites", new Dictionary<string, string?> { ["target"] = target }, CancellationToken.None), CancellationToken.None);
         Assert.True(retry.Reused);
         Assert.Equal("completed", retry.Record.State);
@@ -324,19 +333,20 @@ public sealed class McpAuthenticationTests
         var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Mcp.McpRequests>();
         var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
-        await server.Claim(owner, humanDeclaration: true, CancellationToken.None);
-        await tangents.Create(owner, "atomic-rollback", "Atomic rollback", null, null, null, null, CancellationToken.None);
-        await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", owner, "failed-invite", async () =>
+        await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
+        await tangents.Create(await Pid(owner), "atomic-rollback", "Atomic rollback", null, null, null, null, CancellationToken.None);
+        var rollbackOwner = await Pid(owner);
+        await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", rollbackOwner, "failed-invite", async () =>
         {
-            var registered = await requests.Register("runtime", owner, "failed-invite", "InviteParticipant", "atomic-rollback",
+            var registered = await requests.Register("runtime", rollbackOwner, "failed-invite", "InviteParticipant", "atomic-rollback",
                 new Dictionary<string, string?>(), CancellationToken.None);
             requests.CompleteWithDomain(registered.Record, _ => throw new IOException("Simulated receipt failure"));
-            await companions.Invite(owner, "atomic-rollback", "did:plc:mcptestinviteaaaaaaaaaa", TangentSpace.Communities.CompanionRole.Member, CancellationToken.None);
+            await companions.Invite(rollbackOwner, "atomic-rollback", "did:plc:mcptestinviteaaaaaaaaaa", TangentSpace.Communities.CompanionRole.Member, CancellationToken.None);
             return 0;
         }, CancellationToken.None));
         using (EntityContext.NoCache())
             Assert.Empty(await TangentSpace.Communities.TangentInvitation.Query(i => i.TangentKey == "atomic-rollback", CancellationToken.None));
-        var receipt = await requests.Find("runtime", owner, "failed-invite", CancellationToken.None);
+        var receipt = await requests.Find("runtime", rollbackOwner, "failed-invite", CancellationToken.None);
         Assert.Equal("pending", receipt!.State);
         Assert.Null(receipt.ResultData);
     }
@@ -357,11 +367,12 @@ public sealed class McpAuthenticationTests
             var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
             await arrival.Enter(first, "first.test", CancellationToken.None);
             await arrival.Enter(second, "second.test", CancellationToken.None);
-            await server.Claim(first, humanDeclaration: true, CancellationToken.None);
+            await server.Claim(await Pid(first), first, humanDeclaration: true, CancellationToken.None);
+            var secondId = await Pid(second);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                server.Claim(second, humanDeclaration: true, CancellationToken.None));
+                server.Claim(secondId, second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
-                Assert.Equal(first, (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerDid);
+                Assert.Equal(await Pid(first), (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerParticipantId);
         }
         await using (var fixture = await HostFixture.StartAsync(database, ownerDid: ""))
         {
@@ -369,11 +380,31 @@ public sealed class McpAuthenticationTests
             var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
             await arrival.CheckConfiguration(CancellationToken.None);
             await arrival.Enter(second, "second.test", CancellationToken.None);
+            var returningId = await Pid(second);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                server.Claim(second, humanDeclaration: true, CancellationToken.None));
+                server.Claim(returningId, second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
-                Assert.Equal(first, (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerDid);
+                Assert.Equal(await Pid(first), (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerParticipantId);
         }
+    }
+
+    [Fact]
+    public async Task Restarting_with_another_configured_owner_DID_refuses_to_boot_the_site()
+    {
+        const string owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+        const string other = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
+        string database;
+        await using (var fixture = await HostFixture.StartAsync(ownerDid: owner))
+        {
+            database = fixture.DatabasePath;
+            var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
+            var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+            await arrival.Enter(owner, null, CancellationToken.None);
+            await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
+        }
+        // Configuration cannot transfer persisted ownership: a restart pinning another
+        // account's DID fails the boot-time configured-owner check and the host refuses to start.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HostFixture.StartAsync(database, ownerDid: other));
     }
 
     [Fact]
@@ -390,7 +421,7 @@ public sealed class McpAuthenticationTests
             await arrival.Enter(did, null, CancellationToken.None);
             try
             {
-                await server.Claim(did, humanDeclaration: true, CancellationToken.None);
+                await server.Claim((await Pid(did)), did, humanDeclaration: true, CancellationToken.None);
                 return true;
             }
             catch (InvalidOperationException) { return false; }
@@ -399,29 +430,31 @@ public sealed class McpAuthenticationTests
         using (EntityContext.NoCache())
         {
             var site = await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None);
-            Assert.Contains(site!.OwnerDid, dids);
-            foreach (var did in dids) Assert.NotNull(await Participant.Get(did, CancellationToken.None));
+            var holders = await Task.WhenAll(dids.Select(did => Pid(did, CancellationToken.None)));
+            Assert.Contains(site!.OwnerParticipantId, holders);
+            foreach (var holder in holders) Assert.NotNull(await Participant.Get(holder, CancellationToken.None));
         }
     }
 
     [Fact]
     public async Task Explicit_owner_keeps_first_visitor_from_claiming_a_fresh_site()
     {
-        // A configured OwnerDid reserves the claim: a visitor's explicit declaration is
+        // A configured OwnerParticipantId reserves the claim: a visitor's explicit declaration is
         // refused and the site stays unestablished until the configured account claims it.
         const string owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
         await using var fixture = await HostFixture.StartAsync(ownerDid: owner);
         var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
         var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
         await arrival.Enter("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", null, CancellationToken.None);
+        var visitorId = await Pid("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb");
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            server.Claim("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", humanDeclaration: true, CancellationToken.None));
+            server.Claim(visitorId, "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", humanDeclaration: true, CancellationToken.None));
         using (EntityContext.NoCache())
             Assert.Null(await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None));
         await arrival.Enter(owner, null, CancellationToken.None);
-        await server.Claim(owner, humanDeclaration: true, CancellationToken.None);
+        await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         using (EntityContext.NoCache())
-            Assert.Equal(owner, (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerDid);
+            Assert.Equal(await Pid(owner), (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerParticipantId);
     }
 
     [Fact]
@@ -452,7 +485,8 @@ public sealed class McpAuthenticationTests
             await saved.Save(CancellationToken.None);
         }
         await Assert.ThrowsAsync<TangentSpace.Mcp.McpContextExpiredException>(() => contexts.Resolve(principal, arrived.Context.Id, CancellationToken.None));
-        var cookie = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AtprotoClaimTypes.Did, did)], "atproto"));
+        var cookie = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(AtprotoClaimTypes.Did, did), new Claim(ParticipationConstants.ParticipantClaim, await Pid(did))], "atproto"));
         await credentials.Revoke(cookie, first.Issued.Credential.Id, CancellationToken.None);
         await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() => contexts.SelectionOf(principal, selected.Companion.Id, CancellationToken.None));
     }
@@ -513,13 +547,14 @@ public sealed class McpAuthenticationTests
         Assert.StartsWith("ts_", result.Issued!.Token);
         using (EntityContext.NoCache())
         {
-            var participant = await Participant.Get(did, CancellationToken.None);
+            var participant = await Participant.Get(await Pid(did), CancellationToken.None);
             Assert.NotNull(participant);
-            Assert.Null(participant!.Handle);
-            Assert.False(participant.IsSuspended);
+            var atproto = await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(did), CancellationToken.None);
+            Assert.Null(atproto!.Label);
+            Assert.False(participant!.IsSuspended);
         }
         var credential = result.Issued.Credential;
-        Assert.Equal(did, credential.Did);
+        Assert.Equal(await Pid(did), credential.ParticipantId);
         Assert.Equal([ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], credential.Grants);
         Assert.Equal(TimeSpan.FromDays(1), credential.ExpiresAt - credential.CreatedAt);
     }
@@ -536,7 +571,8 @@ public sealed class McpAuthenticationTests
         Assert.NotNull(principal);
         Assert.Equal(did, principal!.FindFirst(AtprotoClaimTypes.Did)!.Value);
         Assert.Contains(principal.Claims, claim => claim.Type == ParticipationConstants.GrantClaim && claim.Value == ParticipationGrants.Post);
-        var cookie = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AtprotoClaimTypes.Did, did)], "atproto"));
+        var cookie = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(AtprotoClaimTypes.Did, did), new Claim(ParticipationConstants.ParticipantClaim, await Pid(did))], "atproto"));
         Assert.True(await credentials.Revoke(cookie, issued.Issued.Credential.Id, CancellationToken.None));
         Assert.Null(await credentials.Authenticate(issued.Issued.Token, CancellationToken.None));
     }
@@ -588,7 +624,7 @@ public sealed class McpAuthenticationTests
             (await fixture.Exchange.Exchange(Bearer(fixture.Keys, did), null, CancellationToken.None)).Status);
         using (EntityContext.NoCache())
         {
-            var participant = await Participant.Get(did, CancellationToken.None);
+            var participant = await Participant.Get(await Pid(did), CancellationToken.None);
             participant!.IsSuspended = true;
             await participant.Save(CancellationToken.None);
         }
@@ -610,7 +646,7 @@ public sealed class McpAuthenticationTests
         Assert.Contains(ParticipationGrants.Manage, granted.Issued!.Credential.Grants);
         var principal = await fixture.Host.Services.GetRequiredService<ParticipationCredentials>()
             .Authenticate(granted.Issued.Token, CancellationToken.None);
-        Assert.Equal(participant, ParticipationAccess.Require(principal!, ParticipationGrants.Manage));
+        Assert.Equal(await Pid(participant), ParticipationAccess.Require(principal!, ParticipationGrants.Manage));
         var plain = await fixture.Exchange.Exchange(Bearer(fixture.Keys, participant), null, CancellationToken.None);
         Assert.Equal(ServiceProofExchangeStatus.Issued, plain.Status);
         Assert.DoesNotContain(ParticipationGrants.Manage, plain.Issued!.Credential.Grants);
@@ -627,7 +663,9 @@ public sealed class McpAuthenticationTests
         using (EntityContext.NoCache())
         {
             Assert.Null(await ServiceProofReplayRecord.Get(ServiceProofReplayRecord.Key(did, "gate-expired-jti"), CancellationToken.None));
-            Assert.Empty(await ParticipantCredential.Query(value => value.ParticipantDid == did, CancellationToken.None));
+            // Arrival precedes the issuance gate, but no credential is ever issued.
+            var holder = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(did), CancellationToken.None))!.ParticipantId;
+            Assert.Empty(await ParticipantCredential.Query(value => value.ParticipantId == holder, CancellationToken.None));
         }
     }
 
@@ -638,17 +676,19 @@ public sealed class McpAuthenticationTests
         var did = "did:plc:mcptestgatesusaaaaaaaaaa";
         using (EntityContext.NoCache())
         {
-            var participant = await Participant.Get(did, CancellationToken.None) ?? Participant.FirstArrival(did, null, DateTimeOffset.UtcNow);
+            var (participant, identities) = Participant.Enroll(did, null, DateTimeOffset.UtcNow);
             participant.IsSuspended = true;
             await participant.Save(CancellationToken.None);
+            foreach (var identity in identities) await identity.Save(CancellationToken.None);
         }
         var validProof = new ServiceProof(did, "gate-suspended-jti", DateTimeOffset.UtcNow.AddSeconds(120));
+        var suspendedPid = await Pid(did);
         Assert.Equal(ServiceProofExchangeStatus.Suspended,
             (await fixture.Exchange.Complete(validProof, null, CancellationToken.None)).Status);
         using (EntityContext.NoCache())
         {
             Assert.Null(await ServiceProofReplayRecord.Get(ServiceProofReplayRecord.Key(did, "gate-suspended-jti"), CancellationToken.None));
-            Assert.Empty(await ParticipantCredential.Query(value => value.ParticipantDid == did, CancellationToken.None));
+            Assert.Empty(await ParticipantCredential.Query(value => value.ParticipantId == suspendedPid, CancellationToken.None));
         }
     }
 
@@ -658,11 +698,15 @@ public sealed class McpAuthenticationTests
         await using var fixture = await HostFixture.StartAsync();
         var did = "did:plc:mcptesthandleaaaaaaaaaaa";
         using (EntityContext.NoCache())
-            await Participant.FirstArrival(did, "preserved.test", DateTimeOffset.UtcNow).Save(CancellationToken.None);
+        {
+            var (participant, identities) = Participant.Enroll(did, "preserved.test", DateTimeOffset.UtcNow);
+            await participant.Save(CancellationToken.None);
+            foreach (var identity in identities) await identity.Save(CancellationToken.None);
+        }
         Assert.Equal(ServiceProofExchangeStatus.Issued,
             (await fixture.Exchange.Exchange(Bearer(fixture.Keys, did), null, CancellationToken.None)).Status);
         using (EntityContext.NoCache())
-            Assert.Equal("preserved.test", (await Participant.Get(did, CancellationToken.None))!.Handle);
+            Assert.Equal("preserved.test", (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(did), CancellationToken.None))!.Label);
     }
 
     [Fact]

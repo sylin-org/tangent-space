@@ -12,6 +12,7 @@ public sealed partial class ConversationService
     private int pendingPage = 1;
     public async Task<int> ReconcileWriter(string roomKey, string authorDid, CancellationToken ct)
     {
+        // authorDid stays an atproto DID: it names the source repository, and Accept mints the participant.
         await sync.WaitAsync(ct);
         try
         {
@@ -27,9 +28,9 @@ public sealed partial class ConversationService
         finally { sync.Release(); }
     }
 
-    public async Task<string> Reconcile(string? requesterDid, string roomKey, CancellationToken ct)
+    public async Task<string> Reconcile(string? requesterId, string roomKey, CancellationToken ct)
     {
-        if (requesterDid is not null) await ReadPolicy(requesterDid, roomKey, ct);
+        if (requesterId is not null) await ReadPolicy(requesterId, roomKey, ct);
         await sync.WaitAsync(ct);
         try
         {
@@ -51,10 +52,15 @@ public sealed partial class ConversationService
                 // Discover missed write notifications from known arrivals as well as the host's advertised writer set.
                 var arrivals = await Participant.All(Window<Participant>(nameof(Participant.Id), state.ParticipantPage, 4), budget.Token);
                 foreach (var participant in arrivals)
-                    // Identity-only arrivals have no native writer to discover. Advertised source writers are still checked
-                    // independently of their current consent, so grant changes never hide already-published source history.
-                    if (!writers.Contains(participant.Id) && (await sourceReadiness.Get(participant.Id, roomKey, budget.Token)).CanWriteSource)
-                        writers.Add(participant.Id);
+                {
+                    // Participants without an atproto identity have no native writer to discover. Advertised
+                    // source writers are still checked independently of their current consent, so grant
+                    // changes never hide already-published source history.
+                    var arrivalDid = await directory.AtprotoDidOf(participant.Id, budget.Token);
+                    if (arrivalDid is null) continue;
+                    if (!writers.Contains(arrivalDid) && (await sourceReadiness.Get(arrivalDid, roomKey, budget.Token)).CanWriteSource)
+                        writers.Add(arrivalDid);
+                }
                 nextParticipantPage = arrivals.Count == 4 ? state.ParticipantPage + 1 : 1;
                 var deferredReplies = 0;
                 foreach (var author in writers.Order(StringComparer.Ordinal))
@@ -72,7 +78,8 @@ public sealed partial class ConversationService
                 nextCursor = state.ReposCursor;
                 nextParticipantPage = state.ParticipantPage;
             }
-            await governance.WithCurrentPolicy(options.Value.AuthorityDid, roomKey, async (_, token) =>
+            var authority = await directory.EnsureAtproto(options.Value.AuthorityDid, ct);
+            await governance.WithCurrentPolicy(authority.Id, roomKey, async (_, token) =>
             {
                 var current = await RoomConversation.Get(roomKey, token) ?? new RoomConversation { Id = roomKey };
                 current.LastAttemptAt = clock.GetUtcNow();
@@ -94,7 +101,8 @@ public sealed partial class ConversationService
 
     private async Task RecordFreshness(string roomKey, string value, CancellationToken ct)
     {
-        var changed = await governance.WithCurrentPolicy(options.Value.AuthorityDid, roomKey, async (_, token) =>
+        var authority = await directory.EnsureAtproto(options.Value.AuthorityDid, ct);
+        var changed = await governance.WithCurrentPolicy(authority.Id, roomKey, async (_, token) =>
         {
             var room = await Room.Get(roomKey, token);
             if (room is null) return false;
@@ -117,7 +125,7 @@ public sealed partial class ConversationService
         foreach (var intent in pending)
         {
             if (!ConversationRecovery.CanAttempt(intent, background: true)) continue;
-            try { await Post(intent.AuthorDid, intent.RoomKey, new(intent.OperationId, intent.Content.Text, intent.Content.ReplyTo), ct, background: true); }
+            try { await Post(intent.AuthorParticipantId, intent.RoomKey, new(intent.OperationId, intent.Content.Text, intent.Content.ReplyTo), ct, background: true); }
             catch (UnauthorizedAccessException) { /* Current policy denies retries; retain the intent for operator inspection. */ }
         }
     }

@@ -21,7 +21,7 @@ namespace TangentSpace.Experience;
 /// distinct from mere watched-topic activity.</summary>
 public sealed class ExperienceDigest(
     TangentGovernance tangents, RoomGovernance governance, TimeProvider clock,
-    IDataProtectionProvider protection, McpRefs refs)
+    IDataProtectionProvider protection, McpRefs refs, TangentServer hub)
 {
     public const int MaximumRooms = 100;
     public const int MaximumUnread = 100;
@@ -34,7 +34,7 @@ public sealed class ExperienceDigest(
     public sealed record Digest(
         ExperienceAttention Attention, IReadOnlyList<ExperienceAction> FollowUps);
 
-    public sealed record DigestCursor(string Did, string? ScopeTangent, string? ScopeRoom, int Offset, DateTimeOffset ExpiresAt);
+    public sealed record DigestCursor(string ParticipantId, string? ScopeTangent, string? ScopeRoom, int Offset, DateTimeOffset ExpiresAt);
 
     /// <summary>Computes one digest page for the participant. The checkpoint is the offset-zero
     /// cursor for recovery; the page cursor continues this page sequence only.</summary>
@@ -84,15 +84,15 @@ public sealed class ExperienceDigest(
         return new(attention, followUps);
     }
 
-    private async Task EnsureActive(string did, string? credentialId, CancellationToken ct)
+    private async Task EnsureActive(string participantId, string? credentialId, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var participant = await Participant.Get(did, ct);
+        var participant = await Participant.Get(participantId, ct);
         if (participant is null || participant.IsSuspended)
             throw new UnauthorizedAccessException("This participant is no longer active.");
         if (credentialId is null) return;
         var credential = await ParticipantCredential.Get(credentialId, ct);
-        if (credential is null || credential.ParticipantDid != did || !credential.IsActive(clock.GetUtcNow()))
+        if (credential is null || credential.ParticipantId != participantId || !credential.IsActive(clock.GetUtcNow()))
             throw new UnauthorizedAccessException("This participant credential is expired or revoked.");
     }
 
@@ -112,18 +112,20 @@ public sealed class ExperienceDigest(
             var state = await RoomConversation.Get(room.Key, token) ?? new RoomConversation { Id = room.Key };
             var read = await ReadPosition.Get(ReadPosition.Key(did, room.Key), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
-            var recipient = await Participant.Get(did, token);
+            var recipientDid = await hub.Directory.AtprotoDidOf(did, token);
+            var recipientHandle = await hub.Directory.LabelOf(did, token);
             var unread = (await Message.Query(
                 message => message.RoomKey == room.Key && message.Sequence > readSequence, UnreadWindow, token))
                 .OrderBy(message => message.Sequence).ToList();
             var handles = new Dictionary<string, string?>(StringComparer.Ordinal);
-            foreach (var author in unread.Select(message => message.AuthorDid).Distinct(StringComparer.Ordinal))
-                handles[author] = (await Participant.Get(author, token))?.Handle;
+            foreach (var (author, label) in await hub.Directory.LabelsFor(
+                     unread.Select(message => message.AuthorParticipantId).Distinct(StringComparer.Ordinal), token))
+                handles[author] = label;
             var addressedPosts = new HashSet<string>(StringComparer.Ordinal);
             foreach (var message in unread)
             {
-                if (message.Removed || message.AuthorDid == did) continue;
-                var authorHandle = handles.GetValueOrDefault(message.AuthorDid);
+                if (message.Removed || message.AuthorParticipantId == did) continue;
+                var authorHandle = handles.GetValueOrDefault(message.AuthorParticipantId);
                 // Direct replies answer this participant's accepted message.
                 if (message.Content.ReplyTo is { } parent)
                 {
@@ -136,8 +138,11 @@ public sealed class ExperienceDigest(
                     }
                 }
                 // Facet mentions are trusted structure (ADR 0008): minted by the picker,
-                // they carry the stable DID and need no prose resolution.
-                if (message.Facets is not null && message.Facets.Any(facet => facet.References(did)))
+                // they carry the perennial identity value (atproto DID or internal DID) and
+                // need no prose resolution.
+                if (message.Facets is not null && message.Facets.Any(
+                        facet => recipientDid is not null && facet.References(recipientDid)
+                            || facet.References(ParticipantIdentity.InternalValue(did))))
                 {
                     addressedPosts.Add(message.Id);
                     directed.Add(Item(did, room, stored.TangentKey, message, "direct_mention", "addressed_to_you", authorHandle));
@@ -146,8 +151,8 @@ public sealed class ExperienceDigest(
                 // Direct mentions use deterministic token resolution against the recipient's
                 // canonical identity; ambiguous or quoted/code occurrences do not count.
                 var candidates = ExperienceMentions.Candidates(message.Content.Text);
-                if (ExperienceMentions.Addresses(candidates, did, recipient?.Handle)
-                    && await ResolvesUnambiguously(candidates, did, recipient?.Handle, token))
+                if (ExperienceMentions.Addresses(candidates, recipientDid, recipientHandle)
+                    && await ResolvesUnambiguously(candidates, did, recipientHandle, token))
                 {
                     addressedPosts.Add(message.Id);
                     directed.Add(Item(did, room, stored.TangentKey, message, "direct_mention", "addressed_to_you", authorHandle));
@@ -160,7 +165,7 @@ public sealed class ExperienceDigest(
                     .Concat((message.Facets ?? []).Where(facet => facet.Kind == Conversation.PostFacet.Group)
                         .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal)))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                if (groups.Count > 0 && message.AuthorDid != did && await HoldsAnyRole(did, stored.TangentKey, groups, token))
+                if (groups.Count > 0 && message.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, token))
                 {
                     addressedPosts.Add(message.Id);
                     directed.Add(Item(did, room, stored.TangentKey, message, "direct_mention", "addressed_to_you", authorHandle));
@@ -175,29 +180,32 @@ public sealed class ExperienceDigest(
 
     /// <summary>Whether the recipient currently holds any of the mentioned role groups in
     /// this Tangent. admins/moderators = owner plus Tangent admins; members = any member.</summary>
-    private static async Task<bool> HoldsAnyRole(string did, string tangentKey, IReadOnlyList<string> groups, CancellationToken ct)
+    private static async Task<bool> HoldsAnyRole(string participantId, string tangentKey, IReadOnlyList<string> groups, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var membership = await TangentMembership.Get(TangentMembership.Key(tangentKey, did), ct);
+        var membership = await TangentMembership.Get(TangentMembership.Key(tangentKey, participantId), ct);
         var site = await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
-        var owner = site?.IsOwner(did) == true;
+        var owner = site?.IsOwner(participantId) == true;
         var admin = owner || membership?.Role == TangentRole.Admin;
         if (admin && groups.Any(group => group is "admins" or "moderators")) return true;
         if (membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader && groups.Contains("members")) return true;
         return false;
     }
 
-    /// <summary>A token that equals the recipient's handle resolves to the recipient only when
-    /// no other stored participant carries the same handle string.</summary>
-    private static async Task<bool> ResolvesUnambiguously(IReadOnlyList<string> candidates, string did, string? handle, CancellationToken ct)
+    /// <summary>A token that equals the recipient's label resolves to the recipient only when
+    /// no other identity entry carries the same label string.</summary>
+    private static async Task<bool> ResolvesUnambiguously(IReadOnlyList<string> candidates, string participantId, string? handle, CancellationToken ct)
     {
-        if (handle is not { Length: > 1 }) return candidates.Contains(did, StringComparer.Ordinal);
+        if (handle is not { Length: > 1 }) return candidates.Contains(participantId, StringComparer.Ordinal);
         var token = candidates.FirstOrDefault(candidate =>
             string.Equals(candidate, handle, StringComparison.OrdinalIgnoreCase));
-        if (token is null) return candidates.Contains(did, StringComparer.Ordinal);
+        if (token is null) return candidates.Contains(participantId, StringComparer.Ordinal);
         using var fresh = EntityContext.NoCache();
-        var matches = await Participant.Query(participant => participant.Handle == token, ct);
-        return matches.All(participant => participant.Id == did);
+        var holders = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in await ParticipantIdentity.Query(value => value.Label != null, ct))
+            if (string.Equals(entry.Label!.Trim(), token, StringComparison.OrdinalIgnoreCase))
+                holders.Add(entry.ParticipantId);
+        return holders.Count <= 1 && holders.Contains(participantId);
     }
 
     private static int DirectOrder(ExperienceAttentionItem left, ExperienceAttentionItem right)
@@ -207,7 +215,7 @@ public sealed class ExperienceDigest(
 
     private ExperienceAttentionItem Item(string did, RoomDescription room, string tangentKey, Message message,
         string kind, string? relationship, string? authorHandle)
-        => new("att:" + room.Key + ":" + message.Id, kind, message.AuthorDid,
+        => new("att:" + room.Key + ":" + message.Id, kind, message.AuthorParticipantId,
             string.IsNullOrEmpty(authorHandle) ? null : authorHandle, did,
             refs.Channel(tangentKey, room.Key), refs.Message(tangentKey, room.Key, message.Id),
             relationship, Preview(message.Content.Text, 160),
@@ -228,14 +236,14 @@ public sealed class ExperienceDigest(
 
     public string Encode(DigestCursor cursor) => cursorProtector.Protect(JsonSerializer.Serialize(cursor));
 
-    public DigestCursor? Decode(string? value, string did, string? scopeTangent, string? scopeRoom)
+    public DigestCursor? Decode(string? value, string participantId, string? scopeTangent, string? scopeRoom)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         try
         {
             if (value.Length > 4096) return null;
             var cursor = JsonSerializer.Deserialize<DigestCursor>(cursorProtector.Unprotect(value));
-            return cursor is null || cursor.Did != did || cursor.Offset < 0 || cursor.Offset > 100_000
+            return cursor is null || cursor.ParticipantId != participantId || cursor.Offset < 0 || cursor.Offset > 100_000
                 || cursor.ExpiresAt <= clock.GetUtcNow()
                 || cursor.ScopeTangent != scopeTangent || cursor.ScopeRoom != scopeRoom ? null : cursor;
         }

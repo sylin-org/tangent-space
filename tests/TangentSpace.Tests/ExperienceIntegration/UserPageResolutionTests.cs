@@ -146,11 +146,13 @@ public sealed class UserPageResolutionTests : IAsyncLifetime
             root.GetProperty("result").GetProperty("problem").GetProperty("message").GetString());
     }
 
-    /// <summary>First arrival through the same domain path the auth flow uses.</summary>
+    /// <summary>First arrival through the same enrollment path the auth flow uses.</summary>
     private static async Task Arrive(string did, string? handle)
     {
         using var context = EntityContext.NoCache();
-        await Participant.FirstArrival(did, handle, DateTimeOffset.UtcNow).Save();
+        var (participant, identities) = Participant.Enroll(did, handle, DateTimeOffset.UtcNow);
+        await participant.Save();
+        foreach (var identity in identities) await identity.Save();
     }
 
     private static string Shipped(string relative)

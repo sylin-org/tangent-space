@@ -13,6 +13,9 @@ public sealed partial class ConversationService
     // Network verification has already bound this snapshot to the expected PDS, author and exact Space.
     private async Task<int> Accept(string roomKey, VerifiedSpaceRepo source, CancellationToken ct)
     {
+        // A source author that never signed in here still mints a participant through the same
+        // Enroll path, so ledger and projection references are participant ids.
+        var author = await directory.EnsureAtproto(source.Author, ct);
         var remaining = source.Records.OrderBy(r => r.Collection, StringComparer.Ordinal).ThenBy(r => r.RecordKey, StringComparer.Ordinal).ToList();
         while (remaining.Count > 0)
         {
@@ -22,7 +25,7 @@ public sealed partial class ConversationService
             var uri = source.Space + "/" + source.Author + "/" + record.Collection + "/" + record.RecordKey;
             var id = SourceDecision.Key(roomKey, uri, record.Cid);
             var accepted = false;
-            var pending = await governance.WithCurrentPolicy(source.Author, roomKey, async (policy, token) =>
+            var pending = await governance.WithCurrentPolicy(author.Id, roomKey, async (policy, token) =>
             {
                 if (policy.SpaceUri != source.Space) throw new InvalidDataException("Source Space differs from current room mapping.");
                 var previous = await SourceDecision.Get(id, token);
@@ -58,7 +61,7 @@ public sealed partial class ConversationService
                 var state = await RoomConversation.Get(roomKey, token) ?? new RoomConversation { Id = roomKey };
                 var decision = new SourceDecision
                 {
-                    Id = id, RoomKey = roomKey, AuthorDid = source.Author, SourceUri = uri, SourceCid = record.Cid,
+                    Id = id, RoomKey = roomKey, AuthorParticipantId = author.Id, SourceUri = uri, SourceCid = record.Cid,
                     Accepted = reason == "accepted", Reason = reason, DecidedAt = clock.GetUtcNow(),
                     PolicyRevision = policy.SelectedPolicyRevision, SitePolicyRevision = policy.SitePolicyRevision,
                     Content = reason == "accepted" ? content : null,
@@ -77,7 +80,7 @@ public sealed partial class ConversationService
                         projected.Id = current.Id;
                         projected.Removed = current.Removed;
                         projected.RemovedAt = current.RemovedAt;
-                        projected.RemovedByDid = current.RemovedByDid;
+                        projected.RemovedByParticipantId = current.RemovedByParticipantId;
                         projected.EditedAt = current.EditedAt;
                         projected.Sequence = current.Sequence;
                         projected.AcceptedAt = current.AcceptedAt;
@@ -88,7 +91,7 @@ public sealed partial class ConversationService
                     await decision.Save(token);
                     await state.Save(token);
                     var room = await Room.Get(roomKey, token);
-                    await ActivityJournal.AppendInTransaction(ActivityKind.MessageAccepted, roomKey, source.Author, null,
+                    await ActivityJournal.AppendInTransaction(ActivityKind.MessageAccepted, roomKey, author.Id, null,
                         room?.TangentKey, decision.Sequence, decision.DecidedAt, token);
                     accepted = true;
                 }
@@ -108,7 +111,7 @@ public sealed partial class ConversationService
         return 0;
     }
 
-    public async Task<int> Rebuild(string actorDid, string roomKey, CancellationToken ct)
+    public async Task<int> Rebuild(string actorId, string roomKey, CancellationToken ct)
     {
         // Keep the ledger and sequence assignment. Rebuild never re-admits old rejected versions.
         var rebuilt = 0;
@@ -116,7 +119,7 @@ public sealed partial class ConversationService
         {
             var decisions = await SourceDecision.Query(d => d.RoomKey == roomKey && d.Accepted,
                 Window<SourceDecision>(nameof(SourceDecision.Sequence), page, 100), ct);
-            await governance.WithCurrentPolicy(actorDid, roomKey, async (policy, token) =>
+            await governance.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
             {
                 if (!policy.CanAppointManagers) throw new UnauthorizedAccessException("Only the owner can rebuild a room projection.");
                 foreach (var decision in decisions)

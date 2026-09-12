@@ -42,7 +42,7 @@ public sealed class EditHistoryTests : IAsyncLifetime
     private async Task<string> MintModeratorToken()
     {
         var clock = app.Services.GetRequiredService<TimeProvider>();
-        var (credential, token) = ParticipantCredential.Issue(ExperienceWebApp.OwnerDid, "History moderation test", 1,
+        var (credential, token) = ParticipantCredential.Issue(app.OwnerParticipantId, "History moderation test", 1,
             [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage],
             clock.GetUtcNow(), managementPermitted: true);
         using var fresh = EntityContext.NoCache();
@@ -136,7 +136,7 @@ public sealed class EditHistoryTests : IAsyncLifetime
         var rows = await HistoryOf(app.Http, messageId);
         var row = Assert.Single(rows);
         Assert.Equal("history-first-original", Get(Get(row, "content"), "text").GetString());
-        Assert.Equal(ExperienceWebApp.AgentDid, Get(row, "authorDid").GetString());
+        Assert.Equal(app.AgentParticipantId, Get(row, "authorParticipantId").GetString());
         Assert.True(AbsentOrNull(row, "previousChangeId"));
         var classification = Get(row, "changeClass");
         Assert.True(classification.ValueKind is JsonValueKind.Object);
@@ -273,7 +273,7 @@ public sealed class EditHistoryTests : IAsyncLifetime
 
         var snapshot = Assert.Single(await HistoryOf(app.Http, messageId));
         Assert.Equal(text, Get(Get(snapshot, "content"), "text").GetString());
-        Assert.Equal(ExperienceWebApp.AgentDid, Get(snapshot, "authorDid").GetString());
+        Assert.Equal(app.AgentParticipantId, Get(snapshot, "authorParticipantId").GetString());
         Assert.True(Get(await MessageRow(messageId), "removed").GetBoolean());
     }
 
@@ -354,7 +354,7 @@ public sealed class EditHistoryTests : IAsyncLifetime
         var ledger = new PostChange
         {
             Id = PostChange.Key(ExperienceWebApp.AgentDid, ExperienceWebApp.TopicKey, messageId, operationId),
-            RoomKey = ExperienceWebApp.TopicKey, MessageId = messageId, ActorDid = ExperienceWebApp.AgentDid,
+            RoomKey = ExperienceWebApp.TopicKey, MessageId = messageId, ActorParticipantId = ExperienceWebApp.AgentDid,
             OperationId = operationId, Delete = delete, Text = text, State = "pending",
             Detail = "source-change-failed-retry-same-operation", UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -503,7 +503,7 @@ public sealed class EditHistoryTests : IAsyncLifetime
 
         // A member asks to see an author's rows they could never see: the row gate still applies
         // server-side, and the same filter stays honest in a moderator's hands.
-        var escape = Uri.EscapeDataString($"{{\"AuthorDid\":{{\"$eq\":\"{ExperienceWebApp.OwnerDid}\"}}}}");
+        var escape = Uri.EscapeDataString($"{{\"AuthorParticipantId\":{{\"$eq\":\"{app.OwnerParticipantId}\"}}}}");
         using var ownerClient = NewOwnerClient();
         using var posted = await ownerClient.PostAsJsonAsync($"/api/v1/experience/topics/{ExperienceWebApp.TopicKey}/posts",
             new { requestId = "hist-filter-owner", text = "history-filter-owner" });

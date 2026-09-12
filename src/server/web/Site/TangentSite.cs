@@ -1,13 +1,18 @@
-using Koan.Data.Core.Model;
 using CarpaNet.Identity;
+using Koan.Data.Core;
+using Koan.Data.Core.Model;
 using TangentSpace.Infrastructure;
+using TangentSpace.Participants;
 
 namespace TangentSpace.Site;
 
+/// <summary>The site row keys its owner by participant id. The configured Tangent:Site:OwnerDid
+/// remains an atproto DID pin: only the explicitly configured account — verified by an atproto
+/// browser sign-in — can establish the site, and only that DID's current holder is the owner.</summary>
 public sealed class TangentSite : Entity<TangentSite>
 {
     public string Name { get; set; } = "";
-    public string OwnerDid { get; set; } = "";
+    public string OwnerParticipantId { get; set; } = "";
     public DateTimeOffset EstablishedAt { get; set; }
     public long PolicyRevision { get; set; }
     public string WelcomeMessage { get; set; } = "";
@@ -23,21 +28,27 @@ public sealed class TangentSite : Entity<TangentSite>
     public bool BackgroundMotion { get; set; } = true;
     public bool BackgroundMouseSpotlight { get; set; } = true;
 
-    public static TangentSite Establish(SiteOptions options, string verifiedDid, DateTimeOffset now)
+    /// <summary>Establishment is the one atproto-DID gate on this row: the verified sign-in DID
+    /// must satisfy the configured pin, and its current holder becomes the owner participant.</summary>
+    public static TangentSite Establish(SiteOptions options, string verifiedDid, string ownerParticipantId, DateTimeOffset now)
     {
         if (!IdentityResolver.IsValidDid(verifiedDid))
             throw new ArgumentException("A verified AT DID is required.", nameof(verifiedDid));
+        if (!Participant.IsValidId(ownerParticipantId))
+            throw new ArgumentException("The site owner must be an enrolled participant.", nameof(ownerParticipantId));
         if (!string.IsNullOrWhiteSpace(options.OwnerDid) && !string.Equals(options.OwnerDid, verifiedDid, StringComparison.Ordinal))
             throw new InvalidOperationException("Only the explicitly configured account can establish this site.");
-        return new TangentSite { Id = TangentConstants.SiteId, Name = options.Name.Trim(), OwnerDid = verifiedDid,
+        return new TangentSite { Id = TangentConstants.SiteId, Name = options.Name.Trim(), OwnerParticipantId = ownerParticipantId,
             EstablishedAt = now, PolicyRevision = 1, WelcomeMessage = options.WelcomeMessage, Motd = options.Motd,
             CreationPolicy = options.CreationPolicy, AllowAgentTangentOwnership = options.AllowAgentTangentOwnership,
             HumanDeclared = false };
     }
 
-    public void CheckConfiguredOwner(SiteOptions options)
+    public async Task CheckConfiguredOwner(SiteOptions options, CancellationToken ct = default)
     {
-        if (!string.IsNullOrWhiteSpace(options.OwnerDid) && !string.Equals(OwnerDid, options.OwnerDid, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(options.OwnerDid)) return;
+        var identity = await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(options.OwnerDid), ct);
+        if (identity is null || identity.ParticipantId != OwnerParticipantId)
             throw new InvalidOperationException("Tangent:Site:OwnerDid differs from the persisted owner. Restore the configured DID; changing configuration cannot transfer site ownership.");
     }
 
@@ -45,5 +56,5 @@ public sealed class TangentSite : Entity<TangentSite>
         => actor is not null && !actor.IsSuspended && (IsOwner(actor.Id) || CreationPolicy == "everyone"
             || CreationPolicy == "humans" && actor.Classification == TangentSpace.Participants.ParticipantClassification.Human);
 
-    public bool IsOwner(string? verifiedDid) => string.Equals(OwnerDid, verifiedDid, StringComparison.Ordinal);
+    public bool IsOwner(string? participantId) => string.Equals(OwnerParticipantId, participantId, StringComparison.Ordinal);
 }

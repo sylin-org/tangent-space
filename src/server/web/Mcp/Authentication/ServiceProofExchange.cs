@@ -11,7 +11,7 @@ namespace TangentSpace.Mcp.Authentication;
 /// Proof verification precedes participant arrival; replay consumption, expiry/suspension rechecks and issuance
 /// share one gated transaction so async gaps cannot issue from an expired proof or a suspended actor.</summary>
 public sealed class ServiceProofExchange(ServiceProofAuthentication proofs, Arrival arrival, PolicyGate gate,
-    TimeProvider clock, ILogger<ServiceProofExchange> logger)
+    TimeProvider clock, TangentSpace.Participants.ParticipantDirectory directory, ILogger<ServiceProofExchange> logger)
 {
     private static readonly string[] DefaultGrants = [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post];
 
@@ -38,9 +38,8 @@ public sealed class ServiceProofExchange(ServiceProofAuthentication proofs, Arri
         try
         {
             ct.ThrowIfCancellationRequested();
-            // Preserve a previously verified display handle; a first autonomous arrival falls back to the DID.
-            string? display = null;
-            using (EntityContext.NoCache()) display = (await Participant.Get(verified.IssuerDid, ct))?.Handle;
+            // Preserve a previously verified display handle; a first autonomous arrival carries none.
+            string? display = (await directory.ByDid(verified.IssuerDid, ct)) is { } known ? await directory.LabelOf(known.Id, ct) : null;
             try { await arrival.Enter(verified.IssuerDid, display, ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception error) when (error is InvalidOperationException or UnauthorizedAccessException)
@@ -55,12 +54,12 @@ public sealed class ServiceProofExchange(ServiceProofAuthentication proofs, Arri
                 using var transaction = EntityContext.Transaction("mcp-proof-exchange");
                 var now = clock.GetUtcNow();
                 if (verified.ExpiresAt <= now) return new(ServiceProofExchangeStatus.InvalidProof);
-                var participant = await Participant.Get(verified.IssuerDid, ct);
+                var participant = await directory.ByDid(verified.IssuerDid, ct);
                 if (participant is null || participant.IsSuspended) return new(ServiceProofExchangeStatus.Suspended);
                 var recordId = ServiceProofReplayRecord.Key(verified.IssuerDid, verified.Jti);
                 var consumed = await ServiceProofReplayRecord.Get(recordId, ct);
                 if (consumed is not null && consumed.ExpiresAt > now) return new(ServiceProofExchangeStatus.ReplayedProof);
-                var (credential, token) = ParticipantCredential.Issue(verified.IssuerDid, name, lifetime, grants, now, managementPermitted);
+                var (credential, token) = ParticipantCredential.Issue(participant!.Id, name, lifetime, grants, now, managementPermitted);
                 await credential.Save(ct);
                 await new ServiceProofReplayRecord
                 {

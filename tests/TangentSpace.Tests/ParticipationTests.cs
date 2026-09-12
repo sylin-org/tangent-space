@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TangentSpace.Participants;
 using TangentSpace.Participation;
 using Xunit;
 using CookieAuthentication = Koan.Web.Auth.Extensions.AuthenticationExtensions;
@@ -17,6 +18,8 @@ public sealed class ParticipationTests
 {
     private const string Did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
     private const string Other = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
+    private static readonly string ParticipantId = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string OtherParticipant = TangentSpace.Participants.Participant.NewIdentifier();
     private static readonly DateTimeOffset Now = new(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -30,7 +33,7 @@ public sealed class ParticipationTests
         Assert.NotEqual(token, secondToken);
         Assert.NotEqual(credential.Id, another.Id);
         Assert.DoesNotContain(token, JsonSerializer.Serialize(credential));
-        Assert.Equal(Did, credential.ParticipantDid);
+        Assert.Equal(ParticipantId, credential.ParticipantId);
     }
 
     [Fact]
@@ -40,28 +43,29 @@ public sealed class ParticipationTests
         Assert.True(credential.IsActive(Now));
         Assert.False(credential.IsActive(Now.AddDays(7)));
         Assert.False(credential.IsActive(Now.AddSeconds(-1)));
-        Assert.Throws<UnauthorizedAccessException>(() => credential.Revoke(Other, Now));
+        Assert.Throws<UnauthorizedAccessException>(() => credential.Revoke(OtherParticipant, Now));
         Assert.Null(credential.RevokedAt);
-        credential.Revoke(Did, Now.AddHours(1));
+        credential.Revoke(ParticipantId, Now.AddHours(1));
         Assert.False(credential.IsActive(Now.AddHours(1)));
-        credential.Revoke(Did, Now.AddHours(2));
+        credential.Revoke(ParticipantId, Now.AddHours(2));
         Assert.Equal(Now.AddHours(1), credential.RevokedAt);
     }
 
     [Theory, InlineData(0), InlineData(-1), InlineData(31)]
     public void Credential_lifetime_cannot_exceed_the_enrollment_bound(int lifetime)
-        => Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(Did, "runner", lifetime, ["read"], Now));
+        => Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(ParticipantId, "runner", lifetime, ["read"], Now));
 
     [Fact]
     public void Enrollment_is_bound_to_authenticated_claims_and_rejects_submitted_DID()
     {
-        Assert.Equal(Did, ParticipationAccess.EnrollmentDid(Cookie()));
-        Assert.Throws<UnauthorizedAccessException>(() => ParticipationAccess.EnrollmentDid(new ClaimsPrincipal(new ClaimsIdentity([new Claim(AtprotoClaimTypes.Did, Other)]))));
-        var hostile = "{\"name\":\"runner\",\"lifetimeDays\":7,\"did\":\"" + Other + "\"}";
+        Assert.Equal(ParticipantId, ParticipationAccess.EnrollmentParticipant(Cookie()));
+        Assert.Throws<UnauthorizedAccessException>(() => ParticipationAccess.EnrollmentParticipant(
+            new ClaimsPrincipal(new ClaimsIdentity([new Claim(ParticipationConstants.ParticipantClaim, OtherParticipant)]))));
+        var hostile = "{\"name\":\"runner\",\"lifetimeDays\":7,\"participant\":\"" + OtherParticipant + "\"}";
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<CredentialEnrollmentRequest>(hostile));
         Assert.Throws<Newtonsoft.Json.JsonSerializationException>(() => Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialEnrollmentRequest>(hostile));
         var (credential, _) = Issue();
-        Assert.Throws<UnauthorizedAccessException>(() => ParticipationAccess.EnrollmentDid(ParticipationCredentials.Principal(credential)));
+        Assert.Throws<UnauthorizedAccessException>(() => ParticipationAccess.EnrollmentParticipant(ParticipationCredentials.Principal(credential)));
     }
 
     [Fact]
@@ -71,20 +75,26 @@ public sealed class ParticipationTests
         Assert.Equal("runner", enrollment.Name);
         Assert.Equal(7, enrollment.LifetimeDays);
         Assert.Null(enrollment.Grants);
-        Assert.Throws<Newtonsoft.Json.JsonSerializationException>(() => Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialRevocationRequest>("{\"did\":\"" + Other + "\"}"));
+        Assert.Throws<Newtonsoft.Json.JsonSerializationException>(() => Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialRevocationRequest>("{\"participant\":\"" + OtherParticipant + "\"}"));
         Assert.NotNull(Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialRevocationRequest>("{}"));
     }
 
     [Fact]
-    public void Credential_identity_has_only_its_DID_and_narrow_grants()
+    public void Credential_identity_carries_the_participant_claim_and_narrow_grants()
     {
-        var (credential, _) = ParticipantCredential.Issue(Did, "reader", 1, [ParticipationGrants.Read], Now);
+        var (credential, _) = ParticipantCredential.Issue(ParticipantId, "reader", 1, [ParticipationGrants.Read], Now);
+        // Without an atproto identity supplied, the bearer principal carries only the participant claim.
         var principal = ParticipationCredentials.Principal(credential);
-        Assert.Equal(Did, ParticipationAccess.Require(principal, ParticipationGrants.Read));
+        Assert.Equal(ParticipantId, ParticipationAccess.Require(principal, ParticipationGrants.Read));
+        Assert.Null(principal.FindFirst(AtprotoClaimTypes.Did));
+        // With one, both claims travel: the GUID spine always, the DID when held.
+        var atproto = ParticipationCredentials.Principal(credential, Did);
+        Assert.Equal(Did, atproto.FindFirst(AtprotoClaimTypes.Did)!.Value);
+        Assert.Equal(ParticipantId, atproto.FindFirst(ParticipationConstants.ParticipantClaim)!.Value);
         Assert.Throws<UnauthorizedAccessException>(() => ParticipationAccess.Require(principal, ParticipationGrants.Post));
         Assert.Empty(principal.FindAll(ClaimTypes.Role));
-        Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(Did, "admin", 1, ["admin"], Now));
-        Assert.Equal(Did, ParticipationAccess.Require(Cookie(), ParticipationGrants.Post));
+        Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(ParticipantId, "admin", 1, ["admin"], Now));
+        Assert.Equal(ParticipantId, ParticipationAccess.Require(Cookie(), ParticipationGrants.Post));
     }
 
     [Theory, InlineData(""), InlineData("Basic test"), InlineData("Bearer invalid"), InlineData("Bearer ts_short")]
@@ -106,12 +116,17 @@ public sealed class ParticipationTests
         var result = await context.AuthenticateAsync();
         Assert.True(result.Succeeded);
         Assert.Equal(Did, result.Principal!.FindFirst(AtprotoClaimTypes.Did)!.Value);
+        Assert.Equal(ParticipantId, result.Principal!.FindFirst(ParticipationConstants.ParticipantClaim)!.Value);
     }
 
     private static (ParticipantCredential Credential, string Token) Issue()
-        => ParticipantCredential.Issue(Did, "runner", 7, [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], Now);
+        => ParticipantCredential.Issue(ParticipantId, "runner", 7, [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], Now);
 
-    private static ClaimsPrincipal Cookie() => new(new ClaimsIdentity([new Claim(AtprotoClaimTypes.Did, Did)], "atproto"));
+    private static ClaimsPrincipal Cookie() => new(new ClaimsIdentity(
+        [
+            new Claim(AtprotoClaimTypes.Did, Did),
+            new Claim(ParticipationConstants.ParticipantClaim, ParticipantId)
+        ], "atproto"));
 
     private static ServiceProvider AuthenticationServices()
     {
@@ -120,6 +135,7 @@ public sealed class ParticipationTests
         services.AddAuthentication(options => options.DefaultAuthenticateScheme = CookieAuthentication.CookieScheme)
             .AddScheme<AuthenticationSchemeOptions, CookieFixtureHandler>(CookieAuthentication.CookieScheme, _ => { });
         services.AddParticipation();
+        services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
         return services.BuildServiceProvider();
     }
 

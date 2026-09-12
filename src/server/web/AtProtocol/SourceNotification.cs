@@ -9,7 +9,7 @@ public sealed class SourceNotification : Entity<SourceNotification>
 {
     public string RoomKey { get; set; } = "";
     public string Space { get; set; } = "";
-    public string AuthorDid { get; set; } = "";
+    public string RepoDid { get; set; } = "";
     public string Revision { get; set; } = "";
     public string CommitHash { get; set; } = "";
     public long Generation { get; set; }

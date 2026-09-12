@@ -89,7 +89,7 @@
     if (typeof participant !== 'object') {
       return null;
     }
-    if (typeof participant.did !== 'string' || participant.did.length === 0) {
+    if (typeof participant.participantRef !== 'string' || participant.participantRef.length === 0) {
       return null;
     }
     var handle = participant.handle;
@@ -123,10 +123,10 @@
 
     displayNameEl.textContent = participant.handle && participant.handle.length > 0
       ? participant.handle
-      : compactDid(participant.did);
+      : compactDid(participant.did || participant.participantRef);
     welcomeNameEl.textContent = participant.handle && participant.handle.length > 0 ? ', ' + participant.handle : '';
     ownerBadge.hidden = !participant.isOwner;
-    didEl.textContent = participant.did;
+    didEl.textContent = participant.did || participant.participantRef;
 
     var joined = formatJoined(participant.joinedAt);
     joinedRow.hidden = joined === null;
@@ -175,7 +175,7 @@
         // the room client never invents a local replacement.
         if (window.TangentPages.route.kind === 'sign-in') return;
         return fetch('/api/v1/tangents', {
-          credentials: 'same-origin', headers: { Accept: 'application/json', ...(site.participant ? { 'X-Tangent-Participant': site.participant.did } : {}) }, cache: 'no-store'
+          credentials: 'same-origin', headers: { Accept: 'application/json', ...(site.participant ? { 'X-Tangent-Participant': site.participant.participantRef } : {}) }, cache: 'no-store'
         })
           .then(function (response) { return response.ok ? response.json() : null; })
           .catch(function () { return null; })

@@ -121,7 +121,7 @@ public sealed class SpacesVerificationTests
         var author = vector.GetProperty("author").GetString()!;
         var document = Document(author, vector.GetProperty("multikey").GetString()!);
         document.VerificationMethod[0].Id = "#atproto";
-        Assert.Equal(author, ResolvedAuthorKey.FromDidDocument(document, author).AuthorDid);
+        Assert.Equal(author, ResolvedAuthorKey.FromDidDocument(document, author).SubjectDid);
     }
 
     private static ResolvedAuthorKey Key(string author, string multikey) => ResolvedAuthorKey.FromDidDocument(Document(author, multikey), author);
@@ -138,9 +138,9 @@ public sealed class SpacesVerificationTests
         var key = ResolvedAuthorKey.FromDidDocument(agent, agent.Id);
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(Fixtures, "manifest.json")));
         var actual = manifest.RootElement.GetProperty("tests").EnumerateArray().Single(item => item.GetProperty("name").GetString() == "actual-pds-repository");
-        Assert.Equal(actual.GetProperty("author").GetString(), key.AuthorDid);
+        Assert.Equal(actual.GetProperty("author").GetString(), key.SubjectDid);
         var result = SpaceCarVerifier.Verify(File.ReadAllBytes(Path.Combine(Fixtures, "actual-pds-repository.car")),
-            actual.GetProperty("space").GetString()!, key.AuthorDid, key);
+            actual.GetProperty("space").GetString()!, key.SubjectDid, key);
         Assert.Equal(3, result.Records.Count);
     }
 

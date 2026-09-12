@@ -23,8 +23,9 @@ public static class ExperienceJson
 /// <summary>Freshness is observational: a later event may always exist.</summary>
 public sealed record ExperienceSnapshot(string Revision, string AsOf, string Coverage);
 
-/// <summary>Canonical acting participant. Null only for an explicitly anonymous view.</summary>
-public sealed record ExperienceIdentity(string ParticipantRef, string Did, string DisplayName, string? Handle);
+/// <summary>Canonical acting participant, keyed by the GUID participant reference. Null only for
+/// an explicitly anonymous view; Did is present only while an atproto identity is held.</summary>
+public sealed record ExperienceIdentity(string ParticipantRef, string? Did, string DisplayName, string? Handle);
 
 /// <summary>Where the participant is and what domain actions current policy permits here.</summary>
 public sealed record ExperiencePlace(string? ServerRef, string? TangentRef, string? TopicRef,
@@ -160,8 +161,8 @@ public sealed record ExperienceOperationData(string Operation, ExperienceReceipt
 
 public sealed record ExperienceMentionablesData(IReadOnlyList<ExperienceMentionable> Targets, string TopicTitle);
 
-public sealed record ExperienceProfileData(string Did, string? Handle, string Classification, string JoinedAt,
-    bool Self, bool Suspended, IReadOnlyList<ExperienceProfileRole> Roles,
+public sealed record ExperienceProfileData(string ParticipantRef, string? Did, string? Handle, string Classification,
+    string JoinedAt, bool Self, bool Suspended, IReadOnlyList<ExperienceProfileRole> Roles,
     IReadOnlyList<ExperiencePostDto> Posts, bool MorePosts);
 
 public sealed record ExperienceProfileRole(string Scope, string Key, string Label, string Role);

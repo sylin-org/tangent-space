@@ -97,7 +97,7 @@
     const byline = element('div', 'message-byline', '');
     const stamp = row.editedAt ? 'Edited ' + new Date(row.editedAt).toLocaleString()
       : 'Posted ' + new Date(row.acceptedAt).toLocaleString();
-    byline.append(element('strong', 'message-author', authorLabel(row.authorDid, context)), element('time', '', stamp));
+    byline.append(element('strong', 'message-author', authorLabel(row.authorParticipantId, context)), element('time', '', stamp));
     era.append(byline);
     const text = row.content && typeof row.content.text === 'string' ? row.content.text : '';
     const faceted = window.TangentFacets?.renderFacetedText?.(text, Array.isArray(row.facets) ? row.facets : undefined, context.resolved);

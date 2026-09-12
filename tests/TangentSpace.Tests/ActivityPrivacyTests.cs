@@ -9,9 +9,9 @@ public sealed class ActivityPrivacyTests
     public void Room_member_does_not_receive_another_participants_membership_target()
     {
         var entry = new ActivityJournal { Sequence = 1, Kind = ActivityKind.MembershipChanged, RoomKey = "private-room",
-            TangentKey = "home", ActorDid = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", TargetDid = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb" };
+            TangentKey = "home", ActorParticipantId = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", TargetParticipantId = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb" };
         var recipient = ActivityService.EventFor("did:plc:cccccccccccccccccccccccc", entry);
-        Assert.Null(recipient.TargetDid);
+        Assert.Null(recipient.TargetParticipantId);
     }
 
     [Fact]
@@ -19,7 +19,7 @@ public sealed class ActivityPrivacyTests
     {
         const string target = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
         var entry = new ActivityJournal { Sequence = 1, Kind = ActivityKind.MembershipChanged, RoomKey = "private-room",
-            TangentKey = "home", ActorDid = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", TargetDid = target };
-        Assert.Equal(target, ActivityService.EventFor(target, entry).TargetDid);
+            TangentKey = "home", ActorParticipantId = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", TargetParticipantId = target };
+        Assert.Equal(target, ActivityService.EventFor(target, entry).TargetParticipantId);
     }
 }

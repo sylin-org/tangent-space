@@ -39,7 +39,7 @@ public sealed class McpWindowTests
 
     private static Message MessageAt(int n) => new()
     {
-        Id = "m" + n, RoomKey = "lounge", AuthorDid = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", Sequence = n,
+        Id = "m" + n, RoomKey = "lounge", AuthorParticipantId = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", Sequence = n,
         Content = new MessageContent("A retained message.", DateTimeOffset.UnixEpoch, null)
     };
 }

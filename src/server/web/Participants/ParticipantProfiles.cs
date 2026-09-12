@@ -10,15 +10,19 @@ public sealed record ParticipantProfile(string Did, string? Handle, string? Disp
 
 /// <summary>Optional public profile decoration. The authenticated DID and verified handle
 /// come from Tangent; profile text never determines identity or permissions.</summary>
-public sealed class ParticipantProfiles(AtprotoSessions sessions, AtprotoHttp network, IMemoryCache cache)
+public sealed class ParticipantProfiles(AtprotoSessions sessions, AtprotoHttp network, IMemoryCache cache,
+    ParticipantDirectory directory)
 {
-    public async Task<ParticipantProfile> Read(string did, CancellationToken ct)
+    /// <summary>Profile decoration for an atproto identity: reads the atproto repo of the DID the
+    /// participant currently holds. Labels come from the identity collection, never the row.</summary>
+    public async Task<ParticipantProfile> Read(string participantId, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var participant = await Participant.Get(did, ct) ?? throw new UnauthorizedAccessException();
+        var did = await directory.AtprotoDidOf(participantId, ct) ?? throw new UnauthorizedAccessException();
+        var handle = await directory.LabelOf(participantId, ct);
         if (cache.TryGetValue<ParticipantProfile>("tangent-profile:" + did, out var saved) && saved is not null)
-            return saved with { Handle = participant.Handle };
-        var profile = new ParticipantProfile(did, participant.Handle, null, null, null, "unavailable");
+            return saved with { Handle = handle };
+        var profile = new ParticipantProfile(did, handle, null, null, null, "unavailable");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(5));
         try

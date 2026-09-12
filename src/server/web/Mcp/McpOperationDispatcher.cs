@@ -118,7 +118,7 @@ public sealed partial class McpOperationDispatcher(
             ? token.Value<string>() : null;
         var context = await contexts.Resolve(principal, requested, ct);
         var identity = await IdentityOf(context, ct);
-        var did = context.ParticipantDid;
+        var did = context.ParticipantId;
         var credential = context.CredentialId;
         var owner = principal.HasClaim(ParticipationConstants.GrantClaim, ParticipationGrants.Manage);
         try
@@ -155,7 +155,7 @@ public sealed partial class McpOperationDispatcher(
         catch (McpInvalidArgumentsException error)
         {
             return await Problem(name, context.CompanionId, context.Id, identity, await ServerFallback(principal, did, credential, ct),
-                McpProblem.Of(McpProblemCodes.InvalidArguments, error.Message, error.Field), did: did, credential: credential, ct: ct);
+                McpProblem.Of(McpProblemCodes.InvalidArguments, error.Message, error.Field), participantId: did, credential: credential, ct: ct);
         }
         catch (McpRequestConflictException error)
         {
@@ -169,17 +169,17 @@ public sealed partial class McpOperationDispatcher(
         catch (UnauthorizedAccessException)
         {
             return await Problem(name, context.CompanionId, context.Id, identity, await ServerFallback(principal, did, credential, ct),
-                McpProblem.Of(McpProblemCodes.PermissionDenied, "Your current access does not permit this operation."), did: did, credential: credential, ct: ct);
+                McpProblem.Of(McpProblemCodes.PermissionDenied, "Your current access does not permit this operation."), participantId: did, credential: credential, ct: ct);
         }
         catch (TangentRuleViolation denied)
         {
             return await Problem(name, context.CompanionId, context.Id, identity, await ServerFallback(principal, did, credential, ct),
-                McpProblem.Of(MapDenial(denied.Denial), denied.Message), did: did, credential: credential, ct: ct);
+                McpProblem.Of(MapDenial(denied.Denial), denied.Message), participantId: did, credential: credential, ct: ct);
         }
         catch (RoomRuleViolation denied)
         {
             return await Problem(name, context.CompanionId, context.Id, identity, await ServerFallback(principal, did, credential, ct),
-                McpProblem.Of(MapDenial(denied.Denial), denied.Message), did: did, credential: credential, ct: ct);
+                McpProblem.Of(MapDenial(denied.Denial), denied.Message), participantId: did, credential: credential, ct: ct);
         }
         catch (Exception failure) when (failure is SpacesUnavailable or HttpRequestException or InvalidDataException)
         {
@@ -197,7 +197,7 @@ public sealed partial class McpOperationDispatcher(
         catch (ArgumentException error)
         {
             return await Problem(name, context.CompanionId, context.Id, identity, await ServerFallback(principal, did, credential, ct),
-                McpProblem.Of(error.Message.Contains("cursor", StringComparison.OrdinalIgnoreCase) ? McpProblemCodes.CursorExpired : McpProblemCodes.InvalidArguments, error.Message), did: did, credential: credential, ct: ct);
+                McpProblem.Of(error.Message.Contains("cursor", StringComparison.OrdinalIgnoreCase) ? McpProblemCodes.CursorExpired : McpProblemCodes.InvalidArguments, error.Message), participantId: did, credential: credential, ct: ct);
         }
     }
 
@@ -256,10 +256,10 @@ public sealed partial class McpOperationDispatcher(
 
     internal async Task<ToolResult> Problem(string operation, string? companionId, string? contextId, McpIdentity? identity, McpPlace place,
         McpProblem problem, IReadOnlyList<McpNextCall>? calls = null, IReadOnlyList<string>? available = null,
-        string? did = null, string? credential = null, CancellationToken ct = default)
+        string? participantId = null, string? credential = null, CancellationToken ct = default)
     => Assemble(operation, "blocked", companionId, contextId, identity, place, new McpResult(null, null, problem),
-        did is null ? new McpActivity(Timestamp(), "not_connected", [], false)
-            : await ActivitySegment(did, credential, null, null, ct),
+        participantId is null ? new McpActivity(Timestamp(), "not_connected", [], false)
+            : await ActivitySegment(participantId, credential, null, null, ct),
         new McpNext(available ?? DefaultAvailable(place, identity is not null), calls ?? []));
 
     internal ToolResult Assemble(string operation, string status, string? companionId, string? contextId, McpIdentity? identity,
@@ -270,13 +270,18 @@ public sealed partial class McpOperationDispatcher(
 
     internal string Format(DateTimeOffset value) => value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
+    /// <summary>The envelope identity segment: `did` carries the primary identity value — the
+    /// atproto DID when held, else the derived internal DID; actingAs is the best label.</summary>
     internal async Task<McpIdentity> IdentityOf(McpContext context, CancellationToken ct)
+        => await IdentityOf(context.ParticipantId, context.ExpiresAt, ct);
+
+    internal async Task<McpIdentity> IdentityOf(string participantId, DateTimeOffset expiresAt, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var participant = await Participant.Get(context.ParticipantDid, ct)
-            ?? Participant.FirstArrival(context.ParticipantDid, null, context.CreatedAt);
-        return new McpIdentity(context.ParticipantDid, CompanionIdentity.ActingAs(participant, context.ParticipantDid),
-            CompanionIdentity.DisplayName(participant, context.ParticipantDid), Format(context.ExpiresAt));
+        var label = await hub.Directory.LabelOf(participantId, ct);
+        var identityValue = await hub.Directory.PerennialValue(participantId, ct);
+        return new McpIdentity(identityValue, CompanionIdentity.ActingAs(label, identityValue),
+            CompanionIdentity.DisplayName(label, identityValue), Format(expiresAt));
     }
 
     internal IReadOnlyList<string> DefaultAvailable(McpPlace place, bool selected)
@@ -360,10 +365,14 @@ public sealed partial class McpOperationDispatcher(
     internal async Task<McpActivity> ActivitySegment(string did, string? credential, string? scopeTangent, string? scopeRoom, CancellationToken ct)
         => (await SnapshotActivity(did, credential, null, null, null, 100, ct)).Activity;
 
-    internal async Task<string> ReadinessOf(string did, CancellationToken ct)
+    /// <summary>Source readiness is atproto-scoped: an internal-only participant reports
+    /// unsupported, never pending.</summary>
+    internal async Task<string> ReadinessOf(string participantId, CancellationToken ct)
     {
         try
         {
+            var did = await hub.Directory.AtprotoDidOf(participantId, ct);
+            if (did is null) return "unsupported";
             var source = await readiness.Get(did, ct: ct);
             return source.State switch
             {

@@ -10,7 +10,7 @@ using TangentSpace.Site;
 namespace TangentSpace.AtProtocol;
 
 [ApiController, Authorize, Route("api/connections")]
-public sealed class ConnectionsController(IOptions<SpacesOptions> options) : ControllerBase
+public sealed class ConnectionsController(IOptions<SpacesOptions> options, TangentServer hub) : ControllerBase
 {
     [HttpGet("rooms")]
     public IActionResult Rooms([FromQuery] string? room = null)
@@ -30,7 +30,8 @@ public sealed class ConnectionsController(IOptions<SpacesOptions> options) : Con
     {
         var did = User.FindFirst(AtprotoClaimTypes.Did)?.Value;
         var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-        if (did is null || site?.IsOwner(did) != true || Request.Headers.Authorization.Count > 0) return Forbid();
+        var holder = did is null ? null : await hub.Directory.ByDid(did, ct);
+        if (did is null || site?.IsOwner(holder?.Id) != true || Request.Headers.Authorization.Count > 0) return Forbid();
         return Connect(options.Value.AuthorityDid, options.Value.AuthorityScope);
     }
 

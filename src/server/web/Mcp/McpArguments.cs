@@ -25,11 +25,11 @@ public static class McpArguments
         string Visibility, string? FirstChannelName, string RequestId);
     public sealed record CreateChannelArgs(string ContextId, string? TangentRef, string Name, string? Topic,
         string Visibility, string RequestId);
-    public sealed record InviteParticipantArgs(string ContextId, string? TangentRef, string ParticipantDid, string Role, string RequestId);
-    public sealed record SetRoleArgs(string ContextId, string ScopeRef, string ParticipantDid, string Role, string RequestId);
+    public sealed record InviteParticipantArgs(string ContextId, string? TangentRef, string ParticipantId, string Role, string RequestId);
+    public sealed record SetRoleArgs(string ContextId, string ScopeRef, string ParticipantId, string Role, string RequestId);
     public sealed record SetPolicyArgs(string ContextId, string? TangentRef, string Admission, string Preset,
         string Undeclared, string RequestId);
-    public sealed record SetRestrictionArgs(string ContextId, string? ScopeRef, string ParticipantDid, string Restriction,
+    public sealed record SetRestrictionArgs(string ContextId, string? ScopeRef, string ParticipantId, string Restriction,
         string? Until, string Reason, string RequestId);
 
     public static SelectCompanionArgs SelectCompanion(JObject args)
@@ -148,14 +148,14 @@ public static class McpArguments
     {
         var reader = Reader(args, ["contextId", "tangentRef", "participantDid", "role", "requestId"]);
         return new(reader.String("contextId", true, 1, 96), reader.String("tangentRef", true, 1, 512),
-            reader.ParticipantDid(), reader.Enum("role", "admin", "member", "reader"), reader.RequestId());
+            reader.ParticipantId(), reader.Enum("role", "admin", "member", "reader"), reader.RequestId());
     }
 
     public static SetRoleArgs SetRole(JObject args)
     {
         var reader = Reader(args, ["contextId", "scopeRef", "participantDid", "role", "requestId"]);
         return new(reader.String("contextId", true, 1, 96), reader.String("scopeRef", true, 1, 512),
-            reader.ParticipantDid(), reader.Enum("role", "admin", "member", "reader"), reader.RequestId());
+            reader.ParticipantId(), reader.Enum("role", "admin", "member", "reader"), reader.RequestId());
     }
 
     public static SetPolicyArgs SetPolicy(JObject args)
@@ -175,7 +175,7 @@ public static class McpArguments
             || parsed <= DateTimeOffset.MinValue))
             throw reader.Invalid("until", "Supply an absolute expiry timestamp for the timeout.");
         return new(reader.String("contextId", true, 1, 96), reader.String("scopeRef", true, 1, 512),
-            reader.ParticipantDid(), reader.Enum("restriction", "timeout", "ban", "none"),
+            reader.ParticipantId(), reader.Enum("restriction", "timeout", "ban", "none"),
             until, reader.String("reason", true, 1, 280), reader.RequestId());
     }
 
@@ -211,7 +211,7 @@ public static class McpArguments
             return value;
         }
 
-        public string ParticipantDid()
+        public string ParticipantId()
         {
             var value = String("participantDid", true, 1, 256);
             if (!CarpaNet.Identity.IdentityResolver.IsValidDid(value))

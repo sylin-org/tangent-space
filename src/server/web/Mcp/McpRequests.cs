@@ -63,7 +63,7 @@ public sealed class McpRequests(TimeProvider clock)
         }
         var record = new McpRequestRecord
         {
-            Id = id, CredentialId = credentialId, ParticipantDid = did, RequestId = requestId,
+            Id = id, CredentialId = credentialId, ParticipantId = did, RequestId = requestId,
             Operation = operation, TargetKey = targetKey, Fingerprint = fingerprint,
             NamespacedOperationId = McpRequestRecord.BuildOperationId(credentialId, did, requestId),
             RegisteredAt = clock.GetUtcNow()

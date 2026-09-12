@@ -4,9 +4,9 @@ namespace TangentSpace.Rooms;
 
 public sealed class RoomAudit : Entity<RoomAudit>
 {
-    public string ActorDid { get; set; } = "";
+    public string ActorParticipantId { get; set; } = "";
     public string RoomKey { get; set; } = "";
-    public string? TargetDid { get; set; }
+    public string? TargetParticipantId { get; set; }
     public RoomAdministration Operation { get; set; }
     public RoomRole? RequestedRole { get; set; }
     public bool Accepted { get; set; }

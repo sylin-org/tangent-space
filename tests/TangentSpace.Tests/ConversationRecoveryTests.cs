@@ -102,7 +102,7 @@ public sealed class ConversationRecoveryTests
         var principal = new ClaimsPrincipal(new ClaimsIdentity());
         if (authenticatedReadOnly)
         {
-            var (credential, _) = ParticipantCredential.Issue(Did, "reader", 1, [ParticipationGrants.Read], DateTimeOffset.UtcNow);
+            var (credential, _) = ParticipantCredential.Issue(TangentSpace.Participants.Participant.NewIdentifier(), "reader", 1, [ParticipationGrants.Read], DateTimeOffset.UtcNow);
             principal = ParticipationCredentials.Principal(credential);
         }
         // No service is supplied: rejection must happen before any private-intent lookup.
@@ -118,7 +118,7 @@ public sealed class ConversationRecoveryTests
         var id = WriteIntent.Key(Did, "workshop", "original-operation");
         return new WriteIntent
         {
-            Id = id, AuthorDid = Did, RoomKey = "workshop", OperationId = "original-operation", RecordKey = "op-" + id,
+            Id = id, AuthorParticipantId = Did, RoomKey = "workshop", OperationId = "original-operation", RecordKey = "op-" + id,
             SpaceUri = "at://did:plc:authority/space/local.tangent.room/workshop",
             Content = new MessageContent("Keep this original text", DateTimeOffset.UnixEpoch, new SourceReference("original-source-uri", "original-cid"))
         };

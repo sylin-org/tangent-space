@@ -28,9 +28,9 @@ public sealed class RoomMutationAttribute(string grant = ParticipationGrants.Man
             return;
         }
         if (context.HttpContext.User.Identity?.IsAuthenticated != true
-            || string.IsNullOrWhiteSpace(context.HttpContext.User.FindFirst(AtprotoClaimTypes.Did)?.Value))
+            || string.IsNullOrWhiteSpace(context.HttpContext.User.FindFirst(ParticipationConstants.ParticipantClaim)?.Value))
         {
-            context.Result = Failure(401, "Sign in with your AT account before administering the site.");
+            context.Result = Failure(401, "Sign in with your account before administering the site.");
             return;
         }
         if (!string.Equals(request.ContentType?.Split(';', 2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase))

@@ -6,7 +6,7 @@ public sealed class PostChange : Entity<PostChange>
 {
     public string RoomKey { get; set; } = "";
     public string MessageId { get; set; } = "";
-    public string ActorDid { get; set; } = "";
+    public string ActorParticipantId { get; set; } = "";
     public string OperationId { get; set; } = "";
     public string State { get; set; } = "pending";
     public string Detail { get; set; } = "";

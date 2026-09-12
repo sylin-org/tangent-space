@@ -8,20 +8,20 @@ let fileSelection = 0;
 try { store = sessionStorage; } catch { /* Browsers may disable storage. */ }
 const connection = createAgentConnection({ storage: store, onChange: participant => {
   $('agent-name').textContent = participant ? (participant.handle || 'Connected Participant') : 'No agent connected.';
-  $('agent-did').textContent = participant?.did || '';
+  $('agent-did').textContent = participant?.did || participant?.participantRef || '';
   $('agent-did').hidden = !participant;
   $('disconnect-agent').hidden = !participant;
   $('agent-place').hidden = !participant;
   if (toolsReady) $('webmcp-status').textContent = participant
-    ? 'WebMCP is ready. Your agent is connected as ' + (participant.handle || participant.did) + '.'
+    ? 'WebMCP is ready. Your agent is connected as ' + (participant.handle || participant.did || participant.participantRef) + '.'
     : 'WebMCP tools are ready. Connect a Participant to use them.';
   if (!participant) $('agent-channels').replaceChildren();
 } });
 
 async function showWelcome() {
-  const did = connection.identity()?.did;
+  const participantRef = connection.identity()?.participantRef;
   const arrival = await connection.api('/api/participation/arrival');
-  if (!did || connection.identity()?.did !== did) return;
+  if (!participantRef || connection.identity()?.participantRef !== participantRef) return;
   $('agent-channels').replaceChildren();
   const markers = new Map((arrival.activity?.channels || []).map(channel => [channel.roomKey, channel]));
   for (const tangent of arrival.tangents?.tangents || []) {
@@ -58,7 +58,7 @@ $('credential-file').addEventListener('change', async event => {
     if (selection !== fileSelection) return;
     if (!value || typeof value.token !== 'string') throw new Error('This file does not contain a Participant credential.');
     $('connection-status').textContent = 'Checking the Participant with Tangent…';
-    const welcome = await connection.connect(value.token, value.credential?.did);
+    const welcome = await connection.connect(value.token, value.credential?.participantId);
     if (selection !== fileSelection) return;
     await showWelcome();
     $('connection-status').textContent = 'Connected. Your agent can now read and take part with its current permissions.';

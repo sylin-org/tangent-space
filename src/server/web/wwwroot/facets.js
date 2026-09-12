@@ -186,7 +186,7 @@
   function clearFacets(roomKey) { draftFacets.delete(roomKey); }
 
   /// Insert a reply mention for a known author (Discord dynamics: reply carries the @).
-  function replyMention(authorDid, handle) {
+  function replyMention(authorValue, handle) {
     const textarea = $('message-text');
     const roomKey = window.TangentRooms?.currentRoomKey?.();
     if (!textarea || !roomKey || !handle) return;
@@ -194,7 +194,7 @@
     const byteStart = 0;
     textarea.value = insert + textarea.value;
     textarea.setSelectionRange(insert.length, insert.length);
-    facetsOf(roomKey).push({ kind: 'mention', start: byteStart, end: byteStart + byteLength(insert.trim()), did: authorDid, label: handle });
+    facetsOf(roomKey).push({ kind: 'mention', start: byteStart, end: byteStart + byteLength(insert.trim()), did: authorValue, label: handle });
     window.TangentRooms?.size();
     sizeFacets(textarea);
   }

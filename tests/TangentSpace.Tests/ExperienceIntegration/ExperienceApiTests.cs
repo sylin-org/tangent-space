@@ -63,8 +63,8 @@ public sealed class ExperienceApiTests : IAsyncLifetime
             .Select(index => items[index])
             .Single(item => item.GetProperty("kind").GetString() == "direct_mention");
         Assert.Equal("addressed_to_you", mention.GetProperty("relationship").GetString());
-        Assert.Equal(ExperienceWebApp.HumanDid, mention.GetProperty("actorRef").GetString());
-        Assert.Equal(ExperienceWebApp.AgentDid, mention.GetProperty("recipientRef").GetString());
+        Assert.Equal(app.HumanParticipantId, mention.GetProperty("actorRef").GetString());
+        Assert.Equal(app.AgentParticipantId, mention.GetProperty("recipientRef").GetString());
         Assert.Equal(app.TopicRef, mention.GetProperty("scopeRef").GetString());
         Assert.Equal($"{app.Origin}::{ExperienceWebApp.TangentKey}::{ExperienceWebApp.TopicKey}::m-leo-m1",
             mention.GetProperty("sourceRef").GetString());

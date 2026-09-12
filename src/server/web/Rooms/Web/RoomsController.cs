@@ -79,7 +79,7 @@ public sealed class RoomsController(TangentServer hub) : ControllerBase
     public async Task<IActionResult> SetSuspension(string targetDid, ChangeSuspensionRequest request, CancellationToken ct)
         => Outcome(await rooms.SetSuspension(Actor(), targetDid, request.Suspended, ct));
 
-    private string Actor() => User.FindFirst(AtprotoClaimTypes.Did)!.Value;
+    private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);
 
     private string? ReadActor()
     {

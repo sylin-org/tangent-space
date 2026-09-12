@@ -14,9 +14,9 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
     [AllowAnonymous, HttpGet("/api/server")]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
-        string? did = null;
-        if (User.Identity?.IsAuthenticated == true) did = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
-        return Ok(await governance.Read(did, ct));
+        string? participantId = null;
+        if (User.Identity?.IsAuthenticated == true) participantId = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
+        return Ok(await governance.Read(participantId, ct));
     }
 
     [HttpPatch("/api/server"), TangentSpace.Rooms.Web.RoomMutation]
@@ -30,13 +30,13 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
     [HttpPost("/api/server/claim"), TangentSpace.Rooms.Web.RoomMutation]
     public async Task<IActionResult> Claim([FromBody] ClaimRequest request, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
-        if (request.ExpectedDid is not null && request.ExpectedDid != did)
+        var participantId = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
+        if (request.ExpectedParticipant is not null && request.ExpectedParticipant != participantId)
             return Conflict(new { error = "Your account changed. Reload before confirming ownership." });
-        try { return Ok(await governance.Claim(did, request.HumanDeclaration, ct)); }
+        try { return Ok(await governance.Claim(participantId, User.FindFirst(AtprotoClaimTypes.Did)?.Value, request.HumanDeclaration, ct)); }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
     }
 }
 
-public sealed record ClaimRequest(bool HumanDeclaration, string? ExpectedDid = null);
+public sealed record ClaimRequest(bool HumanDeclaration, string? ExpectedParticipant = null);

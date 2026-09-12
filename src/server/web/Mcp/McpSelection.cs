@@ -14,7 +14,7 @@ public sealed class McpSelection : Entity<McpSelection>
     public const string IdPrefix = "cmp_";
 
     public string CredentialId { get; set; } = "";
-    public string ParticipantDid { get; set; } = "";
+    public string ParticipantId { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset LastUsedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
@@ -29,7 +29,7 @@ public sealed class McpSelection : Entity<McpSelection>
         if (did is null || did.Length == 0) throw new ArgumentException("A verified participant DID is required.");
         return (new McpSelection
         {
-            Id = NewIdentifier(), CredentialId = credentialId, ParticipantDid = did,
+            Id = NewIdentifier(), CredentialId = credentialId, ParticipantId = did,
             CreatedAt = now, LastUsedAt = now, ExpiresAt = now.Add(Lifetime)
         }, true);
     }

@@ -37,24 +37,24 @@ public sealed partial class McpOperationDispatcher
 
     private async Task AuthorizeReplay(McpContext context, McpRequestRecord record, CancellationToken ct)
     {
-        await activity.EnsureParticipantActive(context.ParticipantDid, context.CredentialId, ct);
+        await activity.EnsureParticipantActive(context.ParticipantId, context.CredentialId, ct);
         if (record.Operation is "DeclareParticipant" or "ClaimServer") return;
-        if (record.Operation == "ConfigureServer") { if (!(await server.Read(context.ParticipantDid, ct)).CanManage) throw new UnauthorizedAccessException(); return; }
+        if (record.Operation == "ConfigureServer") { if (!(await server.Read(context.ParticipantId, ct)).CanManage) throw new UnauthorizedAccessException(); return; }
         if (record.Operation == "ConfigureTangent") { var key = refs.ParseTangent(record.TargetKey); if (key is null || (await FindTangent(context, key, ct))?.CanManage != true) throw new UnauthorizedAccessException(); return; }
-        if (record.Operation == "ConfigureTopic") { var key = refs.ParseChannel(record.TargetKey); if (key is null || !(await conversation.ReadPolicy(context.ParticipantDid, key.Value.RoomKey, ct)).CanManage) throw new UnauthorizedAccessException(); return; }
+        if (record.Operation == "ConfigureTopic") { var key = refs.ParseChannel(record.TargetKey); if (key is null || !(await conversation.ReadPolicy(context.ParticipantId, key.Value.RoomKey, ct)).CanManage) throw new UnauthorizedAccessException(); return; }
         if (record.Operation is "LeaveTangent") return; // Only the caller's departure receipt, no private data.
         using var fresh = EntityContext.NoCache();
         var room = await Room.Get(record.TargetKey, ct);
         if (record.Operation is "SetRole" or "SetRestriction" or "InviteParticipant" or "SetParticipationPolicy" or "CreateChannel")
         {
-            if (!await companions.CanAdminister(context.ParticipantDid,
+            if (!await companions.CanAdminister(context.ParticipantId,
                     room?.TangentKey ?? record.TargetKey, room?.Id, ct)) throw new UnauthorizedAccessException();
         }
         else if (room is not null)
-            await conversation.ReadPolicy(context.ParticipantDid, room.Id, ct);
-        else if (record.Operation != "CreateTangent" && !await tangents.CanAccess(context.ParticipantDid, record.TargetKey, ct))
+            await conversation.ReadPolicy(context.ParticipantId, room.Id, ct);
+        else if (record.Operation != "CreateTangent" && !await tangents.CanAccess(context.ParticipantId, record.TargetKey, ct))
             throw new UnauthorizedAccessException();
-        if (record.ResultRef is { } reference && !await RefReadable(context.ParticipantDid, reference, ct))
+        if (record.ResultRef is { } reference && !await RefReadable(context.ParticipantId, reference, ct))
             throw new UnauthorizedAccessException();
     }
 

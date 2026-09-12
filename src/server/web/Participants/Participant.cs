@@ -3,9 +3,11 @@ using CarpaNet.Identity;
 
 namespace TangentSpace.Participants;
 
+/// <summary>Keyed by an internal GUIDv7 minted at creation; no external identifier is ever the
+/// key. External identifiers (atproto DIDs, handles, future kinds) live on the identity
+/// collection and resolve point-in-time to their current holder.</summary>
 public sealed class Participant : Entity<Participant>
 {
-    public string? Handle { get; set; }
     public DateTimeOffset JoinedAt { get; set; }
     public DateTimeOffset LastArrivedAt { get; set; }
     public bool IsSuspended { get; set; }
@@ -13,19 +15,35 @@ public sealed class Participant : Entity<Participant>
     public ParticipantClassification Classification { get; set; }
     public bool WasDeclaredAgent { get; set; }
 
-    public static Participant FirstArrival(string verifiedDid, string? verifiedHandle, DateTimeOffset now)
+    public static string NewIdentifier() => Guid.CreateVersion7().ToString("N");
+
+    /// <summary>GUIDv7 participant ids are 32 lowercase hex characters.</summary>
+    public static bool IsValidId(string? value)
+        => value is { Length: 32 } && value.All(char.IsAsciiHexDigitLower);
+
+    /// <summary>First verified atproto arrival: mint the GUIDv7 spine, the derived internal
+    /// identity and the atproto identity entry carrying the verified handle as its label.
+    /// The caller persists the participant and the returned rows in one transaction.</summary>
+    public static (Participant Participant, IReadOnlyList<ParticipantIdentity> Identities) Enroll(
+        string verifiedDid, string? verifiedHandle, DateTimeOffset now)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(verifiedDid);
         if (!IdentityResolver.IsValidDid(verifiedDid))
             throw new ArgumentException("A participant needs a verified AT DID.", nameof(verifiedDid));
-        return new Participant { Id = verifiedDid, Handle = verifiedHandle, JoinedAt = now, LastArrivedAt = now };
+        var participant = new Participant { Id = NewIdentifier(), JoinedAt = now, LastArrivedAt = now };
+        return (participant,
+        [
+            ParticipantIdentity.Internal(participant.Id, now),
+            ParticipantIdentity.Atproto(participant.Id, verifiedDid, verifiedHandle, now)
+        ]);
     }
 
-    public void Return(string verifiedDid, string? verifiedHandle, DateTimeOffset now)
+    /// <summary>Refreshes the arrival stamp. The caller has already matched the atproto identity
+    /// row to this participant and refreshes its label alongside.</summary>
+    public void Return(ParticipantIdentity atproto, DateTimeOffset now)
     {
-        if (!string.Equals(Id, verifiedDid, StringComparison.Ordinal))
-            throw new InvalidOperationException("A returning account must have the same verified DID.");
-        Handle = verifiedHandle;
+        if (atproto.Kind != ParticipantIdentity.AtprotoKind || atproto.ParticipantId != Id)
+            throw new InvalidOperationException("A returning account must arrive with its own atproto identity.");
         LastArrivedAt = now;
     }
 

@@ -15,9 +15,7 @@ public sealed partial class McpOperationDispatcher
         var args = McpArguments.SelectCompanion(arguments);
         var selection = await contexts.Select(principal, args.Moniker, ct);
         var companion = selection.Companion;
-        var did = companion.ParticipantDid;
-        var identity = new McpIdentity(did, CompanionIdentity.ActingAs(selection.Participant, did),
-            CompanionIdentity.DisplayName(selection.Participant, did), Format(companion.ExpiresAt));
+        var identity = await IdentityOf(companion.ParticipantId, companion.ExpiresAt, ct);
         // Selection establishes identity only: no context exists until Arrive names this server.
         return Assemble("SelectCompanion", "ok", companion.Id, null, identity, CompanionPlace(),
             new McpResult(new McpSelectData(companion.Id), null, null),
@@ -33,9 +31,8 @@ public sealed partial class McpOperationDispatcher
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var selection = await contexts.SelectionOf(principal, args.CompanionId, ct);
         var companion = selection.Companion;
-        var did = companion.ParticipantDid;
-        var identity = new McpIdentity(did, CompanionIdentity.ActingAs(selection.Participant, did),
-            CompanionIdentity.DisplayName(selection.Participant, did), Format(companion.ExpiresAt));
+        var did = companion.ParticipantId;
+        var identity = await IdentityOf(companion.ParticipantId, companion.ExpiresAt, ct);
         // Inbound handles only its own configured origin; the selection survives a wrong destination
         // so the caller can recover by arriving here with the correct URL.
         if (!McpOptionsValidation.IsCanonicalOrigin(args.ServerUrl, out var requested) || requested != refs.Origin)
@@ -46,7 +43,7 @@ public sealed partial class McpOperationDispatcher
                 calls: [NextCall("Arrive", "Continue", McpJson.Arguments(
                     new Dictionary<string, string?> { ["companionId"] = companion.Id, ["serverUrl"] = refs.Origin }))],
                 available: ["Arrive"],
-                did: did, credential: companion.CredentialId, ct: ct);
+                participantId: did, credential: companion.CredentialId, ct: ct);
         }
         var (context, _) = await contexts.Bind(companion, ct);
         identity = identity with { ExpiresAt = Format(context.ExpiresAt) };
@@ -69,34 +66,34 @@ public sealed partial class McpOperationDispatcher
     {
         var args = McpArguments.ListTangents(arguments);
         if (args.ServerRef != refs.ServerRef)
-            return await Problem("ListTangents", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantDid, context.CredentialId, ct),
+            return await Problem("ListTangents", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantId, context.CredentialId, ct),
                 McpProblem.Of(McpProblemCodes.Unreachable, "That server reference does not match this server."),
-                did: context.ParticipantDid, credential: context.CredentialId, ct: ct);
+                participantId: context.ParticipantId, credential: context.CredentialId, ct: ct);
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
-        var selected = refs.DecodeListCursor(args.Cursor, "tangents", context.ParticipantDid);
+        var selected = refs.DecodeListCursor(args.Cursor, "tangents", context.ParticipantId);
         var page = selected?.Page ?? 1;
         var offset = selected is not null && int.TryParse(selected.Inner, out var parsed) && parsed > 0 ? parsed : 0;
         var (tangents, continuation, incomplete) = await TangentPage(context, page, offset, args.Limit, ct);
         var permissions = GrantPermissions(principal);
         var label = await SiteLabel(ct);
-        var place = new McpPlace("server", label, refs.ServerRef, null, null, permissions, await ReadinessOf(context.ParticipantDid, ct));
+        var place = new McpPlace("server", label, refs.ServerRef, null, null, permissions, await ReadinessOf(context.ParticipantId, ct));
         return Assemble("ListTangents", "ok", context.CompanionId, context.Id, identity, place,
             new McpResult(new McpListTangentsData(tangents, continuation, incomplete), null, null),
-            await ActivitySegment(context.ParticipantDid, context.CredentialId, null, null, ct),
+            await ActivitySegment(context.ParticipantId, context.CredentialId, null, null, ct),
             new McpNext(DefaultAvailable(place, selected: true), []));
     }
 
     private async Task<(IReadOnlyList<McpTangentDto> Tangents, string? NextCursor, bool Incomplete)> TangentPage(
         McpContext context, int page, int offset, int limit, CancellationToken ct)
     {
-        var directory = await tangents.List(context.ParticipantDid, page, ct);
+        var directory = await tangents.List(context.ParticipantId, page, ct);
         var visible = directory.Tangents.Skip(offset).ToList();
         var slice = visible.Take(limit).ToList();
         string? continuation = null;
         if (visible.Count > limit)
-            continuation = refs.EncodeListCursor("tangents", context.ParticipantDid, page, (offset + limit).ToString());
+            continuation = refs.EncodeListCursor("tangents", context.ParticipantId, page, (offset + limit).ToString());
         else if (directory.NextPage is { } next)
-            continuation = refs.EncodeListCursor("tangents", context.ParticipantDid, next, "0");
+            continuation = refs.EncodeListCursor("tangents", context.ParticipantId, next, "0");
         var mapped = new List<McpTangentDto>(slice.Count);
         foreach (var tangent in slice) mapped.Add(ToDto(tangent));
         return (mapped, continuation, directory.DirectoryIncomplete);
@@ -134,7 +131,7 @@ public sealed partial class McpOperationDispatcher
             ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a tangent reference returned by this server.");
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var scope = "channels:" + tangentKey;
-        var cursor = refs.DecodeListCursor(args.Cursor, scope, context.ParticipantDid);
+        var cursor = refs.DecodeListCursor(args.Cursor, scope, context.ParticipantId);
         var channelPage = cursor?.Page ?? 1;
         var selected = await FindTangent(context, tangentKey, ct, channelPage);
         if (selected is null) throw new UnauthorizedAccessException();
@@ -143,9 +140,9 @@ public sealed partial class McpOperationDispatcher
         var slice = visible.Take(args.Limit).ToList();
         string? continuation = null;
         if (visible.Count > args.Limit)
-            continuation = refs.EncodeListCursor(scope, context.ParticipantDid, channelPage, (offset + args.Limit).ToString());
+            continuation = refs.EncodeListCursor(scope, context.ParticipantId, channelPage, (offset + args.Limit).ToString());
         else if (selected.NextChannelsPage is { } nextPage)
-            continuation = refs.EncodeListCursor(scope, context.ParticipantDid, nextPage, "0");
+            continuation = refs.EncodeListCursor(scope, context.ParticipantId, nextPage, "0");
         var channels = slice.Select(room => ToDto(tangentKey, room)).ToList();
         var permissions = new List<string>();
         if (selected.Channels.Any(channel => channel.CanRead)) permissions.Add("read");
@@ -153,7 +150,7 @@ public sealed partial class McpOperationDispatcher
         var place = new McpPlace("tangent", Preview(selected.Name, 160), refs.ServerRef, refs.Tangent(tangentKey), null, permissions, "ready");
         return Assemble("ListChannels", "ok", context.CompanionId, context.Id, identity, place,
             new McpResult(new McpListChannelsData(channels, continuation, selected.ChannelsIncomplete), null, null),
-            await ActivitySegment(context.ParticipantDid, context.CredentialId, tangentKey, null, ct),
+            await ActivitySegment(context.ParticipantId, context.CredentialId, tangentKey, null, ct),
             new McpNext(DefaultAvailable(place, selected: true),
                 channels.Count > 0
                     ? [NextCall("ReadChannel", "Open the conversation", McpJson.Arguments(new Dictionary<string, string?>

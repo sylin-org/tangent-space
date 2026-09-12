@@ -13,7 +13,7 @@ namespace TangentSpace.Conversation;
 
 public sealed partial class ConversationService
 {
-    public async Task<PostChangeResult> ChangePost(string did, string roomKey, string messageId, string? text,
+    public async Task<PostChangeResult> ChangePost(string participantId, string roomKey, string messageId, string? text,
         bool delete, string operationId, CancellationToken ct, IReadOnlyList<PostFacet>? facets = null)
     {
         if (string.IsNullOrWhiteSpace(messageId) || string.IsNullOrWhiteSpace(operationId))
@@ -28,12 +28,12 @@ public sealed partial class ConversationService
         await writes.WaitAsync(ct);
         try
         {
-            var change = await governance.WithCurrentPolicy(did, roomKey, async (policy, token) =>
+            var change = await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
             {
                 if (!policy.CanRead) throw new UnauthorizedAccessException("This room's current rules do not allow changing posts.");
                 var message = await Message.Get(messageId, token);
                 if (message is null || message.RoomKey != roomKey) throw new ArgumentException("Choose a message in this room.");
-                var id = PostChange.Key(did, roomKey, messageId, operationId);
+                var id = PostChange.Key(participantId, roomKey, messageId, operationId);
                 var previous = await PostChange.Get(id, token);
                 if (previous is not null)
                 {
@@ -45,7 +45,7 @@ public sealed partial class ConversationService
                     if (Canonical(previous.Facets) != Canonical(facets)) throw new WriteConflict();
                     if (previous.State is "accepted" or "deleted" or "moderated") return previous;
                 }
-                var own = message.AuthorDid == did;
+                var own = message.AuthorParticipantId == participantId;
                 if (own)
                 {
                     if (!policy.CanWrite || policy.Locked || (!delete && !policy.EditingAllowed))
@@ -55,7 +55,7 @@ public sealed partial class ConversationService
                 else if (!policy.CanManage) throw new UnauthorizedAccessException("Only a room manager can remove another participant's post.");
                 if (!delete && !own) throw new UnauthorizedAccessException("Moderators may remove posts but cannot rewrite their authors' words.");
                 if (previous is not null) return previous;
-                var created = new PostChange { Id = id, RoomKey = roomKey, MessageId = messageId, ActorDid = did,
+                var created = new PostChange { Id = id, RoomKey = roomKey, MessageId = messageId, ActorParticipantId = participantId,
                     OperationId = operationId, Delete = delete, Text = text, Facets = facets, UpdatedAt = clock.GetUtcNow() };
                 await created.Save(token);
                 return created;
@@ -68,20 +68,20 @@ public sealed partial class ConversationService
             try
             {
                 var message = await Message.Get(messageId, ct) ?? throw new ArgumentException("Choose a message in this room.");
-                if (change.Delete && message.AuthorDid != did)
+                if (change.Delete && message.AuthorParticipantId != participantId)
                 {
-                    await governance.WithCurrentPolicy(did, roomKey, async (currentPolicy, token) =>
+                    await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                     {
                         if (!currentPolicy.CanManage) throw new UnauthorizedAccessException("The current room rules do not allow moderation.");
                         await SnapshotChange(message, "", null, embedder, token);
                         message.Removed = true; message.Content = new MessageContent("", message.Content.CreatedAt, message.Content.ReplyTo);
-                        message.RemovedAt = clock.GetUtcNow(); message.RemovedByDid = did;
+                        message.RemovedAt = clock.GetUtcNow(); message.RemovedByParticipantId = participantId;
                         // The words are gone; their byte ranges are meaningless on a removed row.
                         message.Facets = null;
                         await message.Save(token);
                         change.State = "moderated"; change.Detail = "post-removed-by-moderator"; change.UpdatedAt = clock.GetUtcNow();
                         var room = await Room.Get(roomKey, token);
-                        await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, did, message.AuthorDid,
+                        await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, participantId, message.AuthorParticipantId,
                             room?.TangentKey, message.Sequence, change.UpdatedAt, token);
                         await change.Save(token); return true;
                     }, ct);
@@ -92,10 +92,10 @@ public sealed partial class ConversationService
                 // to update or delete (ADR 0006). Authorship policy is unchanged.
                 if (message.SourceUri.StartsWith("local://", StringComparison.Ordinal))
                 {
-                    await governance.WithCurrentPolicy(did, roomKey, async (currentPolicy, token) =>
+                    await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                     {
                         var current = await Message.Get(messageId, token) ?? message;
-                        if (current.AuthorDid == did)
+                        if (current.AuthorParticipantId == participantId)
                         {
                             if (!currentPolicy.CanWrite || currentPolicy.Locked || (!change.Delete && !currentPolicy.EditingAllowed))
                                 throw new UnauthorizedAccessException("The current room rules do not allow this post change.");
@@ -107,7 +107,7 @@ public sealed partial class ConversationService
                             current.Removed = true;
                             current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
                             current.RemovedAt = clock.GetUtcNow();
-                            current.RemovedByDid = did;
+                            current.RemovedByParticipantId = participantId;
                             current.Facets = null;
                         }
                         else
@@ -126,7 +126,7 @@ public sealed partial class ConversationService
                         change.UpdatedAt = clock.GetUtcNow();
                         var room = await Room.Get(roomKey, token);
                         await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.MessageDeleted : ActivityKind.MessageEdited,
-                            roomKey, did, current.AuthorDid, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
+                            roomKey, participantId, current.AuthorParticipantId, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
                         await change.Save(token);
                         return true;
                     }, ct);
@@ -134,21 +134,26 @@ public sealed partial class ConversationService
                     ActivityJournal.SignalAfterCommit();
                     return new(change.State, messageId, change.Detail);
                 }
+                // Source changes are atproto-scoped: both the acting editor and the post's
+                // author cross to their atproto identities at this boundary.
+                var actorDid = await directory.AtprotoDidOf(participantId, ct)
+                    ?? throw new UnauthorizedAccessException("Editing a Spaces post requires an atproto identity.");
                 var parts = message.SourceUri[5..].Split('/');
-                if (parts.Length != 7 || parts[4] != message.AuthorDid || parts[5] != SpacesOptions.Collection)
+                if (parts.Length != 7 || parts[5] != SpacesOptions.Collection
+                    || parts[4] != await directory.AtprotoDidOf(message.AuthorParticipantId, ct))
                     throw new InvalidDataException("The post source URI is invalid.");
                 var space = "at://" + string.Join('/', parts[..4]);
                 var recordKey = parts[6];
                 string? putCid = null;
-                if (change.Delete) await spaces.DeleteRecord(did, space, recordKey, ct);
+                if (change.Delete) await spaces.DeleteRecord(actorDid, space, recordKey, ct);
                 else
                 {
                     var content = new MessageContent(change.Text!, message.Content.CreatedAt, message.Content.ReplyTo);
-                    var result = await spaces.PutRecord(did, space, recordKey, content.ToRecord(), ct);
+                    var result = await spaces.PutRecord(actorDid, space, recordKey, content.ToRecord(), ct);
                     if (!result.TryGetProperty("cid", out _)) throw new InvalidDataException("The source did not return a new record CID.");
                     putCid = result.GetProperty("cid").GetString();
                 }
-                var source = await spaces.ReadRepo(did, space, message.AuthorDid, ct);
+                var source = await spaces.ReadRepo(actorDid, space, parts[4], ct);
                 var record = source.Records.SingleOrDefault(r => r.Collection == SpacesOptions.Collection && r.RecordKey == recordKey);
                 if (change.Delete ? record is not null : record is null) throw new InvalidDataException("The source did not confirm the requested post change.");
                 if (!change.Delete)
@@ -160,10 +165,10 @@ public sealed partial class ConversationService
                     { throw new InvalidDataException("The source content could not be verified."); }
                     if (confirmed.Text != change.Text) throw new InvalidDataException("The source content does not match the requested edit.");
                 }
-                await governance.WithCurrentPolicy(did, roomKey, async (currentPolicy, token) =>
+                await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                 {
                     var current = await Message.Get(messageId, token) ?? message;
-                    if (current.AuthorDid == did)
+                    if (current.AuthorParticipantId == participantId)
                     {
                         if (!currentPolicy.CanWrite || currentPolicy.Locked || (!change.Delete && !currentPolicy.EditingAllowed))
                             throw new UnauthorizedAccessException("The current room rules do not allow this post change.");
@@ -172,7 +177,7 @@ public sealed partial class ConversationService
                     if (change.Delete)
                     {
                         await SnapshotChange(current, "", null, embedder, token);
-                        current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo); current.RemovedAt = clock.GetUtcNow(); current.RemovedByDid = did;
+                        current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo); current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
                         current.Facets = null;
                     }
                     else
@@ -189,7 +194,7 @@ public sealed partial class ConversationService
                     change.State = change.Delete ? "deleted" : "accepted"; change.Detail = change.Delete ? "post-deleted" : "post-edited"; change.UpdatedAt = clock.GetUtcNow();
                     var room = await Room.Get(roomKey, token);
                     await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.MessageDeleted : ActivityKind.MessageEdited,
-                        roomKey, did, current.AuthorDid, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
+                        roomKey, participantId, current.AuthorParticipantId, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
                     await change.Save(token); return true;
                 }, ct);
                 updates.Pulse(roomKey); ActivityJournal.SignalAfterCommit();
@@ -216,9 +221,9 @@ public sealed partial class ConversationService
         var snapshot = new Message
         {
             Id = Guid.CreateVersion7().ToString(),
-            RoomKey = live.RoomKey, AuthorDid = live.AuthorDid, SourceUri = live.SourceUri, SourceCid = live.SourceCid,
+            RoomKey = live.RoomKey, AuthorParticipantId = live.AuthorParticipantId, SourceUri = live.SourceUri, SourceCid = live.SourceCid,
             Sequence = live.Sequence, AcceptedAt = live.AcceptedAt, Content = live.Content, Removed = live.Removed,
-            RemovedAt = live.RemovedAt, RemovedByDid = live.RemovedByDid, EditedAt = live.EditedAt,
+            RemovedAt = live.RemovedAt, RemovedByParticipantId = live.RemovedByParticipantId, EditedAt = live.EditedAt,
             Permissions = live.Permissions, OperationId = live.OperationId, Facets = live.Facets,
             OfMessageId = live.Id, PreviousChangeId = live.ChangeId, ChangeClass = classification,
         };
@@ -278,7 +283,7 @@ public sealed partial class ConversationService
                 foreach (Match match in DidToken().Matches(line))
                 {
                     var did = match.Value.TrimEnd('.', ',', '!', '?', ';', ':', ')', ']', '"', '\'');
-                    if (did.Length is < 9 or > 576 || !targets.Add(did) || await Participant.Get(did, token) is null) continue;
+                    if (did.Length is < 9 or > 576 || !targets.Add(did) || await directory.ByDid(did, token) is null) continue;
                     facets.Add(At(lineStart, line, match.Index, did, PostFacet.Mention, did: did));
                 }
             }
@@ -286,8 +291,10 @@ public sealed partial class ConversationService
             lineStart += Encoding.UTF8.GetByteCount(rawLine) + 1;
         }
         var claims = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var storedLabels = (await ParticipantIdentity.Query(value => value.Label != null, token))
+            .Select(entry => entry.Label!.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var group in PostFacet.Groups)
-            foreach (var claim in await Participant.Query(participant => participant.Handle == group, token))
+            if (storedLabels.Contains(group))
                 claims.Add(group);
         inFence = false;
         lineStart = 0;
@@ -323,17 +330,18 @@ public sealed partial class ConversationService
         return facets.Count == 0 ? null : PostFacets.Check(text, facets.OrderBy(facet => facet.Start).ToList());
     }
 
-    /// <summary>An exact handle match resolves to a participant DID only when exactly one stored
-    /// participant carries that handle — the digest parser's ambiguity guard.</summary>
-    private static async Task<string?> ResolveHandle(string lowered, CancellationToken token)
+    /// <summary>An exact label match resolves to a participant's perennial identity value only
+    /// when exactly one participant carries that label — the digest parser's ambiguity guard.</summary>
+    private async Task<string?> ResolveHandle(string lowered, CancellationToken token)
     {
-        Participant? single = null;
-        foreach (var candidate in await Participant.Query(participant => participant.Handle == lowered, token))
+        string? holder = null;
+        foreach (var entry in await ParticipantIdentity.Query(value => value.Label != null, token))
         {
-            if (single is not null) return null;
-            single = candidate;
+            if (!string.Equals(lowered, entry.Label!.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
+            if (holder is not null && holder != entry.ParticipantId) return null;
+            holder = entry.ParticipantId;
         }
-        return single?.Id;
+        return holder is null ? null : await directory.PerennialValue(holder, token);
     }
 
     /// <summary>A facet range in whole-text absolute UTF-8 byte offsets: the line's start offset

@@ -15,7 +15,7 @@ public sealed class McpContext : Entity<McpContext>
     public const string IdPrefix = "ctx_";
 
     public string CredentialId { get; set; } = "";
-    public string ParticipantDid { get; set; } = "";
+    public string ParticipantId { get; set; } = "";
     public string CompanionId { get; set; } = "";
     public string Origin { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
@@ -37,7 +37,7 @@ public sealed class McpContext : Entity<McpContext>
             throw new ArgumentException("A canonical server origin is required.");
         return (new McpContext
         {
-            Id = NewIdentifier(), CredentialId = credentialId, ParticipantDid = did,
+            Id = NewIdentifier(), CredentialId = credentialId, ParticipantId = did,
             CompanionId = companionId, Origin = origin,
             CreatedAt = now, LastUsedAt = now, ExpiresAt = now.Add(Lifetime)
         }, true);

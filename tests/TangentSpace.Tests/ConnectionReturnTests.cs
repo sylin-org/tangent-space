@@ -16,7 +16,7 @@ public sealed class ConnectionReturnTests
     {
         var context = new DefaultHttpContext();
         if (did is not null) context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AtprotoClaimTypes.Did, did)], "test"));
-        return new ConnectionsController(Options.Create(new SpacesOptions()))
+        return new ConnectionsController(Options.Create(new SpacesOptions()), null!)
         { ControllerContext = new ControllerContext { HttpContext = context } };
     }
 

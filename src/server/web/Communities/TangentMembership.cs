@@ -7,9 +7,9 @@ namespace TangentSpace.Communities;
 public sealed class TangentMembership : Entity<TangentMembership>
 {
     public string TangentKey { get; set; } = "";
-    public string ParticipantDid { get; set; } = "";
+    public string ParticipantId { get; set; } = "";
     public TangentRole Role { get; set; }
-    public string ChangedByDid { get; set; } = "";
+    public string ChangedByParticipantId { get; set; } = "";
     public DateTimeOffset ChangedAt { get; set; }
 
     public static string Key(string tangentKey, string participantDid)
@@ -17,6 +17,6 @@ public sealed class TangentMembership : Entity<TangentMembership>
 
     internal static TangentMembership Assign(TangentCommunity tangent, string did, TangentRole role, string actorDid, DateTimeOffset now) => new()
     {
-        Id = Key(tangent.Id, did), TangentKey = tangent.Id, ParticipantDid = did, Role = role, ChangedByDid = actorDid, ChangedAt = now
+        Id = Key(tangent.Id, did), TangentKey = tangent.Id, ParticipantId = did, Role = role, ChangedByParticipantId = actorDid, ChangedAt = now
     };
 }

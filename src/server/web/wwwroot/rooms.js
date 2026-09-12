@@ -378,13 +378,13 @@
         if (route().kind === 'post' && message.id === route().post) { li.classList.add('message-anchor'); li.setAttribute('aria-current', 'true'); }
         const byline = element('div', 'message-byline', '');
         let bylineProfileSlot;
-        const isYou = message.authorDid === site.participant?.did;
-        const handle = typeof page.authorHandles?.[message.authorDid] === 'string' ? page.authorHandles[message.authorDid] : '';
-        const shown = isYou ? 'You' : handle ? '@' + handle.replace(/^@/, '') : message.authorDid;
-        const initial = (handle || message.authorDid).replace(/^@/, '').slice(0, 1).toUpperCase() || '•';
-        const avatar = element('span', 'message-avatar', initial); avatar.title = message.authorDid;
-        const author = element('strong', 'message-author', shown); author.title = message.authorDid;
-        if (!isYou) { const profileLink = document.createElement('a'); profileLink.href = '/u/' + encodeURIComponent(handle || message.authorDid); profileLink.className = 'author-link'; profileLink.append(author); bylineProfileSlot = profileLink; }
+        const isYou = message.authorParticipantId === site.participant?.participantRef;
+        const handle = typeof page.authorHandles?.[message.authorParticipantId] === 'string' ? page.authorHandles[message.authorParticipantId] : '';
+        const shown = isYou ? 'You' : handle ? '@' + handle.replace(/^@/, '') : message.authorParticipantId;
+        const initial = (handle || message.authorParticipantId).replace(/^@/, '').slice(0, 1).toUpperCase() || '•';
+        const avatar = element('span', 'message-avatar', initial); avatar.title = message.authorParticipantId;
+        const author = element('strong', 'message-author', shown); author.title = message.authorParticipantId;
+        if (!isYou) { const profileLink = document.createElement('a'); profileLink.href = '/u/' + encodeURIComponent(handle || page.resolved?.[message.authorParticipantId]?.value || message.authorParticipantId); profileLink.className = 'author-link'; profileLink.append(author); bylineProfileSlot = profileLink; }
         else bylineProfileSlot = author;
         byline.append(avatar, bylineProfileSlot, element('time', '', new Date(message.acceptedAt).toLocaleString()));
         const permalink = element('a', 'post-permalink', 'Permalink');
@@ -401,15 +401,15 @@
         // keeps its plain edited marker. Removed rows never carry the affordance.
         if (!deleted && (message.editedAt || message.changeId)) {
           const historyViewer = window.TangentHistory?.disclosure?.(message,
-            { handles: page.authorHandles, resolved: page.resolved, viewerDid: site.participant?.did });
+            { handles: page.authorHandles, resolved: page.resolved, viewerDid: site.participant?.participantRef });
           li.append(historyViewer || element('span', 'message-edited', message.editedAt
             ? 'Edited ' + new Date(message.editedAt).toLocaleString() : 'Edited'));
         }
         const details = element('details', 'source-details', ''); details.append(element('summary', '', 'Source and identity'));
-        details.append(element('p', 'did', message.authorDid), element('p', 'did', message.sourceUri), element('p', 'did', message.sourceCid)); li.append(details);
+        details.append(element('p', 'did', message.authorParticipantId), element('p', 'did', message.sourceUri), element('p', 'did', message.sourceCid)); li.append(details);
         const actions = message.permissions?.allowedActions || room.permissions?.allowedActions || [];
         const own = isYou;
-        if (room.canWrite && !deleted) { const button = element('button', 'btn btn-quiet', 'Reply'); button.type = 'button'; button.addEventListener('click', () => { if (pending.has(room.key)) return status('Finish or retry the pending message first.'); drafts.set(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } }); renderDraft(); if (!isYou) window.TangentFacets?.replyMention?.(message.authorDid, handle); $('message-text').focus(); }); li.append(button); }
+        if (room.canWrite && !deleted) { const button = element('button', 'btn btn-quiet', 'Reply'); button.type = 'button'; button.addEventListener('click', () => { if (pending.has(room.key)) return status('Finish or retry the pending message first.'); drafts.set(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } }); renderDraft(); if (!isYou) window.TangentFacets?.replyMention?.(page.resolved?.[message.authorParticipantId]?.value || message.authorParticipantId, handle); $('message-text').focus(); }); li.append(button); }
         const mayEdit = !deleted && (actions.includes('editOwnPost') && own) && !message._editing;
         const mayDelete = !deleted && ((actions.includes('deleteOwnPost') && own) || actions.includes('removePost'));
         if (mayEdit || mayDelete) {

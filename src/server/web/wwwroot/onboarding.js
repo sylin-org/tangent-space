@@ -5,8 +5,8 @@
   function text(id, value) { $(id).textContent = value || ''; }
   async function send(path, body) {
     const response = await fetch(path, { method: 'POST', credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', 'X-Tangent-Participant': current.participant.did },
-      body: JSON.stringify({ ...body, expectedDid: current.participant.did }) });
+      headers: { 'content-type': 'application/json', 'X-Tangent-Participant': current.participant.participantRef },
+      body: JSON.stringify({ ...body, expectedParticipant: current.participant.participantRef }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || result.reason || 'That step could not be completed. Please try again.');
     return result;

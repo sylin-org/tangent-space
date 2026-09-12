@@ -9,12 +9,13 @@ namespace TangentSpace.Tests;
 /// <summary>Rule tests for companion participation: self join/remove/leave, invitations, role scope, restrictions.</summary>
 public sealed class McpCommunityTests
 {
-    private const string Owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
-    private const string Member = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
-    private const string Agent = "did:plc:cccccccccccccccccccccccc";
-    private const string Other = "did:plc:dddddddddddddddddddddddd";
+    private const string OwnerDid = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+    private static readonly string Owner = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string Member = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string Agent = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string Other = TangentSpace.Participants.Participant.NewIdentifier();
     private static readonly DateTimeOffset Now = new(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
-    private static TangentSite Site() => TangentSite.Establish(new SiteOptions { Name = "Host", OwnerDid = Owner }, Owner, Now);
+    private static TangentSite Site() => TangentSite.Establish(new SiteOptions { Name = "Host", OwnerDid = OwnerDid }, OwnerDid, Owner, Now);
 
     private static TangentCommunity ClosedTangent() => TangentCommunity.Create(Site(), Owner, "kintsugi", "Kintsugi", "", "", "", "", Now);
 
@@ -74,7 +75,7 @@ public sealed class McpCommunityTests
         var tangent = ClosedTangent();
         var invitation = TangentInvitation.Issue(tangent, Agent, TangentRole.Reader, Owner, Now);
         Assert.Equal(tangent.Id, invitation.TangentKey);
-        Assert.Equal(Agent, invitation.RecipientDid);
+        Assert.Equal(Agent, invitation.RecipientParticipantId);
         Assert.True(invitation.Usable(Now));
         Assert.True(invitation.Usable(invitation.ExpiresAt.AddSeconds(-1)));
 
@@ -150,7 +151,7 @@ public sealed class McpCommunityTests
         var room = Room.CreateDelegated(site, Member, "kintsugi-work", "Workshop", RoomAdmission.SignedIn, Now, tangent.Id, tangent);
         room.CompleteSpace(site, Owner, room.PolicyRevision, Space("kintsugi-work"), Now, tangent);
 
-        Assert.Equal(Member, room.CreatorOwnerDid);
+        Assert.Equal(Member, room.CreatorParticipantId);
         var adminPolicy = room.CurrentPolicy(site, Member, null, tangent: tangent, tangentMembership: adminMembership);
         Assert.True(adminPolicy.CanManage);
         Assert.True(adminPolicy.CanAppointManagers == false);

@@ -116,8 +116,8 @@ public sealed class ExperienceController(ExperienceService experience) : Control
     {
         var expected = Request.Headers["X-Tangent-Participant"];
         if (expected.Count == 0) return;
-        var did = User.FindFirst(Koan.Web.Auth.Connector.Atproto.AtprotoClaimTypes.Did)?.Value;
-        if (expected.Count != 1 || expected[0] != did)
+        var participant = User.FindFirst(ParticipationConstants.ParticipantClaim)?.Value;
+        if (expected.Count != 1 || expected[0] != participant)
             throw new UnauthorizedAccessException("Your signed-in account changed. Reload before continuing.");
     }
 }

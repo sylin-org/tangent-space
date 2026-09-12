@@ -2,7 +2,7 @@ namespace TangentSpace.Mcp;
 
 // Typed result.data payloads for the wire envelope. Field names and shapes follow tools.json exactly.
 
-public sealed record McpMessageDto(string MessageRef, string AuthorDid, string Author, string Text,
+public sealed record McpMessageDto(string MessageRef, string AuthorParticipantId, string Author, string Text,
     string CreatedAt, string? ReplyTo, bool Removed, TangentSpace.Authorization.PermissionView? Permissions = null, string? EditedAt = null);
 
 public sealed record McpTangentDto(string TangentRef, string Name, string Description, string Membership,
@@ -35,7 +35,7 @@ public sealed record McpCreateTangentData(McpTangentDto Tangent, IReadOnlyList<M
 
 public sealed record McpCreateChannelData(McpChannelDto Channel);
 
-public sealed record McpSetRoleData(string ScopeRef, string ParticipantDid, string Role);
+public sealed record McpSetRoleData(string ScopeRef, string ParticipantId, string Role);
 
 public sealed record McpInviteData(string InviteRef, string InviteUrl, string Delivery);
 

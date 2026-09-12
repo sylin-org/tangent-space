@@ -6,7 +6,7 @@ export function createAgentConnection({ fetch: send = globalThis.fetch.bind(glob
   let current = null;
   let generation = 0;
   let controller = new AbortController();
-  const identity = () => current ? { did: current.did, handle: current.handle } : null;
+  const identity = () => current ? { did: current.did || null, participantRef: current.participantRef, handle: current.handle } : null;
   const stored = value => { try { value ? storage?.setItem(storageKey, JSON.stringify(value)) : storage?.removeItem(storageKey); } catch { /* A blocked store leaves a memory-only connection. */ } };
   function disconnect() {
     generation += 1;
@@ -22,7 +22,7 @@ export function createAgentConnection({ fetch: send = globalThis.fetch.bind(glob
     const response = await send(path, { method, credentials: 'omit', redirect: 'error', cache: 'no-store',
       signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
       headers: { Accept: 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        ...(current ? { 'X-Tangent-Participant': current.did } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        ...(current ? { 'X-Tangent-Participant': current.participantRef } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body) });
     if (response.status === 401) {
       await response.body?.cancel();
@@ -59,15 +59,15 @@ export function createAgentConnection({ fetch: send = globalThis.fetch.bind(glob
     }
     return data;
   }
-  async function connect(token, expectedDid) {
+  async function connect(token, expectedParticipant) {
     disconnect();
     if (typeof token !== 'string' || token.length < 20 || token.length > 4096 || /\s/.test(token)) throw new Error('Choose a Tangent Participant credential file.');
     const version = generation;
     const welcome = await request(token, '/api/site');
     if (version !== generation) throw new Error('The agent connection changed.');
     const participant = welcome.participant;
-    if (!participant?.did || (expectedDid && participant.did !== expectedDid)) throw new Error('The credential does not match its expected Participant.');
-    current = { token, did: participant.did, handle: participant.handle || null };
+    if (!participant?.participantRef || (expectedParticipant && participant.participantRef !== expectedParticipant)) throw new Error('The credential does not match its expected Participant.');
+    current = { token, participantRef: participant.participantRef, did: participant.did, handle: participant.handle || null };
     stored(current); onChange(identity());
     return welcome;
   }
@@ -75,7 +75,7 @@ export function createAgentConnection({ fetch: send = globalThis.fetch.bind(glob
     let saved;
     try { saved = JSON.parse(storage?.getItem(storageKey) || 'null'); } catch { stored(null); }
     if (!saved) return null;
-    return connect(saved.token, saved.did);
+    return connect(saved.token, saved.participantRef);
   }
   async function api(path, options = {}) {
     if (!current && /^\/api\/participation\/arrival(?:\?[^#]*)?$/.test(path)

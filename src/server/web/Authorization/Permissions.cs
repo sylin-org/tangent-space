@@ -25,7 +25,7 @@ public static class Permissions
     {
         var topic = Topic(policy);
         var actions = topic.AllowedActions.Where(a => a is "read" or "removePost").ToList();
-        var own = string.Equals(policy.ActorDid, authorDid, StringComparison.Ordinal);
+        var own = string.Equals(policy.ActorParticipantId, authorDid, StringComparison.Ordinal);
         if (own || removed) actions.Remove("removePost");
         if (own && policy.CanWrite && policy.EditingAllowed && !policy.Locked && !removed) actions.Add("editOwnPost");
         if (own && policy.CanWrite && !policy.Locked && !removed) actions.Add("deleteOwnPost");

@@ -14,8 +14,8 @@ public sealed class McpAttentionTests
     [Fact]
     public void The_actors_own_messages_never_count_as_unread_attention()
     {
-        var own = new Message { RoomKey = "lounge", AuthorDid = Watcher, Sequence = 2 };
-        var theirs = new Message { RoomKey = "lounge", AuthorDid = Author, Sequence = 3 };
+        var own = new Message { RoomKey = "lounge", AuthorParticipantId = Watcher, Sequence = 2 };
+        var theirs = new Message { RoomKey = "lounge", AuthorParticipantId = Author, Sequence = 3 };
         Assert.False(AttentionRules.CountsForAttention(own, Watcher));
         Assert.True(AttentionRules.CountsForAttention(theirs, Watcher));
         Assert.True(AttentionRules.CountsForAttention(own, Author));
@@ -94,19 +94,19 @@ public sealed class McpAttentionTests
     [Fact]
     public void Replies_mode_event_delivery_only_answers_the_participants_own_accepted_messages()
     {
-        var reply = new Message { RoomKey = "lounge", AuthorDid = Author, Sequence = 4,
+        var reply = new Message { RoomKey = "lounge", AuthorParticipantId = Author, Sequence = 4,
             Content = new("", default, new SourceReference("at://x", "cid")) };
-        var parent = new SourceDecision { RoomKey = "lounge", AuthorDid = Watcher, Accepted = true };
-        var standalone = new Message { RoomKey = "lounge", AuthorDid = Author, Sequence = 5 };
-        var ownReply = new Message { RoomKey = "lounge", AuthorDid = Watcher, Sequence = 6,
+        var parent = new SourceDecision { RoomKey = "lounge", AuthorParticipantId = Watcher, Accepted = true };
+        var standalone = new Message { RoomKey = "lounge", AuthorParticipantId = Author, Sequence = 5 };
+        var ownReply = new Message { RoomKey = "lounge", AuthorParticipantId = Watcher, Sequence = 6,
             Content = new("", default, new SourceReference("at://y", "cid")) };
 
         Assert.True(AttentionRules.IsDirectReply(reply, parent, Watcher));
         // Not a reply at all, a reply to someone else's message, an unaccepted parent, or the actor's own message.
         Assert.False(AttentionRules.IsDirectReply(standalone, parent, Watcher));
-        Assert.False(AttentionRules.IsDirectReply(reply, new SourceDecision { AuthorDid = Author, Accepted = true }, Watcher));
-        Assert.False(AttentionRules.IsDirectReply(reply, new SourceDecision { AuthorDid = Watcher, Accepted = false }, Watcher));
-        Assert.False(AttentionRules.IsDirectReply(ownReply, new SourceDecision { AuthorDid = Watcher, Accepted = true }, Watcher));
+        Assert.False(AttentionRules.IsDirectReply(reply, new SourceDecision { AuthorParticipantId = Author, Accepted = true }, Watcher));
+        Assert.False(AttentionRules.IsDirectReply(reply, new SourceDecision { AuthorParticipantId = Watcher, Accepted = false }, Watcher));
+        Assert.False(AttentionRules.IsDirectReply(ownReply, new SourceDecision { AuthorParticipantId = Watcher, Accepted = true }, Watcher));
         Assert.False(AttentionRules.IsDirectReply(null, parent, Watcher));
     }
 
@@ -114,10 +114,10 @@ public sealed class McpAttentionTests
     public void Restriction_targets_are_administration_metadata_not_public_activity()
     {
         var entry = new ActivityJournal { Sequence = 4, Kind = ActivityKind.RestrictionChanged, RoomKey = "lounge",
-            TangentKey = "home", ActorDid = Author, TargetDid = Watcher };
+            TangentKey = "home", ActorParticipantId = Author, TargetParticipantId = Watcher };
         // The target learns of their own restriction; a third party does not learn who was restricted.
-        Assert.Equal(Watcher, ActivityService.EventFor(Watcher, entry).TargetDid);
+        Assert.Equal(Watcher, ActivityService.EventFor(Watcher, entry).TargetParticipantId);
         var stranger = "did:plc:eeeeeeeeeeeeeeeeeeeeeeee";
-        Assert.Null(ActivityService.EventFor(stranger, entry).TargetDid);
+        Assert.Null(ActivityService.EventFor(stranger, entry).TargetParticipantId);
     }
 }

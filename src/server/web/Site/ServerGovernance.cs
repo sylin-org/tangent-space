@@ -8,28 +8,33 @@ using TangentSpace.Authorization;
 
 namespace TangentSpace.Site;
 
-public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptions<SiteOptions> options)
+public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptions<SiteOptions> options, ParticipantDirectory directory)
 {
-    public async Task<ServerSettings> Read(string? actorDid, CancellationToken ct)
+    public async Task<ServerSettings> Read(string? actorId, CancellationToken ct)
     {
         await gate.Enter(ct);
         try
         {
             using var fresh = EntityContext.NoCache();
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            var owner = site?.IsOwner(actorDid) == true;
-            var participant = actorDid is null ? null : await Participant.Get(actorDid, ct);
+            var owner = site?.IsOwner(actorId) == true;
+            var participant = actorId is null ? null : await Participant.Get(actorId, ct);
             var canCreate = site?.CanCreateTangent(participant) == true;
-            var declared = site is not null && (site.HumanDeclared || !string.IsNullOrWhiteSpace(site.OwnerDid));
+            var declared = site is not null && (site.HumanDeclared || !string.IsNullOrWhiteSpace(site.OwnerParticipantId));
+            // First ownership is claimable only by the configured DID's current holder (or anyone when unconfigured).
+            var configured = string.IsNullOrWhiteSpace(options.Value.OwnerDid)
+                || actorId is not null && await directory.ByDid(options.Value.OwnerDid, ct) is { } pinned && pinned.Id == actorId;
             await EntityContext.Commit(ct);
             return new ServerSettings(site?.Name ?? "", site?.WelcomeMessage ?? "", site?.Motd ?? "",
                 site?.CreationPolicy ?? "owner_only", site?.AllowAgentTangentOwnership ?? false,
-                site?.OwnerDid ?? "", owner, site is null, !declared && participant is not null && !participant.IsSuspended && !participant.WasDeclaredAgent && participant.Classification != ParticipantClassification.Agent && (string.IsNullOrWhiteSpace(options.Value.OwnerDid) || options.Value.OwnerDid == actorDid), Permissions.Server(owner, canCreate), site?.Byline ?? "", site?.CoverImageUrl ?? "", site?.BackgroundScene ?? "galaxy", site?.BackgroundColor ?? "", site?.BackgroundIntensity ?? 35, site?.BackgroundMotion ?? true, site?.BackgroundMouseSpotlight ?? true);
+                site?.OwnerParticipantId ?? "", owner, site is null, !declared && participant is not null && !participant.IsSuspended && !participant.WasDeclaredAgent && participant.Classification != ParticipantClassification.Agent && configured, Permissions.Server(owner, canCreate), site?.Byline ?? "", site?.CoverImageUrl ?? "", site?.BackgroundScene ?? "galaxy", site?.BackgroundColor ?? "", site?.BackgroundIntensity ?? 35, site?.BackgroundMotion ?? true, site?.BackgroundMouseSpotlight ?? true);
         }
         finally { gate.Exit(); }
     }
 
-    public async Task<ServerSettings> Claim(string actorDid, bool humanDeclaration, CancellationToken ct)
+    /// <summary>Ownership claim. Establishment is the atproto gate: the verified sign-in DID must
+    /// satisfy the configured pin, and its holder becomes the site owner participant.</summary>
+    public async Task<ServerSettings> Claim(string actorId, string? verifiedAtprotoDid, bool humanDeclaration, CancellationToken ct)
     {
         if (!humanDeclaration) throw new InvalidOperationException("A humanDeclaration is required.");
         await gate.Enter(ct);
@@ -38,30 +43,32 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            var participant = await Participant.Get(actorDid, ct);
+            var participant = await Participant.Get(actorId, ct);
             if (participant is null || participant.IsSuspended || participant.WasDeclaredAgent || participant.Classification == ParticipantClassification.Agent)
                 throw new InvalidOperationException("A known agent cannot reserve human server ownership.");
             participant?.Declare(ParticipantClassification.Human);
             if (participant is not null) await participant.Save(ct);
-            if (site is not null && !site.IsOwner(actorDid))
+            if (site is not null && !site.IsOwner(actorId))
                 throw new InvalidOperationException("Server ownership is already claimed.");
             if (site is null)
             {
-                site = TangentSite.Establish(options.Value, actorDid, clock.GetUtcNow());
+                if (verifiedAtprotoDid is null)
+                    throw new UnauthorizedAccessException("Server ownership requires a verified atproto sign-in.");
+                site = TangentSite.Establish(options.Value, verifiedAtprotoDid, actorId, clock.GetUtcNow());
                 site.HumanDeclared = true;
             }
             else site.HumanDeclared = true;
             await site.Save(ct);
-            await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorDid, ct: ct);
+            await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             return new ServerSettings(site.Name, site.WelcomeMessage, site.Motd, site.CreationPolicy,
-                site.AllowAgentTangentOwnership, site.OwnerDid, true, false, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
+                site.AllowAgentTangentOwnership, site.OwnerParticipantId, true, false, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
         }
         finally { gate.Exit(); }
     }
 
-    public async Task<ServerSettings> Update(string actorDid, ServerSettingsPatch patch, CancellationToken ct)
+    public async Task<ServerSettings> Update(string actorId, ServerSettingsPatch patch, CancellationToken ct)
     {
         if (patch.Name is not null && (string.IsNullOrWhiteSpace(patch.Name) || patch.Name.Length > 120)
             || patch.WelcomeMessage?.Length > 4096 || patch.Motd?.Length > 4096 || patch.Byline?.Length > 240)
@@ -81,7 +88,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct)
                 ?? throw new InvalidOperationException("The server has not been claimed.");
-            if (!site.IsOwner(actorDid)) throw new UnauthorizedAccessException("Only the server owner can change settings.");
+            if (!site.IsOwner(actorId)) throw new UnauthorizedAccessException("Only the server owner can change settings.");
             if (patch.Name is not null) site.Name = patch.Name.Trim();
             if (patch.WelcomeMessage is not null) site.WelcomeMessage = patch.WelcomeMessage;
             if (patch.Byline is not null) site.Byline = patch.Byline.Trim();
@@ -98,11 +105,11 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             if (patch.BackgroundMouseSpotlight is not null) site.BackgroundMouseSpotlight = patch.BackgroundMouseSpotlight.Value;
             site.PolicyRevision = checked(site.PolicyRevision + 1);
             await site.Save(ct);
-            await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorDid, ct: ct);
+            await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             return new ServerSettings(site.Name, site.WelcomeMessage, site.Motd, site.CreationPolicy,
-                site.AllowAgentTangentOwnership, site.OwnerDid, true, false, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
+                site.AllowAgentTangentOwnership, site.OwnerParticipantId, true, false, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
         }
         finally { gate.Exit(); }
     }
@@ -112,7 +119,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             && (value.StartsWith('/') && !value.StartsWith("//")
                 || Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.UserInfo.Length == 0);
 
-    public async Task<Participant> Declare(string actorDid, ParticipantClassification classification, CancellationToken ct)
+    public async Task<Participant> Declare(string actorId, ParticipantClassification classification, CancellationToken ct)
     {
         if (!Enum.IsDefined(classification)) throw new InvalidOperationException("Unknown participant classification.");
         await gate.Enter(ct);
@@ -120,13 +127,13 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
-            var participant = await Participant.Get(actorDid, ct) ?? throw new InvalidOperationException("Participant not found.");
+            var participant = await Participant.Get(actorId, ct) ?? throw new InvalidOperationException("Participant not found.");
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            if (participant.IsSuspended || site?.IsOwner(actorDid) == true && classification != ParticipantClassification.Human) throw new UnauthorizedAccessException("The server owner must retain human accountability.");
+            if (participant.IsSuspended || site?.IsOwner(actorId) == true && classification != ParticipantClassification.Human) throw new UnauthorizedAccessException("The server owner must retain human accountability.");
             if (participant.Classification == ParticipantClassification.Agent && classification != ParticipantClassification.Agent)
                 throw new UnauthorizedAccessException("A known agent cannot declare itself human.");
             participant.Declare(classification); await participant.Save(ct);
-            await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorDid, ct: ct);
+            await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct); ActivityJournal.SignalAfterCommit(); return participant;
         }
         finally { gate.Exit(); }
@@ -134,7 +141,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
 }
 
 public sealed record ServerSettings(string Name, string WelcomeMessage, string Motd, string CreationPolicy,
-    bool AllowAgentTangentOwnership, string OwnerDid, bool CanManage, bool SetupRequired, bool CanClaim,
+    bool AllowAgentTangentOwnership, string OwnerParticipantId, bool CanManage, bool SetupRequired, bool CanClaim,
     PermissionView? Permissions = null, string Byline = "", string CoverImageUrl = "",
     string BackgroundScene = "galaxy", string BackgroundColor = "", int BackgroundIntensity = 35, bool BackgroundMotion = true, bool BackgroundMouseSpotlight = true);
 public sealed record ServerSettingsPatch(string? Name = null, string? WelcomeMessage = null, string? Motd = null,

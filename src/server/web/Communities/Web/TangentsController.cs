@@ -50,7 +50,7 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
     public Task<IActionResult> SetMembership(string tangentKey, string targetDid, ChangeTangentMembershipRequest request, CancellationToken ct)
         => Execute(actor => tangents.SetMembership(actor, tangentKey, targetDid, request.Role, ct));
 
-    private string Actor() => User.FindFirst(AtprotoClaimTypes.Did)!.Value;
+    private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);
 
     private string? ReadActor()
     {

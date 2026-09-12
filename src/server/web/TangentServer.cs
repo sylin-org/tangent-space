@@ -14,7 +14,8 @@ namespace TangentSpace;
 public sealed class TangentServer(
     ServerGovernance site, TangentGovernance tangents, CompanionGovernance participants,
     RoomGovernance topics, ConversationService posts, ActivityService activity,
-    SpacesService source, SourceReadiness readiness, TangentSpace.Participants.ParticipantProfiles profiles)
+    SpacesService source, SourceReadiness readiness, TangentSpace.Participants.ParticipantProfiles profiles,
+    TangentSpace.Participants.ParticipantDirectory directory)
 {
     public TangentSpace.Participants.ParticipantProfiles Profiles { get; } = profiles;
     public ServerGovernance Site { get; } = site;
@@ -25,5 +26,6 @@ public sealed class TangentServer(
     public ActivityService Activity { get; } = activity;
     public SpacesService Source { get; } = source;
     public SourceReadiness Readiness { get; } = readiness;
+    public TangentSpace.Participants.ParticipantDirectory Directory { get; } = directory;
 
 }

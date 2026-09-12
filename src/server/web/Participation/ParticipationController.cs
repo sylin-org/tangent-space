@@ -44,7 +44,7 @@ public sealed class ParticipationController(ParticipationCredentials credentials
             || (Request.Headers.TryGetValue("Sec-Fetch-Site", out var site) && site != "same-origin"))) return null;
         var result = await HttpContext.AuthenticateAsync(CookieAuthentication.CookieScheme);
         if (!result.Succeeded || result.Principal is null) return null;
-        try { ParticipationAccess.EnrollmentDid(result.Principal); return result.Principal; }
+        try { ParticipationAccess.EnrollmentParticipant(result.Principal); return result.Principal; }
         catch (UnauthorizedAccessException) { return null; }
     }
 }

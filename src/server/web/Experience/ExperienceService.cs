@@ -41,14 +41,14 @@ public sealed partial class ExperienceService(
 
     public async Task<ExperienceResponse> Arrive(ClaimsPrincipal principal, string? scopeRef, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var (scopeTangent, scopeRoom) = await ScopeOf(principal, did, credential, scopeRef, ct);
-        var identity = await IdentityOf(did, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var (scopeTangent, scopeRoom) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
+        var identity = await IdentityOf(participantId, ct);
         var site = await SiteLabel(ct);
-        var page = await digest.Page(did, credential, null, scopeTangent, scopeRoom, 3, ct);
-        var (directory, continuation, _) = await TangentPage(did, 1, 0, DirectoryLimit, ct);
+        var page = await digest.Page(participantId, credential, null, scopeTangent, scopeRoom, 3, ct);
+        var (directory, continuation, _) = await TangentPage(participantId, 1, 0, DirectoryLimit, ct);
         var orientation = new ExperienceOrientation(
             $"{site} is a shared conversation space for people and agents.",
             [],
@@ -64,54 +64,54 @@ public sealed partial class ExperienceService(
             new ExperienceResult(new ExperienceArrivalData(directory, continuation), null, null),
             page.Attention, new ExperienceContinuation(null, null, null, null, null, null),
             actions, orientation,
-            new ExperienceCapabilities(Attention: true, Coordination: false), did, credential, ct);
+            new ExperienceCapabilities(Attention: true, Coordination: false), participantId, credential, ct);
     }
 
     // ---------- Directories ----------
 
     public async Task<ExperienceResponse> ListTangents(ClaimsPrincipal principal, string? cursor, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
-        var selected = DecodeDirectoryCursor(cursor, "experience:tangents", did);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
+        var selected = DecodeDirectoryCursor(cursor, "experience:tangents", participantId);
         var page = selected?.Page ?? 1;
         var offset = InnerOffset(selected);
-        var (tangents, continuation, _) = await TangentPage(did, page, offset, DirectoryLimit, ct);
+        var (tangents, continuation, _) = await TangentPage(participantId, page, offset, DirectoryLimit, ct);
         return await Assemble("list_tangents", ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(new ExperienceTangentsData(tangents, continuation), null, null),
-            (await digest.Page(did, credential, null, null, null, 3, ct)).Attention,
-            new ExperienceContinuation(null, null, null, null, null, continuation), [], null, null, did, credential, ct);
+            (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention,
+            new ExperienceContinuation(null, null, null, null, null, continuation), [], null, null, participantId, credential, ct);
     }
 
     public async Task<ExperienceResponse> ListTopics(ClaimsPrincipal principal, string tangentKey, string? cursor, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
         TangentDescription? selected;
         using (EntityContext.NoCache())
-            selected = await tangents.Describe(did, tangentKey, ct);
+            selected = await tangents.Describe(participantId, tangentKey, ct);
         if (selected is null)
             return Problem("list_topics", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Tangent is not visible to your account."),
-                did: did, credential: credential, ct: ct);
-        var decoded = DecodeDirectoryCursor(cursor, "experience:topics:" + tangentKey, did);
+                participantId: participantId, credential: credential, ct: ct);
+        var decoded = DecodeDirectoryCursor(cursor, "experience:topics:" + tangentKey, participantId);
         var page = decoded?.Page ?? 1;
         var offset = InnerOffset(decoded);
         TangentChannelDirectory listing;
         using (EntityContext.NoCache())
-            listing = await rooms.ListForTangent(did, tangentKey, page, ct);
+            listing = await rooms.ListForTangent(participantId, tangentKey, page, ct);
         var visible = listing.Channels.Skip(offset).ToList();
         var slice = visible.Take(DirectoryLimit).ToList();
         string? continuation = null;
         if (visible.Count > DirectoryLimit)
-            continuation = refs.EncodeListCursor("experience:topics:" + tangentKey, did, page, (offset + DirectoryLimit).ToString());
+            continuation = refs.EncodeListCursor("experience:topics:" + tangentKey, participantId, page, (offset + DirectoryLimit).ToString());
         else if (listing.NextPage is { } next)
-            continuation = refs.EncodeListCursor("experience:topics:" + tangentKey, did, next, "0");
+            continuation = refs.EncodeListCursor("experience:topics:" + tangentKey, participantId, next, "0");
         var topics = slice.Select(room => TopicDto(tangentKey, room)).ToList();
         var actions = topics.Count > 0
             ? new List<ExperienceAction> { new(ExperienceActionNames.ReadTopic, topics[0].TopicRef, null, $"Read {topics[0].Title}") }
@@ -119,8 +119,8 @@ public sealed partial class ExperienceService(
         return await Assemble("list_topics", ExperienceStatus.Ok, identity,
             TangentPlace(principal, selected),
             new ExperienceResult(new ExperienceTopicsData(topics, continuation), null, null),
-            (await digest.Page(did, credential, null, tangentKey, null, 3, ct)).Attention,
-            new ExperienceContinuation(null, null, null, null, null, continuation), actions, null, null, did, credential, ct);
+            (await digest.Page(participantId, credential, null, tangentKey, null, 3, ct)).Attention,
+            new ExperienceContinuation(null, null, null, null, null, continuation), actions, null, null, participantId, credential, ct);
     }
 
     // ---------- Topic reading ----------
@@ -128,17 +128,17 @@ public sealed partial class ExperienceService(
     public async Task<ExperienceResponse> ReadTopic(ClaimsPrincipal principal, string topicKey, string? cursor,
         string? aroundPostRef, int limit, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
         Rooms.Room? stored;
         using (EntityContext.NoCache())
             stored = await Room.Get(topicKey, ct);
         if (stored is null)
             return Problem("read_topic", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
-                did: did, credential: credential, ct: ct);
+                participantId: participantId, credential: credential, ct: ct);
         var tangentKey = stored.TangentKey;
         string? anchorId = null;
         if (aroundPostRef is { } anchorRef)
@@ -151,7 +151,7 @@ public sealed partial class ExperienceService(
         McpMessageWindow window;
         try
         {
-            window = await conversation.McpWindow(did, topicKey, cursor, anchorId, limit, ct);
+            window = await conversation.McpWindow(participantId, topicKey, cursor, anchorId, limit, ct);
         }
         catch (ArgumentException error)
         {
@@ -160,14 +160,14 @@ public sealed partial class ExperienceService(
                     error.Message.Contains("cursor", StringComparison.OrdinalIgnoreCase)
                         ? "This history cursor expired or no longer matches. Open a fresh window explicitly."
                         : error.Message),
-                did: did, credential: credential, ct: ct);
+                participantId: participantId, credential: credential, ct: ct);
         }
         var posts = Posts(tangentKey, topicKey, window);
-        var policy = await conversation.ReadPolicy(did, topicKey, ct);
+        var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead, ExperienceActionNames.SetWatch };
         if (policy.CanWrite) allowed.Add(ExperienceActionNames.CreatePost);
         var place = new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Channel(tangentKey, topicKey),
-            $"{await TangentName(tangentKey, ct)} / {stored.Title}", await RoleOf(did, tangentKey, ct), allowed);
+            $"{await TangentName(tangentKey, ct)} / {stored.Title}", await RoleOf(participantId, tangentKey, ct), allowed);
         var actions = new List<ExperienceAction>();
         if (posts.Count > 0)
             actions.Add(new(ExperienceActionNames.MarkRead, refs.Channel(tangentKey, topicKey), null, "Acknowledge reading through the newest Post"));
@@ -176,11 +176,11 @@ public sealed partial class ExperienceService(
                 posts, window.Position, window.Resolved is null ? null
                     : window.Resolved.ToDictionary(pair => pair.Key, pair => new ExperienceResolution(
                         pair.Value.Handle, pair.Value.DisplayName, pair.Value.Classification))), null, null),
-            (await digest.Page(did, credential, null, tangentKey, topicKey, 3, ct)).Attention,
+            (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
             new ExperienceContinuation(null, null, window.OlderCursor, window.NewerCursor, window.ReadCursor, null),
             actions,
             new ExperienceOrientation(null, [],
-                $"{stored.Title}: {ExperienceDigest.Preview(stored.Topic, 240)}"), null, did, credential, ct);
+                $"{stored.Title}: {ExperienceDigest.Preview(stored.Topic, 240)}"), null, participantId, credential, ct);
     }
 
     // ---------- Digest, updates and wait ----------
@@ -188,49 +188,49 @@ public sealed partial class ExperienceService(
     public async Task<ExperienceResponse> GetUpdates(ClaimsPrincipal principal, string? checkpoint, string? pageCursor,
         string? scopeRef, int limit, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        var (scopeTangent, scopeRoom) = await ScopeOf(principal, did, credential, scopeRef, ct);
-        var identity = await IdentityOf(did, ct);
-        var decoded = digest.Decode(pageCursor ?? checkpoint, did, scopeTangent, scopeRoom);
+        var (scopeTangent, scopeRoom) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
+        var identity = await IdentityOf(participantId, ct);
+        var decoded = digest.Decode(pageCursor ?? checkpoint, participantId, scopeTangent, scopeRoom);
         if (pageCursor is not null && decoded is null && checkpoint is null)
             return Problem("get_updates", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.CursorExpired, "This digest cursor expired or no longer matches. Restart from the checkpoint."),
-                did: did, credential: credential, ct: ct);
-        var page = await digest.Page(did, credential, decoded, scopeTangent, scopeRoom, limit, ct);
-        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(did, scopeTangent, scopeRoom, 0, clock.GetUtcNow().AddDays(7)));
+                participantId: participantId, credential: credential, ct: ct);
+        var page = await digest.Page(participantId, credential, decoded, scopeTangent, scopeRoom, limit, ct);
+        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeRoom, 0, clock.GetUtcNow().AddDays(7)));
         var continuationCursor = page.Attention.More
-            ? digest.Encode(new ExperienceDigest.DigestCursor(did, scopeTangent, scopeRoom, (decoded?.Offset ?? 0) + limit, clock.GetUtcNow().AddDays(7)))
+            ? digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeRoom, (decoded?.Offset ?? 0) + limit, clock.GetUtcNow().AddDays(7)))
             : null;
         var actions = page.FollowUps.Take(3).ToList();
         return await Assemble("get_updates", ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(new ExperienceUpdatesData(scopeRef ?? refs.ServerRef), null, null),
             page.Attention, new ExperienceContinuation(recovery, continuationCursor, null, null, null, null),
-            actions, null, null, did, credential, ct);
+            actions, null, null, participantId, credential, ct);
     }
 
     public async Task<ExperienceResponse> Wait(ClaimsPrincipal principal, string? checkpoint, string? sinceRevision,
         string? scopeRef, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        var (scopeTangent, scopeRoom) = await ScopeOf(principal, did, credential, scopeRef, ct);
-        var identity = await IdentityOf(did, ct);
+        var (scopeTangent, scopeRoom) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
+        var identity = await IdentityOf(participantId, ct);
         // Capture before inspecting state so a commit between snapshot and wait is replayed.
         using var notification = ActivityJournal.Capture();
-        var current = await digest.Page(did, credential, digest.Decode(checkpoint, did, scopeTangent, scopeRoom), scopeTangent, scopeRoom, DefaultDigestLimit, ct);
+        var current = await digest.Page(participantId, credential, digest.Decode(checkpoint, participantId, scopeTangent, scopeRoom), scopeTangent, scopeRoom, DefaultDigestLimit, ct);
         if (sinceRevision is { Length: > 0 } && string.Equals(current.Attention.Revision, sinceRevision, StringComparison.Ordinal))
         {
             await notification.WaitAsync(TimeSpan.FromSeconds(15), ct);
-            current = await digest.Page(did, credential, null, scopeTangent, scopeRoom, DefaultDigestLimit, ct);
+            current = await digest.Page(participantId, credential, null, scopeTangent, scopeRoom, DefaultDigestLimit, ct);
         }
-        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(did, scopeTangent, scopeRoom, 0, clock.GetUtcNow().AddDays(7)));
+        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeRoom, 0, clock.GetUtcNow().AddDays(7)));
         return await Assemble("wait", ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(new ExperienceUpdatesData(scopeRef ?? refs.ServerRef), null, null),
             current.Attention, new ExperienceContinuation(recovery, null, null, null, null, null),
-            current.FollowUps.Take(3).ToList(), null, null, did, credential, ct);
+            current.FollowUps.Take(3).ToList(), null, null, participantId, credential, ct);
     }
 
     // ---------- Participation mutations ----------
@@ -238,20 +238,20 @@ public sealed partial class ExperienceService(
     public async Task<ExperienceResponse> CreatePost(ClaimsPrincipal principal, string topicKey, string requestId,
         string text, string? replyTo, IReadOnlyList<Conversation.PostFacet>? facets, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Post);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Post);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
         Rooms.Room? stored;
         using (EntityContext.NoCache())
             stored = await Room.Get(topicKey, ct);
         if (stored is null)
             return Problem("create_post", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
-                did: did, credential: credential, ct: ct);
+                participantId: participantId, credential: credential, ct: ct);
         var tangentKey = stored.TangentKey;
         MessageContent.CheckText(text);
-        var policy = await conversation.ReadPolicy(did, topicKey, ct);
+        var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         if (!policy.CanWrite) throw new UnauthorizedAccessException();
         SourceReference? replySource = null;
         if (replyTo is { } reference)
@@ -270,15 +270,15 @@ public sealed partial class ExperienceService(
         var payload = new Dictionary<string, string?> { ["text"] = text, ["replyTo"] = replyTo,
             ["facets"] = facets is null || facets.Count == 0 ? ""
                 : string.Join("|", facets.OrderBy(facet => facet.Start).Select(facet => facet.Canonical())) };
-        return await requests.Run(RegistryCredential(principal), did, requestId, async () =>
+        return await requests.Run(RegistryCredential(principal), participantId, requestId, async () =>
         {
-            var registration = await requests.Register(RegistryCredential(principal), did, requestId, "CreatePost", topicKey, payload, ct);
+            var registration = await requests.Register(RegistryCredential(principal), participantId, requestId, "CreatePost", topicKey, payload, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("create_post", principal, identity, registration.Record, did, credential, ct);
+                return await Replay("create_post", principal, identity, registration.Record, participantId, credential, ct);
             var operationId = registration.Record.NamespacedOperationId
-                ?? McpRequestRecord.BuildOperationId(RegistryCredential(principal), did, requestId);
-            var intent = await conversation.Post(did, topicKey, new PostMessage(operationId, text, replySource, facets), ct);
-            var place = await TopicPlaceOf(principal, did, tangentKey, topicKey, ct);
+                ?? McpRequestRecord.BuildOperationId(RegistryCredential(principal), participantId, requestId);
+            var intent = await conversation.Post(participantId, topicKey, new PostMessage(operationId, text, replySource, facets), ct);
+            var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
             var checkOperation = new ExperienceAction("get_operation", refs.ServerRef, null, "Check the saved action");
             if (intent.State == "accepted")
             {
@@ -297,8 +297,8 @@ public sealed partial class ExperienceService(
                 await requests.Complete(registration.Record, "completed", postRef, Serialize(data), ct);
                 return await Assemble("create_post", ExperienceStatus.Ok, identity, place,
                     new ExperienceResult(data, new ExperienceReceipt(requestId, "completed", postRef, null), null),
-                    (await digest.Page(did, credential, null, tangentKey, topicKey, 3, ct)).Attention,
-                    Empty(), [new(ExperienceActionNames.ReadTopic, refs.Channel(tangentKey, topicKey), null, "Open the Topic")], null, null, did, credential, ct);
+                    (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
+                    Empty(), [new(ExperienceActionNames.ReadTopic, refs.Channel(tangentKey, topicKey), null, "Open the Topic")], null, null, participantId, credential, ct);
             }
             if (intent.State == "rejected")
             {
@@ -306,11 +306,11 @@ public sealed partial class ExperienceService(
                 return await Assemble("create_post", ExperienceStatus.Blocked, identity, place,
                     new ExperienceResult(null, new ExperienceReceipt(requestId, "rejected", null, null),
                         ExperienceProblem.Of(ExperienceProblemCodes.SourceUnsupported, "The source rejected this Post. The saved request keeps it inspectable.")),
-                    (await digest.Page(did, credential, null, null, null, 3, ct)).Attention,
-                    Empty(), [checkOperation], null, null, did, credential, ct);
+                    (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention,
+                    Empty(), [checkOperation], null, null, participantId, credential, ct);
             }
             await requests.Complete(registration.Record, "pending", null, null, ct);
-            var readiness = await ReadinessOf(did, ct);
+            var readiness = await ReadinessOf(participantId, ct);
             var problem = readiness == "unsupported"
                 ? ExperienceProblem.Of(ExperienceProblemCodes.SourceUnsupported, "This account provider cannot supply the native capability this Post needs.")
                 : ExperienceProblem.Of(ExperienceProblemCodes.SourcePermissionMissing,
@@ -318,32 +318,32 @@ public sealed partial class ExperienceService(
             return await Assemble("create_post", readiness is "needs_connection" or "unsupported" ? ExperienceStatus.Blocked : ExperienceStatus.Pending,
                 identity, place,
                 new ExperienceResult(null, new ExperienceReceipt(requestId, "pending", null, 15), problem),
-                (await digest.Page(did, credential, null, null, null, 3, ct)).Attention,
-                Empty(), [checkOperation], null, null, did, credential, ct);
+                (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention,
+                Empty(), [checkOperation], null, null, participantId, credential, ct);
         }, ct);
     }
 
     public async Task<ExperienceResponse> ReadPosition(ClaimsPrincipal principal, string topicKey, string readCursor,
         string requestId, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
         Rooms.Room? stored;
         using (EntityContext.NoCache())
             stored = await Room.Get(topicKey, ct);
         if (stored is null)
             return Problem("read_position", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
-                did: did, credential: credential, ct: ct);
+                participantId: participantId, credential: credential, ct: ct);
         var tangentKey = stored.TangentKey;
         Func<Task<ExperienceResponse>> acknowledge = async () =>
         {
             long sequence;
             try
             {
-                sequence = await conversation.Acknowledge(did, topicKey, readCursor, ct);
+                sequence = await conversation.Acknowledge(participantId, topicKey, readCursor, ct);
             }
             catch (ArgumentException error)
             {
@@ -352,7 +352,7 @@ public sealed partial class ExperienceService(
                     ExperienceProblem.Of(invalid ? ExperienceProblemCodes.InvalidArguments : ExperienceProblemCodes.CursorExpired,
                         invalid ? "Acknowledge a read cursor returned with a history page."
                             : "This read cursor expired or belongs to another participant. Open a fresh window.", "readCursor"),
-                    did: did, credential: credential, ct: ct);
+                    participantId: participantId, credential: credential, ct: ct);
             }
             string? throughRef = null;
             using (EntityContext.NoCache())
@@ -364,18 +364,18 @@ public sealed partial class ExperienceService(
             var data = new ExperienceReadPositionData(throughRef, refs.Channel(tangentKey, topicKey));
             var receipt = requestId is null ? null : new ExperienceReceipt(requestId, "completed", null, null);
             return await Assemble("read_position", ExperienceStatus.Ok, identity,
-                await TopicPlaceOf(principal, did, tangentKey, topicKey, ct),
+                await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct),
                 new ExperienceResult(data, receipt, null),
-                (await digest.Page(did, credential, null, tangentKey, topicKey, 3, ct)).Attention,
-                Empty(), [new(ExperienceActionNames.ReadTopic, refs.Channel(tangentKey, topicKey), null, "Open the Topic")], null, null, did, credential, ct);
+                (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
+                Empty(), [new(ExperienceActionNames.ReadTopic, refs.Channel(tangentKey, topicKey), null, "Open the Topic")], null, null, participantId, credential, ct);
         };
         if (requestId is null) return await acknowledge();
-        return await requests.Run(RegistryCredential(principal), did, requestId, async () =>
+        return await requests.Run(RegistryCredential(principal), participantId, requestId, async () =>
         {
-            var registration = await requests.Register(RegistryCredential(principal), did, requestId, "ReadPosition", topicKey,
+            var registration = await requests.Register(RegistryCredential(principal), participantId, requestId, "ReadPosition", topicKey,
                 new Dictionary<string, string?> { ["readCursor"] = readCursor }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("read_position", principal, identity, registration.Record, did, credential, ct);
+                return await Replay("read_position", principal, identity, registration.Record, participantId, credential, ct);
             var outcome = await acknowledge();
             if (outcome.Status == ExperienceStatus.Ok)
                 await requests.Complete(registration.Record, "completed", null,
@@ -387,10 +387,10 @@ public sealed partial class ExperienceService(
     public async Task<ExperienceResponse> Join(ClaimsPrincipal principal, string tangentKey, string? inviteRef,
         string requestId, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
         string? invitationId = null;
         if (inviteRef is { } invite)
         {
@@ -400,12 +400,12 @@ public sealed partial class ExperienceService(
                 throw new McpInvalidArgumentsException("inviteRef", "That invitation belongs to another Tangent.");
             invitationId = parsed.InvitationId;
         }
-        return await requests.Run(RegistryCredential(principal), did, requestId, async () =>
+        return await requests.Run(RegistryCredential(principal), participantId, requestId, async () =>
         {
-            var registration = await requests.Register(RegistryCredential(principal), did, requestId, "JoinTangent",
+            var registration = await requests.Register(RegistryCredential(principal), participantId, requestId, "JoinTangent",
                 tangentKey, new Dictionary<string, string?> { ["inviteRef"] = inviteRef }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("join", principal, identity, registration.Record, did, credential, ct);
+                return await Replay("join", principal, identity, registration.Record, participantId, credential, ct);
             requests.CompleteWithDomain(registration.Record, raw =>
             {
                 var joined = (CompanionJoinResult)raw!;
@@ -415,24 +415,24 @@ public sealed partial class ExperienceService(
             CompanionJoinResult join;
             try
             {
-                join = await companions.Join(did, tangentKey, invitationId, ct);
+                join = await companions.Join(participantId, tangentKey, invitationId, ct);
             }
             catch (TangentRuleViolation denied) when (denied.Denial == TangentDenial.Forbidden)
             {
                 return Problem("join", identity, ServerPlace(principal, await SiteLabel(ct)),
                     ExperienceProblem.Of(ExperienceProblemCodes.NotAdmitted, denied.Message),
-                    did: did, credential: credential, ct: ct);
+                    participantId: participantId, credential: credential, ct: ct);
             }
             var key = requestId;
-            var place = await TangentPlaceOf(principal, did, tangentKey, ct);
+            var place = await TangentPlaceOf(principal, participantId, tangentKey, ct);
             if (join.Outcome == CompanionJoinOutcome.PendingApproval)
             {
                 await requests.Complete(registration.Record, "pending", null, null, ct);
                 return await Assemble("join", ExperienceStatus.Pending, identity, place,
                     new ExperienceResult(new ExperienceMembershipData("pending", "Your request is with the Tangent's administrators."),
                         new ExperienceReceipt(key, "pending", null, 15), null),
-                    (await digest.Page(did, credential, null, null, null, 3, ct)).Attention, Empty(),
-                    [new("get_operation", refs.ServerRef, null, "Check the saved action")], null, null, did, credential, ct);
+                    (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention, Empty(),
+                    [new("get_operation", refs.ServerRef, null, "Check the saved action")], null, null, participantId, credential, ct);
             }
             var membership = join.Membership is { } result ? result.Role switch
             {
@@ -443,65 +443,65 @@ public sealed partial class ExperienceService(
                 new ExperienceResult(new ExperienceMembershipData(membership,
                     join.Outcome == CompanionJoinOutcome.AlreadyMember ? "You already belong to this Tangent." : "Welcome to your Tangent."),
                     new ExperienceReceipt(key, "completed", refs.Tangent(tangentKey), null), null),
-                (await digest.Page(did, credential, null, tangentKey, null, 3, ct)).Attention, Empty(),
-                [new(ExperienceActionNames.ListTopics, refs.Tangent(tangentKey), null, "Browse Topics")], null, null, did, credential, ct);
+                (await digest.Page(participantId, credential, null, tangentKey, null, 3, ct)).Attention, Empty(),
+                [new(ExperienceActionNames.ListTopics, refs.Tangent(tangentKey), null, "Browse Topics")], null, null, participantId, credential, ct);
         }, ct);
     }
 
     public async Task<ExperienceResponse> Leave(ClaimsPrincipal principal, string tangentKey, string requestId, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
-        return await requests.Run(RegistryCredential(principal), did, requestId, async () =>
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
+        return await requests.Run(RegistryCredential(principal), participantId, requestId, async () =>
         {
-            var registration = await requests.Register(RegistryCredential(principal), did, requestId, "LeaveTangent",
+            var registration = await requests.Register(RegistryCredential(principal), participantId, requestId, "LeaveTangent",
                 tangentKey, new Dictionary<string, string?>(), ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("leave", principal, identity, registration.Record, did, credential, ct);
+                return await Replay("leave", principal, identity, registration.Record, participantId, credential, ct);
             requests.CompleteWithDomain(registration.Record, _ => ("completed", null, "{}"));
-            await companions.Leave(did, tangentKey, ct);
+            await companions.Leave(participantId, tangentKey, ct);
             await requests.Complete(registration.Record, "completed", null, "{}", ct);
             return await Assemble("leave", ExperienceStatus.Ok, identity,
                 new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), null, await TangentName(tangentKey, ct), "visitor",
                     [ExperienceActionNames.ListTangents]),
                 new ExperienceResult(new ExperienceMembershipData("visitor", "You left this Tangent. Authorship is never erased."),
                     new ExperienceReceipt(requestId, "completed", null, null), null),
-                (await digest.Page(did, credential, null, null, null, 3, ct)).Attention, Empty(),
-                [new(ExperienceActionNames.ListTangents, refs.ServerRef, null, "Browse Tangents")], null, null, did, credential, ct);
+                (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention, Empty(),
+                [new(ExperienceActionNames.ListTangents, refs.ServerRef, null, "Browse Tangents")], null, null, participantId, credential, ct);
         }, ct);
     }
 
     public async Task<ExperienceResponse> SetWatch(ClaimsPrincipal principal, string scopeRef, string mode,
         string requestId, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(did, credential, ct);
-        var identity = await IdentityOf(did, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
+        var identity = await IdentityOf(participantId, ct);
         var (tangentKey, roomKey) = ScopeDestination(scopeRef);
-        if (!await tangents.CanAccess(did, tangentKey, ct)) throw new UnauthorizedAccessException();
+        if (!await tangents.CanAccess(participantId, tangentKey, ct)) throw new UnauthorizedAccessException();
         var parsed = mode switch
         {
             "all" => (WatchMode?)WatchMode.All, "replies" => WatchMode.Replies, "none" => WatchMode.None, _ => null
         } ?? throw new McpInvalidArgumentsException("mode", "Choose all, replies, or none.");
-        return await requests.Run(RegistryCredential(principal), did, requestId, async () =>
+        return await requests.Run(RegistryCredential(principal), participantId, requestId, async () =>
         {
-            var registration = await requests.Register(RegistryCredential(principal), did, requestId, "SetWatch",
+            var registration = await requests.Register(RegistryCredential(principal), participantId, requestId, "SetWatch",
                 roomKey ?? tangentKey, new Dictionary<string, string?> { ["scopeRef"] = scopeRef, ["mode"] = mode }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("set_watch", principal, identity, registration.Record, did, credential, ct);
+                return await Replay("set_watch", principal, identity, registration.Record, participantId, credential, ct);
             requests.CompleteWithDomain(registration.Record, _ => ("completed", null, "{}"));
-            if (roomKey is { } watchedRoom) await companions.SetWatch(did, watchedRoom, parsed, ct);
-            else await companions.SetTangentWatch(did, tangentKey, parsed, ct);
+            if (roomKey is { } watchedRoom) await companions.SetWatch(participantId, watchedRoom, parsed, ct);
+            else await companions.SetTangentWatch(participantId, tangentKey, parsed, ct);
             await requests.Complete(registration.Record, "completed", null, "{}", ct);
             return await Assemble("set_watch", ExperienceStatus.Ok, identity,
-                roomKey is null ? await TangentPlaceOf(principal, did, tangentKey, ct)
-                    : await TopicPlaceOf(principal, did, tangentKey, roomKey, ct),
+                roomKey is null ? await TangentPlaceOf(principal, participantId, tangentKey, ct)
+                    : await TopicPlaceOf(principal, participantId, tangentKey, roomKey, ct),
                 new ExperienceResult(new ExperienceWatchData(scopeRef, mode),
                     new ExperienceReceipt(requestId, "completed", null, null), null),
-                (await digest.Page(did, credential, null, tangentKey, roomKey, 3, ct)).Attention, Empty(), [], null, null, did, credential, ct);
+                (await digest.Page(participantId, credential, null, tangentKey, roomKey, 3, ct)).Attention, Empty(), [], null, null, participantId, credential, ct);
         }, ct);
     }
 
@@ -509,25 +509,25 @@ public sealed partial class ExperienceService(
 
     public async Task<ExperienceResponse> GetOperation(ClaimsPrincipal principal, string requestId, CancellationToken ct)
     {
-        var did = ParticipationAccess.Require(principal, ParticipationGrants.Read);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        var identity = await IdentityOf(did, ct);
+        var identity = await IdentityOf(participantId, ct);
         // Lookup never re-executes; the durable registry and WriteIntent state are the only truth.
-        var record = await requests.Find(RegistryCredential(principal), did, requestId, ct);
+        var record = await requests.Find(RegistryCredential(principal), participantId, requestId, ct);
         if (record is null)
             return Problem("get_operation", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.ReceiptExpired, "No receipt is available for that request ID.", "requestId"),
-                did: did, credential: credential, ct: ct);
+                participantId: participantId, credential: credential, ct: ct);
         var state = record.State;
         string? resultRef = record.ResultRef;
         if (record.Operation is "CreatePost" or "PostMessage")
         {
             using var fresh = EntityContext.NoCache();
             var operationId = record.NamespacedOperationId
-                ?? McpRequestRecord.BuildOperationId(RegistryCredential(principal), did, requestId);
+                ?? McpRequestRecord.BuildOperationId(RegistryCredential(principal), participantId, requestId);
             // ADR 0007: for locally written posts the projection row is the receipt. Legacy
             // rows and the Spaces pipeline still resolve through the staged intent.
-            var projected = (await Message.Query(m => m.AuthorDid == did && m.OperationId == operationId, One(), ct)).FirstOrDefault();
+            var projected = (await Message.Query(m => m.AuthorParticipantId == participantId && m.OperationId == operationId, One(), ct)).FirstOrDefault();
             if (projected is not null)
             {
                 var rowRoom = await Room.Get(projected.RoomKey, ct);
@@ -539,7 +539,7 @@ public sealed partial class ExperienceService(
             }
             else
             {
-                var intent = await WriteIntent.Get(WriteIntent.Key(did, record.TargetKey, operationId), ct);
+                var intent = await WriteIntent.Get(WriteIntent.Key(participantId, record.TargetKey, operationId), ct);
                 if (intent is not null)
                 {
                     state = intent.State == "accepted" ? "completed" : intent.State == "rejected" ? "rejected" : "pending";
@@ -558,7 +558,7 @@ public sealed partial class ExperienceService(
         if (record.Operation == "JoinTangent" && state == "pending")
         {
             using var fresh = EntityContext.NoCache();
-            var admission = await TangentJoinRequest.Get(TangentJoinRequest.Key(record.TargetKey, did), ct);
+            var admission = await TangentJoinRequest.Get(TangentJoinRequest.Key(record.TargetKey, participantId), ct);
             if (admission is { Pending: false })
             {
                 state = admission.Accepted == true ? "completed" : "rejected";
@@ -567,7 +567,7 @@ public sealed partial class ExperienceService(
             }
         }
         // Current access governs cached receipts: a revoked target's references are not re-disclosed.
-        resultRef = await RefReadable(did, resultRef, ct) ? resultRef : null;
+        resultRef = await RefReadable(participantId, resultRef, ct) ? resultRef : null;
         var receipt = new ExperienceReceipt(record.RequestId, state is "completed" ? "completed" : state is "rejected" ? "rejected" : "pending",
             resultRef, state == "pending" ? 15 : null);
         var actions = new List<ExperienceAction>();
@@ -576,7 +576,7 @@ public sealed partial class ExperienceService(
         return await Assemble("get_operation", ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(new ExperienceOperationData(record.Operation, receipt), null, null),
-            (await digest.Page(did, credential, null, null, null, 3, ct)).Attention, Empty(), actions, null, null, did, credential, ct);
+            (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention, Empty(), actions, null, null, participantId, credential, ct);
     }
 
     // ---------- Shared assembly ----------
@@ -585,9 +585,9 @@ public sealed partial class ExperienceService(
         ExperiencePlace place, ExperienceResult result, ExperienceAttention attention,
         ExperienceContinuation continuation, IReadOnlyList<ExperienceAction> actions,
         ExperienceOrientation? orientation, ExperienceCapabilities? capabilities,
-        string did, string credential, CancellationToken ct)
+        string participantId, string credential, CancellationToken ct)
     {
-        await activity.EnsureParticipantActive(did, credential, ct);
+        await activity.EnsureParticipantActive(participantId, credential, ct);
         return new ExperienceResponse(ExperienceResponse.Version, operation, status,
             new ExperienceSnapshot(await digest.HeadRevision(ct), Timestamp(), "current"),
             identity, place, result, attention, continuation, actions, orientation, capabilities);
@@ -595,7 +595,7 @@ public sealed partial class ExperienceService(
 
     internal ExperienceResponse Problem(string operation, ExperienceIdentity? identity, ExperiencePlace place,
         ExperienceProblem problem, IReadOnlyList<ExperienceAction>? actions = null,
-        string? did = null, string? credential = null, CancellationToken ct = default)
+        string? participantId = null, string? credential = null, CancellationToken ct = default)
         => new(ExperienceResponse.Version, operation, ExperienceStatus.Blocked,
             new ExperienceSnapshot("unknown", Timestamp(), "unavailable"), identity, place,
             new ExperienceResult(null, null, problem),
@@ -603,32 +603,32 @@ public sealed partial class ExperienceService(
             Empty(), actions ?? [], null, null);
 
     private async Task<ExperienceResponse> Replay(string operation, ClaimsPrincipal principal, ExperienceIdentity identity,
-        McpRequestRecord record, string did, string credential, CancellationToken ct)
+        McpRequestRecord record, string participantId, string credential, CancellationToken ct)
     {
         // Retries of a committed action return the recorded result; no side effect repeats.
         var receipt = new ExperienceReceipt(record.RequestId, record.State == "completed" ? "completed" : record.State,
-            await RefReadable(did, record.ResultRef, ct) ? record.ResultRef : null, null);
+            await RefReadable(participantId, record.ResultRef, ct) ? record.ResultRef : null, null);
         return await Assemble(operation, ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(record.ResultData is null ? null : System.Text.Json.JsonSerializer.Deserialize<object>(record.ResultData, ExperienceJson.Options),
                 receipt, null),
-            (await digest.Page(did, credential, null, null, null, 3, ct)).Attention, Empty(), [], null, null, did, credential, ct);
+            (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention, Empty(), [], null, null, participantId, credential, ct);
     }
 
-    internal async Task<ExperienceIdentity> IdentityOf(string did, CancellationToken ct)
+    internal async Task<ExperienceIdentity> IdentityOf(string participantId, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var participant = await Participant.Get(did, ct)
-            ?? Participant.FirstArrival(did, null, clock.GetUtcNow());
-        return new ExperienceIdentity(did, did, DisplayName(participant), participant.Handle);
+        // A principal's participant always exists; the hollow fallback only renders an id.
+        var did = await hub.Directory.AtprotoDidOf(participantId, ct);
+        var label = await hub.Directory.LabelOf(participantId, ct);
+        return new ExperienceIdentity(participantId, did, DisplayName(label ?? participantId), label);
     }
 
-    private static string DisplayName(Participant participant)
+    private static string DisplayName(string label)
     {
-        if (participant.Handle is not { Length: > 0 } handle) return participant.Id;
-        var at = handle.IndexOf('.');
-        var acting = at > 0 ? handle[..at] : handle;
-        return acting.Length <= 80 ? acting : handle[..80];
+        var at = label.IndexOf('.');
+        var acting = at > 0 ? label[..at] : label;
+        return acting.Length <= 80 ? acting : label[..80];
     }
 
     internal ExperiencePlace ServerPlace(ClaimsPrincipal principal, string label)
@@ -636,15 +636,15 @@ public sealed partial class ExperienceService(
             principal.HasClaim(ParticipationConstants.GrantClaim, ParticipationGrants.Read) || !ParticipationAccess.UsesCredential(principal)
                 ? [ExperienceActionNames.ListTangents, "get_updates"] : []);
 
-    private async Task<ExperiencePlace> TangentPlaceOf(ClaimsPrincipal principal, string did, string tangentKey, CancellationToken ct)
+    private async Task<ExperiencePlace> TangentPlaceOf(ClaimsPrincipal principal, string participantId, string tangentKey, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
         var tangent = await TangentCommunity.Get(tangentKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ListTopics, ExperienceActionNames.SetWatch };
-        if (await tangents.CanAccess(did, tangentKey, ct)) allowed.Add(ExperienceActionNames.LeaveTangent);
+        if (await tangents.CanAccess(participantId, tangentKey, ct)) allowed.Add(ExperienceActionNames.LeaveTangent);
         else allowed.Add(ExperienceActionNames.JoinTangent);
         return new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), null,
-            tangent?.Name is { Length: > 0 } name ? name : tangentKey, await RoleOf(did, tangentKey, ct), allowed);
+            tangent?.Name is { Length: > 0 } name ? name : tangentKey, await RoleOf(participantId, tangentKey, ct), allowed);
     }
 
     private ExperiencePlace TangentPlace(ClaimsPrincipal principal, TangentDescription tangent)
@@ -653,15 +653,15 @@ public sealed partial class ExperienceService(
                 ? [ExperienceActionNames.ListTopics, ExperienceActionNames.JoinTangent, ExperienceActionNames.SetWatch]
                 : [ExperienceActionNames.ListTopics, ExperienceActionNames.LeaveTangent, ExperienceActionNames.SetWatch]);
 
-    private async Task<ExperiencePlace> TopicPlaceOf(ClaimsPrincipal principal, string did, string tangentKey, string topicKey, CancellationToken ct)
+    private async Task<ExperiencePlace> TopicPlaceOf(ClaimsPrincipal principal, string participantId, string tangentKey, string topicKey, CancellationToken ct)
     {
-        var policy = await conversation.ReadPolicy(did, topicKey, ct);
+        var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         using var fresh = EntityContext.NoCache();
         var room = await Room.Get(topicKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead, ExperienceActionNames.SetWatch };
         if (policy.CanWrite) allowed.Add(ExperienceActionNames.CreatePost);
         return new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Channel(tangentKey, topicKey),
-            $"{await TangentName(tangentKey, ct)} / {room?.Title ?? topicKey}", await RoleOf(did, tangentKey, ct), allowed);
+            $"{await TangentName(tangentKey, ct)} / {room?.Title ?? topicKey}", await RoleOf(participantId, tangentKey, ct), allowed);
     }
 
     internal static string RoleOf(TangentDescription tangent) => tangent.IsOwner ? "owner"
@@ -671,10 +671,10 @@ public sealed partial class ExperienceService(
             TangentRole.Member => "member", TangentRole.Admin => "admin", TangentRole.Reader => "reader", _ => "visitor"
         };
 
-    private async Task<string> RoleOf(string did, string tangentKey, CancellationToken ct)
+    private async Task<string> RoleOf(string participantId, string tangentKey, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        return RoleOf(await tangents.Describe(did, tangentKey, ct) ?? new TangentDescription(tangentKey, tangentKey, "", "", "", "",
+        return RoleOf(await tangents.Describe(participantId, tangentKey, ct) ?? new TangentDescription(tangentKey, tangentKey, "", "", "", "",
             "", false, false, [], IsMember: false));
     }
 
@@ -691,28 +691,32 @@ public sealed partial class ExperienceService(
         return site?.Name.Length > 0 ? site.Name : "This Tangent server";
     }
 
-    internal async Task<string> ReadinessOf(string did, CancellationToken ct)
+    /// <summary>Source readiness is atproto-scoped: an internal-only participant has no source
+    /// provider to connect and reports unsupported, never pending.</summary>
+    internal async Task<string> ReadinessOf(string participantId, CancellationToken ct)
     {
         try
         {
+            var did = await hub.Directory.AtprotoDidOf(participantId, ct);
+            if (did is null) return "unsupported";
             var source = await readiness.Get(did, ct: ct);
             return source.State switch { "ready" => "ready", "provider-unsupported" => "unsupported", _ => "needs_connection" };
         }
         catch (Exception error) when (error is not OperationCanceledException) { return "unavailable"; }
     }
 
-    private async Task<(string? Tangent, string? Room)> ScopeOf(ClaimsPrincipal principal, string did, string credential,
+    private async Task<(string? Tangent, string? Room)> ScopeOf(ClaimsPrincipal principal, string participantId, string credential,
         string? scopeRef, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(scopeRef) || scopeRef == refs.ServerRef) return (null, null);
         if (refs.ParseChannel(scopeRef) is { } channel)
         {
-            await conversation.ReadPolicy(did, channel.RoomKey, ct);
+            await conversation.ReadPolicy(participantId, channel.RoomKey, ct);
             return (channel.TangentKey, channel.RoomKey);
         }
         if (refs.ParseTangent(scopeRef) is { } tangent)
         {
-            if (!await tangents.CanAccess(did, tangent, ct)) throw new UnauthorizedAccessException();
+            if (!await tangents.CanAccess(participantId, tangent, ct)) throw new UnauthorizedAccessException();
             return (tangent, null);
         }
         throw new McpInvalidArgumentsException("scopeRef", "Copy a server, Topic, or Tangent reference returned by this server.");
@@ -725,7 +729,7 @@ public sealed partial class ExperienceService(
         throw new McpInvalidArgumentsException("scopeRef", "Copy a Topic or Tangent reference returned by this server.");
     }
 
-    private async Task<bool> RefReadable(string did, string? reference, CancellationToken ct)
+    private async Task<bool> RefReadable(string participantId, string? reference, CancellationToken ct)
     {
         if (reference is null) return true;
         try
@@ -734,10 +738,10 @@ public sealed partial class ExperienceService(
             if (refs.ParseMessage(reference) is { } message) channel = (message.TangentKey, message.RoomKey);
             if (channel is { } room)
             {
-                var description = await rooms.Describe(did, room.Room, ct);
+                var description = await rooms.Describe(participantId, room.Room, ct);
                 return description?.TangentKey == room.Tangent && description.CanRead;
             }
-            if (refs.ParseTangent(reference) is { } tangent) return await tangents.CanAccess(did, tangent, ct);
+            if (refs.ParseTangent(reference) is { } tangent) return await tangents.CanAccess(participantId, tangent, ct);
             return false;
         }
         catch (Exception error) when (error is UnauthorizedAccessException or RoomRuleViolation or TangentRuleViolation)
@@ -745,18 +749,18 @@ public sealed partial class ExperienceService(
     }
 
     internal async Task<(IReadOnlyList<ExperienceTangentDto> Tangents, string? Continuation, bool Incomplete)> TangentPage(
-        string did, int page, int offset, int limit, CancellationToken ct)
+        string participantId, int page, int offset, int limit, CancellationToken ct)
     {
         TangentsResponse directory;
         using (EntityContext.NoCache())
-            directory = await tangents.List(did, page, ct);
+            directory = await tangents.List(participantId, page, ct);
         var visible = directory.Tangents.Skip(offset).ToList();
         var slice = visible.Take(limit).ToList();
         string? continuation = null;
         if (visible.Count > limit)
-            continuation = refs.EncodeListCursor("experience:tangents", did, page, (offset + limit).ToString());
+            continuation = refs.EncodeListCursor("experience:tangents", participantId, page, (offset + limit).ToString());
         else if (directory.NextPage is { } next)
-            continuation = refs.EncodeListCursor("experience:tangents", did, next, "0");
+            continuation = refs.EncodeListCursor("experience:tangents", participantId, next, "0");
         return (slice.Select(ToDto).ToList(), continuation, directory.DirectoryIncomplete);
     }
 
@@ -785,8 +789,8 @@ public sealed partial class ExperienceService(
                 var projection = (from m in window.Messages where m.SourceUri == parent.Uri select m).FirstOrDefault();
                 if (projection is not null) replyTo = refs.Message(tangentKey, topicKey, projection.Id);
             }
-            posts.Add(new ExperiencePostDto(refs.Message(tangentKey, topicKey, message.Id), message.AuthorDid,
-                window.AuthorHandles.GetValueOrDefault(message.AuthorDid, message.AuthorDid),
+            posts.Add(new ExperiencePostDto(refs.Message(tangentKey, topicKey, message.Id), message.AuthorParticipantId,
+                window.AuthorHandles.GetValueOrDefault(message.AuthorParticipantId, message.AuthorParticipantId),
                 message.Removed ? "" : message.Content.Text, replyTo,
                 refs.Origin + "/tangents/" + tangentKey + "/posts/" + message.Id + "/",
                 Format(message.AcceptedAt), message.EditedAt is { } edited ? Format(edited) : null, message.Removed,
@@ -816,10 +820,10 @@ public sealed partial class ExperienceService(
             Sort = [new SortSpec(new MemberPath(typeof(Message), [member], member.PropertyType, false, -1), false)] };
     }
 
-    private McpListCursor? DecodeDirectoryCursor(string? value, string scope, string did)
+    private McpListCursor? DecodeDirectoryCursor(string? value, string scope, string participantId)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
-        try { return refs.DecodeListCursor(value, scope, did); }
+        try { return refs.DecodeListCursor(value, scope, participantId); }
         catch (ArgumentException) { throw new McpInvalidArgumentsException("cursor", "This directory cursor is invalid. Open the directory again."); }
     }
 

@@ -13,11 +13,12 @@ namespace TangentSpace.Tests;
 
 public sealed class CommunityRulesTests
 {
-    private const string HostOwner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
-    private const string Member = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
-    private const string Visitor = "did:plc:cccccccccccccccccccccccc";
+    private const string HostOwnerDid = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+    private static readonly string HostOwner = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string Member = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string Visitor = TangentSpace.Participants.Participant.NewIdentifier();
     private static readonly DateTimeOffset Now = new(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
-    private static TangentSite Site() => TangentSite.Establish(new SiteOptions { Name = "Host", OwnerDid = HostOwner }, HostOwner, Now);
+    private static TangentSite Site() => TangentSite.Establish(new SiteOptions { Name = "Host", OwnerDid = HostOwnerDid }, HostOwnerDid, HostOwner, Now);
 
     [Fact]
     public void A_new_tangent_is_owned_by_the_configured_host_owner_and_has_a_card()
@@ -27,7 +28,7 @@ public sealed class CommunityRulesTests
 
         Assert.Equal("kintsugi", tangent.Id);
         Assert.Equal("Kintsugi Architecture", tangent.Name);
-        Assert.Equal(HostOwner, tangent.OwnerDid);
+        Assert.Equal(HostOwner, tangent.OwnerParticipantId);
         Assert.False(tangent.OpenToSignedIn);
         Assert.True(tangent.IsOwner(HostOwner));
         Assert.False(tangent.IsOwner(Member));
@@ -123,7 +124,8 @@ public sealed class CommunityRulesTests
     {
         var context = new DefaultHttpContext
         {
-            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AtprotoClaimTypes.Did, HostOwner)], "cookie"))
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(AtprotoClaimTypes.Did, HostOwnerDid), new Claim(TangentSpace.Participation.ParticipationConstants.ParticipantClaim, HostOwner)], "cookie"))
         };
         context.Request.Headers["X-Tangent-Participant"] = multipleValues ? new StringValues([HostOwner, Member]) : Member;
         var controller = new TangentsController(null!) { ControllerContext = new ControllerContext { HttpContext = context } };

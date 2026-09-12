@@ -7,9 +7,9 @@ namespace TangentSpace.Rooms;
 public sealed class RoomMembership : Entity<RoomMembership>
 {
     public string RoomKey { get; set; } = "";
-    public string ParticipantDid { get; set; } = "";
+    public string ParticipantId { get; set; } = "";
     public RoomRole Role { get; set; }
-    public string ChangedByDid { get; set; } = "";
+    public string ChangedByParticipantId { get; set; } = "";
     public DateTimeOffset ChangedAt { get; set; }
     public long PolicyRevision { get; set; }
 
@@ -19,7 +19,7 @@ public sealed class RoomMembership : Entity<RoomMembership>
     internal static RoomMembership Assign(Room room, string participantDid, RoomRole role, string actorDid, DateTimeOffset now)
         => new()
         {
-            Id = Key(room.Id, participantDid), RoomKey = room.Id, ParticipantDid = participantDid, Role = role,
-            ChangedByDid = actorDid, ChangedAt = now, PolicyRevision = room.PolicyRevision
+            Id = Key(room.Id, participantDid), RoomKey = room.Id, ParticipantId = participantDid, Role = role,
+            ChangedByParticipantId = actorDid, ChangedAt = now, PolicyRevision = room.PolicyRevision
         };
 }

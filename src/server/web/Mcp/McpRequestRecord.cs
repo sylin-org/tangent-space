@@ -11,7 +11,7 @@ namespace TangentSpace.Mcp;
 public sealed class McpRequestRecord : Entity<McpRequestRecord>
 {
     public string CredentialId { get; set; } = "";
-    public string ParticipantDid { get; set; } = "";
+    public string ParticipantId { get; set; } = "";
     public string RequestId { get; set; } = "";
     public string Operation { get; set; } = "";
     public string TargetKey { get; set; } = "";

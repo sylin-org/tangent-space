@@ -42,12 +42,12 @@ public sealed class MessageRulesTests
     {
         var old = MessageContent.FromCbor(Record("late", SpacesOptions.Collection, DateTimeOffset.UnixEpoch));
         var decision = new SourceDecision { Id = "source", Accepted = true, DecidedAt = DateTimeOffset.UtcNow,
-            Sequence = 42, Content = old, AuthorDid = "did:plc:verified-source" };
+            Sequence = 42, Content = old, AuthorParticipantId = "11111111111111111111111111111111" };
         var projected = Message.Project(decision);
         Assert.Equal(DateTimeOffset.UnixEpoch, projected.Content.CreatedAt);
         Assert.Equal(decision.DecidedAt, projected.AcceptedAt);
         Assert.Equal(42, projected.Sequence);
-        Assert.Equal(decision.AuthorDid, projected.AuthorDid);
+        Assert.Equal(decision.AuthorParticipantId, projected.AuthorParticipantId);
     }
 
     [Theory]

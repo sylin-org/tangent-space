@@ -1,7 +1,6 @@
-using CarpaNet.Identity;
 using Koan.Data.Core;
 using Koan.Web.Authorization;
-using Koan.Web.Auth.Connector.Atproto;
+using TangentSpace.Participation;
 using Microsoft.Extensions.DependencyInjection;
 using TangentSpace.Communities;
 using TangentSpace.Infrastructure;
@@ -13,7 +12,7 @@ namespace TangentSpace.Conversation;
 
 /// <summary>D4b read gate for Message rows on the generic entity surface (the gposingway
 /// governed-read pattern on the WEB-0068 rail): a changelog snapshot is visible only to its
-/// author (AuthorDid == viewer) or to a viewer holding a moderation-capable role for that
+/// author (AuthorParticipantId == viewer) or to a viewer holding a moderation-capable role for that
 /// snapshot's room. Per-row control lives in the predicate, so a moderation-removed post's
 /// snapshots stay author+moderator visible while everyone else gets the framework's honest
 /// empty/404. The predicate is ANDed with a structural snapshot-only term (OfMessageId set),
@@ -38,8 +37,8 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
     {
         if (action == AccessAction.Read)
         {
-            var viewer = Principal.FindFirst(AtprotoClaimTypes.Did)?.Value;
-            if (viewer is null || !IdentityResolver.IsValidDid(viewer))
+            var viewer = Principal.FindFirst(ParticipationConstants.ParticipantClaim)?.Value;
+            if (viewer is null || !TangentSpace.Participants.Participant.IsValidId(viewer))
                 return q.Where(row => false);
             using (EntityContext.NoCache())
             {
@@ -49,7 +48,7 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
             }
             var moderatorRooms = ModeratorRooms(viewer);
             return q.Where(row => row.OfMessageId != null
-                && (row.AuthorDid == viewer || moderatorRooms.Contains(row.RoomKey)));
+                && (row.AuthorParticipantId == viewer || moderatorRooms.Contains(row.RoomKey)));
         }
         // No row may ever be updated or removed through the generic surface; a create contributes
         // no Where (an unstamped create constraint is a boot-probed footgun).
@@ -65,28 +64,28 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
     /// predicate. Constrain is synchronous on the endpoint read path (no SynchronizationContext)
     /// and runs before the main query, so the bounded role lookups block once per request rather
     /// than deadlocking.</summary>
-    private static HashSet<string> ModeratorRooms(string did)
+    private static HashSet<string> ModeratorRooms(string participantId)
     {
         var rooms = new HashSet<string>(StringComparer.Ordinal);
         using (EntityContext.NoCache())
         {
             var site = Block<TangentSite?>().Invoke(TangentSite.Get(TangentConstants.SiteId, CancellationToken.None));
-            var siteOwner = site?.IsOwner(did) == true;
+            var siteOwner = site?.IsOwner(participantId) == true;
             var roles = new Dictionary<string, RoomRole>(StringComparer.Ordinal);
             foreach (var membership in Block<IReadOnlyList<RoomMembership>>()
-                .Invoke(RoomMembership.Query(membership => membership.ParticipantDid == did, CancellationToken.None)))
+                .Invoke(RoomMembership.Query(membership => membership.ParticipantId == participantId, CancellationToken.None)))
                 roles[membership.RoomKey] = membership.Role;
             var tangentMemberships = new Dictionary<string, TangentMembership>(StringComparer.Ordinal);
             var admin = new HashSet<string>(StringComparer.Ordinal);
             foreach (var membership in Block<IReadOnlyList<TangentMembership>>()
-                .Invoke(TangentMembership.Query(membership => membership.ParticipantDid == did, CancellationToken.None)))
+                .Invoke(TangentMembership.Query(membership => membership.ParticipantId == participantId, CancellationToken.None)))
             {
                 tangentMemberships[membership.TangentKey] = membership;
                 if (membership.Role == TangentRole.Admin) admin.Add(membership.TangentKey);
             }
             var owned = new HashSet<string>(StringComparer.Ordinal);
             foreach (var tangent in Block<IReadOnlyList<TangentCommunity>>()
-                .Invoke(TangentCommunity.Query(tangent => tangent.OwnerDid == did, CancellationToken.None)))
+                .Invoke(TangentCommunity.Query(tangent => tangent.OwnerParticipantId == participantId, CancellationToken.None)))
                 owned.Add(tangent.Id);
 
             var candidates = new Dictionary<string, Room>(StringComparer.Ordinal);
@@ -102,7 +101,7 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
                     foreach (var room in Block<IReadOnlyList<Room>>()
                         .Invoke(Room.Query(room => room.TangentKey == tangentKey, CancellationToken.None))) Admit(room);
                 foreach (var room in Block<IReadOnlyList<Room>>()
-                    .Invoke(Room.Query(room => room.CreatorOwnerDid == did, CancellationToken.None))) Admit(room);
+                    .Invoke(Room.Query(room => room.CreatorParticipantId == participantId, CancellationToken.None))) Admit(room);
                 foreach (var (roomKey, role) in roles)
                     if (role == RoomRole.Manager && Block<Room?>().Invoke(Room.Get(roomKey, CancellationToken.None)) is { } room)
                         Admit(room);
@@ -116,15 +115,15 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
                 // rule decides with the viewer's membership, where a durable removal overrides.
                 var tangent = Block<TangentCommunity?>().Invoke(TangentCommunity.Get(room.TangentKey, CancellationToken.None));
                 var admitted = ownerHere || tangent is null
-                    || tangent.CanParticipate(did, tangentMemberships.GetValueOrDefault(room.TangentKey));
+                    || tangent.CanParticipate(participantId, tangentMemberships.GetValueOrDefault(room.TangentKey));
                 // A durable ban removes the manager tier for non-owners (owners are never
                 // restriction targets); time-scoped timeouts stay ignored for reads.
                 var banned = !ownerHere && Block<EffectiveRestriction?>()
-                    .Invoke(Restrictions.ForRoom(did, room.Id, room.TangentKey, now, CancellationToken.None)) is { Banned: true };
+                    .Invoke(Restrictions.ForRoom(participantId, room.Id, room.TangentKey, now, CancellationToken.None)) is { Banned: true };
                 RoomRole? role = roles.TryGetValue(room.Id, out var assigned) ? assigned : null;
                 var managerHere = admitted
                     && (role == RoomRole.Manager
-                        || role is null or not RoomRole.Removed && (admin.Contains(room.TangentKey) || room.CreatorOwnerDid == did));
+                        || role is null or not RoomRole.Removed && (admin.Contains(room.TangentKey) || room.CreatorParticipantId == participantId));
                 if (ownerHere || managerHere && !banned) rooms.Add(room.Id);
             }
         }

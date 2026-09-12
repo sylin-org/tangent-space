@@ -23,25 +23,26 @@ public sealed class WelcomeController(IOptions<SiteOptions> options, TangentServ
     public async Task<IActionResult> Welcome(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        string? did;
+        string? participantId;
         try
         {
-            did = User.Identity?.IsAuthenticated == true ? ParticipationAccess.Require(User, ParticipationGrants.Welcome) : null;
-            if (did is null && Request.Headers.ContainsKey("Authorization")) return Unauthorized();
+            participantId = User.Identity?.IsAuthenticated == true ? ParticipationAccess.Require(User, ParticipationGrants.Welcome) : null;
+            if (participantId is null && Request.Headers.ContainsKey("Authorization")) return Unauthorized();
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         using var fresh = EntityContext.NoCache();
         var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-        var participant = did is null ? null : await Participant.Get(did, ct);
-        var identity = participant is null ? null : new ParticipantWelcome(participant.Id, participant.Handle,
+        var participant = participantId is null ? null : await Participant.Get(participantId, ct);
+        var identity = participant is null ? null : new ParticipantWelcome(participant.Id,
+            await hub.Directory.AtprotoDidOf(participant.Id, ct), await hub.Directory.LabelOf(participant.Id, ct),
             site?.IsOwner(participant.Id) == true, participant.JoinedAt);
-        var settings = await server.Read(did, ct);
-        var home = site?.IsOwner(did) == true ? await TangentCommunity.Get(TangentCommunity.HomeKey, ct) : null;
+        var settings = await server.Read(participantId, ct);
+        var home = site?.IsOwner(participantId) == true ? await TangentCommunity.Get(TangentCommunity.HomeKey, ct) : null;
         var onboarding = site is null
             ? identity is null ? "sign_in" : settings.CanClaim ? "confirm_owner" : "waiting_owner"
-            : site.IsOwner(did) && home?.SetupComplete != true ? "create_tangent" : "complete";
+            : site.IsOwner(participantId) && home?.SetupComplete != true ? "create_tangent" : "complete";
         return Ok(new SiteWelcome(site?.Name ?? options.Value.Name, site is not null, identity,
             TangentConstants.SignInPath, identity is null ? null : TangentConstants.SignOutPath,
-            await rooms.List(did, 1, ct), settings, onboarding));
+            await rooms.List(participantId, 1, ct), settings, onboarding));
     }
 }

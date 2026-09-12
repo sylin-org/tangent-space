@@ -28,9 +28,9 @@ public sealed partial class McpOperationDispatcher
         }
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var payload = new Dictionary<string, string?> { ["tangentRef"] = args.TangentRef, ["inviteRef"] = args.InviteRef };
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId,
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId,
                 "JoinTangent", tangentKey, payload, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("JoinTangent", principal, context, identity, registration.Record, ct);
@@ -46,14 +46,14 @@ public sealed partial class McpOperationDispatcher
             CompanionJoinResult join;
             try
             {
-                join = await companions.Join(context.ParticipantDid, tangentKey, invitationId, ct);
+                join = await companions.Join(context.ParticipantId, tangentKey, invitationId, ct);
             }
             catch (TangentRuleViolation denied) when (denied.Denial == TangentDenial.Forbidden)
             {
                 // Join denials are admission outcomes, not authority failures.
-                return await Problem("JoinTangent", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantDid, context.CredentialId, ct),
+                return await Problem("JoinTangent", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantId, context.CredentialId, ct),
                     McpProblem.Of(McpProblemCodes.NotAdmitted, denied.Message),
-                    did: context.ParticipantDid, credential: context.CredentialId, ct: ct);
+                    participantId: context.ParticipantId, credential: context.CredentialId, ct: ct);
             }
             var welcome = join.Outcome == CompanionJoinOutcome.PendingApproval
                 ? "Your request is with the Tangent's administrators."
@@ -63,9 +63,9 @@ public sealed partial class McpOperationDispatcher
             var selected = await FindTangent(context, tangentKey, ct);
             var channels = selected?.Channels.Take(10).Select(room => ToDto(tangentKey, room)).ToList() ?? [];
             var nextChannels = selected?.Channels.Count > 10
-                ? refs.EncodeListCursor("channels:" + tangentKey, context.ParticipantDid, 1, "10")
+                ? refs.EncodeListCursor("channels:" + tangentKey, context.ParticipantId, 1, "10")
                 : selected?.NextChannelsPage is { } nextPage
-                    ? refs.EncodeListCursor("channels:" + tangentKey, context.ParticipantDid, nextPage, "0") : null;
+                    ? refs.EncodeListCursor("channels:" + tangentKey, context.ParticipantId, nextPage, "0") : null;
             var membership = join.Membership is { } result
                 ? result.Role switch
                 {
@@ -81,7 +81,7 @@ public sealed partial class McpOperationDispatcher
                 return Assemble("JoinTangent", "pending", context.CompanionId, context.Id, identity,
                     await TangentPlace(context, tangentKey, ["discover"], ct),
                     new McpResult(pendingData, new McpReceipt(args.RequestId, "op_" + args.RequestId, "pending", null, 15), null),
-                    await ActivitySegment(context.ParticipantDid, context.CredentialId, null, null, ct),
+                    await ActivitySegment(context.ParticipantId, context.CredentialId, null, null, ct),
                     new McpNext(["GetOperation"],
                         [NextCall("GetOperation", "Check your saved action", McpJson.Arguments(new Dictionary<string, string?>
                             { ["contextId"] = context.Id, ["requestId"] = args.RequestId }))]));
@@ -91,7 +91,7 @@ public sealed partial class McpOperationDispatcher
             var place = await TangentPlace(context, tangentKey, MembershipPermissions(channels), ct);
             return Assemble("JoinTangent", "ok", context.CompanionId, context.Id, identity, place,
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", refs.Tangent(tangentKey), null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, tangentKey, null, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, tangentKey, null, ct),
                 new McpNext(DefaultAvailable(place, selected: true),
                     channels.Count > 0
                         ? [NextCall("ReadChannel", "Open the conversation", McpJson.Arguments(new Dictionary<string, string?>
@@ -106,21 +106,21 @@ public sealed partial class McpOperationDispatcher
         var tangentKey = refs.ParseTangent(args.TangentRef)
             ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a tangent reference returned by this server.");
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId,
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId,
                 "LeaveTangent", tangentKey, new Dictionary<string, string?> { ["tangentRef"] = args.TangentRef }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("LeaveTangent", principal, context, identity, registration.Record, ct);
             requests.CompleteWithDomain(registration.Record, _ => ("completed", null, SerializeData(new McpLeaveData("visitor", true))));
-            await companions.Leave(context.ParticipantDid, tangentKey, ct);
+            await companions.Leave(context.ParticipantId, tangentKey, ct);
             // Leaving retains public and room history; authorship is never erased.
             var data = new McpLeaveData("visitor", true);
             await requests.Complete(registration.Record, "completed", null, SerializeData(data), ct);
             return Assemble("LeaveTangent", "ok", context.CompanionId, context.Id, identity,
                 new McpPlace("tangent", tangentKey, refs.ServerRef, refs.Tangent(tangentKey), null, [], "not_applicable"),
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", null, null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, null, null, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, null, null, ct),
                 new McpNext(["ListTangents", "GetUpdates"], []));
         }, ct);
     }
@@ -129,11 +129,11 @@ public sealed partial class McpOperationDispatcher
     {
         var args = McpArguments.SetWatch(arguments);
         var destination = ScopeDestination(args.ScopeRef);
-        if (!await tangents.CanAccess(context.ParticipantDid, destination.Tangent, ct)) throw new UnauthorizedAccessException();
+        if (!await tangents.CanAccess(context.ParticipantId, destination.Tangent, ct)) throw new UnauthorizedAccessException();
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "SetWatch",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "SetWatch",
                 destination.Room ?? destination.Tangent, new Dictionary<string, string?> { ["scopeRef"] = args.ScopeRef, ["mode"] = args.Mode }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("SetWatch", principal, context, identity, registration.Record, ct);
@@ -145,14 +145,14 @@ public sealed partial class McpOperationDispatcher
                 _ => WatchMode.None
             };
             if (destination.Room is { } watchedRoom)
-                await companions.SetWatch(context.ParticipantDid, watchedRoom, mode, ct);
-            else await companions.SetTangentWatch(context.ParticipantDid, destination.Tangent, mode, ct);
+                await companions.SetWatch(context.ParticipantId, watchedRoom, mode, ct);
+            else await companions.SetTangentWatch(context.ParticipantId, destination.Tangent, mode, ct);
             var data = new McpSetWatchData(args.ScopeRef, args.Mode);
             await requests.Complete(registration.Record, "completed", null, SerializeData(data), ct);
             var place = await ScopePlace(context, destination, ct);
             return Assemble("SetWatch", "ok", context.CompanionId, context.Id, identity, place,
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", null, null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, destination.Tangent, destination.Room, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, destination.Tangent, destination.Room, ct),
                 new McpNext(DefaultAvailable(place, selected: true), []));
         }, ct);
     }
@@ -162,21 +162,21 @@ public sealed partial class McpOperationDispatcher
         var args = McpArguments.GetOperation(arguments);
         ParticipationAccess.Require(principal, ParticipationGrants.Read);
         // Lookup never re-executes; the durable registry and WriteIntent state are the only truth.
-        var record = await requests.Find(context.CredentialId, context.ParticipantDid, args.RequestId, ct);
+        var record = await requests.Find(context.CredentialId, context.ParticipantId, args.RequestId, ct);
         if (record is null)
-            return await Problem("GetOperation", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantDid, context.CredentialId, ct),
+            return await Problem("GetOperation", context.CompanionId, context.Id, identity, await ServerFallback(principal, context.ParticipantId, context.CredentialId, ct),
                 McpProblem.Of(McpProblemCodes.ReceiptExpired, "No receipt is available for that request ID.", "requestId"),
-                did: context.ParticipantDid, credential: context.CredentialId, ct: ct);
+                participantId: context.ParticipantId, credential: context.CredentialId, ct: ct);
         var state = record.State;
         string? resultRef = record.ResultRef;
         if (record.Operation == "PostMessage")
         {
             using var fresh = EntityContext.NoCache();
             var operationId = record.NamespacedOperationId
-                ?? McpRequestRecord.BuildOperationId(context.CredentialId, context.ParticipantDid, args.RequestId);
+                ?? McpRequestRecord.BuildOperationId(context.CredentialId, context.ParticipantId, args.RequestId);
             // ADR 0007: a locally written post's projection row is its own receipt; the staged
             // intent remains the authority for the Spaces pipeline and legacy rows.
-            var projected = (await Message.Query(m => m.AuthorDid == context.ParticipantDid && m.OperationId == operationId, One(), ct)).FirstOrDefault();
+            var projected = (await Message.Query(m => m.AuthorParticipantId == context.ParticipantId && m.OperationId == operationId, One(), ct)).FirstOrDefault();
             if (projected is not null)
             {
                 var rowRoom = await Room.Get(projected.RoomKey, ct);
@@ -188,7 +188,7 @@ public sealed partial class McpOperationDispatcher
             }
             else
             {
-                var intent = await WriteIntent.Get(WriteIntent.Key(context.ParticipantDid, record.TargetKey, operationId), ct);
+                var intent = await WriteIntent.Get(WriteIntent.Key(context.ParticipantId, record.TargetKey, operationId), ct);
                 if (intent is not null)
                 {
                     state = intent.State == "accepted" ? "completed" : intent.State == "rejected" ? "rejected" : "pending";
@@ -207,7 +207,7 @@ public sealed partial class McpOperationDispatcher
         if (record.Operation == "JoinTangent" && state == "pending" && record.ResultData is not null)
         {
             using var fresh = EntityContext.NoCache();
-            var admission = await TangentJoinRequest.Get(TangentJoinRequest.Key(record.TargetKey, context.ParticipantDid), ct);
+            var admission = await TangentJoinRequest.Get(TangentJoinRequest.Key(record.TargetKey, context.ParticipantId), ct);
             if (admission is { Pending: false })
             {
                 state = admission.Accepted == true ? "completed" : "rejected";
@@ -217,10 +217,10 @@ public sealed partial class McpOperationDispatcher
             }
         }
         // Current access governs cached receipts: a revoked target's references are not re-disclosed.
-        resultRef = await RefReadable(context.ParticipantDid, resultRef, ct) ? resultRef : null;
+        resultRef = await RefReadable(context.ParticipantId, resultRef, ct) ? resultRef : null;
         var receipt = new McpReceipt(record.RequestId, "op_" + record.RequestId,
             state is "completed" ? "completed" : state is "rejected" ? "rejected" : "pending", resultRef, null);
-        var place = await ServerFallback(principal, context.ParticipantDid, context.CredentialId, ct);
+        var place = await ServerFallback(principal, context.ParticipantId, context.CredentialId, ct);
         var channelRef = resultRef is not null && refs.ParseMessage(resultRef) is { } message
             ? refs.Channel(message.TangentKey, message.RoomKey)
             : refs.ParseChannel(resultRef) is not null ? resultRef : null;
@@ -232,7 +232,7 @@ public sealed partial class McpOperationDispatcher
             McpJson.Arguments(new Dictionary<string, string?> { ["contextId"] = context.Id, ["tangentRef"] = tangentRef })));
         return Assemble("GetOperation", "ok", context.CompanionId, context.Id, identity, place,
             new McpResult(new McpOperationData(record.Operation, receipt), null, null),
-            await ActivitySegment(context.ParticipantDid, context.CredentialId, null, null, ct),
+            await ActivitySegment(context.ParticipantId, context.CredentialId, null, null, ct),
             new McpNext(["GetUpdates", "ReadChannel", "ListChannels"], followups));
     }
 
@@ -266,10 +266,10 @@ public sealed partial class McpOperationDispatcher
         var args = McpArguments.InviteParticipant(arguments);
         var tangentKey = refs.ParseTangent(args.TangentRef)
             ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a tangent reference returned by this server.");
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "InviteParticipant",
-                tangentKey, new Dictionary<string, string?> { ["participantDid"] = args.ParticipantDid, ["role"] = args.Role }, ct);
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "InviteParticipant",
+                tangentKey, new Dictionary<string, string?> { ["participantDid"] = args.ParticipantId, ["role"] = args.Role }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("InviteParticipant", principal, context, identity, registration.Record, ct);
             var role = args.Role switch
@@ -284,14 +284,14 @@ public sealed partial class McpOperationDispatcher
                 return ("completed", null, SerializeData(new McpInviteData(refs.Invite(tangentKey, issued.InvitationId),
                     refs.Origin + "/invite/" + issued.InvitationId, "not_sent")));
             });
-            var invitation = await companions.Invite(context.ParticipantDid, tangentKey, args.ParticipantDid, role, ct);
+            var invitation = await companions.Invite(context.ParticipantId, tangentKey, args.ParticipantId, role, ct);
             var data = new McpInviteData(refs.Invite(tangentKey, invitation.InvitationId),
                 refs.Origin + "/invite/" + invitation.InvitationId, "not_sent");
             await requests.Complete(registration.Record, "completed", null, SerializeData(data), ct);
             return Assemble("InviteParticipant", "ok", context.CompanionId, context.Id, identity,
                 await TangentPlace(context, tangentKey, ["manage"], ct),
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", null, null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, tangentKey, null, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, tangentKey, null, ct),
                 new McpNext(["GetUpdates"], []));
         }, ct);
     }
@@ -300,11 +300,11 @@ public sealed partial class McpOperationDispatcher
     {
         var args = McpArguments.SetRole(arguments);
         var scope = ScopeDestination(args.ScopeRef);
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "SetRole",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "SetRole",
                 scope.Room is { } room ? room : scope.Tangent,
-                new Dictionary<string, string?> { ["scopeRef"] = args.ScopeRef, ["participantDid"] = args.ParticipantDid, ["role"] = args.Role }, ct);
+                new Dictionary<string, string?> { ["scopeRef"] = args.ScopeRef, ["participantDid"] = args.ParticipantId, ["role"] = args.Role }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("SetRole", principal, context, identity, registration.Record, ct);
             var role = args.Role switch
@@ -314,14 +314,14 @@ public sealed partial class McpOperationDispatcher
                 _ => CompanionRole.Member
             };
             requests.CompleteWithDomain(registration.Record, _ => ("completed", null,
-                SerializeData(new McpSetRoleData(args.ScopeRef, args.ParticipantDid, args.Role))));
-            var assigned = await companions.SetRole(context.ParticipantDid, scope.Tangent, scope.Room, args.ParticipantDid, role, ct);
+                SerializeData(new McpSetRoleData(args.ScopeRef, args.ParticipantId, args.Role))));
+            var assigned = await companions.SetRole(context.ParticipantId, scope.Tangent, scope.Room, args.ParticipantId, role, ct);
             if (assigned.Channel is { Accepted: false }) throw new UnauthorizedAccessException();
-            var data = new McpSetRoleData(args.ScopeRef, args.ParticipantDid, args.Role);
+            var data = new McpSetRoleData(args.ScopeRef, args.ParticipantId, args.Role);
             await requests.Complete(registration.Record, "completed", null, SerializeData(data), ct);
             return Assemble("SetRole", "ok", context.CompanionId, context.Id, identity, await ScopePlace(context, scope, ct),
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", null, null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, scope.Tangent, scope.Room, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, scope.Tangent, scope.Room, ct),
                 new McpNext(["GetUpdates"], []));
         }, ct);
     }
@@ -331,16 +331,16 @@ public sealed partial class McpOperationDispatcher
         var args = McpArguments.SetPolicy(arguments);
         var tangentKey = refs.ParseTangent(args.TangentRef)
             ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a tangent reference returned by this server.");
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "SetParticipationPolicy",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "SetParticipationPolicy",
                 tangentKey, new Dictionary<string, string?>
                 {
                     ["admission"] = args.Admission, ["preset"] = args.Preset, ["undeclared"] = args.Undeclared
                 }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("SetParticipationPolicy", principal, context, identity, registration.Record, ct);
-            var policy = await companions.SetParticipationPolicy(context.ParticipantDid, tangentKey,
+            var policy = await companions.SetParticipationPolicy(context.ParticipantId, tangentKey,
                 args.Admission switch
                 {
                     "open" => TangentAdmission.Open,
@@ -366,7 +366,7 @@ public sealed partial class McpOperationDispatcher
             return Assemble("SetParticipationPolicy", "ok", context.CompanionId, context.Id, identity,
                 await TangentPlace(context, tangentKey, ["manage"], ct),
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", null, null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, tangentKey, null, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, tangentKey, null, ct),
                 new McpNext(["GetUpdates"], []));
         }, ct);
     }
@@ -377,13 +377,13 @@ public sealed partial class McpOperationDispatcher
         var scope = ScopeDestination(args.ScopeRef);
         DateTimeOffset? until = args.Until is null ? null : DateTimeOffset.TryParse(args.Until, null,
             System.Globalization.DateTimeStyles.RoundtripKind, out var parsed) ? parsed : null;
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "SetRestriction",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "SetRestriction",
                 scope.Room is { } room ? room : scope.Tangent,
                 new Dictionary<string, string?>
                 {
-                    ["scopeRef"] = args.ScopeRef, ["participantDid"] = args.ParticipantDid,
+                    ["scopeRef"] = args.ScopeRef, ["participantDid"] = args.ParticipantId,
                     ["restriction"] = args.Restriction, ["until"] = args.Until, ["reason"] = args.Reason
                 }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
@@ -395,7 +395,7 @@ public sealed partial class McpOperationDispatcher
                     : refs.Tangent(scope.Tangent) + "::" + McpRefs.AuditPrefix + restricted.AuditId;
                 return ("completed", null, SerializeData(new McpRestrictionData(args.Restriction, args.Until, audit)));
             });
-            var result = await companions.SetRestriction(context.ParticipantDid, scope.Tangent, scope.Room, args.ParticipantDid,
+            var result = await companions.SetRestriction(context.ParticipantId, scope.Tangent, scope.Room, args.ParticipantId,
                 args.Restriction switch
                 {
                     "timeout" => RestrictionKind.Timeout,
@@ -409,7 +409,7 @@ public sealed partial class McpOperationDispatcher
             await requests.Complete(registration.Record, "completed", null, SerializeData(data), ct);
             return Assemble("SetRestriction", "ok", context.CompanionId, context.Id, identity, await ScopePlace(context, scope, ct),
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", null, null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, scope.Tangent, scope.Room, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, scope.Tangent, scope.Room, ct),
                 new McpNext(["GetUpdates"], []));
         }, ct);
     }
@@ -428,9 +428,9 @@ public sealed partial class McpOperationDispatcher
         var args = McpArguments.CreateTangent(arguments);
         if (args.ServerRef != refs.ServerRef)
             throw new McpInvalidArgumentsException("serverRef", "That server reference does not match this server.");
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "CreateTangent",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "CreateTangent",
                 "site", new Dictionary<string, string?>
                 {
                     ["name"] = args.Name, ["description"] = args.Description, ["visibility"] = args.Visibility, ["firstChannelName"] = args.FirstChannelName
@@ -442,7 +442,7 @@ public sealed partial class McpOperationDispatcher
             TangentDescription created;
             try
             {
-                created = await tangents.Create(context.ParticipantDid, key, args.Name, args.Description, null, null, null, ct, args.Visibility == "public" ? TangentAdmission.Open : TangentAdmission.Invite);
+                created = await tangents.Create(context.ParticipantId, key, args.Name, args.Description, null, null, null, ct, args.Visibility == "public" ? TangentAdmission.Open : TangentAdmission.Invite);
             }
             catch (TangentRuleViolation error) when (error.Denial == TangentDenial.AlreadyExists)
             {
@@ -460,7 +460,7 @@ public sealed partial class McpOperationDispatcher
             var place = new McpPlace("tangent", created.Name, refs.ServerRef, refs.Tangent(created.Key), null, ["read", "post"], "ready");
             return Assemble("CreateTangent", "ok", context.CompanionId, context.Id, identity, place,
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed", refs.Tangent(created.Key), null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, created.Key, null, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, created.Key, null, ct),
                 new McpNext(["ListChannels", "CreateChannel"],
                     [NextCall("ListChannels", "Browse channels", McpJson.Arguments(new Dictionary<string, string?>
                         { ["contextId"] = context.Id, ["tangentRef"] = refs.Tangent(created.Key) }))]));
@@ -472,9 +472,9 @@ public sealed partial class McpOperationDispatcher
         var args = McpArguments.CreateChannel(arguments);
         var tangentKey = refs.ParseTangent(args.TangentRef)
             ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a tangent reference returned by this server.");
-        return await requests.Run(context.CredentialId, context.ParticipantDid, args.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, args.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, args.RequestId, "CreateChannel",
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, args.RequestId, "CreateChannel",
                 tangentKey, new Dictionary<string, string?> { ["name"] = args.Name, ["topic"] = args.Topic, ["visibility"] = args.Visibility }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("CreateChannel", principal, context, identity, registration.Record, ct);
@@ -484,11 +484,11 @@ public sealed partial class McpOperationDispatcher
             await requests.Complete(registration.Record, "completed", refs.Channel(tangentKey, created.Key), SerializeData(data), ct);
             var tangentName = await TangentName(tangentKey, ct);
             var place = new McpPlace("channel", Preview($"{tangentName} / {created.Title}", 160), refs.ServerRef, refs.Tangent(tangentKey),
-                refs.Channel(tangentKey, created.Key), created.CanWrite ? ["read", "post"] : ["read"], await ReadinessOf(context.ParticipantDid, ct));
+                refs.Channel(tangentKey, created.Key), created.CanWrite ? ["read", "post"] : ["read"], await ReadinessOf(context.ParticipantId, ct));
             return Assemble("CreateChannel", "ok", context.CompanionId, context.Id, identity, place,
                 new McpResult(data, new McpReceipt(args.RequestId, "op_" + args.RequestId, "completed",
                     refs.Channel(tangentKey, created.Key), null), null),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, tangentKey, created.Key, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, tangentKey, created.Key, ct),
                 new McpNext(["ReadChannel", "GetUpdates"], []));
         }, ct);
     }
@@ -498,13 +498,13 @@ public sealed partial class McpOperationDispatcher
     {
         await AuthorizeReplay(context, record, ct);
         var data = JsonNode.Parse(record.ResultData!);
-        await RefreshReplayData(context.ParticipantDid, data, ct);
+        await RefreshReplayData(context.ParticipantId, data, ct);
         var receipt = new McpReceipt(record.RequestId, "op_" + record.RequestId,
             record.State == "completed" ? "completed" : record.State, record.ResultRef, null);
-        var place = await ServerFallback(principal, context.ParticipantDid, context.CredentialId, ct);
+        var place = await ServerFallback(principal, context.ParticipantId, context.CredentialId, ct);
         return Assemble(operation, "ok", context.CompanionId, context.Id, identity, place,
             new McpResult(data, receipt, null),
-            await ActivitySegment(context.ParticipantDid, context.CredentialId, null, null, ct),
+            await ActivitySegment(context.ParticipantId, context.CredentialId, null, null, ct),
             new McpNext(["GetOperation", "GetUpdates"], []));
     }
 
@@ -512,7 +512,7 @@ public sealed partial class McpOperationDispatcher
     {
         for (var page = 1; page <= 10; page++)
         {
-            var directory = await tangents.List(context.ParticipantDid, page, channelPage, ct);
+            var directory = await tangents.List(context.ParticipantId, page, channelPage, ct);
             var found = directory.Tangents.FirstOrDefault(tangent => tangent.Key == tangentKey);
             if (found is not null) return found;
             if (directory.NextPage is null) return null;
@@ -527,20 +527,20 @@ public sealed partial class McpOperationDispatcher
         RoomDescription created;
         try
         {
-            var creation = await tangents.CreateChannel(context.ParticipantDid, tangentKey, key, name,
+            var creation = await tangents.CreateChannel(context.ParticipantId, tangentKey, key, name,
                 RoomAdmission.SignedIn, topic, ct, membersOnly: visibility == "members");
             created = creation.Channel ?? throw new InvalidOperationException("The created channel was not returned.");
         }
         catch (TangentRuleViolation error) when (error.Denial == TangentDenial.AlreadyExists)
         {
-            created = await rooms.Describe(context.ParticipantDid, key, ct) ?? throw new UnauthorizedAccessException();
+            created = await rooms.Describe(context.ParticipantId, key, ct) ?? throw new UnauthorizedAccessException();
             if (created.TangentKey != tangentKey || !created.CanManage) throw new UnauthorizedAccessException();
         }
         if (created.SpaceState == RoomSpaceState.Pending)
         {
-            var provisioned = await spaces.Provision(context.ParticipantDid, key, ct);
+            var provisioned = await spaces.Provision(context.ParticipantId, key, ct);
             if (!provisioned.Accepted) throw new UnauthorizedAccessException();
-            created = await rooms.Describe(context.ParticipantDid, key, ct) ?? throw new UnauthorizedAccessException();
+            created = await rooms.Describe(context.ParticipantId, key, ct) ?? throw new UnauthorizedAccessException();
         }
         return created;
     }
@@ -582,11 +582,11 @@ public sealed partial class McpOperationDispatcher
         if (scope.Room is { } room)
         {
             var place = await ChannelPlace(context, (scope.Tangent, room), ct);
-            return await companions.CanAdminister(context.ParticipantDid, scope.Tangent, room, ct)
+            return await companions.CanAdminister(context.ParticipantId, scope.Tangent, room, ct)
                 ? place with { Permissions = [.. place.Permissions, "manage"] } : place;
         }
         return await TangentPlace(context, scope.Tangent,
-            await companions.CanAdminister(context.ParticipantDid, scope.Tangent, null, ct) ? ["read", "manage"] : ["read"], ct);
+            await companions.CanAdminister(context.ParticipantId, scope.Tangent, null, ct) ? ["read", "manage"] : ["read"], ct);
     }
 }
 

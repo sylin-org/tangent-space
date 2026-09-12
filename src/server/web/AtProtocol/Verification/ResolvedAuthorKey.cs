@@ -15,7 +15,7 @@ public sealed class ResolvedAuthorKey
 
     private ResolvedAuthorKey(string authorDid, string curve, byte[] encodedPoint)
     {
-        AuthorDid = authorDid;
+        SubjectDid = authorDid;
         Curve = curve;
         var parameters = CustomNamedCurves.GetByName(curve == "P-256" ? "secp256r1" : "secp256k1");
         var domain = new ECDomainParameters(parameters.Curve, parameters.G, parameters.N, parameters.H);
@@ -26,7 +26,7 @@ public sealed class ResolvedAuthorKey
         catch (ArgumentException error) { throw new InvalidDataException("Invalid AT signing key point.", error); }
     }
 
-    public string AuthorDid { get; }
+    public string SubjectDid { get; }
     public string Curve { get; }
     public string JwtAlgorithm => Curve == "P-256" ? "ES256" : "ES256K";
 

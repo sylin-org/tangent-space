@@ -35,6 +35,9 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     private readonly string root;
 
     public string Origin { get; }
+    public string OwnerParticipantId { get; private set; } = "";
+    public string AgentParticipantId { get; private set; } = "";
+    public string HumanParticipantId { get; private set; } = "";
     public string AgentToken { get; }
     public string AgentCredentialId { get; }
     public string OwnerToken { get; }
@@ -97,8 +100,13 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         app.Urls.Add(origin);
         await app.StartAsync();
         AppHost.Current = app.Services;
-        var (token, credentialId, ownerToken) = await SeedAsync(app.Services, storage);
-        var fixture = new ExperienceWebApp(app, root, origin, token, credentialId, ownerToken);
+        var (token, credentialId, ownerToken, ownerParticipant, agentParticipant, humanParticipant) = await SeedAsync(app.Services, storage);
+        var fixture = new ExperienceWebApp(app, root, origin, token, credentialId, ownerToken)
+        {
+            OwnerParticipantId = ownerParticipant,
+            AgentParticipantId = agentParticipant,
+            HumanParticipantId = humanParticipant
+        };
         await fixture.WaitUntilReady();
         return fixture;
     }
@@ -126,28 +134,44 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     /// three accepted source messages: the agent's own question, Leo's direct reply to it,
     /// and Leo's fresh post mentioning the agent. Accepted history is a SourceDecision plus
     /// its Message projection and the room's sequence, exactly like the acceptance path.</summary>
-    private static async Task<(string Token, string CredentialId, string OwnerToken)> SeedAsync(IServiceProvider services, string storage)
+    private static async Task<(string Token, string CredentialId, string OwnerToken, string OwnerParticipant, string AgentParticipant, string HumanParticipant)> SeedAsync(IServiceProvider services, string storage)
     {
         var clock = services.GetRequiredService<TimeProvider>();
         var now = clock.GetUtcNow();
+        string OwnerParticipant = "", AgentParticipant = "", HumanParticipant = "";
         using (var context = EntityContext.NoCache())
         {
             foreach (var (did, handle) in new[] { (OwnerDid, "owner.experience.test"), (AgentDid, AgentHandle), (HumanDid, HumanHandle) })
             {
-                var participant = await Participant.Get(did) ?? Participant.FirstArrival(did, handle, now);
-                participant.Return(did, handle, now);
-                await participant.Save();
+                var atproto = await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(did));
+                if (atproto is null)
+                {
+                    var (participant, identities) = Participant.Enroll(did, handle, now);
+                    await participant.Save();
+                    foreach (var identity in identities) await identity.Save();
+                }
+                else
+                {
+                    var participant = await Participant.Get(atproto.ParticipantId)!;
+                    participant.Return(atproto, now);
+                    atproto.Relabel(handle);
+                    await participant.Save();
+                    await atproto.Save();
+                }
             }
+            OwnerParticipant = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(OwnerDid)))!.ParticipantId;
+            AgentParticipant = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(AgentDid)))!.ParticipantId;
+            HumanParticipant = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(HumanDid)))!.ParticipantId;
         }
         var server = services.GetRequiredService<ServerGovernance>();
-        await server.Claim(OwnerDid, humanDeclaration: true, CancellationToken.None);
+        await server.Claim(OwnerParticipant, OwnerDid, humanDeclaration: true, CancellationToken.None);
         var tangents = services.GetRequiredService<TangentGovernance>();
         var companions = services.GetRequiredService<CompanionGovernance>();
-        await tangents.Create(OwnerDid, TangentKey, "Workshop", "Integration workshop", null, null, null,
+        await tangents.Create(OwnerParticipant, TangentKey, "Workshop", "Integration workshop", null, null, null,
             CancellationToken.None, TangentAdmission.Open);
-        await tangents.CreateChannel(OwnerDid, TangentKey, TopicKey, "Project Z", RoomAdmission.SignedIn,
+        await tangents.CreateChannel(OwnerParticipant, TangentKey, TopicKey, "Project Z", RoomAdmission.SignedIn,
             "Coordinate Project Z", CancellationToken.None);
-        await companions.Join(AgentDid, TangentKey, null, CancellationToken.None);
+        await companions.Join(AgentParticipant, TangentKey, null, CancellationToken.None);
         if (storage == "Spaces")
         {
             // The state real provisioning produces, with the source network itself absent:
@@ -170,16 +194,16 @@ public sealed class ExperienceWebApp : IAsyncDisposable
 
         // Real scoped credentials for the agent and the owner; the participant
         // authentication handler verifies these exact tokens on every request.
-        var (credential, token) = ParticipantCredential.Issue(AgentDid, "Experience integration agent", 1,
+        var (credential, token) = ParticipantCredential.Issue(AgentParticipant, "Experience integration agent", 1,
             [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], now);
-        var (ownerCredential, ownerToken) = ParticipantCredential.Issue(OwnerDid, "Experience integration owner", 1,
+        var (ownerCredential, ownerToken) = ParticipantCredential.Issue(OwnerParticipant, "Experience integration owner", 1,
             [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], now);
         using (EntityContext.NoCache())
         {
             await credential.Save();
             await ownerCredential.Save();
         }
-        return (token, credential.Id, ownerToken);
+        return (token, credential.Id, ownerToken, OwnerParticipant, AgentParticipant, HumanParticipant);
     }
 
     private static async Task<SourceReference> Accept(string roomKey, string authorDid, string recordKey, long sequence,
@@ -187,11 +211,12 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     {
         var content = new MessageContent(text, acceptedAt, replyTo);
         var uri = $"at://{authorDid}/space/local.tangent.room/op-{sequence}/{recordKey}";
+        var authorId = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(authorDid)))!.ParticipantId;
         var cid = "bafyrei" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(uri)))[..52].ToLowerInvariant();
         var decision = new SourceDecision
         {
             Id = SourceDecision.Key(roomKey, uri, cid),
-            RoomKey = roomKey, AuthorDid = authorDid, SourceUri = uri, SourceCid = cid,
+            RoomKey = roomKey, AuthorParticipantId = authorId, SourceUri = uri, SourceCid = cid,
             Accepted = true, Reason = "test-accepted", Sequence = sequence, DecidedAt = acceptedAt, Content = content,
         };
         var message = Message.Project(decision);
@@ -211,7 +236,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         using var context = EntityContext.NoCache();
         var credential = await ParticipantCredential.Get(AgentCredentialId);
         Assert.NotNull(credential);
-        credential!.Revoke(AgentDid, DateTime.UtcNow);
+        credential!.Revoke(AgentParticipantId, DateTime.UtcNow);
         await credential.Save();
     }
 

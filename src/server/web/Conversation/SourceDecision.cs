@@ -8,7 +8,7 @@ namespace TangentSpace.Conversation;
 public sealed class SourceDecision : Entity<SourceDecision>
 {
     public string RoomKey { get; set; } = "";
-    public string AuthorDid { get; set; } = "";
+    public string AuthorParticipantId { get; set; } = "";
     public string SourceUri { get; set; } = "";
     public string SourceCid { get; set; } = "";
     public bool Accepted { get; set; }

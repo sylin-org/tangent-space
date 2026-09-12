@@ -6,7 +6,7 @@ namespace TangentSpace.Conversation;
 public sealed class Message : Entity<Message>
 {
     public string RoomKey { get; set; } = "";
-    public string AuthorDid { get; set; } = "";
+    public string AuthorParticipantId { get; set; } = "";
     public string SourceUri { get; set; } = "";
     public string SourceCid { get; set; } = "";
     public long Sequence { get; set; }
@@ -14,7 +14,7 @@ public sealed class Message : Entity<Message>
     public MessageContent Content { get; set; } = new("", default, null);
     public bool Removed { get; set; }
     public DateTimeOffset? RemovedAt { get; set; }
-    public string? RemovedByDid { get; set; }
+    public string? RemovedByParticipantId { get; set; }
     public DateTimeOffset? EditedAt { get; set; }
     public PermissionView? Permissions { get; set; }
     /// <summary>The client-minted operation identity for locally written posts (ADR 0007);
@@ -44,7 +44,7 @@ public sealed class Message : Entity<Message>
 
     public static Message Project(SourceDecision source) => new()
     {
-        Id = source.Id, RoomKey = source.RoomKey, AuthorDid = source.AuthorDid, SourceUri = source.SourceUri,
+        Id = source.Id, RoomKey = source.RoomKey, AuthorParticipantId = source.AuthorParticipantId, SourceUri = source.SourceUri,
         SourceCid = source.SourceCid, Sequence = source.Sequence, AcceptedAt = source.DecidedAt, Content = source.Content!
     };
 }

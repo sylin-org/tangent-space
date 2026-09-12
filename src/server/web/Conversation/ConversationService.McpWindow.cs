@@ -12,9 +12,9 @@ public sealed partial class ConversationService
 {
     private readonly IDataProtector mcpHistory = protection.CreateProtector("Tangent.Mcp.History.v1");
 
-    public Task<McpMessageWindow> McpWindow(string did, string room, string? cursor, string? aroundMessageId,
+    public Task<McpMessageWindow> McpWindow(string participantId, string room, string? cursor, string? aroundMessageId,
         int limit, CancellationToken ct)
-        => governance.WithCurrentPolicy(did, room, async (policy, token) =>
+        => governance.WithCurrentPolicy(participantId, room, async (policy, token) =>
         {
             if (!policy.CanRead) throw new UnauthorizedAccessException("This conversation is not available to your account.");
             if (limit is < 1 or > 25) throw new ArgumentException("Choose a window of 1 to 25 messages.");
@@ -28,7 +28,7 @@ public sealed partial class ConversationService
 
             if (cursor is not null)
             {
-                var selected = DecodeMcpHistory(cursor, did, room);
+                var selected = DecodeMcpHistory(cursor, participantId, room);
                 if (selected.Boundary > boundary || selected.Edge < 1 || selected.Edge > selected.Boundary)
                     throw new ArgumentException("The history cursor no longer matches this conversation. Open a fresh window.");
                 boundary = selected.Boundary;
@@ -56,7 +56,7 @@ public sealed partial class ConversationService
             }
             else
             {
-                var read = await ReadPosition.Get(ReadPosition.Key(did, room), token);
+                var read = await ReadPosition.Get(ReadPosition.Key(participantId, room), token);
                 var after = Math.Min(read?.Sequence ?? 0, boundary);
                 rows = (await Message.Query(m => m.RoomKey == room && m.Sequence > after && m.Sequence <= boundary,
                     McpQuery(limit), token)).ToList();
@@ -70,7 +70,7 @@ public sealed partial class ConversationService
             }
 
             var messages = McpWindowPlanner.Select(rows, anchorIndex, limit);
-            foreach (var message in messages) message.Permissions = Permissions.Post(policy, message.AuthorDid, message.Removed);
+            foreach (var message in messages) message.Permissions = Permissions.Post(policy, message.AuthorParticipantId, message.Removed);
             string? older = null, newer = null, readCursor = null;
             if (messages.Count > 0)
             {
@@ -81,16 +81,14 @@ public sealed partial class ConversationService
                 var hasNewer = (await Message.Query(m => m.RoomKey == room && m.Sequence > last && m.Sequence <= boundary,
                     McpQuery(1), token)).Count > 0;
                 var expiry = clock.GetUtcNow().AddDays(7);
-                if (hasOlder) older = EncodeMcpHistory(new(did, room, boundary, first, true, expiry));
-                if (hasNewer) newer = EncodeMcpHistory(new(did, room, boundary, last, false, expiry));
-                readCursor = Encode(new ConversationCursor(did, room, last, null, expiry));
+                if (hasOlder) older = EncodeMcpHistory(new(participantId, room, boundary, first, true, expiry));
+                if (hasNewer) newer = EncodeMcpHistory(new(participantId, room, boundary, last, false, expiry));
+                readCursor = Encode(new ConversationCursor(participantId, room, last, null, expiry));
             }
             var handles = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var author in messages.Select(m => m.AuthorDid).Distinct(StringComparer.Ordinal))
-            {
-                var participant = await Participant.Get(author, token);
-                if (participant?.Handle is { Length: > 0 and <= 253 } handle) handles[author] = handle;
-            }
+            foreach (var (author, handle) in await directory.LabelsFor(
+                     messages.Select(m => m.AuthorParticipantId).Distinct(StringComparer.Ordinal), token))
+                if (handle is { Length: > 0 and <= 253 }) handles[author] = handle;
             return new McpMessageWindow(messages, older, newer, readCursor, position,
                 state.Freshness, state.LastCompleteAt, handles, await ResolveParticipants(messages, token));
         }, ct);
@@ -104,13 +102,13 @@ public sealed partial class ConversationService
 
     private string EncodeMcpHistory(McpHistoryCursor value) => mcpHistory.Protect(JsonSerializer.Serialize(value));
 
-    private McpHistoryCursor DecodeMcpHistory(string value, string did, string room)
+    private McpHistoryCursor DecodeMcpHistory(string value, string participantId, string room)
     {
         try
         {
             if (value.Length > 4096) throw new ArgumentException("The history cursor is too long.");
             var cursor = JsonSerializer.Deserialize<McpHistoryCursor>(mcpHistory.Unprotect(value));
-            if (cursor is null || cursor.Did != did || cursor.Room != room || cursor.ExpiresAt <= clock.GetUtcNow())
+            if (cursor is null || cursor.ParticipantId != participantId || cursor.Room != room || cursor.ExpiresAt <= clock.GetUtcNow())
                 throw new ArgumentException("The history cursor expired or belongs to another participant or Channel.");
             return cursor;
         }

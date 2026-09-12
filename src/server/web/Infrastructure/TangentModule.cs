@@ -31,6 +31,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<PolicyGate>();
         services.AddSingleton<Arrival>();
+        services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
         services.AddSingleton<TangentServer>();
         services.AddMemoryCache();
         services.AddSingleton<TangentSpace.Participants.ParticipantProfiles>();

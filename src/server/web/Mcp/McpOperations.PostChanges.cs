@@ -27,20 +27,20 @@ public sealed partial class McpOperationDispatcher
         var message = await Message.Get(target.MessageId, ct);
         if (message is null || message.RoomKey != channel.RoomKey)
             throw new McpInvalidArgumentsException("messageRef", "Choose a message in this Channel.");
-        var own = message.AuthorDid == context.ParticipantDid;
+        var own = message.AuthorParticipantId == context.ParticipantId;
         ParticipationAccess.Require(principal, own ? ParticipationGrants.Post : ParticipationGrants.Manage);
-        await conversation.ReadPolicy(context.ParticipantDid, channel.RoomKey, ct);
+        await conversation.ReadPolicy(context.ParticipantId, channel.RoomKey, ct);
         var destination = (Tangent: channel.TangentKey, Room: channel.RoomKey);
         var payload = new Dictionary<string, string?> { ["messageRef"] = parsed.MessageRef, ["text"] = parsed.Text };
-        return await requests.Run(context.CredentialId, context.ParticipantDid, parsed.RequestId, async () =>
+        return await requests.Run(context.CredentialId, context.ParticipantId, parsed.RequestId, async () =>
         {
-            var registration = await requests.Register(context.CredentialId, context.ParticipantDid, parsed.RequestId,
+            var registration = await requests.Register(context.CredentialId, context.ParticipantId, parsed.RequestId,
                 delete ? "DeletePost" : "EditPost", channel.RoomKey, payload, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay(delete ? "DeletePost" : "EditPost", principal, context, identity, registration.Record, ct);
             var operationId = registration.Record.NamespacedOperationId
-                ?? McpRequestRecord.BuildOperationId(context.CredentialId, context.ParticipantDid, parsed.RequestId);
-            var result = await conversation.ChangePost(context.ParticipantDid, channel.RoomKey, target.MessageId,
+                ?? McpRequestRecord.BuildOperationId(context.CredentialId, context.ParticipantId, parsed.RequestId);
+            var result = await conversation.ChangePost(context.ParticipantId, channel.RoomKey, target.MessageId,
                 parsed.Text, delete, operationId, ct);
             var terminal = result.State is "accepted" or "deleted" or "moderated";
             var state = terminal ? "completed" : "pending";
@@ -56,7 +56,7 @@ public sealed partial class McpOperationDispatcher
                 context.Id, identity, place,
                 new McpResult(terminal ? new { messageRef = resultRef, state = result.State, detail = result.Detail } : null,
                     receipt, problem),
-                await ActivitySegment(context.ParticipantDid, context.CredentialId, destination.Tangent, destination.Room, ct),
+                await ActivitySegment(context.ParticipantId, context.CredentialId, destination.Tangent, destination.Room, ct),
                 new McpNext(terminal ? ["ReadChannel", "GetUpdates"] : ["GetOperation"], []));
         }, ct);
     }

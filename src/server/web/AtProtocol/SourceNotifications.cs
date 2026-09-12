@@ -41,7 +41,7 @@ public sealed class SourceNotifications(PolicyGate gate, SpacesService spaces, C
             {
                 var pending = await SourceNotification.Query(x => x.Pending, new QueryDefinition { Page = 1, PageSize = 2048 }, ct);
                 if (pending.Count >= 2048) throw new InvalidOperationException("Source inbox is at its bounded capacity.");
-                work = new SourceNotification { Id = key, RoomKey = roomKey, Space = request.Space, AuthorDid = request.Repo };
+                work = new SourceNotification { Id = key, RoomKey = roomKey, Space = request.Space, RepoDid = request.Repo };
             }
             work.Revision = request.Rev; work.CommitHash = hash;
             work.Generation = checked(work.Generation + 1); work.Pending = true; work.Attempts = 0;
@@ -103,7 +103,7 @@ public sealed class SourceNotifications(PolicyGate gate, SpacesService spaces, C
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
             budget.CancelAfter(TimeSpan.FromSeconds(45));
-            var pendingReplies = await conversation.ReconcileWriter(snapshot.RoomKey, snapshot.AuthorDid, budget.Token);
+            var pendingReplies = await conversation.ReconcileWriter(snapshot.RoomKey, snapshot.RepoDid, budget.Token);
             if (pendingReplies != 0) status = "waiting-for-reply-source";
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }

@@ -29,10 +29,10 @@ public sealed partial class McpOperationDispatcher
         var place = result.Envelope.Place;
         PermissionView? access;
         if (refs.ParseChannel(place.ChannelRef) is {} topic)
-            access = Permissions.Topic(await conversation.ReadPolicy(context.ParticipantDid, topic.RoomKey, ct));
+            access = Permissions.Topic(await conversation.ReadPolicy(context.ParticipantId, topic.RoomKey, ct));
         else if (refs.ParseTangent(place.TangentRef) is {} tangent)
             access = (await FindTangent(context, tangent, ct))?.Permissions;
-        else access = (await server.Read(context.ParticipantDid, ct)).Permissions;
+        else access = (await server.Read(context.ParticipantId, ct)).Permissions;
         var next = result.Envelope.Next.Available.ToList();
         next.Add("GetPermissions");
         if (access?.AllowedActions.Contains("manageServer") == true) next.Add("ConfigureServer");
@@ -70,7 +70,7 @@ public sealed partial class McpOperationDispatcher
                 throw new McpInvalidArgumentsException(field, "Supply an integer.");
             return value;
         }
-        var did = context.ParticipantDid;
+        var did = context.ParticipantId;
         var scope = Text("scopeRef", 512) ?? Text("channelRef", 512) ?? Text("tangentRef", 512) ?? refs.ServerRef;
         var place = await ServerFallback(principal, did, context.CredentialId, ct);
         object data;
@@ -83,7 +83,7 @@ public sealed partial class McpOperationDispatcher
                 using var fresh = EntityContext.NoCache();
                 var message = await Message.Get(post.MessageId, ct);
                 if (message is null || message.RoomKey != post.RoomKey) throw new UnauthorizedAccessException();
-                data = Permissions.Post(policy, message.AuthorDid, message.Removed);
+                data = Permissions.Post(policy, message.AuthorParticipantId, message.Removed);
                 place = await ChannelPlace(context, (post.TangentKey, post.RoomKey), ct);
             }
             else if (refs.ParseChannel(scope) is {} topic)
@@ -123,7 +123,7 @@ public sealed partial class McpOperationDispatcher
             data = operation switch
             {
                 "ConfigureServer" => await server.Update(did, new ServerSettingsPatch(Text("name",120), Text("welcomeMessage"), Text("motd"), Text("creationPolicy",32), Flag("allowAgentTangentOwnership"), Text("byline",240), Text("coverImageUrl",2048), Text("backgroundScene",16), Text("backgroundColor",7), Number("backgroundIntensity"), Flag("backgroundMotion"), Flag("backgroundMouseSpotlight")), ct),
-                "ClaimServer" => await server.Claim(did, Flag("humanDeclaration") == true, ct),
+                "ClaimServer" => await server.Claim(did, principal.FindFirst(Koan.Web.Auth.Connector.Atproto.AtprotoClaimTypes.Did)?.Value, Flag("humanDeclaration") == true, ct),
                 "DeclareParticipant" => await server.Declare(did, ParseClassification(Text("classification",16,true)!), ct),
                 "ConfigureTangent" => await tangents.Change(did, refs.ParseTangent(Text("tangentRef",512,true)) ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a Tangent reference."), Text("name",80), Text("description",240), Text("motto",160), Text("accent",32), Text("artwork",1024), ct, Flag("allowMemberTopics")),
                 "ConfigureTopic" => await ConfigureTopic(),

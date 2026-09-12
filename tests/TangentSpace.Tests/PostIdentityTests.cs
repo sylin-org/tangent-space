@@ -17,11 +17,13 @@ public sealed class PostIdentityTests
     [InlineData(true, true)]
     public async Task A_stale_browser_identity_cannot_send_or_read_private_intents_using_another_tabs_new_cookie(bool multipleValues, bool pendingLookup)
     {
-        const string signedIn = "did:plc:6c26drqwrk5yavtnnjuvpvdf";
+        const string signedInDid = "did:plc:6c26drqwrk5yavtnnjuvpvdf";
         const string displayed = "did:plc:5rqf45qvouvadvz26a4m4al3";
+        var signedIn = TangentSpace.Participants.Participant.NewIdentifier();
         var context = new DefaultHttpContext
         {
-            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AtprotoClaimTypes.Did, signedIn)], "cookie"))
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(AtprotoClaimTypes.Did, signedInDid), new Claim(TangentSpace.Participation.ParticipationConstants.ParticipantClaim, signedIn)], "cookie"))
         };
         context.Request.Headers["X-Tangent-Participant"] = multipleValues ? new StringValues([signedIn, displayed]) : displayed;
         // No service: reject the stale identity before a source operation or intent lookup.

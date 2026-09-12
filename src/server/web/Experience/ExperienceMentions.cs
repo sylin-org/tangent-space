@@ -78,8 +78,9 @@ public static partial class ExperienceMentions
         return found.Distinct(StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>Whether a candidate list addresses the recipient directly by handle or DID.</summary>
-    public static bool Addresses(IReadOnlyList<string> candidates, string did, string? handle)
-        => candidates.Contains(did, StringComparer.Ordinal)
+    /// <summary>Whether a candidate list addresses the recipient directly by label or perennial
+    /// identity value. An internal-only participant matches by internal DID, never by null.</summary>
+    public static bool Addresses(IReadOnlyList<string> candidates, string? identityValue, string? handle)
+        => identityValue is not null && candidates.Contains(identityValue, StringComparer.Ordinal)
            || (handle is { Length: > 1 } && candidates.Contains(handle, StringComparer.OrdinalIgnoreCase));
 }

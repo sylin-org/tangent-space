@@ -4,7 +4,7 @@ namespace TangentSpace.Activity;
 internal static class AttentionRules
 {
     /// <summary>The actor's own contributions never count as unread attention.</summary>
-    public static bool CountsForAttention(Conversation.Message message, string did) => message.AuthorDid != did;
+    public static bool CountsForAttention(Conversation.Message message, string did) => message.AuthorParticipantId != did;
 
     /// <summary>Null-safe mode resolution: an absent or malformed stored setting means All.</summary>
     public static WatchMode Effective(WatchSetting? channel, TangentWatchSetting? tangent = null)
@@ -33,6 +33,6 @@ internal static class AttentionRules
     /// <summary>Whether a delivered message marker is itself a reply to the actor's accepted message.
     /// The actor's own reply never counts: own messages are not attention.</summary>
     public static bool IsDirectReply(Conversation.Message? message, Conversation.SourceDecision? parent, string did)
-        => message?.Content.ReplyTo is not null && message.AuthorDid != did
-            && parent?.Accepted == true && parent.AuthorDid == did;
+        => message?.Content.ReplyTo is not null && message.AuthorParticipantId != did
+            && parent?.Accepted == true && parent.AuthorParticipantId == did;
 }
