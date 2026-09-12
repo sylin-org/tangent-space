@@ -146,7 +146,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         Assert.Equal("2025-06-18", initialize.GetProperty("result").GetProperty("protocolVersion").GetString());
         peer.Notify("notifications/initialized", new { });
         var tools = peer.Call("tools/list", new { });
-        Assert.Equal(12, tools.GetProperty("result").GetProperty("tools").GetArrayLength());
+        Assert.Equal(14, tools.GetProperty("result").GetProperty("tools").GetArrayLength());
 
         var selected = peer.Call("tools/call", new { name = "SelectCompanion", arguments = new { moniker = "agent" } });
         var companion = selected.GetProperty("result").GetProperty("structuredContent").GetProperty("connector")
