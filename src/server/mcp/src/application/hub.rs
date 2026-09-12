@@ -30,7 +30,8 @@ use crate::presentation::{render, RenderInput};
 pub const DELIVERY_MODE: &str = "tool_response_only";
 /// The exact exchange method of the atproto service-proof profile. Fixed by protocol;
 /// the server's discovery document must agree, or the enrollment refuses honestly.
-pub const EXCHANGE_LXM: &str = "local.tangent.mcp.exchange";
+/// One source with the bind's OAuth rpc permission (the oauth module owns it).
+pub const EXCHANGE_LXM: &str = atproto_oauth::EXCHANGE_LXM;
 /// Proof lifetime requested from the PDS; the server's accepted window is now+120 s.
 const PROOF_EXPIRY_SECONDS: i64 = 120;
 /// The public PDS used when the operator does not name one explicitly; the authoritative
@@ -293,7 +294,7 @@ impl ConnectorHub {
         };
         let raw = self.port.get(&context, "/api/v1/experience").map_err(|error| match error {
             ExperienceError::Unreachable => "the server could not be reached".to_string(),
-            ExperienceError::Unauthorized => {
+            ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => {
                 "the session was rejected; it may be expired, revoked or from another server".to_string()
             }
             ExperienceError::Application { code, message } => format!("{code}: {message}"),
@@ -516,6 +517,7 @@ impl ConnectorHub {
                     refresh_jwt: None,
                     pds: authoritative,
                     authserver: None,
+                    client_id: None,
                     dpop_key: None,
                     obtained_at: now_millis(),
                 },
@@ -668,6 +670,7 @@ impl ConnectorHub {
                     refresh_jwt: tokens.refresh_token,
                     pds,
                     authserver: Some(flight.start.authserver.clone()),
+                    client_id: Some(flight.start.client_id.clone()),
                     dpop_key: Some(flight.start.dpop_key.clone()),
                     obtained_at: now_millis(),
                 },
@@ -732,7 +735,13 @@ impl ConnectorHub {
         if !atproto_oauth::access_needs_refresh(&session.access_jwt, now_millis() / 1000) {
             return Ok(session);
         }
-        match self.oauth().refresh(authserver, refresh, key) {
+        // The client id the grant lives under: the scope-declaring form for new
+        // binds, the bare localhost origin for pre-scope-era sessions.
+        let client_id = session
+            .client_id
+            .clone()
+            .unwrap_or_else(|| atproto_oauth::CLIENT_ID.to_string());
+        match self.oauth().refresh(authserver, refresh, key, &client_id) {
             Ok(tokens) => {
                 if tokens.sub != session.did {
                     return Err(
@@ -819,6 +828,48 @@ impl ConnectorHub {
         Ok(proof_spec)
     }
 
+    /// One PDS `getServiceAuth` call. OAuth sessions ride a DPoP proof under the DPoP
+    /// auth scheme (RFC 9449 §7.1) carrying the PDS's OWN nonce: the first ask uses
+    /// the cached one when it is fresh, otherwise none; a 401 answering with a
+    /// `DPoP-Nonce` header is honored exactly ONCE — the nonce is cached per PDS and
+    /// the retried proof embeds it. A second challenge, or any other refusal, maps
+    /// through [`service_auth_error`]. App-password sessions carry no key: plain
+    /// Bearer, no proof, no retry.
+    fn pds_service_auth(&self, atproto: &AtprotoSession, auth_path: &str) -> Result<Value, String> {
+        let Some(key) = atproto.dpop_key.as_deref() else {
+            let context = RequestContext {
+                origin: atproto.pds.clone(),
+                credential: atproto.access_jwt.clone(),
+                participant_ref: String::new(),
+                dpop: None,
+            };
+            return self.port.get(&context, auth_path).map_err(|error| service_auth_error(&error));
+        };
+        let htu = format!("{}{}", atproto.pds, "/xrpc/com.atproto.server.getServiceAuth");
+        let mut nonce = self.oauth().resource_nonce(&atproto.pds);
+        for attempt in 0..2 {
+            let proof = self.oauth().resource_proof(key, "GET", &htu, &atproto.access_jwt, nonce.as_deref()).map_err(|_| {
+                "atproto_session_expired: the session's DPoP key is unusable. Re-bind the identity on the operator page.".to_string()
+            })?;
+            let context = RequestContext {
+                origin: atproto.pds.clone(),
+                credential: atproto.access_jwt.clone(),
+                participant_ref: String::new(),
+                dpop: Some(proof),
+            };
+            match self.port.get(&context, auth_path) {
+                Ok(value) => return Ok(value),
+                Err(ExperienceError::DpopChallenge { nonce: fresh }) if attempt == 0 => {
+                    self.oauth().remember_resource_nonce(&atproto.pds, &fresh);
+                    nonce = Some(fresh);
+                }
+                Err(error) => return Err(service_auth_error(&error)),
+            }
+        }
+        // The retried proof was challenged again: retrying further cannot settle it.
+        Err(service_auth_error(&ExperienceError::DpopChallenge { nonce: String::new() }))
+    }
+
     /// Bound enrollment — the primary path: verify the server's discovery document,
     /// have the identity's PDS mint a service-auth proof for exactly that audience, and
     /// exchange the proof at `/mcp/token` for a Tangent session stored per enrollment.
@@ -871,7 +922,9 @@ impl ConnectorHub {
             // Percent-encoding the parameters means a crafted audience or origin can
             // never inject query structure into the request. OAuth sessions carry a
             // DPoP proof on this resource request (R2): htm/htu of this exact call,
-            // `ath` binding the access token, the AS's nonce when it issued one.
+            // `ath` binding the access token, and the PDS's OWN nonce — never the
+            // authorization server's (RFC 9449 §8 gives each server its own nonce
+            // context).
             let exp = now_millis() / 1000 + PROOF_EXPIRY_SECONDS;
             let auth_path = format!(
                 "/xrpc/com.atproto.server.getServiceAuth?aud={}&lxm={}&exp={}",
@@ -879,22 +932,7 @@ impl ConnectorHub {
                 encode(EXCHANGE_LXM),
                 exp
             );
-            let dpop_proof = match (&atproto.authserver, &atproto.dpop_key) {
-                (Some(authserver), Some(key)) => {
-                    let htu = format!("{}{}", atproto.pds, "/xrpc/com.atproto.server.getServiceAuth");
-                    Some(self.oauth().resource_proof(authserver, key, "GET", &htu, &atproto.access_jwt).map_err(|_| {
-                        "atproto_session_expired: the session's DPoP key is unusable. Re-bind the identity on the operator page.".to_string()
-                    })?)
-                }
-                _ => None,
-            };
-            let pds_context = RequestContext {
-                origin: atproto.pds.clone(),
-                credential: atproto.access_jwt.clone(),
-                participant_ref: String::new(),
-                dpop: dpop_proof,
-            };
-            let raw = self.port.get(&pds_context, &auth_path).map_err(|error| service_auth_error(&error))?;
+            let raw = self.pds_service_auth(&atproto, &auth_path)?;
             let auth: contract::ServiceAuthDto = serde_json::from_value(raw)
                 .map_err(|error| format!("malformed getServiceAuth response: {error}"))?;
             if auth.token.is_empty() {
@@ -1959,7 +1997,9 @@ impl ConnectorHub {
             if !matches!(error, ExperienceError::Application { code, .. } if code == "request_conflict") {
                 let reason = match error {
                     ExperienceError::Unreachable => "the server could not be reached".to_string(),
-                    ExperienceError::Unauthorized => "authentication was rejected".to_string(),
+                    ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => {
+                        "authentication was rejected".to_string()
+                    }
                     ExperienceError::Application { message, .. } => message.clone(),
                     ExperienceError::Transport(detail) => detail.clone(),
                 };
@@ -2235,7 +2275,7 @@ impl ConnectorHub {
     ) -> ToolOutcome {
         let (code, message) = match error {
             ExperienceError::Unreachable => ("unreachable".to_string(), "The Tangent server could not be reached. Saved actions and cursors remain available.".to_string()),
-            ExperienceError::Unauthorized => ("needs_operator_connection".to_string(), "Authentication was rejected; the operator must renew this enrollment's session.".to_string()),
+            ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => ("needs_operator_connection".to_string(), "Authentication was rejected; the operator must renew this enrollment's session.".to_string()),
             ExperienceError::Application { code, message } => (code.clone(), message.clone()),
             ExperienceError::Transport(detail) => ("unreachable".to_string(), detail.clone()),
         };
@@ -2340,7 +2380,9 @@ fn selected_outcome(companion: &CompanionEntry) -> ToolOutcome {
 fn enroll_transport_error(error: &ExperienceError) -> String {
     match error {
         ExperienceError::Unreachable => "the server could not be reached".to_string(),
-        ExperienceError::Unauthorized => "the enrollment endpoint rejected the request".to_string(),
+        ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => {
+            "the enrollment endpoint rejected the request".to_string()
+        }
         ExperienceError::Application { code, message } => format!("{code}: {message}"),
         ExperienceError::Transport(detail) => detail.clone(),
     }
@@ -2390,7 +2432,7 @@ fn problem_code_of(outcome: &ToolOutcome) -> String {
 fn pds_signin_error(error: &ExperienceError) -> String {
     match error {
         ExperienceError::Unreachable => "the PDS could not be reached; check the PDS origin and the network".to_string(),
-        ExperienceError::Unauthorized => "the PDS rejected the handle or app password".to_string(),
+        ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => "the PDS rejected the handle or app password".to_string(),
         ExperienceError::Application { code, message } => format!("the PDS refused the sign-in ({code}): {message}"),
         ExperienceError::Transport(detail) => detail.clone(),
     }
@@ -2401,7 +2443,9 @@ fn pds_signin_error(error: &ExperienceError) -> String {
 fn discovery_error(error: &ExperienceError) -> String {
     match error {
         ExperienceError::Unreachable => "the server could not be reached".to_string(),
-        ExperienceError::Unauthorized => "the discovery document refused the request".to_string(),
+        ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => {
+            "the discovery document refused the request".to_string()
+        }
         ExperienceError::Application { code, message } => match code.as_str() {
             "exchange_unconfigured" | "public_origin_unconfigured" | "exchange_unavailable" => {
                 "exchange_unavailable: this server has no proof audience configured (service-proof enrollment is off there)".to_string()
@@ -2420,7 +2464,18 @@ fn service_auth_error(error: &ExperienceError) -> String {
         ExperienceError::Unauthorized => {
             "atproto_session_expired: the PDS session was rejected (it may have expired). Re-bind the identity on the operator page.".to_string()
         }
-        ExperienceError::Application { code, message } => format!("the PDS refused the service-auth request ({code}): {message}"),
+        ExperienceError::DpopChallenge { .. } => {
+            "atproto_session_expired: the PDS kept challenging the DPoP proof for a fresh nonce. Re-try, or re-bind the identity on the operator page.".to_string()
+        }
+        ExperienceError::Application { code, message } => match code.as_str() {
+            // The reference PDS's granular-scope refusal: a session bound before the
+            // rpc permission existed cannot mint service proofs. One re-bind (the
+            // updated consent screen shows the permission) extends the grant.
+            "ScopeMissingError" => format!(
+                "atproto_scope_missing: the bound account's OAuth grant lacks the service-proof permission this PDS demands ({message}). Re-bind the identity on the operator page to grant it."
+            ),
+            _ => format!("the PDS refused the service-auth request ({code}): {message}"),
+        },
         ExperienceError::Transport(detail) => detail.clone(),
     }
 }
@@ -2431,7 +2486,7 @@ fn service_auth_error(error: &ExperienceError) -> String {
 fn exchange_error(error: &ExperienceError) -> String {
     match error {
         ExperienceError::Unreachable => "the server could not be reached".to_string(),
-        ExperienceError::Unauthorized => {
+        ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => {
             "invalid_service_proof: the server rejected the proof (invalid or already used); enroll again".to_string()
         }
         ExperienceError::Application { code, message } => match code.as_str() {

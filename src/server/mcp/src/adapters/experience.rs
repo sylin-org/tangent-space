@@ -83,13 +83,17 @@ fn request(
     timeout: Duration,
 ) -> Result<Value, ExperienceError> {
     let url = format!("{}{}", context.origin, path);
-    let mut request = agent.request(method, &url).timeout(timeout).set("Authorization", &format!("Bearer {}", context.credential));
+    // RFC 9449 §7.1: a DPoP-bound token is presented under the DPoP auth scheme —
+    // the resource server rejects bound tokens under Bearer (the reference PDS
+    // answers those with its misleading "Malformed token" 400). Plain credentials
+    // (enrollment sessions, app-password PDS sessions) stay Bearer.
+    let scheme = if context.dpop.is_some() { "DPoP" } else { "Bearer" };
+    let mut request = agent.request(method, &url).timeout(timeout).set("Authorization", &format!("{} {}", scheme, context.credential));
     if let Some(proof) = &context.dpop {
-        // RFC 9449 resource requests: the access token stays in Authorization, the
-        // proof rides its own header, bound to this exact method/URI and token.
+        // The proof rides its own header, bound to this exact method/URI and token.
         request = request.set("DPoP", proof);
     }
-    dispatch(request, body)
+    dispatch(request, body, context.dpop.is_some())
 }
 
 /// The pre-credential enrollment exchange: same framing and status handling, no
@@ -103,7 +107,7 @@ fn request_anonymous(
 ) -> Result<Value, ExperienceError> {
     let url = format!("{origin}{path}");
     let request = agent.request("POST", &url).timeout(timeout);
-    dispatch(request, Some(body))
+    dispatch(request, Some(body), false)
 }
 
 /// One request on the atproto service-proof surface (discovery GET or the `/mcp/token`
@@ -163,7 +167,7 @@ fn extract_error_code(value: &Value) -> Option<(String, String)> {
     Some((code.to_string(), message.to_string()))
 }
 
-fn dispatch(request: ureq::Request, body: Option<&Value>) -> Result<Value, ExperienceError> {
+fn dispatch(request: ureq::Request, body: Option<&Value>, dpop: bool) -> Result<Value, ExperienceError> {
     let request = match body {
         Some(value) if !value.is_null() => request.set("Content-Type", "application/json"),
         _ => request,
@@ -179,10 +183,24 @@ fn dispatch(request: ureq::Request, body: Option<&Value>) -> Result<Value, Exper
     match outcome {
         Ok(response) => parse_response(response),
         Err(ureq::Error::Status(status, response)) => match status {
-            401 => Err(ExperienceError::Unauthorized),
+            401 => {
+                // A DPoP-proved request that drew a nonce header is the RFC 9449 §8
+                // challenge: the caller retries once with this nonce in a fresh
+                // proof. Only that combination maps here — everything else stays
+                // the plain Unauthorized it always was.
+                let challenge = if dpop { response.header("DPoP-Nonce").map(str::to_string) } else { None };
+                match challenge {
+                    Some(nonce) => Err(ExperienceError::DpopChallenge { nonce }),
+                    None => Err(ExperienceError::Unauthorized),
+                }
+            }
             403 | 400 | 404 | 409 => {
                 let problem = parse_response(response).ok();
-                match problem.and_then(|value| extract_problem(&value)) {
+                // The experience API problem shape first (`code`), the atproto XRPC
+                // shape (`error`/`message` — the PDS's refusals) as the fallback.
+                let extracted = problem
+                    .and_then(|value| extract_problem(&value).or_else(|| extract_error_code(&value)));
+                match extracted {
                     Some((code, message)) => Err(ExperienceError::Application { code, message }),
                     None => Err(ExperienceError::Application {
                         code: match status {

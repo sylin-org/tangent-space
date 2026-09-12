@@ -23,6 +23,12 @@ pub enum ExperienceError {
     Unreachable,
     #[error("authentication was rejected; the stored credential may be expired or revoked")]
     Unauthorized,
+    /// RFC 9449 §8 resource-server nonce challenge: the `DPoP-Nonce` value a 401
+    /// issued for a DPoP-proved request. The caller embeds it in a fresh proof's
+    /// nonce claim and retries once. The nonce is a public server-issued challenge,
+    /// not a credential.
+    #[error("the resource server challenged for a fresh DPoP nonce")]
+    DpopChallenge { nonce: String },
     #[error("{code}: {message}")]
     Application { code: String, message: String },
     #[error("transport problem: {0}")]

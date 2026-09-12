@@ -137,8 +137,19 @@ impl OauthScript {
     }
 }
 
-/// The DPoP nonce the fake authorization server demands on the token endpoint.
+/// The DPoP nonce the fake authorization server demands on the token endpoint — its
+/// OWN context, deliberately distinct from the PDS's below (the bug this suite pins:
+/// an AS nonce never satisfies a resource server).
 const FAKE_DPOP_NONCE: &str = "fake-dpop-nonce-1";
+/// The DPoP nonce the fake PDS (a separate resource server) demands — issued via 401
+/// challenge, never accepted from the AS's context.
+const PDS_DPOP_NONCE: &str = "fake-pds-dpop-nonce-1";
+
+/// The scoped localhost client id the connector binds under — the fake's single
+/// source mirrors the crate's own construction, so the two can never drift.
+fn scoped_client_id() -> String {
+    tangent_connector::adapters::atproto_oauth::bind_client_id()
+}
 
 /// A scripted experience API. Responses are synthetic; the post registry gives the
 /// crash-retry scenario its statefulness, and the enrollment registry implements the W2
@@ -318,12 +329,13 @@ fn serve_connection(
             return;
         }
         // Form posts (the OAuth surface) record as a JSON object of their pairs.
+        // Form-urlencoded semantics: '+' is a space, '%' is an escape.
         let body = if content_type.starts_with("application/x-www-form-urlencoded") {
             let text = String::from_utf8_lossy(&body_bytes);
             let mut object = serde_json::Map::new();
             for pair in text.split('&').filter(|pair| !pair.is_empty()) {
                 let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
-                object.insert(percent_decode(name), Value::String(percent_decode(value)));
+                object.insert(percent_decode(name), Value::String(percent_decode(&value.replace('+', " "))));
             }
             Value::Object(object)
         } else {
@@ -504,8 +516,20 @@ fn respond(
             if body.get("login_hint").is_some_and(|value| !value.is_null()) {
                 return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported \"login_hint\" parameter" }));
             }
-            if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
+            // The localhost virtual client's requestable scopes live in its client_id
+            // query parameter; the scoped form declares the bind scope set, the bare
+            // legacy origin declares the profile base only.
+            let client_id = body.get("client_id").and_then(Value::as_str).unwrap_or_default().to_string();
+            let declared: &[&str] = if client_id == scoped_client_id() {
+                &["atproto", "rpc:local.tangent.mcp.exchange?aud=*"]
+            } else if client_id == "http://localhost" {
+                &["atproto"]
+            } else {
                 return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
+            };
+            let requested = body.get("scope").and_then(Value::as_str).unwrap_or_default();
+            if !requested.split(' ').filter(|scope| !scope.is_empty()).all(|scope| declared.contains(&scope)) {
+                return Script::Body(400, json!({ "error": "invalid_scope", "error_description": format!("scope outside the client's declared set: {requested}") }));
             }
             let redirect = body.get("redirect_uri").and_then(Value::as_str).unwrap_or_default().to_string();
             let redirect_ok = redirect.starts_with("http://127.0.0.1") || redirect.starts_with("http://[::1]");
@@ -550,7 +574,7 @@ fn respond(
         ("GET", "/oauth/authorize") => {
             let client_id = query_param(path, "client_id").unwrap_or_default();
             let request_uri = query_param(path, "request_uri").unwrap_or_default();
-            if client_id != "http://localhost" {
+            if client_id != tangent_connector::adapters::atproto_oauth::bind_client_id() {
                 return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
             }
             // Auto-approval as the provider's signed-in account: the DID document the
@@ -595,7 +619,7 @@ fn respond(
                     let Some((record, did)) = issued else {
                         return Script::Body(400, json!({ "error": "invalid_grant", "error_description": "unknown or used code" }));
                     };
-                    if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
+                    if body.get("client_id").and_then(Value::as_str) != Some(scoped_client_id().as_str()) {
                         return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
                     }
                     if body.get("redirect_uri").and_then(Value::as_str) != Some(record.redirect_uri.as_str()) {
@@ -624,7 +648,9 @@ fn respond(
                     let Some(did) = did else {
                         return Script::Body(400, json!({ "error": "invalid_grant", "error_description": "unknown or used refresh token" }));
                     };
-                    if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
+                    // The refresh must present the client id the grant lives under —
+                    // the scoped form for every session this fake issues.
+                    if body.get("client_id").and_then(Value::as_str) != Some(scoped_client_id().as_str()) {
                         return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
                     }
                     if let Err(problem) = validate_dpop(extras, "POST", &format!("{origin}/oauth/token"), Some(FAKE_DPOP_NONCE), None, oauth) {
@@ -701,12 +727,17 @@ fn respond(
             }
         }
         // The fake PDS service-auth mint: session bearer, aud/lxm/exp query discipline.
-        // OAuth sessions (JWT-shaped) are DPoP-bound: this PDS DEMANDS a valid proof
-        // (R2) — real ES256 machinery, htm/htu of exactly this request (no query),
-        // the AS nonce from the token endpoint, and `ath` pinning the exact access
-        // token. App-password sessions (sat_-prefixed) carry no key and none is asked.
+        // OAuth sessions (JWT-shaped) are DPoP-bound under the DPoP auth scheme: this
+        // resource server has its OWN nonce context (RFC 9449 §8) — the first ask
+        // without it draws a 401 challenge carrying this PDS's nonce (distinct from
+        // the AS's, which never satisfies this check), and the retried proof must
+        // embed it. `ath` pins the exact access token; htm/htu of exactly this
+        // request (no query). The reference PDS's granular-scope check follows: the
+        // token's scope claim must cover (lxm, aud). App-password sessions (sat_-
+        // prefixed) carry no key, no proof and no scope check — Bearer as ever.
         ("GET", "/xrpc/com.atproto.server.getServiceAuth") => {
-            let token = bearer.strip_prefix("Bearer ").unwrap_or_default();
+            let scheme = bearer.split(' ').next().unwrap_or_default();
+            let token = bearer.strip_prefix("Bearer ").or_else(|| bearer.strip_prefix("DPoP ")).unwrap_or_default();
             // App-password sessions are sat_-prefixed; OAuth sessions are JWT-shaped.
             let is_session = token.starts_with("sat_") || (token.split('.').count() == 3 && token.starts_with("ey"));
             if !is_session {
@@ -716,17 +747,35 @@ fn respond(
                 return Script::Body(401, json!({ "error": "ExpiredToken", "message": "token has expired" }));
             }
             if token.split('.').count() == 3 && token.starts_with("ey") {
+                // A DPoP-bound token under the Bearer scheme is refused the way the
+                // reference PDS refuses it — the misleading "Malformed token" 400.
+                if scheme != "DPoP" {
+                    return Script::Body(400, json!({ "error": "InvalidToken", "message": "Malformed token" }));
+                }
                 let htu = format!("{origin}/xrpc/com.atproto.server.getServiceAuth");
                 let expected_ath = b64url(&sha256(token.as_bytes()));
-                if let Err(problem) = validate_dpop(extras, "GET", &htu, Some(FAKE_DPOP_NONCE), Some(&expected_ath), oauth) {
-                    return Script::Body(401, json!({ "error": "InvalidDpopProof", "message": problem }));
+                match validate_dpop(extras, "GET", &htu, Some(PDS_DPOP_NONCE), Some(&expected_ath), oauth) {
+                    Ok(_) => {}
+                    // A proof without OUR nonce (none, or a foreign one — the AS's
+                    // included) gets exactly one challenge; the retry must embed it.
+                    Err(problem) if proof_nonce(extras).as_deref() != Some(PDS_DPOP_NONCE) => {
+                        return Script::NonceChallenge(
+                            401,
+                            json!({ "error": "use_dpop_nonce", "error_description": problem }),
+                            PDS_DPOP_NONCE.into(),
+                        );
+                    }
+                    // Our nonce and still refused: retrying cannot settle it.
+                    Err(problem) => return Script::Body(401, json!({ "error": "InvalidDpopProof", "message": problem })),
                 }
             }
             let query = path.split_once('?').map(|(_, query)| query.to_string()).unwrap_or_default();
             let param = |name: &str| -> Option<String> {
                 query.split('&').find_map(|pair| pair.strip_prefix(&format!("{name}=")).map(percent_decode))
             };
-            match param("lxm").as_deref() {
+            let lxm = param("lxm");
+            let aud = param("aud");
+            match lxm.as_deref() {
                 Some("local.tangent.mcp.exchange") => {}
                 other => {
                     return Script::Body(
@@ -735,7 +784,7 @@ fn respond(
                     )
                 }
             }
-            match param("aud") {
+            match aud.as_deref() {
                 Some(audience) if audience.starts_with("did:") => {}
                 _ => return Script::Body(400, json!({ "error": "InvalidRequest", "message": "aud must be a DID" })),
             }
@@ -743,6 +792,18 @@ fn respond(
                 // The server's accepted window: a near-future expiry around now+120 s.
                 Some(exp) if (now_secs()..=now_secs() + 130).contains(&exp) => {}
                 _ => return Script::Body(400, json!({ "error": "InvalidRequest", "message": "exp outside the accepted window" })),
+            }
+            // The granular permission the reference PDS demands of OAuth sessions:
+            // the token's scope claim must carry an rpc permission covering this
+            // exact (lxm, aud) — the atproto base alone no longer mints proofs.
+            if token.split('.').count() == 3 && token.starts_with("ey") {
+                let (lxm, aud) = (lxm.unwrap_or_default(), aud.unwrap_or_default());
+                if !scope_covers(token, &lxm, &aud) {
+                    return Script::Body(
+                        403,
+                        json!({ "error": "ScopeMissingError", "message": format!("Missing required scope \"rpc:{lxm}?aud={aud}\"") }),
+                    );
+                }
             }
             let port = origin.rsplit(':').next().unwrap_or("0");
             let mut counter = bound.counter.lock().unwrap();
@@ -1067,14 +1128,25 @@ fn query_param(path: &str, name: &str) -> Option<String> {
     })
 }
 
+/// The scope every OAuth token this fake AS issues carries — the grant the connector
+/// binds under, echoed in the token response and the access token's own claim.
+const GRANTED_SCOPE: &str = "atproto rpc:local.tangent.mcp.exchange?aud=*";
+
 /// Issues one access+refresh pair for a DID: the access token is JWT-shaped (the
-/// connector parses `exp` from it), the refresh token rotates and is remembered.
+/// connector parses `exp` from it, the fake PDS reads its `scope` claim), the refresh
+/// token rotates and is remembered.
 fn issue_tokens(oauth: &OauthScript, did: &str, lifetime_secs: i64) -> Script {
     let now = now_secs();
     let access = format!(
         "{}.{}.{}",
         b64url(br#"{"alg":"ES256","typ":"atproto+jwt"}"#),
-        b64url(format!("{{\"exp\":{},\"sub\":\"{did}\"}}", now + lifetime_secs).as_bytes()),
+        b64url(
+            format!(
+                "{{\"exp\":{},\"scope\":\"{GRANTED_SCOPE}\",\"sub\":\"{did}\"}}",
+                now + lifetime_secs
+            )
+            .as_bytes()
+        ),
         b64url(&[7u8; 64])
     );
     let refresh = oauth.next("rt_oauth");
@@ -1086,10 +1158,33 @@ fn issue_tokens(oauth: &OauthScript, did: &str, lifetime_secs: i64) -> Script {
             "refresh_token": refresh,
             "token_type": "DPoP",
             "expires_in": lifetime_secs,
-            "scope": "atproto",
+            "scope": GRANTED_SCOPE,
             "sub": did,
         }),
     )
+}
+
+/// The `nonce` claim inside a request's DPoP proof (None when the proof carries no
+/// nonce) — the challenge decision: only a proof already embedding OUR nonce has
+/// exhausted the challenge path.
+fn proof_nonce(extras: &RequestExtras) -> Option<String> {
+    let payload = extras.dpop.split('.').nth(1)?;
+    let claims: Value = serde_json::from_slice(&b64url_decode(payload)?).ok()?;
+    claims.get("nonce").and_then(Value::as_str).map(str::to_string)
+}
+
+/// Whether an OAuth access token's `scope` claim carries an rpc permission covering
+/// one exact (lxm, aud) request — the reference PDS's granular check. Either axis may
+/// be wildcarded in the granted permission, never both.
+fn scope_covers(token: &str, lxm: &str, aud: &str) -> bool {
+    let Some(payload) = token.split('.').nth(1).and_then(b64url_decode) else { return false };
+    let Ok(claims) = serde_json::from_slice::<Value>(&payload) else { return false };
+    let Some(scope) = claims.get("scope").and_then(Value::as_str) else { return false };
+    scope.split(' ').any(|value| {
+        let Some(rest) = value.strip_prefix("rpc:") else { return false };
+        let (granted_lxm, granted_aud) = rest.split_once("?aud=").unwrap_or((rest, "*"));
+        (granted_lxm == "*" || granted_lxm == lxm) && (granted_aud == "*" || granted_aud == aud)
+    })
 }
 
 /// Validates one DPoP proof the way the real servers would: ES256
@@ -1172,6 +1267,12 @@ fn validate_dpop(
         }
     }
     Ok(verifying)
+}
+
+/// Strict base64url decode, shared with journey assertions that read proof payloads.
+#[allow(dead_code)]
+pub fn decode_b64url(text: &str) -> Option<Vec<u8>> {
+    b64url_decode(text)
 }
 
 /// Strict base64url decode (unpadded alphabet only).

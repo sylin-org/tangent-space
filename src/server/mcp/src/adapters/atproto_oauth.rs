@@ -3,13 +3,17 @@
 //! (handle → DID → DID document → PDS → AS) for the self-hosted `?handle=` escape
 //! hatch, a Pushed Authorization Request with PKCE (S256), the code exchange and the
 //! silent refresh — all under the local-client profile the atproto OAuth spec defines
-//! for loopback tools: `client_id` exactly `http://localhost`, loopback
-//! `http://127.0.0.1[:port]/` redirect, `atproto` scope, no `nonce` parameter (the
-//! pushed request_uri binding replaces it — verified against the public authorization
-//! server 2026-09-11), DPoP (ES256) proofs on the PAR, token and PDS resource
-//! requests per RFC 9449. The bound account is whatever the authorization server
-//! authenticates: the exchange's `sub` claim is the DID, mandatory, and the flight
-//! stores no pre-declared DID to mismatch.
+//! for loopback tools: `client_id` the localhost origin carrying its `?scope=` set,
+//! loopback `http://127.0.0.1[:port]/` redirect, the profile base scope plus the
+//! granular `rpc:` permission `getServiceAuth` demands (atproto.com/specs/permission),
+//! no `nonce` parameter (the pushed request_uri binding replaces it — verified against
+//! the public authorization server 2026-09-11), DPoP (ES256) proofs on the PAR, token
+//! and PDS resource requests per RFC 9449 — resource proofs under the DPoP auth
+//! scheme, carrying the resource server's OWN nonce (§8: each server has its own
+//! nonce context; the authorization server's never applies to a PDS). The bound
+//! account is whatever the authorization server authenticates: the exchange's `sub`
+//! claim is the DID, mandatory, and the flight stores no pre-declared DID to
+//! mismatch.
 //!
 //! Compact JWS (the DPoP proof) is hand-rolled in the house style: bounded, strict
 //! parsing, no JWT crate. The cryptographic primitives come from pure-Rust crates
@@ -29,10 +33,25 @@ use sha2::{Digest, Sha256};
 
 use crate::domain::refs;
 
-/// The atproto local-client id: a literal origin, no port, no metadata document.
+/// The atproto local-client id of sessions bound before the granular-scope era: a
+/// literal origin, no port, no metadata document. A session's refresh must present
+/// the exact client_id it was authorized under, so this id stays for those sessions.
 pub const CLIENT_ID: &str = "http://localhost";
-/// The scope the implicit localhost client metadata declares (the only one).
-pub const SCOPE: &str = "atproto";
+/// The service-proof exchange lxm the bind's rpc permission covers — the same method
+/// the server contract pins (the hub's `EXCHANGE_LXM`).
+pub const EXCHANGE_LXM: &str = "local.tangent.mcp.exchange";
+/// The scope new binds request: the profile base plus the granular permission
+/// `com.atproto.server.getServiceAuth` demands of OAuth sessions (the reference PDS
+/// enforces it, live-verified 2026-09-12): service-proof mints for our exchange lxm
+/// on any audience — never both axes wildcarded, nothing wider.
+pub const SCOPE: &str = "atproto rpc:local.tangent.mcp.exchange?aud=*";
+/// The client id new binds present: the localhost virtual client's metadata declares
+/// its scope set in the client_id's own query parameter (atproto OAuth spec,
+/// localhost development), and the authorization server refuses any requested scope
+/// outside that set — live-verified accepted by the public server 2026-09-12.
+pub fn bind_client_id() -> String {
+    format!("http://localhost?scope={}", percent_encode(SCOPE))
+}
 /// The default authorization server (owner correction): public Bluesky accounts live
 /// here; `TANGENT_CONNECTOR_AUTHSERVER` overrides it for self-hosted worlds. The
 /// provider's own UI handles account selection and sign-in — the connector never
@@ -50,6 +69,10 @@ const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const PROOF_LIFETIME_SECS: i64 = 120;
 /// Refresh margin: a token with less than this left is refreshed before use.
 const REFRESH_MARGIN_SECS: i64 = 60;
+/// How long a cached resource-server DPoP nonce is trusted before the first ask
+/// risks one challenge round trip again (a stale nonce costs exactly that — the
+/// retry recovers; never a failure).
+const RESOURCE_NONCE_TTL_SECS: i64 = 300;
 /// Bounded string discipline for the values this module handles.
 const TOKEN_LIMIT: usize = 4096;
 
@@ -64,8 +87,13 @@ pub struct AtprotoOauth {
     /// The authorization server binds use when no `?handle=` discovery names one: the
     /// public default, or the operator's `TANGENT_CONNECTOR_AUTHSERVER` override.
     default_authserver: String,
-    /// Per-authorization-server DPoP nonces (RFC 9449 §8), so the retry is the exception.
+    /// Per-authorization-server DPoP nonces (RFC 9449 §8): the token-endpoint
+    /// context only, so the retry is the exception.
     dpop_nonces: Mutex<HashMap<String, String>>,
+    /// Per-resource-server DPoP nonces with their fetch time (RFC 9449 §8: a
+    /// resource server's nonce context is its OWN — the PDS's never mixes with the
+    /// authorization server's above). Keyed by resource origin, short-lived.
+    resource_nonces: Mutex<HashMap<String, (String, i64)>>,
 }
 
 /// Everything a started bind needs to finish: returned by [`AtprotoOauth::start`], kept
@@ -84,6 +112,9 @@ pub struct BindStart {
     pub dpop_key: String,
     /// The authorization server origin (token and refresh endpoint host).
     pub authserver: String,
+    /// The client id this bind pushed (scope-declaring localhost form) — the session
+    /// stores it, and every later refresh must present the same one.
+    pub client_id: String,
     /// The DID the discovery path resolved (`?handle=` only): the exchange must agree.
     pub did: Option<String>,
     /// The account's PDS origin the discovery path found (`?handle=` only); the
@@ -122,6 +153,7 @@ impl AtprotoOauth {
             handle_resolver: handle_resolver.to_string(),
             default_authserver: authserver.to_string(),
             dpop_nonces: Mutex::new(HashMap::new()),
+            resource_nonces: Mutex::new(HashMap::new()),
         }
     }
 
@@ -150,8 +182,9 @@ impl AtprotoOauth {
         let verifier = random_token(32);
         let challenge = base64url(&sha256_bytes(verifier.as_bytes()));
         let key = SigningKey::random(&mut OsRng);
+        let client_id = bind_client_id();
         let par_form = vec![
-            ("client_id", CLIENT_ID.to_string()),
+            ("client_id", client_id.clone()),
             ("redirect_uri", redirect.clone()),
             ("response_type", "code".to_string()),
             ("scope", SCOPE.to_string()),
@@ -170,7 +203,7 @@ impl AtprotoOauth {
         let authorize_url = format!(
             "{}?client_id={}&request_uri={}",
             metadata.authorize_endpoint,
-            percent_encode(CLIENT_ID),
+            percent_encode(&client_id),
             percent_encode(&request_uri)
         );
         Ok(BindStart {
@@ -179,6 +212,7 @@ impl AtprotoOauth {
             verifier,
             dpop_key: encode_key(&key),
             authserver,
+            client_id,
             did,
             pds,
             handle: handle.flatten(),
@@ -198,7 +232,7 @@ impl AtprotoOauth {
             ("grant_type", "authorization_code".to_string()),
             ("code", code.to_string()),
             ("redirect_uri", redirect),
-            ("client_id", CLIENT_ID.to_string()),
+            ("client_id", flight.client_id.clone()),
             ("code_verifier", flight.verifier.clone()),
         ];
         let (_, body) = self.form_post(&metadata.token_endpoint, &form, Some(&key), &flight.authserver)?;
@@ -207,7 +241,16 @@ impl AtprotoOauth {
 
     /// Silent refresh: a new access token (and rotated refresh token, when the server
     /// rotates) from the stored refresh token, DPoP-proved with the session's key.
-    pub fn refresh(&self, authserver: &str, refresh_token: &str, dpop_key: &str) -> Result<OAuthTokens, String> {
+    /// `client_id` is the id the session was authorized under — the authorization
+    /// server pins a grant to its exact client_id, so a scope-era session and a
+    /// legacy one must each present their own.
+    pub fn refresh(
+        &self,
+        authserver: &str,
+        refresh_token: &str,
+        dpop_key: &str,
+        client_id: &str,
+    ) -> Result<OAuthTokens, String> {
         if refresh_token.is_empty() || refresh_token.len() > TOKEN_LIMIT {
             return Err("invalid_refresh_token: the stored refresh token is unusable; re-bind the identity".to_string());
         }
@@ -216,7 +259,7 @@ impl AtprotoOauth {
         let form = vec![
             ("grant_type", "refresh_token".to_string()),
             ("refresh_token", refresh_token.to_string()),
-            ("client_id", CLIENT_ID.to_string()),
+            ("client_id", client_id.to_string()),
         ];
         let (_, body) = self.form_post(&metadata.token_endpoint, &form, Some(&key), authserver)?;
         tokens_of(&body)
@@ -234,25 +277,39 @@ impl AtprotoOauth {
 
     /// One DPoP resource-request proof (RFC 9449 §7) for a PDS call made with the OAuth
     /// access token: this request's `htm`/`htu` (no query or fragment), `ath` binding
-    /// the exact token, signed with the session's key; the authorization server's
-    /// latest nonce rides along when it issued one. App-password sessions never call
-    /// this — they carry no DPoP key.
+    /// the exact token, signed with the session's key. `resource_nonce` is the
+    /// RESOURCE SERVER's own nonce — the one its 401 challenge issued (§8: each
+    /// server has its own nonce context, so the authorization server's token-endpoint
+    /// nonce never rides a resource proof). App-password sessions never call this —
+    /// they carry no DPoP key.
     pub fn resource_proof(
         &self,
-        authserver: &str,
         dpop_key: &str,
         htm: &str,
         htu: &str,
         access_token: &str,
+        resource_nonce: Option<&str>,
     ) -> Result<String, String> {
         let key = decode_key(dpop_key)?;
-        let nonce = self
-            .dpop_nonces
-            .lock()
-            .ok()
-            .and_then(|cache| cache.get(authserver).cloned());
         let ath = base64url(&sha256_bytes(access_token.as_bytes()));
-        Ok(dpop_proof(&key, htm, htu, nonce.as_deref(), Some(&ath)))
+        Ok(dpop_proof(&key, htm, htu, resource_nonce, Some(&ath)))
+    }
+
+    /// A resource server's latest DPoP nonce, when one is cached and still trusted
+    /// ([`RESOURCE_NONCE_TTL_SECS`]). The first ask carries no nonce without one.
+    pub fn resource_nonce(&self, resource: &str) -> Option<String> {
+        self.resource_nonces.lock().ok().and_then(|cache| {
+            let (nonce, fetched_at) = cache.get(resource)?;
+            (now_secs() - *fetched_at <= RESOURCE_NONCE_TTL_SECS).then(|| nonce.clone())
+        })
+    }
+
+    /// Remembers a nonce a resource server's 401 DPoP challenge issued, so the next
+    /// first ask already carries it (one round trip saved per TTL window).
+    pub fn remember_resource_nonce(&self, resource: &str, nonce: &str) {
+        if let Ok(mut cache) = self.resource_nonces.lock() {
+            cache.insert(resource.to_string(), (nonce.to_string(), now_secs()));
+        }
     }
 
     /// Handle (or DID) → (DID, canonical handle when the DID document names one).
@@ -397,8 +454,11 @@ impl AtprotoOauth {
                 .ok_or_else(|| "authorization_server: no token endpoint in the metadata".to_string())?,
         };
         if let Some(scopes) = body.get("scopes_supported").and_then(Value::as_array) {
-            if !scopes.is_empty() && !scopes.iter().any(|scope| scope.as_str() == Some(SCOPE)) {
-                return Err(format!("authorization_server: the '{SCOPE}' scope is not supported there"));
+            // Only the profile base can be checked against the document: granular
+            // `rpc:` permissions are dynamic values the live servers do not enumerate
+            // (their documents list the static set only — verified 2026-09-12).
+            if !scopes.is_empty() && !scopes.iter().any(|scope| scope.as_str() == Some("atproto")) {
+                return Err("authorization_server: the 'atproto' scope is not supported there".to_string());
             }
         }
         if let Some(algorithms) = body.get("dpop_signing_alg_values_supported").and_then(Value::as_array) {
@@ -859,7 +919,7 @@ mod tests {
         let encoded = encode_key(&key);
         let access = "eyJhbGciOiJFUzI1NiJ9.payload.c2ln";
         let proof = client
-            .resource_proof("https://as.example", &encoded, "GET", "http://127.0.0.1:1/xrpc/com.atproto.server.getServiceAuth", access)
+            .resource_proof(&encoded, "GET", "http://127.0.0.1:1/xrpc/com.atproto.server.getServiceAuth", access, None)
             .expect("proof");
         let segments: Vec<&str> = proof.split('.').collect();
         let payload = String::from_utf8(base64url_decode(segments[1]).unwrap()).unwrap();
@@ -869,7 +929,54 @@ mod tests {
         // A foreign key cannot produce a proof the session's key verifies.
         let other = SigningKey::random(&mut OsRng);
         assert!(decode_key(&encode_key(&other)).is_ok());
-        assert!(client.resource_proof("https://as.example", "!!!not-base64url!!!", "GET", "http://127.0.0.1:1/", access).is_err());
+        assert!(client.resource_proof("!!!not-base64url!!!", "GET", "http://127.0.0.1:1/", access, None).is_err());
+    }
+
+    #[test]
+    fn resource_proofs_carry_only_the_resource_servers_own_nonce() {
+        // RFC 9449 §8: the authorization server's token-endpoint nonce NEVER rides a
+        // resource proof — the resource server validates against its own context.
+        // The first ask carries no nonce at all; the resource server's challenge
+        // nonce is the only one that may appear.
+        let client = AtprotoOauth::with_origins("https://plc.example", "https://rpc.example", "https://as.example");
+        let encoded = encode_key(&SigningKey::random(&mut OsRng));
+        let access = "eyJhbGciOiJFUzI1NiJ9.payload.c2ln";
+        let proof = client
+            .resource_proof(&encoded, "GET", "https://pds.example/xrpc/com.atproto.server.getServiceAuth", access, None)
+            .expect("proof");
+        let payload = proof_payload(&proof);
+        assert!(!payload.contains("\"nonce\""), "no nonce claim when the resource server issued none: {payload}");
+        let proof = client
+            .resource_proof(&encoded, "GET", "https://pds.example/xrpc/com.atproto.server.getServiceAuth", access, Some("pds-nonce-1"))
+            .expect("proof");
+        let payload = proof_payload(&proof);
+        assert!(payload.contains("\"nonce\":\"pds-nonce-1\""), "the resource server's nonce rides when it challenged: {payload}");
+        assert!(payload.contains("\"ath\""), "resource proofs always bind the token");
+    }
+
+    #[test]
+    fn resource_nonces_cache_per_resource_server() {
+        let client = AtprotoOauth::with_origins("https://plc.example", "https://rpc.example", "https://as.example");
+        assert_eq!(client.resource_nonce("https://pds.example"), None, "nothing cached initially");
+        client.remember_resource_nonce("https://pds.example", "pds-nonce-1");
+        assert_eq!(client.resource_nonce("https://pds.example").as_deref(), Some("pds-nonce-1"));
+        assert_eq!(client.resource_nonce("https://other-pds.example"), None, "one resource server's nonce never serves another");
+    }
+
+    #[test]
+    fn the_bind_client_id_declares_the_bind_scope() {
+        // The localhost virtual client's requestable scopes live in the client_id's
+        // own query parameter; the pushed scope must stay inside that set.
+        assert_eq!(
+            bind_client_id(),
+            "http://localhost?scope=atproto%20rpc%3Alocal.tangent.mcp.exchange%3Faud%3D%2A"
+        );
+        assert!(SCOPE.starts_with("atproto "), "the profile base rides every bind");
+        assert!(SCOPE.contains("rpc:local.tangent.mcp.exchange?aud=*"), "the getServiceAuth permission, no wider");
+    }
+
+    fn proof_payload(proof: &str) -> String {
+        String::from_utf8(base64url_decode(proof.split('.').nth(1).unwrap()).unwrap()).unwrap()
     }
 
     #[test]

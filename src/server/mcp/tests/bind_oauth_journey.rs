@@ -178,9 +178,17 @@ fn the_bind_route_starts_the_flow_immediately_and_binds_the_authenticated_accoun
     let requests = server.requests();
     let par_position = requests.iter().position(|request| request.path == "/oauth/par").expect("the PAR request");
     let par = &requests[par_position];
-    assert_eq!(par.body.get("client_id").and_then(Value::as_str), Some("http://localhost"), "the literal loopback client id");
+    assert_eq!(
+        par.body.get("client_id").and_then(Value::as_str),
+        Some(tangent_connector::adapters::atproto_oauth::bind_client_id().as_str()),
+        "the loopback client id declaring its scope set"
+    );
     assert_eq!(par.body.get("response_type").and_then(Value::as_str), Some("code"));
-    assert_eq!(par.body.get("scope").and_then(Value::as_str), Some("atproto"), "the implicit localhost metadata's one scope");
+    assert_eq!(
+        par.body.get("scope").and_then(Value::as_str),
+        Some("atproto rpc:local.tangent.mcp.exchange?aud=*"),
+        "the profile base plus the granular getServiceAuth permission"
+    );
     assert!(par.body.get("nonce").is_none(), "the atproto profile sends no nonce (the request_uri binding replaces it)");
     assert!(par.body.get("login_hint").is_none(), "no interstitial means no pre-declared account (no login_hint)");
     assert_eq!(par.body.get("code_challenge_method").and_then(Value::as_str), Some("S256"));
@@ -202,14 +210,29 @@ fn the_bind_route_starts_the_flow_immediately_and_binds_the_authenticated_accoun
         .position(|request| request.path.starts_with("/did:plc:lumen"))
         .expect("the DID document fetch");
     assert!(did_doc_position > token_position, "the bound DID's document is resolved after the token exchange");
-    // The silent-refresh and service-auth steps of the auto-resume used the OAuth
-    // session — and the proof-demanding PDS accepted it (R2): Bearer token AND DPoP.
-    let service_auth = requests
+    // The service-auth step of the auto-resume used the OAuth session on the
+    // proof-demanding PDS (R2): the DPoP auth scheme (RFC 9449 §7.1), one 401 nonce
+    // challenge from the PDS's OWN context, and the retried proof embedding it —
+    // never the authorization server's nonce.
+    let service_auths: Vec<_> = requests
         .iter()
-        .find(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
-        .expect("service-auth request");
-    assert!(service_auth.bearer.starts_with("Bearer ey"), "the OAuth access token minted the proof");
-    assert!(!service_auth.dpop.is_empty(), "the PDS call carried a DPoP proof header: {service_auth:?}");
+        .filter(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
+        .collect();
+    assert_eq!(service_auths.len(), 2, "exactly one challenge round: {service_auths:?}");
+    assert!(service_auths[0].bearer.starts_with("DPoP ey"), "the bound token rides the DPoP auth scheme");
+    assert!(!service_auths[0].dpop.is_empty(), "even the challenged first ask carries a proof");
+    let first_proof_payload = proof_payload_of(&service_auths[0].dpop);
+    assert!(!first_proof_payload.contains("\"nonce\""), "the first ask carries no nonce (the PDS had issued none): {first_proof_payload}");
+    assert!(service_auths[1].bearer.starts_with("DPoP ey"), "the retry stays on the DPoP scheme");
+    let retry_proof_payload = proof_payload_of(&service_auths[1].dpop);
+    assert!(retry_proof_payload.contains("\"nonce\""), "the retried proof embeds the PDS's challenge nonce: {retry_proof_payload}");
+}
+
+/// The decoded payload segment of one DPoP proof header (assertable claim shapes).
+fn proof_payload_of(proof: &str) -> String {
+    let segment = proof.split('.').nth(1).expect("payload segment");
+    let decoded = common::decode_b64url(segment).expect("payload decodes");
+    String::from_utf8(decoded).expect("payload is UTF-8")
 }
 
 #[test]
@@ -331,6 +354,47 @@ fn an_unknown_provider_or_identity_is_an_honest_404_page() {
 
 // ---------- the silent refresh ----------
 
+/// The per-PDS nonce cache's payoff, pinned on the wire: the FIRST mint at a PDS pays
+/// the RFC 9449 challenge round trip (ask without nonce → 401 → retry with it); the
+/// SECOND mint at the SAME PDS already carries the cached nonce — one ask, no
+/// challenge. The authorization server's nonce context never enters either ask.
+#[test]
+fn the_pds_nonce_cache_saves_the_second_mint_one_round_trip() {
+    let server = FakeServer::start();
+    server.add_account("first.bsky.example", "unused-password", "did:plc:first");
+    let (hub, _dir, _page, address) = operator_workspace("nonce-cache", &server);
+    let one = hub.create_identity("first", None).expect("identity");
+    let two = hub.create_identity("second", None).expect("identity");
+
+    // The default flow signs in as the provider's LAST registered account.
+    let first_bind = drive_bind(address, &server, &one.local_id, None);
+    assert!(first_bind.contains("Bound as <strong>first.bsky.example</strong>"), "the first identity binds: {first_bind}");
+    // The `?handle=` discovery path re-points the provider's session at the second
+    // account (the default flow would re-sign the last resolved DID).
+    server.add_account("second.bsky.example", "unused-password", "did:plc:second");
+    let second_bind = drive_bind(address, &server, &two.local_id, Some("second.bsky.example"));
+    assert!(second_bind.contains("Bound as <strong>second.bsky.example</strong>"), "the second identity binds: {second_bind}");
+
+    hub.enroll_bound(&one.local_id, server.origin()).expect("the first bound enrollment");
+    hub.enroll_bound(&two.local_id, server.origin()).expect("the second bound enrollment");
+
+    let requests = server.requests();
+    let mints = requests
+        .iter()
+        .filter(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
+        .count();
+    assert_eq!(mints, 3, "challenge + retry on the first mint, ONE ask on the second (the cached PDS nonce)");
+    let third = requests
+        .iter()
+        .filter(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
+        .nth(2)
+        .expect("the cached-nonce ask");
+    let payload = proof_payload_of(&third.dpop);
+    assert!(payload.contains("\"nonce\""), "the cached-nonce ask embeds the PDS's challenge nonce: {payload}");
+    // The fake PDS validates that claim against its OWN constant (never the AS's), so
+    // this ask succeeding is itself the pin: no authorization-server nonce rode it.
+}
+
 #[test]
 fn an_expired_oauth_session_refreshes_silently_before_use() {
     let server = FakeServer::start();
@@ -354,20 +418,24 @@ fn an_expired_oauth_session_refreshes_silently_before_use() {
         .iter()
         .find(|request| request.path == "/oauth/token" && request.body.get("grant_type").and_then(Value::as_str) == Some("refresh_token"))
         .expect("a refresh grant ran before use");
-    assert_eq!(refresh.body.get("client_id").and_then(Value::as_str), Some("http://localhost"));
+    assert_eq!(
+        refresh.body.get("client_id").and_then(Value::as_str),
+        Some(tangent_connector::adapters::atproto_oauth::bind_client_id().as_str()),
+        "the refresh presents the client id the grant lives under"
+    );
 
     let renewed = hub.store().lock().unwrap().atproto_session(&identity.local_id).expect("renewed session");
     assert_ne!(renewed.access_jwt, stale, "the access token was replaced");
     assert!(renewed.access_jwt.split('.').count() == 3, "still JWT-shaped");
     assert!(renewed.refresh_jwt.as_deref().is_some_and(|token| token.starts_with("rt_oauth")), "the rotated refresh token is stored");
 
-    // The proof mint rode the renewed token — Bearer AND a DPoP proof binding it (R2),
-    // on the proof-demanding PDS.
+    // The proof mint rode the renewed token — the DPoP scheme with a proof binding it
+    // (R2), on the proof-demanding PDS, after the PDS's own nonce challenge settled.
     let service_auth = requests
         .iter()
         .find(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
         .expect("service-auth request");
-    assert_eq!(service_auth.bearer, format!("Bearer {}", renewed.access_jwt), "the refreshed token minted the proof");
+    assert_eq!(service_auth.bearer, format!("DPoP {}", renewed.access_jwt), "the refreshed token minted the proof");
     assert!(!service_auth.dpop.is_empty(), "the PDS call carried a DPoP proof for the renewed token");
 }
 

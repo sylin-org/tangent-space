@@ -129,6 +129,11 @@ pub struct AtprotoSession {
     /// The authorization server origin that issued the OAuth tokens, for silent refresh.
     #[serde(default)]
     pub authserver: Option<String>,
+    /// The OAuth client id this session was authorized under (new binds: the
+    /// scope-declaring localhost form; absent for pre-scope-era sessions, which
+    /// refresh under the bare localhost origin). Routing state, not a secret.
+    #[serde(default)]
+    pub client_id: Option<String>,
     /// The session's DPoP ES256 private key, base64url SEC1 bytes (`/bind` sessions
     /// only) — required material for the refresh request.
     #[serde(default)]
@@ -150,6 +155,7 @@ impl std::fmt::Debug for AtprotoSession {
             .field("refresh_jwt", &self.refresh_jwt.as_ref().map(|_| "[redacted]"))
             .field("pds", &self.pds)
             .field("authserver", &self.authserver)
+            .field("client_id", &self.client_id)
             .field("dpop_key", &self.dpop_key.as_ref().map(|_| "[redacted]"))
             .field("obtained_at", &self.obtained_at)
             .finish()
