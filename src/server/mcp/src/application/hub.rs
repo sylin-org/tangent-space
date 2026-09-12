@@ -37,6 +37,10 @@ pub const DEFAULT_PDS: &str = "https://bsky.social";
 /// Live coordination state, not durable enrollment state — ten minutes of operator
 /// attention is the whole budget.
 pub const PENDING_CONNECT_TIMEOUT_MS: i64 = 10 * 60 * 1000;
+/// Age-out scan cadence: one shared sweeper thread wakes at this period and drops
+/// expired pendings, so a looping model's repeated Connects (each refreshing the
+/// pending) can never pile up one sleeping thread per call.
+const PENDING_CONNECT_SWEEP_MS: u64 = 15 * 1000;
 
 /// A completed tool invocation: deterministic view text plus canonical structured facts.
 pub struct ToolOutcome {
@@ -112,8 +116,10 @@ pub struct ConnectorHub {
     /// spawn one tab per retry. Keyed by the full target URL, so distinct anchors stay
     /// distinct.
     opened_pages: Mutex<HashSet<String>>,
-    /// Waiting-for-operator connects (A3), shared with their timeout sweepers.
+    /// Waiting-for-operator connects (A3), shared with the one age-out sweeper.
     pending_connects: Arc<Mutex<Vec<PendingConnect>>>,
+    /// Arms the single sweeper thread on the first recorded pending connect.
+    sweep_once: std::sync::Once,
 }
 
 impl ConnectorHub {
@@ -127,6 +133,7 @@ impl ConnectorHub {
             pending_bind: Mutex::new(None),
             opened_pages: Mutex::new(HashSet::new()),
             pending_connects: Arc::new(Mutex::new(Vec::new())),
+            sweep_once: std::sync::Once::new(),
         }
     }
 
@@ -461,6 +468,28 @@ impl ConnectorHub {
             pds: session.pds,
             obtained_at: session.obtained_at,
         })
+    }
+
+    /// The operator page's whole identity table in one store guard: every identity with
+    /// its atproto binding status (never the access token) and its enrollment count.
+    /// This is the ONLY shape the page should read identities through — a caller that
+    /// instead walks the store directly and then asks per-identity questions re-enters
+    /// the store lock and deadlocks the whole hub (the live popped-page freeze).
+    pub fn identity_inventory(&self) -> Vec<(crate::domain::identity::Identity, Option<AtprotoBinding>, usize)> {
+        let store = self.lock_store().expect("state lock");
+        store
+            .identities()
+            .iter()
+            .map(|identity| {
+                let binding = store.atproto_session(&identity.local_id).map(|session| AtprotoBinding {
+                    did: session.did,
+                    handle: session.handle,
+                    pds: session.pds,
+                    obtained_at: session.obtained_at,
+                });
+                (identity.clone(), binding, store.companions_of(&identity.local_id).len())
+            })
+            .collect()
     }
 
     /// Shared discovery step of the bound handshake: reads the server's own
@@ -816,6 +845,10 @@ impl ConnectorHub {
     /// Records one waiting-for-operator connect (A3) and arms its honest age-out: if
     /// the operator never completes (or abandons) the sign-in, the pending connect is
     /// dropped after [`PENDING_CONNECT_TIMEOUT_MS`] with a feed event — never silently.
+    /// The age-out runs on ONE shared sweeper thread (armed here on the first pending):
+    /// a looping model's repeated Connects each refresh the pending but spawn nothing,
+    /// and the sweeper touches the pending list only briefly, once per sweep — it can
+    /// never contend with the store, the operator page, or a Connect in flight.
     fn record_pending_connect(&self, identity: &Identity, canonical: &str) {
         let pending = PendingConnect {
             local_id: identity.local_id.clone(),
@@ -830,47 +863,52 @@ impl ConnectorHub {
             };
             // One pending per (identity, origin): a repeated connect refreshes it.
             pendings.retain(|entry| !(entry.local_id == pending.local_id && entry.origin == pending.origin));
-            pendings.push(pending.clone());
+            pendings.push(pending);
         }
         let pendings = self.pending_connects.clone();
         let events = self.events();
-        let local_id = pending.local_id;
-        let handle = pending.handle;
-        let origin = pending.origin;
-        let recorded_at = pending.recorded_at;
-        std::thread::Builder::new()
-            .name("tangent-connect-timeout".into())
-            .spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(PENDING_CONNECT_TIMEOUT_MS as u64));
-                let expired = pendings
-                    .lock()
-                    .map(|mut pendings| {
-                        let mut expired = false;
-                        pendings.retain(|entry| {
-                            let same = entry.local_id == local_id && entry.origin == origin && entry.recorded_at == recorded_at;
-                            if same {
-                                expired = true;
-                            }
-                            !same
+        self.sweep_once.call_once(|| {
+            let _ = std::thread::Builder::new()
+                .name("tangent-connect-timeout".into())
+                .spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_millis(PENDING_CONNECT_SWEEP_MS));
+                    let expired: Vec<PendingConnect> = pendings
+                        .lock()
+                        .map(|mut pendings| {
+                            let now = now_millis();
+                            let mut expired = Vec::new();
+                            pendings.retain(|entry| {
+                                if now.saturating_sub(entry.recorded_at) >= PENDING_CONNECT_TIMEOUT_MS {
+                                    expired.push(entry.clone());
+                                    false
+                                } else {
+                                    true
+                                }
+                            });
+                            expired
+                        })
+                        .unwrap_or_default();
+                    for entry in expired {
+                        events.publish(DomainEvent::ConnectFailed {
+                            origin: entry.origin,
+                            identity: entry.handle,
+                            code: "operator_timeout: the pending connect aged out waiting for the operator".into(),
                         });
-                        expired
-                    })
-                    .unwrap_or(false);
-                if expired {
-                    events.publish(DomainEvent::ConnectFailed {
-                        origin,
-                        identity: handle,
-                        code: "operator_timeout: the pending connect aged out waiting for the operator".into(),
-                    });
-                }
-            })
-            .ok();
+                    }
+                });
+        });
     }
 
     /// The auto-resume (A3), armed right after an operator completed a binding: every
     /// fresh pending connect for that identity finishes by itself — no model involved —
     /// through the same enroll-and-arrive steps with the same live progress. The
     /// model's next Connect or Arrive simply finds the enrollment and session ready.
+    ///
+    /// Lock discipline: the pending list is drained under its own lock and RELEASED
+    /// before any hub work; the enroll-and-arrive steps take the store lock only in
+    /// their own short scopes, with all network I/O outside it (W2-A). The resume runs
+    /// on the operator connection thread that performed the bind and holds no lock
+    /// across its whole journey.
     fn resume_pending_connects(&self, local_id: &str) {
         let resumes: Vec<PendingConnect> = {
             let Ok(mut pendings) = self.pending_connects.lock() else { return };
@@ -1061,6 +1099,15 @@ impl ConnectorHub {
         result
     }
 
+    /// Direct store access for intakes rendering their own views (the CLI, the tray).
+    ///
+    /// LOCK RULE — the store mutex is a leaf lock. While holding it, only pure
+    /// `StateStore` reads and writes are allowed: never a hub method that takes the
+    /// store again (`std::sync::Mutex` is not re-entrant — the second `lock()` on the
+    /// same thread blocks forever while still holding the mutex, freezing every other
+    /// intake), and never network I/O (W2-A: exchange outside the lock, re-check after).
+    /// Intakes that need composed facts should ask the hub for a batched read (see
+    /// [`ConnectorHub::identity_inventory`]) instead of walking the store themselves.
     pub fn store(&self) -> &Mutex<StateStore> {
         &self.store
     }
@@ -1774,6 +1821,9 @@ impl ConnectorHub {
         store.session(&companion.companion_id).ok_or_else(|| "the stored session is missing; re-enroll this enrollment".to_string())
     }
 
+    /// Takes the store lock. Leaf-lock discipline applies for the whole guard scope:
+    /// no hub method that locks the store again (the mutex is not re-entrant), no
+    /// network I/O, no process spawn. Composed reads belong in batched hub methods.
     fn lock_store(&self) -> Result<std::sync::MutexGuard<'_, StateStore>, String> {
         self.store.lock().map_err(|_| "state lock poisoned".to_string())
     }

@@ -373,6 +373,135 @@ fn a_waiting_connect_auto_resumes_when_the_operator_signs_in_with_live_sse() {
     assert_eq!(hub.enrollments_of(&identity.local_id).len(), 1, "still exactly one enrollment");
 }
 
+// ---------- the looping-model and frozen-hub guarantees ----------
+
+/// Runs one hub call on its own thread and enforces a deadline: a call that would hang
+/// (the live deadlock shape) fails the test instead of freezing the suite.
+fn bounded<T: Send + 'static>(run: impl FnOnce() -> T + Send + 'static, timeout: Duration) -> T {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(run());
+    });
+    receiver.recv_timeout(timeout).unwrap_or_else(|_| panic!("the call did not answer within {timeout:?}"))
+}
+
+/// One HTTP request/response with a hard read deadline: a handler that never answers
+/// (the frozen-page shape) surfaces as an error instead of a hang.
+fn http_round_trip_bounded(stream: &mut TcpStream, request: &str, timeout: Duration) -> Result<String, String> {
+    stream.write_all(request.as_bytes()).map_err(|error| format!("write failed: {error}"))?;
+    stream.flush().map_err(|error| format!("flush failed: {error}"))?;
+    stream.set_read_timeout(Some(timeout)).map_err(|error| format!("deadline refused: {error}"))?;
+    let mut raw = Vec::new();
+    stream
+        .read_to_end(&mut raw)
+        .map(|_| String::from_utf8_lossy(&raw).to_string())
+        .map_err(|_| format!("no answer within {timeout:?} — the operator API is frozen"))
+}
+
+/// A looping model is an expected client: while one connect waits for the operator,
+/// any number of repeated Connect calls must keep answering promptly and honestly
+/// (already-opened page, never a new spawn, never a hang).
+#[test]
+fn repeated_connects_while_waiting_for_the_operator_all_answer_promptly() {
+    let server = FakeServer::start();
+    let hub = mcp_workspace("loop", "codex-host");
+    let identity = hub.create_identity("ox_omega", None).expect("identity");
+    hub.set_client_rules(vec![ClientRule { client_name: "codex-host".into(), local_id: Some(identity.local_id.clone()) }])
+        .expect("allowlist");
+    hub.set_operator_page_url("http://127.0.0.1:59999/?token=page-secret-loop");
+    let _guard = no_browser();
+
+    let hub_caller = hub.clone();
+    let origin = server.origin().to_string();
+    let first = bounded(move || connect(&hub_caller, &origin), Duration::from_secs(5));
+    assert_eq!(code_of(&first), "operator_action_needed");
+    assert!(first.text.contains("page opened"), "first connect narrates the pop: {}", first.text);
+
+    for attempt in 0..6 {
+        let hub_caller = hub.clone();
+        let origin = server.origin().to_string();
+        let again = bounded(move || connect(&hub_caller, &origin), Duration::from_secs(5));
+        assert_eq!(code_of(&again), "operator_action_needed", "attempt {attempt}: {}", again.text);
+        assert!(again.text.contains("already opened"), "attempt {attempt} is honest: {}", again.text);
+        assert!(!again.text.contains("page-secret-loop"), "the page token never renders: {}", again.text);
+    }
+
+    // The store stays lockable after the whole loop, and nothing enrolled meanwhile.
+    assert_eq!(hub.identities().len(), 1);
+    assert!(hub.enrollments_of(&identity.local_id).is_empty(), "still nothing enrolled while waiting");
+}
+
+/// The live-deadlock regression (journal: Connect → pending → page refresh → frozen hub).
+/// The operator page's identity fetch (`GET /api/identities`, which every tab runs at
+/// boot and after every click) must answer while a connect is pending, and operator
+/// mutations plus a repeated Connect must keep answering too. Before the fix, the page's
+/// identity list held the store lock and re-locked it per identity, freezing the hub.
+#[test]
+fn a_pending_connect_never_freezes_the_page_or_operator_mutations() {
+    let server = FakeServer::start();
+    let hub = mcp_workspace("frozen", "codex-host");
+    let identity = hub.create_identity("ox_omega", None).expect("identity");
+    hub.set_client_rules(vec![ClientRule { client_name: "codex-host".into(), local_id: Some(identity.local_id.clone()) }])
+        .expect("allowlist");
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let address = listener.local_addr().expect("address");
+    let token = "0123456789abcdef0123456789abcdef".to_string();
+    {
+        let hub = hub.clone();
+        let token = token.clone();
+        let serving = listener.try_clone().expect("clone listener");
+        std::thread::Builder::new()
+            .name("operator-under-test".into())
+            .spawn(move || tangent_connector::adapters::operator::serve(serving, hub, token))
+            .expect("server thread");
+    }
+    hub.set_operator_page_url(&format!("http://{address}/?token={token}"));
+    let _guard = no_browser();
+
+    // Connect #1: waiting for the operator, honest return.
+    let hub_caller = hub.clone();
+    let origin = server.origin().to_string();
+    let waiting = bounded(move || connect(&hub_caller, &origin), Duration::from_secs(5));
+    assert_eq!(code_of(&waiting), "operator_action_needed");
+
+    // The popped tab boots and refreshes: the identity list must answer (the freeze point).
+    let mut page = TcpStream::connect(address).expect("connect page");
+    let listed = http_round_trip_bounded(
+        &mut page,
+        &format!("GET /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"),
+        Duration::from_secs(5),
+    )
+    .expect("the page's identity fetch answered");
+    assert!(listed.starts_with("HTTP/1.1 200"), "identity list was: {listed}");
+    assert!(listed.contains("ox_omega"), "the list names the identity: {listed}");
+    assert!(listed.contains("\"atproto\":null"), "the binding status renders: {listed}");
+
+    // The operator's mutation on the frozen-looking page: create still works.
+    let mut creating = TcpStream::connect(address).expect("connect create");
+    let payload = json!({ "handle": "ox_second", "displayName": null }).to_string();
+    let created = http_round_trip_bounded(
+        &mut creating,
+        &format!(
+            "POST /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            payload.len()
+        ),
+        Duration::from_secs(5),
+    )
+    .expect("operator.create_identity answered while a connect was pending");
+    assert!(created.contains("\"status\":\"ok\""), "create was: {created}");
+
+    // The same mutation through the hub directly, and the polling client's next Connect.
+    let hub_caller = hub.clone();
+    let second_identity = bounded(move || hub_caller.create_identity("ox_third", None), Duration::from_secs(5));
+    assert!(second_identity.is_ok(), "hub create while pending: {:?}", second_identity.err());
+    let hub_caller = hub.clone();
+    let origin = server.origin().to_string();
+    let again = bounded(move || connect(&hub_caller, &origin), Duration::from_secs(5));
+    assert_eq!(code_of(&again), "operator_action_needed");
+    assert!(again.text.contains("already opened"), "the repeated connect stays honest: {}", again.text);
+}
+
 #[test]
 fn the_sse_feed_refuses_missing_tokens_and_caps_concurrent_clients() {
     let hub = mcp_workspace("sse-cap", "codex-host");

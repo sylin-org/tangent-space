@@ -271,3 +271,111 @@ fn serve_mode_hosts_the_operator_page_with_a_stderr_token_and_pure_stdout() {
     let journal = std::fs::read_to_string(home.join("connector.log")).unwrap_or_default();
     assert!(journal.contains("operator_page_ready") && journal.contains(&url), "journal was: {journal}");
 }
+
+/// The live-deadlock journey against the real binary (serve mode hosts the operator
+/// page in-process, exactly like the live run): an allowlisted MCP client Connects, the
+/// handshake waits for the operator and pops the page, the popped tab refreshes its
+/// identity list, a polling client Connects again, and the operator mutates identities —
+/// every step must answer promptly. Before the re-entrant-lock fix, the page's identity
+/// fetch froze the whole hub: the second Connect and every operator mutation hung.
+#[test]
+fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
+    let server = FakeServer::start();
+    let home = std::env::temp_dir().join(format!("tangent-connector-looping-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).expect("temp dir");
+
+    let mut peer = Peer::spawn(&["serve"], &home);
+    // The startup URL and its note are the only stderr lines; the page answers once a
+    // client has connected (the server thread joins the hub at initialize).
+    let mut operator_url = None;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
+        let line = peer.stderr.recv_timeout(std::time::Duration::from_secs(10)).expect("stderr startup line");
+        if let Some(url) = line.split("operator page: ").nth(1) {
+            operator_url = Some(url.trim().to_string());
+            break;
+        }
+    }
+    let url = operator_url.expect("the operator page URL is on stderr");
+    let token = url.rsplit("token=").next().unwrap_or_default().to_string();
+    let port: u16 = url.trim_start_matches("http://127.0.0.1:").split(['/', '?']).next().unwrap_or_default().parse().expect("port");
+
+    peer.send(&json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "zcode", "version": "0" } }
+    }));
+    let initialized = peer.receive();
+    assert_eq!(initialized["result"]["serverInfo"]["name"], json!("tangent-connector"));
+    peer.send(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
+
+    // Operator setup through the page API this same process hosts: one identity, and
+    // the allowlist rule that lets the MCP client 'zcode' resolve it.
+    let http = |request: &str| {
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect");
+        stream.write_all(request.as_bytes()).expect("write");
+        stream.flush().expect("flush");
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).expect("deadline");
+        let mut raw = Vec::new();
+        stream
+            .read_to_end(&mut raw)
+            .map(|_| String::from_utf8_lossy(&raw).to_string())
+            .map_err(|_| "no answer within 5s — the operator API is frozen".to_string())
+    };
+    let create_body = json!({ "handle": "ox_omega", "displayName": null }).to_string();
+    let created = http(&format!(
+        "POST /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{create_body}",
+        create_body.len()
+    ))
+    .expect("identity creation answered");
+    assert!(created.contains("\"status\":\"ok\""), "create was: {created}");
+    let local_id = created.split("\"localId\":\"").nth(1).unwrap_or_default().split('"').next().unwrap_or_default().to_string();
+    assert!(!local_id.is_empty(), "local id parsed from: {created}");
+    let allow_body = format!("{{\"rules\":[{{\"clientName\":\"zcode\",\"localId\":\"{local_id}\"}}]}}");
+    let allowed = http(&format!(
+        "POST /api/allowlist?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{allow_body}",
+        allow_body.len()
+    ))
+    .expect("allowlist save answered");
+    assert!(allowed.contains("\"status\":\"ok\""), "allowlist was: {allowed}");
+
+    // Connect #1: waiting for the operator — the honest blocked return, page popped.
+    peer.send(&json!({
+        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": { "name": "Connect", "arguments": { "serverUrl": server.origin() } }
+    }));
+    let waiting = peer.receive();
+    assert_eq!(waiting["result"]["isError"], json!(true));
+    let text = waiting["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(text.contains("operator action needed") && text.contains("sign in identity 'ox_omega'"), "text was: {text}");
+    assert_eq!(waiting["result"]["structuredContent"]["problem"]["code"], json!("operator_action_needed"));
+
+    // The popped tab boots and fetches its identity list — the exact freeze point of
+    // the live deadlock. It must answer, with the identity and its binding status.
+    let listed = http(&format!("GET /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"))
+        .expect("the popped page's identity fetch answered");
+    assert!(listed.starts_with("HTTP/1.1 200"), "identity list was: {listed}");
+    assert!(listed.contains("ox_omega") && listed.contains("\"atproto\":null"), "list was: {listed}");
+
+    // The polling client Connects again (and once more): prompt, honest, no new page.
+    for id in 3..=4 {
+        peer.send(&json!({
+            "jsonrpc": "2.0", "id": id, "method": "tools/call",
+            "params": { "name": "Connect", "arguments": { "serverUrl": server.origin() } }
+        }));
+        let again = peer.receive();
+        assert_eq!(again["id"], json!(id));
+        assert_eq!(again["result"]["structuredContent"]["problem"]["code"], json!("operator_action_needed"));
+        let text = again["result"]["content"][0]["text"].as_str().expect("text");
+        assert!(text.contains("already opened"), "repeat connect {id} was honest: {text}");
+    }
+
+    // The operator's mutation during the pending connect still answers.
+    let mutate_body = json!({ "handle": "ox_second", "displayName": null }).to_string();
+    let mutated = http(&format!(
+        "POST /api/identities?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Tangent-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{mutate_body}",
+        mutate_body.len()
+    ))
+    .expect("operator.create_identity answered during the pending connect");
+    assert!(mutated.contains("\"status\":\"ok\""), "mutation was: {mutated}");
+}

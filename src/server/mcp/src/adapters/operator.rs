@@ -407,11 +407,16 @@ fn route(hub: &ConnectorHub, token: &str, method: &str, target: &str, token_head
             };
             let bound = hub.bind_atproto(local_id, handle, password, pds);
             // The response carries the identity view (with binding status) only — never
-            // the app password and never the atproto session token.
-            finish(bound, |identity| ok_json(json!({ "identity": identity_with_atproto(hub, &identity) })))
+            // the app password and never the atproto session token. The binding read
+            // happens here, after `bind_atproto` returned and released its guards.
+            finish(bound, |identity| {
+                ok_json(json!({ "identity": identity_with_atproto(&identity, hub.atproto_binding(&identity.local_id)) }))
+            })
         }
         ("POST", ["identities", local_id, "atproto", "unbind"]) => {
-            finish(hub.unbind_atproto(local_id), |identity| ok_json(json!({ "identity": identity_json(&identity) })))
+            finish(hub.unbind_atproto(local_id), |identity| {
+                ok_json(json!({ "identity": identity_with_atproto(&identity, hub.atproto_binding(&identity.local_id)) }))
+            })
         }
         ("POST", ["enrollments", companion_id, "forget"]) => {
             finish(hub.forget_enrollment(companion_id), |_| ok_json(json!({ "forgotten": companion_id })))
@@ -464,17 +469,12 @@ fn route(hub: &ConnectorHub, token: &str, method: &str, target: &str, token_head
 }
 
 fn identity_list(hub: &ConnectorHub) -> Vec<Value> {
-    let inventory: Vec<(String, Value, usize)> = {
-        let store = hub.store().lock().expect("state lock");
-        store
-            .identities()
-            .iter()
-            .map(|identity| {
-                let count = store.companions_of(&identity.local_id).len();
-                (identity.local_id.clone(), identity_with_atproto(hub, identity), count)
-            })
-            .collect()
-    };
+    // One batched hub read (one store guard inside it), then pure JSON assembly. This
+    // route once walked the store under its own guard and asked the hub per identity —
+    // `atproto_binding` re-locked the same non-reentrant mutex on the same thread and
+    // froze the entire hub (store held forever): every Connect, every operator
+    // mutation, the page itself. Never re-enter the store from under a store guard.
+    let inventory = hub.identity_inventory();
     let availability: std::collections::HashMap<String, bool> = hub
         .enrollment_inventory()
         .into_iter()
@@ -482,7 +482,9 @@ fn identity_list(hub: &ConnectorHub) -> Vec<Value> {
         .collect();
     inventory
         .into_iter()
-        .map(|(local_id, mut value, count)| {
+        .map(|(identity, atproto, count)| {
+            let local_id = identity.local_id.clone();
+            let mut value = identity_with_atproto(&identity, atproto);
             value["enrollmentCount"] = json!(count);
             value["sessionsAvailable"] = json!(availability.get(&local_id).copied().unwrap_or(true));
             value
@@ -501,10 +503,14 @@ fn identity_json(identity: &crate::domain::identity::Identity) -> Value {
 }
 
 /// The identity view plus its atproto binding status: what is bound, where, and how old
-/// the session is — never the access token, never the app password.
-fn identity_with_atproto(hub: &ConnectorHub, identity: &crate::domain::identity::Identity) -> Value {
+/// the session is — never the access token, never the app password. Pure rendering: the
+/// binding is fetched by the caller, so no store guard is ever held here.
+fn identity_with_atproto(
+    identity: &crate::domain::identity::Identity,
+    atproto: Option<crate::application::hub::AtprotoBinding>,
+) -> Value {
     let mut value = identity_json(identity);
-    value["atproto"] = match hub.atproto_binding(&identity.local_id) {
+    value["atproto"] = match atproto {
         Some(binding) => json!({
             "did": binding.did,
             "handle": binding.handle,
