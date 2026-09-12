@@ -3,9 +3,8 @@
   const $ = id => document.getElementById(id);
   let site, room, epoch = 0, identityEpoch = 0, nextRoomPage, nextCursor, resumeCursor, reply, restoring;
   const mentionCache = new Map();
-  let liveController;
-  let activityController, activityCursor, activityReconnect, activityActive = false;
-  let activityBackoff = 0, activityRecovering = false, activityRecoveryLabel = '', noticeTimer;
+  let activityTransport, activityActive = false, activityMode = 'stopped', activityOverviewNote = '', activityNeedsRefresh = false;
+  let activityRecovering = false, activityRecoveryLabel = '', activityAutomaticRecoveries = 0, noticeTimer;
   let sourceReadiness, activeTangentKey, activitySignature = '', tangentNextPage;
   let routeTangent, routeTopics, routeFailure;
   const route = () => window.TangentPages?.route || { kind: 'home' };
@@ -19,6 +18,7 @@
   const postMutations = new Map();
   const recoveryBlocked = new Set();
   const drafts = new Map();
+  const draftStoragePrefix = 'tangent-space:draft:v1:';
   const sending = new Map();
   const rendered = new Set();
   const visibleMessages = new Map();
@@ -30,9 +30,16 @@
   const text = (id, value) => { $(id).textContent = value ?? ''; };
   const show = (id, visible) => { $(id).hidden = !visible; };
   const field = (form, name) => $(form).elements.namedItem(name);
-  function connectionStatus(message, state = activityActive ? 'live' : 'connecting') {
-    text('activity-status', message);
-    text('conversation-connection', state === 'live' ? 'Live' : state === 'reconnecting' ? 'Reconnecting…' : message);
+  function connectionStatus(message, state = activityActive ? activityMode === 'poll' ? 'polling' : 'live' : 'connecting') {
+    const label = { live: 'Live', polling: 'Polling', reconnecting: 'Reconnecting…', paused: 'Paused', stopped: 'Offline', error: 'Offline' }[state] || 'Connecting…';
+    const badgeLabel = { live: 'Live updates', polling: 'Polling for updates', reconnecting: 'Reconnecting…', paused: 'Updates paused', stopped: 'Offline', error: 'Offline' }[state] || 'Connecting…';
+    const badgeText = $('activity-status-label');
+    if (badgeText?.parentElement === $('activity-status')) badgeText.textContent = badgeLabel;
+    else text('activity-status', label);
+    $('activity-status').dataset.state = state;
+    $('activity-status').title = message;
+    $('activity-status').setAttribute('aria-label', message);
+    text('conversation-connection', label);
     $('conversation-connection').dataset.state = state;
     $('conversation-connection').title = message;
   }
@@ -89,21 +96,38 @@
     const summary = permissionSummary(server.permissions);
     text('server-role', summary); show('server-role', !!summary);
     const canManage = participant?.isOwner === true || can(server, 'manageServer') || can(server, 'editServer');
-    show('server-settings-toggle', canManage);
+    show('server-settings-toggle', canManage && route().kind === 'home');
+    show('server-settings', canManage && route().kind === 'settings');
+    $('server-settings').open = canManage && route().kind === 'settings';
+    show('settings-denied', route().kind === 'settings' && !canManage);
     if (canManage) {
       const form = $('server-settings-form');
       for (const key of ['name', 'byline', 'coverImageUrl', 'welcomeMessage', 'motd', 'creationPolicy']) if (form.elements.namedItem(key)) form.elements.namedItem(key).value = server[key] || (key === 'creationPolicy' ? 'owner_only' : '');
       form.elements.namedItem('allowAgentTangentOwnership').checked = server.allowAgentTangentOwnership === true;
+      previewServerCard();
       text('server-permissions-summary', Array.isArray(server.permissions) ? server.permissions.map(p => [p.role, p.scope, (p.allowedActions || []).join(', ')].filter(Boolean).join(': ')).join(' · ') : '');
     }
     show('server-welcome', true);
     updateHero();
   }
-  async function refreshServer() { try { const value = (await request('/api/server')).data; if (value && typeof value === 'object') { site.server = value; renderServerSettings(value); } } catch (_) { /* older servers may not expose server settings yet */ } }
+  async function refreshServer(context) {
+    const identity = identityEpoch, owner = site;
+    if (context && !context.isCurrent()) return;
+    try {
+      const value = (await request('/api/server', undefined, 'GET', context?.signal)).data;
+      if (identity !== identityEpoch || site !== owner || (context && !context.isCurrent())) return;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Server settings could not be read.');
+      site.server = value; renderServerSettings(value);
+    } catch (error) {
+      // Activity may acknowledge an invalidation only after its dependent read succeeds.
+      if (context) throw error;
+    }
+  }
   async function action(button, work) {
+    const identity = identityEpoch;
     if (button) button.disabled = true;
-    try { await work(); } catch (error) { status(error.message || 'The site could not be reached. Try again.', true); }
-    finally { if (button === $('send-message')) renderDraft(); else if (button === $('acknowledge')) checkpointState(); else if (button) button.disabled = false; }
+    try { await work(); } catch (error) { if (identity === identityEpoch) status(error.message || 'The site could not be reached. Try again.', true); }
+    finally { if (identity === identityEpoch) { if (button === $('send-message')) renderDraft(); else if (button === $('acknowledge')) checkpointState(); else if (button) button.disabled = false; } }
   }
   function listRooms(listing, append = false) {
     if (!append) $('room-list').replaceChildren();
@@ -122,38 +146,48 @@
     nextRoomPage = listing.nextPage;
     show('more-rooms', !!nextRoomPage); show('no-rooms', !$('room-list').children.length);
   }
-  async function refreshRooms(append = false) {
+  async function refreshRooms(append = false, context) {
+    const identity = identityEpoch, owner = site;
+    if (context && !context.isCurrent()) return;
     if (activeTangentKey) {
-      const key = activeTangentKey, identity = identityEpoch;
-      const listing = (await request(tangentPath(key) + '/topics' + (append && nextRoomPage ? '?page=' + encodeURIComponent(nextRoomPage) : ''))).data;
-      if (identity !== identityEpoch || key !== activeTangentKey) return;
+      const key = activeTangentKey;
+      const listing = (await request(tangentPath(key) + '/topics' + (append && nextRoomPage ? '?page=' + encodeURIComponent(nextRoomPage) : ''), undefined, 'GET', context?.signal)).data;
+      if (identity !== identityEpoch || site !== owner || key !== activeTangentKey || (context && !context.isCurrent())) return;
       routeTopics = { ...listing, channels: append ? [...(routeTopics?.channels || []), ...(listing.channels || [])] : listing.channels || [] };
       listRooms(routeTopics);
-    } else listRooms((await request('/api/rooms')).data);
+    } else {
+      const listing = (await request('/api/rooms', undefined, 'GET', context?.signal)).data;
+      if (identity === identityEpoch && site === owner && !activeTangentKey && (!context || context.isCurrent())) listRooms(listing);
+    }
   }
   function cardArtwork(card, tangent) {
     if (card.style) card.style.backgroundImage = '';
     card.classList.remove('has-artwork');
-    if (typeof tangent.artwork === 'string' && (/^https:\/\//i.test(tangent.artwork) || /^\/tangent-art\/[a-z0-9-]+\.png$/i.test(tangent.artwork))) {
+    if (typeof tangent.artwork === 'string' && tangent.artwork && validArtwork(tangent.artwork)) {
       card.classList.add('has-artwork');
     }
   }
-  function validArtwork(value) { return !value || /^https:\/\//i.test(value) || /^\/tangent-art\/[a-z0-9-]+\.png$/i.test(value); }
+  function validArtwork(value) { return !value || /^https:\/\//i.test(value) || /^\/tangent-art\/[a-z0-9-]+\.png$/i.test(value) || /^\/artwork\/[a-f0-9]{64}\.(png|jpg|webp)$/.test(value); }
   function cardContents(value, count = 0, countLabel = '·') {
-    const top = element('span', 'tangent-card-top', '');
-    const disc = element('span', 'activity-disc', count ? countLabel : '·'); disc.title = count ? countLabel + ' unread activity' : 'No unread activity';
-    top.append(element('span', 'card-kicker', 'TANGENT'), disc);
-    const face = element('span', 'card-face', '');
-    if (value.artwork && validArtwork(value.artwork)) { const image = document.createElement('img'); image.className = 'card-art'; image.src = value.artwork; image.alt = ''; face.append(image); }
-    else face.append(element('span', 'card-sigil', '✦'));
-    const stripe = element('span', 'card-stripe', '');
-    const glass = element('span', 'card-glass', '');
+    const face = element('span', 'tcg-art', '');
+    if (value.artwork && validArtwork(value.artwork)) { const image = document.createElement('img'); image.src = value.artwork; image.alt = ''; image.loading = 'lazy'; face.append(image); }
+    else face.append(element('span', 'tcg-emblem', '✦'));
+    face.append(element('span', 'tcg-edition', 'TANGENT'));
+    const stripe = element('span', 'tcg-divider', '');
+    const disc = element('span', 'tcg-disc activity-disc', count ? countLabel : '✦'); disc.title = count ? countLabel + ' unread activity' : 'All caught up';
+    const glass = element('span', 'tcg-pane', '');
     const unread = count === 1 ? '1 unread message' : count ? countLabel + ' unread messages' : 'No unread messages';
-    glass.append(element('strong', 'tangent-card-name', value.name || value.key || 'Your Tangent'), element('span', 'tangent-card-description', value.description || 'A shared place for conversation.'), element('em', 'tangent-card-rule', value.motto ? '“' + value.motto + '”' : 'Make room for the next thought.'), element('span', 'tangent-card-footer', unread));
-    return [top, face, stripe, glass];
+    glass.append(element('strong', 'tcg-name', value.name || value.key || 'Your Tangent'), element('span', 'tcg-description', value.description || 'A shared place for conversation.'));
+    if (value.motto) glass.append(element('em', 'tcg-motto', '“' + value.motto + '”'));
+    glass.append(element('span', 'tcg-foot tangent-card-footer', site?.participant ? unread : 'Explore this Tangent'));
+    const foil = element('span', 'tcg-holo'), rainbow = element('span', 'tcg-holo2'), notch = element('span', 'tcg-notch');
+    for (const decoration of [foil, rainbow, notch]) decoration.setAttribute('aria-hidden', 'true');
+    return [face, stripe, disc, notch, glass, foil, rainbow];
   }
   function renderEditorPreview() {
     const form = $('edit-tangent-form'), preview = $('edit-card-preview'); if (!form || !preview) return;
+    preview.classList.add('sylin-card');
+    window.TangentArtwork?.refresh(form);
     const value = Object.fromEntries(new FormData(form)); preview.replaceChildren();
     if (preview.style) preview.style.setProperty('--tangent-accent', safeAccent(value.accent));
     cardArtwork(preview, value);
@@ -161,6 +195,8 @@
   }
   function renderCreatePreview() {
     const form = $('create-tangent'), preview = $('create-card-preview'); if (!form || !preview) return;
+    preview.classList.add('sylin-card');
+    window.TangentArtwork?.refresh(form);
     const value = Object.fromEntries(new FormData(form)); preview.replaceChildren();
     if (preview.style) preview.style.setProperty('--tangent-accent', safeAccent(value.accent));
     cardArtwork(preview, value);
@@ -176,6 +212,7 @@
   }
   function openTangentEditor(tangent) {
     const form = $('edit-tangent-form'); if (!form) return;
+    $('edit-tangent-form').dataset.artworkKey = tangent.key;
     for (const name of ['name', 'description', 'motto', 'accent', 'artwork']) field('edit-tangent-form', name).value = tangent[name] || (name === 'accent' ? '#d88957' : '');
     text('edit-tangent-heading', tangent.name || tangent.key); show('tangent-editor', !!(tangent.canManage || tangent.isOwner)); renderEditorPreview();
   }
@@ -204,7 +241,7 @@
     for (const tangent of tangents) {
       tangentByKey.set(tangent.key, tangent);
       const wrap = element('div', 'tangent-card-wrap');
-      const card = element('a', 'tangent-card', ''); card.href = tangentUrl(tangent.key); card.dataset.key = tangent.key;
+      const card = element('a', 'tangent-card sylin-card', ''); card.href = tangentUrl(tangent.key); card.dataset.key = tangent.key;
       card.style.setProperty('--tangent-accent', safeAccent(tangent.accent)); cardArtwork(card, tangent);
       const channels = Array.isArray(tangent.channels) ? tangent.channels : [];
       const total = channels.reduce((sum, channel) => sum + (activityFor(channel.key).unreadCount || 0), 0);
@@ -221,6 +258,7 @@
     text('no-tangents', site?.participant ? 'No Tangents are available to this account yet.' : 'Sign in to discover the Tangents available to you.');
     show('no-tangents', !tangents.length);
     show('tangent-setup', !!site?.tangents?.setupRequired || !!site?.tangents?.canCreate);
+    show('create-tangent-open', !!site?.participant && !!site?.tangents?.canCreate && site?.onboarding === 'complete');
     const active = tangentByKey.get(activeTangentKey);
     show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || active?.canManage || active?.isOwner || active?.canCreateTopic === true));
     show('site-setup', site?.participant?.isOwner === true || active?.canCreateTopic === true || can(active, 'createTopic'));
@@ -231,6 +269,19 @@
     text('directory-note', !incomplete ? '' : site?.tangents?.directoryIncomplete ? 'The directory is bounded while the server checks what this account can see. Load more or narrow to a Tangent.' : 'Some channel lists are bounded. Open a Tangent to continue browsing its channels.');
     show('directory-note', !!incomplete);
     renderCatchUp();
+  }
+  function previewServerCard() {
+    if (!$('server-card-name')) return;
+    window.TangentArtwork?.refresh($('server-settings-form'));
+    const value = key => field('server-settings-form', key).value.trim();
+    text('server-card-name', value('name') || 'Your place');
+    text('server-card-byline', value('byline')); show('server-card-byline', !!value('byline'));
+    text('server-card-description', value('welcomeMessage') || 'A place for your people and the conversations worth keeping.');
+    text('server-card-motd', value('motd')); show('server-card-board', !!value('motd'));
+    const image = $('server-card-image'), url = value('coverImageUrl');
+    const valid = (/^https:\/\//i.test(url) || /^\/(?!\/)/.test(url)) && !/[\u0000-\u001f\\]/.test(url);
+    if (valid && image.getAttribute('src') !== url) { image.hidden = false; image.onerror = () => { image.hidden = true; }; image.src = url; }
+    else if (!valid) { image.hidden = true; image.removeAttribute('src'); }
   }
   function renderCatchUp() {
     const section = $('catch-up'), list = $('catch-up-list');
@@ -251,29 +302,37 @@
     }
     $('catch-up-more').hidden = entries.length <= 3;
   }
-  async function refreshTangents() {
-    const directory = (await request('/api/v1/tangents')).data;
+  async function refreshTangents(context) {
+    const identity = identityEpoch, owner = site;
+    if (context && !context.isCurrent()) return;
+    const directory = (await request('/api/v1/tangents', undefined, 'GET', context?.signal)).data;
+    if (identity !== identityEpoch || site !== owner || (context && !context.isCurrent())) return;
     if (!directory || !Array.isArray(directory.tangents)) throw new Error('Tangent directory could not be read.');
     site.tangents = directory; renderTangents();
-    if (route().tangent) {
-      routeTangent = (await request(tangentPath(route().tangent))).data;
+    // A known unavailable route must not prevent global directory/activity recovery.
+    if (route().tangent && !routeFailure) {
+      const tangent = (await request(tangentPath(route().tangent), undefined, 'GET', context?.signal)).data;
+      if (identity !== identityEpoch || site !== owner || (context && !context.isCurrent())) return;
+      routeTangent = tangent;
       tangentByKey.set(routeTangent.key, routeTangent);
-      await refreshRooms();
+      await refreshRooms(false, context);
     }
-    updateHero();
+    if (identity === identityEpoch && site === owner && (!context || context.isCurrent())) updateHero();
   }
   async function moreTangents() {
     if (!tangentNextPage) return;
+    const identity = identityEpoch, owner = site;
     const page = (await request('/api/v1/tangents?page=' + encodeURIComponent(tangentNextPage))).data;
+    if (identity !== identityEpoch || site !== owner) return;
     if (!page || !Array.isArray(page.tangents)) throw new Error('More Tangents could not be loaded.');
     const known = new Set(currentTangents().map(tangent => tangent.key));
     site.tangents.tangents.push(...page.tangents.filter(tangent => !known.has(tangent.key)));
     site.tangents.nextPage = page.nextPage; site.tangents.directoryIncomplete = !!page.directoryIncomplete; site.tangents.channelsIncomplete = !!page.channelsIncomplete;
     renderTangents();
   }
-  function resetMessages() { liveController?.abort(); historyRevision++; rendered.clear(); visibleMessages.clear(); newPosts.clear(); updateNewPosts(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); show('read-checkpoint', false); text('freshness', ''); }
+  function resetMessages() { historyRevision++; rendered.clear(); visibleMessages.clear(); newPosts.clear(); updateNewPosts(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); show('read-checkpoint', false); text('freshness', ''); }
   function unavailableRoute(code) {
-    routeFailure = code; epoch++; resetMessages(); stopActivity(); room = null; reply = undefined; sourceReadiness = undefined;
+    routeFailure = code; epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
     routeTangent = routeTopics = undefined;
     for (const id of ['room-title', 'room-topic', 'topic-permissions', 'room-access']) text(id, '');
     field('topic-form', 'topic').value = '';
@@ -283,6 +342,7 @@
       : code === 403 ? 'You don’t have access to this conversation.'
       : 'This conversation isn’t available.');
     updateHero();
+    startActivity(); // A missing/private route does not disconnect this participant's other activity.
   }
   function revokeSelectedRoom(code = 403) {
     const key = room?.key; if (!key) return;
@@ -375,47 +435,56 @@
       if (version === epoch && lookup.identity === identityEpoch) renderDraft();
     }
   }
-  async function historyPage(cursor, version = epoch, key = room?.key, fromStart = false) {
-    if (route().kind === 'post') return refreshOpenHistory();
+  async function historyPage(cursor, version = epoch, key = room?.key, fromStart = false, context) {
+    if (context && !context.isCurrent()) return false;
+    if (route().kind === 'post') return refreshOpenHistory(false, context);
     if (!key) return;
     try {
       const revision = historyRevision, liveAppend = !!cursor && cursor === resumeCursor && !nextCursor;
-      const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : fromStart ? '?from=start' : ''))).data;
+      const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : fromStart ? '?from=start' : ''), undefined, 'GET', context?.signal)).data;
+      if (context && !context.isCurrent()) return false;
       if (version !== epoch || room?.key !== key) return;
       if (revision !== historyRevision) {
-        if (!nextCursor && resumeCursor) return historyPage(resumeCursor, version, key);
+        if (!nextCursor && resumeCursor) return historyPage(resumeCursor, version, key, false, context);
         return;
       }
       renderPage(page, true, liveAppend);
-      startLive();
+      startActivity();
+      return true;
     } catch (error) {
+      if (context && !context.isCurrent()) return false;
       if (version !== epoch) return;
       if (error.status === 403 || error.status === 401 || error.status === 404) revokeSelectedRoom(error.status);
       throw error;
     }
   }
-  async function refreshOpenHistory(force = false) {
-    if (refreshingHistory) { queuedHistoryRefresh = { key: room?.key, force: force || queuedHistoryRefresh?.force }; return; }
-    if (!room?.canRead || !force && document.querySelector('.message-edit-form')) return;
+  async function refreshOpenHistory(force = false, context) {
+    if (context && !context.isCurrent()) return false;
+    if (refreshingHistory) { if (context) throw new Error('History is already refreshing. Activity will retry.'); queuedHistoryRefresh = { key: room?.key, force: force || queuedHistoryRefresh?.force }; return; }
+    if (!room?.canRead) return;
+    if (!force && document.querySelector('.message-edit-form')) { if (context) throw new Error('Close the active edit to refresh activity.'); return; }
     const key = room.key, version = epoch, revision = historyRevision;
     refreshingHistory = true;
     try {
       let pages = [], topic;
       if (route().kind === 'post') {
-        const result = (await request(tangentPath(route().tangent) + '/posts/' + encodeURIComponent(route().post))).data;
+        const result = (await request(tangentPath(route().tangent) + '/posts/' + encodeURIComponent(route().post), undefined, 'GET', context?.signal)).data;
         pages = [result.window]; topic = result.topic;
       } else {
         // Keep the loaded reading window, not just the first page, on an edit or removal.
         const count = rendered.size, cursors = new Set(); let cursor, loaded = 0;
         do {
-          const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '?from=start'))).data;
+          const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '?from=start'), undefined, 'GET', context?.signal)).data;
+          if (context && !context.isCurrent()) return false;
           pages.push(page); loaded += page.messages?.length || 0;
           cursor = page.nextCursor;
           if (!cursor || cursors.has(cursor) || !page.messages?.length) break;
           cursors.add(cursor);
         } while (loaded < count && version === epoch);
       }
-      if (version !== epoch || room?.key !== key || !force && document.querySelector('.message-edit-form')) return;
+      if (context && !context.isCurrent()) return false;
+      if (version !== epoch || room?.key !== key) return;
+      if (!force && document.querySelector('.message-edit-form')) { if (context) throw new Error('Close the active edit to refresh activity.'); return; }
       if (revision !== historyRevision) { queuedHistoryRefresh = { key, force }; return; }
       const anchor = readingAnchor(), previousPosts = new Set(rendered), previousNewPosts = new Set(newPosts);
       const open = [...$('messages').querySelectorAll('details[open]')].map(node => ({ post: node.closest('.message').id, kind: node.className }));
@@ -431,8 +500,10 @@
         if (detail) detail.open = true;
       }
       restoreReadingAnchor(anchor);
-      startLive();
+      startActivity();
+      return true;
     } catch (error) {
+      if (context && !context.isCurrent()) return false;
       if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status);
       throw error;
     } finally {
@@ -491,13 +562,15 @@
         const handle = profile.handle;
         const avatarLink = element('a', 'message-avatar', profile.name.replace(/^@/, '').slice(0, 1).toUpperCase());
         avatarLink.href = profile.href; avatarLink.setAttribute('aria-label', 'View ' + profile.name + '’s profile');
-        if (typeof profile.avatar === 'string' && profile.avatar.startsWith('https://')) {
+        avatarLink.dataset.profileDid = profile.value || ''; avatarLink.dataset.profilePart = 'avatar'; avatarLink.dataset.profileFallback = profile.name;
+        if (typeof profile.avatar === 'string' && profile.avatar.startsWith('/api/profile-cache/avatar?')) {
           const image = document.createElement('img'); image.src = profile.avatar; image.alt = ''; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
           image.addEventListener('error', () => image.remove(), { once: true }); avatarLink.append(image);
         }
         li.append(avatarLink);
         const byline = element('div', 'message-byline', '');
         const author = element('a', 'message-author author-link', profile.name); author.href = profile.href;
+        author.dataset.profileDid = profile.value || ''; author.dataset.profilePart = 'name'; author.dataset.profileFallback = handle ? '@' + handle.replace(/^@/, '') : 'Participant';
         byline.append(author);
         if (isYou) byline.append(element('span', 'message-you', 'you'));
         if (handle && profile.displayName) byline.append(element('span', 'message-handle', '@' + handle.replace(/^@/, '')));
@@ -530,7 +603,7 @@
           const button = element('button', 'btn btn-quiet message-reply', 'Reply'); button.type = 'button';
           button.addEventListener('click', () => {
             if (pending.has(room.key)) return status('Finish or retry the pending message first.');
-            drafts.set(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } });
+            saveDraft(room.key, { text: $('message-text').value, replyTo: { uri: message.sourceUri, cid: message.sourceCid } });
             renderDraft();
             if (!isYou) window.TangentFacets?.replyMention?.(profile.value || message.authorParticipantId, handle);
             rememberDraft(); $('message-text').focus();
@@ -593,29 +666,8 @@
       postMutations.delete(mutationKey); await refreshOpenHistory(true);
     });
   }
-  async function startLive() {
-    if (route().kind === 'post' || activityActive || document.hidden || !room?.canRead || !resumeCursor || nextCursor || (liveController && !liveController.signal.aborted)) return;
-    const controller = new AbortController(); liveController = controller;
-    const version = epoch, key = room.key;
-    try {
-      while (!controller.signal.aborted && version === epoch) {
-        const revision = historyRevision;
-        const page = (await request(roomPath(key) + '/updates?cursor=' + encodeURIComponent(resumeCursor), undefined, 'GET', controller.signal)).data;
-        if (controller.signal.aborted || version !== epoch) return;
-        if (revision !== historyRevision) continue;
-        renderPage(page, true, true);
-        if (nextCursor) break;
-      }
-    } catch (error) {
-      if (controller.signal.aborted || version !== epoch) return;
-      if (error.status === 401 || error.status === 403) {
-        revokeSelectedRoom(error.status);
-      } else { text('freshness', 'Live updates paused. Use Check for updates to reconnect.'); show('freshness', true); }
-    } finally { controller.abort(); }
-  }
-  function renderActivity(snapshot) {
-    if (!snapshot || typeof snapshot !== 'object') return;
-    if (typeof snapshot.checkpoint === 'string') activityCursor = snapshot.checkpoint;
+  async function renderActivity(snapshot, context) {
+    if (!context.isCurrent() || context.participant !== site?.participant?.participantRef) return false;
     const previousSequence = room ? activityFor(room.key).lastSequence : undefined;
     const signature = JSON.stringify({ channels: snapshot.channels, truncated: snapshot.channelsTruncated, reset: snapshot.resetRequired });
     const changed = signature !== activitySignature; activitySignature = signature;
@@ -624,11 +676,7 @@
       if (typeof channel.roomKey === 'string') activityByRoom.set(channel.roomKey, channel);
     }
     const selectedTangent = tangentByKey.get(room?.tangentKey || activeTangentKey);
-    const state = snapshot.channelsIncomplete ? 'Live activity is connected. This overview is incomplete because the directory reached its current scan limit.' : snapshot.channelsTruncated ? 'Live activity is connected. This overview shows up to 100 visible topics.' : selectedTangent?.channelsIncomplete ? 'Live activity is connected. This Tangent’s topic directory is incomplete.' : selectedTangent?.nextChannelsPage ? 'Live activity is connected. This Tangent has more visible topics to load.' : snapshot.resetRequired ? 'Activity reconnected. Some earlier markers may need a fresh check.' : 'Live activity is connected.';
-    const compactLive = state === 'Live activity is connected.';
-    connectionStatus(activityActive ? compactLive ? 'Live' : state : 'Connecting…');
-    $('activity-status').title = state;
-    $('activity-status').setAttribute('aria-label', state);
+    activityOverviewNote = snapshot.channelsIncomplete ? 'This overview is incomplete because the directory reached its current scan limit.' : snapshot.channelsTruncated ? 'This overview shows up to 100 visible topics.' : selectedTangent?.channelsIncomplete ? 'This Tangent’s topic directory is incomplete.' : selectedTangent?.nextChannelsPage ? 'This Tangent has more visible topics to load.' : snapshot.resetRequired ? 'Earlier activity markers have been reset.' : '';
     if (changed) {
       renderTangents();
       const activeChannels = currentTangents().flatMap(tangent => tangent.channels || []);
@@ -649,77 +697,87 @@
       link.href = topicUrl(tangent.key, topic.key); $('elsewhere-links').append(link);
     }
     if (elsewhere.length > 3) { const link = element('a', '', 'See all Tangents →'); link.href = '/tangents/'; $('elsewhere-links').append(link); }
-    const completeOverview = !snapshot.channelsTruncated && !snapshot.channelsHasMore && !snapshot.channelsIncomplete;
-    if (room?.canRead && completeOverview && !selected) { revokeSelectedRoom(); refreshTangents().catch(() => {}); return; }
+    // Watch/mute policy also removes channels from activity. Absence is not an ACL result.
+    if (room?.canRead && !selected && (changed || snapshot.resetRequired)) {
+      const selectedRoom = room, version = epoch;
+      try {
+        const current = (await request(tangentPath(selectedRoom.tangentKey) + '/topics/' + encodeURIComponent(selectedRoom.key), undefined, 'GET', context.signal)).data;
+        if (!context.isCurrent()) return false;
+        if (version === epoch && room === selectedRoom) renderRoom(current);
+      } catch (error) {
+        if (!context.isCurrent()) return false;
+        if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status);
+        else throw error;
+      }
+    }
     const shouldRefresh = room && (snapshot.resetRequired || (Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room.key)) || selected?.lastSequence !== previousSequence);
     const messageEvent = Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room?.key && ['MessageChanged', 'MessageEdited', 'MessageDeleted', 'PostChanged', 'PostDeleted'].includes(event.kind));
-    if ((messageEvent || snapshot.resetRequired || route().kind === 'post' && shouldRefresh) && room?.canRead) action(null, refreshOpenHistory);
-    else if (shouldRefresh && room.canRead && !nextCursor && resumeCursor) action(null, () => historyPage(resumeCursor, epoch, room.key));
-    if (snapshot.resetRequired || snapshot.events?.some(event => event?.kind === 'ParticipantChanged')) refreshServer();
-    if (Array.isArray(snapshot.events) && snapshot.events.some(event => ['TangentChanged', 'RoomChanged', 'MembershipChanged', 'ParticipantChanged'].includes(event?.kind))) {
-      refreshTangents().then(async () => {
-        if (room) {
-          const key = room.key, version = epoch;
-          try { const current = (await request(tangentPath(room.tangentKey) + '/topics/' + encodeURIComponent(key))).data; if (version === epoch && room?.key === key) renderRoom(current); }
-          catch (error) { if (version === epoch && [401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status); }
-        }
-      }).catch(() => connectionStatus('Live activity is connected; the directory will refresh when you reopen it.'));
-    }
-  }
-  function processSseBlock(block) {
-    let event = 'message', id, data = '';
-    for (const line of block.split(/\r?\n/)) {
-      if (line.startsWith('event:')) event = line.slice(6).trim();
-      else if (line.startsWith('id:')) id = line.slice(3).trim();
-      else if (line.startsWith('data:')) data += line.slice(5).trim();
-    }
-    if (id) activityCursor = id;
-    if (event === 'identity_changed' && data) {
-      try { reloadIdentity(JSON.parse(data)); } catch (_) { reloadIdentity({}); }
-    }
-    else if ((event === 'activity' || event === 'reset') && data) {
-      try { renderActivity(JSON.parse(data)); } catch (_) { connectionStatus('Live activity sent an unreadable update. Reconnecting…', 'reconnecting'); }
-    }
-  }
-  async function startActivity() {
-    if (routeFailure || typeof ReadableStream === 'undefined' || activityController || !site?.participant?.participantRef || !site?.tangents || document.hidden) return;
-    activityController = new AbortController(); const controller = activityController;
     try {
-      const identity = identityEpoch;
-      const initial = (await request('/api/activity' + (activityCursor ? '?cursor=' + encodeURIComponent(activityCursor) : ''), undefined, 'GET', controller.signal)).data;
-      if (controller.signal.aborted || identity !== identityEpoch) return;
-      renderActivity(initial);
-      const path = '/api/activity/events' + (activityCursor ? '?cursor=' + encodeURIComponent(activityCursor) : '');
-      const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
-        headers: { Accept: 'text/event-stream' } });
-      if (!response.ok || !response.body) throw new Error('Activity stream could not be opened.');
-      activityBackoff = 0;
-      activityActive = true;
-      // A selected room may have opened its old wait just before the global
-      // stream connected.  One page uses one live transport.
-      liveController?.abort();
-      if ($('freshness').textContent === 'Live updates paused. Use Check for updates to reconnect.') text('freshness', '');
-      connectionStatus('Live', 'live'); $('activity-status').title = 'Live activity is connected.'; $('activity-status').setAttribute('aria-label', 'Live activity is connected.');
-      const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = '';
-      while (!controller.signal.aborted) {
-        const packet = await reader.read(); if (packet.done) break;
-        buffer += decoder.decode(packet.value, { stream: true });
-        if (buffer.length > 512 * 1024) throw new Error('Activity response exceeds the live connection limit.');
-        const parts = buffer.split(/\r?\n\r?\n/); buffer = parts.pop(); parts.forEach(processSseBlock);
+      if ((messageEvent || snapshot.resetRequired || activityNeedsRefresh || route().kind === 'post' && shouldRefresh) && room?.canRead) {
+        const refreshed = await refreshOpenHistory(false, context);
+        if (room?.canRead && refreshed !== true) throw new Error('History changed during activity recovery. Retrying.');
+      } else if (shouldRefresh && room.canRead && !nextCursor && resumeCursor) {
+        const refreshed = await historyPage(resumeCursor, epoch, room.key, false, context);
+        if (room?.canRead && refreshed !== true) throw new Error('History changed during activity recovery. Retrying.');
       }
     } catch (error) {
-      if (!controller.signal.aborted) connectionStatus('Live activity is reconnecting…', 'reconnecting');
-    } finally {
-      activityActive = false;
-      if (activityController === controller) activityController = undefined;
-      // Bounded backoff, not a fixed retry: transient failures slow the poll (2s doubling
-      // to a 30s cap) and a clean connection resets it.
-      if (!controller.signal.aborted && !document.hidden) {
-        connectionStatus('Live activity is reconnecting…', 'reconnecting');
-        activityBackoff = activityBackoff ? Math.min(activityBackoff * 2, 30000) : 2000;
-        activityReconnect = setTimeout(startActivity, activityBackoff);
-      }
+      // A known room denial has already cleared that route; it does not deny all activity.
+      if (room || ![401, 403, 404].includes(error.status)) throw error;
     }
+    if (!context.isCurrent()) return false;
+    if (snapshot.resetRequired || snapshot.events?.some(event => event?.kind === 'ParticipantChanged')) await refreshServer(context);
+    if (!context.isCurrent()) return false;
+    if (snapshot.resetRequired || (Array.isArray(snapshot.events) && snapshot.events.some(event => ['TangentChanged', 'RoomChanged', 'MembershipChanged', 'ParticipantChanged'].includes(event?.kind)))) {
+      await refreshTangents(context).then(async () => {
+        if (!context.isCurrent()) return;
+        if (room) {
+          const key = room.key, version = epoch;
+          try { const current = (await request(tangentPath(room.tangentKey) + '/topics/' + encodeURIComponent(key), undefined, 'GET', context.signal)).data; if (context.isCurrent() && version === epoch && room?.key === key) renderRoom(current); }
+          catch (error) {
+            if (!context.isCurrent() || version !== epoch) return;
+            if ([401, 403, 404].includes(error.status)) revokeSelectedRoom(error.status);
+            else throw error;
+          }
+        }
+      });
+    }
+    return context.isCurrent();
+  }
+  function startActivity() {
+    if (!site?.participant?.participantRef || activityRecovering || ['sign-in', 'onboarding'].includes(route().kind)) return;
+    if (!activityTransport) {
+      const activityFactory = window.TangentActivityCoordinator || window.TangentActivity;
+      if (!activityFactory) { connectionStatus('Activity could not load. Reload this page to reconnect.', 'error'); return; }
+      activityTransport = activityFactory.create({
+        fetch: (path, options) => fetch(path, options),
+        onSnapshot: async (snapshot, context) => {
+          if (activityRecovering || !context.isCurrent() || context.participant !== site?.participant?.participantRef) return false;
+          try {
+            const accepted = await renderActivity(snapshot, context);
+            if (accepted) { activityAutomaticRecoveries = 0; activityNeedsRefresh = false; }
+            return accepted;
+          } catch (error) {
+            if (context.isCurrent()) { activityNeedsRefresh = true; activitySignature = ''; }
+            throw error; // Failed invalidation must not advance the transport checkpoint.
+          }
+        },
+        onIdentity: reloadIdentity,
+        onState: state => {
+          activityMode = state.mode;
+          activityActive = state.status === 'live';
+          if (activityRecovering) return;
+          if (activityActive) {
+            const message = state.mode === 'poll' ? 'Activity is connected using polling. Live streaming will be retried.' : 'Live activity is connected.';
+            connectionStatus(message + (activityOverviewNote ? ' ' + activityOverviewNote : ''), state.mode === 'poll' ? 'polling' : 'live');
+          } else if (state.status === 'paused') connectionStatus('Updates are paused while this page is hidden.', 'paused');
+          else if (state.status === 'reconnecting') connectionStatus('Activity is reconnecting. Displayed information may be stale.', 'reconnecting');
+          else if (state.status === 'identity') connectionStatus('Your session is being checked. Displayed information may be stale.', 'connecting');
+          else connectionStatus('Activity is connecting. Displayed information may be stale.', state.status);
+        }
+      });
+    }
+    activityTransport.setVisible(!document.hidden);
+    activityTransport.start({ participant: site.participant.participantRef });
   }
   function reloadIdentity(detail) {
     // Token-only sessions: the server pushed an identity_changed event for this session —
@@ -727,18 +785,71 @@
     // session token, so re-run the page's welcome flow; the tangent:welcome listener
     // re-fetches the world as the current identity and acknowledges it.
     if (activityRecovering) return;
+    rememberDraft();
     activityRecovering = true;
+    stopActivity();
+    // Quarantine the old world immediately, before the asynchronous welcome request.
+    // Retain the old actor on site solely so the welcome transition clears its drafts
+    // and uncertain operations correctly; nothing is re-attributed or automatically sent.
+    identityEpoch++; epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
+    routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
+    activitySignature = ''; activityOverviewNote = '';
+    for (const id of ['room-content', 'place', 'community-settings', 'settings-page', 'server-welcome']) show(id, false);
     activityRecoveryLabel = typeof detail?.bestLabel === 'string' ? detail.bestLabel : '';
     connectionStatus('Your signed-in account changed. Updating…', 'connecting');
+    if (++activityAutomaticRecoveries > 1) {
+      connectionStatus('Your session or access needs attention. Sign in or retry to reconnect.', 'error');
+      status('Activity could not verify your current access. Sign in or retry.', true);
+      return;
+    }
     const retry = document.getElementById('retry');
     if (retry && typeof retry.click === 'function') retry.click();
     else status('Your signed-in account changed. Reload this page.', true);
   }
-  function stopActivity() { if (typeof clearTimeout === 'function') clearTimeout(activityReconnect); activityController?.abort(); activityController = undefined; activityActive = false; }
+  function stopActivity() { activityNeedsRefresh = true; activityTransport?.stop(); activityActive = false; }
+  function storedDraftKey(key, actor = site?.participant?.participantRef) {
+    return actor && key ? draftStoragePrefix + encodeURIComponent(actor) + ':' + encodeURIComponent(key) : '';
+  }
+  function readStoredDraft(key) {
+    if (drafts.has(key)) return drafts.get(key);
+    const storageKey = storedDraftKey(key); if (!storageKey) return undefined;
+    try {
+      const value = JSON.parse(window.sessionStorage.getItem(storageKey));
+      const text = typeof value?.text === 'string' && value.text.length <= 4096 ? value.text : '';
+      const replyTo = value?.replyTo && typeof value.replyTo.uri === 'string' && typeof value.replyTo.cid === 'string'
+        ? { uri: value.replyTo.uri, cid: value.replyTo.cid } : undefined;
+      if (!text && !replyTo) { window.sessionStorage.removeItem(storageKey); return undefined; }
+      const draft = { text, ...(replyTo ? { replyTo } : {}) }; drafts.set(key, draft); return draft;
+    } catch (_) { return undefined; }
+  }
+  function saveDraft(key, draft) {
+    if (!key) return;
+    drafts.set(key, draft);
+    const storageKey = storedDraftKey(key); if (!storageKey) return;
+    try {
+      if (draft?.text || draft?.replyTo) window.sessionStorage.setItem(storageKey, JSON.stringify(draft));
+      else window.sessionStorage.removeItem(storageKey);
+    } catch (_) { /* A private or full browser store must not interrupt composing. */ }
+  }
+  function forgetDraft(key) {
+    drafts.delete(key);
+    const storageKey = storedDraftKey(key); if (!storageKey) return;
+    try { window.sessionStorage.removeItem(storageKey); } catch (_) { }
+  }
+  function forgetStoredDrafts(actor) {
+    if (!actor) return;
+    const prefix = draftStoragePrefix + encodeURIComponent(actor) + ':';
+    try {
+      for (let index = window.sessionStorage.length - 1; index >= 0; index--) {
+        const key = window.sessionStorage.key(index);
+        if (key?.startsWith(prefix)) window.sessionStorage.removeItem(key);
+      }
+    } catch (_) { }
+  }
   function renderDraft() {
     const intent = room && pending.get(room.key);
     if (intent) { $('message-text').value = intent.text; reply = intent.replyTo; }
-    else { const draft = drafts.get(room?.key); $('message-text').value = draft?.text || ''; reply = draft?.replyTo; }
+    else { const draft = room && readStoredDraft(room.key); $('message-text').value = draft?.text || ''; reply = draft?.replyTo; }
     $('message-text').readOnly = !!intent;
     $('send-message').disabled = !!room && (sending.has(room.key) || recoveryBlocked.has(room.key) || restoring?.version === epoch);
     text('send-message', intent ? 'Retry saved message' : 'Send message');
@@ -754,7 +865,7 @@
     text('reply-context', reply ? 'Replying to: ' + (preview?.text.replace(/\s+/g, ' ').slice(0, 140) || 'an earlier post') : ''); show('reply-context', !!reply); show('cancel-reply', !!reply && !intent);
     size();
   }
-  function rememberDraft() { if (room?.key && !pending.has(room.key)) drafts.set(room.key, { text: $('message-text').value, replyTo: reply }); }
+  function rememberDraft() { if (room?.key && !pending.has(room.key)) saveDraft(room.key, { text: $('message-text').value, replyTo: reply }); }
   // Facet bridges for the composer (ADR 0008): the picker, the wire package and cleanup.
   window.TangentRooms = window.TangentRooms || {};
   window.TangentRooms.currentRoomKey = () => room?.key;
@@ -785,19 +896,22 @@
       // Identity events re-render the world as the new participant. Drafts and pending
       // outbound messages belong to the identity that wrote them; they are dropped here
       // rather than silently re-attributed to the new account.
-      const recovered = activityRecovering;
+      const recovered = activityRecovering, previousActor = site?.participant?.participantRef;
+      forgetStoredDrafts(previousActor);
       identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); recoveryBlocked.clear(); drafts.clear(); sending.clear(); restoring = undefined; room = null; reply = undefined; sourceReadiness = undefined; activeTangentKey = undefined; routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
-      activityRecovering = false; activityBackoff = 0;
+      activityAutomaticRecoveries = 0;
+      mentionCache.clear(); postMutations.clear(); activitySignature = ''; activityOverviewNote = '';
       renderDraft(); show('room-content', false); show('choose-room', true); text('choose-room', 'Choose a room to see its topic and current access.'); status('');
       if (recovered) acknowledge = 'Now viewing as ' + (event.detail.participant?.handle || activityRecoveryLabel || event.detail.participant?.did || event.detail.participant?.participantRef || 'another account') + '.';
     }
+    activityRecovering = false;
     site = event.detail;
     routeFailure = undefined;
     if (['sign-in', 'onboarding'].includes(route().kind)) return;
-    if (route().kind === 'participant') { refreshServer(); show('place', false); startActivity(); return; }
+    if (['participant', 'settings'].includes(route().kind)) { refreshServer(); show('place', false); startActivity(); return; }
     show('place', true); document.body.classList.add('has-rooms'); refreshServer();
     show('site-setup', site.participant?.isOwner === true || currentTangents().some(t => t.canCreateTopic === true));
-    const identity = identityEpoch;
+    const identity = identityEpoch, welcome = site;
     const flow = action(null, async () => {
       try {
       const legacy = new URL(location.href).searchParams.get('room');
@@ -806,12 +920,17 @@
         if (identity === identityEpoch) location.replace(topicUrl(topic.tangentKey, topic.key));
         return;
       }
-      if (!site.tangents) site.tangents = (await request('/api/v1/tangents')).data;
+      if (!welcome.tangents) {
+        const directory = (await request('/api/v1/tangents')).data;
+        if (identity !== identityEpoch || site !== welcome) return;
+        welcome.tangents = directory;
+      }
       if (identity !== identityEpoch) return;
       renderTangents();
       if (route().tangent) {
-        routeTangent = tangentByKey.get(route().tangent) || (await request(tangentPath(route().tangent))).data;
+        const tangent = tangentByKey.get(route().tangent) || (await request(tangentPath(route().tangent))).data;
         if (identity !== identityEpoch) return;
+        routeTangent = tangent;
         tangentByKey.set(routeTangent.key, routeTangent);
         selectTangent(routeTangent);
         await refreshRooms();
@@ -828,12 +947,13 @@
           }
         }
       }
-      updateHero(); startActivity();
+      updateHero();
       } catch (error) {
         if (identity === identityEpoch && [401, 403, 404].includes(error.status)) unavailableRoute(error.status);
         throw error;
       }
     });
+    startActivity();
     // The identity acknowledgment lands once the re-loaded world has settled, so opening
     // the route cannot clear it again.
     if (acknowledge) flow.then(() => { if (identity === identityEpoch) notice(acknowledge); });
@@ -844,7 +964,9 @@
     rememberDraft(); location.assign('/tangents/');
   });
   $('more-tangents').addEventListener('click', () => action($('more-tangents'), moreTangents));
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { liveController?.abort(); stopActivity(); } else { startLive(); startActivity(); } });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { activityNeedsRefresh = true; activityTransport?.setVisible(false); } else startActivity(); });
+  window.addEventListener('pagehide', () => { rememberDraft(); stopActivity(); });
+  window.addEventListener('pageshow', () => startActivity());
   $('more-rooms').addEventListener('click', () => action($('more-rooms'), () => refreshRooms(true)));
   $('more-messages').addEventListener('click', () => action($('more-messages'), () => historyPage(nextCursor)));
   $('view-new-posts').addEventListener('click', () => {
@@ -854,7 +976,7 @@
   });
   $('conversation-elsewhere').addEventListener('keydown', event => { if (event.key === 'Escape') { $('conversation-elsewhere').open = false; $('elsewhere-label').focus(); } });
   $('message-text').addEventListener('input', () => { size(); rememberDraft(); });
-  $('cancel-reply').addEventListener('click', () => { drafts.set(room.key, { text: $('message-text').value }); renderDraft(); });
+  $('cancel-reply').addEventListener('click', () => { saveDraft(room.key, { text: $('message-text').value }); renderDraft(); });
   $('provision-room').addEventListener('click', () => action($('provision-room'), () => mutateRoom('/provision', {})));
   $('sync-room').addEventListener('click', () => action($('sync-room'), async () => { const key = room.key; status(room.spaceState === 'Local' ? 'Checking for updates…' : 'Checking source repositories…'); await request(roomPath(key) + '/sync', {}); if (room?.key === key) { status(''); await choose(key); } }));
   $('acknowledge').addEventListener('click', () => action($('acknowledge'), async () => {
@@ -910,8 +1032,8 @@
   $('admission-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/admission', { admission: field('admission-form', 'admission').value }, 'PUT')); });
   $('topic-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/settings', { allowPostEditing: field('topic-settings-form', 'allowPostEditing').checked, isLocked: field('topic-settings-form', 'isLocked').checked, title: room.title, topic: field('topic-form', 'topic').value }, 'PATCH')); });
   $('server-atmosphere-open').addEventListener('click', () => window.TangentAtmosphere?.open());
-  $('server-settings-toggle').addEventListener('click', () => { const panel = $('server-settings'), button = $('server-settings-toggle'); panel.open = !panel.open; panel.hidden = !panel.open; button.setAttribute('aria-expanded', String(panel.open)); if (panel.open) $('server-settings-form').elements.namedItem('name').focus(); });
-  $('server-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => { const body = Object.fromEntries(new FormData(event.target)); body.allowAgentTangentOwnership = field('server-settings-form', 'allowAgentTangentOwnership').checked; try { await request('/api/server', body, 'PATCH'); } catch (error) { if (error.status === 403) { administrativeDenied(); return; } throw error; } await refreshServer(); status('Server settings saved.'); }); });
+  $('server-settings-form').addEventListener('input', previewServerCard);
+  $('server-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => { const body = Object.fromEntries(new FormData(event.target)); body.allowAgentTangentOwnership = field('server-settings-form', 'allowAgentTangentOwnership').checked; try { await request('/api/server', body, 'PATCH'); } catch (error) { text('settings-status', error.status === 403 ? 'Your account can no longer change these settings.' : 'Settings could not be saved. Please try again.'); if (error.status === 403) { administrativeDenied(); return; } throw error; } await refreshServer(); text('settings-status', 'Server settings saved.'); }); });
   $('message-form').addEventListener('submit', event => {
     event.preventDefault();
     if (!room?.canWrite || sending.has(room.key) || recoveryBlocked.has(room.key) || restoring?.version === epoch) return;
@@ -938,8 +1060,8 @@
         if (receipt.state === 'accepted') window.TangentFacets?.clearFacets?.(key);
         if (receipt.state === 'accepted') {
           const draft = drafts.get(key);
-          if (draft?.text === intent.text && draft.replyTo?.uri === intent.replyTo?.uri && draft.replyTo?.cid === intent.replyTo?.cid) drafts.delete(key);
-        } else drafts.set(key, { text: intent.text, replyTo: intent.replyTo });
+          if (draft?.text === intent.text && draft.replyTo?.uri === intent.replyTo?.uri && draft.replyTo?.cid === intent.replyTo?.cid) forgetDraft(key);
+        } else saveDraft(key, { text: intent.text, replyTo: intent.replyTo });
         if (room?.key === key) {
           const completionVersion = epoch;
           const completionCurrent = () => identity === identityEpoch && completionVersion === epoch && room?.key === key;

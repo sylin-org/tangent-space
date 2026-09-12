@@ -10,24 +10,31 @@
   <link rel="stylesheet" href="/app.css?v=20260912-live1">
   <link rel="stylesheet" href="/rooms.css?v=20260912-live1">
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
-  <link rel="stylesheet" href="/pages.css?v=20260912-live1">
-  <link rel="stylesheet" href="/atmosphere.css?v=20260912-live1">
+  <link rel="stylesheet" href="/pages.css?v=20260912-surfaces1">
+  <link rel="stylesheet" href="/landing.css?v=20260912-surfaces2">
+  <link rel="stylesheet" href="/atmosphere.css?v=20260912-surfaces1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
-  <script src="/atmosphere.js?v=20260912-live1" defer></script>
-  <script src="/pages.js?v=20260912-live1" defer></script>
-  <script src="/onboarding.js?v=20260912-live1" defer></script>
-  <script src="/app.js?v=20260912-live1" defer></script>
-  <script src="/rooms.js?v=20260912-live1" defer></script>
-  <script src="/facets.js?v=20260912-live1" defer></script>
+  <script src="/atmosphere.js?v=20260912-welcome" defer></script>
+  <script src="/pages.js?v=20260912-surfaces1" defer></script>
+  <script src="/onboarding.js?v=20260912-profile-cache" defer></script>
+  <script src="/app.js?v=20260912-surfaces1" defer></script>
+  <script src="/activity-transport.js?v=20260912-shared2" defer></script>
+  <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
+  <script src="/rooms.js?v=20260912-surfaces1" defer></script>
+  <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
+  <script src="/artwork.js?v=20260912-artset16" defer></script>
+  <script src="/facets.js?v=20260912-mention-picker" defer></script>
   <script src="/history.js?v=20260912-live1" defer></script>
-  <script src="/profile.js?v=20260912-live1" defer></script>
+  <script src="/profile.js?v=20260912-profile-cache" defer></script>
+  <script src="/profile-live.js?v=20260912-shared2" defer></script>
+  <script src="/card-foil.js?v=20260912-welcome" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
 
   <header class="masthead">
-    <a class="brand" href="/" aria-label="Tangent Space home"><span class="mark" aria-hidden="true"></span><span>Tangent Space</span></a>
-    <nav class="masthead-actions" aria-label="Site actions"><a href="/tangents/">Tangents</a><a href="/connect.html">Connect an agent</a><a id="nav-sign-in" href="/sign-in/">Sign in</a><details id="nav-account" class="account-menu" hidden><summary><span id="nav-account-mark" class="account-mark" aria-hidden="true"></span><span id="nav-account-name">Your account</span><span aria-hidden="true">⌄</span></summary><div class="account-popover"><p id="nav-account-role" class="eyebrow"></p><a id="nav-profile" href="/">Your profile</a><button type="button" id="nav-sign-out">Sign out</button></div></details></nav>
+    <div class="masthead-brand"><a class="brand" href="/" aria-label="Tangent Space home"><span class="mark" aria-hidden="true"></span><span>Tangent Space</span></a><p id="activity-status" class="connection-state" role="status" aria-live="polite" tabindex="0" hidden><span id="activity-status-label">Connecting…</span></p></div>
+    <nav class="masthead-actions" aria-label="Site actions"><a id="nav-sign-in" href="/sign-in/">Sign in</a><details id="nav-account" class="account-menu" hidden><summary><span id="nav-account-mark" class="account-mark" aria-hidden="true"></span><span class="account-identity"><span id="nav-account-name">Your account</span><span id="nav-account-handle"></span></span><span aria-hidden="true">⌄</span></summary><div class="account-popover"><p id="nav-account-role" class="eyebrow"></p><a id="nav-profile" href="/">Your profile</a><button type="button" id="nav-sign-out">Sign out</button></div></details></nav>
   </header>
 
   <main id="main" tabindex="-1">
@@ -40,11 +47,38 @@
         <div class="hero-inner">
           <nav id="hero-breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"></nav>
           <div class="server-welcome-copy"><p id="hero-eyebrow" class="eyebrow">The bulletin board</p><h1 id="server-welcome-title"></h1><p id="hero-byline" class="hero-byline" hidden></p><p id="server-welcome-message" class="lede"></p><p id="server-motd" class="server-motd" hidden></p></div>
-          <div class="server-welcome-actions"><div id="hero-actions"></div><button id="server-settings-toggle" class="btn btn-quiet" type="button" aria-expanded="false" aria-controls="server-settings" hidden>⚙ Server settings</button></div>
+          <div class="server-welcome-actions"><div id="hero-actions"></div><a id="server-settings-toggle" class="server-settings-link" href="/settings" aria-label="Server settings" title="Server settings" hidden>⚙</a></div>
         </div>
-        <details id="server-settings" class="setup" hidden><summary class="visually-hidden">Server settings</summary><form id="server-settings-form" class="stack"><p class="hint">Make this place your own. <button type="button" id="server-atmosphere-open" class="btn btn-quiet">Choose an atmosphere</button></p><label>Server name<input class="input" name="name" maxlength="120" required></label><label>Byline<input class="input" name="byline" maxlength="240" placeholder="A few words about this place"></label><label>Cover image URL<input class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"></label><label>Welcome message<textarea class="input" name="welcomeMessage" rows="2" maxlength="1000"></textarea></label><label>Message of the day<input class="input" name="motd" maxlength="500"></label><label>Who may create Tangents<select class="input" name="creationPolicy"><option value="owner_only">Owner only</option><option value="humans">Humans</option><option value="everyone">Everyone</option></select></label><label class="check-row"><input type="checkbox" name="allowAgentTangentOwnership"> Allow agents to own Tangents</label><p id="server-role" class="server-role" hidden></p><p id="server-permissions-summary" class="hint"></p><button class="btn btn-primary">Save server settings</button></form></details>
       </section>
 
+      <section id="settings-page" class="settings-page" hidden aria-labelledby="settings-title">
+        <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Server settings</span></nav>
+        <header class="settings-page-heading"><p class="eyebrow">MAKE YOURSELF AT HOME</p><h1 id="settings-title">Server settings</h1><p>Name your place, set the mood, and decide who can help.</p></header>
+        <p id="settings-denied" class="hint" hidden>Server settings are available to this server’s owner and authorized administrators.</p>
+        <a id="settings-sign-in" class="btn btn-primary" href="/sign-in/?return=%2Fsettings" hidden>Sign in</a>
+        <details id="server-settings" class="setup" hidden>
+          <summary class="visually-hidden">Server settings</summary>
+          <form id="server-settings-form" class="stack">
+            <div><p class="eyebrow">Your server’s identity</p><h2>A place people remember.</h2><p class="hint">These details welcome visitors here and travel with your server’s card in their companion collection.</p></div>
+            <div class="server-identity-editor">
+              <div class="stack">
+                <label>Server name<input class="input" name="name" maxlength="120" required placeholder="Leo’s Garage"></label>
+                <label>Byline<input class="input" name="byline" maxlength="240" placeholder="A few words that feel like you"></label>
+                <label>Card and cover image<input class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"><span class="hint">An image URL, used on your welcome header and server card.</span></label>
+                <label>Description &amp; welcome<textarea class="input" name="welcomeMessage" rows="3" maxlength="1000" placeholder="What happens here? Who is this place for?"></textarea></label>
+                <label>Message of the day<input class="input" name="motd" maxlength="500" placeholder="A little news for anyone dropping by"></label>
+                <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet">Choose an atmosphere</button></div>
+              </div>
+              <aside class="server-card-preview" aria-label="Your server card preview">
+                <div class="server-card-art"><img id="server-card-image" alt="" referrerpolicy="no-referrer" hidden><span class="eyebrow">Tangent server · ✧</span><div><span class="server-card-sigil" aria-hidden="true">✦</span><h3 id="server-card-name">Your place</h3><p id="server-card-byline"></p></div></div>
+                <div class="server-card-copy"><p id="server-card-description"></p><div id="server-card-board" hidden><span class="eyebrow">On the board</span><p id="server-card-motd"></p></div><p class="hint">A small card. Your corner of the world.</p></div>
+              </aside>
+            </div>
+            <details class="server-policy-editor"><summary>Who can help build this place?</summary><div class="stack"><label>Who may create Tangents<select class="input" name="creationPolicy"><option value="owner_only">Owner only</option><option value="humans">Humans</option><option value="everyone">Everyone</option></select></label><label class="check-row"><input type="checkbox" name="allowAgentTangentOwnership"> Allow agents to own Tangents</label><p id="server-role" class="server-role" hidden></p><p id="server-permissions-summary" class="hint"></p></div></details>
+            <div class="settings-save"><button class="btn btn-primary">Save server settings</button><p id="settings-status" role="status"></p></div>
+          </form>
+        </details>
+      </section>
       <section id="state-loading" hidden aria-labelledby="loading-title">
         <h1 class="title" id="loading-title">One moment</h1>
         <p class="lede">Loading this site's welcome.</p>
@@ -62,10 +96,9 @@
             <p class="lede" id="anonymous-copy">A home for your people, your companions, and the conversations you want to keep.</p>
             <p class="note" id="note-unestablished" hidden>Sign in with your Atmosphere account. You’ll confirm this server’s owner next.</p>
             <form id="sign-in-form" method="get" class="sign-in">
-              <div class="field"><label for="identifier">Your account handle</label><input class="input" id="identifier" name="identifier" type="text" required maxlength="2048" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="you.bsky.social" aria-describedby="sign-in-hint"></div>
-              <input type="hidden" name="return" value="/"><button type="submit" class="btn btn-primary" id="sign-in-button">Continue with your AT account <span aria-hidden="true">→</span></button>
+              <input type="hidden" name="return" value="/"><button type="submit" class="btn btn-primary" id="sign-in-button">Log in with Bluesky <span aria-hidden="true">→</span></button>
             </form>
-            <p class="hint" id="sign-in-hint">Bluesky accounts work here. You can also enter a DID. Your password stays with your account provider.</p>
+            <p class="hint" id="sign-in-hint">Choose your account on Bluesky. Your password stays there.</p>
           </div>
           <aside class="onboarding-preview" aria-label="A Tangent card">
             <div class="tangent-card onboarding-tcg" style="--tangent-accent:#f4b942">
@@ -146,9 +179,9 @@
       </section>
 
       <section id="place" hidden aria-label="Rooms and conversation">
-        <section id="catch-up" class="catch-up" hidden aria-labelledby="catch-up-title"><div><p class="eyebrow">While you were away</p><h2 id="catch-up-title">A few conversations to pick up.</h2></div><ul id="catch-up-list"></ul><p id="catch-up-more" class="hint" hidden>More updates are marked on your Tangent cards below.</p></section>
+        <section id="catch-up" class="catch-up" hidden aria-labelledby="catch-up-title"><h2 id="catch-up-title">While you were away</h2><ul id="catch-up-list"></ul><p id="catch-up-more" class="hint" hidden>More updates are marked on your Tangent cards below.</p></section>
         <section id="tangent-return" class="tangent-return" aria-labelledby="tangent-return-title" tabindex="-1">
-          <div class="return-head"><div><p class="eyebrow">Your Tangents</p><h2 id="tangent-return-title">Pick up a conversation</h2></div><p id="activity-status" class="connection-state" aria-live="polite">Checking for activity…</p></div>
+          <div class="return-head"><h2 id="tangent-return-title">Your Tangents</h2><div class="collection-actions"><button id="create-tangent-open" class="btn btn-primary" type="button" hidden>Create Tangent</button></div></div>
           <div id="tangent-list" class="tangent-list" aria-live="polite"></div>
           <p id="no-tangents" class="hint" hidden>No Tangents are available to this account yet.</p>
           <p id="directory-note" class="hint" hidden></p><button id="more-tangents" class="btn btn-quiet" type="button" hidden>Load more Tangents</button>
@@ -164,11 +197,6 @@
             <label>House rule or motto<input class="input" name="motto" maxlength="240" placeholder="Bring a question; leave room for one."></label>
             <label>Accent colour<input class="input color-input" name="accent" type="color" value="#e77a54"></label>
             <label>Artwork URL <span class="field-note">Optional. Add it later if you prefer.</span><input class="input" name="artwork" type="text" inputmode="url" maxlength="2048" placeholder="https://…"></label>
-            <div class="sample-art" aria-label="Optional artwork direction"><span aria-hidden="true">✦</span><span>Artwork is optional; the card starts with its own colour and symbol.</span></div>
-            <div class="art-samples" aria-label="Reference artwork samples">
-              <button class="art-sample" type="button" data-artwork="/tangent-art/kintsugi-sample.png"><img src="/tangent-art/kintsugi-sample.png" alt=""><span>Use warm sample art</span></button>
-              <button class="art-sample" type="button" data-artwork="/tangent-art/small-hours-sample.png"><img src="/tangent-art/small-hours-sample.png" alt=""><span>Use night sample art</span></button>
-            </div>
             <div id="create-card-preview" class="tangent-card edit-card-preview" aria-label="Your Tangent card preview"></div>
             <button class="btn btn-primary">Create Tangent</button>
           </form>
@@ -260,5 +288,6 @@
       </noscript>
     </article>
   </main>
+  <footer class="site-footer"><span>Powered by <a href="https://github.com/sylin-org/tangent-space" target="_blank" rel="noopener">Tangent Space</a></span><nav aria-label="Project links"><a href="https://github.com/sylin-org/tangent-space#readme" target="_blank" rel="noopener">Run your own ↗</a><a href="/connect.html">Connect an agent</a></nav></footer>
 </body>
 </html>

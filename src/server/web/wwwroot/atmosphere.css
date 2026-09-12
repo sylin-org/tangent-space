@@ -3,22 +3,14 @@ body.atmosphere-on,body.atmosphere-on:not(.onboarding-active)[data-page] { backg
 #ascii-atmosphere { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; transition:opacity .6s; }
 body.atmosphere-on>main { position:relative; z-index:1; }
 body.atmosphere-on>.masthead { position:relative; z-index:2; }
-body.atmosphere-on .masthead { background:#111016cc; backdrop-filter:blur(14px); }
+body.atmosphere-on .masthead { background:#111016; }
 body.atmosphere-on #server-welcome { background:linear-gradient(110deg,#15131bc9,#15131b40); }
 body.atmosphere-on #server-welcome::after { background:linear-gradient(0deg,#0c0c1490,transparent); }
 body.atmosphere-on.onboarding-active .panel { background:linear-gradient(120deg,#1c1922eb,#17151de0); backdrop-filter:blur(5px); border-color:#d5c3e324; box-shadow:0 32px 90px #0005; }
 body.atmosphere-on #state-signed-in { background:#111016b3; }
-body.atmosphere-on:is([data-page='topic'],[data-page='post']) .conversation { padding:24px; border:1px solid #ffffff12; border-radius:18px; background:#111016ed; }
-body.atmosphere-on[data-page='topics'] .room-directory { padding:24px; border:1px solid #ffffff12; border-radius:18px; background:#111016e6; }
+body.atmosphere-on:is([data-page='topic'],[data-page='post']) .conversation { padding:24px; border:1px solid #ffffff12; border-radius:18px; background:#111016; }
+body.atmosphere-on[data-page='topics'] .room-directory { padding:24px; border:1px solid #ffffff12; border-radius:18px; background:#111016; }
 body.atmosphere-on #server-settings,body.atmosphere-on .community-settings[open] { background:#19171ff5; }
-.atmosphere-dock { position:fixed; right:20px; bottom:18px; z-index:8; display:flex; border:1px solid #ffffff24; border-radius:24px; background:#12111bec; box-shadow:0 8px 30px #0004; backdrop-filter:blur(12px); overflow:hidden; }
-.atmosphere-dock button { font:11px var(--sans); color:#c6bed0; padding:11px 14px; background:none; border:0; cursor:pointer; min-height:38px; }
-.atmosphere-dock button:first-child { display:flex; align-items:center; gap:8px; }
-.atmosphere-dock button:first-child span { font:14px var(--mono); color:var(--accent); }
-.atmosphere-dock button+button { border-left:1px solid #ffffff16; }
-.atmosphere-dock button:hover { background:#ffffff09; color:#fff; }
-.atmosphere-dock button:focus-visible { outline:2px solid var(--accent); outline-offset:-4px; }
-.atmosphere-dock button:disabled { opacity:.55; cursor:default; }
 #atmosphere-dialog { width:min(880px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); padding:28px; border:1px solid #b5a2ce36; border-radius:22px; background:#14131deb; color:var(--ink); color-scheme:dark; box-shadow:0 40px 120px #000b; backdrop-filter:blur(24px); overflow:auto; }
 body:has(#atmosphere-dialog[open]) { overflow:hidden; }
 #atmosphere-dialog::backdrop { background:#07071090; backdrop-filter:blur(4px); }
@@ -73,8 +65,6 @@ body:has(#atmosphere-dialog[open]) { overflow:hidden; }
   .atmosphere-scene { height:82px; }
   .atmosphere-controls { gap:18px; }
   .atmosphere-intensity { flex-basis:100%; }
-  .atmosphere-dock { right:12px; bottom:12px; }
-  body.atmosphere-on>main { padding-bottom:80px; }
   body.atmosphere-on:is([data-page='topic'],[data-page='post']) .conversation,body.atmosphere-on[data-page='topics'] .room-directory { padding:18px; }
 }
 @media(prefers-reduced-motion:reduce) { #ascii-atmosphere,.atmosphere-scene { transition:none; } }
@@ -87,6 +77,6 @@ body:has(#atmosphere-dialog[open]) { overflow:hidden; }
 }
 @media(forced-colors:active) {
   #ascii-atmosphere,.atmosphere-stage canvas,.atmosphere-scene canvas { display:none; }
-  #atmosphere-dialog,.atmosphere-dock { border:1px solid CanvasText; background:Canvas; color:CanvasText; }
+  #atmosphere-dialog { border:1px solid CanvasText; background:Canvas; color:CanvasText; }
   .atmosphere-scene[aria-pressed='true'] { outline:2px solid Highlight; }
 }

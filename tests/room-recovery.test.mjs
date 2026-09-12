@@ -5,15 +5,27 @@ import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../src/server/web/wwwroot/rooms.js', import.meta.url), 'utf8');
+const activitySource = await readFile(new URL('../src/server/web/wwwroot/activity-transport.js', import.meta.url), 'utf8');
+const activitySnapshot = (participantRef = 'ref-did:plc:alice') => ({ participantRef, checkpoint: 'c0', events: [], channels: [],
+  hasMore: false, resetRequired: false, nextCursor: null, nextChannelCursor: null });
 const saved = { operationId: 'c2b64a14-f4b8-444e-8a1d-2a3053ebc6bb', text: 'My original message',
   replyTo: { uri: 'at://example/reply', cid: 'original-cid' }, detail: 'reauthorization-required' };
 const later = { operationId: 'e395b4f6-6d06-4c21-b64a-04777c48993b', text: 'Another saved message', replyTo: null, detail: 'source-unavailable' };
 const settle = async () => { for (let turn = 0; turn < 5; turn++) await new Promise(resolve => setImmediate(resolve)); };
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
+function memoryStorage(entries = new Map()) {
+  return {
+    get length() { return entries.size; },
+    key(index) { return [...entries.keys()][index] ?? null; },
+    getItem(key) { return entries.get(key) ?? null; },
+    setItem(key, value) { entries.set(key, String(value)); },
+    removeItem(key) { entries.delete(key); }
+  };
+}
 
 // Exercise the browser script's event/request boundary without a live account or PDS.
 // The DOM stub only supplies rendering primitives; it contains no recovery logic.
-function fixture(respond = () => ({ messages: [] })) {
+function fixture(respond = () => ({ messages: [] }), sessionStorage = memoryStorage()) {
   class Element {
     constructor() {
       this.children = []; this.listeners = new Map(); this.value = ''; this.hidden = true; this.textContent = ''; this.dataset = {};
@@ -29,10 +41,18 @@ function fixture(respond = () => ({ messages: [] })) {
     setAttribute(name, value) { this[name] = value; }
     click() { this.emit('click'); }
     focus() {}
+    querySelector() { return null; }
+    querySelectorAll() { return []; }
+    contains(child) { return this.children.includes(child); }
   }
   const elements = new Map();
   const get = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const window = new Element(), document = new Element(), requests = [], timers = [];
+  let timerId = 0;
+  const setTimer = (fn, ms) => { const id = ++timerId; timers.push({ id, fn, ms }); return id; };
+  const clearTimer = id => { const index = timers.findIndex(timer => timer.id === id); if (index >= 0) timers.splice(index, 1); };
+  Object.assign(window, { setTimeout: setTimer, clearTimeout: clearTimer, ReadableStream });
+  window.sessionStorage = sessionStorage;
   Object.assign(document, { hidden: true, body: new Element(), getElementById: get, createElement: () => new Element(), querySelectorAll: () => get('room-list').children });
   const route = { kind: 'topic', tangent: 'home', topic: 'lounge' };
   window.TangentPages = { route,
@@ -40,9 +60,9 @@ function fixture(respond = () => ({ messages: [] })) {
     hero() {}, prepare() {}, unavailable() {} };
   const location = { href: 'http://127.0.0.1:5220/t/home/topics/lounge', assign: path => { location.href = new URL(path, location.href).href; }, replace: path => { location.href = new URL(path, location.href).href; } };
   class FormData { constructor() {} *[Symbol.iterator]() {} }
-  vm.runInNewContext(source, { window, document, location, URL, TextEncoder, TextDecoder, AbortController, FormData, crypto: { randomUUID }, setImmediate,
-    ReadableStream: class { },
-    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout: () => { },
+  vm.runInNewContext(activitySource + '\n' + source, { window, document, location, URL, TextEncoder, TextDecoder, AbortController, FormData, crypto: { randomUUID }, setImmediate,
+    ReadableStream,
+    setTimeout: setTimer, clearTimeout: clearTimer,
     history: { replaceState: (_state, _title, path) => { location.href = new URL(path, location.href).href; } },
     fetch: async (path, options) => {
       const request = { path, method: options.method, headers: options.headers, body: options.body && JSON.parse(options.body) }; requests.push(request);
@@ -59,11 +79,11 @@ function fixture(respond = () => ({ messages: [] })) {
       else if (path.includes('/messages?')) data = { messages: [], freshness: 'checked' };
       else data = await respond(request);
       if (data instanceof Response) return data;
-      return { ok: true, status: 200, json: async () => data };
+      return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } });
     }
   });
   let lastDetail = null;
-  return { get, requests, timers, document, welcome(did = 'did:plc:alice', key = 'lounge', tangents) {
+  return { get, requests, timers, document, window, welcome(did = 'did:plc:alice', key = 'lounge', tangents) {
     route.topic = key;
     location.href = 'http://127.0.0.1:5220/t/home/topics/' + key;
     lastDetail = { participant: { participantRef: 'ref-' + did, did }, rooms: { rooms: [{ key: 'lounge', title: 'Lounge' }, { key: 'workshop', title: 'Workshop' }] }, ...(tangents ? { tangents } : {}) };
@@ -124,6 +144,30 @@ test('a new draft typed while recovery loads survives completing the older pendi
   lookup.resolve({ messages: [saved] }); await settle(); f.submit(); await settle();
   assert.equal(f.get('message-text').value, 'My separate new draft');
   assert.equal(f.get('message-text').readOnly, false);
+});
+
+test('an unsent draft survives a reload for the same participant and is cleared after acceptance', async () => {
+  const storage = memoryStorage();
+  const first = fixture(() => ({ messages: [] }), storage);
+  first.welcome(); await settle(); first.type('A thought worth keeping');
+
+  const second = fixture(request => request.method === 'POST' ? { state: 'accepted' } : { messages: [] }, storage);
+  second.welcome(); await settle();
+  assert.equal(second.get('message-text').value, 'A thought worth keeping');
+  second.submit(); await settle();
+  assert.equal(second.get('message-text').value, '');
+
+  const third = fixture(() => ({ messages: [] }), storage);
+  third.welcome(); await settle();
+  assert.equal(third.get('message-text').value, '');
+});
+
+test('changing participants removes the previous account reload draft', async () => {
+  const storage = memoryStorage(), f = fixture(() => ({ messages: [] }), storage);
+  f.welcome(); await settle(); f.type('Alice private draft');
+  f.welcome('did:plc:bob'); await settle();
+  f.welcome('did:plc:alice'); await settle();
+  assert.equal(f.get('message-text').value, '');
 });
 
 test('revisiting a room preserves its local operation and loads the next saved message when sending finishes', async () => {
@@ -243,42 +287,45 @@ test('a private recovery lookup verifies by session token alone and a mismatch r
 
 test('an identity_changed push re-runs the welcome flow and acknowledges the new identity', async () => {
   const encoder = new TextEncoder();
-  let clicks = 0;
+  let clicks = 0, actor = 'ref-did:plc:alice', pushes = 0;
   const f = fixture(request => {
     if (request.path.startsWith('/api/activity/events')) {
       // One pushed event, then the stream parks like a quiet live connection.
       return new Response(new ReadableStream({ start(controller) {
-        controller.enqueue(encoder.encode('event: identity_changed\ndata: {"participantRef":"ref-did:plc:bob","bestLabel":"bob.example"}\n\n'));
+        if (++pushes === 1) controller.enqueue(encoder.encode('event: identity_changed\ndata: {"participantRef":"ref-did:plc:bob","bestLabel":"bob.example"}\n\n'));
       } }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
     }
-    if (/^\/api\/activity(\?|$)/.test(request.path)) return { checkpoint: 'c0', channels: [{ roomKey: 'lounge', lastSequence: 0 }] };
+    if (/^\/api\/activity(\?|$)/.test(request.path)) return activitySnapshot(actor);
     return { messages: [] };
   });
   f.document.hidden = false;
   f.get('retry').addEventListener('click', () => { clicks++; });
   f.welcome(); await settle();
   assert.equal(clicks, 1, 'the page re-runs its own welcome flow');
-  assert.match(f.get('activity-status').textContent, /Updating/);
+  assert.equal(f.get('activity-status').textContent, 'Connecting…');
+  assert.match(f.get('activity-status').title, /Updating/);
   assert.ok(f.requests.some(request => /^\/api\/activity(\?|$)/.test(request.path)
     && request.headers['X-Tangent-Participant'] === undefined), 'the stream authenticates by token only');
-  f.welcome('did:plc:bob'); await settle();
+  actor = 'ref-did:plc:bob'; f.welcome('did:plc:bob'); await settle();
   assert.match(f.get('action-status').textContent, /Now viewing as bob\.example/);
 });
 
-test('transient activity failures back off by doubling to a cap and reset on connection', async () => {
+test('an SSE failure falls back to participant polling without a second topic connection or automatic writes', async () => {
   const f = fixture(request => {
     if (request.path.startsWith('/api/activity/events')) return new Response('{}', { status: 500 });
-    if (/^\/api\/activity(\?|$)/.test(request.path)) return { checkpoint: 'c0', channels: [{ roomKey: 'lounge', lastSequence: 0 }] };
-    return {};
+    if (request.path.startsWith('/api/activity/wait')) return activitySnapshot();
+    if (/^\/api\/activity(\?|$)/.test(request.path)) return activitySnapshot();
+    return { messages: [] };
   });
   f.document.hidden = false;
   f.welcome(); await settle();
-  const delays = [];
-  for (let attempt = 0; attempt < 5; attempt++) {
-    assert.ok(f.timers.length, 'a reconnect stays scheduled while failing');
-    const timer = f.timers.splice(0)[0];
-    delays.push(timer.ms);
-    timer.fn(); await settle();
-  }
-  assert.deepEqual(delays, [2000, 4000, 8000, 16000, 30000]);
+  const retry = f.timers.find(timer => timer.ms >= 750 && timer.ms <= 1300);
+  assert.ok(retry, 'bounded jittered reconnect is scheduled');
+  f.timers.splice(f.timers.indexOf(retry), 1); retry.fn(); await settle();
+  assert.ok(f.requests.some(request => request.path.startsWith('/api/activity/wait?') && request.path.includes('cursor=c0')));
+  assert.equal(f.get('activity-status').textContent, 'Polling');
+  assert.equal(f.requests.some(request => request.path.includes('/updates')), false);
+  assert.equal(f.requests.some(request => request.method === 'POST'), false);
+  f.window.emit('pagehide'); await settle();
+  assert.equal(f.timers.length, 0, 'pagehide releases transport timers');
 });
