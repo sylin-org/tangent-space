@@ -399,3 +399,16 @@ popped-page connect keeps running connector-side, the operator page receives liv
 over SSE (a subscriber on the existing event bus; waiting-for-you states included), and a
 connect waiting on operator sign-in auto-resumes service-side when the binding completes
 (the model's next connect finds the session ready; abandoned waits age out honestly).
+
+## 11 September 2026 — CLI/MCP parity and caller-keyed resolution (owner-directed)
+
+Every operation a model can call through MCP tools MUST be callable via the CLI — the CLI
+is never second-class. Consequences: allowlist rules key on ANY caller (MCP clientInfo
+names and the CLI caller alike; the allowlist is the opt-in consent layer — an unlisted
+caller resolves nothing, even with exactly one identity); Connect's success response names
+the acting identity and the session handle ("You are ox_omega · session ctx_12as12"), and
+the session id is the context handle later calls carry; a Connect missing its atproto
+binding pops the operator page when one is running (page URL persisted in state) or
+returns honest instructions otherwise — the next Connect completes the handshake by
+itself (CLI calls are naturally re-entrant; serve-process auto-resume remains a
+convenience).
