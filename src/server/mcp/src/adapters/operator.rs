@@ -3,12 +3,17 @@
 //! overrides, 0 stays ephemeral for tests). Hand-rolled minimal HTTP/1.1 in the house
 //! style — request line, headers and a Content-Length body under an 8 KiB header cap
 //! and a 1 MiB body cap, GET/POST only, `Connection: close`, a 30 s read timeout,
-//! JSON-only `/api/*` bodies (form-encoding appears exactly once: the bind pages' one
-//! handle field), no CORS headers. The pages are inert embedded strings; every `/api/*`
-//! JSON call crosses the SAME hub as the CLI and MCP intakes (attribution channel
-//! `Operator`). The `/bind/{identityId}/{provider}` pages carry the atproto OAuth bind
-//! flow; the authorization servers' loopback redirect (root path only, per the public
-//! local-client profile) lands on `/` with code+state and renders the result page.
+//! JSON-only `/api/*` bodies (form-encoded bodies are refused on every surface), no
+//! CORS headers. The pages are inert embedded strings; every `/api/*` JSON call crosses
+//! the SAME hub as the CLI and MCP intakes (attribution channel `Operator`). The
+//! `/bind/{identityId}/{provider}` route IS the atproto OAuth bind (owner correction:
+//! no interstitial): the GET immediately starts the flow — the default authorization
+//! server, or `?handle=` discovery for self-hosted PDSes — and answers the 302 to the
+//! provider's authorize page, whose own UI handles account selection and sign-in. The
+//! provider's loopback redirect (root path only, per the public local-client profile)
+//! lands on `/` with code+state+iss and renders the result page. No state-changing
+//! `/bind` POST route exists, so none needs a loopback Origin/Referer check (R4); a
+//! cross-origin GET only ever starts a flow the operator sees at the provider.
 //! Structural local-only guarantees (loopback bind, method/caps discipline) carry the
 //! trust: the operator is the trust root and a local process can read state.json
 //! directly anyway, so the page carries no interactive token (owner correction). Nothing
@@ -342,9 +347,11 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         stream_events(writer, hub, sse_clients);
         return;
     }
-    // JSON for the /api/* surface; form-encoding for the bind pages' one field.
+    // JSON for the /api/* surface; a form-encoded body anywhere classifies as a form
+    // and is refused by the routes (no form surface remains — the bind route's handle
+    // field left with the interstitial).
     let body = if content_type.starts_with("application/x-www-form-urlencoded") {
-        RequestBody::Form(parse_form(&String::from_utf8_lossy(&body_bytes)))
+        RequestBody::Form
     } else {
         RequestBody::Json(serde_json::from_slice(&body_bytes).unwrap_or(Value::Null))
     };
@@ -352,10 +359,12 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
     let _ = respond(&mut writer, response.0, response.1, response.2.as_deref());
 }
 
-/// A request body in either of the two encodings these surfaces accept.
+/// A request body in either of the two encodings these surfaces classify: JSON (the
+/// /api/* surface) or form-encoded (a distinct classification, so every route's
+/// refusal is explicit rather than a misleading JSON parse error).
 enum RequestBody {
     Json(Value),
-    Form(Vec<(String, String)>),
+    Form,
 }
 
 /// The SSE feed (owner addendum): the one deliberate exception to this server's
@@ -417,9 +426,9 @@ impl Drop for SseSlot {
 struct ApiResponse(u16, Value, Option<String>);
 
 /// The route table. The embedded page is inert HTML+JS; the `/bind/{identityId}/{provider}`
-/// pages carry the OAuth bind flow (atproto today; any other provider is an honest 404);
-/// everything under /api/ is the same local-only trust boundary (loopback bind, GET/POST,
-/// caps, JSON bodies).
+/// route immediately starts the atproto OAuth flow (any other provider is an honest
+/// 404); everything under /api/ is the same local-only trust boundary (loopback bind,
+/// GET/POST, caps, JSON bodies).
 fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, root_url: &str) -> ApiResponse {
     let (path, query) = match target.split_once('?') {
         Some((path, query)) => (path, query),
@@ -469,7 +478,7 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
         // tier — never an operator-page ceremony. The old enroll routes are gone.
         //
         // The app-password bind route is gone too (owner direction): binding happens on
-        // the /bind pages over OAuth; the hub-level password method remains the
+        // the /bind route over OAuth; the hub-level password method remains the
         // documented non-UI fallback (CLI/tests), not a page surface.
         ("POST", ["identities", local_id, "atproto", "unbind"]) => {
             finish(hub.unbind_atproto(local_id), |identity| {
@@ -500,10 +509,10 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
     }
 }
 
-/// The human surfaces: the operator page, the OAuth bind pages, and the loopback
-/// callback that lands on `/` (the atproto local-client redirect rule — the public
-/// authorization server only ever redirects to `http://127.0.0.1[:port]/`).
-fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, body: &RequestBody, root_url: &str) -> ApiResponse {
+/// The human surfaces: the operator page, the bind route, and the loopback callback
+/// that lands on `/` (the atproto local-client redirect rule — the public authorization
+/// server only ever redirects to `http://127.0.0.1[:port]/`).
+fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, _body: &RequestBody, root_url: &str) -> ApiResponse {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').filter(|segment| !segment.is_empty()).collect();
     match (method, segments.as_slice()) {
         ("GET", []) => {
@@ -523,48 +532,36 @@ fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, body: 
                     BIND_PROVIDER_ATPROTO
                 ));
             }
-            let Some(identity) = hub.identity(local_id) else {
-                return not_found_page("No local identity matches that id — open the operator page and pick one.");
-            };
-            let page = include_str!("bind.html")
-                .replace("__IDENTITY__", &html_escape(&identity.handle))
-                .replace("__ACTION__", &html_escape(path));
-            ApiResponse(200, Value::String(page), None)
-        }
-        ("POST", ["bind", local_id, provider]) => {
-            if *provider != BIND_PROVIDER_ATPROTO {
-                return not_found_page(&format!(
-                    "Unknown bind provider '{provider}' — only '{}' lives here.",
-                    BIND_PROVIDER_ATPROTO
-                ));
-            }
             if hub.identity(local_id).is_none() {
                 return not_found_page("No local identity matches that id — open the operator page and pick one.");
             }
-            let RequestBody::Form(form) = body else {
-                return bad_request_page("The bind form posts its handle field (form-encoded).");
-            };
-            let handle = form
+            // No interstitial (owner correction): this GET IS the bind's start. The
+            // default authorization server handles account selection and sign-in in
+            // its own UI; the answer is the 302 to its authorize page. `?handle=` is
+            // the self-hosted escape hatch — it runs the handle→DID→PDS→AS discovery
+            // path first, then the same redirect.
+            let handle = parse_query(query)
                 .iter()
                 .find(|(name, _)| name == "handle")
-                .map(|(_, value)| value.trim())
-                .unwrap_or_default();
-            if handle.is_empty() {
-                return bad_request_page("Type the account's atproto handle first.");
-            }
-            match hub.begin_atproto_bind(local_id, handle, root_url) {
+                .map(|(_, value)| value.trim().to_string())
+                .filter(|value| !value.is_empty());
+            match hub.begin_atproto_bind(local_id, handle.as_deref(), root_url) {
                 Ok(authorize_url) => ApiResponse(302, Value::String(String::new()), Some(authorize_url)),
                 Err(problem) => bind_problem_page(&problem, local_id),
             }
         }
-        _ => not_found_page("only the operator page, its /bind pages and /api/* live here"),
+        // No POST bind route exists (R4): the bind is a navigation, and a cross-origin
+        // GET only ever starts a flow the operator sees at the provider. Form posts
+        // anywhere outside /api/'s JSON surface fall through to the honest 404.
+        _ => not_found_page("only the operator page, its bind route and /api/* live here"),
     }
 }
 
 /// The loopback callback (redirect target of the bind flow): a provider error renders
-/// an honest failure naming its code; a code+state pair completes the bind and renders
-/// the close-your-tab page. The waiting connect (if any) finished by itself inside the
-/// hub — this page only reports.
+/// an honest failure naming its code; a code+state+iss triple completes the bind and
+/// renders the close-your-tab page. The issuer is mandatory (the hub refuses its
+/// absence and any mismatch with the flight's authorization server). The waiting
+/// connect (if any) finished by itself inside the hub — this page only reports.
 fn bind_callback(hub: &ConnectorHub, parameters: &[(String, String)], root_url: &str) -> ApiResponse {
     let parameter = |name: &str| parameters.iter().find(|(key, _)| key == name).map(|(_, value)| value.as_str());
     if let Some(error) = parameter("error") {
@@ -618,19 +615,21 @@ fn bind_result_page(success: bool, message: &str) -> ApiResponse {
     } else {
         format!(
             "<h1>Bind failed</h1>\n<p class=\"error\">{}</p>\n\
-             <p class=\"muted\">Start again from the operator page's Sign In, or <a href=\"/\">return to it</a>.</p>\n",
+             <p class=\"muted\"><a href=\"/\">Return to the operator page</a> and use its Sign In to start again.</p>\n",
             html_escape(message)
         )
     };
     ApiResponse(200, Value::String(bind_skeleton("bind result", &body)), None)
 }
 
-/// A bind that could not even start (resolution, discovery, PAR): the operator sees the
+/// A bind that could not even start (default authorization server unreachable,
+/// discovery failure on the `?handle=` path, PAR refusal): the operator sees the
 /// honest reason with a way back to retry.
 fn bind_problem_page(problem: &str, local_id: &str) -> ApiResponse {
     let body = format!(
         "<h1>Bind could not start</h1>\n<p class=\"error\">{}</p>\n\
-         <p class=\"muted\"><a href=\"/bind/{}/{}\">Try again</a> or <a href=\"/\">return to the operator page</a>.</p>\n",
+         <p class=\"muted\"><a href=\"/bind/{}/{}\">Try again</a>, or <a href=\"/\">return to the operator page</a>. \
+         Self-hosted account? Append <code>?handle=your.host</code> to the bind address so the connector discovers its PDS.</p>\n",
         html_escape(problem),
         html_escape(local_id),
         BIND_PROVIDER_ATPROTO
@@ -641,11 +640,6 @@ fn bind_problem_page(problem: &str, local_id: &str) -> ApiResponse {
 fn not_found_page(message: &str) -> ApiResponse {
     let body = format!("<h1>Not found</h1>\n<p class=\"error\">{}</p>\n<p class=\"muted\"><a href=\"/\">Back to the operator page</a></p>\n", html_escape(message));
     ApiResponse(404, Value::String(bind_skeleton("not found", &body)), None)
-}
-
-fn bad_request_page(message: &str) -> ApiResponse {
-    let body = format!("<h1>Bad request</h1>\n<p class=\"error\">{}</p>\n<p class=\"muted\"><a href=\"/\">Back to the operator page</a></p>\n", html_escape(message));
-    ApiResponse(400, Value::String(bind_skeleton("bad request", &body)), None)
 }
 
 // ---------- tiny query/form parsing (bounded, strict enough for loopback forms) ----------
@@ -663,10 +657,6 @@ fn parse_pairs(raw: &str) -> Vec<(String, String)> {
 
 fn parse_query(query: &str) -> Vec<(String, String)> {
     parse_pairs(query)
-}
-
-fn parse_form(body: &str) -> Vec<(String, String)> {
-    parse_pairs(body)
 }
 
 /// Minimal percent-decoding plus `+`-as-space (the form convention).

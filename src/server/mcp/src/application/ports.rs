@@ -5,12 +5,16 @@
 use serde_json::Value;
 
 /// Per-call routing context: canonical origin, scoped credential and the participant
-/// reference it belongs to.
+/// reference it belongs to. `dpop` carries one RFC 9449 resource-request proof when the
+/// call presents an OAuth access token the resource server demands DPoP for (the PDS
+/// `getServiceAuth` mint); like the credential, it never renders, logs or journals.
 pub struct RequestContext {
     pub origin: String,
     pub credential: String,
     /// The enrollment's participant reference; informational for the adapter.
     pub participant_ref: String,
+    /// One DPoP proof header value for this exact request (None for plain Bearer calls).
+    pub dpop: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]

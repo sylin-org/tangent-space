@@ -36,11 +36,13 @@ loopback-only.</p>
 <p class="muted">Update an identity: change its handle or display name inline, then press Save. Deleting refuses
 while enrollments exist unless you confirm a cascade (their sessions are forgotten too). With exactly one
 identity, every connect acts as it automatically; with several, connects ask which one to use.</p>
-<p class="muted">Sign In (in the table above) opens the atproto bind page: you type the account handle and
-authenticate on the account's own authorization page — the connector never sees a password. The resulting
-session is kept in connector state (cookie-jar posture) and refreshed silently. Log Out clears the binding
-and leaves server enrollment sessions untouched. (An app-password bind remains available as a hub/CLI
-fallback, not on this page.)</p>
+<p class="muted">Sign In (in the table above) goes straight to the account's own authorization page —
+the connector never sees a password and never asks for a handle first; you pick the account at the provider.
+The resulting session is kept in connector state (cookie-jar posture) and refreshed silently, and the bound
+account is whichever one you authenticate as there. Self-hosted PDS? Append
+<code>?handle=your.host</code> to the bind address so its PDS is discovered first. Log Out clears the
+binding and leaves server enrollment sessions untouched. (An app-password bind remains available as a
+hub/CLI fallback, not on this page.)</p>
 
 <h2>Servers / enrollments</h2>
 <p class="muted">Status only. Enrollment is a consequence of connecting, not a ceremony here: the model's Connect

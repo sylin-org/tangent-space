@@ -83,7 +83,12 @@ fn request(
     timeout: Duration,
 ) -> Result<Value, ExperienceError> {
     let url = format!("{}{}", context.origin, path);
-    let request = agent.request(method, &url).timeout(timeout).set("Authorization", &format!("Bearer {}", context.credential));
+    let mut request = agent.request(method, &url).timeout(timeout).set("Authorization", &format!("Bearer {}", context.credential));
+    if let Some(proof) = &context.dpop {
+        // RFC 9449 resource requests: the access token stays in Authorization, the
+        // proof rides its own header, bound to this exact method/URI and token.
+        request = request.set("DPoP", proof);
+    }
     dispatch(request, body)
 }
 

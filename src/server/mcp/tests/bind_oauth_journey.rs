@@ -1,11 +1,15 @@
 //! The OAuth bind journeys against the fake authorization server (synthetic data): the
-//! connector-served /bind pages run the atproto local-client profile end to end —
-//! handle form → PAR (loopback client, PKCE S256, DPoP-bound) → authorize redirect →
-//! loopback callback → tokens stored as the identity's atproto session (refresh token
-//! and DPoP key included) → the waiting connect auto-resumes. Refusals are honest:
-//! state mismatch binds nothing, an unknown provider is a 404 page, and the operator
-//! page carries no password form anywhere. The silent refresh runs before the PDS
-//! session is used.
+//! connector-served /bind route runs the atproto local-client profile end to end with
+//! NO interstitial (owner correction) — the GET itself starts the flow at the default
+//! authorization server (PAR: loopback client, PKCE S256, DPoP-bound, no login_hint) →
+//! authorize redirect (the provider's own UI picks the account) → loopback callback
+//! with code+state+iss → tokens stored as the identity's atproto session (refresh
+//! token and DPoP key included; the mandatory `sub` claim IS the bound DID) → the
+//! waiting connect auto-resumes, its getServiceAuth DPoP-proved against the
+//! proof-demanding fake PDS. Refusals are honest: state mismatch and a missing or
+//! foreign issuer bind nothing, an aged-out flight refuses, and the operator page
+//! carries no password form anywhere. The `?handle=` escape hatch still discovers
+//! self-hosted PDSes; the silent refresh runs before the PDS session is used.
 
 mod common;
 
@@ -27,7 +31,8 @@ use tangent_connector::domain::identity::CallerId;
 use tangent_connector::domain::intake::IntakeChannel;
 
 /// A hub plus a real operator server on an ephemeral loopback port, with the OAuth
-/// resolution origins pointed at the fake. Answers the server's page URL.
+/// resolution origins and the default authorization server pointed at the fake.
+/// Answers the server's page URL.
 fn operator_workspace(label: &str, server: &FakeServer) -> (Arc<ConnectorHub>, std::path::PathBuf, String, std::net::SocketAddr) {
     let dir = std::env::temp_dir().join(format!("tangent-connector-bind-{}-{}", label, std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -36,7 +41,7 @@ fn operator_workspace(label: &str, server: &FakeServer) -> (Arc<ConnectorHub>, s
     let port: Arc<dyn ExperiencePort> = Arc::new(UreqExperience::new());
     let store = StateStore::open(&dir).expect("store");
     let hub = Arc::new(ConnectorHub::new(port, store, events, CallerId("operator".into())));
-    hub.set_atproto_oauth(AtprotoOauth::with_origins(server.origin(), server.origin()));
+    hub.set_atproto_oauth(AtprotoOauth::with_origins(server.origin(), server.origin(), server.origin()));
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let address = listener.local_addr().expect("address");
     {
@@ -69,19 +74,20 @@ fn get(stream_addr: std::net::SocketAddr, target: &str) -> String {
     http_round_trip(&mut stream, &format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"))
 }
 
-/// Runs the operator-driven OAuth dance against the fake: form POST → 302 authorize →
-/// 302 callback → the callback page's response. Answers the callback response.
-fn drive_bind(address: std::net::SocketAddr, server: &FakeServer, local_id: &str, handle: &str) -> String {
-    let mut binder = TcpStream::connect(address).expect("connect");
-    let payload = format!("handle={handle}");
-    let started = http_round_trip(
-        &mut binder,
-        &format!(
-            "POST /bind/{local_id}/atproto HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
-            payload.len()
-        ),
+/// Starts one bind the way the operator's browser does — GETs the bind route (with the
+/// optional `?handle=` escape hatch), follows the fake authorization server's
+/// auto-approving authorize redirect — and answers the loopback callback URL without
+/// visiting it, so scenarios can tamper with (or age out) the flight first.
+fn start_bind(address: std::net::SocketAddr, server: &FakeServer, local_id: &str, handle: Option<&str>) -> String {
+    let target = match handle {
+        Some(handle) => format!("/bind/{local_id}/atproto?handle={handle}"),
+        None => format!("/bind/{local_id}/atproto"),
+    };
+    let started = get(address, &target);
+    assert!(
+        started.starts_with("HTTP/1.1 302"),
+        "the bind route immediately redirects to authorize (no interstitial): {started}"
     );
-    assert!(started.starts_with("HTTP/1.1 302"), "the bind page redirects to authorize: {started}");
     let authorize = started
         .lines()
         .find_map(|line| line.strip_prefix("Location: "))
@@ -92,12 +98,18 @@ fn drive_bind(address: std::net::SocketAddr, server: &FakeServer, local_id: &str
     let authorize_path = authorize.strip_prefix(server.origin()).unwrap_or(&authorize);
     let redirected = get(server_addr(server.origin()), authorize_path);
     assert!(redirected.starts_with("HTTP/1.1 302"), "the AS redirects back: {redirected}");
-    let callback = redirected
+    redirected
         .lines()
         .find_map(|line| line.strip_prefix("Location: "))
         .expect("callback location")
         .trim()
-        .to_string();
+        .to_string()
+}
+
+/// Runs the operator-driven OAuth dance against the fake: GET bind → 302 authorize →
+/// 302 callback → the callback page's response. Answers the callback response.
+fn drive_bind(address: std::net::SocketAddr, server: &FakeServer, local_id: &str, handle: Option<&str>) -> String {
+    let callback = start_bind(address, server, local_id, handle);
     assert!(callback.starts_with(&format!("http://{address}/?")), "the callback lands on the operator root: {callback}");
     let callback_path = callback.strip_prefix(&format!("http://{address}")).unwrap_or(&callback);
     get(address, callback_path)
@@ -106,18 +118,17 @@ fn drive_bind(address: std::net::SocketAddr, server: &FakeServer, local_id: &str
 // ---------- the full journey ----------
 
 #[test]
-fn the_bind_pages_run_the_oauth_profile_end_to_end_and_resume_the_waiting_connect() {
+fn the_bind_route_starts_the_flow_immediately_and_binds_the_authenticated_account() {
     let server = FakeServer::start();
+    // A decoy account registered FIRST: the provider signs the default flow in as its
+    // LAST registered account, and nothing the connector sends names either — the
+    // binding is exactly what the provider's token says it is.
+    server.add_account("decoy.bsky.example", "unused-password", "did:plc:decoy");
     server.add_account("lumen.bsky.example", "unused-password", "did:plc:lumen");
     let (hub, dir, _page, address) = operator_workspace("journey", &server);
     let identity = hub.create_identity("lumen", None).expect("identity");
 
-    // The bind page serves an inert form — and no password field anywhere.
-    let page = get(address, &format!("/bind/{}/atproto", identity.local_id));
-    assert!(page.starts_with("HTTP/1.1 200"), "the bind page serves: {page}");
-    assert!(page.contains("Sign in lumen") && page.contains("atproto handle"), "the page names the identity and asks for the handle: {page}");
-    assert!(!page.contains("type=\"password\"") && !page.contains("appPassword"), "no password field on the bind page: {page}");
-    // The operator page links the bind page and carries no password form either.
+    // The operator page links the bind route and carries no password form anywhere.
     let operator_page = get(address, "/");
     assert!(operator_page.contains("signIn.href = \"/bind/\" + identity.localId + \"/atproto\""), "Sign In links the bind route: {operator_page}");
     assert!(!operator_page.contains("type=\"password\"") && !operator_page.contains("appPassword"), "the operator page has no password form: {operator_page}");
@@ -134,8 +145,9 @@ fn the_bind_pages_run_the_oauth_profile_end_to_end_and_resume_the_waiting_connec
     );
     assert!(hub.enrollments_of(&identity.local_id).is_empty(), "nothing enrolled while waiting");
 
-    // The operator drives the bind through the fake authorization server.
-    let callback_page = drive_bind(address, &server, &identity.local_id, "lumen.bsky.example");
+    // The operator drives the bind through the fake authorization server — no handle,
+    // no interstitial: the GET is the start.
+    let callback_page = drive_bind(address, &server, &identity.local_id, None);
     assert!(callback_page.starts_with("HTTP/1.1 200"), "the callback answers: {callback_page}");
     assert!(callback_page.contains("Bound as <strong>lumen.bsky.example</strong>"), "the success page names the handle: {callback_page}");
     assert!(callback_page.contains("you can close this tab"), "the tab is freed honestly: {callback_page}");
@@ -146,73 +158,148 @@ fn the_bind_pages_run_the_oauth_profile_end_to_end_and_resume_the_waiting_connec
     assert_eq!(enrollments[0].did.as_deref(), Some("did:plc:lumen"));
     assert!(hub.store().lock().unwrap().has_session(&enrollments[0].companion_id));
 
-    // The identity is bound and the OAuth session is durable state (cookie-jar posture):
-    // refresh token and DPoP key included, access token present, app password never.
+    // The binding IS the token's subject (R1/R3): no pre-declared DID existed to
+    // mismatch, and the authenticated account — not the decoy — is what got bound.
     assert_eq!(hub.identity(&identity.local_id).unwrap().bound_did.as_deref(), Some("did:plc:lumen"));
     let session = hub.store().lock().unwrap().atproto_session(&identity.local_id).expect("oauth session");
     assert_eq!(session.did, "did:plc:lumen");
     assert_eq!(session.handle, "lumen.bsky.example");
-    assert_eq!(session.pds, server.origin(), "the PDS comes from the DID document");
+    assert_eq!(session.pds, server.origin(), "the PDS comes from the post-exchange DID document");
     assert_eq!(session.authserver.as_deref(), Some(server.origin()));
     assert!(session.access_jwt.split('.').count() == 3, "the access token is JWT-shaped");
     assert!(session.refresh_jwt.as_deref().is_some_and(|token| token.starts_with("rt_oauth")), "the refresh token is stored");
     assert!(session.dpop_key.as_deref().is_some_and(|key| key.len() >= 43), "the DPoP key is stored");
     let state_text = std::fs::read_to_string(dir.join("state.json")).expect("state file");
     assert!(state_text.contains("rt_oauth") && state_text.contains("atproto_sessions"), "the refresh token lives in the state map: {state_text}");
+    assert!(!state_text.contains("did:plc:decoy"), "the decoy account's DID appears nowhere: {state_text}");
     assert!(!state_text.contains("unused-password"), "the password never reaches state");
 
     // The wire discipline the local-client profile demands (all against the fake AS).
     let requests = server.requests();
-    let par = requests.iter().find(|request| request.path == "/oauth/par").expect("the PAR request");
+    let par_position = requests.iter().position(|request| request.path == "/oauth/par").expect("the PAR request");
+    let par = &requests[par_position];
     assert_eq!(par.body.get("client_id").and_then(Value::as_str), Some("http://localhost"), "the literal loopback client id");
     assert_eq!(par.body.get("response_type").and_then(Value::as_str), Some("code"));
     assert_eq!(par.body.get("scope").and_then(Value::as_str), Some("atproto"), "the implicit localhost metadata's one scope");
     assert!(par.body.get("nonce").is_none(), "the atproto profile sends no nonce (the request_uri binding replaces it)");
+    assert!(par.body.get("login_hint").is_none(), "no interstitial means no pre-declared account (no login_hint)");
     assert_eq!(par.body.get("code_challenge_method").and_then(Value::as_str), Some("S256"));
     let redirect = par.body.get("redirect_uri").and_then(Value::as_str).unwrap_or_default();
     assert!(redirect.starts_with("http://127.0.0.1:") && redirect.ends_with('/'), "the redirect is the loopback root: {redirect}");
-    let token = requests.iter().find(|request| request.path == "/oauth/token").expect("the token request");
+    // Nothing was resolved before the PAR: the default flow declares no account.
+    assert!(
+        !requests[..par_position].iter().any(|request| request.path.contains("resolveHandle")),
+        "no handle resolution happens before the PAR"
+    );
+    let token_position = requests.iter().position(|request| request.path == "/oauth/token").expect("the token request");
+    let token = &requests[token_position];
     assert_eq!(token.body.get("grant_type").and_then(Value::as_str), Some("authorization_code"));
     assert!(token.body.get("code_verifier").and_then(Value::as_str).is_some_and(|verifier| verifier.len() >= 43), "the PKCE verifier rides the exchange");
     assert!(token.body.get("refresh_token").is_none(), "the initial grant is not a refresh");
-    // The silent-refresh and service-auth steps of the auto-resume used the OAuth session.
+    // The DID document is resolved AFTER the exchange named the account, not before.
+    let did_doc_position = requests
+        .iter()
+        .position(|request| request.path.starts_with("/did:plc:lumen"))
+        .expect("the DID document fetch");
+    assert!(did_doc_position > token_position, "the bound DID's document is resolved after the token exchange");
+    // The silent-refresh and service-auth steps of the auto-resume used the OAuth
+    // session — and the proof-demanding PDS accepted it (R2): Bearer token AND DPoP.
     let service_auth = requests
         .iter()
         .find(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
         .expect("service-auth request");
     assert!(service_auth.bearer.starts_with("Bearer ey"), "the OAuth access token minted the proof");
+    assert!(!service_auth.dpop.is_empty(), "the PDS call carried a DPoP proof header: {service_auth:?}");
 }
 
 #[test]
-fn a_state_mismatch_or_foreign_issuer_binds_nothing() {
+fn a_state_mismatch_or_missing_issuer_binds_nothing() {
     let server = FakeServer::start();
     server.add_account("keeper.bsky.example", "unused-password", "did:plc:keeper");
     let (hub, _dir, _page, address) = operator_workspace("mismatch", &server);
     let identity = hub.create_identity("keeper", None).expect("identity");
 
     // Start a real bind, then hand the callback a forged state and a foreign issuer.
-    let mut binder = TcpStream::connect(address).expect("connect");
-    let payload = "handle=keeper.bsky.example";
-    let started = http_round_trip(
-        &mut binder,
-        &format!(
-            "POST /bind/{}/atproto HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
-            identity.local_id,
-            payload.len()
-        ),
-    );
-    assert!(started.starts_with("HTTP/1.1 302"), "the bind started: {started}");
-
+    let _real_callback = start_bind(address, &server, &identity.local_id, None);
     let forged = get(address, "/?code=code-999&state=forged-state&iss=http://127.0.0.1:1");
     assert!(forged.starts_with("HTTP/1.1 200"), "the failure still renders a page: {forged}");
     assert!(forged.contains("state_mismatch") && forged.contains("Bind failed"), "the failure names the code: {forged}");
     assert!(hub.identity(&identity.local_id).unwrap().bound_did.is_none(), "nothing was bound");
     assert!(hub.store().lock().unwrap().atproto_session(&identity.local_id).is_none(), "no session was stored");
 
-    // The in-flight bind is still completable... no — it was consumed by the forged
-    // attempt (single use): the honest answer for a replay is a fresh start.
-    let replay = get(address, "/?code=code-1&state=whatever");
-    assert!(replay.contains("state_mismatch"), "a second state is refused too: {replay}");
+    // The forged state matched no flight, so the REAL bind is still parked — but its
+    // state is a secret the forger never held, and any other guess is refused the same
+    // way. A callback without an issuer (iss) is refused outright (R5): RFC 9207's
+    // issuer identification is mandatory on this surface.
+    let no_issuer = get(address, "/?code=code-1&state=whatever");
+    assert!(no_issuer.contains("invalid_callback") && no_issuer.contains("no issuer"), "a missing iss is an honest refusal: {no_issuer}");
+}
+
+#[test]
+fn a_real_callback_without_an_issuer_is_refused() {
+    let server = FakeServer::start();
+    server.add_account("honest.bsky.example", "unused-password", "did:plc:honest");
+    let (hub, _dir, _page, address) = operator_workspace("no-iss", &server);
+    let identity = hub.create_identity("honest", None).expect("identity");
+
+    // A perfectly valid dance, except the issuer is stripped from the callback.
+    let callback = start_bind(address, &server, &identity.local_id, None);
+    let stripped = match callback.find("&iss=") {
+        Some(at) => callback[..at].to_string(),
+        None => panic!("the fake AS always sends iss: {callback}"),
+    };
+    let path = stripped.strip_prefix(&format!("http://{address}")).unwrap_or(&stripped);
+    let refused = get(address, path);
+    assert!(refused.contains("invalid_callback") && refused.contains("no issuer"), "the refusal is honest: {refused}");
+    assert!(hub.identity(&identity.local_id).unwrap().bound_did.is_none(), "nothing was bound without the issuer");
+    assert!(hub.store().lock().unwrap().atproto_session(&identity.local_id).is_none(), "no session was stored");
+}
+
+#[test]
+fn an_aged_out_bind_flight_is_refused_honestly() {
+    let server = FakeServer::start();
+    server.add_account("late.bsky.example", "unused-password", "did:plc:late");
+    let (hub, _dir, _page, address) = operator_workspace("aged", &server);
+    let identity = hub.create_identity("late", None).expect("identity");
+    // The test seam: the ten-minute park window shrinks to gone.
+    hub.set_bind_flight_ttl_ms(1);
+
+    let callback = start_bind(address, &server, &identity.local_id, None);
+    std::thread::sleep(std::time::Duration::from_millis(25));
+    let path = callback.strip_prefix(&format!("http://{address}")).unwrap_or(&callback);
+    let late = get(address, path);
+    assert!(late.contains("bind_expired") && late.contains("Bind failed"), "the aged-out flight refuses: {late}");
+    assert!(hub.identity(&identity.local_id).unwrap().bound_did.is_none(), "nothing was bound");
+    assert!(hub.store().lock().unwrap().atproto_session(&identity.local_id).is_none(), "no session was stored");
+}
+
+#[test]
+fn the_handle_escape_hatch_still_discovers_the_self_hosted_path() {
+    let server = FakeServer::start();
+    server.add_account("selfhosted.example", "unused-password", "did:plc:selfhosted");
+    let (hub, _dir, _page, address) = operator_workspace("escape", &server);
+    let identity = hub.create_identity("selfhosted", None).expect("identity");
+
+    // `?handle=` runs the discovery path BEFORE the flow: resolver, DID document,
+    // the PDS's protected-resource metadata, the AS metadata — then the PAR.
+    let callback_page = drive_bind(address, &server, &identity.local_id, Some("selfhosted.example"));
+    assert!(callback_page.contains("Bound as <strong>selfhosted.example</strong>"), "the discovery path completes: {callback_page}");
+
+    let requests = server.requests();
+    let par_position = requests.iter().position(|request| request.path == "/oauth/par").expect("the PAR request");
+    for expected in [
+        "/xrpc/com.atproto.identity.resolveHandle",
+        "/did:plc:selfhosted",
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-authorization-server",
+    ] {
+        let found = requests[..par_position].iter().any(|request| request.path.starts_with(expected));
+        assert!(found, "the discovery step {expected} ran before the PAR");
+    }
+    assert_eq!(hub.identity(&identity.local_id).unwrap().bound_did.as_deref(), Some("did:plc:selfhosted"));
+    let session = hub.store().lock().unwrap().atproto_session(&identity.local_id).expect("session");
+    assert_eq!(session.did, "did:plc:selfhosted", "the discovery path agrees with the token's subject");
+    assert_eq!(session.pds, server.origin());
 }
 
 #[test]
@@ -229,16 +316,16 @@ fn an_unknown_provider_or_identity_is_an_honest_404_page() {
     assert!(unknown.starts_with("HTTP/1.1 404"), "the unknown identity is a 404: {unknown}");
     assert!(unknown.contains("No local identity"), "the page says so honestly: {unknown}");
 
-    // POST routes refuse the same way.
+    // No POST surface exists on the bind route at all (R4): the bind is a navigation.
     let mut post = TcpStream::connect(address).expect("connect");
     let posted = http_round_trip(
         &mut post,
         &format!(
-            "POST /bind/{}/github HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\nConnection: close\r\n\r\nhandle=x",
+            "POST /bind/{}/atproto HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\nConnection: close\r\n\r\nhandle=x",
             identity.local_id
         ),
     );
-    assert!(posted.starts_with("HTTP/1.1 404"), "the POST refuses the unknown provider: {posted}");
+    assert!(posted.starts_with("HTTP/1.1 404"), "no POST bind route remains: {posted}");
     assert!(hub.identity(&identity.local_id).unwrap().bound_did.is_none());
 }
 
@@ -253,7 +340,7 @@ fn an_expired_oauth_session_refreshes_silently_before_use() {
     let (hub, _dir, _page, address) = operator_workspace("refresh", &server);
     let identity = hub.create_identity("wanderer", None).expect("identity");
 
-    let callback_page = drive_bind(address, &server, &identity.local_id, "wanderer.bsky.example");
+    let callback_page = drive_bind(address, &server, &identity.local_id, None);
     assert!(callback_page.contains("Bound as <strong>wanderer.bsky.example</strong>"), "the bind completed: {callback_page}");
     let stale = hub.store().lock().unwrap().atproto_session(&identity.local_id).expect("session").access_jwt;
 
@@ -274,12 +361,14 @@ fn an_expired_oauth_session_refreshes_silently_before_use() {
     assert!(renewed.access_jwt.split('.').count() == 3, "still JWT-shaped");
     assert!(renewed.refresh_jwt.as_deref().is_some_and(|token| token.starts_with("rt_oauth")), "the rotated refresh token is stored");
 
-    // The proof mint rode the renewed token, not the stale one.
+    // The proof mint rode the renewed token — Bearer AND a DPoP proof binding it (R2),
+    // on the proof-demanding PDS.
     let service_auth = requests
         .iter()
         .find(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
         .expect("service-auth request");
     assert_eq!(service_auth.bearer, format!("Bearer {}", renewed.access_jwt), "the refreshed token minted the proof");
+    assert!(!service_auth.dpop.is_empty(), "the PDS call carried a DPoP proof for the renewed token");
 }
 
 // ---------- the fixed port and its honest conflicts ----------

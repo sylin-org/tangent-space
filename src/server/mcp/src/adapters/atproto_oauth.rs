@@ -1,11 +1,15 @@
-//! The atproto OAuth client (the bind flow's outbound spoke): identity resolution
-//! (handle → DID → DID document → PDS), authorization-server discovery, a Pushed
-//! Authorization Request with PKCE (S256), the code exchange and the silent refresh —
-//! all under the local-client profile the atproto OAuth spec defines for loopback
-//! tools: `client_id` exactly `http://localhost`, loopback `http://127.0.0.1[:port]/`
-//! redirect, `atproto` scope, no `nonce` parameter (the pushed request_uri binding
-//! replaces it — verified against the public authorization server 2026-09-11), DPoP
-//! (ES256) proofs on the PAR and token requests per RFC 9449.
+//! The atproto OAuth client (the bind flow's outbound spoke): the default
+//! authorization server (no interstitial — the owner correction), identity resolution
+//! (handle → DID → DID document → PDS → AS) for the self-hosted `?handle=` escape
+//! hatch, a Pushed Authorization Request with PKCE (S256), the code exchange and the
+//! silent refresh — all under the local-client profile the atproto OAuth spec defines
+//! for loopback tools: `client_id` exactly `http://localhost`, loopback
+//! `http://127.0.0.1[:port]/` redirect, `atproto` scope, no `nonce` parameter (the
+//! pushed request_uri binding replaces it — verified against the public authorization
+//! server 2026-09-11), DPoP (ES256) proofs on the PAR, token and PDS resource
+//! requests per RFC 9449. The bound account is whatever the authorization server
+//! authenticates: the exchange's `sub` claim is the DID, mandatory, and the flight
+//! stores no pre-declared DID to mismatch.
 //!
 //! Compact JWS (the DPoP proof) is hand-rolled in the house style: bounded, strict
 //! parsing, no JWT crate. The cryptographic primitives come from pure-Rust crates
@@ -29,6 +33,13 @@ use crate::domain::refs;
 pub const CLIENT_ID: &str = "http://localhost";
 /// The scope the implicit localhost client metadata declares (the only one).
 pub const SCOPE: &str = "atproto";
+/// The default authorization server (owner correction): public Bluesky accounts live
+/// here; `TANGENT_CONNECTOR_AUTHSERVER` overrides it for self-hosted worlds. The
+/// provider's own UI handles account selection and sign-in — the connector never
+/// duplicates it.
+pub const DEFAULT_AUTHSERVER: &str = "https://bsky.social";
+/// The environment knob that overrides [`DEFAULT_AUTHSERVER`].
+pub const AUTHSERVER_ENV: &str = "TANGENT_CONNECTOR_AUTHSERVER";
 /// How long a started bind stays completable: the authorization server parks pushed
 /// requests for ~5 minutes; ten minutes of operator attention is the whole budget.
 pub const FLIGHT_TTL_MS: i64 = 10 * 60 * 1000;
@@ -50,12 +61,18 @@ pub struct AtprotoOauth {
     /// The handle-resolution origin (the `com.atproto.identity.resolveHandle` XRPC —
     /// createSession-equivalent server-side resolution, per the owner direction).
     handle_resolver: String,
+    /// The authorization server binds use when no `?handle=` discovery names one: the
+    /// public default, or the operator's `TANGENT_CONNECTOR_AUTHSERVER` override.
+    default_authserver: String,
     /// Per-authorization-server DPoP nonces (RFC 9449 §8), so the retry is the exception.
     dpop_nonces: Mutex<HashMap<String, String>>,
 }
 
 /// Everything a started bind needs to finish: returned by [`AtprotoOauth::start`], kept
-/// in flight by the hub, consumed by [`AtprotoOauth::exchange`].
+/// in flight by the hub, consumed by [`AtprotoOauth::exchange`]. The DID/PDS/handle
+/// triple is `Some` only on the `?handle=` discovery path; the default-authorization-
+/// server flow parks none of them — the exchange's mandatory `sub` claim names the
+/// account, and the DID document is resolved afterwards.
 pub struct BindStart {
     /// The authorize URL the operator's browser is redirected to.
     pub authorize_url: String,
@@ -67,48 +84,66 @@ pub struct BindStart {
     pub dpop_key: String,
     /// The authorization server origin (token and refresh endpoint host).
     pub authserver: String,
-    /// The account's PDS origin (service-auth requests go here).
-    pub pds: String,
-    /// The DID identity resolution produced (the exchange must agree).
-    pub did: String,
-    /// The canonical handle (the DID document's `alsoKnownAs` when it names one).
-    pub handle: String,
+    /// The DID the discovery path resolved (`?handle=` only): the exchange must agree.
+    pub did: Option<String>,
+    /// The account's PDS origin the discovery path found (`?handle=` only); the
+    /// default flow resolves it from the bound DID's document after the exchange.
+    pub pds: Option<String>,
+    /// The canonical handle the discovery path saw (`?handle=` only).
+    pub handle: Option<String>,
 }
 
-/// Tokens an exchange or refresh produced.
+/// Tokens an exchange or refresh produced. `sub` is mandatory on both responses: it is
+/// the account the authorization server authenticated — for the code exchange it IS
+/// the binding DID (R1/R3).
 pub struct OAuthTokens {
     pub access_token: String,
     pub refresh_token: Option<String>,
-    /// The subject DID the authorization server reports (the code exchange carries it).
-    pub sub: Option<String>,
+    /// The subject DID the authorization server reports.
+    pub sub: String,
 }
 
 impl AtprotoOauth {
-    /// The production client: the public PLC directory and the public handle resolver.
+    /// The production client: the public PLC directory, the public handle resolver and
+    /// the default authorization server (`TANGENT_CONNECTOR_AUTHSERVER` overrides the
+    /// public constant; an unusable override falls back to it — a broken authorization
+    /// server then surfaces honestly in the bind flow itself).
     pub fn new() -> Self {
-        Self::with_origins("https://plc.directory", "https://public.api.bsky.app")
+        let default_authserver = authserver_from(std::env::var(AUTHSERVER_ENV).ok().as_deref())
+            .unwrap_or_else(|_| DEFAULT_AUTHSERVER.to_string());
+        Self::with_origins("https://plc.directory", "https://public.api.bsky.app", &default_authserver)
     }
 
-    /// A client pointed at explicit resolution origins (tests point both at their fake).
-    pub fn with_origins(plc_directory: &str, handle_resolver: &str) -> Self {
+    /// A client pointed at explicit origins (tests point all three at their fake).
+    pub fn with_origins(plc_directory: &str, handle_resolver: &str, authserver: &str) -> Self {
         Self {
             agent: ureq::AgentBuilder::new().redirects(0).timeout_connect(Duration::from_secs(10)).build(),
             plc_directory: plc_directory.to_string(),
             handle_resolver: handle_resolver.to_string(),
+            default_authserver: authserver.to_string(),
             dpop_nonces: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Runs the outbound half of starting a bind: identity resolution, authorization
-    /// server discovery, the pushed authorization request. The redirect URI must be the
-    /// loopback shape the local-client profile allows (`http://127.0.0.1[:port]/`).
-    pub fn start(&self, handle_input: &str, redirect_uri: &str) -> Result<BindStart, String> {
-        let handle = normalize_handle(handle_input)?;
+    /// Runs the outbound half of starting a bind. Without a handle (the owner's default)
+    /// it goes straight to the default authorization server: no interstitial, no
+    /// pre-declared account. With a handle (the self-hosted escape hatch) it runs the
+    /// full discovery first: handle → DID → DID document → PDS → authorization server.
+    /// The redirect URI must be the loopback shape the local-client profile allows
+    /// (`http://127.0.0.1[:port]/`).
+    pub fn start(&self, handle_input: Option<&str>, redirect_uri: &str) -> Result<BindStart, String> {
         let redirect = normalize_redirect(redirect_uri)?;
-        let (did, canonical_handle) = self.resolve_identity(&handle)?;
-        let (pds, from_doc) = self.pds_of(&did)?;
-        let handle = canonical_handle.unwrap_or_else(|| from_doc.unwrap_or(handle));
-        let authserver = self.discover_authorization_server(&pds)?;
+        let (authserver, did, pds, handle) = match handle_input {
+            Some(input) => {
+                let handle = normalize_handle(input)?;
+                let (did, canonical) = self.resolve_identity(&handle)?;
+                let (pds, from_doc) = self.pds_of(&did)?;
+                let handle = Some(canonical.or(from_doc));
+                let authserver = self.discover_authorization_server(&pds)?;
+                (authserver, Some(did), Some(pds), handle)
+            }
+            None => (self.default_authserver.clone(), None, None, None),
+        };
         let metadata = self.authorization_server_metadata(&authserver)?;
 
         let state = random_token(32);
@@ -144,9 +179,9 @@ impl AtprotoOauth {
             verifier,
             dpop_key: encode_key(&key),
             authserver,
-            pds,
             did,
-            handle,
+            pds,
+            handle: handle.flatten(),
         })
     }
 
@@ -188,6 +223,37 @@ impl AtprotoOauth {
     }
 
     // ---------- identity resolution ----------
+
+    /// The bound account's (PDS origin, canonical handle) from its DID document — the
+    /// step the default-authorization-server flow runs AFTER the exchange, once the
+    /// mandatory `sub` claim has named the account. Public twin of the discovery path's
+    /// internal `pds_of`.
+    pub fn resolve_account(&self, did: &str) -> Result<(String, Option<String>), String> {
+        self.pds_of(did)
+    }
+
+    /// One DPoP resource-request proof (RFC 9449 §7) for a PDS call made with the OAuth
+    /// access token: this request's `htm`/`htu` (no query or fragment), `ath` binding
+    /// the exact token, signed with the session's key; the authorization server's
+    /// latest nonce rides along when it issued one. App-password sessions never call
+    /// this — they carry no DPoP key.
+    pub fn resource_proof(
+        &self,
+        authserver: &str,
+        dpop_key: &str,
+        htm: &str,
+        htu: &str,
+        access_token: &str,
+    ) -> Result<String, String> {
+        let key = decode_key(dpop_key)?;
+        let nonce = self
+            .dpop_nonces
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(authserver).cloned());
+        let ath = base64url(&sha256_bytes(access_token.as_bytes()));
+        Ok(dpop_proof(&key, htm, htu, nonce.as_deref(), Some(&ath)))
+    }
 
     /// Handle (or DID) → (DID, canonical handle when the DID document names one).
     fn resolve_identity(&self, handle: &str) -> Result<(String, Option<String>), String> {
@@ -356,7 +422,7 @@ impl AtprotoOauth {
     ) -> Result<(u16, Value), String> {
         let mut nonce = self.dpop_nonces.lock().ok().and_then(|cache| cache.get(authserver).cloned());
         for attempt in 0..2 {
-            let proof = key.map(|key| dpop_proof(key, "POST", &htu_of(url), nonce.as_deref()));
+            let proof = key.map(|key| dpop_proof(key, "POST", &htu_of(url), nonce.as_deref(), None));
             let mut request = self.agent.post(url).timeout(READ_TIMEOUT);
             if let Some(proof) = &proof {
                 request = request.set("DPoP", proof);
@@ -453,7 +519,10 @@ fn tokens_of(body: &Value) -> Result<OAuthTokens, String> {
         .get("sub")
         .and_then(Value::as_str)
         .filter(|sub| sub.starts_with("did:") && sub.len() <= 512)
-        .map(str::to_string);
+        .ok_or_else(|| {
+            "authorization_server: the token response carried no subject (sub) — the account the server authenticated is unknown, so nothing can be bound".to_string()
+        })?
+        .to_string();
     Ok(OAuthTokens { access_token, refresh_token, sub })
 }
 
@@ -489,16 +558,18 @@ pub fn access_needs_refresh(access_token: &str, now_epoch_secs: i64) -> bool {
 
 // ---------- the local-client profile helpers ----------
 
-/// Handle discipline for the bind input: one label, trimmed, `@` stripped, lowercased.
-/// A DID passes through untouched (its own validation happens at resolution).
+/// Handle discipline for the bind input: one label, trimmed, ONE leading `@` stripped
+/// (any further `@` anywhere is refused), lowercased. A DID passes through untouched
+/// (its own validation happens at resolution).
 fn normalize_handle(input: &str) -> Result<String, String> {
-    let handle = input.trim().trim_start_matches('@').to_ascii_lowercase();
+    let trimmed = input.trim();
+    let handle = trimmed.strip_prefix('@').unwrap_or(trimmed).to_ascii_lowercase();
     if handle.starts_with("did:") {
         return Ok(handle);
     }
     if handle.chars().count() < 3
         || handle.chars().count() > 253
-        || handle.chars().any(|c| c.is_whitespace() || c == '/' || c == ':' || c == '#' || c == '?')
+        || handle.chars().any(|c| c.is_whitespace() || c == '/' || c == ':' || c == '#' || c == '?' || c == '@')
         || !handle.contains('.')
     {
         return Err("invalid_handle: an atproto handle looks like someone.example.org (or a DID)".to_string());
@@ -506,8 +577,22 @@ fn normalize_handle(input: &str) -> Result<String, String> {
     Ok(handle)
 }
 
+/// The `TANGENT_CONNECTOR_AUTHSERVER` discipline: one acceptable origin, or the honest
+/// refusal naming the knob. The pure decision behind [`AtprotoOauth::new`], so it is
+/// assertable without touching the process environment.
+pub fn authserver_from(environment: Option<&str>) -> Result<String, String> {
+    match environment.map(str::trim) {
+        None | Some("") => Ok(DEFAULT_AUTHSERVER.to_string()),
+        Some(value) => refs::acceptable_origin(value).ok_or_else(|| {
+            format!("{AUTHSERVER_ENV} must be one HTTPS origin (or explicit loopback HTTP), not '{value}'")
+        }),
+    }
+}
+
 /// Redirect discipline: `http://127.0.0.1[:port]/` or `http://[::1][:port]/` — the
-/// loopback shape the local-client profile allows (path exactly `/`, port free).
+/// loopback shape the local-client profile allows (IP literals only, path exactly `/`,
+/// port free). `localhost` is deliberately NOT accepted: the atproto profile pins the
+/// IP-literal forms, and a name-based redirect is not one.
 fn normalize_redirect(input: &str) -> Result<String, String> {
     let refused =
         || "invalid_redirect: the bind redirect must be loopback HTTP with an empty path (http://127.0.0.1:port/)".to_string();
@@ -526,7 +611,7 @@ fn normalize_redirect(input: &str) -> Result<String, String> {
             None => (authority.to_string(), ""),
         }
     };
-    if !matches!(host.as_str(), "127.0.0.1" | "[::1]" | "localhost") {
+    if !matches!(host.as_str(), "127.0.0.1" | "[::1]") {
         return Err(refused());
     }
     let parsed = port.parse::<u32>().unwrap_or(u32::MAX);
@@ -538,8 +623,9 @@ fn normalize_redirect(input: &str) -> Result<String, String> {
 
 /// The DPoP proof JWT (RFC 9449): ES256 over a compact header+payload, the public key
 /// in the header, the request bound by method and URI, the nonce when the server issued
-/// one. Hand-rolled in the house style — there is no JWT crate in this workspace.
-fn dpop_proof(key: &SigningKey, htm: &str, htu: &str, nonce: Option<&str>) -> String {
+/// one, and — on resource requests — `ath`, the hash of the exact access token the
+/// request carries. Hand-rolled in the house style — there is no JWT crate here.
+fn dpop_proof(key: &SigningKey, htm: &str, htu: &str, nonce: Option<&str>, ath: Option<&str>) -> String {
     let point = key.verifying_key().to_encoded_point(false);
     let coordinates = point.as_bytes();
     let header = format!(
@@ -558,6 +644,9 @@ fn dpop_proof(key: &SigningKey, htm: &str, htu: &str, nonce: Option<&str>) -> St
     );
     if let Some(nonce) = nonce {
         payload.push_str(&format!(",\"nonce\":\"{}\"", nonce.escape_default()));
+    }
+    if let Some(ath) = ath {
+        payload.push_str(&format!(",\"ath\":\"{}\"", ath));
     }
     payload.push('}');
     let signing_input = format!("{}.{}", base64url(header.as_bytes()), base64url(payload.as_bytes()));
@@ -668,6 +757,7 @@ mod tests {
         assert_eq!(normalize_redirect("http://127.0.0.1:5219").unwrap(), "http://127.0.0.1:5219/");
         assert_eq!(normalize_redirect("http://127.0.0.1/").unwrap(), "http://127.0.0.1/");
         assert_eq!(normalize_redirect("http://[::1]:5219/").unwrap(), "http://[::1]:5219/");
+        assert!(normalize_redirect("http://localhost:5219/").is_err(), "localhost is not the IP-literal loopback profile");
         assert!(normalize_redirect("http://127.0.0.1:5219/bind/ox/atproto/callback").is_err(), "the public profile refuses paths");
         assert!(normalize_redirect("https://127.0.0.1:5219/").is_err(), "HTTPS is not the loopback profile");
         assert!(normalize_redirect("http://example.com/").is_err(), "off-loopback is refused");
@@ -678,7 +768,38 @@ mod tests {
         assert_eq!(normalize_handle("@Lumen.Example").unwrap(), "lumen.example");
         assert!(normalize_handle("no-dot").is_err());
         assert!(normalize_handle("a b.example").is_err());
+        assert!(normalize_handle("a@b.example").is_err(), "an @ anywhere but one leading character is refused");
+        assert!(normalize_handle("@@double.example").is_err(), "only ONE leading @ is stripped");
         assert!(normalize_handle("did:plc:ok").is_ok(), "DIDs pass through untouched here");
+    }
+
+    #[test]
+    fn the_default_authorization_server_comes_from_the_environment_or_the_public_constant() {
+        assert_eq!(authserver_from(None).unwrap(), DEFAULT_AUTHSERVER);
+        assert_eq!(authserver_from(Some("")).unwrap(), DEFAULT_AUTHSERVER, "an empty environment value falls back");
+        assert_eq!(authserver_from(Some("https://as.example")).unwrap(), "https://as.example");
+        assert_eq!(authserver_from(Some(" http://127.0.0.1:9000 ")).unwrap(), "http://127.0.0.1:9000", "loopback HTTP is allowed for development");
+        let refused = authserver_from(Some("not an origin")).expect_err("garbage is an honest refusal");
+        assert!(refused.contains(AUTHSERVER_ENV), "the message names the knob: {refused}");
+    }
+
+    #[test]
+    fn token_responses_without_a_subject_are_refused() {
+        let full = serde_json::json!({ "access_token": "at", "refresh_token": "rt", "sub": "did:plc:x" });
+        let tokens = tokens_of(&full).unwrap();
+        assert_eq!(tokens.sub, "did:plc:x");
+        // No Debug on OAuthTokens by design (it holds tokens): the Err sides are read
+        // with a match, never printed whole.
+        let missing = match tokens_of(&serde_json::json!({ "access_token": "at" })) {
+            Err(problem) => problem,
+            Ok(_) => panic!("no sub, no binding"),
+        };
+        assert!(missing.contains("no subject"), "{missing}");
+        let not_a_did = match tokens_of(&serde_json::json!({ "access_token": "at", "sub": "alice" })) {
+            Err(problem) => problem,
+            Ok(_) => panic!("a non-DID subject is refused"),
+        };
+        assert!(not_a_did.contains("no subject"), "{not_a_did}");
     }
 
     #[test]
@@ -716,7 +837,7 @@ mod tests {
     #[test]
     fn dpop_proofs_carry_the_profile_claims() {
         let key = SigningKey::random(&mut OsRng);
-        let proof = dpop_proof(&key, "POST", "https://as.example/oauth/token", Some("nonce-1"));
+        let proof = dpop_proof(&key, "POST", "https://as.example/oauth/token", Some("nonce-1"), None);
         let segments: Vec<&str> = proof.split('.').collect();
         assert_eq!(segments.len(), 3);
         let header = String::from_utf8(base64url_decode(segments[0]).unwrap()).unwrap();
@@ -727,7 +848,28 @@ mod tests {
         assert!(payload.contains("\"htm\":\"POST\""));
         assert!(payload.contains("\"htu\":\"https://as.example/oauth/token\""));
         assert!(payload.contains("\"nonce\":\"nonce-1\""));
+        assert!(!payload.contains("\"ath\""), "endpoint proofs carry no ath");
         assert_eq!(base64url_decode(segments[2]).unwrap().len(), 64, "raw r||s signature");
+    }
+
+    #[test]
+    fn dpop_resource_proofs_bind_the_access_token_by_hash() {
+        let client = AtprotoOauth::with_origins("https://plc.example", "https://rpc.example", "https://as.example");
+        let key = SigningKey::random(&mut OsRng);
+        let encoded = encode_key(&key);
+        let access = "eyJhbGciOiJFUzI1NiJ9.payload.c2ln";
+        let proof = client
+            .resource_proof("https://as.example", &encoded, "GET", "http://127.0.0.1:1/xrpc/com.atproto.server.getServiceAuth", access)
+            .expect("proof");
+        let segments: Vec<&str> = proof.split('.').collect();
+        let payload = String::from_utf8(base64url_decode(segments[1]).unwrap()).unwrap();
+        let expected_ath = base64url(&sha256_bytes(access.as_bytes()));
+        assert!(payload.contains(&format!("\"ath\":\"{expected_ath}\"")), "ath is the base64url token hash: {payload}");
+        assert!(payload.contains("\"htm\":\"GET\""));
+        // A foreign key cannot produce a proof the session's key verifies.
+        let other = SigningKey::random(&mut OsRng);
+        assert!(decode_key(&encode_key(&other)).is_ok());
+        assert!(client.resource_proof("https://as.example", "!!!not-base64url!!!", "GET", "http://127.0.0.1:1/", access).is_err());
     }
 
     #[test]

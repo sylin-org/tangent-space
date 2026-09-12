@@ -5,7 +5,8 @@
 //! and never changes a domain outcome. Adapters (HTTP client, poller, store) are the
 //! remaining spokes; none of them talks to another directly.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
@@ -137,6 +138,14 @@ pub struct ConnectorHub {
     atproto_oauth: Arc<Mutex<Arc<AtprotoOauth>>>,
     /// Started OAuth binds, keyed by their OAuth `state` value.
     bind_flights: Mutex<Vec<BindFlight>>,
+    /// How long a parked bind stays completable; [`atproto_oauth::FLIGHT_TTL_MS`] by
+    /// default. A pub test seam shortens it so the TTL refusal is assertable without
+    /// waiting out ten real minutes.
+    bind_flight_ttl_ms: AtomicI64,
+    /// Per-identity refresh serialization (R5): one small mutex per identity so a MCP
+    /// Connect and the operator auto-resume can never double-refresh one session. The
+    /// map itself grows one entry per identity that ever refreshes.
+    refresh_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     /// Arms the single sweeper thread on the first recorded pending connect.
     sweep_once: std::sync::Once,
 }
@@ -154,8 +163,16 @@ impl ConnectorHub {
             pending_connects: Arc::new(Mutex::new(Vec::new())),
             atproto_oauth: Arc::new(Mutex::new(Arc::new(AtprotoOauth::new()))),
             bind_flights: Mutex::new(Vec::new()),
+            bind_flight_ttl_ms: AtomicI64::new(atproto_oauth::FLIGHT_TTL_MS),
+            refresh_locks: Mutex::new(HashMap::new()),
             sweep_once: std::sync::Once::new(),
         }
+    }
+
+    /// Shortens how long a parked bind stays completable (milliseconds). A test seam
+    /// for the TTL refusal; production always runs [`atproto_oauth::FLIGHT_TTL_MS`].
+    pub fn set_bind_flight_ttl_ms(&self, milliseconds: i64) {
+        self.bind_flight_ttl_ms.store(milliseconds, Ordering::Relaxed);
     }
 
     /// Replaces the atproto OAuth client (tests point its resolution origins at a fake
@@ -224,7 +241,7 @@ impl ConnectorHub {
     }
 
     /// The browser target a sign-in pop for this identity would open (this process's
-    /// own page, or a recorded reachable one, at the identity's bind page).
+    /// own page, or a recorded reachable one, at the identity's bind route).
     /// Test-visible mirror of the internal resolution, so the target is assertable
     /// under the no-browser guard without spawning anything.
     pub fn sign_in_target_url(&self, local_id: &str) -> Option<String> {
@@ -272,6 +289,7 @@ impl ConnectorHub {
             origin: canonical.clone(),
             credential: session.to_string(),
             participant_ref: String::new(),
+            dpop: None,
         };
         let raw = self.port.get(&context, "/api/v1/experience").map_err(|error| match error {
             ExperienceError::Unreachable => "the server could not be reached".to_string(),
@@ -539,15 +557,21 @@ impl ConnectorHub {
         })
     }
 
-    // ---------- atproto OAuth binding (the /bind pages) ----------
+    // ---------- atproto OAuth binding (the /bind route) ----------
 
-    /// Starts one identity's OAuth bind (the `/bind` page's POST): resolves the handle,
-    /// discovers the authorization server, pushes the authorization request (PAR, PKCE,
-    /// DPoP-bound) and parks the in-flight state. Answers the authorize URL the
-    /// operator's browser is redirected to. Starting a new bind for the same identity
-    /// replaces its in-flight one; different identities bind concurrently. All network
-    /// I/O happens outside every guard (W2-A).
-    pub fn begin_atproto_bind(&self, local_id: &str, handle: &str, redirect_uri: &str) -> Result<String, String> {
+    /// Starts one identity's OAuth bind (the `/bind` route's GET — no interstitial, the
+    /// owner correction). Without a handle it goes straight to the default
+    /// authorization server (`TANGENT_CONNECTOR_AUTHSERVER`, else the public Bluesky
+    /// one) and parks no pre-declared account: the exchange's mandatory `sub` claim
+    /// will name the bound DID. With a handle (the self-hosted escape hatch) it runs
+    /// the discovery first — handle → DID → DID document → PDS → authorization server —
+    /// and the exchange must then agree with the resolved DID. Either way the answer is
+    /// the authorize URL the operator's browser is redirected to (a 302); the
+    /// provider's own UI handles account selection and sign-in. Starting a new bind
+    /// for the same identity replaces its in-flight one; different identities bind
+    /// concurrently. All network I/O happens outside every guard (W2-A). A flight
+    /// that cannot be parked is an honest failure — never a dangling redirect.
+    pub fn begin_atproto_bind(&self, local_id: &str, handle: Option<&str>, redirect_uri: &str) -> Result<String, String> {
         self.attributed("operator.atproto_bind_start", || {
             {
                 let store = self.lock_store()?;
@@ -555,29 +579,41 @@ impl ConnectorHub {
             }
             let start = self.oauth().start(handle, redirect_uri)?;
             let authorize_url = start.authorize_url.clone();
-            if let Ok(mut flights) = self.bind_flights.lock() {
-                let now = now_millis();
-                // Age out, then keep one bind at a time per identity.
-                flights.retain(|flight| now.saturating_sub(flight.created_at) < atproto_oauth::FLIGHT_TTL_MS);
-                flights.retain(|flight| flight.local_id != local_id);
-                flights.push(BindFlight { local_id: local_id.to_string(), created_at: now, start });
-                while flights.len() > BIND_FLIGHT_LIMIT {
-                    flights.remove(0);
-                }
+            let mut flights = self
+                .bind_flights
+                .lock()
+                .map_err(|_| "bind_unparkable: the connector's bind state is unavailable; restart the connector and try again".to_string())?;
+            let now = now_millis();
+            let ttl = self.bind_flight_ttl_ms.load(Ordering::Relaxed);
+            // Age out, then keep one bind at a time per identity.
+            flights.retain(|flight| now.saturating_sub(flight.created_at) < ttl);
+            flights.retain(|flight| flight.local_id != local_id);
+            flights.push(BindFlight { local_id: local_id.to_string(), created_at: now, start });
+            while flights.len() > BIND_FLIGHT_LIMIT {
+                flights.remove(0);
             }
             Ok(authorize_url)
         })
     }
 
-    /// Completes one OAuth bind (the loopback callback): validates the state (and the
-    /// issuer, when the callback carries one), exchanges the code for tokens, stores the
-    /// session — refresh token and DPoP key included, cookie-jar posture — and answers
-    /// the bound handle for the success page. The waiting-connect hook runs on success,
-    /// exactly like the app-password path: pending connects for this identity finish by
-    /// themselves.
+    /// Completes one OAuth bind (the loopback callback): validates the state and the
+    /// issuer (`iss` is mandatory — RFC 9207 — and must be the authorization server the
+    /// flight started with), exchanges the code for tokens, and binds exactly the
+    /// account the exchange's `sub` names — the account the operator authenticated as;
+    /// on the `?handle=` discovery path a differing `sub` is the honest
+    /// account_mismatch refusal. The PDS and canonical handle come from the bound
+    /// DID's document when the flight parked none. The session — refresh token and
+    /// DPoP key included, cookie-jar posture — is stored, and the waiting-connect hook
+    /// runs on success, exactly like the app-password path.
     pub fn complete_atproto_bind(&self, state: &str, code: &str, issuer: Option<&str>, redirect_uri: &str) -> Result<String, String> {
         let mut bound_local: Option<String> = None;
         let outcome = self.attributed("operator.bind_atproto", || {
+            // The issuer comes first (RFC 9207): without `iss` the callback does not
+            // even name which authorization server answered, so nothing else is
+            // trustworthy enough to try.
+            let issuer = issuer.filter(|iss| !iss.is_empty()).ok_or_else(|| {
+                "invalid_callback: the authorization server's callback carried no issuer (iss); start the bind again".to_string()
+            })?;
             let flight = {
                 let mut flights = match self.bind_flights.lock() {
                     Ok(flights) => flights,
@@ -590,37 +626,47 @@ impl ConnectorHub {
                         "state_mismatch: no started bind matches that state (it may have expired or already completed); start the bind again".to_string()
                     })?;
                 let flight = flights.remove(position);
-                if now_millis().saturating_sub(flight.created_at) >= atproto_oauth::FLIGHT_TTL_MS {
+                let ttl = self.bind_flight_ttl_ms.load(Ordering::Relaxed);
+                if now_millis().saturating_sub(flight.created_at) >= ttl {
                     return Err("bind_expired: this bind started too long ago; start it again".to_string());
                 }
                 flight
             };
-            if let Some(issuer) = issuer {
-                if refs::acceptable_origin(issuer).as_deref() != Some(flight.start.authserver.as_str()) {
-                    return Err(format!(
-                        "issuer_mismatch: the callback claims issuer {issuer}, but the bind started with {}",
-                        flight.start.authserver
-                    ));
-                }
+            if refs::acceptable_origin(issuer).as_deref() != Some(flight.start.authserver.as_str()) {
+                return Err(format!(
+                    "issuer_mismatch: the callback claims issuer {issuer}, but the bind started with {}",
+                    flight.start.authserver
+                ));
             }
             let tokens = self.oauth().exchange(&flight.start, code, redirect_uri)?;
-            if let Some(subject) = tokens.sub.as_deref() {
-                if subject != flight.start.did {
+            // The binding IS the authenticated account: `sub` (mandatory) names the
+            // DID. Only the ?handle= discovery path pre-declared one to disagree with.
+            if let Some(declared) = flight.start.did.as_deref() {
+                if tokens.sub != declared {
                     return Err(
                         "account_mismatch: the authorized account resolves to a different DID than the bind started with; start the bind again".to_string(),
                     );
                 }
             }
-            let handle = flight.start.handle.clone();
+            let (pds, discovered_handle) = match (flight.start.pds.as_deref(), flight.start.handle.as_deref()) {
+                (Some(pds), handle) => (pds.to_string(), handle.map(str::to_string)),
+                (None, _) => {
+                    let (pds, doc_handle) = self.oauth().resolve_account(&tokens.sub)?;
+                    (pds, doc_handle)
+                }
+            };
+            // The bound label: the DID document's canonical handle when one is known,
+            // else the DID itself (honest, never a guess).
+            let handle = discovered_handle.unwrap_or_else(|| tokens.sub.clone());
             let local_id = flight.local_id.clone();
             self.store_atproto_session(
                 &local_id,
                 AtprotoSession {
-                    did: flight.start.did.clone(),
+                    did: tokens.sub.clone(),
                     handle: handle.clone(),
                     access_jwt: tokens.access_token,
                     refresh_jwt: tokens.refresh_token,
-                    pds: flight.start.pds.clone(),
+                    pds,
                     authserver: Some(flight.start.authserver.clone()),
                     dpop_key: Some(flight.start.dpop_key.clone()),
                     obtained_at: now_millis(),
@@ -638,13 +684,48 @@ impl ConnectorHub {
         outcome
     }
 
+    /// The per-identity refresh mutex (R5). Leaf lock: taken only around one
+    /// identity's refresh, never while holding the store lock (the refresh takes the
+    /// store inside, briefly, in its own scopes).
+    fn refresh_lock_of(&self, local_id: &str) -> Arc<Mutex<()>> {
+        match self.refresh_locks.lock() {
+            Ok(mut locks) => locks
+                .entry(local_id.to_string())
+                .or_insert_with(|| Arc::new(Mutex::new(())))
+                .clone(),
+            // A poisoned registry lock must not brick refreshes: an unsynchronized
+            // refresh is still correct (rotation just converges on the last writer).
+            Err(_) => Arc::new(Mutex::new(())),
+        }
+    }
+
     /// Silent refresh before use (the OAuth bind's promise): an access token inside its
     /// refresh margin is renewed from the stored refresh token with the session's DPoP
-    /// key, and the renewed session is stored before the caller proceeds. App-password
-    /// sessions carry no refresh material and pass through; a token without a readable
-    /// expiry is used as-is (the PDS refuses it honestly if stale). A failed refresh is
-    /// the honest expired-session error — never a silent unbound fallback.
-    fn refresh_atproto_if_stale(&self, local_id: &str, session: AtprotoSession) -> Result<AtprotoSession, String> {
+    /// key, and the renewed session is stored before the caller proceeds. One small
+    /// per-identity mutex serializes this (R5), so a MCP Connect and the operator
+    /// auto-resume can never double-refresh — the later waiter re-reads the session
+    /// and finds the earlier one's renewal. The refreshed `sub` must be the same
+    /// account (R3, mandatory now) or the honest re-bind error. App-password sessions
+    /// carry no refresh material and pass through; a token without a readable expiry
+    /// is used as-is (the PDS refuses it honestly if stale). A store failure AFTER a
+    /// rotation keeps the rotated tokens in the live store (R5): the call proceeds on
+    /// them and the next save persists them, rather than bricking on the stale disk
+    /// copy. A failed refresh is the honest expired-session error — never a silent
+    /// unbound fallback.
+    fn refresh_atproto_if_stale(&self, local_id: &str) -> Result<AtprotoSession, String> {
+        // Serialization first; the session is re-read under the lock so a concurrent
+        // refresh's result is seen instead of duplicated.
+        let serializer = self.refresh_lock_of(local_id);
+        let _serial = serializer.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let session = {
+            let store = self.lock_store()?;
+            store.atproto_session(local_id)
+        };
+        let Some(session) = session else {
+            return Err(
+                "atproto_session_missing: the atproto session is gone (it may have expired). Re-bind the identity on the operator page.".to_string(),
+            );
+        };
         let (Some(refresh), Some(authserver), Some(key)) = (&session.refresh_jwt, &session.authserver, &session.dpop_key) else {
             return Ok(session);
         };
@@ -653,12 +734,10 @@ impl ConnectorHub {
         }
         match self.oauth().refresh(authserver, refresh, key) {
             Ok(tokens) => {
-                if let Some(subject) = tokens.sub.as_deref() {
-                    if subject != session.did {
-                        return Err(
-                            "atproto_session_expired: the refresh returned a different account. Re-bind the identity on its bind page.".to_string(),
-                        );
-                    }
+                if tokens.sub != session.did {
+                    return Err(
+                        "atproto_session_expired: the refresh returned a different account. Re-bind the identity on the operator page.".to_string(),
+                    );
                 }
                 let mut renewed = session;
                 renewed.access_jwt = tokens.access_token;
@@ -666,11 +745,15 @@ impl ConnectorHub {
                     renewed.refresh_jwt = Some(rotated);
                 }
                 renewed.obtained_at = now_millis();
-                self.store_atproto_session(local_id, renewed.clone())?;
+                if self.store_atproto_session(local_id, renewed.clone()).is_err() {
+                    // Persistence failed, not the session: the rotated tokens are
+                    // already in the live store, so the next attempt (and the next
+                    // save anywhere) reuses them instead of bricking.
+                }
                 Ok(renewed)
             }
             Err(_) => Err(
-                "atproto_session_expired: the PDS session could not be renewed (it may have expired or been revoked). Re-bind the identity on its bind page.".to_string(),
+                "atproto_session_expired: the PDS session could not be renewed (it may have expired or been revoked). Re-bind the identity on the operator page.".to_string(),
             ),
         }
     }
@@ -776,8 +859,9 @@ impl ConnectorHub {
                 );
             }
             // Silent refresh before use: an OAuth access token inside its margin renews
-            // here, outside every guard (W2-A); the renewed session is already stored.
-            let atproto = self.refresh_atproto_if_stale(local_id, atproto)?;
+            // here, outside every guard (W2-A) and under the identity's refresh mutex;
+            // the renewed session is already stored.
+            let atproto = self.refresh_atproto_if_stale(local_id)?;
 
             // Step 1 — discovery: the proof audience comes from the server's own document.
             let proof_spec = self.discover_proof_spec(&canonical)?;
@@ -785,7 +869,9 @@ impl ConnectorHub {
             // Step 2 — the PDS mints the proof: the discovery audience, the exact
             // exchange method, and an expiry inside the server's accepted window.
             // Percent-encoding the parameters means a crafted audience or origin can
-            // never inject query structure into the request.
+            // never inject query structure into the request. OAuth sessions carry a
+            // DPoP proof on this resource request (R2): htm/htu of this exact call,
+            // `ath` binding the access token, the AS's nonce when it issued one.
             let exp = now_millis() / 1000 + PROOF_EXPIRY_SECONDS;
             let auth_path = format!(
                 "/xrpc/com.atproto.server.getServiceAuth?aud={}&lxm={}&exp={}",
@@ -793,10 +879,20 @@ impl ConnectorHub {
                 encode(EXCHANGE_LXM),
                 exp
             );
+            let dpop_proof = match (&atproto.authserver, &atproto.dpop_key) {
+                (Some(authserver), Some(key)) => {
+                    let htu = format!("{}{}", atproto.pds, "/xrpc/com.atproto.server.getServiceAuth");
+                    Some(self.oauth().resource_proof(authserver, key, "GET", &htu, &atproto.access_jwt).map_err(|_| {
+                        "atproto_session_expired: the session's DPoP key is unusable. Re-bind the identity on the operator page.".to_string()
+                    })?)
+                }
+                _ => None,
+            };
             let pds_context = RequestContext {
                 origin: atproto.pds.clone(),
                 credential: atproto.access_jwt.clone(),
                 participant_ref: String::new(),
+                dpop: dpop_proof,
             };
             let raw = self.port.get(&pds_context, &auth_path).map_err(|error| service_auth_error(&error))?;
             let auth: contract::ServiceAuthDto = serde_json::from_value(raw)
@@ -1020,7 +1116,7 @@ impl ConnectorHub {
             self.events.publish(DomainEvent::ConnectWaitingForOperator {
                 origin: canonical.to_string(),
                 identity: identity.handle.clone(),
-                needed: format!("sign in identity '{}': its atproto account (the bind page opens in the browser)", identity.handle),
+                needed: format!("sign in identity '{}': its atproto account (the provider's sign-in page opens in the browser)", identity.handle),
                 initiator: initiator.to_string(),
             });
         }
@@ -1695,7 +1791,7 @@ impl ConnectorHub {
             Ok(session) => session,
             Err(error) => return self.problem_outcome("Arrive", "needs_operator_connection", &error, Some((&companion, None))),
         };
-        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() };
+        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None };
         let raw = match self.port.get(&request, "/api/v1/experience") {
             Ok(raw) => raw,
             Err(error) => return self.transport_problem("Arrive", &companion, None, &error),
@@ -1730,7 +1826,7 @@ impl ConnectorHub {
             Ok(session) => session,
             Err(error) => return self.problem_outcome("GetUpdates", "needs_operator_connection", &error, Some((&companion, Some(&context_binding)))),
         };
-        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() };
+        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None };
         let mut query = Vec::new();
         match &cursor {
             // A supplied cursor continues the previous page sequence.
@@ -1802,7 +1898,7 @@ impl ConnectorHub {
             Err(error) => return self.problem_outcome(tool, "needs_operator_connection", &error, Some((&companion, Some(&context_binding)))),
         };
         let frame = CallFrame {
-            request: RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() },
+            request: RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None },
             companion: companion.clone(),
             context_id: context_binding.context_id.clone(),
         };
@@ -2007,7 +2103,7 @@ impl ConnectorHub {
             return Err("unknown companion".to_string());
         };
         let session = self.session_of(&companion)?;
-        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone() };
+        let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None };
         let checkpoint = {
             let store = self.lock_store().map_err(|_| "state lock poisoned")?;
             store.checkpoint(&companion.companion_id)
@@ -2253,7 +2349,7 @@ fn enroll_transport_error(error: &ExperienceError) -> String {
 /// The browser target of one operator-page anchor. Pure construction, so tests can
 /// assert the URL under the no-browser guard without spawning anything. The anchor
 /// carries its own sigil: `#create-identity` (a fragment) or `bind/{localId}/atproto`
-/// (the connector-served bind page, a path).
+/// (the connector-served bind route, a path).
 pub fn registration_target(page_url: &str, anchor: &str) -> String {
     format!("{page_url}{anchor}")
 }

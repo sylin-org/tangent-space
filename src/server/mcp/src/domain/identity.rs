@@ -106,14 +106,14 @@ impl CompanionEntry {
 }
 
 /// The atproto session one identity holds after the operator binds an account — via
-/// atproto OAuth (the `/bind` pages) or an app password (the hub-level fallback): the
+/// atproto OAuth (the `/bind` route) or an app password (the hub-level fallback): the
 /// PDS-issued bearer (`accessJwt`, cookie-jar posture — same exposure class as the
 /// per-enrollment sessions) plus where to reach the PDS again. The app password itself
 /// is NEVER part of this record: it exists in memory for the one `createSession`
 /// request. OAuth sessions additionally carry their refresh token and DPoP key so the
 /// connector can silently renew them — the same cookie-jar session state, never a vault
 /// secret.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AtprotoSession {
     /// The bound account's DID (`did:plc:…`); mirrors the identity's `bound_did`.
     pub did: String,
@@ -135,6 +135,25 @@ pub struct AtprotoSession {
     pub dpop_key: Option<String>,
     /// Epoch milliseconds of the sign-in that produced this session.
     pub obtained_at: i64,
+}
+
+/// Redacted by hand (R7): a derived Debug would print the access token, refresh token
+/// and DPoP key into any debug log. Only routing facts render; the secrets are named,
+/// never shown.
+impl std::fmt::Debug for AtprotoSession {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AtprotoSession")
+            .field("did", &self.did)
+            .field("handle", &self.handle)
+            .field("access_jwt", &"[redacted]")
+            .field("refresh_jwt", &self.refresh_jwt.as_ref().map(|_| "[redacted]"))
+            .field("pds", &self.pds)
+            .field("authserver", &self.authserver)
+            .field("dpop_key", &self.dpop_key.as_ref().map(|_| "[redacted]"))
+            .field("obtained_at", &self.obtained_at)
+            .finish()
+    }
 }
 
 /// A participation context: caller + enrollment + canonical origin + credential binding.

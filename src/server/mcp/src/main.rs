@@ -71,7 +71,7 @@ fn usage() {
                                         (its URL goes to stderr, never stdout)\n\
          operator [--port N] [--no-open] [--force]\n\
                                         local operator web page + tray (identities,
-                                        atproto sign-in via /bind pages, enrollments,\n\
+                                        atproto sign-in via the /bind route, enrollments,\n\
                                         status). Fixed default port 5219 (stable URL);\n\
                                         TANGENT_CONNECTOR_PORT or --port overrides\n\
          call <tool> [json] [--view V]  invoke one participation tool through the same hub\n\

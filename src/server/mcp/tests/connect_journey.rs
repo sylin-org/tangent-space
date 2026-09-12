@@ -455,6 +455,7 @@ fn a_waiting_connect_auto_resumes_when_the_operator_signs_in_with_live_sse() {
     hub.set_atproto_oauth(tangent_connector::adapters::atproto_oauth::AtprotoOauth::with_origins(
         server.origin(),
         server.origin(),
+        server.origin(),
     ));
     let identity = hub.create_identity("ox_omega", None).expect("identity");
 
@@ -518,28 +519,25 @@ fn a_waiting_connect_auto_resumes_when_the_operator_signs_in_with_live_sse() {
     wait_for(&received, "connect_waiting_for_operator", Duration::from_secs(10));
     assert!(hub.enrollments_of(&identity.local_id).is_empty(), "nothing enrolled while waiting");
 
-    // The operator completes the sign-in on the connector-served bind page: the form
-    // POST redirects to the fake authorization server, which (auto-approving) redirects
-    // back to the operator page's loopback root with code+state; that callback response
-    // returns only after the auto-resume has run: enrollment plus arrival, connector-
-    // side, no model involved.
+    // The operator completes the sign-in on the connector-served bind route: the GET
+    // (with the self-hosted handle escape hatch) immediately redirects to the fake
+    // authorization server, which (auto-approving) redirects back to the operator
+    // page's loopback root with code+state+iss; that callback response returns only
+    // after the auto-resume has run: enrollment plus arrival, connector-side, no
+    // model involved.
     let mut binder = TcpStream::connect(address).expect("connect");
-    let payload = "handle=ox_omega.bsky.example".to_string();
     let started = http_round_trip(
         &mut binder,
         &format!(
-            "POST /bind/{}/atproto HTTP/1.1
+            "GET /bind/{}/atproto?handle=ox_omega.bsky.example HTTP/1.1
 Host: 127.0.0.1
-Content-Type: application/x-www-form-urlencoded
-Content-Length: {}
 Connection: close
 
-{payload}",
-            identity.local_id,
-            payload.len()
+",
+            identity.local_id
         ),
     );
-    assert!(started.starts_with("HTTP/1.1 302"), "the bind page redirects to the authorize URL: {started}");
+    assert!(started.starts_with("HTTP/1.1 302"), "the bind route redirects to the authorize URL: {started}");
     let authorize = started
         .lines()
         .find_map(|line| line.strip_prefix("Location: "))

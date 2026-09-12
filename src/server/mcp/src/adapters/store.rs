@@ -534,6 +534,14 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
     {
         let mut file = fs::File::create(&temporary).map_err(|error| format!("cannot create temp state file: {error}"))?;
+        // Owner-only where the platform supports it (R7): state.json carries the
+        // cookie-jar sessions, so no other local account should read it. Windows has
+        // no portable mode bits; its per-user profile ACLs are the boundary there.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&temporary, fs::Permissions::from_mode(0o600));
+        }
         file.write_all(bytes).map_err(|error| format!("cannot write state: {error}"))?;
         file.sync_all().map_err(|error| format!("cannot sync state: {error}"))?;
     }

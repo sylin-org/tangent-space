@@ -29,6 +29,9 @@ pub struct Received {
     pub method: String,
     pub path: String,
     pub bearer: String,
+    /// The DPoP proof header the request carried, when it carried one (empty string
+    /// otherwise) — assertions prove OAuth resource requests are DPoP-proved.
+    pub dpop: String,
     pub body: Value,
 }
 
@@ -330,6 +333,7 @@ fn serve_connection(
             method: method.clone(),
             path: path.clone(),
             bearer: bearer.clone(),
+            dpop: dpop.clone(),
             body: body.clone(),
         });
         if bearer.ends_with(REVOKED_CREDENTIAL) {
@@ -489,19 +493,22 @@ fn respond(
             }),
         ),
         ("POST", "/oauth/par") => {
-            // The local-client profile, strictly: loopback client id, loopback redirect
-            // with an empty path, atproto scope, PKCE S256, and NO nonce (the pushed
-            // request_uri replaces it — the public server refuses a nonce; so do we).
+            // The local-client profile, strictly: loopback IP-literal client id,
+            // loopback IP-literal redirect with an empty path, atproto scope, PKCE
+            // S256, NO nonce (the pushed request_uri replaces it — the public server
+            // refuses a nonce; so do we) and NO login_hint (no interstitial to
+            // pre-declare an account: the provider's own UI selects the account).
             if body.get("nonce").is_some_and(|value| !value.is_null()) {
                 return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported \"nonce\" parameter" }));
+            }
+            if body.get("login_hint").is_some_and(|value| !value.is_null()) {
+                return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported \"login_hint\" parameter" }));
             }
             if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
                 return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
             }
             let redirect = body.get("redirect_uri").and_then(Value::as_str).unwrap_or_default().to_string();
-            let redirect_ok = redirect.starts_with("http://127.0.0.1")
-                || redirect.starts_with("http://[::1]")
-                || redirect.starts_with("http://localhost");
+            let redirect_ok = redirect.starts_with("http://127.0.0.1") || redirect.starts_with("http://[::1]");
             // Loopback root only: exactly the scheme slashes plus the trailing slash.
             let path_ok = redirect.matches('/').count() == 3 && redirect.ends_with('/');
             if !redirect_ok || !path_ok {
@@ -526,7 +533,7 @@ fn respond(
             if !state_ok || challenge.len() < 40 || method != "S256" {
                 return Script::Body(400, json!({ "error": "invalid_request", "error_description": "state and an S256 code_challenge are required" }));
             }
-            let record = match validate_dpop(extras, "POST", &format!("{origin}/oauth/par"), None, oauth) {
+            let record = match validate_dpop(extras, "POST", &format!("{origin}/oauth/par"), None, None, oauth) {
                 Ok(key) => ParRecord {
                     client_id: "http://localhost".into(),
                     redirect_uri: redirect,
@@ -546,9 +553,17 @@ fn respond(
             if client_id != "http://localhost" {
                 return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
             }
-            // Auto-approval: the fake acts as the account whose DID document was just
-            // resolved (the tight resolve→PAR→authorize sequence of one bind).
-            let did = oauth.last_resolved_did.lock().unwrap().clone();
+            // Auto-approval as the provider's signed-in account: the DID document the
+            // discovery path resolved last (`?handle=` binds), or — the no-interstitial
+            // default flow, where nothing was resolved — the most recently registered
+            // account. Either way the account comes from the PROVIDER's session, and
+            // the token's `sub` names it: the connector binds what it is handed.
+            let did = oauth
+                .last_resolved_did
+                .lock()
+                .unwrap()
+                .clone()
+                .or_else(|| bound.accounts.lock().unwrap().last().map(|account| account.did.clone()));
             let record = oauth.pars.lock().unwrap().remove(&request_uri);
             match (record, did) {
                 (Some(record), Some(did)) => {
@@ -593,7 +608,7 @@ fn respond(
                         return Script::Body(400, json!({ "error": "invalid_grant", "error_description": "PKCE verification failed" }));
                     }
                     // DPoP: valid proof, signed by the key the PAR bound.
-                    let key = match validate_dpop(extras, "POST", &format!("{origin}/oauth/token"), Some(FAKE_DPOP_NONCE), oauth) {
+                    let key = match validate_dpop(extras, "POST", &format!("{origin}/oauth/token"), Some(FAKE_DPOP_NONCE), None, oauth) {
                         Ok(key) => key,
                         Err(problem) => return Script::Body(401, json!({ "error": "invalid_dpop_proof", "error_description": problem })),
                     };
@@ -612,7 +627,7 @@ fn respond(
                     if body.get("client_id").and_then(Value::as_str) != Some("http://localhost") {
                         return Script::Body(400, json!({ "error": "invalid_request", "error_description": "Unsupported client_id" }));
                     }
-                    if let Err(problem) = validate_dpop(extras, "POST", &format!("{origin}/oauth/token"), Some(FAKE_DPOP_NONCE), oauth) {
+                    if let Err(problem) = validate_dpop(extras, "POST", &format!("{origin}/oauth/token"), Some(FAKE_DPOP_NONCE), None, oauth) {
                         return Script::Body(401, json!({ "error": "invalid_dpop_proof", "error_description": problem }));
                     }
                     // Refreshed tokens are always long-lived (the knob shapes only the
@@ -686,16 +701,26 @@ fn respond(
             }
         }
         // The fake PDS service-auth mint: session bearer, aud/lxm/exp query discipline.
+        // OAuth sessions (JWT-shaped) are DPoP-bound: this PDS DEMANDS a valid proof
+        // (R2) — real ES256 machinery, htm/htu of exactly this request (no query),
+        // the AS nonce from the token endpoint, and `ath` pinning the exact access
+        // token. App-password sessions (sat_-prefixed) carry no key and none is asked.
         ("GET", "/xrpc/com.atproto.server.getServiceAuth") => {
             let token = bearer.strip_prefix("Bearer ").unwrap_or_default();
             // App-password sessions are sat_-prefixed; OAuth sessions are JWT-shaped.
-
             let is_session = token.starts_with("sat_") || (token.split('.').count() == 3 && token.starts_with("ey"));
             if !is_session {
                 return Script::Body(401, json!({ "error": "InvalidToken", "message": "authentication required" }));
             }
             if token.starts_with("sat_expired") {
                 return Script::Body(401, json!({ "error": "ExpiredToken", "message": "token has expired" }));
+            }
+            if token.split('.').count() == 3 && token.starts_with("ey") {
+                let htu = format!("{origin}/xrpc/com.atproto.server.getServiceAuth");
+                let expected_ath = b64url(&sha256(token.as_bytes()));
+                if let Err(problem) = validate_dpop(extras, "GET", &htu, Some(FAKE_DPOP_NONCE), Some(&expected_ath), oauth) {
+                    return Script::Body(401, json!({ "error": "InvalidDpopProof", "message": problem }));
+                }
             }
             let query = path.split_once('?').map(|(_, query)| query.to_string()).unwrap_or_default();
             let param = |name: &str| -> Option<String> {
@@ -1067,15 +1092,17 @@ fn issue_tokens(oauth: &OauthScript, did: &str, lifetime_secs: i64) -> Script {
     )
 }
 
-/// Validates one DPoP proof the way the real authorization server would: ES256
+/// Validates one DPoP proof the way the real servers would: ES256
 /// signature over the compact signing input by the header's own JWK, the profile
-/// claims (typ/alg, htm/htu, iat window, exp), the nonce when one is expected, and a
-/// jti replay guard. Answers the verified public key.
+/// claims (typ/alg, htm/htu, iat window, exp), the nonce when one is expected, `ath`
+/// pinning the access token on resource requests, and a jti replay guard. Answers
+/// the verified public key.
 fn validate_dpop(
     extras: &RequestExtras,
     htm: &str,
     htu: &str,
     expected_nonce: Option<&str>,
+    expected_ath: Option<&str>,
     oauth: &OauthScript,
 ) -> Result<p256::ecdsa::VerifyingKey, String> {
     use p256::ecdsa::signature::Verifier;
@@ -1137,6 +1164,11 @@ fn validate_dpop(
     if let Some(expected) = expected_nonce {
         if payload.get("nonce").and_then(Value::as_str) != Some(expected) {
             return Err("wrong nonce".into());
+        }
+    }
+    if let Some(expected) = expected_ath {
+        if payload.get("ath").and_then(Value::as_str) != Some(expected) {
+            return Err("wrong ath (the proof does not bind this access token)".into());
         }
     }
     Ok(verifying)
