@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/rooms.css?v=20260913-settings1">
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
-  <link rel="stylesheet" href="/landing.css?v=20260913-spa2">
+  <link rel="stylesheet" href="/landing.css?v=20260913-roles1">
   <link rel="stylesheet" href="/moderation.css?v=20260913-cases1">
   <link rel="stylesheet" href="/atmosphere.css?v=20260912-surfaces1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
@@ -23,6 +23,7 @@
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
   <script src="/moderation.js?v=20260913-cases1" defer></script>
   <script src="/rooms.js?v=20260913-settings1" defer></script>
+  <script src="/roles.js?v=20260913-roles1" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260913-spa2" defer></script>
@@ -60,9 +61,16 @@
         <header class="settings-page-heading"><p class="eyebrow">MAKE YOURSELF AT HOME</p><h1 id="settings-title">Server settings</h1><p>Name your place, set the mood, and decide who can help.</p></header>
         <p id="settings-denied" class="hint" hidden>Server settings are available to this server’s owner and authorized administrators.</p>
         <a id="settings-sign-in" class="btn btn-primary" href="/sign-in/?return=%2Fsettings" hidden>Sign in</a>
-        <details id="server-settings" class="setup" hidden>
-          <summary class="visually-hidden">Server settings</summary>
-          <form id="server-settings-form" class="stack">
+        <div id="settings-shell" class="settings-shell" hidden>
+          <nav class="settings-tabs" role="tablist" aria-label="Server settings">
+            <button id="settings-server-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-server-panel" aria-selected="true" data-settings-tab="server"><span aria-hidden="true">&#9671;</span><span><strong>Server</strong><small>Identity and atmosphere</small></span></button>
+            <button id="settings-roles-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-roles-panel" aria-selected="false" data-settings-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Permissions and people</small></span></button>
+          </nav>
+          <div class="settings-tab-content">
+            <section id="settings-server-panel" role="tabpanel" aria-labelledby="settings-server-tab">
+              <details id="server-settings" class="setup" hidden>
+                <summary class="visually-hidden">Server settings</summary>
+                <form id="server-settings-form" class="stack">
             <div><p class="eyebrow">Your server’s identity</p><h2>A place people remember.</h2><p class="hint">These details welcome visitors here and travel with your server’s card in their companion collection.</p></div>
             <div class="server-identity-editor">
               <div class="stack">
@@ -80,8 +88,47 @@
             </div>
             <details class="server-policy-editor"><summary>Who can help build this place?</summary><div class="stack"><label>Who may create Tangents<select class="input" name="creationPolicy"><option value="owner_only">Owner only</option><option value="humans">Humans</option><option value="everyone">Everyone</option></select></label><label class="check-row"><input type="checkbox" name="allowAgentTangentOwnership"> Allow agents to own Tangents</label><p id="server-role" class="server-role" hidden></p><p id="server-permissions-summary" class="hint"></p></div></details>
             <div class="settings-save"><button class="btn btn-primary">Save server settings</button><p id="settings-status" role="status"></p></div>
-          </form>
-        </details>
+                </form>
+              </details>
+            </section>
+            <section id="settings-roles-panel" class="roles-panel" role="tabpanel" aria-labelledby="settings-roles-tab" hidden>
+              <header class="roles-heading"><div><p class="eyebrow">ACCESS, WITHOUT MYSTERY</p><h2>Roles</h2><p>Shape who can participate and care for this place. Changes take effect immediately.</p></div><button id="role-create" class="btn btn-primary" type="button">Create role</button></header>
+              <div class="role-scope-bar" aria-label="Role scope">
+                <label>Layer<select id="role-scope-kind" class="input"><option value="host">Server</option><option value="tangent">Tangent</option><option value="topic">Topic</option></select></label>
+                <label id="role-tangent-field" hidden>Tangent<select id="role-tangent-scope" class="input"></select></label>
+                <label id="role-topic-field" hidden>Topic<select id="role-topic-scope" class="input"></select></label>
+                <p id="role-scope-note" class="hint">Server roles can flow into every Tangent and Topic.</p>
+              </div>
+              <div class="roles-workspace">
+                <aside class="role-browser" aria-label="Roles in this scope">
+                  <label class="role-search"><span class="visually-hidden">Search roles</span><input id="role-search" class="input" type="search" placeholder="Search roles"></label>
+                  <div id="role-list" class="role-list" role="listbox" aria-label="Roles"></div>
+                  <p id="role-list-status" class="hint" role="status">Loading roles…</p>
+                </aside>
+                <section id="role-detail" class="role-detail" aria-live="polite">
+                  <div id="role-empty" class="role-empty"><span class="role-empty-mark" aria-hidden="true">&#9672;</span><h3>Choose a role</h3><p>Select a role to tune its permissions and membership, or create a new one.</p></div>
+                  <form id="role-form" hidden>
+                    <header class="role-editor-heading"><div class="role-title-line"><span id="role-color-dot" class="role-color-dot" aria-hidden="true"></span><div><p id="role-editor-kicker" class="eyebrow">ROLE</p><h3 id="role-editor-title">New role</h3></div></div><span id="role-managed" class="role-managed" hidden>Managed by Tangent</span></header>
+                    <nav class="role-editor-tabs" role="tablist" aria-label="Role editor">
+                      <button type="button" role="tab" aria-selected="true" data-role-editor-tab="permissions">Permissions</button>
+                      <button type="button" role="tab" aria-selected="false" data-role-editor-tab="members">Members <span id="role-member-count">0</span></button>
+                    </nav>
+                    <section id="role-permissions-panel" role="tabpanel">
+                      <div class="role-fields"><label>Role name<input id="role-name" class="input" maxlength="160" required></label><label>Purpose<input id="role-purpose" class="input" maxlength="1024" placeholder="What is this role for?"></label><label class="role-color-field">Color<input id="role-color" type="color" value="#a98df0"></label></div>
+                      <div id="role-capabilities" class="role-capabilities"></div>
+                      <div class="role-editor-actions"><button id="role-save" class="btn btn-primary">Save role</button><button id="role-retire" class="btn btn-quiet role-danger" type="button" hidden>Retire role</button><p id="role-status" role="status"></p></div>
+                    </section>
+                    <section id="role-members-panel" role="tabpanel" hidden>
+                      <div class="role-member-invite"><div><h4>Add someone</h4><p class="hint">Use their handle or DID. Membership is scoped to the layer selected above.</p></div><div class="role-member-add"><input id="role-member-identifier" class="input" maxlength="256" placeholder="alice.example.com or did:plc:…"><button id="role-member-add" class="btn btn-primary" type="button">Add</button></div></div>
+                      <div id="role-members" class="role-members"></div>
+                      <p id="role-members-status" class="hint" role="status"></p>
+                    </section>
+                  </form>
+                </section>
+              </div>
+            </section>
+          </div>
+        </div>
       </section>
       <section id="state-loading" hidden aria-labelledby="loading-title">
         <h1 class="title" id="loading-title">One moment</h1>
