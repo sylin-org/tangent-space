@@ -4,6 +4,7 @@ using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
 using TangentSpace.Activity;
 using TangentSpace.AtProtocol;
+using TangentSpace.Authorization;
 using TangentSpace.Communities;
 using TangentSpace.Conversation;
 using TangentSpace.Mcp;
@@ -165,7 +166,7 @@ public sealed partial class ExperienceService(
         var posts = Posts(tangentKey, topicKey, window);
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead, ExperienceActionNames.SetWatch };
-        if (policy.CanWrite) allowed.Add(ExperienceActionNames.CreatePost);
+        if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
         var place = new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Channel(tangentKey, topicKey),
             $"{await TangentName(tangentKey, ct)} / {stored.Title}", await RoleOf(participantId, tangentKey, ct), allowed);
         var actions = new List<ExperienceAction>();
@@ -253,7 +254,7 @@ public sealed partial class ExperienceService(
         var tangentKey = stored.TangentKey;
         MessageContent.CheckText(text);
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
-        if (!policy.CanWrite) throw new UnauthorizedAccessException();
+        if (!TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) throw new UnauthorizedAccessException();
         SourceReference? replySource = null;
         if (replyTo is { } reference)
         {
@@ -660,7 +661,7 @@ public sealed partial class ExperienceService(
         using var fresh = EntityContext.NoCache();
         var room = await Room.Get(topicKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead, ExperienceActionNames.SetWatch };
-        if (policy.CanWrite) allowed.Add(ExperienceActionNames.CreatePost);
+        if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
         return new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Channel(tangentKey, topicKey),
             $"{await TangentName(tangentKey, ct)} / {room?.Title ?? topicKey}", await RoleOf(participantId, tangentKey, ct), allowed);
     }

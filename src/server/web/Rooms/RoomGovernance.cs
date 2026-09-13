@@ -131,21 +131,21 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
 
     public Task<RoomAdministrationResult> Create(string actorId, string roomKey, string title, RoomAdmission admission, CancellationToken ct)
         => Administer(actorId, roomKey, null, RoomAdministration.Create, null,
-            (site, existing, _, _, _, _, now) => existing is not null
+            (site, existing, _, _, _, _, _, now) => existing is not null
                 ? throw new RoomRuleViolation(RoomDenial.AlreadyExists, "That stable room key already exists; reconcile its pending Space instead of creating another room.")
                 : new Change(Room.Create(site, actorId, roomKey, title, admission, now)), ct);
 
     public Task<RoomAdministrationResult> SetMembership(string actorId, string roomKey, string targetIdentifier, RoomRole role, CancellationToken ct)
         => Administer(actorId, roomKey, targetIdentifier, RoomAdministration.SetMembership, role,
-            (site, room, actor, target, tangent, tangentMembership, now) =>
+            (site, room, actor, targetId, target, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
-                return new Change(current, current.ChangeMembership(site, actorId, actor, targetIdentifier, target, role, now, tangent, tangentMembership));
+                return new Change(current, current.ChangeMembership(site, actorId, actor, targetId!, target, role, now, tangent, tangentMembership));
             }, ct);
 
     public Task<RoomAdministrationResult> SetTopic(string actorId, string roomKey, string topic, CancellationToken ct)
         => Administer(actorId, roomKey, null, RoomAdministration.SetTopic, null,
-            (site, room, actor, _, tangent, tangentMembership, now) =>
+            (site, room, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
                 current.ChangeTopic(site, actorId, actor, topic, now, tangent, tangentMembership);
@@ -154,7 +154,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
 
     public Task<RoomAdministrationResult> SetAdmission(string actorId, string roomKey, RoomAdmission admission, CancellationToken ct)
         => Administer(actorId, roomKey, null, RoomAdministration.SetAdmission, null,
-            (site, room, _, _, tangent, _, now) =>
+            (site, room, _, _, _, tangent, _, now) =>
             {
                 var current = RequireRoom(room);
                 current.ChangeAdmission(site, actorId, admission, now, tangent);
@@ -164,7 +164,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
     public Task<RoomAdministrationResult> SetSettings(string actorId, string roomKey, bool allowPostEditing, bool isLocked,
         string? title, string? topic, CancellationToken ct)
         => Administer(actorId, roomKey, null, RoomAdministration.SetSettings, null,
-            (site, room, actor, _, tangent, tangentMembership, now) =>
+            (site, room, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
                 current.ChangeSettings(site, actorId, actor, allowPostEditing, isLocked, title, topic, now, tangent, tangentMembership);
@@ -174,7 +174,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
     /// <summary>Audited authorization before external provisioning. The network call happens after this gate is released.</summary>
     public Task<RoomAdministrationResult> BeginProvisioning(string actorId, string roomKey, CancellationToken ct)
         => Administer(actorId, roomKey, null, RoomAdministration.Provision, null,
-            (site, room, actor, _, tangent, tangentMembership, _) =>
+            (site, room, actor, _, _, tangent, tangentMembership, _) =>
             {
                 var current = RequireRoom(room);
                 // A delegated channel administrator provisions without gaining ownership.
@@ -186,7 +186,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
     /// <summary>Called after the real transport verifies authority/type/key. Retries preserve an existing identical mapping.</summary>
     public Task<RoomAdministrationResult> MapSpace(string actorId, string roomKey, long expectedRevision, string spaceUri, CancellationToken ct)
         => Administer(actorId, roomKey, null, RoomAdministration.MapSpace, null,
-            (site, room, _, _, tangent, tangentMembership, now) =>
+            (site, room, _, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
                 current.CompleteSpace(site, actorId, expectedRevision, spaceUri, now, tangent, tangentMembership);
@@ -230,7 +230,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
 
     private async Task<RoomAdministrationResult> Administer(string actorId, string roomKey, string? targetIdentifier,
         RoomAdministration operation, RoomRole? requestedRole,
-        Func<TangentSite?, Room?, RoomMembership?, RoomMembership?, TangentCommunity?, TangentMembership?, DateTimeOffset, Change> apply, CancellationToken ct)
+        Func<TangentSite?, Room?, RoomMembership?, string?, RoomMembership?, TangentCommunity?, TangentMembership?, DateTimeOffset, Change> apply, CancellationToken ct)
     {
         await gate.Enter(ct);
         try
@@ -241,7 +241,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
             await TangentBootstrap.EnsureHome(site, clock, ct);
             // Administration targets arrive as external identifiers and resolve to participant ids here.
-            targetIdentifier = targetIdentifier is null ? null
+            var targetId = targetIdentifier is null ? null
                 : (await directory.ByIdentifier(targetIdentifier, ct))?.Participant.Id
                 ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The participant must first establish a verified arrival.");
             Room? room = null;
@@ -258,11 +258,12 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                 if (room is not null && await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, now, ct) is not null)
                     throw new RoomRuleViolation(RoomDenial.Forbidden, "A scoped restriction currently denies this administration.");
                 var actor = room is null ? null : await RoomMembership.Get(RoomMembership.Key(roomKey, actorId), ct);
-                var target = room is null || targetIdentifier is null ? null
-                    : await RoomMembership.Get(RoomMembership.Key(roomKey, targetIdentifier), ct);
+                var target = room is null || targetId is null ? null
+                    : await RoomMembership.Get(RoomMembership.Key(roomKey, targetId), ct);
                 var tangent = room is null ? null : await TangentCommunity.Get(room.TangentKey, ct);
                 var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-                change = apply(site, room, actor, target, tangent, tangentMembership, now);
+                // The domain command, membership row and audit use the same once-resolved identity.
+                change = apply(site, room, actor, targetId, target, tangent, tangentMembership, now);
             }
             catch (RoomRuleViolation rejected) { denial = rejected; }
 
@@ -277,7 +278,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             }
             var audit = new RoomAudit
             {
-                ActorParticipantId = actorId, RoomKey = roomKey, TargetParticipantId = targetIdentifier, Operation = operation,
+                ActorParticipantId = actorId, RoomKey = roomKey, TargetParticipantId = targetId, Operation = operation,
                 RequestedRole = requestedRole, Accepted = denial is null, Denial = denial?.Denial,
                 Reason = denial?.Message ?? "Accepted.", SelectedPolicyRevision = room?.PolicyRevision ?? 0,
                 SitePolicyRevision = site?.PolicyRevision ?? 0, OccurredAt = now

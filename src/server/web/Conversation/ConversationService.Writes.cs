@@ -2,6 +2,7 @@ using Koan.Data.Core;
 using TangentSpace.Rooms;
 using TangentSpace.Activity;
 using TangentSpace.AtProtocol;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Conversation;
 
@@ -45,7 +46,7 @@ public sealed partial class ConversationService
             var id = WriteIntent.Key(participantId, roomKey, input.OperationId);
             var intent = await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
             {
-                if (!policy.CanWrite) throw new UnauthorizedAccessException("This room's current rules do not allow posting.");
+                RequireTopicCapability(policy, TopicCapability.Reply, "This room's current rules do not allow posting.");
                 var previous = await WriteIntent.Get(id, token);
                 if (previous is not null)
                 {
@@ -69,6 +70,13 @@ public sealed partial class ConversationService
             if (!ConversationRecovery.CanAttempt(intent, background)) return intent;
             try
             {
+                // Intent loading and recovery may have yielded since preflight. Recheck before
+                // dispatch, without retaining the local policy gate across the network request.
+                await governance.WithCurrentPolicy(participantId, roomKey, (policy, _) =>
+                {
+                    RequireTopicCapability(policy, TopicCapability.Reply, "This room's current rules do not allow posting.");
+                    return Task.FromResult(true);
+                }, ct);
                 // Creation is insert-only at one deterministic key. RecordAlreadyExists triggers the same source reconciliation.
                 await spaces.CreateRecord(authorDid, intent.SpaceUri, intent.RecordKey, intent.Content.ToRecord(), ct);
                 var source = await spaces.ReadRepo(authorDid, intent.SpaceUri, authorDid, ct);
@@ -131,7 +139,7 @@ public sealed partial class ConversationService
         var conflict = false;
         await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
         {
-            if (!policy.CanWrite) throw new UnauthorizedAccessException("This room's current rules do not allow posting.");
+            RequireTopicCapability(policy, TopicCapability.Reply, "This room's current rules do not allow posting.");
             var existing = (await Message.Query(m => m.RoomKey == roomKey && m.AuthorParticipantId == participantId && m.OperationId == input.OperationId,
                 Window<Message>(nameof(Message.Sequence), 1, 1), token)).FirstOrDefault();
             if (existing is { } found)

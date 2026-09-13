@@ -1,5 +1,38 @@
 # Current state
 
+## Post authorization and Windows bootstrap — 12 September 2026
+
+The next EPIC-006 S01/S02 slice applies the typed Topic decisions to actual Post
+creation, editing and removal, not only displayed affordances. Mutations recheck
+current authority and reload the Post inside the policy gate. Removed Posts cannot
+be changed again; moderators may remove but cannot rewrite another author's words.
+Matching completed change receipts remain replayable after lock or role demotion
+only while the actor can still read the Topic. External dispatch is checked without
+holding the gate across the network; this does not cancel an already-sent request.
+
+The service tests exposed and fixed a separate Tangent role-assignment defect:
+administration resolved an external identifier but its callback still passed the
+original DID to the domain command. The command, membership row and audit now share
+one canonical participant identity. Regressions cover DID, normalized handle, local
+identity and participant ID, including updates and owner protection.
+
+The focused permission/identity suites pass **66/66**, including 16 new service cases;
+the broader .NET suite passes **491/491**, with no skips.
+Controlled interleavings cover demotion, read revocation, tombstoning and Topic
+reassignment after a pending receipt. Independent review found no blocking issue in
+this slice. Full external-source optimistic concurrency remains open: source edit
+confirmation checks text rather than the complete content/reply and does not compare
+the current source revision with its pre-dispatch version. These tests do not qualify
+that race, cross-entity atomicity, the new audience engine or an owner-overriding pause.
+
+A clean Windows bootstrap also exposed Tangent's contribution patches being converted
+to CRLF by Git, invalidating their exact checksums. Repository attributes now preserve
+patch bytes; both patch manifests are unchanged. All 18 checkout-filter combinations
+and repair of an isolated existing Windows-style clone pass. The remote environment
+owner received the fix and exact-target repair instructions; integrated remote build
+qualification remains pending. Neither defect belongs to Koan. No deployment was made
+in this slice; the six paused visual-polish files remain outside these commits.
+
 ## Human Host and typed Topic permissions — 12 September 2026
 
 The first [EPIC-006](epics/EPIC-006.md) S01/S02 foundations are implemented, not deployed.
@@ -28,8 +61,12 @@ The dedicated **Tangent Moderator Environment Owner** task owns that installatio
 It reports a loopback-only Letta/Ollama stack and a synthetic defer/private-note/restart
 recall test. These are runtime probes, not live Tangent integration or proof of safe
 cross-audience memory. The operator's identity inputs are private, not repository assets;
-source text was checked against the downloaded copies. Remote identity access remains
-pending. [Moderation practice](design/stewardship/MODERATION_PRACTICE.md) supplements
+source text was checked against the downloaded copies. After Leo completed GitHub login,
+an independent remote check confirmed both preserved originals match the expected hashes
+and pinned source revision. The private resident probe records identity loading and a
+successful restart check, with output capture disabled. This is isolated bootstrap evidence,
+not an unattended wake loop, real Tangent participation or qualified cross-audience memory.
+[Moderation practice](design/stewardship/MODERATION_PRACTICE.md) supplements
 personality without replacing it. No real resident enrollment or moderation grant was made.
 
 ## Activity recovery and scoped author labels — 12 September 2026

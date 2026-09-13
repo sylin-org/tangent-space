@@ -28,9 +28,7 @@ public sealed partial class ConversationService
         {
             var change = await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
             {
-                if (!policy.CanRead) throw new UnauthorizedAccessException("This room's current rules do not allow changing posts.");
-                var message = await Message.Get(messageId, token);
-                if (message is null || message.RoomKey != roomKey) throw new ArgumentException("Choose a message in this room.");
+                var message = await ReadPostForChange(policy, roomKey, messageId, token);
                 var id = PostChange.Key(participantId, roomKey, messageId, operationId);
                 var previous = await PostChange.Get(id, token);
                 if (previous is not null)
@@ -43,15 +41,7 @@ public sealed partial class ConversationService
                     if (Canonical(previous.Facets) != Canonical(facets)) throw new WriteConflict();
                     if (previous.State is "accepted" or "deleted" or "moderated") return previous;
                 }
-                var own = message.AuthorParticipantId == participantId;
-                if (own)
-                {
-                    if (!policy.CanWrite || policy.Locked || (!delete && !policy.EditingAllowed))
-                        throw new UnauthorizedAccessException("The current room rules do not allow this post change.");
-                    if (message.Removed) throw new ArgumentException("That post has already been removed.");
-                }
-                else if (!policy.CanManage) throw new UnauthorizedAccessException("Only a room manager can remove another participant's post.");
-                if (!delete && !own) throw new UnauthorizedAccessException("Moderators may remove posts but cannot rewrite their authors' words.");
+                RequirePostChange(policy, message, delete);
                 if (previous is not null) return previous;
                 var created = new PostChange { Id = id, RoomKey = roomKey, MessageId = messageId, ActorParticipantId = participantId,
                     OperationId = operationId, Delete = delete, Text = text, Facets = facets, UpdatedAt = clock.GetUtcNow() };
@@ -65,22 +55,24 @@ public sealed partial class ConversationService
             var embedder = ChangeClassification.ResolveEmbedder();
             try
             {
-                var message = await Message.Get(messageId, ct) ?? throw new ArgumentException("Choose a message in this room.");
+                var message = await governance.WithCurrentPolicy(participantId, roomKey,
+                    (policy, token) => ReadPostForChange(policy, roomKey, messageId, token), ct);
                 if (change.Delete && message.AuthorParticipantId != participantId)
                 {
                     await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                     {
-                        if (!currentPolicy.CanManage) throw new UnauthorizedAccessException("The current room rules do not allow moderation.");
-                        await SnapshotChange(message, "", null, embedder, token);
-                        message.Removed = true; message.Content = new MessageContent("", message.Content.CreatedAt, message.Content.ReplyTo);
-                        message.RemovedAt = clock.GetUtcNow(); message.RemovedByParticipantId = participantId;
+                        var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
+                        RequirePostChange(currentPolicy, current, delete: true);
+                        await SnapshotChange(current, "", null, embedder, token);
+                        current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
+                        current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
                         // The words are gone; their byte ranges are meaningless on a removed row.
-                        message.Facets = null;
-                        await message.Save(token);
+                        current.Facets = null;
+                        await current.Save(token);
                         change.State = "moderated"; change.Detail = "post-removed-by-moderator"; change.UpdatedAt = clock.GetUtcNow();
                         var room = await Room.Get(roomKey, token);
-                        await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, participantId, message.AuthorParticipantId,
-                            room?.TangentKey, message.Sequence, change.UpdatedAt, token);
+                        await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, participantId, current.AuthorParticipantId,
+                            room?.TangentKey, current.Sequence, change.UpdatedAt, token);
                         await change.Save(token); return true;
                     }, ct);
                     updates.Pulse(roomKey); ActivityJournal.SignalAfterCommit();
@@ -92,13 +84,8 @@ public sealed partial class ConversationService
                 {
                     await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                     {
-                        var current = await Message.Get(messageId, token) ?? message;
-                        if (current.AuthorParticipantId == participantId)
-                        {
-                            if (!currentPolicy.CanWrite || currentPolicy.Locked || (!change.Delete && !currentPolicy.EditingAllowed))
-                                throw new UnauthorizedAccessException("The current room rules do not allow this post change.");
-                        }
-                        else if (!currentPolicy.CanManage) throw new UnauthorizedAccessException("The current room rules do not allow moderation.");
+                        var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
+                        RequirePostChange(currentPolicy, current, change.Delete);
                         if (change.Delete)
                         {
                             await SnapshotChange(current, "", null, embedder, token);
@@ -134,12 +121,25 @@ public sealed partial class ConversationService
                 }
                 // Source changes are atproto-scoped: both the acting editor and the post's
                 // author cross to their atproto identities at this boundary.
-                var actorDid = await directory.AtprotoDidOf(participantId, ct)
-                    ?? throw new UnauthorizedAccessException("Editing a Spaces post requires an atproto identity.");
-                var parts = message.SourceUri[5..].Split('/');
-                if (parts.Length != 7 || parts[5] != SpacesOptions.Collection
-                    || parts[4] != await directory.AtprotoDidOf(message.AuthorParticipantId, ct))
-                    throw new InvalidDataException("The post source URI is invalid.");
+                var dispatch = await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
+                {
+                    var current = await ReadPostForChange(policy, roomKey, messageId, token);
+                    RequirePostChange(policy, current, change.Delete);
+                    var did = await directory.AtprotoDidOf(participantId, token)
+                        ?? throw new UnauthorizedAccessException("Editing a Spaces post requires an atproto identity.");
+                    if (!current.SourceUri.StartsWith("at://", StringComparison.Ordinal))
+                        throw new InvalidDataException("The post source URI is invalid.");
+                    var sourceParts = current.SourceUri[5..].Split('/');
+                    if (sourceParts.Length != 7 || sourceParts[5] != SpacesOptions.Collection
+                        || sourceParts[4] != await directory.AtprotoDidOf(current.AuthorParticipantId, token))
+                        throw new InvalidDataException("The post source URI is invalid.");
+                    return (Message: current, ActorDid: did, Parts: sourceParts);
+                }, ct);
+                // No policy gate spans the network. This pre-dispatch decision does not imply
+                // an already-sent external request can be cancelled or rolled back locally.
+                message = dispatch.Message;
+                var actorDid = dispatch.ActorDid;
+                var parts = dispatch.Parts;
                 var space = "at://" + string.Join('/', parts[..4]);
                 var recordKey = parts[6];
                 string? putCid = null;
@@ -165,13 +165,8 @@ public sealed partial class ConversationService
                 }
                 await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                 {
-                    var current = await Message.Get(messageId, token) ?? message;
-                    if (current.AuthorParticipantId == participantId)
-                    {
-                        if (!currentPolicy.CanWrite || currentPolicy.Locked || (!change.Delete && !currentPolicy.EditingAllowed))
-                            throw new UnauthorizedAccessException("The current room rules do not allow this post change.");
-                    }
-                    else if (!currentPolicy.CanManage) throw new UnauthorizedAccessException("The current room rules do not allow moderation.");
+                    var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
+                    RequirePostChange(currentPolicy, current, change.Delete);
                     if (change.Delete)
                     {
                         await SnapshotChange(current, "", null, embedder, token);
