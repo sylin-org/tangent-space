@@ -322,6 +322,15 @@ fn serve_mode_hosts_the_operator_page_with_a_clean_url_and_pure_stdout() {
     );
     let api = get("GET /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     assert!(api.starts_with("HTTP/1.1 200") && api.contains("\"status\":\"ok\""), "api was: {api}");
+    assert!(!api.contains("Access-Control-Allow-Origin"), "identity data remains same-origin: {api}");
+    let discovery = get("GET /api/discovery HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://tangent.example\r\nConnection: close\r\n\r\n");
+    assert!(discovery.starts_with("HTTP/1.1 200"), "discovery was: {discovery}");
+    assert!(discovery.contains("Access-Control-Allow-Origin: *"), "discovery is browser-readable: {discovery}");
+    assert!(discovery.contains("\"product\":\"tangent-space-connector\""), "discovery identifies the connector: {discovery}");
+    assert!(discovery.contains(&format!("\"operatorOrigin\":\"http://127.0.0.1:{port}\"")), "discovery names this listener: {discovery}");
+    let preflight = get("OPTIONS /api/discovery HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: https://tangent.example\r\nAccess-Control-Request-Method: GET\r\nAccess-Control-Request-Private-Network: true\r\nConnection: close\r\n\r\n");
+    assert!(preflight.starts_with("HTTP/1.1 204 No Content"), "preflight was: {preflight}");
+    assert!(preflight.contains("Access-Control-Allow-Private-Network: true"), "local-network preflight is explicit: {preflight}");
 
     // The startup URL is recoverable from the diagnostics journal, and the connector
     // recorded it in state so any process's Connect can pop this page (P4).

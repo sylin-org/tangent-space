@@ -3,8 +3,12 @@
 //! overrides, 0 stays ephemeral for tests). Hand-rolled minimal HTTP/1.1 in the house
 //! style — request line, headers and a Content-Length body under an 8 KiB header cap
 //! and a 1 MiB body cap, GET/POST only, `Connection: close`, a 30 s read timeout,
-//! JSON-only `/api/*` bodies (form-encoded bodies are refused on every surface), no
-//! CORS headers. The pages are inert embedded strings; every `/api/*` JSON call crosses
+//! JSON-only `/api/*` bodies (form-encoded bodies are refused on every surface). The
+//! one deliberately cross-origin route is `GET/OPTIONS /api/discovery`: it discloses
+//! only the connector product/version and this loopback origin, so a Tangent page can
+//! decide whether to offer its local operator page without exposing identities or
+//! credentials. The pages are inert embedded strings; every other `/api/*` JSON call
+//! crosses
 //! the SAME hub as the CLI and MCP intakes (attribution channel `Operator`). The
 //! `/bind/{identityId}/{provider}` route IS the atproto OAuth bind (owner correction:
 //! no interstitial): the GET immediately starts the flow — the default authorization
@@ -318,7 +322,9 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         let _ = respond(&mut writer, 400, problem_json("bad_request", "malformed request line"), None);
         return;
     }
-    if method != "GET" && method != "POST" {
+    let request_path = target.split('?').next().unwrap_or_default();
+    let discovery_preflight = method == "OPTIONS" && request_path == "/api/discovery";
+    if method != "GET" && method != "POST" && !discovery_preflight {
         let _ = respond(&mut writer, 405, problem_json("method_not_allowed", "GET and POST only"), None);
         return;
     }
@@ -355,6 +361,14 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
     }
     let mut body_bytes = vec![0u8; content_length];
     if content_length > 0 && reader.read_exact(&mut body_bytes).is_err() {
+        return;
+    }
+    // Cross-origin discovery is intentionally tiny and inert. It proves only that a
+    // compatible connector is listening on this browser's loopback interface. Every
+    // identity, enrollment and mutation route remains same-origin and receives no
+    // CORS headers.
+    if request_path == "/api/discovery" && (method == "GET" || method == "OPTIONS") {
+        let _ = respond_discovery(&mut writer, method == "OPTIONS", root_url.trim_end_matches('/'));
         return;
     }
     // The live activity feed (A1): the connection is handed to the streaming handler
@@ -817,6 +831,27 @@ fn problem_json(code: &str, message: &str) -> Value {
     blocked_json(code, message)
 }
 
+fn respond_discovery(writer: &mut impl Write, preflight: bool, operator_origin: &str) -> std::io::Result<()> {
+    let bytes = if preflight {
+        Vec::new()
+    } else {
+        serde_json::to_vec(&json!({
+            "product": "tangent-space-connector",
+            "discoveryVersion": 1,
+            "operatorOrigin": operator_origin,
+        }))
+        .unwrap_or_default()
+    };
+    let (status, reason) = if preflight { (204, "No Content") } else { (200, "OK") };
+    let head = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Private-Network: true\r\nVary: Origin, Access-Control-Request-Private-Network\r\nX-Content-Type-Options: nosniff\r\n\r\n",
+        bytes.len()
+    );
+    writer.write_all(head.as_bytes())?;
+    writer.write_all(&bytes)?;
+    writer.flush()
+}
+
 fn respond(writer: &mut TcpStream, status: u16, body: Value, location: Option<&str>) -> std::io::Result<()> {
     let (content_type, bytes) = match body {
         Value::String(html) => {
@@ -871,5 +906,24 @@ mod tests {
         let mut partial = Cursor::new(b"tail".to_vec());
         assert_eq!(read_line_capped(&mut partial, &mut line, 64).unwrap(), Some(4));
         assert_eq!(line, "tail");
+    }
+
+    #[test]
+    fn discovery_is_minimal_cors_enabled_and_has_an_inert_preflight() {
+        let mut response = Vec::new();
+        respond_discovery(&mut response, false, "http://127.0.0.1:5219").expect("discovery response");
+        let response = String::from_utf8(response).expect("utf-8 response");
+        assert!(response.starts_with("HTTP/1.1 200 OK"));
+        assert!(response.contains("Access-Control-Allow-Origin: *"));
+        assert!(response.contains("Access-Control-Allow-Private-Network: true"));
+        assert!(response.contains("\"product\":\"tangent-space-connector\""));
+        assert!(response.contains("\"operatorOrigin\":\"http://127.0.0.1:5219\""));
+        assert!(!response.contains("identities") && !response.contains("enrollment") && !response.contains("token"));
+
+        let mut preflight = Vec::new();
+        respond_discovery(&mut preflight, true, "http://127.0.0.1:5219").expect("preflight response");
+        let preflight = String::from_utf8(preflight).expect("utf-8 preflight");
+        assert!(preflight.starts_with("HTTP/1.1 204 No Content"));
+        assert!(preflight.ends_with("\r\n\r\n"), "preflight has no response body");
     }
 }
