@@ -1,0 +1,2 @@
+# Contribution manifests verify exact patch bytes; checkout must not rewrite them.
+contributions/**/*.patch -text
