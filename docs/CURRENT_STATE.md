@@ -1,5 +1,47 @@
 # Current state
 
+## Bounded moderation cases and optional stewardship tools — 12 September 2026
+
+The first EPIC-006 S06/S07 path is implemented, not deployed or granted to the
+resident moderator. A signed-in reader can report another author's available Post.
+Reports for one Topic/Post form one case while retaining distinct testimony; one
+reporter cannot overwrite or amplify their own report. The case itself is the single
+durable domain record for this slice, capped at 32 testimonies and 32 decisions. Queue
+pages hold 10 cases, case projections expose at most eight testimonies and eight recent
+decisions, reporter identities stay internal, and no copy of the reported Post is stored.
+
+Current Topic managers can list and read those bounded cases, preview without writing,
+defer for at most seven days, or escalate to the accountable human Host owner. New
+testimony reopens a deferred case; escalation is sticky. Both case and complete subject
+revisions are required at decision time. The Topic policy gate serializes concurrent
+decisions, current authority is checked again for every execution and operation-receipt
+read, and embedded operation IDs make a committed case mutation replayable if its
+separate request receipt was not completed. This avoids claiming cross-entity atomicity
+that the current persistence layer does not provide.
+
+The local connector still presents its stable 14 participation tools by default. Four
+moderation schemas are learned only from an authenticated, caller-context response that
+sets `stewardship` and offers the exact action. Authoritative responses replace that
+context's offer set; explicit revocation or a permission denial removes it and emits MCP
+`tools/list_changed`. Capability-less ordinary responses preserve the last authoritative
+view. Tool calls use strict same-origin case references, preview is never journaled, and
+Apply uses the normal recoverable request journal.
+
+Verified locally: the focused permission/moderation/reference set passes **69/69**; the
+full .NET suite passes **498/498** with no skips; the connector suite passes **97/97**.
+The existing repository-wide Rust formatting drift still prevents a meaningful global
+`cargo fmt --check` without unrelated churn; `cargo check` and `git diff --check` pass.
+The remote 3060 Ti environment independently passed a private Lumen-to-connector smoke
+test with all 14 baseline tools and **90/90** release tests on its pinned prior revision.
+It remains loopback-only and unenrolled: this does not qualify the new stewardship tools
+against Letta or authorize Lumen to read, post, moderate or run unattended.
+
+This is deliberately non-punitive groundwork. It does not yet implement conceal/restore,
+timeouts, bans, case closure, target notices, appeals, report-rate budgets, cumulative
+sanction ceilings, due-case scheduling, browser moderation UI or an unattended wake
+adapter. No Koan defect was found in this slice. The six paused visual-polish files remain
+outside the implementation commit.
+
 ## Post authorization and Windows bootstrap — 12 September 2026
 
 The next EPIC-006 S01/S02 slice applies the typed Topic decisions to actual Post

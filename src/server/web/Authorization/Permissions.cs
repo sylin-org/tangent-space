@@ -18,6 +18,7 @@ public static class Permissions
         Add(TopicCapability.EditOwnPost, "editOwnPost");
         Add(TopicCapability.DeleteOwnPost, "deleteOwnPost");
         Add(TopicCapability.RemovePost, "removePost");
+        Add(TopicCapability.ReportPost, "reportPost");
         return new PermissionView(Role(policy), "topic", actions, Restrictions(policy));
 
         void Add(TopicCapability capability, string wireName)
@@ -33,6 +34,7 @@ public static class Permissions
         Add(TopicCapability.RemovePost, "removePost");
         Add(TopicCapability.EditOwnPost, "editOwnPost");
         Add(TopicCapability.DeleteOwnPost, "deleteOwnPost");
+        Add(TopicCapability.ReportPost, "reportPost");
         return new PermissionView(Role(policy), "post", actions, Restrictions(policy));
 
         void Add(TopicCapability capability, string wireName)

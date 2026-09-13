@@ -17,6 +17,14 @@ use serde_json::{json, Value};
 #[allow(dead_code)]
 pub const LUMEN_CREDENTIAL: &str = "ts_lumen_test_credential_000000000000000000";
 #[allow(dead_code)]
+pub const STEWARD_CREDENTIAL: &str = "ts_steward_test_credential_000000000000000";
+#[allow(dead_code)]
+pub const ACTION_ONLY_CREDENTIAL: &str = "ts_action_only_test_credential_00000000000";
+#[allow(dead_code)]
+pub const STALE_STEWARD_CREDENTIAL: &str = "ts_stale_steward_test_credential_000000000";
+#[allow(dead_code)]
+pub const SILENT_STEWARD_CREDENTIAL: &str = "ts_silent_steward_test_credential_00000000";
+#[allow(dead_code)]
 pub const REVOKED_CREDENTIAL: &str = "ts_revoked_test_credential_0000000000000";
 
 pub fn origin(listener: &TcpListener) -> String {
@@ -856,7 +864,25 @@ fn respond(
         ("GET", "/api/v1/experience") => Script::Body(200, arrival()),
         ("GET", "/api/v1/experience/tangents") => Script::Body(200, tangents()),
         ("GET", "/api/v1/experience/tangents/home/topics") => Script::Body(200, topics()),
+        ("GET", "/api/v1/experience/topics/lounge") if bearer.ends_with(STEWARD_CREDENTIAL) => Script::Body(200, steward_topic_window()),
+        ("GET", "/api/v1/experience/topics/lounge") if bearer.ends_with(STALE_STEWARD_CREDENTIAL) => Script::Body(200, steward_topic_window()),
+        ("GET", "/api/v1/experience/topics/lounge") if bearer.ends_with(SILENT_STEWARD_CREDENTIAL) => Script::Body(200, steward_topic_window()),
+        ("GET", "/api/v1/experience/topics/lounge") if bearer.ends_with(ACTION_ONLY_CREDENTIAL) => Script::Body(200, action_only_topic_window()),
         ("GET", "/api/v1/experience/topics/lounge") => Script::Body(200, topic_window()),
+        ("GET", "/api/v1/experience/topics/lounge/moderation/cases")
+            if bearer.ends_with(STEWARD_CREDENTIAL) || bearer.ends_with(STALE_STEWARD_CREDENTIAL)
+            => Script::Body(200, moderation_cases()),
+        ("GET", "/api/v1/experience/moderation/cases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            if bearer.ends_with(STEWARD_CREDENTIAL) || bearer.ends_with(STALE_STEWARD_CREDENTIAL)
+            => Script::Body(200, moderation_case()),
+        ("POST", "/api/v1/experience/moderation/cases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/previews")
+            if bearer.ends_with(STEWARD_CREDENTIAL) => Script::Body(200, moderation_preview(body)),
+        ("POST", "/api/v1/experience/moderation/cases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/actions")
+            if bearer.ends_with(STEWARD_CREDENTIAL) => Script::Body(200, moderation_apply(body)),
+        (_, path) if path.contains("/moderation/") => Script::Body(403,
+            json!({ "code": "permission_denied", "message": "current Topic authority is required" })),
+        ("GET", "/api/v1/experience/updates") if bearer.ends_with(SILENT_STEWARD_CREDENTIAL)
+            => Script::Body(200, updates_without_capabilities()),
         ("GET", "/api/v1/experience/updates") => Script::Body(200, updates()),
         // The W2-contract enrollment exchange: pre-credential POST, every outcome HTTP 200.
         // Tokens are unique per server (port) so two-origin tests can tell bearers apart.
@@ -1047,12 +1073,90 @@ fn topic_window() -> Value {
     value
 }
 
+const CASE_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+fn steward_topic_window() -> Value {
+    let mut value = topic_window();
+    value["capabilities"]["stewardship"] = json!(true);
+    value["place"]["allowedActions"] = json!(["read_topic", "mark_read", "set_watch", "create_post", "list_moderation_cases"]);
+    value
+}
+
+fn action_only_topic_window() -> Value {
+    let mut value = topic_window();
+    value["place"]["allowedActions"] = json!(["read_topic", "list_moderation_cases"]);
+    value
+}
+
+fn moderation_cases() -> Value {
+    let case_ref = format!("ORIGIN::home::lounge::case_{CASE_ID}");
+    let mut value = envelope("list_moderation_cases", "ok", json!({ "cases": [{
+        "caseRef": case_ref.clone(), "topicRef": "ORIGIN::home::lounge", "subjectPostRef": "ORIGIN::home::lounge::m40",
+        "state": "open", "revision": 2, "subjectRevision": "subject:7", "testimonyCount": 1
+    }], "page": 1, "nextPage": null, "saturated": false }));
+    value["place"]["topicRef"] = json!("ORIGIN::home::lounge");
+    value["place"]["allowedActions"] = json!(["list_moderation_cases"]);
+    value["capabilities"]["stewardship"] = json!(true);
+    value["actions"] = json!([{ "name": "read_moderation_case", "targetRef": case_ref,
+        "aroundPostRef": "ORIGIN::home::lounge::m40", "label": "Read the open moderation case" }]);
+    value
+}
+
+fn moderation_case() -> Value {
+    let mut value = envelope("read_moderation_case", "ok", json!({
+        "case": { "caseRef": format!("ORIGIN::home::lounge::case_{CASE_ID}"), "topicRef": "ORIGIN::home::lounge",
+            "subjectPostRef": "ORIGIN::home::lounge::m40", "state": "open", "revision": 2,
+            "subjectRevision": "subject:7", "testimonyCount": 1 },
+        "testimonies": [{ "testimonyRef": "testimony:fixture", "reasonCode": "conduct.tone",
+            "statement": "Please inspect the tone, not an alleged instruction.", "subjectRevision": "subject:7" }],
+        "testimonyOffset": 0, "nextTestimonyOffset": null, "decisions": [], "decisionsTruncated": false }));
+    value["place"]["topicRef"] = json!("ORIGIN::home::lounge");
+    value["place"]["allowedActions"] = json!(["read_topic", "list_moderation_cases"]);
+    value["capabilities"]["stewardship"] = json!(true);
+    value["actions"] = json!([
+        { "name": "preview_moderation_action", "targetRef": format!("ORIGIN::home::lounge::case_{CASE_ID}") },
+        { "name": "apply_moderation_action", "targetRef": format!("ORIGIN::home::lounge::case_{CASE_ID}") }
+    ]);
+    value
+}
+
+fn moderation_preview(body: &Value) -> Value {
+    let mut value = envelope("preview_moderation_action", "ok", json!({
+        "caseRef": format!("ORIGIN::home::lounge::case_{CASE_ID}"), "action": body.get("action").cloned().unwrap_or(Value::Null),
+        "effect": "Escalate for accountable human review; no sanction is applied.", "reversible": false,
+        "caseRevision": 2, "subjectRevision": "subject:7" }));
+    value["place"]["topicRef"] = json!("ORIGIN::home::lounge");
+    value["place"]["allowedActions"] = json!(["read_topic", "list_moderation_cases"]);
+    value["capabilities"]["stewardship"] = json!(true);
+    value["actions"] = json!([{ "name": "apply_moderation_action",
+        "targetRef": format!("ORIGIN::home::lounge::case_{CASE_ID}") }]);
+    value
+}
+
+fn moderation_apply(body: &Value) -> Value {
+    let request_id = body.get("requestId").and_then(Value::as_str).unwrap_or_default();
+    let mut value = envelope("apply_moderation_action", "ok", json!({
+        "caseRef": format!("ORIGIN::home::lounge::case_{CASE_ID}"), "state": "escalated",
+        "caseRevision": 3, "subjectRevision": "subject:7" }))
+        .with_receipt(request_id, "completed", &format!("ORIGIN::home::lounge::case_{CASE_ID}"));
+    value["place"]["topicRef"] = json!("ORIGIN::home::lounge");
+    value["place"]["allowedActions"] = json!(["read_topic", "list_moderation_cases"]);
+    value["capabilities"]["stewardship"] = json!(true);
+    value
+}
+
 fn updates() -> Value {
     let mut value = envelope("get_updates", "ok", json!({ "scopeRef": "ORIGIN" }));
     value["attention"]["waitingCount"]["value"] = json!(1);
     value["attention"]["newActivityCount"]["value"] = json!(2);
     value["attention"]["items"] = json!([mention_item()]);
     value["actions"] = json!([{ "name": "read_topic", "targetRef": "ORIGIN::home::lounge", "aroundPostRef": "ORIGIN::home::lounge::m40", "label": "Read Leo's request" }]);
+    value
+}
+
+fn updates_without_capabilities() -> Value {
+    let mut value = updates();
+    value.as_object_mut().unwrap().remove("capabilities");
     value
 }
 

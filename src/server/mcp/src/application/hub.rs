@@ -5,7 +5,7 @@
 //! and never changes a domain outcome. Adapters (HTTP client, poller, store) are the
 //! remaining spokes; none of them talks to another directly.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -149,6 +149,9 @@ pub struct ConnectorHub {
     refresh_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     /// Public card refresh attempts are shared across identities visiting one origin.
     server_card_attempts: Mutex<HashMap<String, i64>>,
+    /// Permission-shaped optional schemas learned from authenticated responses. They
+    /// are ephemeral and keyed by caller-bound context, never a selected/global actor.
+    optional_tools: Mutex<HashMap<String, BTreeSet<String>>>,
     /// Arms the single sweeper thread on the first recorded pending connect.
     sweep_once: std::sync::Once,
 }
@@ -169,8 +172,39 @@ impl ConnectorHub {
             bind_flight_ttl_ms: AtomicI64::new(atproto_oauth::FLIGHT_TTL_MS),
             refresh_locks: Mutex::new(HashMap::new()),
             server_card_attempts: Mutex::new(HashMap::new()),
+            optional_tools: Mutex::new(HashMap::new()),
             sweep_once: std::sync::Once::new(),
         }
+    }
+
+    pub fn optional_tool_names(&self) -> BTreeSet<String> {
+        self.optional_tools.lock().map(|contexts| contexts.values()
+            .flat_map(|names| names.iter().cloned()).collect()).unwrap_or_default()
+    }
+
+    fn observe_optional_tools(&self, context_id: &str, experience: &ExperienceDto) {
+        let Some(capabilities) = experience.capabilities.as_ref() else { return; };
+        let known = |name: &str| match name {
+            "list_moderation_cases" => Some("ListModerationCases"),
+            "read_moderation_case" => Some("ReadModerationCase"),
+            "preview_moderation_action" => Some("PreviewModerationAction"),
+            "apply_moderation_action" => Some("ApplyModerationAction"),
+            _ => None,
+        };
+        let offered = experience.place.allowed_actions.iter().map(String::as_str)
+            .chain(experience.actions.iter().map(|action| action.name.as_str()))
+            .filter_map(known).map(str::to_string).collect::<BTreeSet<_>>();
+        if let Ok(mut contexts) = self.optional_tools.lock() {
+            if capabilities.stewardship && !offered.is_empty() {
+                contexts.insert(context_id.to_string(), offered);
+            } else {
+                contexts.remove(context_id);
+            }
+        }
+    }
+
+    fn invalidate_optional_tools(&self, context_id: &str) {
+        if let Ok(mut contexts) = self.optional_tools.lock() { contexts.remove(context_id); }
     }
 
     /// Shortens how long a parked bind stays completable (milliseconds). A test seam
@@ -1769,6 +1803,50 @@ impl ConnectorHub {
                         .get(&frame.request, &format!("/api/v1/experience/operations/{}", encode(&request_id)))
                 })
             }
+            Operation::ListModerationCases { context_id, topic_ref, page, view } => {
+                self.with_context("ListModerationCases", &context_id, view, |frame| {
+                    let Some((_tangent, topic)) = refs::topic_keys(&frame.request.origin, &topic_ref) else {
+                        return Err(invalid_ref("Topic"));
+                    };
+                    let path = page.map(|value| format!("/api/v1/experience/topics/{topic}/moderation/cases?page={value}"))
+                        .unwrap_or_else(|| format!("/api/v1/experience/topics/{topic}/moderation/cases"));
+                    self.port.get(&frame.request, &path)
+                })
+            }
+            Operation::ReadModerationCase { context_id, case_ref, view } => {
+                self.with_context("ReadModerationCase", &context_id, view, |frame| {
+                    let Some((_tangent, _topic, case_id)) = refs::case_keys(&frame.request.origin, &case_ref) else {
+                        return Err(invalid_ref("moderation case"));
+                    };
+                    self.port.get(&frame.request, &format!("/api/v1/experience/moderation/cases/{case_id}"))
+                })
+            }
+            Operation::PreviewModerationAction { context_id, case_ref, action, summary, deferred_until,
+                expected_case_revision, expected_subject_revision, view } => {
+                self.with_context("PreviewModerationAction", &context_id, view, |frame| {
+                    let Some((_tangent, _topic, case_id)) = refs::case_keys(&frame.request.origin, &case_ref) else {
+                        return Err(invalid_ref("moderation case"));
+                    };
+                    let mut body = json!({ "action": action, "summary": summary,
+                        "expectedCaseRevision": expected_case_revision, "expectedSubjectRevision": expected_subject_revision });
+                    if let Some(value) = &deferred_until { body["deferredUntil"] = json!(value); }
+                    self.port.send(&frame.request, "POST",
+                        &format!("/api/v1/experience/moderation/cases/{case_id}/previews"), &body)
+                })
+            }
+            Operation::ApplyModerationAction { context_id, case_ref, request_id, action, summary, deferred_until,
+                expected_case_revision, expected_subject_revision, view } => {
+                self.with_context("ApplyModerationAction", &context_id, view, |frame| {
+                    let Some((_tangent, _topic, case_id)) = refs::case_keys(&frame.request.origin, &case_ref) else {
+                        return Err(invalid_ref("moderation case"));
+                    };
+                    let mut body = json!({ "requestId": request_id, "action": action, "summary": summary,
+                        "expectedCaseRevision": expected_case_revision, "expectedSubjectRevision": expected_subject_revision });
+                    if let Some(value) = &deferred_until { body["deferredUntil"] = json!(value); }
+                    self.journaled_send(frame, "ApplyModerationAction", &case_ref, &request_id,
+                        Route::ModerationAction(case_id.to_string()), &body)
+                })
+            }
         }
     }
 
@@ -2004,7 +2082,12 @@ impl ConnectorHub {
         };
         let raw = match run(&frame) {
             Ok(raw) => raw,
-            Err(error) => return self.transport_problem(tool, &companion, Some(&context_binding), &error),
+            Err(error) => {
+                if matches!(&error, ExperienceError::Application { code, .. } if code == "permission_denied") {
+                    self.invalidate_optional_tools(&context_binding.context_id);
+                }
+                return self.transport_problem(tool, &companion, Some(&context_binding), &error);
+            }
         };
         let parsed = match contract::parse(&raw) {
             Ok(parsed) => parsed,
@@ -2053,6 +2136,15 @@ impl ConnectorHub {
         });
         let (method, path) = route.build();
         let result = self.port.send(&frame.request, method, &path, body);
+        // A policy denial is a definitive non-write, not an uncertain transport outcome.
+        // Settle the local journal and let with_context invalidate this context's schemas.
+        if matches!(&result, Err(ExperienceError::Application { code, .. }) if code == "permission_denied") {
+            if let Ok(store) = self.lock_store() { let _ = store.journal_settle(request_id, "denied"); }
+            self.events.publish(DomainEvent::WriteSettled {
+                request_id: request_id.into(), state: "denied".into(),
+            });
+            return result;
+        }
         // A lost or failed response has an unknown outcome: the journaled tuple is the
         // recovery path, so the request id stays visible to the caller.
         if let Err(error) = &result {
@@ -2105,6 +2197,7 @@ impl ConnectorHub {
         parsed: ExperienceDto,
         unchanged: bool,
     ) -> ToolOutcome {
+        if let Some(binding) = binding { self.observe_optional_tools(&binding.context_id, &parsed); }
         let (text, delivered_ids, unresolved) = {
             let mut store = self.lock_store().expect("state lock");
             let context_id = binding.map(|binding| binding.context_id.clone()).unwrap_or_default();
@@ -2391,6 +2484,7 @@ enum Route {
     Membership(String),
     Leave(String, String),
     Watches,
+    ModerationAction(String),
 }
 
 impl Route {
@@ -2403,6 +2497,7 @@ impl Route {
                 ("DELETE", format!("/api/v1/experience/tangents/{tangent}/membership?requestId={}", encode(&request_id)))
             }
             Self::Watches => ("PUT", "/api/v1/experience/watches".to_string()),
+            Self::ModerationAction(case_id) => ("POST", format!("/api/v1/experience/moderation/cases/{case_id}/actions")),
         }
     }
 }

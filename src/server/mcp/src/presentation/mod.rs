@@ -6,6 +6,7 @@ use crate::application::contract::{ActionDto, AttentionItemDto, ExperienceDto};
 use crate::application::operations::ViewMode;
 use crate::domain::attention::AttentionRecord;
 use perspective::{attention_line, anchor, Budget, Perspective};
+use serde_json::Value;
 
 /// Compact scaffold budget (requested post content, receipts and errors are accounted
 /// separately by the expanded path).
@@ -72,6 +73,7 @@ fn render_orientation(input: &RenderInput, budget: usize) -> String {
         }
         if let Some(capabilities) = &experience.capabilities {
             text.push(format!("Attention digests: {}.", if capabilities.attention { "available" } else { "unavailable" }));
+            if capabilities.stewardship { text.push("Scoped stewardship is available here; shown actions are the current remit.".to_string()); }
         }
     }
     push_attention(input, &mut text, 3, true);
@@ -185,6 +187,27 @@ fn push_data_details(experience: &ExperienceDto, input: &RenderInput, text: &mut
     }
     if let Some(brief) = data.get("brief").and_then(|value| value.as_str()) {
         text.push(format!("Brief: {}", sanitize_label(brief)));
+    }
+    if let Some(cases) = data.get("cases").and_then(Value::as_array) {
+        for case in cases.iter().take(10) {
+            let reference = case.get("caseRef").and_then(Value::as_str).unwrap_or_default();
+            let state = case.get("state").and_then(Value::as_str).unwrap_or("unknown");
+            let testimonies = case.get("testimonyCount").and_then(Value::as_u64).unwrap_or(0);
+            text.push(format!("{} · case {state} · {testimonies} report(s)", (input.aliases)(reference)));
+        }
+    }
+    if experience.operation == "read_moderation_case" {
+        if let Some(testimonies) = data.get("testimonies").and_then(Value::as_array) {
+            for testimony in testimonies.iter().take(8) {
+                let reference = testimony.get("testimonyRef").and_then(Value::as_str).unwrap_or("testimony");
+                let statement = testimony.get("statement").and_then(Value::as_str).unwrap_or_default();
+                text.push(format!("Evidence {} (participant report):", sanitize_label(reference)));
+                text.push_critical(perspective::quoted(statement, 512));
+                if let Some(rule) = testimony.get("citedRule").and_then(Value::as_str) {
+                    text.push(format!("Cited rule: {}", sanitize_label(rule)));
+                }
+            }
+        }
     }
 }
 

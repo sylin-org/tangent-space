@@ -11,7 +11,7 @@ use std::thread;
 
 use serde_json::{json, Value};
 
-use common::{FakeServer, LUMEN_CREDENTIAL};
+use common::{FakeServer, LUMEN_CREDENTIAL, STEWARD_CREDENTIAL};
 
 struct Peer {
     child: Child,
@@ -196,6 +196,55 @@ fn the_stdio_edge_negotiates_and_serves_the_fourteen_tools() {
         requests.iter().map(|request| request.path.clone()).collect::<Vec<_>>()
     );
     let _ = context;
+}
+
+#[test]
+fn authorized_scope_emits_tool_list_changed_after_the_result() {
+    let server = FakeServer::start();
+    let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+    let home = std::env::temp_dir().join(format!("tangent-connector-steward-{}-{unique}", std::process::id()));
+    std::fs::create_dir_all(&home).unwrap();
+    let token_file = home.join("session-token.txt");
+    std::fs::write(&token_file, STEWARD_CREDENTIAL).unwrap();
+    let enroll = Command::new(env!("CARGO_BIN_EXE_tangent-connector"))
+        .args(["enroll", "--name", "steward", "--server", server.origin(), "--token-file"])
+        .arg(&token_file).env("TANGENT_CONNECTOR_HOME", &home).output().unwrap();
+    assert!(enroll.status.success(), "{}", String::from_utf8_lossy(&enroll.stderr));
+    let mut peer = Peer::spawn(&["serve"], &home);
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": { "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": { "name": "steward-test" } } }));
+    assert_eq!(peer.receive()["result"]["capabilities"]["tools"]["listChanged"], true);
+    peer.send(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }));
+    assert_eq!(peer.receive()["result"]["tools"].as_array().unwrap().len(), 14);
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+        "params": { "name": "SelectCompanion", "arguments": { "moniker": "steward" } } }));
+    let selected = peer.receive();
+    let companion = selected["result"]["structuredContent"]["connector"]["companionId"].as_str().unwrap().to_string();
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+        "params": { "name": "Arrive", "arguments": { "companionId": companion, "serverUrl": server.origin() } } }));
+    let arrival = peer.receive();
+    let context = arrival["result"]["structuredContent"]["connector"]["contextId"].as_str().unwrap().to_string();
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+        "params": { "name": "ReadTopic", "arguments": { "contextId": context,
+            "topicRef": format!("{}::home::lounge", server.origin()) } } }));
+    assert_eq!(peer.receive()["id"], 5);
+    let notification = peer.receive();
+    assert_eq!(notification["method"], "notifications/tools/list_changed");
+    assert!(notification.get("id").is_none());
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 6, "method": "tools/list" }));
+    let tools = peer.receive();
+    let names: Vec<_> = tools["result"]["tools"].as_array().unwrap().iter()
+        .filter_map(|entry| entry["name"].as_str()).collect();
+    assert_eq!(names.len(), 15);
+    assert!(names.contains(&"ListModerationCases"));
+    assert!(!names.contains(&"ReadModerationCase"));
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+        "params": { "name": "GetUpdates", "arguments": { "contextId": context } } }));
+    assert_eq!(peer.receive()["id"], 7);
+    assert_eq!(peer.receive()["method"], "notifications/tools/list_changed");
+    peer.send(&json!({ "jsonrpc": "2.0", "id": 8, "method": "tools/list" }));
+    assert_eq!(peer.receive()["result"]["tools"].as_array().unwrap().len(), 14);
 }
 
 #[test]

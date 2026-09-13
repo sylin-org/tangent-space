@@ -13,10 +13,10 @@ public sealed class PermissionProjectionTests
     public void Existing_manager_wire_actions_and_order_are_preserved()
     {
         var policy = Policy();
-        Assert.Equal(new[] { "read", "reply", "manageTopic", "manageParticipants", "editOwnPost", "deleteOwnPost", "removePost" },
+        Assert.Equal(new[] { "read", "reply", "manageTopic", "manageParticipants", "editOwnPost", "deleteOwnPost", "removePost", "reportPost" },
             Permissions.Topic(policy).AllowedActions);
         Assert.Equal(new[] { "read", "editOwnPost", "deleteOwnPost" }, Permissions.Post(policy, Actor, false).AllowedActions);
-        Assert.Equal(new[] { "read", "removePost" }, Permissions.Post(policy, Other, false).AllowedActions);
+        Assert.Equal(new[] { "read", "removePost", "reportPost" }, Permissions.Post(policy, Other, false).AllowedActions);
         Assert.Equal(new[] { "read" }, Permissions.Post(policy, Other, true).AllowedActions);
         Assert.Equal("moderator", Permissions.Topic(policy).Role);
         Assert.Equal("topic", Permissions.Topic(policy).Scope);
@@ -27,7 +27,7 @@ public sealed class PermissionProjectionTests
     public void Locked_topic_keeps_management_but_not_author_writes()
     {
         var policy = Policy() with { Locked = true, CanWrite = false, Reason = "topic-locked" };
-        Assert.Equal(new[] { "read", "manageTopic", "manageParticipants", "removePost" }, Permissions.Topic(policy).AllowedActions);
+        Assert.Equal(new[] { "read", "manageTopic", "manageParticipants", "removePost", "reportPost" }, Permissions.Topic(policy).AllowedActions);
         Assert.Equal(new[] { "read" }, Permissions.Post(policy, Actor, false).AllowedActions);
         Assert.Equal("true", Permissions.Topic(policy).Restrictions["locked"]);
         Assert.Equal("topic-locked", Permissions.Topic(policy).Restrictions["reason"]);

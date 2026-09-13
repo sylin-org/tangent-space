@@ -4,6 +4,7 @@
 //! multi-revision negotiation, stateless `server/discover`) is harvested from the sibling
 //! ghostlight connector, which is verified against real MCP hosts.
 
+use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -100,11 +101,19 @@ pub fn serve(
                 None => unreachable!("builder exists while no hub does"),
             }
         }
+        let tools_before = (method == "tools/call")
+            .then(|| hub.as_deref().map(ConnectorHub::optional_tool_names).unwrap_or_default());
         let response = handle_request(hub.as_deref(), &method, &message, &id, &initialized);
         if let Some(response) = response {
             if write_json(output, &response).is_err() {
                 return 0;
             }
+        }
+        if let Some(before) = tools_before {
+            let after = hub.as_deref().map(ConnectorHub::optional_tool_names).unwrap_or_default();
+            if before != after && write_json(output, &json!({
+                "jsonrpc": JSONRPC_VERSION, "method": "notifications/tools/list_changed"
+            })).is_err() { return 0; }
         }
     }
 }
@@ -135,7 +144,8 @@ fn handle_request(
             if !ready(initialized, hub) {
                 return Some(rpc_error(id.clone(), -32002, "Server not initialized"));
             }
-            Some(success(id, json!({ "tools": catalog() })))
+            let optional = hub.map(ConnectorHub::optional_tool_names).unwrap_or_default();
+            Some(success(id, json!({ "tools": catalog_for(&optional) })))
         }
         "tools/call" => {
             let Some(hub) = hub else {
@@ -168,7 +178,7 @@ fn initialize(message: &Value, id: &Value) -> Value {
         id,
         json!({
             "protocolVersion": negotiated,
-            "capabilities": { "tools": { "listChanged": false } },
+            "capabilities": { "tools": { "listChanged": true } },
             "serverInfo": { "name": SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
             "instructions": INSTRUCTIONS,
         }),
@@ -189,7 +199,7 @@ fn discover(message: &Value, id: &Value) -> Value {
             "ttlMs": 0,
             "cacheScope": "private",
             "serverInfo": { "name": SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-            "capabilities": { "tools": { "listChanged": false } },
+            "capabilities": { "tools": { "listChanged": true } },
         }),
     )
 }
@@ -473,6 +483,61 @@ pub fn catalog() -> Value {
     json!(tools)
 }
 
+/// Keeps the fourteen participation tools stable and adds only exact actions learned
+/// from authenticated, actor-scoped server responses.
+pub fn catalog_for(optional: &BTreeSet<String>) -> Value {
+    let mut tools = catalog().as_array().cloned().unwrap_or_default();
+    for name in ["ListModerationCases", "ReadModerationCase", "PreviewModerationAction", "ApplyModerationAction"] {
+        if optional.contains(name) { tools.push(moderation_tool(name)); }
+    }
+    json!(tools)
+}
+
+fn moderation_tool(name: &str) -> Value {
+    let common = json!({
+        "contextId": { "type": "string", "description": "Caller-bound contextId returned by Arrive" },
+        "caseRef": { "type": "string", "description": "Qualified caseRef copied from this server" },
+        "action": { "type": "string", "enum": ["defer", "escalate"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 280 },
+        "deferredUntil": { "type": "string", "format": "date-time", "description": "Required only for defer; at most seven days ahead" },
+        "expectedCaseRevision": { "type": "integer", "minimum": 0 },
+        "expectedSubjectRevision": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "view": { "type": "string", "enum": ["orientation", "compact", "expanded"] }
+    });
+    let (description, schema, read_only, destructive, idempotent) = match name {
+        "ListModerationCases" => ("List one bounded page of moderation cases in an authorized Topic.", json!({
+            "type": "object", "properties": {
+                "contextId": { "type": "string" }, "topicRef": { "type": "string", "description": "Topic reference copied from this server" },
+                "page": { "type": "integer", "minimum": 1, "maximum": 10000 },
+                "view": { "type": "string", "enum": ["orientation", "compact", "expanded"] }
+            }, "required": ["contextId", "topicRef"], "additionalProperties": false
+        }), true, false, false),
+        "ReadModerationCase" => ("Read one bounded moderation case this context is currently authorized to inspect.", json!({
+            "type": "object", "properties": { "contextId": { "type": "string" }, "caseRef": { "type": "string" },
+                "view": { "type": "string", "enum": ["orientation", "compact", "expanded"] } },
+            "required": ["contextId", "caseRef"], "additionalProperties": false
+        }), true, false, false),
+        "PreviewModerationAction" => ("Preview a closed defer or escalate decision. This changes nothing.", json!({
+            "type": "object", "properties": common, "required": ["contextId", "caseRef", "action", "summary", "expectedCaseRevision", "expectedSubjectRevision"],
+            "additionalProperties": false
+        }), true, false, false),
+        "ApplyModerationAction" => {
+            let mut properties = common.as_object().cloned().unwrap_or_default();
+            properties.insert("requestId".into(), json!({ "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" }));
+            ("Apply a defer or escalate decision. Reuse requestId exactly to recover an uncertain outcome.", json!({
+                "type": "object", "properties": properties,
+                "required": ["contextId", "caseRef", "requestId", "action", "summary", "expectedCaseRevision", "expectedSubjectRevision"],
+                "additionalProperties": false
+            }), false, true, true)
+        }
+        _ => unreachable!("closed optional tool set"),
+    };
+    json!({ "name": name, "description": description, "inputSchema": schema, "annotations": {
+        "title": name, "readOnlyHint": read_only, "destructiveHint": destructive,
+        "idempotentHint": idempotent, "openWorldHint": false
+    }})
+}
+
 fn tool(name: &str, description: &str, input_schema: Value) -> Value {
     json!({
         "name": name,
@@ -513,5 +578,19 @@ mod tests {
         for entry in tools {
             assert!(entry.get("inputSchema").is_some(), "every tool carries a schema");
         }
+    }
+
+    #[test]
+    fn optional_moderation_schemas_are_exact_and_do_not_change_the_base_catalog() {
+        let optional = BTreeSet::from(["ListModerationCases".to_string(), "ApplyModerationAction".to_string(), "ReportPost".to_string()]);
+        let catalog_value = catalog_for(&optional);
+        let tools = catalog_value.as_array().unwrap();
+        assert_eq!(catalog().as_array().unwrap().len(), 14);
+        assert_eq!(tools.len(), 16);
+        assert!(tools.iter().any(|entry| entry["name"] == "ListModerationCases"));
+        let apply = tools.iter().find(|entry| entry["name"] == "ApplyModerationAction").unwrap();
+        assert_eq!(apply["annotations"]["destructiveHint"], true);
+        assert_eq!(apply["annotations"]["idempotentHint"], true);
+        assert!(!tools.iter().any(|entry| entry["name"] == "ReportPost"));
     }
 }

@@ -32,6 +32,27 @@ public sealed class McpContractTests
         => Assert.Null(References().ParseChannel(value));
 
     [Fact]
+    public void Moderation_case_references_are_qualified_and_type_safe()
+    {
+        var refs = References();
+        var id = new string('a', 64);
+        var value = refs.Case("home", "lounge", id);
+        Assert.Equal(("home", "lounge", id), refs.ParseCase(value));
+        Assert.Null(refs.ParseCase(refs.Message("home", "lounge", id)));
+        Assert.Null(refs.ParseMessage(value));
+        Assert.Null(refs.ParseCase($"https://evil.example::home::lounge::case_{id}"));
+        Assert.Null(refs.ParseCase(refs.Case("home", "lounge", new string('A', 64))));
+    }
+
+    [Fact]
+    public void Message_references_accept_the_hyphenated_ids_the_server_emits()
+    {
+        var refs = References();
+        var value = refs.Message("home", "lounge", "m-source-1");
+        Assert.Equal(("home", "lounge", "m-source-1"), refs.ParseMessage(value));
+    }
+
+    [Fact]
     public void Activity_checkpoints_are_bound_to_credential_scope_and_expiry()
     {
         var refs = References();

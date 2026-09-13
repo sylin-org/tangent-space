@@ -10,5 +10,6 @@ public enum TopicCapability
     AppointManagers,
     EditOwnPost,
     DeleteOwnPost,
-    RemovePost
+    RemovePost,
+    ReportPost
 }

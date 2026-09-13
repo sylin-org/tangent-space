@@ -29,6 +29,7 @@ public static class TopicPermissionEvaluator
     public const string RemovedReason = "removed";
     public const string NotAuthorReason = "not-author";
     public const string OwnPostRemovalReason = "use-delete-own-post";
+    public const string OwnPostReportReason = "own-post";
     public const string TopicLockedReason = "topic-locked";
     public const string EditingDisabledReason = "editing-disabled";
     public const string ManageRequiredReason = "manage-required";
@@ -52,6 +53,7 @@ public static class TopicPermissionEvaluator
             TopicCapability.EditOwnPost => WriteDecision(policy, capability, editingRequired: true),
             TopicCapability.DeleteOwnPost => WriteDecision(policy, capability, editingRequired: false),
             TopicCapability.RemovePost => RemoveDecision(policy, capability),
+            TopicCapability.ReportPost => ReportDecision(policy, capability),
             _ => new TopicPermissionDecision(capability, false, UnsupportedActionReason, policy.SelectedPolicyRevision)
         };
     }
@@ -61,7 +63,7 @@ public static class TopicPermissionEvaluator
     {
         if (policy is null) return DenyNull(capability);
         if (!Enum.IsDefined(capability) || capability is not (TopicCapability.Read or TopicCapability.EditOwnPost
-            or TopicCapability.DeleteOwnPost or TopicCapability.RemovePost))
+            or TopicCapability.DeleteOwnPost or TopicCapability.RemovePost or TopicCapability.ReportPost))
             return new TopicPermissionDecision(capability, false, UnsupportedActionReason, policy.SelectedPolicyRevision);
         var own = IsAuthor(policy.ActorParticipantId, authorParticipantId);
         if (capability is TopicCapability.EditOwnPost or TopicCapability.DeleteOwnPost)
@@ -76,6 +78,14 @@ public static class TopicPermissionEvaluator
             if (own) return Deny(policy, capability, OwnPostRemovalReason);
             return RemoveDecision(policy, capability);
         }
+        if (capability == TopicCapability.ReportPost)
+        {
+            if (removed) return Deny(policy, capability, RemovedReason);
+            if (string.IsNullOrWhiteSpace(policy.ActorParticipantId))
+                return Deny(policy, capability, PermissionDeniedReason);
+            if (own) return Deny(policy, capability, OwnPostReportReason);
+            return ReadDecision(policy, capability);
+        }
         return ReadDecision(policy, capability);
     }
 
@@ -83,6 +93,11 @@ public static class TopicPermissionEvaluator
         => policy.CanRead
             ? Allow(policy, capability)
             : Deny(policy, capability, PolicyBoundaryReason(policy));
+
+    private static TopicPermissionDecision ReportDecision(RoomPolicy policy, TopicCapability capability)
+        => string.IsNullOrWhiteSpace(policy.ActorParticipantId)
+            ? Deny(policy, capability, PermissionDeniedReason)
+            : ReadDecision(policy, capability);
 
     private static TopicPermissionDecision WriteDecision(RoomPolicy policy, TopicCapability capability, bool editingRequired)
     {

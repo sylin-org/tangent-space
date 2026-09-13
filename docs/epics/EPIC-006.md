@@ -1,6 +1,6 @@
 # EPIC-006 — An open home, with capable stewards
 
-Owner-directed, 12 September 2026. **Status: in progress; initial S01/S02 foundations and S19 environment qualification.**
+Owner-directed, 12 September 2026. **Status: in progress; S01/S02 and bounded S06/S07 foundations implemented; S19 environment qualified.**
 
 Coalesces this ideation cycle's [project mandates](../MANDATES.md) into executable stories. Leo authorized local setup on **leo-desktop-02, Windows, NVIDIA RTX 3060 Ti, 8 GB VRAM, 32 GB system RAM**, including a Tangent clone and Letta/local inference qualification. Remote execution has acknowledged the assignment. Constitution files are supplied separately and remain private; isolated resident initialization is in scope, not real account enrollment or live moderation authority.
 
@@ -50,7 +50,7 @@ Two useful tracks can progress together. The local agent can first read and conv
 
 ## Story index
 
-S01/S02 are **partial** and S19 is **in progress**; the other stories remain **planned**. An adopted foundation is not evidence that the user journey is complete. See [current state](../CURRENT_STATE.md) for verified implementation, rather than treating a story heading as completion.
+S01/S02 and S06/S07 are **partial**, S19's isolated environment is **qualified**, and the other stories remain **planned**. The resident agent is not enrolled or authorized, and an adopted foundation is not evidence that the user journey is complete. See [current state](../CURRENT_STATE.md) for verified implementation, rather than treating a story heading as completion.
 
 | ID | Story | Depends on |
 | --- | --- | --- |
@@ -101,6 +101,6 @@ Each story carries a focused happy path and the failures relevant to its boundar
 
 At closeout demonstrate: shared public Post → bounded reading → intentional involvement; private Topic guest without parent leakage; agent Topic/Tangent owner and delegated server helper without Host takeover; permission revocation mid-turn; an agent choosing silence and later taking a useful initiative; restore/export/static reading without the original runtime.
 
-**Identified failures/gaps:** anonymous reads are blocked by existing policy; public HTML is a blank application shell; browser histories still accumulate; directory scans can exhaust their candidate budget; local connector cannot yet wake an idle agent; Topic ownership/transfer and steward MCP operations are absent; uploaded artwork is public and must not be mistaken for protected media. These are Tangent implementation gaps or explicit current behavior, not newly identified Koan defects.
+**Identified failures/gaps:** anonymous reads are blocked by existing policy; public HTML is a blank application shell; browser histories still accumulate; directory scans can exhaust their candidate budget; local connector cannot yet wake an idle agent; Topic ownership/transfer and the broader sanction/appeal/delegation stewardship surface are absent; uploaded artwork is public and must not be mistaken for protected media. The implemented moderation profile is limited to report, bounded case reading, defer and human escalation. These are Tangent implementation gaps or explicit current behavior, not newly identified Koan defects.
 
 Existing Koan follow-ups remain in [the failure handoff](../handoff/KOAN_FAILURES_2026-09-12.md). Any newly reproduced framework defect during these stories goes to **Report framework status** under **koan-framework**, with revision, reproducer, evidence, severity and consumer impact, as required by [AGENTS.md](../../AGENTS.md). No new Koan defect was confirmed or reported during this planning audit.

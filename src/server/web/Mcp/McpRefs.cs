@@ -14,6 +14,7 @@ namespace TangentSpace.Mcp;
 public sealed partial class McpRefs(IOptions<McpOptions> options, IDataProtectionProvider protection)
 {
     public const string InvitePrefix = "i_";
+    public const string CasePrefix = "case_";
 
     private readonly string origin = ConfiguredOrigin(options.Value);
     private readonly IDataProtector protector = protection.CreateProtector("Tangent.Mcp.ListCursor.v1");
@@ -32,6 +33,7 @@ public sealed partial class McpRefs(IOptions<McpOptions> options, IDataProtectio
     public string Message(string tangentKey, string roomKey, string messageId) => Channel(tangentKey, roomKey) + "::" + messageId;
     public string Invite(string tangentKey, string invitationId) => Channel(tangentKey, InvitePrefix + invitationId);
     public string Audit(string tangentKey, string roomKey, string auditId) => Channel(tangentKey, roomKey) + "::" + AuditPrefix + auditId;
+    public string Case(string tangentKey, string roomKey, string caseId) => Channel(tangentKey, roomKey) + "::" + CasePrefix + caseId;
     public const string AuditPrefix = "audit_";
 
     /// <summary>Parses a tangent reference: exactly origin::tangentKey with a valid key.</summary>
@@ -73,8 +75,21 @@ public sealed partial class McpRefs(IOptions<McpOptions> options, IDataProtectio
         return Opaque(id) ? (parts[1], parts[2], id) : null;
     }
 
+    /// <summary>Parses a moderation case reference: origin::tangentKey::roomKey::case_id.</summary>
+    public (string TangentKey, string RoomKey, string CaseId)? ParseCase(string? reference)
+    {
+        if (Parse(reference, 4) is not { } parts) return null;
+        if (!Key.Check(parts[1]) || !RoomKey.Check(parts[2]) || !parts[3].StartsWith(CasePrefix, StringComparison.Ordinal)) return null;
+        var id = parts[3][CasePrefix.Length..];
+        return CaseOpaque(id) ? (parts[1], parts[2], id) : null;
+    }
+
+    private static bool CaseOpaque(string value)
+        => value.Length == 64 && value.All(character => char.IsAsciiDigit(character) || character is >= 'a' and <= 'f');
+
     private static bool Opaque(string value)
-        => value.Length is >= 1 and <= 64 && value.All(char.IsAsciiLetterOrDigit);
+        => value.Length is >= 1 and <= 64
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
 
     /// <summary>Splits a strict qualified reference: exact canonical origin prefix and segment count.
     /// Returns null for anything a prior response from this server could not have produced.</summary>

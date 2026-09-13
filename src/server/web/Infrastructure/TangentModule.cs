@@ -16,6 +16,7 @@ using TangentSpace.Communities;
 using TangentSpace.Activity;
 using TangentSpace.Mcp;
 using TangentSpace.Mcp.Authentication;
+using TangentSpace.Moderation;
 
 namespace TangentSpace.Infrastructure;
 
@@ -62,6 +63,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<LiveSessions>();
         services.AddSingleton<Experience.ExperienceDigest>();
         services.AddSingleton<Experience.ExperienceService>();
+        services.AddSingleton<ModerationCaseService>();
         services.AddSingleton<SourceNotifications>();
         services.AddSingleton<SourceReadiness>();
         var protection = services.AddDataProtection().SetApplicationName(nameof(TangentSpace));

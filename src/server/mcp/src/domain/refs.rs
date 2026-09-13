@@ -31,7 +31,17 @@ pub fn topic_keys<'a>(origin: &str, reference: &'a str) -> Option<(&'a str, &'a 
 /// `origin::tangent::room::message` → (tangent, room, message).
 pub fn post_keys<'a>(origin: &str, reference: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
     let parts = split(origin, reference)?;
-    (parts.len() == 3 && valid_key(parts[0]) && valid_key(parts[1])).then(|| (parts[0], parts[1], parts[2]))
+    (parts.len() == 3 && valid_key(parts[0]) && valid_key(parts[1]) && valid_opaque(parts[2]))
+        .then(|| (parts[0], parts[1], parts[2]))
+}
+
+/// `origin::tangent::topic::case_{64-lower-hex}` → tangent, Topic and raw case id.
+pub fn case_keys<'a>(origin: &str, reference: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
+    let parts = split(origin, reference)?;
+    let case_id = parts.get(2)?.strip_prefix("case_")?;
+    (parts.len() == 3 && valid_key(parts[0]) && valid_key(parts[1]) && case_id.len() == 64
+        && case_id.bytes().all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')))
+        .then(|| (parts[0], parts[1], case_id))
 }
 
 /// Segment sanity: bounded, no separators, not a nested qualified reference.
@@ -40,6 +50,12 @@ fn valid_key(value: &str) -> bool {
         && value.len() <= 128
         && !value.contains("::")
         && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b':'))
+}
+
+fn valid_opaque(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
 }
 
 /// Canonical origin check: HTTPS anywhere, HTTP only on explicit loopback for development.
@@ -79,6 +95,12 @@ mod tests {
             Some(("home", "lounge"))
         );
         assert!(post_keys(ORIGIN, &format!("{ORIGIN}::home::lounge::m1")).is_some());
+        const CASE_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let case = format!("{ORIGIN}::home::lounge::case_{CASE_ID}");
+        assert_eq!(case_keys(ORIGIN, &case), Some(("home", "lounge", CASE_ID)));
+        assert!(post_keys(ORIGIN, &case).is_none(), "the discriminator cannot be mistaken for a Post id");
+        assert!(case_keys(ORIGIN, &format!("{ORIGIN}::home::lounge::case_{}", "A".repeat(64))).is_none());
+        assert!(case_keys(ORIGIN, &format!("{ORIGIN}::home::lounge::{}", "a".repeat(64))).is_none());
         // Another origin's reference is unusable here.
         assert!(tangent_key(ORIGIN, "https://elsewhere::home").is_none());
         // Nested or malformed segments are rejected.

@@ -215,6 +215,29 @@ pub fn result_summary(experience: &ExperienceDto, alias: &dyn Fn(&str) -> String
                 lines.push(format!("Request {}: {}.", receipt.request_id, receipt.state));
             }
         }
+        "list_moderation_cases" => {
+            let count = experience.result.data.get("cases").and_then(|value| value.as_array()).map(Vec::len).unwrap_or(0);
+            let more = experience.result.data.get("nextPage").is_some_and(|value| !value.is_null());
+            lines.push(format!("{count} moderation case(s) in this bounded page{}.", if more { "; more are available" } else { "" }));
+        }
+        "read_moderation_case" => {
+            let case = experience.result.data.get("case").unwrap_or(&experience.result.data);
+            let state = case.get("state").and_then(|value| value.as_str()).unwrap_or("unknown");
+            let revision = case.get("caseRevision").or_else(|| case.get("revision"))
+                .and_then(|value| value.as_u64()).map(|value| value.to_string()).unwrap_or_else(|| "unknown".into());
+            let subject = case.get("subjectRevision").and_then(|value| value.as_str()).unwrap_or("unknown");
+            lines.push(format!("Moderation case: {state}; case revision {revision}; subject revision {}.", sanitize(subject)));
+        }
+        "preview_moderation_action" => {
+            let action = experience.result.data.get("action").and_then(|value| value.as_str()).unwrap_or("decision");
+            let effect = experience.result.data.get("effect").and_then(|value| value.as_str()).unwrap_or_default();
+            lines.push(format!("Preview only — {action}: {}", sanitize(effect)));
+        }
+        "apply_moderation_action" => {
+            if let Some(receipt) = &experience.result.receipt {
+                lines.push(format!("Moderation decision {}. Request {}.", receipt.state, receipt.request_id));
+            } else { lines.push(format!("Moderation decision: {}.", experience.status)); }
+        }
         other => lines.push(format!("Operation {other}: {}.", experience.status)),
     }
     if let Some(problem) = &experience.result.problem {

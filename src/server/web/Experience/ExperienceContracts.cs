@@ -81,7 +81,7 @@ public sealed record ExperienceOrientation(string? Purpose, IReadOnlyList<string
 
 /// <summary>Server experience capabilities advertised at arrival. A different namespace from
 /// MCP host capabilities; the two must never be confused.</summary>
-public sealed record ExperienceCapabilities(bool Attention, bool Coordination);
+public sealed record ExperienceCapabilities(bool Attention, bool Coordination, bool Stewardship = false);
 
 public static class ExperienceProblemCodes
 {
@@ -97,6 +97,7 @@ public static class ExperienceProblemCodes
     public const string InvalidArguments = "invalid_arguments";
     public const string UnsupportedOperation = "unsupported_operation";
     public const string ReceiptExpired = "receipt_expired";
+    public const string ModerationConflict = "moderation_conflict";
 }
 
 public static class ExperienceStatus
@@ -119,6 +120,11 @@ public static class ExperienceActionNames
     public const string LeaveTangent = "leave_tangent";
     public const string GetOperation = "get_operation";
     public const string GetUpdates = "get_updates";
+    public const string ReportPost = "report_post";
+    public const string ListModerationCases = "list_moderation_cases";
+    public const string ReadModerationCase = "read_moderation_case";
+    public const string PreviewModerationAction = "preview_moderation_action";
+    public const string ApplyModerationAction = "apply_moderation_action";
 }
 
 // ---------- Result data payloads ----------

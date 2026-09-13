@@ -1,5 +1,6 @@
-//! The small stable tool vocabulary and its argument decoding. Fourteen participation
-//! tools; setup and stewardship live in the CLI, not the model-facing catalog.
+//! The small stable participation vocabulary plus permission-discovered stewardship
+//! operations. Optional schemas are advertised only after an authenticated server
+//! response offers the matching action for a bound context.
 
 use serde_json::Value;
 
@@ -43,6 +44,12 @@ pub enum Operation {
     LeaveTangent { context_id: String, tangent_ref: String, request_id: String, view: ViewMode },
     SetWatch { context_id: String, scope_ref: String, mode: String, request_id: Option<String>, view: ViewMode },
     GetOperation { context_id: String, request_id: String, view: ViewMode },
+    ListModerationCases { context_id: String, topic_ref: String, page: Option<u16>, view: ViewMode },
+    ReadModerationCase { context_id: String, case_ref: String, view: ViewMode },
+    PreviewModerationAction { context_id: String, case_ref: String, action: String, summary: String,
+        deferred_until: Option<String>, expected_case_revision: u64, expected_subject_revision: String, view: ViewMode },
+    ApplyModerationAction { context_id: String, case_ref: String, request_id: String, action: String, summary: String,
+        deferred_until: Option<String>, expected_case_revision: u64, expected_subject_revision: String, view: ViewMode },
 }
 
 impl Operation {
@@ -62,6 +69,10 @@ impl Operation {
             Self::LeaveTangent { .. } => "LeaveTangent",
             Self::SetWatch { .. } => "SetWatch",
             Self::GetOperation { .. } => "GetOperation",
+            Self::ListModerationCases { .. } => "ListModerationCases",
+            Self::ReadModerationCase { .. } => "ReadModerationCase",
+            Self::PreviewModerationAction { .. } => "PreviewModerationAction",
+            Self::ApplyModerationAction { .. } => "ApplyModerationAction",
         }
     }
 }
@@ -119,6 +130,20 @@ pub fn decode(tool: &str, arguments: &Value) -> Result<Operation, String> {
             .ok_or_else(|| format!("argument '{name}' must be 1-128 letters, digits, hyphens or underscores"))
     };
     let view = || -> Result<ViewMode, String> { ViewMode::parse(optional("view")?.as_deref()) };
+    let revision = |name: &str| -> Result<u64, String> {
+        field(name)?.as_u64().ok_or_else(|| format!("argument '{name}' must be a non-negative integer"))
+    };
+    let bounded_text = |name: &str, maximum: usize| -> Result<String, String> {
+        let value = string(name)?;
+        if value.trim().is_empty() || value.len() > maximum || value.contains('\0') {
+            Err(format!("argument '{name}' must contain 1-{maximum} UTF-8 bytes and no null characters"))
+        } else { Ok(value) }
+    };
+    let moderation_action = || -> Result<String, String> {
+        let value = string("action")?;
+        matches!(value.as_str(), "defer" | "escalate").then_some(value)
+            .ok_or_else(|| "argument 'action' must be defer or escalate".to_string())
+    };
     match tool {
         "SelectCompanion" => Ok(Operation::SelectCompanion { moniker: optional("moniker")? }),
         "OpenRegistration" => {
@@ -206,6 +231,55 @@ pub fn decode(tool: &str, arguments: &Value) -> Result<Operation, String> {
             request_id: request_id("requestId")?,
             view: view()?,
         }),
+        "ListModerationCases" => Ok(Operation::ListModerationCases {
+            context_id: string("contextId")?, topic_ref: string("topicRef")?,
+            page: match arguments.get("page") {
+                None | Some(Value::Null) => None,
+                Some(value) => Some(value.as_u64().filter(|page| (1..=10_000).contains(page))
+                    .ok_or("argument 'page' must be 1-10000")? as u16),
+            },
+            view: view()?,
+        }),
+        "ReadModerationCase" => Ok(Operation::ReadModerationCase {
+            context_id: string("contextId")?, case_ref: string("caseRef")?, view: view()?,
+        }),
+        "PreviewModerationAction" => {
+            if arguments.get("requestId").is_some() {
+                return Err("PreviewModerationAction does not accept requestId; a preview creates no receipt".into());
+            }
+            Ok(Operation::PreviewModerationAction {
+                context_id: string("contextId")?, case_ref: string("caseRef")?, action: moderation_action()?,
+                summary: bounded_text("summary", 280)?, deferred_until: optional("deferredUntil")?,
+                expected_case_revision: revision("expectedCaseRevision")?,
+                expected_subject_revision: bounded_text("expectedSubjectRevision", 256)?, view: view()?,
+            })
+        }
+        "ApplyModerationAction" => Ok(Operation::ApplyModerationAction {
+            context_id: string("contextId")?, case_ref: string("caseRef")?, request_id: request_id("requestId")?,
+            action: moderation_action()?, summary: bounded_text("summary", 280)?, deferred_until: optional("deferredUntil")?,
+            expected_case_revision: revision("expectedCaseRevision")?,
+            expected_subject_revision: bounded_text("expectedSubjectRevision", 256)?, view: view()?,
+        }),
         other => Err(format!("unknown tool '{other}'")),
+    }
+}
+
+#[cfg(test)]
+mod moderation_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn actions_are_closed_revision_bound_and_only_apply_accepts_a_request_id() {
+        let base = json!({ "contextId": "ctx_1", "caseRef": "case", "action": "defer",
+            "summary": "Revisit later.", "deferredUntil": "2026-09-13T12:00:00Z",
+            "expectedCaseRevision": 4, "expectedSubjectRevision": "subject:7" });
+        assert!(matches!(decode("PreviewModerationAction", &base), Ok(Operation::PreviewModerationAction { .. })));
+        let mut apply = base.clone(); apply["requestId"] = json!("case-decision-1");
+        assert!(matches!(decode("ApplyModerationAction", &apply), Ok(Operation::ApplyModerationAction { .. })));
+        apply["action"] = json!("ban");
+        assert!(decode("ApplyModerationAction", &apply).unwrap_err().contains("defer or escalate"));
+        let mut preview = base; preview["requestId"] = json!("not-a-preview-receipt");
+        assert!(decode("PreviewModerationAction", &preview).unwrap_err().contains("does not accept requestId"));
     }
 }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using TangentSpace.Experience;
 using TangentSpace.Mcp;
 using TangentSpace.Participation;
+using TangentSpace.Moderation;
 
 namespace TangentSpace.Communities.Web;
 
@@ -54,6 +55,30 @@ public sealed class ExperienceController(ExperienceService experience) : Control
     public Task<IActionResult> CreatePost(string topicKey, [FromBody] ExperienceCreatePostRequest request, CancellationToken ct)
         => Mutate(principal => experience.CreatePost(principal, topicKey, request.RequestId, request.Text, request.ReplyTo, request.Facets, ct));
 
+    [HttpPost("topics/{topicKey}/reports")]
+    public Task<IActionResult> ReportPost(string topicKey, [FromBody] ExperienceReportPostRequest request, CancellationToken ct)
+        => Mutate(principal => experience.ReportPost(principal, topicKey, request.RequestId, request.PostRef,
+            request.ReasonCode, request.Statement, ct));
+
+    [HttpGet("topics/{topicKey}/moderation/cases")]
+    public Task<IActionResult> ModerationCases(string topicKey, [FromQuery] int page = 1, CancellationToken ct = default)
+        => Read(principal => experience.ListModerationCases(principal, topicKey, page, ct));
+
+    [HttpGet("moderation/cases/{caseId}")]
+    public Task<IActionResult> ModerationCase(string caseId, [FromQuery] int testimonyOffset = 0,
+        [FromQuery] int testimonyLimit = 8, [FromQuery] int decisionLimit = 8, CancellationToken ct = default)
+        => Read(principal => experience.ReadModerationCase(principal, caseId, testimonyOffset, testimonyLimit, decisionLimit, ct));
+
+    [HttpPost("moderation/cases/{caseId}/previews")]
+    public Task<IActionResult> PreviewModeration(string caseId, [FromBody] ExperienceModerationPreviewRequest request, CancellationToken ct)
+        => Read(principal => experience.PreviewModerationAction(principal, caseId, request.Action, request.Summary,
+            request.DeferredUntil, request.ExpectedCaseRevision, request.ExpectedSubjectRevision, ct));
+
+    [HttpPost("moderation/cases/{caseId}/actions")]
+    public Task<IActionResult> ApplyModeration(string caseId, [FromBody] ExperienceModerationActionRequest request, CancellationToken ct)
+        => Mutate(principal => experience.ApplyModerationAction(principal, caseId, request.RequestId, request.Action,
+            request.Summary, request.DeferredUntil, request.ExpectedCaseRevision, request.ExpectedSubjectRevision, ct));
+
     [HttpPost("topics/{topicKey}/read-position")]
     public Task<IActionResult> ReadPosition(string topicKey, [FromBody] ExperienceReadPositionRequest request, CancellationToken ct)
         => Mutate(principal => experience.ReadPosition(principal, topicKey, request.ReadCursor, request.RequestId, ct));
@@ -98,6 +123,10 @@ public sealed class ExperienceController(ExperienceService experience) : Control
             return Problem(ExperienceProblem.Of("request_conflict",
                 $"{error.RequestId} already identifies a different action. Inspect its receipt before creating another action."), 409);
         }
+        catch (ModerationCaseConflictException error)
+        {
+            return Problem(ExperienceProblem.Of(ExperienceProblemCodes.ModerationConflict, error.Message), 409);
+        }
         catch (ArgumentException error)
         {
             return Problem(ExperienceProblem.Of(
@@ -121,3 +150,11 @@ public sealed record ExperienceReadPositionRequest(string ReadCursor, string? Re
 public sealed record ExperienceMembershipRequest(string? InviteRef, string RequestId);
 
 public sealed record ExperienceWatchRequest(string ScopeRef, string Mode, string RequestId);
+
+public sealed record ExperienceReportPostRequest(string RequestId, string PostRef, string ReasonCode, string Statement);
+
+public sealed record ExperienceModerationPreviewRequest(string Action, string Summary, DateTimeOffset? DeferredUntil,
+    long ExpectedCaseRevision, string ExpectedSubjectRevision);
+
+public sealed record ExperienceModerationActionRequest(string RequestId, string Action, string Summary,
+    DateTimeOffset? DeferredUntil, long ExpectedCaseRevision, string ExpectedSubjectRevision);

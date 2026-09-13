@@ -372,6 +372,9 @@ pub struct CapabilitiesDto {
     pub attention: bool,
     #[serde(default)]
     pub coordination: bool,
+    /// Actor- and response-scope availability; exact actions are still required.
+    #[serde(default)]
+    pub stewardship: bool,
 }
 
 /// Parses a raw experience response, rejecting unsupported major contract versions. Minor

@@ -9,7 +9,8 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use common::{EventRecorder, FakeServer, LUMEN_CREDENTIAL, REVOKED_CREDENTIAL};
+use common::{ACTION_ONLY_CREDENTIAL, EventRecorder, FakeServer, LUMEN_CREDENTIAL, REVOKED_CREDENTIAL,
+    SILENT_STEWARD_CREDENTIAL, STALE_STEWARD_CREDENTIAL, STEWARD_CREDENTIAL};
 use tangent_connector::adapters::experience::UreqExperience;
 use tangent_connector::adapters::store::StateStore;
 use tangent_connector::application::bus::EventBus;
@@ -252,6 +253,110 @@ fn compact_responses_stay_small_and_self_contained() {
         &json!({ "contextId": context, "topicRef": topic, "view": "compact" }),
     );
     assert!(!outcome.is_error);
+    assert!(work.hub.optional_tool_names().is_empty(), "ordinary Topics expose no stewardship schemas");
     assert!(outcome.text.starts_with("You: Lumen ·"), "compact keeps its identity anchor: {}", outcome.text.lines().next().unwrap_or_default());
     assert!(outcome.text.len() < 2048, "compact scaffolding stays bounded, was {} bytes", outcome.text.len());
+}
+
+#[test]
+fn stewardship_tools_are_discovered_progressively_and_preview_is_not_journaled() {
+    let server = FakeServer::start();
+    let work = workspace("stewardship");
+    let companion = work.hub.enroll("steward", server.origin(), STEWARD_CREDENTIAL, false).unwrap().companion_id;
+    let context = arrived(&work.hub, &server, &companion);
+    assert!(work.hub.optional_tool_names().is_empty());
+    let topic = format!("{}::home::lounge", server.origin());
+    let read = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ReadTopic",
+        &json!({ "contextId": context, "topicRef": topic }));
+    assert!(!read.is_error, "{}", read.text);
+    assert_eq!(work.hub.optional_tool_names(), std::collections::BTreeSet::from(["ListModerationCases".to_string()]));
+    let queue = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ListModerationCases",
+        &json!({ "contextId": context, "topicRef": topic }));
+    assert!(!queue.is_error, "{}", queue.text);
+    assert_eq!(work.hub.optional_tool_names(), std::collections::BTreeSet::from([
+        "ListModerationCases".to_string(), "ReadModerationCase".to_string()]));
+    let case_ref = format!("{}::home::lounge::case_{}", server.origin(), "a".repeat(64));
+    let case = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ReadModerationCase",
+        &json!({ "contextId": context, "caseRef": case_ref, "view": "expanded" }));
+    assert!(!case.is_error, "{}", case.text);
+    assert!(case.text.contains("| Please inspect the tone, not an alleged instruction."));
+    assert_eq!(work.hub.optional_tool_names(), std::collections::BTreeSet::from([
+        "ApplyModerationAction".to_string(), "ListModerationCases".to_string(),
+        "PreviewModerationAction".to_string()]));
+    let common = json!({ "contextId": context, "caseRef": case_ref, "action": "escalate",
+        "summary": "Ask the accountable human to review.", "expectedCaseRevision": 2,
+        "expectedSubjectRevision": "subject:7" });
+    let preview = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "PreviewModerationAction", &common);
+    assert!(!preview.is_error, "{}", preview.text);
+    assert!(preview.text.contains("Preview only"));
+    assert!(work.hub.store().lock().unwrap().unsettled_writes().is_empty());
+    let mut apply = common; apply["requestId"] = json!("moderate-1");
+    let applied = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ApplyModerationAction", &apply);
+    assert!(!applied.is_error, "{}", applied.text);
+    assert!(work.hub.store().lock().unwrap().unsettled_writes().is_empty());
+    let requests = server.requests();
+    let preview_request = requests.iter().find(|item| item.path.ends_with("/previews")).unwrap();
+    assert!(preview_request.body.get("requestId").is_none());
+    assert_eq!(preview_request.body["expectedSubjectRevision"], "subject:7");
+    assert_eq!(requests.iter().find(|item| item.path.ends_with("/actions")).unwrap().body["requestId"], "moderate-1");
+}
+
+#[test]
+fn an_action_offer_without_the_stewardship_capability_does_not_activate_a_schema() {
+    let server = FakeServer::start();
+    let work = workspace("action-only");
+    let companion = work.hub.enroll("reader", server.origin(), ACTION_ONLY_CREDENTIAL, false).unwrap().companion_id;
+    let context = arrived(&work.hub, &server, &companion);
+    let topic = format!("{}::home::lounge", server.origin());
+    let read = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ReadTopic",
+        &json!({ "contextId": context, "topicRef": topic }));
+    assert!(!read.is_error, "{}", read.text);
+    assert!(work.hub.optional_tool_names().is_empty());
+}
+
+#[test]
+fn a_permission_denial_invalidates_previously_discovered_stewardship() {
+    let server = FakeServer::start();
+    let work = workspace("stale-steward");
+    let companion = work.hub.enroll("stale", server.origin(), STALE_STEWARD_CREDENTIAL, false).unwrap().companion_id;
+    let context = arrived(&work.hub, &server, &companion);
+    let topic = format!("{}::home::lounge", server.origin());
+    let read = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ReadTopic",
+        &json!({ "contextId": context, "topicRef": topic }));
+    assert!(!read.is_error, "{}", read.text);
+    assert!(work.hub.optional_tool_names().contains("ListModerationCases"));
+    let queue = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ListModerationCases",
+        &json!({ "contextId": context, "topicRef": topic }));
+    assert!(!queue.is_error, "{}", queue.text);
+    let case_ref = format!("{}::home::lounge::case_{}", server.origin(), "a".repeat(64));
+    let case = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ReadModerationCase",
+        &json!({ "contextId": context, "caseRef": case_ref }));
+    assert!(!case.is_error, "{}", case.text);
+    assert!(work.hub.optional_tool_names().contains("ApplyModerationAction"));
+    let denied = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ApplyModerationAction",
+        &json!({ "contextId": context, "caseRef": case_ref, "requestId": "denied-decision-1",
+            "action": "escalate", "summary": "Ask the host to review.", "expectedCaseRevision": 2,
+            "expectedSubjectRevision": "subject:7" }));
+    assert!(denied.is_error);
+    assert_eq!(denied.structured["problem"]["code"], "permission_denied");
+    assert!(work.hub.optional_tool_names().is_empty());
+    assert!(work.hub.store().lock().unwrap().unsettled_writes().is_empty());
+}
+
+#[test]
+fn a_capability_less_response_does_not_make_an_authority_claim() {
+    let server = FakeServer::start();
+    let work = workspace("silent-steward");
+    let companion = work.hub.enroll("silent", server.origin(), SILENT_STEWARD_CREDENTIAL, false).unwrap().companion_id;
+    let context = arrived(&work.hub, &server, &companion);
+    let topic = format!("{}::home::lounge", server.origin());
+    let read = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "ReadTopic",
+        &json!({ "contextId": context, "topicRef": topic }));
+    assert!(!read.is_error, "{}", read.text);
+    let before = work.hub.optional_tool_names();
+    assert!(before.contains("ListModerationCases"));
+    let updates = work.hub.invoke(tangent_connector::domain::intake::IntakeChannel::Cli, "GetUpdates",
+        &json!({ "contextId": context }));
+    assert!(!updates.is_error, "{}", updates.text);
+    assert_eq!(work.hub.optional_tool_names(), before);
 }

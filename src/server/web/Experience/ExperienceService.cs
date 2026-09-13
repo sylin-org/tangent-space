@@ -8,6 +8,7 @@ using TangentSpace.Authorization;
 using TangentSpace.Communities;
 using TangentSpace.Conversation;
 using TangentSpace.Mcp;
+using TangentSpace.Moderation;
 using TangentSpace.Participation;
 using TangentSpace.Participants;
 using TangentSpace.Rooms;
@@ -20,7 +21,8 @@ namespace TangentSpace.Experience;
 /// actors observe the same domain outcomes regardless of browser or connector transport. The
 /// actor always derives from the verified credential: submitted identifiers are never authority.</summary>
 public sealed partial class ExperienceService(
-    TangentServer hub, McpRequests requests, McpRefs refs, TimeProvider clock, ExperienceDigest digest)
+    TangentServer hub, McpRequests requests, McpRefs refs, TimeProvider clock, ExperienceDigest digest,
+    ModerationCaseService moderation)
 {
     private TangentGovernance tangents => hub.Tangents;
     private RoomGovernance rooms => hub.Topics;
@@ -165,13 +167,19 @@ public sealed partial class ExperienceService(
         }
         var posts = Posts(tangentKey, topicKey, window);
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
-        var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead, ExperienceActionNames.SetWatch };
+        var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead,
+            ExperienceActionNames.SetWatch, ExperienceActionNames.ReportPost };
         if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
+        var stewardship = TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
+            && TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed;
+        if (stewardship) allowed.Add(ExperienceActionNames.ListModerationCases);
         var place = new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Channel(tangentKey, topicKey),
             $"{await TangentName(tangentKey, ct)} / {stored.Title}", await RoleOf(participantId, tangentKey, ct), allowed);
         var actions = new List<ExperienceAction>();
         if (posts.Count > 0)
             actions.Add(new(ExperienceActionNames.MarkRead, refs.Channel(tangentKey, topicKey), null, "Acknowledge reading through the newest Post"));
+        if (stewardship)
+            actions.Add(new(ExperienceActionNames.ListModerationCases, refs.Channel(tangentKey, topicKey), null, "Review this Topic's moderation cases"));
         return await Assemble("read_topic", ExperienceStatus.Ok, identity, place,
             new ExperienceResult(new ExperienceTopicData(stored.Title, ExperienceDigest.Preview(stored.Topic, 480),
                 posts, window.Position, window.Resolved is null ? null
@@ -182,7 +190,9 @@ public sealed partial class ExperienceService(
             new ExperienceContinuation(null, null, window.OlderCursor, window.NewerCursor, window.ReadCursor, null),
             actions,
             new ExperienceOrientation(null, [],
-                $"{stored.Title}: {ExperienceDigest.Preview(stored.Topic, 240)}"), null, participantId, credential, ct);
+                $"{stored.Title}: {ExperienceDigest.Preview(stored.Topic, 240)}"),
+            new ExperienceCapabilities(Attention: true, Coordination: false, Stewardship: stewardship),
+            participantId, credential, ct);
     }
 
     // ---------- Digest, updates and wait ----------
@@ -520,6 +530,10 @@ public sealed partial class ExperienceService(
             return Problem("get_operation", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.ReceiptExpired, "No receipt is available for that request ID.", "requestId"),
                 participantId: participantId, credential: credential, ct: ct);
+        // A receipt is not an authority token. Stewardship operations remain private to a
+        // current Topic manager even after their domain mutation has committed.
+        if (record.Operation == "ApplyModerationAction")
+            await moderation.Read(participantId, record.TargetKey, 0, 1, 1, ct);
         var state = record.State;
         string? resultRef = record.ResultRef;
         if (record.Operation is "CreatePost" or "PostMessage")
@@ -660,8 +674,12 @@ public sealed partial class ExperienceService(
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         using var fresh = EntityContext.NoCache();
         var room = await Room.Get(topicKey, ct);
-        var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead, ExperienceActionNames.SetWatch };
+        var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead,
+            ExperienceActionNames.SetWatch, ExperienceActionNames.ReportPost };
         if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
+        if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
+            && TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed)
+            allowed.Add(ExperienceActionNames.ListModerationCases);
         return new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Channel(tangentKey, topicKey),
             $"{await TangentName(tangentKey, ct)} / {room?.Title ?? topicKey}", await RoleOf(participantId, tangentKey, ct), allowed);
     }
@@ -742,6 +760,11 @@ public sealed partial class ExperienceService(
             {
                 var description = await rooms.Describe(participantId, room.Room, ct);
                 return description?.TangentKey == room.Tangent && description.CanRead;
+            }
+            if (refs.ParseCase(reference) is { } moderationCase)
+            {
+                var description = await rooms.Describe(participantId, moderationCase.RoomKey, ct);
+                return description?.TangentKey == moderationCase.TangentKey && description.CanRead;
             }
             if (refs.ParseTangent(reference) is { } tangent) return await tangents.CanAccess(participantId, tangent, ct);
             return false;
