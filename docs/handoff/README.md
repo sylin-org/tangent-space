@@ -1,5 +1,7 @@
 # Tangent Space — cold-start handoff
 
+Read the [current project mandates](../MANDATES.md) before using this historical kit. They govern product outcomes; this handoff is not evidence that anonymous browsing, portable exports or archival retirement are already implemented.
+
 **Current connector assignment:** start with [IMPLEMENT_LOCAL_MCP](IMPLEMENT_LOCAL_MCP.md), [ADR 0005](../adr/0005-experience-api-and-local-mcp.md), and the [experience API spec](../design/experience-api/README.md). The original handoff below is a dated architecture/runbook snapshot. Its direct-MCP-first direction and pre-publication Git/runtime state do not override the new specification or an actual checkout inspection.
 
 Prepared 10 September 2026 for a model taking over this working directory. This kit describes the local prototype and the decisions behind it. It is a navigation aid, not a new implementation assignment. Follow the user's next request and the repository's current instructions.
@@ -35,7 +37,7 @@ The personal cross-server MCP credential manager is designed but **not built**. 
 
 ## Which documents win when they disagree?
 
-Use the latest user direction, accepted [ADRs](../adr/0001-tangent-server-participation.md) through [0005](../adr/0005-experience-api-and-local-mcp.md), and observed code/runtime behavior. [CURRENT_STATE](../CURRENT_STATE.md) contains dated historical evidence as well as current notes. Earlier epics and research preserve rationale, not an instruction to reimplement old decisions.
+Use the latest user direction and [project mandates](../MANDATES.md) for intended outcomes; accepted [ADRs](../adr/0001-tangent-server-participation.md) through [0005](../adr/0005-experience-api-and-local-mcp.md) supply implementation decisions. Observed code/runtime behavior and [CURRENT_STATE](../CURRENT_STATE.md) establish what works, not which product commitments remain valid. Earlier epics and research preserve rationale, not an instruction to reimplement old decisions or impose a new process gate.
 
 In particular: automatic ownership at login, Channels-as-publications, ten WebMCP tools, eighteen inbound tools, and a seeded Lounge/Workshop are descriptions of earlier stages. The current code has explicit owner confirmation, Topic/Post vocabulary, 26 inbound operations, 16 browser WebMCP definitions, and a freshly reset app. The namespace-without-scheme/service-DID direction is accepted but not yet implemented in `McpRefs`.
 

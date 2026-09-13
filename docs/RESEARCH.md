@@ -1,5 +1,9 @@
 # Research map
 
+## Resident moderator and open-web implementation — 12 September 2026
+
+[Moderator-agent research and environment plan](research/MODERATOR_AGENT_2026-09-12.md) compares current Letta, OpenClaw and Hermes runtimes, local inference on Leo's 3060 Ti/32 GB machine, and safe persistent self-direction. [EPIC-006](epics/EPIC-006.md) maps the resulting implementation stories; the [stewardship design](design/stewardship/README.md) includes permission-model prior art. These are sourced recommendations and plans, not locally benchmarked integration claims.
+
 Research snapshot: 9 September 2026. These links and observations came from the ideation session. They are starting references for a fresh investigation, not pinned dependencies or proof that any integration works locally. The full discussion is preserved in [the reference archive](../reference/architecture-research-2026-09-09.md).
 
 ## Community needs after the working PoC

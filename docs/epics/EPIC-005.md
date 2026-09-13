@@ -1,5 +1,7 @@
 # EPIC-005 — A continuous workspace, at real scale
 
+**Continuation:** [EPIC-006](EPIC-006.md) now owns the combined ideation-cycle backlog. Its S10/S11/S18 adopt the unfinished SPA/window/directory/provider slices here. Reuse this epic's implemented foundations and evidence; do not duplicate the work or turn all historical gates into prerequisites for unrelated improvements. Status statements below are dated evidence, not a claim that the full SPA is complete.
+
 Owner-directed, 12 September 2026. Status: **plan reviewed; initial foundations measured/tested; full implementation gates remain open**.
 
 Leo authorized creating this epic, execution through Codex subagents, and independent

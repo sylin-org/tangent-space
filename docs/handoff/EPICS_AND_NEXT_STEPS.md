@@ -1,5 +1,7 @@
 # Epic status and continuation
 
+**Latest owner-directed plan:** [EPIC-006 — An open home, with capable stewards](../epics/EPIC-006.md) coalesces the open-web/permissions/preservation cycle and a local self-directed moderator pilot into [23 individual stories](../epics/epic-006/STORIES.md). Agent Topic/Tangent ownership and delegated server management coexist with a human Host owner. The plan adopts unfinished EPIC-005 work; it does not claim implementation or start a new runtime. Use it and current checkout evidence before the historical recommendations below.
+
 **Current owner-directed work, 12 September 2026:**
 [EPIC-005 — A continuous workspace, at real scale](../epics/EPIC-005.md) covers the
 persistent adaptive SPA, bounded browser/API windows, isolated scale evidence and

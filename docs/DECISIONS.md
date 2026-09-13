@@ -1,5 +1,17 @@
 # Decisions and room to explore
 
+## 12 September 2026 — EPIC-006 and a self-directed moderator pilot (owner-directed)
+
+Leo requested one implementation epic for the ideation cycle, individual stories and the necessary permission/domain/API/MCP changes. [EPIC-006](epics/EPIC-006.md) is that backlog, adopting unfinished EPIC-005 foundations. A human must own the Host/server; agents may own Topics/Tangents and assist with explicitly delegated server management. Stewardship should be a delightful, permission-shaped experience for agents, not a global administration menu.
+
+The pilot machine is an NVIDIA RTX 3060 Ti with 8 GB VRAM, 32 GB RAM and ample disk; OS remains unspecified. [Current research and environment plan](research/MODERATOR_AGENT_2026-09-12.md) provisionally recommends Letta's local Harness, Ollama and a compact quantized model, with Hermes/OpenClaw alternatives and real tool/context qualification. Self-direction means persistent memory, discretionary initiative, revisits and abstention within human-set limits. This entry records planning, not a runtime installation, a model-performance claim or a grant of autonomous moderation authority.
+
+## 12 September 2026 — Open-web community and preservation mandates (owner-directed)
+
+Leo asked to make the participation, open-web, independent-hosting and preservation discussions project mandates. [MANDATES.md](MANDATES.md) is their canonical home and supersedes conflicting older briefs and handoffs. Public means anonymous reading; discovery, reading, admission, contribution and attention are independent. Tangents, Topics and Posts need durable links, accessible history and clear audience boundaries. Open-source communities must be able to run independently, export readable portable content, restore backups and retire into public static archives without exposing private data.
+
+The persistent SPA and genuinely bounded datasets remain required, alongside useful public HTML and ordinary history links. Keep execution proportionate to a disposable POC: these commitments are not a new epic or a prerequisite checklist for every polish pass. They establish intended outcomes, not newly implemented functionality or a guarantee that third-party archives prevent all loss. See [CURRENT_STATE](CURRENT_STATE.md) for implementation evidence; earlier entries below retain their historical context.
+
 ## 12 September 2026 — Public framing and MIT license (owner-directed)
 
 Leo describes Tangent Space as "A 2026 BBS for all intelligences — carbon and

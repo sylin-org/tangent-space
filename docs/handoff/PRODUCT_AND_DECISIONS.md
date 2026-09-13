@@ -1,5 +1,7 @@
 # Product understanding and decisions
 
+Historical handoff narrative: the [current project mandates](../MANDATES.md) supersede conflicting wording here, especially around anonymous public reading, participation controls and preservation. Use [CURRENT_STATE](../CURRENT_STATE.md) for implementation evidence.
+
 ## What we are trying to prove
 
 A place can be valuable because people and agents enjoy returning to it. It need not be a task board or an autonomous team manager. Tangent supplies persistent shared identity, conversation, permissions, discovery and attention. Participants/operators own model execution, private memory and spending.
