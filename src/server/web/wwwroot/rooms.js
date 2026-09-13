@@ -333,6 +333,7 @@
   function resetMessages() { historyRevision++; rendered.clear(); visibleMessages.clear(); newPosts.clear(); updateNewPosts(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); show('read-checkpoint', false); text('freshness', ''); }
   function unavailableRoute(code) {
     routeFailure = code; epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
+    window.TangentModeration?.topic?.(undefined, site?.participant);
     routeTangent = routeTopics = undefined;
     for (const id of ['room-title', 'room-topic', 'topic-permissions', 'room-access']) text(id, '');
     field('topic-form', 'topic').value = '';
@@ -352,6 +353,7 @@
   }
   function renderRoom(value) {
     room = value;
+    window.TangentModeration?.topic?.(room, site?.participant);
     document.body.classList.add('conversation-open');
     text('tangent-return-title', 'Your Tangents');
     if (room.tangentKey) activeTangentKey = room.tangentKey;
@@ -616,6 +618,7 @@
         const permalink = element('a', 'post-permalink', 'Open post'); permalink.href = '/t/' + encodeURIComponent(room.tangentKey) + '/' + encodeURIComponent(message.id); controls.append(permalink);
         if (mayEdit) { const edit = element('button', 'btn btn-quiet', 'Edit post'); edit.type = 'button'; edit.addEventListener('click', () => { menu.open = false; beginEdit(li, message); }); controls.append(edit); }
         if (mayDelete) { const remove = element('button', 'btn btn-quiet message-danger', actions.includes('removePost') && !isYou ? 'Remove post' : 'Delete post'); remove.type = 'button'; remove.addEventListener('click', () => { menu.open = false; removeMessage(message); }); controls.append(remove); }
+        window.TangentModeration?.postActions?.(controls, message, { room, menu, authorName: profile.name });
         const details = element('details', 'source-details', ''); details.append(element('summary', '', 'Source details'));
         for (const value of [message.authorParticipantId, message.sourceUri, message.sourceCid]) if (value) details.append(element('p', 'did', value));
         controls.append(details); menu.append(controls);
@@ -899,6 +902,7 @@
       const recovered = activityRecovering, previousActor = site?.participant?.participantRef;
       forgetStoredDrafts(previousActor);
       identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); recoveryBlocked.clear(); drafts.clear(); sending.clear(); restoring = undefined; room = null; reply = undefined; sourceReadiness = undefined; activeTangentKey = undefined; routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
+      window.TangentModeration?.topic?.(undefined, event.detail.participant);
       activityAutomaticRecoveries = 0;
       mentionCache.clear(); postMutations.clear(); activitySignature = ''; activityOverviewNote = '';
       renderDraft(); show('room-content', false); show('choose-room', true); text('choose-room', 'Choose a room to see its topic and current access.'); status('');
@@ -908,7 +912,7 @@
     site = event.detail;
     routeFailure = undefined;
     if (['sign-in', 'onboarding'].includes(route().kind)) return;
-    if (['participant', 'settings'].includes(route().kind)) { refreshServer(); show('place', false); startActivity(); return; }
+    if (['participant', 'settings'].includes(route().kind)) { window.TangentModeration?.topic?.(undefined, site.participant); refreshServer(); show('place', false); startActivity(); return; }
     show('place', true); document.body.classList.add('has-rooms'); refreshServer();
     show('site-setup', site.participant?.isOwner === true || currentTangents().some(t => t.canCreateTopic === true));
     const identity = identityEpoch, welcome = site;

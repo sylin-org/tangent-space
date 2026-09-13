@@ -61,7 +61,7 @@
     if (route.kind === 'home') {
       if (site.onboarding !== 'complete') actions.append(link(site.participant?.isOwner ? 'Finish setting up' : 'Set up this server', '/onboarding/', 'btn btn-primary'));
     }
-    if (!site.participant && site.established) actions.append(link('Sign in to take part', signInUrl(), 'btn btn-quiet'));
+    if (!site.participant && site.established) actions.append(link('Sign in to take part', signInUrl(), 'btn btn-primary'));
     if (route.kind === 'post' && topic) actions.append(link('Open conversation', topicUrl(topic.tangentKey, topic.key), 'btn btn-quiet'));
     if (route.kind === 'topics' && tangent?.canCreateTopic) actions.append(control('Create Topic', ['community-settings', 'site-setup'], 'create-room'));
     if (route.kind === 'topics' && tangent?.canManage) actions.append(control('⚙ Tangent settings', ['community-settings', 'tangent-editor'], 'edit-tangent-form'));

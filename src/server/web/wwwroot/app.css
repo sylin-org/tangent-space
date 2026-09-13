@@ -208,35 +208,46 @@ main {
 }
 
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.65rem 1.3rem;
   font: inherit;
   font-weight: 600;
+  line-height: 1.25;
   border-radius: 10px;
   cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: transform 140ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
 .btn-primary {
   background: var(--accent);
   color: var(--accent-ink);
   border: 1px solid #d99d2e;
+  box-shadow: 0 8px 22px -14px rgba(244,185,66,.8);
 }
 
 .btn-primary:hover {
   background: #ffd46e;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -15px rgba(244,185,66,.95);
 }
 
 .btn-quiet {
-  background: transparent;
+  background: var(--surface-soft);
   color: var(--ink);
   border: 1px solid var(--line-strong);
+  box-shadow: 0 8px 22px -18px #000;
 }
 
 .btn-quiet:hover {
   border-color: var(--accent-strong);
   color: var(--accent-strong);
+  background: #292431;
+  transform: translateY(-1px);
 }
+
+.btn:active { transform: translateY(0); }
 
 .sign-in .btn,
 .sign-out .btn {

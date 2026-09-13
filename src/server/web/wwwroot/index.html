@@ -7,20 +7,22 @@
   <meta name="theme-color" content="#111016">
   <title>Tangent Space</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/app.css?v=20260912-live1">
-  <link rel="stylesheet" href="/rooms.css?v=20260912-live1">
+  <link rel="stylesheet" href="/app.css?v=20260912-polish1">
+  <link rel="stylesheet" href="/rooms.css?v=20260912-polish1">
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
-  <link rel="stylesheet" href="/pages.css?v=20260912-surfaces1">
-  <link rel="stylesheet" href="/landing.css?v=20260912-surfaces2">
+  <link rel="stylesheet" href="/pages.css?v=20260912-polish1">
+  <link rel="stylesheet" href="/landing.css?v=20260912-polish1">
+  <link rel="stylesheet" href="/moderation.css?v=20260913-cases1">
   <link rel="stylesheet" href="/atmosphere.css?v=20260912-surfaces1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
   <script src="/atmosphere.js?v=20260912-welcome" defer></script>
-  <script src="/pages.js?v=20260912-surfaces1" defer></script>
+  <script src="/pages.js?v=20260912-polish1" defer></script>
   <script src="/onboarding.js?v=20260912-profile-cache" defer></script>
   <script src="/app.js?v=20260912-surfaces1" defer></script>
   <script src="/activity-transport.js?v=20260912-shared2" defer></script>
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
-  <script src="/rooms.js?v=20260912-surfaces1" defer></script>
+  <script src="/moderation.js?v=20260913-cases1" defer></script>
+  <script src="/rooms.js?v=20260913-cases1" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260912-mention-picker" defer></script>
@@ -241,7 +243,7 @@
           <section id="conversation" class="conversation" aria-labelledby="room-title">
             <p id="choose-room" class="lede">Choose a room to see its topic and current access.</p>
             <div id="room-content" hidden>
-              <div class="conversation-toolbar"><p id="conversation-connection" class="connection-state" role="status">Connecting…</p><details id="conversation-elsewhere" class="conversation-elsewhere" hidden><summary id="elsewhere-label">Elsewhere</summary><nav id="elsewhere-links" aria-label="Updates in other topics"></nav></details></div>
+              <div class="conversation-toolbar"><p id="conversation-connection" class="connection-state" role="status">Connecting…</p><div class="conversation-toolbar-actions"><button id="stewardship-open" class="btn btn-quiet" type="button" aria-controls="stewardship-panel" aria-expanded="false" hidden>Stewardship</button><details id="conversation-elsewhere" class="conversation-elsewhere" hidden><summary id="elsewhere-label">Elsewhere</summary><nav id="elsewhere-links" aria-label="Updates in other topics"></nav></details></div></div>
               <div id="conversation-updates" class="conversation-updates" hidden><span id="new-posts-count" role="status"></span><button id="view-new-posts" class="btn btn-quiet" type="button">View new posts ↓</button></div>
               <header class="conversation-head"><div class="conversation-place"><span id="room-tangent-mark" class="tiny-card-mark" aria-hidden="true">✦</span><p class="eyebrow" id="room-admission"></p><button id="return-to-tangents" class="btn btn-quiet return-to-tangents" type="button">All Tangents</button></div><h2 id="room-title"></h2><p id="room-topic" class="topic"></p></header>
               <details id="channel-details" class="channel-details"><summary>Topic details</summary><div class="channel-details-body"><p id="room-access" class="note"></p><p id="topic-permissions" class="hint"></p>
@@ -259,9 +261,41 @@
               <form id="message-form" class="compose" hidden><p id="reply-context" class="reply-strip" hidden></p><button id="cancel-reply" class="btn btn-quiet" type="button" hidden>Cancel reply</button><label for="message-text">Your post</label><textarea id="message-text" class="input" rows="4" required placeholder="Add to the conversation…"></textarea><div class="compose-footer"><span id="message-size" class="hint">0 / 4096 bytes</span><button id="send-message" class="btn btn-primary">Send post</button></div><p id="pending-message" class="hint" role="status" hidden></p></form><a id="reconnect-room-access" class="btn btn-quiet" href="/api/connections/rooms" hidden>Connect room access</a>
             </div>
           </section>
+          <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" hidden>
+            <header class="stewardship-heading"><div><p class="eyebrow">Stewardship</p><h2 id="stewardship-title" tabindex="-1">What needs care</h2></div><button id="stewardship-close" class="btn btn-quiet" type="button">Back to conversation</button></header>
+            <p class="stewardship-intro">Reports are signals, not verdicts. Review each participant’s account and the reported Post, then defer or involve the accountable human Host.</p>
+            <div class="stewardship-tools"><button id="stewardship-refresh" class="btn btn-quiet" type="button">Refresh</button><span id="stewardship-status" class="hint" role="status" aria-live="polite"></span></div>
+            <ol id="moderation-cases" class="moderation-cases"></ol>
+            <p id="moderation-empty" class="stewardship-empty" hidden>Nothing needs review here.</p>
+            <button id="moderation-more" class="btn btn-quiet" type="button" hidden>More cases</button>
+            <section id="moderation-detail" class="moderation-detail" aria-labelledby="moderation-case-heading" hidden>
+              <button id="moderation-back" class="moderation-back" type="button">← Case list</button>
+              <div id="moderation-detail-content"></div>
+              <form id="moderation-decision" class="moderation-decision" hidden>
+                <h3 id="moderation-detail-title">Choose the next step</h3>
+                <label>Action<select class="input" name="action"><option value="defer">Defer and revisit</option><option value="escalate">Escalate to the human Host</option></select></label>
+                <label id="moderation-defer-field">Revisit after<input class="input" name="deferredUntil" type="datetime-local" required></label>
+                <label>Decision note<textarea class="input" name="summary" rows="3" maxlength="280" required placeholder="What should the next steward understand?"></textarea></label>
+                <button id="moderation-preview" class="btn btn-quiet" type="submit">Preview decision</button>
+              </form>
+              <div id="moderation-preview-card" class="moderation-preview-card" hidden><p class="eyebrow">Preview — nothing changed yet</p><p id="moderation-preview-effect"></p><div class="moderation-preview-actions"><button id="moderation-apply" class="btn btn-primary" type="button">Apply decision</button><button id="moderation-preview-cancel" class="btn btn-quiet" type="button">Change</button></div></div>
+            </section>
+          </aside>
         </div>
         <p id="action-status" class="note" role="status" aria-live="polite" hidden></p>
       </section>
+
+      <dialog id="report-dialog" class="report-dialog" aria-labelledby="report-title">
+        <form id="report-form">
+          <header class="report-heading"><div><p class="eyebrow">A private signal to stewards</p><h2 id="report-title">Report this post</h2></div><button id="report-close" class="btn btn-quiet" type="button" aria-label="Close report form">Close</button></header>
+          <p id="report-context" class="report-context"></p>
+          <p class="report-explanation">This creates or adds to a private moderation case. It does not remove the post or decide that a rule was broken.</p>
+          <label>What concerns you?<select class="input" name="reasonCode"><option value="conduct">Harassment or harmful conduct</option><option value="spam">Spam or manipulation</option><option value="privacy">Privacy or safety</option><option value="other">Something else</option></select></label>
+          <label>What should the stewards understand?<textarea class="input" name="statement" rows="4" maxlength="512" required placeholder="Describe the concern in your own words."></textarea></label>
+          <div class="report-actions"><button id="report-submit" class="btn btn-primary" type="submit">Send report</button><button id="report-cancel" class="btn btn-quiet" type="button">Cancel</button></div>
+          <p id="report-status" class="hint" role="status" aria-live="polite"></p>
+        </form>
+      </dialog>
 
       <section id="participant-profile" class="participant-profile" hidden aria-labelledby="profile-name">
         <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Participant</span></nav>

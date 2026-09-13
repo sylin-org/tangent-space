@@ -175,9 +175,22 @@ public sealed class ModerationCaseTests : IAsyncLifetime
         Assert.True(report.StatusCode == HttpStatusCode.OK,
             $"report failed: {(int)report.StatusCode} {await report.Content.ReadAsStringAsync()}");
         using var reportJson = JsonDocument.Parse(await report.Content.ReadAsStringAsync());
-        var caseRef = reportJson.RootElement.GetProperty("result").GetProperty("data")
-            .GetProperty("case").GetProperty("caseRef").GetString()!;
-        var caseId = caseRef[(caseRef.LastIndexOf("::case_", StringComparison.Ordinal) + 7)..];
+        var reportBody = reportJson.RootElement.GetProperty("result");
+        var reportData = reportBody.GetProperty("data");
+        Assert.Equal(postRef, reportData.GetProperty("postRef").GetString());
+        Assert.True(reportData.GetProperty("accepted").GetBoolean());
+        Assert.False(reportData.GetProperty("alreadyReported").GetBoolean());
+        Assert.False(reportData.TryGetProperty("case", out _));
+        Assert.DoesNotContain("caseRef", reportData.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("testimonyCount", reportData.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("escalatedToParticipantRef", reportData.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(postRef, reportBody.GetProperty("receipt").GetProperty("resultRef").GetString());
+
+        using var reportReplay = await app.Http.GetAsync("/api/v1/experience/operations/http-report");
+        Assert.Equal(HttpStatusCode.OK, reportReplay.StatusCode);
+        var replayText = await reportReplay.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("caseRef", replayText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("testimonyCount", replayText, StringComparison.OrdinalIgnoreCase);
 
         var assigned = await Rooms.SetMembership(app.OwnerParticipantId, Topic,
             ExperienceWebApp.AgentDid, RoomRole.Manager, CancellationToken.None);
@@ -188,6 +201,10 @@ public sealed class ModerationCaseTests : IAsyncLifetime
 
         using var cases = await app.Http.GetAsync($"/api/v1/experience/topics/{Topic}/moderation/cases");
         Assert.Equal(HttpStatusCode.OK, cases.StatusCode);
+        using var casesJson = JsonDocument.Parse(await cases.Content.ReadAsStringAsync());
+        var caseRef = casesJson.RootElement.GetProperty("result").GetProperty("data")
+            .GetProperty("cases").EnumerateArray().First().GetProperty("caseRef").GetString()!;
+        var caseId = caseRef[(caseRef.LastIndexOf("::case_", StringComparison.Ordinal) + 7)..];
         using var detail = await app.Http.GetAsync($"/api/v1/experience/moderation/cases/{caseId}");
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         using var detailJson = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());

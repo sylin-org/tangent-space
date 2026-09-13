@@ -33,11 +33,16 @@ public sealed partial class ExperienceService
                 ?? McpRequestRecord.BuildOperationId(RegistryCredential(principal), participantId, requestId);
             var result = await moderation.Report(participantId, topicKey, parsed.Value.MessageId,
                 operationId, reasonCode, statement, ct);
-            var data = Serialize(result);
-            await requests.Complete(registration.Record, "completed", result.Case.CaseRef, data, ct);
+            // A reporter may submit testimony but is not thereby entitled to inspect the case,
+            // its other testimony, its state, or the human escalation target. Persist the same
+            // reporter-safe shape for receipt replay so GET operation cannot become a side door.
+            var report = new ExperienceReportData(postRef, result.Accepted, result.AlreadyReported,
+                result.Case.TestimonySaturated);
+            var data = Serialize(report);
+            await requests.Complete(registration.Record, "completed", postRef, data, ct);
             var place = await TopicPlaceOf(principal, participantId, parsed.Value.TangentKey, topicKey, ct);
             return await Assemble("report_post", ExperienceStatus.Ok, identity, place,
-                new ExperienceResult(result, new ExperienceReceipt(requestId, "completed", result.Case.CaseRef, null), null),
+                new ExperienceResult(report, new ExperienceReceipt(requestId, "completed", postRef, null), null),
                 (await digest.Page(participantId, credential, null, parsed.Value.TangentKey, topicKey, 3, ct)).Attention,
                 Empty(), [new(ExperienceActionNames.ReadTopic, place.TopicRef!, postRef, "Return to the reported Post")],
                 null, CapabilitiesOf(place), participantId, credential, ct);

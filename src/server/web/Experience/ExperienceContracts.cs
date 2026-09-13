@@ -156,6 +156,10 @@ public sealed record ExperienceUpdatesData(string ScopeRef);
 
 public sealed record ExperiencePostData(string? PostRef, ExperienceSource? Source, string? Url);
 
+/// <summary>A reporter-safe acknowledgement. Moderation case identity, state, testimony totals,
+/// steward decisions and escalation ownership are deliberately not disclosed to reporters.</summary>
+public sealed record ExperienceReportData(string PostRef, bool Accepted, bool AlreadyReported, bool CaseSaturated);
+
 public sealed record ExperienceSource(string Uri, string? Cid);
 
 public sealed record ExperienceReadPositionData(string? ThroughPostRef, string TopicRef);
