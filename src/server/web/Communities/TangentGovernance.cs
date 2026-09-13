@@ -7,12 +7,13 @@ using TangentSpace.Infrastructure;
 using TangentSpace.Participants;
 using TangentSpace.Rooms;
 using TangentSpace.Site;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Communities;
 
 /// <summary>Coordinates card ownership, community membership and channel creation under the host policy gate.</summary>
 public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Microsoft.Extensions.Options.IOptions<TangentSpace.Conversation.ConversationOptions> conversation,
-    TangentSpace.Participants.ParticipantDirectory directory)
+    TangentSpace.Participants.ParticipantDirectory directory, TangentRoles? roles = null)
 {
     public const int TangentsPerPage = 50;
     public const int ChannelsPerTangent = 100;
@@ -131,6 +132,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
     public async Task<TangentDescription> Create(string actorId, string key, string name, string? description, string? motto,
         string? accent, string? artwork, CancellationToken ct, TangentAdmission? admission = null)
     {
+        TangentDescription result;
         await gate.Enter(ct);
         try
         {
@@ -152,23 +154,28 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
                 await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: existing.Id, ct: ct);
                 await EntityContext.Commit(ct);
                 ActivityJournal.SignalAfterCommit();
-                return new TangentDescription(existing.Id, existing.Name, existing.Description, existing.Motto, existing.Accent, existing.Artwork,
+                result = new TangentDescription(existing.Id, existing.Name, existing.Description, existing.Motto, existing.Accent, existing.Artwork,
                     existing.OwnerParticipantId, true, true, [], IsMember: true, Admission: existing.EffectiveAdmission);
             }
-            if (site is null) throw new TangentRuleViolation(TangentDenial.Forbidden, "The server has not been claimed.");
-            var tangent = site.IsOwner(actorId) || actor?.Classification == ParticipantClassification.Human || site.AllowAgentTangentOwnership
-                ? TangentCommunity.CreateForAuthorizedActor(site, actorId, site.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow())
-                : TangentCommunity.CreateForAuthorizedActor(site, site.OwnerParticipantId, site.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow());
-            if (admission is { } initialAdmission)
-                tangent.ChangeParticipationPolicy(tangent.OwnerParticipantId, initialAdmission, ParticipationPreset.Everyone, UndeclaredAccess.Write, clock.GetUtcNow());
-            await tangent.Save(ct);
-            if (!tangent.IsOwner(actorId)) await TangentMembership.Assign(tangent, actorId, TangentRole.Admin, site.OwnerParticipantId, clock.GetUtcNow()).Save(ct);
-            await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: tangent.Id, ct: ct);
-            await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
-            return await DescribeForOwner(tangent, actorId, ct);
+            else
+            {
+                if (site is null) throw new TangentRuleViolation(TangentDenial.Forbidden, "The server has not been claimed.");
+                var tangent = site.IsOwner(actorId) || actor?.Classification == ParticipantClassification.Human || site.AllowAgentTangentOwnership
+                    ? TangentCommunity.CreateForAuthorizedActor(site, actorId, site.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow())
+                    : TangentCommunity.CreateForAuthorizedActor(site, site.OwnerParticipantId, site.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow());
+                if (admission is { } initialAdmission)
+                    tangent.ChangeParticipationPolicy(tangent.OwnerParticipantId, initialAdmission, ParticipationPreset.Everyone, UndeclaredAccess.Write, clock.GetUtcNow());
+                await tangent.Save(ct);
+                if (!tangent.IsOwner(actorId)) await TangentMembership.Assign(tangent, actorId, TangentRole.Admin, site.OwnerParticipantId, clock.GetUtcNow()).Save(ct);
+                await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: tangent.Id, ct: ct);
+                await EntityContext.Commit(ct);
+                ActivityJournal.SignalAfterCommit();
+                result = await DescribeForOwner(tangent, actorId, ct);
+            }
         }
         finally { gate.Exit(); }
+        if (roles is not null) await roles.ReconcileTangent(key, ct);
+        return result;
     }
 
     // One durable transition; a lost response can be retried without creating another card.
@@ -228,6 +235,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
     public async Task<TangentChannelCreation> CreateChannel(string actorId, string tangentKey, string roomKey, string title,
         RoomAdmission admission, string? topic, CancellationToken ct, bool membersOnly = false)
     {
+        TangentChannelCreation result;
         await gate.Enter(ct);
         try
         {
@@ -264,9 +272,11 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             ActivityJournal.SignalAfterCommit();
             var policy = room.CurrentPolicy(site, actorId, null, actor?.IsSuspended == true, tangent, actorMembership,
                 actor?.Classification ?? ParticipantClassification.Undeclared);
-            return new TangentChannelCreation(new RoomAdministrationResult(true, null, "Accepted.", room.Id, room.PolicyRevision, room.SpaceUri, audit.Id), RoomDescription.From(room, policy));
+            result = new TangentChannelCreation(new RoomAdministrationResult(true, null, "Accepted.", room.Id, room.PolicyRevision, room.SpaceUri, audit.Id), RoomDescription.From(room, policy));
         }
         finally { gate.Exit(); }
+        if (roles is not null) await roles.ReconcileTopic(roomKey, ct);
+        return result;
     }
 
     /// <summary>Invitation workflows can call this now; the human invitation endpoint remains a later scope.
@@ -274,6 +284,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
     /// its current holder here.</summary>
     public async Task<TangentMembershipResult> SetMembership(string actorId, string tangentKey, string targetIdentifier, TangentRole role, CancellationToken ct)
     {
+        TangentMembershipResult result;
         await gate.Enter(ct);
         try
         {
@@ -291,9 +302,11 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             await ActivityJournal.AppendInTransaction(ActivityKind.MembershipChanged, "", actorId, target.Id, tangent.Id, ct: ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
-            return new TangentMembershipResult(member.TangentKey, member.ParticipantId, member.Role);
+            result = new TangentMembershipResult(member.TangentKey, member.ParticipantId, member.Role);
         }
         finally { gate.Exit(); }
+        if (roles is not null) await roles.ReconcileTangent(tangentKey, ct);
+        return result;
     }
 
     /// <summary>Current card access for global activity entries that have no room key.</summary>

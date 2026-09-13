@@ -43,7 +43,7 @@ body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padd
 #server-settings { grid-column:1 / -1; margin:0; padding:.75rem .85rem; border-top:1px solid var(--line); }
 .message-controls { display:inline-flex; gap:.35rem; margin-left:.35rem; }
 .message-edited { display:block; color:var(--ink-soft); font-size:.72rem; }
-.check-row { display:flex !important; grid-template-columns:none !important; align-items:center; gap:.5rem !important; }
+.check-row:not([hidden]) { display:flex !important; grid-template-columns:none !important; align-items:center; gap:.5rem !important; }
 @media (max-width: 650px) { .server-welcome { grid-template-columns:1fr; } .server-welcome-actions { justify-content:flex-start; } }
 
 /* Card anatomy: top activity, art face, accent stripe, glass pane. */
@@ -114,6 +114,20 @@ body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padd
 .channel-details .note { margin-bottom:.7rem; }
 #room-admin.setup { margin:.6rem 0; padding:.6rem .75rem; border-radius:9px; background:var(--surface-soft); }
 #room-admin.setup > summary { color:var(--ink-soft); cursor:pointer; font-size:.8rem; }
+.topic-settings-section { display:grid; grid-template-columns:minmax(0,1fr); gap:.75rem; margin:.9rem 0 0; padding:1rem; border:1px solid var(--line); border-radius:9px; background:var(--surface); }
+.topic-settings-section h3 { margin:0; font:600 1rem/1.4 var(--sans); }
+.topic-settings-section header .hint { margin:.25rem 0 0; }
+.topic-settings-section .stack { margin:0; }
+.topic-settings-section .stack + .stack,.topic-settings-controls > .stack { margin-top:1rem; padding-top:1rem; border-top:1px solid var(--line); }
+.topic-settings-controls > [hidden] + .stack { margin-top:0; padding-top:0; border-top:0; }
+.topic-settings-section .hint { margin:0; line-height:1.5; }
+.topic-settings-section .btn { justify-self:start; max-width:100%; white-space:normal; }
+.topic-settings-section .check-row { align-items:flex-start; }
+.topic-settings-section .check-row input { flex:none; margin-top:.3em; }
+.topic-settings-controls { min-width:0; }
+@media (min-width:760px) {
+  .topic-settings-section { grid-template-columns:minmax(100px,1fr) minmax(0,3fr); gap:1.5rem; }
+}
 .messages { display:grid; gap:.7rem; margin:1.2rem 0; padding:0; list-style:none; }
 .message { position:relative; padding:.65rem .8rem; border-left:2px solid transparent; background:transparent; }
 .message:hover { border-left-color:rgba(244,185,66,.55); background:rgba(255,255,255,.022); }

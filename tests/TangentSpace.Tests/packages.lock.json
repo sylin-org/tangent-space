@@ -823,6 +823,13 @@
           "Sylin.Koan.Web.Auth.Abstractions": "[1.0.0, )"
         }
       },
+      "Sylin.Koan.Identity.Web": {
+        "type": "Project",
+        "dependencies": {
+          "Sylin.Koan.Identity": "[1.0.0, )",
+          "Sylin.Koan.Web": "[1.0.0, )"
+        }
+      },
       "Sylin.Koan.Security.Trust": {
         "type": "Project",
         "dependencies": {
@@ -881,6 +888,7 @@
           "Sylin.Koan.AI.Connector.Onnx": "[1.0.0, )",
           "Sylin.Koan.Data.Connector.Sqlite": "[1.0.0, )",
           "Sylin.Koan.Identity": "[1.0.0, )",
+          "Sylin.Koan.Identity.Web": "[1.0.0, )",
           "Sylin.Koan.Web": "[1.0.0, )",
           "Sylin.Koan.Web.Auth.Connector.Atproto": "[1.0.0, )",
           "System.Formats.Cbor": "[10.0.5, 10.0.5]"

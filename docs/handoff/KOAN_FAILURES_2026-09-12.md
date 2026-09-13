@@ -4,6 +4,79 @@ Date: 12 September 2026. Requested by Leo: pass Koan bugs to its agent and list 
 failures. Destination: existing **Report framework status**, koan-framework project,
 local task `01a096b9-350b-7920-9559-3075077afcb0`.
 
+The task is now named **Sol High**.
+
+## 13 September follow-up: scoped-role consumer review
+
+The first review targeted Koan commit `2ffba9c5778b24abed8e647f1473eaea7e3220ec`.
+R01/R02 below were delivered to **Report framework status** on 13 September and fixed
+on Koan `dev` at `950c7a89411e8241c4012f526298172872015201`. Tangent's full pre-adoption
+suite passed **506/506** against that exact checkout, and its scoped-role implementation
+now pins it. Koan pushed both role commits to `origin/dev`; no package was published.
+
+R03, found during Tangent adoption, was delivered to **Sol High** and fixed on
+`26b592c056075a7c5a8b2aaef143d838a36db322`: revoking a deterministic membership
+binding prevented assigning the same subject/role/scope again. The fix restores ordinary
+collection semantics (idempotent add/remove and remove/re-add) and adds compiled immutable
+`role:*` / `group:*` membership predicates. Koan's Identity suite passes 122/122 and the
+SQLite, Mongo and Web provider suites pass 1/1 each at that revision.
+
+The isolated red-team follow-up found no allow-side authorization bypass, tenant leak,
+forged `permission:*` membership, inheritance escape or provider divergence. It did find
+three further defects, delivered to **Sol High** and fixed on
+`2c556f185023a95db752002e22c1cbcceedb4208`:
+
+- **R04 — Reapproval bypassed role lifecycle handlers.** Restoring a stale binding could
+  restore authority without the veto-capable pre-event or committed-only post-event.
+- **R05 — Stale revoke could delete a renewed binding.** Expected version was checked on
+  a read object, but deletion was identity-only; the fix adds an atomic conditional-delete
+  contract through Data Core and the InMemory, SQLite and Mongo adapters.
+- **R06 — Role-management metadata was unbounded.** Authorized requests could persist
+  arbitrarily large presentation/parameter graphs; the follow-up adds explicit semantic
+  bounds at the core and Web boundary.
+
+Evidence at the follow-up revision: Identity 125/125, Data Core 563/563, SQLite 1/1,
+Mongo 1/1 and Web 1/1, plus warning-clean Identity and Identity.Web builds.
+
+A final narrow review found **R07 — Reapproval lifecycle context omitted policy-derived
+permissions**: authorization used the complete approval grant set, but pre/post handlers
+received direct role grants only. Sol High fixed this at
+`1b986ec73acbff434933bd156b2de56dd3a83614`; the grantless-role replacement-policy veto
+regression passes, as do ScopedRoleEngineSpec 30/30 and the complete Identity suite 126/126.
+
+- **R01 — Read/preview authority ceilings omitted from evaluation.** In
+  `src/Koan.Identity/Roles/RoleEngine.cs`, `Roles`, `Bindings`, `Directory`,
+  `Role` and `Binding` do not supply role identifiers/effective capabilities to
+  `Demand`; the policy directory omits capabilities and `Preview` omits its
+  requested capability. `Allows` applies role/capability ceilings only when
+  those corresponding request values are present. Reproduce a same-scope
+  steward with read/preview operations, `RoleIds={reader}` and
+  `Capabilities={discussion.read}`, alongside a different private role/binding
+  and moderation policy. Unauthorized rows, counts, by-ID reads and moderation
+  previews must not be exposed. Require provider-pushed filtering or fail closed
+  on unsupported read ceilings; do not post-filter pages. If these constraints
+  are mutation-only by design, explicitly reject misleading constrained read
+  envelopes. Consumer impact: private membership/policy leakage to scoped stewards.
+- **R02 — Reset-to-inherit may escape an audience ceiling.** `Inherit` requests
+  `ManagePolicy` plus capability without the effective post-reset audience or
+  grants, so `Allows` does not check `AudienceClauses`. Reproduce a child with a
+  narrow/empty replacement under broader parent/default access, and a steward
+  whose management envelope permits only a selected-role audience. Resetting
+  inheritance must not bypass that ceiling. Verify effective grants or require
+  explicit reset authority; preserve conditional update guarantees. Consumer
+  impact: scoped stewards potentially widening reading/contribution beyond
+  their delegated authority.
+
+Koan also reports known open capabilities/evidence, not new failures: no safe
+assignable-role directory or scoped audit-read endpoint, no automatic interception
+of arbitrary trusted in-process reads, and only a pre-dispatch authority recheck
+(not a serializable authority-plus-target transaction). Full W01-W18, large-directory,
+concurrent ETag, restart and consumer-journey evidence is incomplete. Tangent's next
+experiment should use a separate test host and disposable SQLite state; its running
+SQLite app, source pin and existing fixed-role policy remain unchanged.
+
+## Original 12 September provider handoff
+
 Delivery status: **sent and accepted by the task messaging tool on 12 September 2026**.
 The full report, exact revisions, reproducer/evidence paths, ownership distinctions and
 request for triage/support guidance were sent to the destination above. Koan's issue

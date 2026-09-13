@@ -1,5 +1,49 @@
 # Current state
 
+## Scoped Host, Tangent and Topic roles — 13 September 2026
+
+Tangent now contributes a Koan scoped-role catalog for the Host → Tangent → Topic
+hierarchy and exposes capabilities for reading, creation, management, participant
+administration, replying, editing/removing/reporting Posts and appointing Topic managers.
+Host and Tangent owners receive durable descendant-propagating `Owner` role membership;
+current Tangent/Topic membership changes project into direct deterministic Koan role-member
+entries. New arrivals and newly created Tangents/Topics update only their affected role set;
+the bounded startup pass adopts existing POC rows.
+
+Topic policy snapshots now intersect their read, reply and management decisions with Koan's
+role result, while Tangent's suspension, restriction, admission, storage-readiness, locking,
+classification and ownership protections remain mandatory guards. Koan Identity Web exposes
+the application vocabulary and scoped management endpoints. A real integration test proves
+the descriptor, durable Host/Tangent Owner bindings, descendant authority, ordinary reply
+access, denied management and immediate Manager promotion/demotion.
+
+The integration exposed a framework remove/re-add defect on Koan `950c7a894`. It was
+reported to **Sol High** and fixed upstream in `26b592c056075a7c5a8b2aaef143d838a36db322`,
+which also adds immutable compiled membership predicates. An isolated red-team pass found
+and Sol High fixed stale conditional-delete and input-bound gaps in
+`2c556f185023a95db752002e22c1cbcceedb4208`. A narrow follow-up found that reapproval
+events still omitted policy-derived grants; final revision
+`1b986ec73acbff434933bd156b2de56dd3a83614` closes that lifecycle gap. Tangent pins it;
+the exact Owner promote → demote → promote regression passes against it. This role slice
+is not deployed yet.
+
+## Topic settings polish — 13 September 2026
+
+The Topic editor now groups existing controls into About, Access and People, with
+solid panels and a narrow-screen layout. Reading, admission and participation remain
+separate controls under the server-projected authority flags. That UI pass itself did
+not add authorization rules; the later scoped-role slice above now owns them. Role guidance explains that removing
+signed-in access does not make public posts private.
+
+Publication acknowledgement is shown and required only when changing a restricted
+Topic to public; changing the selection, Topic or account resets stale confirmation.
+Saving lock/edit controls no longer submits a description edited in a separate form.
+The browser suite passes **159/159**, including eight new settings regressions.
+An isolated, write-disabled browser preview verified desktop/mobile rendering and
+caught a checkbox style overriding `hidden`, now corrected. These source changes
+have not yet been deployed to the running app. The existing post-save room reload
+(which closes Topic details and resets form drafts) remains unchanged.
+
 ## Public Topic reading foundation — 13 September 2026
 
 Topics now have an independent restricted/public read audience. Widening is an audited

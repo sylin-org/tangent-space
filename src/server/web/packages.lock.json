@@ -324,6 +324,13 @@
           "Sylin.Koan.Web.Auth.Abstractions": "[1.0.0, )"
         }
       },
+      "Sylin.Koan.Identity.Web": {
+        "type": "Project",
+        "dependencies": {
+          "Sylin.Koan.Identity": "[1.0.0, )",
+          "Sylin.Koan.Web": "[1.0.0, )"
+        }
+      },
       "Sylin.Koan.Security.Trust": {
         "type": "Project",
         "dependencies": {

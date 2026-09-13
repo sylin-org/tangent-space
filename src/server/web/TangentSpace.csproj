@@ -13,6 +13,7 @@
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity.Web/Koan.Identity.Web.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/AI/Onnx/Koan.AI.Connector.Onnx.csproj" />
   </ItemGroup>

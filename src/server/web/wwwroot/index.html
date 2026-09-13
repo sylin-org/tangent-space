@@ -8,7 +8,7 @@
   <title>Tangent Space</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/app.css?v=20260912-polish1">
-  <link rel="stylesheet" href="/rooms.css?v=20260912-polish1">
+  <link rel="stylesheet" href="/rooms.css?v=20260913-settings1">
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
   <link rel="stylesheet" href="/landing.css?v=20260913-spa2">
@@ -22,7 +22,7 @@
   <script src="/activity-transport.js?v=20260912-shared2" defer></script>
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
   <script src="/moderation.js?v=20260913-cases1" defer></script>
-  <script src="/rooms.js?v=20260913-spa4" defer></script>
+  <script src="/rooms.js?v=20260913-settings1" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260913-spa2" defer></script>
@@ -251,11 +251,24 @@
               <details id="channel-details" class="channel-details"><summary>Topic details</summary><div class="channel-details-body"><p id="room-access" class="note"></p><p id="topic-permissions" class="hint"></p>
               <div class="room-actions"><button id="sync-room" class="btn btn-quiet" type="button" hidden>Check for updates</button><button id="provision-room" class="btn btn-primary" type="button" hidden>Finish room setup</button></div>
               <details id="room-admin" class="setup" hidden><summary>Topic settings</summary>
-                <form id="topic-form" class="stack"><label>Topic<textarea name="topic" class="input" maxlength="2000" rows="2"></textarea></label><button class="btn btn-quiet">Save topic</button></form>
-                <form id="topic-settings-form" class="stack" hidden><label class="check-row"><input type="checkbox" name="allowPostEditing"> Allow authors to edit their posts</label><label class="check-row"><input type="checkbox" name="isLocked"> Lock this topic</label><button class="btn btn-quiet">Save topic settings</button></form>
-                <form id="member-form" class="stack"><label>Participant DID<input class="input" name="did" required maxlength="2048" autocomplete="off" spellcheck="false"></label><label>Topic role<select class="input" name="role"><option value="Member">Member</option><option value="Reader">Read only</option><option value="Removed">Remove access</option><option id="manager-choice" value="Manager">Manager</option></select></label><button class="btn btn-quiet">Update membership</button></form>
-                <form id="admission-form" class="stack" hidden><label>Who can enter<select name="admission" class="input"><option value="SignedIn">Signed-in participants</option><option value="InvitationOnly">Invited participants</option></select></label><button class="btn btn-quiet">Save admission</button></form>
-                <form id="read-audience-form" class="stack" hidden><label>Who can read<select name="audience" class="input"><option value="Restricted">Only admitted participants</option><option value="Public">Anyone on the web</option></select></label><label id="publish-history-confirmation" class="check-row"><input type="checkbox" name="publishExistingHistory"> I understand that existing posts will become public and copies may persist</label><p id="read-audience-note" class="hint"></p><button class="btn btn-quiet">Save reading audience</button></form>
+                <section class="topic-settings-section" aria-labelledby="topic-about-heading">
+                  <header><h3 id="topic-about-heading">About</h3><p class="hint">Set the scene for this conversation.</p></header>
+                  <form id="topic-form" class="stack"><label>Description<textarea name="topic" class="input" maxlength="2000" rows="3"></textarea></label><button class="btn btn-quiet">Save description</button></form>
+                </section>
+                <section class="topic-settings-section" aria-labelledby="topic-access-heading">
+                  <header><h3 id="topic-access-heading">Access</h3><p class="hint">Reading and taking part are separate choices.</p></header>
+                  <div class="topic-settings-controls">
+                    <div id="topic-access-settings" hidden>
+                      <form id="read-audience-form" class="stack" hidden><label>Who can read<select name="audience" class="input" aria-describedby="read-audience-note"><option value="Restricted">Only admitted participants</option><option value="Public">Anyone on the web</option></select></label><p id="read-audience-note" class="hint" aria-live="polite"></p><label id="publish-history-confirmation" class="check-row" hidden><input type="checkbox" name="publishExistingHistory" disabled> I understand that existing posts will become public and copies may persist</label><button class="btn btn-quiet">Save reading audience</button></form>
+                      <form id="admission-form" class="stack" hidden><label>Who can join<select name="admission" class="input" aria-describedby="topic-admission-note"><option value="SignedIn">Signed-in participants</option><option value="InvitationOnly">Invited participants</option></select></label><p id="topic-admission-note" class="hint">Controls signed-in participation. Tangent access and participant roles still apply.</p><button class="btn btn-quiet">Save admission</button></form>
+                    </div>
+                    <form id="topic-settings-form" class="stack" hidden><label class="check-row"><input type="checkbox" name="allowPostEditing"> Allow authors to edit their posts</label><label class="check-row"><input type="checkbox" name="isLocked"> Lock this topic</label><button class="btn btn-quiet">Save participation settings</button></form>
+                  </div>
+                </section>
+                <section class="topic-settings-section" aria-labelledby="topic-people-heading">
+                  <header><h3 id="topic-people-heading">People</h3><p class="hint">Give a participant a role in this Topic.</p></header>
+                  <form id="member-form" class="stack"><label>Participant DID<input class="input" name="did" required maxlength="2048" autocomplete="off" spellcheck="false"></label><label>Topic role<select class="input" name="role" aria-describedby="topic-role-note"><option value="Member">Member</option><option value="Reader">Read only</option><option value="Removed">Remove access</option><option id="manager-choice" value="Manager">Manager</option></select></label><p id="topic-role-note" class="hint" aria-live="polite"></p><button class="btn btn-quiet">Update membership</button></form>
+                </section>
               </details>
               <p id="freshness" class="hint" aria-live="polite"></p></div></details>
               <ol id="messages" class="messages" aria-label="Messages"></ol>

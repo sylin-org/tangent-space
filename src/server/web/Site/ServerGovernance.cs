@@ -8,7 +8,8 @@ using TangentSpace.Authorization;
 
 namespace TangentSpace.Site;
 
-public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptions<SiteOptions> options, ParticipantDirectory directory)
+public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptions<SiteOptions> options, ParticipantDirectory directory,
+    TangentRoles? roles = null)
 {
     public async Task<ServerSettings> Read(string? actorId, CancellationToken ct)
     {
@@ -37,6 +38,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
     public async Task<ServerSettings> Claim(string actorId, string? verifiedAtprotoDid, bool humanDeclaration, CancellationToken ct)
     {
         if (!humanDeclaration) throw new InvalidOperationException("A humanDeclaration is required.");
+        ServerSettings result;
         await gate.Enter(ct);
         try
         {
@@ -66,10 +68,12 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
-            return new ServerSettings(site.Name, site.WelcomeMessage, site.Motd, site.CreationPolicy,
+            result = new ServerSettings(site.Name, site.WelcomeMessage, site.Motd, site.CreationPolicy,
                 site.AllowAgentTangentOwnership, site.OwnerParticipantId, true, false, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
         }
         finally { gate.Exit(); }
+        if (roles is not null) await roles.Reconcile(ct);
+        return result;
     }
 
     public async Task<ServerSettings> Update(string actorId, ServerSettingsPatch patch, CancellationToken ct)

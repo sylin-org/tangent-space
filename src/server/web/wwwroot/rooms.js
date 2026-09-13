@@ -356,6 +356,31 @@
     for (const tangent of currentTangents()) tangent.channels = (tangent.channels || []).filter(channel => channel.key !== key);
     unavailableRoute(code);
   }
+  function updateReadAudience() {
+    const audience = field('read-audience-form', 'audience').value;
+    const confirmation = field('read-audience-form', 'publishExistingHistory');
+    const publishing = !!room?.canAppointManagers && room.readAudience !== 'Public' && audience === 'Public';
+    show('publish-history-confirmation', publishing);
+    confirmation.required = publishing;
+    confirmation.disabled = !publishing;
+    if (!publishing) confirmation.checked = false;
+    text('read-audience-note', audience === 'Public'
+      ? room?.readAudience === 'Public'
+        ? 'Anyone with the link can read without signing in. Restricting this Topic later cannot erase copies already made.'
+        : 'Saving will make this Topic and its existing posts readable without signing in. Confirm below before publishing.'
+      : room?.readAudience === 'Public'
+        ? 'Saving will restrict reading to admitted participants. Copies already downloaded or archived cannot be recalled.'
+        : 'Only admitted participants can read. This Topic is not available to anonymous visitors.');
+  }
+  function updateTopicRoleNote() {
+    const notes = {
+      Member: 'Can take part, subject to Tangent access and Topic locks.',
+      Reader: 'Can read without posting, subject to Tangent access.',
+      Manager: 'Can manage this Topic and its participants. Owner-only powers, including publication and appointing managers, are not included.',
+      Removed: 'Removes signed-in access to this Topic. Public posts remain readable without signing in.'
+    };
+    text('topic-role-note', notes[field('member-form', 'role').value] || notes.Member);
+  }
   function renderRoom(value) {
     room = value;
     window.TangentModeration?.topic?.(room, site?.participant);
@@ -383,19 +408,18 @@
     field('topic-form', 'topic').value = room.topic || '';
     field('admission-form', 'admission').value = room.admission;
     show('admission-form', room.canAppointManagers); show('manager-choice', room.canAppointManagers);
+    show('topic-access-settings', room.canAppointManagers);
     const audienceForm = $('read-audience-form');
     if (audienceForm) {
       field('read-audience-form', 'audience').value = room.readAudience || 'Restricted';
       field('read-audience-form', 'publishExistingHistory').checked = false;
       show('read-audience-form', room.canAppointManagers);
-      show('publish-history-confirmation', room.readAudience !== 'Public');
-      text('read-audience-note', room.readAudience === 'Public'
-        ? 'Anyone with the link can read this Topic. Restricting it later cannot erase copies already made.'
-        : 'This Topic is not available to anonymous visitors.');
+      updateReadAudience();
     }
     show('reconnect-room-access', false);
     $('manager-choice').disabled = !room.canAppointManagers;
     if (!room.canAppointManagers && field('member-form', 'role').value === 'Manager') field('member-form', 'role').value = 'Member';
+    updateTopicRoleNote();
     renderDraft();
     refreshSourceReadiness();
     updateHero();
@@ -1071,8 +1095,16 @@
   $('topic-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/topic', { topic: field('topic-form', 'topic').value }, 'PUT')); });
   $('member-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/members/' + encodeURIComponent(field('member-form', 'did').value.trim()), { role: field('member-form', 'role').value }, 'PUT')); });
   $('admission-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/admission', { admission: field('admission-form', 'admission').value }, 'PUT')); });
-  $('read-audience-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/read-audience', { audience: field('read-audience-form', 'audience').value, publishExistingHistory: field('read-audience-form', 'publishExistingHistory').checked }, 'PUT')); });
-  $('topic-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/settings', { allowPostEditing: field('topic-settings-form', 'allowPostEditing').checked, isLocked: field('topic-settings-form', 'isLocked').checked, title: room.title, topic: field('topic-form', 'topic').value }, 'PATCH')); });
+  field('read-audience-form', 'audience').addEventListener('change', updateReadAudience);
+  field('member-form', 'role').addEventListener('change', updateTopicRoleNote);
+  $('read-audience-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => {
+    const audience = field('read-audience-form', 'audience').value;
+    const publishing = room?.readAudience !== 'Public' && audience === 'Public';
+    const publishExistingHistory = publishing && field('read-audience-form', 'publishExistingHistory').checked;
+    if (publishing && !publishExistingHistory) throw new Error('Confirm that existing posts will become public before saving.');
+    return mutateRoom('/read-audience', { audience, publishExistingHistory }, 'PUT');
+  }); });
+  $('topic-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/settings', { allowPostEditing: field('topic-settings-form', 'allowPostEditing').checked, isLocked: field('topic-settings-form', 'isLocked').checked }, 'PATCH')); });
   $('server-atmosphere-open').addEventListener('click', () => window.TangentAtmosphere?.open());
   $('server-settings-form').addEventListener('input', previewServerCard);
   $('server-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => { const body = Object.fromEntries(new FormData(event.target)); body.allowAgentTangentOwnership = field('server-settings-form', 'allowAgentTangentOwnership').checked; try { await request('/api/server', body, 'PATCH'); } catch (error) { text('settings-status', error.status === 403 ? 'Your account can no longer change these settings.' : 'Settings could not be saved. Please try again.'); if (error.status === 403) { administrativeDenied(); return; } throw error; } await refreshServer(); text('settings-status', 'Server settings saved.'); }); });

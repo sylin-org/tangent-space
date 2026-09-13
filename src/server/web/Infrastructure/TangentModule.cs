@@ -6,6 +6,11 @@ using Koan.Web.Auth.Initialization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Koan.Identity;
+using Koan.Identity.Roles;
+using Koan.Identity.Web.Initialization;
+using TangentSpace.Authorization;
 using TangentSpace.Site;
 using TangentSpace.Rooms;
 using TangentSpace.AtProtocol;
@@ -21,6 +26,7 @@ using TangentSpace.Moderation;
 namespace TangentSpace.Infrastructure;
 
 [After(typeof(AuthModule))]
+[After(typeof(SecIdentityWebModule))]
 public sealed class TangentModule : KoanModule
 {
     public override void Register(IServiceCollection services)
@@ -38,6 +44,14 @@ public sealed class TangentModule : KoanModule
             .Validate(o => string.IsNullOrWhiteSpace(o.OwnerDid) || IdentityResolver.IsValidDid(o.OwnerDid), "Tangent:Site:OwnerDid must be blank for first-login ownership, or a valid AT DID.")
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
+        services.AddHttpContextAccessor();
+        services.AddSingleton<TangentRoleContext>();
+        services.Replace(ServiceDescriptor.Singleton<IIdentityActorAccessor>(provider => provider.GetRequiredService<TangentRoleContext>()));
+        services.Replace(ServiceDescriptor.Singleton<IScopedRoleSubjectAccessor>(provider => provider.GetRequiredService<TangentRoleContext>()));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IScopedRoleCatalogContributor, TangentRoleCatalog>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IScopedRoleAuthorityContributor, TangentRoleAuthority>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IScopedRoleGuardContributor, TangentRoleGuard>());
+        services.AddSingleton<TangentRoles>();
         services.AddSingleton<PolicyGate>();
         services.AddSingleton<Arrival>();
         services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
@@ -74,8 +88,11 @@ public sealed class TangentModule : KoanModule
                 new DirectoryInfo(Path.Combine(host.ContentRootPath, TangentConstants.KeyDirectory)), logger));
     }
 
-    public override Task Start(IServiceProvider services, CancellationToken ct)
-        => services.GetRequiredService<Arrival>().CheckConfiguration(ct);
+    public override async Task Start(IServiceProvider services, CancellationToken ct)
+    {
+        await services.GetRequiredService<Arrival>().CheckConfiguration(ct);
+        await services.GetRequiredService<TangentRoles>().Reconcile(ct);
+    }
 
     public override void Report(ProvenanceModuleWriter module, IConfiguration cfg, IHostEnvironment env)
         => module.Describe(Version);

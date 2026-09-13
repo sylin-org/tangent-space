@@ -25,7 +25,7 @@ function memoryStorage(entries = new Map()) {
 
 // Exercise the browser script's event/request boundary without a live account or PDS.
 // The DOM stub only supplies rendering primitives; it contains no recovery logic.
-function fixture(respond = () => ({ messages: [] }), sessionStorage = memoryStorage()) {
+function fixture(respond = () => ({ messages: [] }), sessionStorage = memoryStorage(), roomOptions = {}) {
   class Element {
     constructor() {
       this.children = []; this.listeners = new Map(); this.value = ''; this.hidden = true; this.textContent = ''; this.dataset = {};
@@ -59,6 +59,7 @@ function fixture(respond = () => ({ messages: [] }), sessionStorage = memoryStor
     tangentUrl: key => '/t/' + key + '/topics', topicUrl: (tangent, topic) => '/t/' + tangent + '/topics/' + topic,
     hero() {}, prepare() {}, unavailable() {} };
   const location = { href: 'http://127.0.0.1:5220/t/home/topics/lounge', assign: path => { location.href = new URL(path, location.href).href; }, replace: path => { location.href = new URL(path, location.href).href; } };
+  const roomFields = key => typeof roomOptions === 'function' ? roomOptions(key) : roomOptions;
   class FormData { constructor() {} *[Symbol.iterator]() {} }
   vm.runInNewContext(activitySource + '\n' + source, { window, document, location, URL, TextEncoder, TextDecoder, AbortController, FormData, crypto: { randomUUID }, setImmediate,
     ReadableStream,
@@ -73,9 +74,9 @@ function fixture(respond = () => ({ messages: [] }), sessionStorage = memoryStor
       if (path === '/api/server' || path.startsWith('/api/connections/status')) data = {};
       else if (path === '/api/v1/tangents') data = { tangents: [] };
       else if (/^\/api\/v1\/tangents\/[^/]+\/topics$/.test(clean)) data = { channels: [{ key: 'lounge', title: 'Lounge', tangentKey: 'home' }, { key: 'workshop', title: 'Workshop', tangentKey: 'home' }] };
-      else if (/^\/api\/v1\/tangents\/[^/]+\/topics\/[^/]+$/.test(clean)) data = { key: segments.at(-1), title: segments.at(-1), tangentKey: segments.at(-2), canRead: true, canWrite: true };
+      else if (/^\/api\/v1\/tangents\/[^/]+\/topics\/[^/]+$/.test(clean)) data = { key: segments.at(-1), title: segments.at(-1), tangentKey: segments.at(-2), canRead: true, canWrite: true, ...roomFields(segments.at(-1)) };
       else if (/^\/api\/v1\/tangents\/[^/]+$/.test(clean)) data = { key: segments.at(-1), name: 'T-' + segments.at(-1), channels: [] };
-      else if (/^\/api\/rooms\/[^/]+$/.test(path)) data = { key: path.split('/').at(-1), title: path.split('/').at(-1), tangentKey: 'home', canRead: true, canWrite: true };
+      else if (/^\/api\/rooms\/[^/]+$/.test(path)) data = { key: path.split('/').at(-1), title: path.split('/').at(-1), tangentKey: 'home', canRead: true, canWrite: true, ...roomFields(path.split('/').at(-1)) };
       else if (path.includes('/messages?')) data = { messages: [], freshness: 'checked' };
       else data = await respond(request);
       if (data instanceof Response) return data;
@@ -117,6 +118,138 @@ test('fresh owner setup is bound to the persisted home key, then returns to an e
   assert.equal(key.value, 'home'); assert.equal(key.readOnly, true);
   f.welcome('did:plc:owner', 'home', { tangents: [{ ...home.tangents[0], name: 'Home' }], canCreate: true, setupRequired: false }); await settle();
   assert.equal(key.value, ''); assert.equal(key.readOnly, false);
+});
+
+const ownerRoom = {
+  tangentKey: 'home', topic: 'Saved description', admission: 'InvitationOnly', readAudience: 'Restricted',
+  canManage: true, canAppointManagers: true, allowPostEditing: false, isLocked: false
+};
+const audienceFields = f => ({
+  form: f.get('read-audience-form'),
+  audience: f.get('read-audience-form').elements.namedItem('audience'),
+  confirmation: f.get('read-audience-form').elements.namedItem('publishExistingHistory')
+});
+const audienceWrites = f => f.requests.filter(request => request.path.endsWith('/read-audience') && request.method === 'PUT');
+
+test('Topic managers can manage conversation settings without owner-only access or manager assignment controls', async () => {
+  const f = fixture(undefined, undefined, { ...ownerRoom, canAppointManagers: false });
+  f.get('member-form').elements.namedItem('role').value = 'Manager';
+  f.welcome(); await settle();
+  assert.equal(f.get('room-admin').hidden, false);
+  assert.equal(f.get('topic-settings-form').hidden, false);
+  assert.equal(f.get('topic-access-settings').hidden, true);
+  assert.equal(f.get('admission-form').hidden, true);
+  assert.equal(f.get('read-audience-form').hidden, true);
+  assert.equal(f.get('manager-choice').hidden, true);
+  assert.equal(f.get('manager-choice').disabled, true);
+  assert.equal(f.get('member-form').elements.namedItem('role').value, 'Member');
+});
+
+test('owners see access controls and history confirmation only when selecting new public reading', async () => {
+  const f = fixture(undefined, undefined, ownerRoom); f.welcome(); await settle();
+  const { audience, confirmation } = audienceFields(f);
+  assert.equal(f.get('topic-access-settings').hidden, false);
+  assert.equal(f.get('admission-form').hidden, false);
+  assert.equal(f.get('read-audience-form').hidden, false);
+  assert.equal(f.get('manager-choice').disabled, false);
+  assert.equal(audience.value, 'Restricted');
+  assert.equal(f.get('publish-history-confirmation').hidden, true);
+  assert.equal(confirmation.disabled, true);
+  assert.equal(confirmation.required, false);
+  audience.value = 'Public'; audience.emit('change');
+  assert.equal(f.get('publish-history-confirmation').hidden, false);
+  assert.equal(confirmation.disabled, false);
+  assert.equal(confirmation.required, true);
+  assert.match(f.get('read-audience-note').textContent, /without signing in/i);
+  confirmation.checked = true;
+  audience.value = 'Restricted'; audience.emit('change');
+  assert.equal(f.get('publish-history-confirmation').hidden, true);
+  assert.equal(confirmation.disabled, true);
+  assert.equal(confirmation.required, false);
+  assert.equal(confirmation.checked, false);
+  audience.value = 'Public'; audience.emit('change');
+  assert.equal(confirmation.checked, false, 'a new publication choice needs a fresh acknowledgement');
+});
+
+test('already-public reading and restricting it do not request another publication acknowledgement', async () => {
+  const f = fixture(undefined, undefined, { ...ownerRoom, readAudience: 'Public' }); f.welcome(); await settle();
+  const { audience, confirmation } = audienceFields(f);
+  assert.equal(audience.value, 'Public');
+  assert.equal(f.get('publish-history-confirmation').hidden, true);
+  assert.equal(confirmation.required, false);
+  audience.value = 'Restricted'; audience.emit('change');
+  assert.equal(f.get('publish-history-confirmation').hidden, true);
+  assert.equal(confirmation.disabled, true);
+  assert.equal(confirmation.required, false);
+  assert.match(f.get('read-audience-note').textContent, /copies|copied|archives/i);
+});
+
+test('publishing rejects an unconfirmed submit before sending any request', async () => {
+  const f = fixture(undefined, undefined, ownerRoom); f.welcome(); await settle();
+  const { form, audience } = audienceFields(f);
+  audience.value = 'Public'; audience.emit('change');
+  form.emit('submit', { submitter: f.get('audience-save') }); await settle();
+  assert.equal(audienceWrites(f).length, 0);
+  assert.match(f.get('action-status').textContent, /confirm|acknowledge/i);
+  assert.equal(audience.value, 'Public', 'a validation error preserves the pending choice');
+});
+
+test('confirmed publication sends only the selected audience and explicit history acknowledgement', async () => {
+  const f = fixture(undefined, undefined, ownerRoom); f.welcome(); await settle();
+  const { form, audience, confirmation } = audienceFields(f);
+  audience.value = 'Public'; audience.emit('change'); confirmation.checked = true;
+  form.emit('submit', { submitter: f.get('audience-save') }); await settle();
+  const writes = audienceWrites(f);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].path, '/api/rooms/lounge/read-audience');
+  assert.deepEqual(writes[0].body, { audience: 'Public', publishExistingHistory: true });
+});
+
+test('Topic and account transitions clear unsaved publication choices and acknowledgement', async () => {
+  const f = fixture(undefined, undefined, key => ({ ...ownerRoom, readAudience: key === 'workshop' ? 'Public' : 'Restricted' }));
+  f.welcome(); await settle();
+  const { audience, confirmation } = audienceFields(f);
+  audience.value = 'Public'; audience.emit('change'); confirmation.checked = true;
+  f.choose('workshop'); await settle();
+  assert.equal(audience.value, 'Public');
+  assert.equal(confirmation.checked, false);
+  assert.equal(f.get('publish-history-confirmation').hidden, true);
+  f.choose('lounge'); await settle();
+  assert.equal(audience.value, 'Restricted');
+  assert.equal(confirmation.checked, false);
+  assert.equal(confirmation.disabled, true);
+  audience.value = 'Public'; audience.emit('change'); confirmation.checked = true;
+  f.welcome('did:plc:bob'); await settle();
+  assert.equal(audience.value, 'Restricted');
+  assert.equal(confirmation.checked, false);
+  assert.equal(f.get('publish-history-confirmation').hidden, true);
+});
+
+test('saving lock and editing controls never submits a different form\'s unsaved description or title', async () => {
+  const f = fixture(undefined, undefined, ownerRoom); f.welcome(); await settle();
+  f.get('topic-form').elements.namedItem('topic').value = 'Description still being written';
+  const form = f.get('topic-settings-form');
+  form.elements.namedItem('allowPostEditing').checked = true;
+  form.elements.namedItem('isLocked').checked = true;
+  form.emit('submit', { submitter: f.get('topic-settings-save') }); await settle();
+  const writes = f.requests.filter(request => request.path.endsWith('/settings') && request.method === 'PATCH');
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].body, { allowPostEditing: true, isLocked: true });
+});
+
+test('a failed audience save retains the choice and acknowledgement for a deliberate retry', async () => {
+  const f = fixture(request => request.path.endsWith('/read-audience')
+    ? new Response('{"reason":"Reading audience could not be saved."}', { status: 503 })
+    : { messages: [] }, undefined, ownerRoom);
+  f.welcome(); await settle();
+  const { form, audience, confirmation } = audienceFields(f);
+  audience.value = 'Public'; audience.emit('change'); confirmation.checked = true;
+  form.emit('submit', { submitter: f.get('audience-save') }); await settle();
+  assert.equal(audienceWrites(f).length, 1);
+  assert.equal(audience.value, 'Public');
+  assert.equal(confirmation.checked, true);
+  assert.equal(f.get('action-status').hidden, false);
+  assert.match(f.get('action-status').textContent, /could not be saved/i);
 });
 
 test('retry submits only the original write fields and completion restores the next saved message', async () => {

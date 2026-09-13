@@ -4,12 +4,14 @@ using TangentSpace.Conversation;
 using TangentSpace.Infrastructure;
 using TangentSpace.Participants;
 using TangentSpace.Rooms;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Site;
 
 // This host-owned operation coordinates two records. Tangent runs one writer process.
 public sealed class Arrival(IOptions<SiteOptions> options, IOptions<ConversationOptions> conversation, TimeProvider clock, PolicyGate gate,
-    TangentSpace.Participants.ParticipantDirectory directory, IAtprotoHandleSource handles, ParticipantProfiles profiles)
+    TangentSpace.Participants.ParticipantDirectory directory, IAtprotoHandleSource handles, ParticipantProfiles profiles,
+    TangentRoles? roles = null)
 {
     public async Task CheckConfiguration(CancellationToken ct)
     {
@@ -49,6 +51,7 @@ public sealed class Arrival(IOptions<SiteOptions> options, IOptions<Conversation
     {
         // Optional account decoration must not occupy the server-wide policy gate.
         verifiedHandle ??= await handles.HandleOf(verifiedDid, ct);
+        Participant participant;
         await gate.Enter(ct);
         try
         {
@@ -56,12 +59,13 @@ public sealed class Arrival(IOptions<SiteOptions> options, IOptions<Conversation
             using var transaction = EntityContext.Transaction(TangentConstants.ArrivalTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
             if (site is not null) await site.CheckConfiguredOwner(options.Value, ct);
-            var participant = await directory.ArriveAtproto(verifiedDid, verifiedHandle, clock.GetUtcNow(), ct);
+            participant = await directory.ArriveAtproto(verifiedDid, verifiedHandle, clock.GetUtcNow(), ct);
             // Arrival establishes participant identity only. Server ownership requires an explicit human declaration.
             await EntityContext.Commit(ct);
             profiles.Request(verifiedDid);
-            return participant;
         }
         finally { gate.Exit(); }
+        if (roles is not null) await roles.ReconcileParticipant(participant.Id, ct);
+        return participant;
     }
 }
