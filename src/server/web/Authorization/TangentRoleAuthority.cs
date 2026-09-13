@@ -9,11 +9,21 @@ namespace TangentSpace.Authorization;
 public sealed class TangentRoleAuthority : IScopedRoleAuthorityContributor
 {
     private static readonly IReadOnlySet<ScopedRoleAuthorityOperation> all = Enum.GetValues<ScopedRoleAuthorityOperation>().ToHashSet();
+    private const string OwnerSuffix = ":owner";
 
     public async ValueTask<IReadOnlyList<ScopedRoleAuthorityEnvelope>> Contribute(ScopedRoleAuthorityRequest request,
         CancellationToken ct = default)
     {
         if (!request.Actor.IsAuthenticated || request.Target.TenantId != TangentRoleScopes.Tenant) return [];
+
+        if (request.Operation == ScopedRoleAuthorityOperation.RevokeRole && IsOwnerRoleId(request.RoleId))
+            return [];
+
+        if (request.Operation == ScopedRoleAuthorityOperation.AssignRole &&
+            IsOwnerRoleId(request.RoleId, out var ownerScope) &&
+            !await IsCanonicalOwner(request.Subject, ownerScope, ct).ConfigureAwait(false))
+            return [];
+
         var site = await TangentSite.Get("site", ct);
         if (site?.IsOwner(request.Actor.Subject) == true)
             return [Envelope(TangentRoleScopes.HostScope, site.OwnerParticipantId, site.PolicyRevision, "host")];
@@ -52,4 +62,30 @@ public sealed class TangentRoleAuthority : IScopedRoleAuthorityContributor
     private static ScopedRoleAuthorityEnvelope Envelope(ScopedRoleScopeRef scope, string owner, long version, string kind)
         => new(scope, all, Descendants: true, AllowSelfAssignment: true,
             ProofKey: $"{kind}:{owner}:{scope.Id}", ProofVersion: version);
+
+    private static bool IsOwnerRoleId(string? roleId)
+        => IsOwnerRoleId(roleId, out _);
+
+    private static bool IsOwnerRoleId(string? roleId, out ScopedRoleScopeRef scope)
+    {
+        scope = null!;
+        if (string.IsNullOrWhiteSpace(roleId) || !roleId.EndsWith(OwnerSuffix, StringComparison.Ordinal))
+            return false;
+        var core = roleId[..^OwnerSuffix.Length];
+        var parts = core.Split(':');
+        if (parts.Length != 3 || parts[0] != "tangent") return false;
+        scope = new(TangentRoleScopes.Tenant, parts[1], parts[2]);
+        return true;
+    }
+
+    private static async ValueTask<bool> IsCanonicalOwner(string? subject, ScopedRoleScopeRef ownerScope, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(subject)) return false;
+        return ownerScope.Type switch
+        {
+            TangentRoleScopes.Host => (await TangentSite.Get("site", ct))?.IsOwner(subject) == true,
+            TangentRoleScopes.Tangent => (await TangentCommunity.Get(ownerScope.Id, ct))?.IsOwner(subject) == true,
+            _ => false,
+        };
+    }
 }

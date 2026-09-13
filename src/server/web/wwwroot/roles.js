@@ -4,12 +4,15 @@
   const tenant = 'tangent-space';
   const groupOrder = ['host', 'tangent', 'topic', 'post', 'other'];
   const groupLabels = { host: 'Server', tangent: 'Tangents', topic: 'Topics', post: 'Posts', other: 'Other' };
-  let site, descriptor, roles = [], bindings = [], selected, tangents = [], topics = [], loadVersion = 0, csrf;
+  let site, descriptor, roles = [], bindings = [], selected, tangents = [], topics = [], loadVersion = 0, csrf, pendingMember;
   let roleTotal = 0, bindingTotal = 0, editorTab = 'appearance', dirty = false;
+  let memberLabelCache = new Map();
   let draftGrantKeys = new Set();
 
   const color = value => /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#a98df0';
   const systemRole = role => role?.presentation?.system === 'true';
+  const protectedOwnerRole = role => systemRole(role) && /:owner$/i.test(role?.id || '');
+  const canManageMembers = role => !!role && !role._new && !protectedOwnerRole(role);
   const activeBinding = binding => binding && binding.revoked !== true;
   const currentKind = () => $('role-scope-kind').value;
   const currentScope = () => {
@@ -24,6 +27,7 @@
   const make = (tag, className, text) => { const node = document.createElement(tag); node.className = className || ''; if (text !== undefined) node.textContent = text; return node; };
   const roleBindings = role => bindings.filter(binding => binding.roleId === role.id);
   const memberCount = role => (bindingTotal > bindings.length ? '≥' : '') + roleBindings(role).length;
+  const normalizeLookupIdentifier = value => String(value || '').trim().replace(/^@/, '').toLocaleLowerCase();
 
   async function session() {
     if (csrf) return csrf;
@@ -276,8 +280,12 @@
     $('role-editor-title').textContent = name;
     $('role-preview-name').textContent = name;
     $('role-preview-purpose').textContent = purpose;
+    $('role-preview-chip').querySelector('b').textContent = name;
+    $('role-color-value').textContent = roleColor.toLocaleLowerCase();
     $('role-color-dot').style.setProperty('--role-color', roleColor);
     $('role-preview-dot').style.setProperty('--role-color', roleColor);
+    $('role-preview').style.setProperty('--role-color', roleColor);
+    $('role-preview-chip').style.setProperty('--role-color', roleColor);
   }
 
   function renderRole() {
@@ -289,22 +297,28 @@
     $('role-purpose').value = selected.purpose || '';
     $('role-color').value = color(selected.presentation?.color);
     $('role-managed').hidden = !managed;
+    $('role-managed-explanation').hidden = !managed;
+    $('role-managed-explanation').textContent = protectedOwnerRole(selected)
+      ? 'Appearance and permissions are managed by Tangent. The server owner is set by server administration and this setting is not changeable here.'
+      : 'Appearance and permissions are managed by Tangent. Authorized owners can still change direct membership.';
     for (const field of [$('role-name'), $('role-purpose'), $('role-color')]) field.disabled = managed;
     $('role-save').textContent = selected._new ? 'Create role' : 'Save changes';
     $('role-reset').hidden = managed;
     $('role-retire').hidden = managed || selected._new;
-    $('role-member-open').hidden = managed || selected._new;
-    $('role-member-invite').hidden = true;
+    $('role-member-open').hidden = !canManageMembers(selected);
+    closeMemberInvite();
     updateRolePreview(); renderCapabilities(selected, managed); renderMembers(); renderSiblingList();
   }
 
   async function loadMemberLabels(ids, roleId) {
+    memberLabelCache = new Map();
     if (!ids.length) return;
     try {
       const query = ids.map(id => 'id=' + encodeURIComponent(id)).join('&');
       const rows = (await request('/api/roles/ui/participants?' + query)).data || [];
       if (selected?.id !== roleId) return;
       const labels = new Map(rows.map(row => [row.id, row.label]));
+      memberLabelCache = labels;
       document.querySelectorAll('#role-members [data-subject]').forEach(node => {
         const label = labels.get(node.dataset.subject); if (!label) return;
         node.querySelector('strong').textContent = label;
@@ -318,16 +332,22 @@
     if (!selected) return;
     const values = selected._new ? [] : roleBindings(selected);
     $('role-member-count').textContent = memberCount(selected);
-    const managed = systemRole(selected);
-    $('role-member-identifier').disabled = managed || selected._new;
-    $('role-member-add').disabled = managed || selected._new;
-    if (!values.length) root.append(make('p', 'hint', selected._new ? 'Create this role before adding members.' : 'Nobody has this role directly in this scope.'));
+    $('role-members-heading-count').textContent = memberCount(selected);
+    const scope = currentScope();
+    $('role-members-scope').textContent = `Direct assignments in ${scope.type === 'host' ? 'this server' : `this ${scope.type}`}.`;
+    const protectedOwner = protectedOwnerRole(selected), manageable = canManageMembers(selected);
+    $('role-member-open').hidden = !manageable;
+    $('role-member-protected').hidden = !protectedOwner;
+    $('role-member-identifier').disabled = !manageable;
+    $('role-member-resolve').disabled = !manageable;
+    $('role-member-add').disabled = !manageable;
+    if (!values.length) root.append(make('p', 'role-member-empty', selected._new ? 'Create this role before adding members.' : 'No direct members yet.'));
     for (const binding of values) {
       const row = make('div', 'role-member'); row.dataset.subject = binding.subject;
       row.style.setProperty('--role-color', color(selected.presentation?.color));
       row.append(make('span', 'role-member-avatar', binding.subject.slice(0, 1).toUpperCase()));
       const copy = make('span'); copy.append(make('strong', '', binding.subject), make('small', '', binding.subject)); row.append(copy);
-      const remove = make('button', 'btn btn-quiet', 'Remove'); remove.type = 'button'; remove.hidden = managed;
+      const remove = make('button', 'btn btn-quiet role-member-remove', 'Remove role'); remove.type = 'button'; remove.hidden = !manageable;
       remove.addEventListener('click', () => removeMember(binding, remove)); row.append(remove); root.append(row);
     }
     loadMemberLabels(values.map(binding => binding.subject).slice(0, 50), selected.id);
@@ -381,22 +401,61 @@
     finally { button.disabled = false; }
   }
 
-  async function addMember(button) {
-    if (!selected || selected._new || systemRole(selected)) return;
+  function clearResolvedMember() {
+    pendingMember = undefined;
+    $('role-member-resolved').hidden = true;
+    $('role-member-resolved-name').textContent = '';
+    $('role-member-resolved-id').textContent = '';
+  }
+
+  function closeMemberInvite() {
+    $('role-member-invite').hidden = true;
+    $('role-member-identifier').value = '';
+    message('role-member-lookup-status', '');
+    clearResolvedMember();
+  }
+
+  async function resolveMember(button) {
+    if (!canManageMembers(selected)) return;
     const identifier = $('role-member-identifier').value.trim();
-    if (!identifier) { message('role-members-status', 'Enter a handle or DID.', true); return; }
-    button.disabled = true; message('role-members-status', 'Finding participant…');
+    const normalizedIdentifier = normalizeLookupIdentifier(identifier);
+    message('role-member-lookup-status', '');
+    if (!normalizedIdentifier) { message('role-member-lookup-status', 'Enter a handle or DID.', true); return; }
+    const duplicateLabel = [...memberLabelCache.values()].find(label => normalizeLookupIdentifier(label) === normalizedIdentifier);
+    if (duplicateLabel) { clearResolvedMember(); message('role-member-lookup-status', `${duplicateLabel} already has this role`, true); return; }
+    button.disabled = true; message('role-member-lookup-status', 'Finding participant…');
     try {
       const person = (await request('/api/roles/ui/resolve?identifier=' + encodeURIComponent(identifier))).data;
+      if (roleBindings(selected).some(binding => binding.subject === person.id)) {
+        clearResolvedMember(); message('role-member-lookup-status', (person.label || identifier) + ' already has this role', true); return;
+      }
+      pendingMember = person;
+      const label = person.label || identifier;
+      $('role-member-resolved-avatar').textContent = label.slice(0, 1).toUpperCase();
+      $('role-member-resolved-name').textContent = label;
+      $('role-member-resolved-id').textContent = person.id;
+      $('role-member-add').textContent = `Add to ${selected.name}`;
+      $('role-member-resolved').hidden = false;
+      message('role-member-lookup-status', 'Participant found. Confirm the assignment.');
+    } catch (error) { clearResolvedMember(); message('role-member-lookup-status', error.message, true); }
+    finally { button.disabled = false; }
+  }
+
+  async function addMember(button) {
+    if (!canManageMembers(selected) || !pendingMember) return;
+    const person = pendingMember;
+    button.disabled = true; message('role-members-status', `Adding ${person.label || 'participant'}…`);
+    try {
       await request(api('bindings'), { method: 'POST', body: { subject: person.id, roleId: selected.id, propagation: 0 } });
-      $('role-member-identifier').value = ''; $('role-member-invite').hidden = true;
+      closeMemberInvite();
       await refreshBindings(); roleEditorTab('members');
-      message('role-members-status', (person.label || identifier) + ' now has this role.');
+      message('role-members-status', (person.label || person.id) + ' now has this role.');
     } catch (error) { message('role-members-status', error.message, true); }
     finally { button.disabled = false; }
   }
 
   async function removeMember(binding, button) {
+    if (!canManageMembers(selected)) return;
     button.disabled = true; message('role-members-status', 'Removing…');
     try {
       await request(api('bindings/' + encodeURIComponent(binding.id)), { method: 'DELETE', headers: { 'If-Match': '"' + binding.version + '"' } });
@@ -447,6 +506,23 @@
     });
   });
   document.querySelectorAll('[data-role-editor-tab]').forEach(button => button.addEventListener('click', () => roleEditorTab(button.dataset.roleEditorTab)));
+  document.querySelectorAll('[data-role-editor-tab]').forEach(button => {
+    button.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const tabs = [...document.querySelectorAll('[data-role-editor-tab]')];
+      const index = tabs.indexOf(button);
+      let target = button;
+      if (event.key === 'Home') target = tabs[0];
+      else if (event.key === 'End') target = tabs[tabs.length - 1];
+      else {
+        const direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
+        target = tabs[(index + direction + tabs.length) % tabs.length];
+      }
+      target.focus();
+      roleEditorTab(target.dataset.roleEditorTab);
+    });
+  });
   $('role-scope-kind').addEventListener('change', () => changeScope().catch(error => message('role-list-status', error.message, true)));
   $('role-tangent-scope').addEventListener('change', () => (currentKind() === 'topic' ? ensureTopics() : Promise.resolve()).then(changeScope).catch(error => message('role-list-status', error.message, true)));
   $('role-topic-scope').addEventListener('change', () => changeScope().catch(error => message('role-list-status', error.message, true)));
@@ -460,10 +536,12 @@
   $('role-form').addEventListener('submit', event => { event.preventDefault(); saveRole(event.submitter || $('role-save')); });
   $('role-reset').addEventListener('click', resetRole);
   $('role-retire').addEventListener('click', event => retireRole(event.currentTarget));
-  $('role-member-open').addEventListener('click', () => { $('role-member-invite').hidden = false; $('role-member-identifier').focus(); });
-  $('role-member-cancel').addEventListener('click', () => { $('role-member-invite').hidden = true; $('role-member-identifier').value = ''; message('role-members-status', ''); });
+  $('role-member-open').addEventListener('click', () => { message('role-member-lookup-status', ''); $('role-member-invite').hidden = false; clearResolvedMember(); $('role-member-identifier').focus(); });
+  $('role-member-cancel').addEventListener('click', () => { closeMemberInvite(); message('role-members-status', ''); });
+  $('role-member-resolve').addEventListener('click', event => resolveMember(event.currentTarget));
   $('role-member-add').addEventListener('click', event => addMember(event.currentTarget));
-  $('role-member-identifier').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addMember($('role-member-add')); } });
+  $('role-member-identifier').addEventListener('input', () => { message('role-member-lookup-status', ''); clearResolvedMember(); });
+  $('role-member-identifier').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); resolveMember($('role-member-resolve')); } });
   window.addEventListener('tangent:welcome', event => openFor(event.detail));
   window.addEventListener('tangent:route', event => openFor(event.detail));
   window.addEventListener('popstate', syncRoleHistory);
