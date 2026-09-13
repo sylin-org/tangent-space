@@ -27,7 +27,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await EntityContext.Commit(ct);
             return new ServerSettings(site?.Name ?? "", site?.WelcomeMessage ?? "", site?.Motd ?? "",
                 site?.CreationPolicy ?? "owner_only", site?.AllowAgentTangentOwnership ?? false,
-                site?.OwnerParticipantId ?? "", owner, site is null, !declared && participant is not null && !participant.IsSuspended && !participant.WasDeclaredAgent && participant.Classification != ParticipantClassification.Agent && configured, Permissions.Server(owner, canCreate), site?.Byline ?? "", site?.CoverImageUrl ?? "", site?.BackgroundScene ?? "galaxy", site?.BackgroundColor ?? "", site?.BackgroundIntensity ?? 35, site?.BackgroundMotion ?? true, site?.BackgroundMouseSpotlight ?? true);
+                site?.OwnerParticipantId ?? "", owner, site is null, !declared && HumanHostAccountability.CanClaim(participant) && configured, Permissions.Server(owner, canCreate), site?.Byline ?? "", site?.CoverImageUrl ?? "", site?.BackgroundScene ?? "galaxy", site?.BackgroundColor ?? "", site?.BackgroundIntensity ?? 35, site?.BackgroundMotion ?? true, site?.BackgroundMouseSpotlight ?? true);
         }
         finally { gate.Exit(); }
     }
@@ -44,20 +44,24 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
             var participant = await Participant.Get(actorId, ct);
-            if (participant is null || participant.IsSuspended || participant.WasDeclaredAgent || participant.Classification == ParticipantClassification.Agent)
+            if (!HumanHostAccountability.CanClaim(participant))
                 throw new InvalidOperationException("A known agent cannot reserve human server ownership.");
-            participant?.Declare(ParticipantClassification.Human);
-            if (participant is not null) await participant.Save(ct);
             if (site is not null && !site.IsOwner(actorId))
                 throw new InvalidOperationException("Server ownership is already claimed.");
             if (site is null)
             {
                 if (verifiedAtprotoDid is null)
                     throw new UnauthorizedAccessException("Server ownership requires a verified atproto sign-in.");
+                if (await directory.ByDid(verifiedAtprotoDid, ct) is not { } holder || holder.Id != actorId)
+                    throw new UnauthorizedAccessException("The verified atproto sign-in must belong to the claiming participant.");
                 site = TangentSite.Establish(options.Value, verifiedAtprotoDid, actorId, clock.GetUtcNow());
-                site.HumanDeclared = true;
             }
-            else site.HumanDeclared = true;
+            // Validate every claim prerequisite before changing either durable row. In particular,
+            // a refused ownership claim must not classify its caller as human as a side effect.
+            HumanHostAccountability.RequireDeclaration(participant!, ParticipantClassification.Human, isHostOwner: true);
+            participant!.Declare(ParticipantClassification.Human);
+            await participant.Save(ct);
+            site.HumanDeclared = true;
             await site.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
@@ -129,9 +133,8 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
             var participant = await Participant.Get(actorId, ct) ?? throw new InvalidOperationException("Participant not found.");
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            if (participant.IsSuspended || site?.IsOwner(actorId) == true && classification != ParticipantClassification.Human) throw new UnauthorizedAccessException("The server owner must retain human accountability.");
-            if (participant.Classification == ParticipantClassification.Agent && classification != ParticipantClassification.Agent)
-                throw new UnauthorizedAccessException("A known agent cannot declare itself human.");
+            if (participant.IsSuspended) throw new UnauthorizedAccessException("A suspended participant cannot change its classification.");
+            HumanHostAccountability.RequireDeclaration(participant, classification, site?.IsOwner(actorId) == true);
             participant.Declare(classification); await participant.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct); ActivityJournal.SignalAfterCommit(); return participant;

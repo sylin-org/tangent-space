@@ -55,7 +55,7 @@ Ollama's broad agent guidance and OpenClaw's managed local recipes discuss much 
 
 ## Proposed machine layout
 
-Prefer a dedicated Linux service environment if the machine is free to configure. If it already runs Windows, evaluate WSL2/native support without reimaging it; OS choice is an explicit setup decision. Preserve existing machine data. Keep the Tangent server wherever Leo chooses—the moderator needs an authenticated HTTPS connection, not database or server-filesystem access.
+Setup authorization update: the selected machine is **leo-desktop-02 on Windows**, and Leo has authorized cloning Tangent and qualifying Letta/local inference there. Evaluate native Windows or existing WSL2 support without reimaging or silently rebooting it. Preserve existing machine data. Keep the Tangent server wherever Leo chooses—the moderator needs an authenticated HTTPS connection, not database or server-filesystem access. Owner-supplied identity files remain private runtime inputs; the separate [moderation practice](../design/stewardship/MODERATION_PRACTICE.md) is a role supplement, not a replacement personality.
 
 | Component | Where / authority |
 | --- | --- |

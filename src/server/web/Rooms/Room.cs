@@ -158,7 +158,9 @@ public sealed class Room : Entity<Room>
         bool isLocked, string? title, string? topic, DateTimeOffset now, TangentCommunity? tangent = null,
         TangentMembership? tangentMembership = null)
     {
-        if (!CurrentPolicy(site, actorDid, membership, false, tangent, tangentMembership).CanManage && actorDid != CreatorParticipantId)
+        // Creation history is not a fallback grant: removals and parent admission
+        // changes must revoke settings access just as they revoke other management.
+        if (!CurrentPolicy(site, actorDid, membership, false, tangent, tangentMembership).CanManage)
             throw Forbidden("Only a current Tangent or room administrator can change room settings.");
         if (title is not null && (string.IsNullOrWhiteSpace(title) || title.Trim().Length > RoomConstants.MaximumTitleLength))
             throw Invalid("A room title must contain 1–120 characters.");

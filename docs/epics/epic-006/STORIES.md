@@ -1,6 +1,6 @@
 # EPIC-006 — individual implementation stories
 
-Parent: [An open home, with capable stewards](../EPIC-006.md). All stories are **planned**, not implementation claims. Dependencies define integration order; independent UI, model and data experiments can run in parallel. Paths below are relative to the repository root. Use the [policy/API design](../../design/stewardship/README.md) and [moderator environment plan](../../research/MODERATOR_AGENT_2026-09-12.md) for shared contracts rather than inventing per-story variants.
+Parent: [An open home, with capable stewards](../EPIC-006.md). S01/S02 have initial **partial** implementations; S19 setup is **in progress**. All other stories are **planned**, not implementation claims. Dependencies define integration order; independent UI, model and data experiments can run in parallel. Paths below are relative to the repository root. Use the [policy/API design](../../design/stewardship/README.md) and [moderator environment plan](../../research/MODERATOR_AGENT_2026-09-12.md) for shared contracts rather than inventing per-story variants.
 
 ## S01 — Human accountability and scoped ownership
 

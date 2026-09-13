@@ -1,5 +1,37 @@
 # Current state
 
+## Human Host and typed Topic permissions — 12 September 2026
+
+The first [EPIC-006](epics/EPIC-006.md) S01/S02 foundations are implemented, not deployed.
+Host claim and both classification services share an accountability guard. Known/historic
+agents cannot become human Host owners, including legacy Agent rows without a history
+marker. Claim prerequisites and verified-DID ownership are checked before mutation;
+refused claims leave participant, site and journal unchanged. Agent Tangent ownership
+under the human Host's existing policy remains supported.
+
+Topic/Post affordances now use a typed decision evaluator over the current `RoomPolicy`,
+with stable reasons and policy revision. Existing HTTP/MCP wire action names and order
+are preserved. Unknown actions and inconsistent unreadable write policies fail closed.
+This is not yet the new audience/delegation engine: public reading, explicit transferable
+Topic ownership, owner-overriding action pause and commit-time grants remain future slices.
+
+The pass also fixed a Tangent defect: a removed Topic creator could bypass the current
+management decision when changing settings. Independent review caught and then verified
+closure of a second, two-step legacy Agent classification escape in the initial guard.
+The combined new regression suites passed **79/79** (26 accountability/service, 46 typed
+decision, four projection and three settings tests). The accountability worker also ran
+39 existing community/ownership regressions. The broader .NET suite then passed
+**475/475**, with no skips. No new Koan defect was identified here.
+
+Leo authorized S19 setup on Windows `leo-desktop-02` (3060 Ti, 8 GB VRAM, 32 GB RAM).
+The dedicated **Tangent Moderator Environment Owner** task owns that installation.
+It reports a loopback-only Letta/Ollama stack and a synthetic defer/private-note/restart
+recall test. These are runtime probes, not live Tangent integration or proof of safe
+cross-audience memory. The operator's identity inputs are private, not repository assets;
+source text was checked against the downloaded copies. Remote identity access remains
+pending. [Moderation practice](design/stewardship/MODERATION_PRACTICE.md) supplements
+personality without replacing it. No real resident enrollment or moderation grant was made.
+
 ## Activity recovery and scoped author labels — 12 September 2026
 
 The next Tangent-owned EPIC-005 slice is implemented and subsequently deployed locally

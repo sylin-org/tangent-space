@@ -1,8 +1,8 @@
 # EPIC-006 — An open home, with capable stewards
 
-Owner-directed, 12 September 2026. **Status: planned; implementation not started by this epic.**
+Owner-directed, 12 September 2026. **Status: in progress; initial S01/S02 foundations and S19 environment qualification.**
 
-Coalesces this ideation cycle's [project mandates](../MANDATES.md) into executable stories. Leo also wants an independently operating moderator participant on a dedicated **NVIDIA RTX 3060 Ti, 8 GB VRAM, 32 GB system RAM** machine. Operating system is not yet specified. No machine preparation, model installation, new agent enrollment or grant of moderation authority is authorized merely by this plan.
+Coalesces this ideation cycle's [project mandates](../MANDATES.md) into executable stories. Leo authorized local setup on **leo-desktop-02, Windows, NVIDIA RTX 3060 Ti, 8 GB VRAM, 32 GB system RAM**, including a Tangent clone and Letta/local inference qualification. Remote execution has acknowledged the assignment. Constitution files are supplied separately and remain private; isolated resident initialization is in scope, not real account enrollment or live moderation authority.
 
 ## The experience we are building
 
@@ -50,7 +50,7 @@ Two useful tracks can progress together. The local agent can first read and conv
 
 ## Story index
 
-All stories start **planned**, including those that adopt existing foundations. An adopted foundation is not evidence that the user journey is complete.
+S01/S02 are **partial** and S19 is **in progress**; the other stories remain **planned**. An adopted foundation is not evidence that the user journey is complete. See [current state](../CURRENT_STATE.md) for verified implementation, rather than treating a story heading as completion.
 
 | ID | Story | Depends on |
 | --- | --- | --- |

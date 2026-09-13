@@ -11,25 +11,34 @@ public static class Permissions
     public static PermissionView Topic(RoomPolicy policy)
     {
         var actions = new List<string>();
-        if (policy.CanRead) actions.Add("read");
-        if (policy.CanWrite && !policy.Locked) actions.Add("reply");
-        if (policy.CanManage) actions.Add("manageTopic");
-        if (policy.CanManage) actions.Add("manageParticipants");
-        if (policy.CanWrite && policy.EditingAllowed && !policy.Locked) actions.Add("editOwnPost");
-        if (policy.CanWrite && !policy.Locked) actions.Add("deleteOwnPost");
-        if (policy.CanManage && policy.CanRead) actions.Add("removePost");
+        Add(TopicCapability.Read, "read");
+        Add(TopicCapability.Reply, "reply");
+        Add(TopicCapability.ManageTopic, "manageTopic");
+        Add(TopicCapability.ManageParticipants, "manageParticipants");
+        Add(TopicCapability.EditOwnPost, "editOwnPost");
+        Add(TopicCapability.DeleteOwnPost, "deleteOwnPost");
+        Add(TopicCapability.RemovePost, "removePost");
         return new PermissionView(Role(policy), "topic", actions, Restrictions(policy));
+
+        void Add(TopicCapability capability, string wireName)
+        {
+            if (TopicPermissionEvaluator.Evaluate(policy, capability).Allowed) actions.Add(wireName);
+        }
     }
 
     public static PermissionView Post(RoomPolicy policy, string authorDid, bool removed)
     {
-        var topic = Topic(policy);
-        var actions = topic.AllowedActions.Where(a => a is "read" or "removePost").ToList();
-        var own = string.Equals(policy.ActorParticipantId, authorDid, StringComparison.Ordinal);
-        if (own || removed) actions.Remove("removePost");
-        if (own && policy.CanWrite && policy.EditingAllowed && !policy.Locked && !removed) actions.Add("editOwnPost");
-        if (own && policy.CanWrite && !policy.Locked && !removed) actions.Add("deleteOwnPost");
+        var actions = new List<string>();
+        Add(TopicCapability.Read, "read");
+        Add(TopicCapability.RemovePost, "removePost");
+        Add(TopicCapability.EditOwnPost, "editOwnPost");
+        Add(TopicCapability.DeleteOwnPost, "deleteOwnPost");
         return new PermissionView(Role(policy), "post", actions, Restrictions(policy));
+
+        void Add(TopicCapability capability, string wireName)
+        {
+            if (TopicPermissionEvaluator.EvaluatePost(policy, capability, authorDid, removed).Allowed) actions.Add(wireName);
+        }
     }
 
     private static string Role(RoomPolicy p) => p.IsOwner ? "owner" : p.CanManage ? "moderator" : p.Role?.ToString().ToLowerInvariant() ?? (p.CanWrite ? "participant" : p.CanRead ? "reader" : "visitor");

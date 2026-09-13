@@ -525,8 +525,12 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
             if (site?.IsOwner(actorId) != true)
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the site owner records classification declarations in this prototype.");
+            var actor = await Participant.Get(actorId, ct);
+            if (!HumanHostAccountability.CanClaim(actor))
+                throw new TangentRuleViolation(TangentDenial.Forbidden, "An active human-accountable site owner is required.");
             var participant = (await directory.ByIdentifier(targetIdentifier, ct))?.Participant
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The participant must first establish a verified arrival.");
+            HumanHostAccountability.RequireDeclaration(participant, classification, site.IsOwner(participant.Id));
             participant.Declare(classification);
             await participant.Save(ct);
             await Journal(ActivityKind.ParticipantChanged, actorId, participant.Id, null, ct);
