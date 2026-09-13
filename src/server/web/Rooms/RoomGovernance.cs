@@ -161,6 +161,16 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                 return new Change(current);
             }, ct);
 
+    public Task<RoomAdministrationResult> SetReadAudience(string actorId, string roomKey, RoomReadAudience audience,
+        bool publishExistingHistory, CancellationToken ct)
+        => Administer(actorId, roomKey, null, RoomAdministration.SetReadAudience, null,
+            (site, room, _, _, _, tangent, _, now) =>
+            {
+                var current = RequireRoom(room);
+                current.ChangeReadAudience(site, actorId, audience, publishExistingHistory, now, tangent);
+                return new Change(current);
+            }, ct, audience, publishExistingHistory);
+
     public Task<RoomAdministrationResult> SetSettings(string actorId, string roomKey, bool allowPostEditing, bool isLocked,
         string? title, string? topic, CancellationToken ct)
         => Administer(actorId, roomKey, null, RoomAdministration.SetSettings, null,
@@ -230,7 +240,8 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
 
     private async Task<RoomAdministrationResult> Administer(string actorId, string roomKey, string? targetIdentifier,
         RoomAdministration operation, RoomRole? requestedRole,
-        Func<TangentSite?, Room?, RoomMembership?, string?, RoomMembership?, TangentCommunity?, TangentMembership?, DateTimeOffset, Change> apply, CancellationToken ct)
+        Func<TangentSite?, Room?, RoomMembership?, string?, RoomMembership?, TangentCommunity?, TangentMembership?, DateTimeOffset, Change> apply,
+        CancellationToken ct, RoomReadAudience? requestedReadAudience = null, bool? publishExistingHistory = null)
     {
         await gate.Enter(ct);
         try
@@ -279,7 +290,8 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             var audit = new RoomAudit
             {
                 ActorParticipantId = actorId, RoomKey = roomKey, TargetParticipantId = targetId, Operation = operation,
-                RequestedRole = requestedRole, Accepted = denial is null, Denial = denial?.Denial,
+                RequestedRole = requestedRole, RequestedReadAudience = requestedReadAudience,
+                PublishExistingHistory = publishExistingHistory, Accepted = denial is null, Denial = denial?.Denial,
                 Reason = denial?.Message ?? "Accepted.", SelectedPolicyRevision = room?.PolicyRevision ?? 0,
                 SitePolicyRevision = site?.PolicyRevision ?? 0, OccurredAt = now
             };

@@ -76,6 +76,23 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
+    [RoomMutation]
+    [HttpPatch("{tangentId}/topics/{topicId}/read-audience")]
+    public async Task<IActionResult> ChangeTopicReadAudience(string tangentId, string topicId,
+        ChangeRoomReadAudienceRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var actor = Actor();
+            var topic = await hub.Topics.Describe(actor, topicId, ct);
+            if (topic is null || topic.TangentKey != tangentId) return NotFound();
+            return Outcome(await hub.Topics.SetReadAudience(actor, topicId, request.Audience,
+                request.PublishExistingHistory, ct));
+        }
+        catch (UnauthorizedAccessException) { return Unauthorized(); }
+        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+    }
+
     [AllowAnonymous]
     [HttpGet("{tangentId}/posts/{postId}")]
     public async Task<IActionResult> Post(string tangentId, string postId, CancellationToken ct)

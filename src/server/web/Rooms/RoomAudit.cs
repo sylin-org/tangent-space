@@ -9,6 +9,8 @@ public sealed class RoomAudit : Entity<RoomAudit>
     public string? TargetParticipantId { get; set; }
     public RoomAdministration Operation { get; set; }
     public RoomRole? RequestedRole { get; set; }
+    public RoomReadAudience? RequestedReadAudience { get; set; }
+    public bool? PublishExistingHistory { get; set; }
     public bool Accepted { get; set; }
     public RoomDenial? Denial { get; set; }
     public string Reason { get; set; } = "";

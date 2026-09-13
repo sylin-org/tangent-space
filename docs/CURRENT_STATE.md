@@ -1,5 +1,28 @@
 # Current state
 
+## Public Topic reading foundation — 13 September 2026
+
+Topics now have an independent restricted/public read audience. Widening is an audited
+Host-or-Tangent-owner command and requires explicit acknowledgement that retained history
+will become public; narrowing cannot promise recall of prior copies. The signed-in Topic
+settings surface exposes that choice separately from admission and writing.
+
+The unlisted anonymous route is a Koan `EntityController<Room>` mount: `EntityAccess`
+pushes public-and-storage-ready visibility into keyed reads, the route adds its Tangent
+constraint, and hidden/missing/wrong-parent targets return the same empty 404. An
+allowlisted projection excludes creator IDs, membership, source/storage metadata,
+permissions and revisions. Public posts use the same authorized parent under the policy
+gate, then return only a maximum of 25 safe projections inside a 64 KiB planning budget,
+with stable sequence edges instead of participant-bound expiring cursors. Invalid bearer
+credentials return 401 before the visibility query on Koan revision `30586ebf`.
+
+The focused public-read/domain suite passes **36/36**, the full .NET suite passes
+**505/505**, and the browser suite passes **151/151**. The Docker app was rebuilt in
+place with existing state preserved. Closing smoke checks confirm healthy document and
+health responses, empty 404s for hidden Topic/Post resources, and 401s for invalid
+credentials. Public server-rendered documents, friendly rename aliases,
+directory listing/search and public media classification remain later S03/S09 work.
+
 ## Bounded moderation cases and optional stewardship tools — 12 September 2026
 
 The first EPIC-006 S06/S07 path is implemented, not deployed or granted to the
@@ -609,7 +632,7 @@ Use the deployed human and native WebMCP experience together and collect Leo's f
 
 The remaining [EPIC-003](epics/EPIC-003.md) scope includes invitations, Posts/Series, permission-filtered search, saved places, richer moderation, public Bluesky bridging and the external-community pilot. Continue to preserve the disposable source network while testing native notifications, bounded repair and recovery.
 
-The isolated framework checkout is `.local/upstream/koan-framework`, based on `e07a84cc3f71a0867f1122b03b723cc80727e772`. The source PDS revision is `c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae`. `scripts/prepare-framework.ps1` reconstructs or verifies the framework contribution without changing the original sibling repository.
+The isolated framework checkout is `.local/upstream/koan-framework`, pinned to `30586ebf8c878fec04047aceefdad0e261c8c532`. This revision includes the application-consumed auth work and rejects failed credentials before entity-access evaluation. The source PDS revision is `c1d97bbd5c874ae7c2c26ed84586ef15a000b7ae`. `scripts/prepare-framework.ps1` reconstructs or verifies the clean framework checkout without changing the original sibling repository.
 
 
 ### Working cadence

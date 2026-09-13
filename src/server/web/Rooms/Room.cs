@@ -14,6 +14,7 @@ public sealed class Room : Entity<Room>
     public string Title { get; set; } = "";
     public string Topic { get; set; } = "";
     public RoomAdmission Admission { get; set; }
+    public RoomReadAudience ReadAudience { get; set; }
     // A members-only channel admits the Tangent's own members without a separate room invitation.
     public bool MembersOnly { get; set; }
     public bool AllowPostEditing { get; set; }
@@ -176,6 +177,20 @@ public sealed class Room : Entity<Room>
         RequireOwner(site, tangent, actorDid);
         if (!Enum.IsDefined(admission)) throw Invalid("Choose signed-in or invitation-only admission.");
         Admission = admission;
+        Advance(now);
+    }
+
+    public void ChangeReadAudience(TangentSite? site, string actorDid, RoomReadAudience audience,
+        bool publishExistingHistory, DateTimeOffset now, TangentCommunity? tangent = null)
+    {
+        if (site is null || !Participant.IsValidId(actorDid)
+            || !site.IsOwner(actorDid) && tangent?.IsOwner(actorDid) != true)
+            throw Forbidden("Only the current Host or Tangent owner can publish a Topic.");
+        if (!Enum.IsDefined(audience)) throw Invalid("Choose restricted or public reading.");
+        if (ReadAudience != RoomReadAudience.Public && audience == RoomReadAudience.Public && !publishExistingHistory)
+            throw Invalid("Confirm that the Topic's existing history will become publicly readable.");
+        if (ReadAudience == audience) return;
+        ReadAudience = audience;
         Advance(now);
     }
 

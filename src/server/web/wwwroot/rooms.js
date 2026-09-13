@@ -369,7 +369,9 @@
     text('rooms-heading', tangent?.name || 'Topics');
     const mark = $('room-tangent-mark');
     if (mark) { if (mark.style) mark.style.background = safeAccent(tangent?.accent); mark.textContent = tangent?.artwork ? '◈' : '✦'; mark.title = tangent?.name || ''; }
-    text('room-admission', room.admission === 'InvitationOnly' ? 'By invitation' : 'Signed-in participants');
+    text('room-admission', room.readAudience === 'Public'
+      ? 'Publicly readable · signed-in participation'
+      : room.admission === 'InvitationOnly' ? 'By invitation' : 'Signed-in participants');
     const access = { 'sign-in-required': 'Sign in to enter this room.', 'invitation-required': 'A room manager can invite your DID to join.', removed: 'Your access to this room has been removed.', suspended: 'Your participation at this site is suspended.', 'space-pending': 'Room setup is pending. Its owner can finish connecting it.' };
     text('room-access', access[room.accessState] || (room.canWrite ? 'You can read and take part.' : room.canRead ? 'You can read this room.' : 'Content is not available under your current access.'));
     show('choose-room', false); show('room-content', true); show('room-admin', room.canManage || can(room, 'manageTopic'));
@@ -381,6 +383,16 @@
     field('topic-form', 'topic').value = room.topic || '';
     field('admission-form', 'admission').value = room.admission;
     show('admission-form', room.canAppointManagers); show('manager-choice', room.canAppointManagers);
+    const audienceForm = $('read-audience-form');
+    if (audienceForm) {
+      field('read-audience-form', 'audience').value = room.readAudience || 'Restricted';
+      field('read-audience-form', 'publishExistingHistory').checked = false;
+      show('read-audience-form', room.canAppointManagers);
+      show('publish-history-confirmation', room.readAudience !== 'Public');
+      text('read-audience-note', room.readAudience === 'Public'
+        ? 'Anyone with the link can read this Topic. Restricting it later cannot erase copies already made.'
+        : 'This Topic is not available to anonymous visitors.');
+    }
     show('reconnect-room-access', false);
     $('manager-choice').disabled = !room.canAppointManagers;
     if (!room.canAppointManagers && field('member-form', 'role').value === 'Manager') field('member-form', 'role').value = 'Member';
@@ -1059,6 +1071,7 @@
   $('topic-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/topic', { topic: field('topic-form', 'topic').value }, 'PUT')); });
   $('member-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/members/' + encodeURIComponent(field('member-form', 'did').value.trim()), { role: field('member-form', 'role').value }, 'PUT')); });
   $('admission-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/admission', { admission: field('admission-form', 'admission').value }, 'PUT')); });
+  $('read-audience-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/read-audience', { audience: field('read-audience-form', 'audience').value, publishExistingHistory: field('read-audience-form', 'publishExistingHistory').checked }, 'PUT')); });
   $('topic-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/settings', { allowPostEditing: field('topic-settings-form', 'allowPostEditing').checked, isLocked: field('topic-settings-form', 'isLocked').checked, title: room.title, topic: field('topic-form', 'topic').value }, 'PATCH')); });
   $('server-atmosphere-open').addEventListener('click', () => window.TangentAtmosphere?.open());
   $('server-settings-form').addEventListener('input', previewServerCard);

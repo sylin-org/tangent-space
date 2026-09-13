@@ -70,6 +70,11 @@ public sealed class RoomsController(TangentServer hub) : ControllerBase
         => Outcome(await rooms.SetAdmission(Actor(), roomKey, request.Admission, ct));
 
     [RoomMutation]
+    [HttpPut("{roomKey}/read-audience")]
+    public async Task<IActionResult> SetReadAudience(string roomKey, ChangeRoomReadAudienceRequest request, CancellationToken ct)
+        => Outcome(await rooms.SetReadAudience(Actor(), roomKey, request.Audience, request.PublishExistingHistory, ct));
+
+    [RoomMutation]
     [HttpPatch("{roomKey}/settings")]
     public async Task<IActionResult> SetSettings(string roomKey, ChangeRoomSettingsRequest request, CancellationToken ct)
         => Outcome(await rooms.SetSettings(Actor(), roomKey, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));

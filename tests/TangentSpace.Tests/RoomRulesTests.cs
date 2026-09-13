@@ -66,6 +66,48 @@ public sealed class RoomRulesTests
     }
 
     [Fact]
+    public void Public_reading_is_an_explicit_owner_change_that_acknowledges_existing_history()
+    {
+        var site = Site();
+        var room = Ready(site, "salon", RoomAdmission.InvitationOnly);
+        Assert.Equal(RoomReadAudience.Restricted, room.ReadAudience);
+        var revision = room.PolicyRevision;
+
+        var missingAcknowledgement = Assert.Throws<RoomRuleViolation>(() => room.ChangeReadAudience(
+            site, Owner, RoomReadAudience.Public, publishExistingHistory: false, Now.AddMinutes(1)));
+        Assert.Equal(RoomDenial.InvalidInput, missingAcknowledgement.Denial);
+        Assert.Equal(RoomReadAudience.Restricted, room.ReadAudience);
+        Assert.Equal(revision, room.PolicyRevision);
+
+        room.ChangeReadAudience(site, Owner, RoomReadAudience.Public, publishExistingHistory: true, Now.AddMinutes(1));
+        Assert.Equal(RoomReadAudience.Public, room.ReadAudience);
+        Assert.Equal(revision + 1, room.PolicyRevision);
+
+        // Narrowing the audience does not need a publication acknowledgement.
+        room.ChangeReadAudience(site, Owner, RoomReadAudience.Restricted, publishExistingHistory: false, Now.AddMinutes(2));
+        Assert.Equal(RoomReadAudience.Restricted, room.ReadAudience);
+    }
+
+    [Fact]
+    public void Host_or_tangent_owner_can_publish_but_a_topic_manager_cannot()
+    {
+        var site = Site();
+        var tangentOwner = Agent;
+        var tangent = new TangentSpace.Communities.TangentCommunity
+        {
+            Id = "salon", OwnerParticipantId = tangentOwner, Name = "Salon"
+        };
+        var room = Room.CreateDelegated(site, Manager, "salon-talk", "Talk", RoomAdmission.SignedIn,
+            Now, tangent.Id, tangent, RoomSpaceState.Local);
+
+        Assert.Equal(RoomDenial.Forbidden, Assert.Throws<RoomRuleViolation>(() => room.ChangeReadAudience(
+            site, Manager, RoomReadAudience.Public, true, Now.AddMinutes(1), tangent)).Denial);
+        room.ChangeReadAudience(site, tangentOwner, RoomReadAudience.Public, true, Now.AddMinutes(1), tangent);
+        room.ChangeReadAudience(site, Owner, RoomReadAudience.Restricted, false, Now.AddMinutes(2), tangent);
+        Assert.Equal(RoomReadAudience.Restricted, room.ReadAudience);
+    }
+
+    [Fact]
     public void Signed_in_admission_does_not_override_an_explicit_reader_or_removal()
     {
         var site = Site();
@@ -204,6 +246,8 @@ public sealed class RoomRulesTests
         { new ChangeRoomMembershipRequest(RoomRole.Reader), """{"role":"Reader"}""" },
         { new ChangeRoomTopicRequest("Shared conversation"), """{"topic":"Shared conversation"}""" },
         { new ChangeRoomAdmissionRequest(RoomAdmission.SignedIn), """{"admission":"SignedIn"}""" },
+        { new ChangeRoomReadAudienceRequest(RoomReadAudience.Public, true),
+            """{"audience":"Public","publishExistingHistory":true}""" },
         { new ChangeSuspensionRequest(true), """{"suspended":true}""" }
     };
 
