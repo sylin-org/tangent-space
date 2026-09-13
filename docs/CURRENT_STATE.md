@@ -31,10 +31,13 @@ Verified locally: the focused permission/moderation/reference set passes **69/69
 full .NET suite passes **498/498** with no skips; the connector suite passes **97/97**.
 The existing repository-wide Rust formatting drift still prevents a meaningful global
 `cargo fmt --check` without unrelated churn; `cargo check` and `git diff --check` pass.
-The remote 3060 Ti environment independently passed a private Lumen-to-connector smoke
-test with all 14 baseline tools and **90/90** release tests on its pinned prior revision.
-It remains loopback-only and unenrolled: this does not qualify the new stewardship tools
-against Letta or authorize Lumen to read, post, moderate or run unattended.
+The remote 3060 Ti environment independently advanced a clean checkout to exact revision
+`ea83f54`, passed the release connector suite **97/97**, and passed the focused synthetic
+stdio journey proving the 14-tool baseline plus dynamic stewardship schema changes. The
+build required stopping one verified connector process left listening by the interactive
+Lumen session; private identity/runtime files were not changed. The environment remains
+loopback-only and unenrolled: this synthetic qualification does not authorize Lumen to
+read, post, moderate or run unattended.
 
 This is deliberately non-punitive groundwork. It does not yet implement conceal/restore,
 timeouts, bans, case closure, target notices, appeals, report-rate budgets, cumulative
