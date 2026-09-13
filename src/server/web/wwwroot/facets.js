@@ -196,6 +196,7 @@
   }
 
   function clearFacets(roomKey) { draftFacets.delete(roomKey); }
+  function clearAll() { draftFacets.clear(); targets = []; targetRoom = null; close(); }
 
   /// Insert a reply mention for a known author (Discord dynamics: reply carries the @).
   function replyMention(authorValue, handle) {
@@ -259,7 +260,7 @@
     return paragraph;
   }
 
-  window.TangentFacets = { wire, wireFacets, clearFacets, replyMention, renderFacetedText, charIndexAtByte };
+  window.TangentFacets = { wire, wireFacets, clearFacets, clearAll, replyMention, renderFacetedText, charIndexAtByte };
   // Deferred scripts run after DOM parsing: the composer exists; wire immediately.
   if (document.getElementById('message-text')) wire(document);
 })();

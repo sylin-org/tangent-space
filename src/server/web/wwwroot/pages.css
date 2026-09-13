@@ -1,7 +1,7 @@
 /* Shared editorial structure: masthead, full-width hero, aligned content. */
-body[data-page] { --page-width:1120px; --page-gutter:clamp(20px,4vw,48px); }
+body[data-page] { --page-width:1120px; --shell-width:1120px; --page-gutter:clamp(20px,4vw,48px); }
 body:not(.onboarding-active)[data-page] { background:var(--canvas); }
-body[data-page] .masthead { width:100%; max-width:none; margin:0; padding:18px max(var(--page-gutter),calc((100% - var(--page-width))/2)); border-bottom:1px solid var(--line); background:#111016; }
+body[data-page] .masthead { width:100%; max-width:none; margin:0; padding:18px max(var(--page-gutter),calc((100% - var(--shell-width))/2)); border-bottom:1px solid var(--line); background:#111016; }
 body[data-page] .masthead-actions { display:flex; align-items:center; flex-wrap:wrap; gap:22px; font-size:12px; }
 body:not(.onboarding-active)[data-page] main { display:block; padding:0 0 72px; }
 body:not(.onboarding-active)[data-page] .panel { width:100%; max-width:none; padding:0; margin:0; border:0; border-radius:0; background:transparent; box-shadow:none; }

@@ -11,6 +11,19 @@
   };
   const route = () => window.TangentPages.route;
   let revision = 0;
+  function clear() {
+    const section = $('participant-profile');
+    if (!section) return;
+    delete section.dataset.profileDid;
+    for (const id of ['profile-handle', 'profile-did', 'profile-description', 'profile-classification', 'profile-joined', 'profile-roles']) text(id, '');
+    for (const node of [$('profile-name'), $('profile-avatar')]) {
+      node.replaceChildren();
+      delete node.dataset.profileDid; delete node.dataset.profilePart;
+      delete node.dataset.profileFallback; delete node.dataset.profileVersion;
+    }
+    $('profile-posts').replaceChildren();
+    $('profile-actions').replaceChildren();
+  }
   window.addEventListener('tangent:profile', event => {
     if (!$('participant-profile')?.hidden && $('participant-profile')?.dataset.profileDid === event.detail.did) {
       text('profile-description', event.detail.description || '');
@@ -26,14 +39,15 @@
   }
 
   async function show() {
+    const version = ++revision;
     const current = route();
     const section = $('participant-profile');
     if (current.kind !== 'participant') {
+      clear();
       if (section) section.hidden = true;
       return;
     }
     if (!section) return;
-    const version = ++revision;
     const place = $('place');
     if (place) place.hidden = true;
     section.hidden = false;
@@ -51,6 +65,10 @@
     } catch (error) {
       if (version !== revision) return;
       failed(error.status === 403 || error.status === 404 ? 'No participant is visible under that address.' : 'The profile could not be loaded.');
+    } finally {
+      if (version === revision) window.dispatchEvent(new CustomEvent('tangent:route-ready', {
+        detail: { href: location.pathname + location.search + location.hash }
+      }));
     }
   }
 
@@ -69,6 +87,8 @@
   function render(envelope) {
     const data = envelope?.result?.data;
     if (!data) return;
+    const canonical = '/u/' + encodeURIComponent(data.handle || data.did || 'tangent:local:' + data.participantRef);
+    if (canonical !== location.pathname) window.TangentNavigation?.canonicalize?.(canonical);
     const name = data.displayName || data.handle || 'Fellow participant';
     $('participant-profile').dataset.profileDid = data.did || '';
     document.title = name + ' · Tangent';
@@ -153,7 +173,6 @@
   }
 
   window.addEventListener('tangent:welcome', () => show());
-  window.addEventListener('popstate', () => show());
-  document.addEventListener('DOMContentLoaded', () => show());
-  window.TangentProfile = { show };
+  window.addEventListener('tangent:route', () => show());
+  window.TangentProfile = { show, clear };
 })();

@@ -10,6 +10,7 @@ public sealed class PagesController(IWebHostEnvironment environment) : Controlle
 {
     [HttpGet("/onboarding/")]
     [HttpGet("/settings")]
+    [HttpGet("/tangents/")]
     [HttpGet("/t/{tangent}/topics")]
     [HttpGet("/t/{tangent}/topics/{topic}")]
     [HttpGet("/t/{tangent}/{post}")]
@@ -30,9 +31,6 @@ public sealed class PagesController(IWebHostEnvironment environment) : Controlle
             && !returnTo.StartsWith("/sign-in", StringComparison.OrdinalIgnoreCase) ? returnTo : "/";
         return Redirect("/auth/atproto/challenge?return=" + Uri.EscapeDataString(destination));
     }
-
-    [HttpGet("/tangents/")]
-    public IActionResult Tangents() => Redirect("/#tangent-return");
 
     /// <summary>The participant resolver page. Identity-level routing only — suspension and
     /// policy never influence it; the profile API keeps all gating. Non-canonical forms redirect

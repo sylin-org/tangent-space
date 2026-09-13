@@ -26,6 +26,7 @@
   var joinedRow = document.getElementById('joined-row');
   var joinedEl = document.getElementById('joined');
   var welcomeNameEl = document.getElementById('welcome-name');
+  var currentSite = null;
 
   function show(state) {
     Object.keys(stateSections).forEach(function (key) {
@@ -162,6 +163,7 @@
         if (!site) {
           throw new Error('Unexpected site payload');
         }
+        currentSite = site;
         if (!site.established && window.TangentPages.route.kind === 'home') {
           location.replace('/onboarding/');
           return;
@@ -190,6 +192,14 @@
   }
 
   retryButton.addEventListener('click', load);
+
+  window.addEventListener('tangent:navigate', function () {
+    if (!currentSite) { location.reload(); return; }
+    render(currentSite);
+    window.TangentPages.prepare(currentSite);
+    if (window.TangentOnboarding?.show(currentSite)) return;
+    window.dispatchEvent(new CustomEvent('tangent:route', { detail: currentSite }));
+  });
 
   load();
 })();

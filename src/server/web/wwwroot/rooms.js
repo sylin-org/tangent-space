@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  let site, room, epoch = 0, identityEpoch = 0, nextRoomPage, nextCursor, resumeCursor, reply, restoring;
+  let site, room, epoch = 0, identityEpoch = 0, routeEpoch = 0, renderedRoute = '', nextRoomPage, nextCursor, resumeCursor, reply, restoring;
   const mentionCache = new Map();
   let activityTransport, activityActive = false, activityMode = 'stopped', activityOverviewNote = '', activityNeedsRefresh = false;
   let activityRecovering = false, activityRecoveryLabel = '', activityAutomaticRecoveries = 0, noticeTimer;
@@ -11,6 +11,11 @@
   const tangentPath = key => '/api/v1/tangents/' + encodeURIComponent(key);
   const tangentUrl = key => window.TangentPages.tangentUrl(key);
   const topicUrl = (tangent, key) => window.TangentPages.topicUrl(tangent, key);
+  const navigate = (url, replace = false) => window.TangentNavigation?.navigate(url, { replace }) || (replace ? location.replace(url) : location.assign(url));
+  const emitWindow = (name, detail) => {
+    if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') window.dispatchEvent(new CustomEvent(name, { detail }));
+    else window.emit?.(name, { detail });
+  };
   const updateHero = () => routeFailure ? window.TangentPages?.unavailable(routeFailure) : window.TangentPages?.hero(site, route().tangent ? tangentByKey.get(route().tangent) || routeTangent : undefined, room);
   const activityByRoom = new Map();
   const tangentByKey = new Map();
@@ -893,8 +898,12 @@
   }
   window.TangentRooms = window.TangentRooms || {};
   window.TangentRooms.size = size;
-  window.addEventListener('tangent:welcome', event => {
+  function enterRoute(event) {
     let acknowledge = '';
+    const nextRoute = route(), routeKey = [nextRoute.kind, nextRoute.tangent, nextRoute.topic, nextRoute.post, nextRoute.identifier].filter(Boolean).join(':');
+    const routeChanged = !!renderedRoute && renderedRoute !== routeKey;
+    renderedRoute = routeKey;
+    const navigation = ++routeEpoch;
     if (site?.participant?.participantRef !== event.detail.participant?.participantRef) {
       // Identity events re-render the world as the new participant. Drafts and pending
       // outbound messages belong to the identity that wrote them; they are dropped here
@@ -904,9 +913,17 @@
       identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); recoveryBlocked.clear(); drafts.clear(); sending.clear(); restoring = undefined; room = null; reply = undefined; sourceReadiness = undefined; activeTangentKey = undefined; routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
       window.TangentModeration?.topic?.(undefined, event.detail.participant);
       activityAutomaticRecoveries = 0;
+      window.TangentFacets?.clearAll?.();
       mentionCache.clear(); postMutations.clear(); activitySignature = ''; activityOverviewNote = '';
+      $('tangent-list')?.replaceChildren(); $('room-list')?.replaceChildren(); window.TangentProfile?.clear?.();
       renderDraft(); show('room-content', false); show('choose-room', true); text('choose-room', 'Choose a room to see its topic and current access.'); status('');
       if (recovered) acknowledge = 'Now viewing as ' + (event.detail.participant?.handle || activityRecoveryLabel || event.detail.participant?.did || event.detail.participant?.participantRef || 'another account') + '.';
+    } else if (routeChanged) {
+      rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
+      activeTangentKey = undefined; routeTangent = routeTopics = undefined; routeFailure = undefined;
+      window.TangentModeration?.topic?.(undefined, event.detail.participant);
+      document.body.classList.remove('conversation-open');
+      renderDraft(); show('room-content', false); show('choose-room', true); status('');
     }
     activityRecovering = false;
     site = event.detail;
@@ -921,24 +938,25 @@
       const legacy = new URL(location.href).searchParams.get('room');
       if (legacy && route().kind === 'home') {
         const topic = (await request(roomPath(legacy))).data;
-        if (identity === identityEpoch) location.replace(topicUrl(topic.tangentKey, topic.key));
-        return;
+          if (identity === identityEpoch && navigation === routeEpoch) navigate(topicUrl(topic.tangentKey, topic.key), true);
+          return;
       }
       if (!welcome.tangents) {
         const directory = (await request('/api/v1/tangents')).data;
-        if (identity !== identityEpoch || site !== welcome) return;
+        if (identity !== identityEpoch || navigation !== routeEpoch || site !== welcome) return;
         welcome.tangents = directory;
       }
-      if (identity !== identityEpoch) return;
+      if (identity !== identityEpoch || navigation !== routeEpoch) return;
       renderTangents();
       if (route().tangent) {
         const tangent = tangentByKey.get(route().tangent) || (await request(tangentPath(route().tangent))).data;
-        if (identity !== identityEpoch) return;
+        if (identity !== identityEpoch || navigation !== routeEpoch) return;
         routeTangent = tangent;
         tangentByKey.set(routeTangent.key, routeTangent);
         selectTangent(routeTangent);
-        await refreshRooms();
-        if (identity !== identityEpoch) return;
+        const routeContext = { isCurrent: () => identity === identityEpoch && navigation === routeEpoch && site === welcome };
+        await refreshRooms(false, routeContext);
+        if (identity !== identityEpoch || navigation !== routeEpoch) return;
         if (route().kind === 'topic') await choose(route().topic);
         else if (route().kind === 'post') await openPost();
         if (location.hash === '#tangent-members' && (routeTangent.canManage || routeTangent.isOwner)) {
@@ -951,21 +969,28 @@
           }
         }
       }
-      updateHero();
+      if (navigation === routeEpoch) updateHero();
       } catch (error) {
-        if (identity === identityEpoch && [401, 403, 404].includes(error.status)) unavailableRoute(error.status);
+        if (identity === identityEpoch && navigation === routeEpoch && [401, 403, 404].includes(error.status)) unavailableRoute(error.status);
         throw error;
       }
     });
     startActivity();
     // The identity acknowledgment lands once the re-loaded world has settled, so opening
     // the route cannot clear it again.
-    if (acknowledge) flow.then(() => { if (identity === identityEpoch) notice(acknowledge); });
+    flow.then(() => {
+      if (identity !== identityEpoch || navigation !== routeEpoch) return;
+      if (acknowledge) notice(acknowledge);
+      const href = location.pathname === undefined ? new URL(location.href).pathname : location.pathname + location.search + location.hash;
+      emitWindow('tangent:route-ready', { href });
+    });
     try { if (sessionStorage.getItem('tangent-created') === site.participant?.participantRef) { sessionStorage.removeItem('tangent-created'); status('Your Tangent is ready. Make yourself at home.'); } } catch (_) { }
-  });
+  }
+  window.addEventListener('tangent:welcome', enterRoute);
+  window.addEventListener('tangent:route', enterRoute);
   $('refresh-rooms').addEventListener('click', () => action($('refresh-rooms'), refreshRooms));
   $('return-to-tangents').addEventListener('click', () => {
-    rememberDraft(); location.assign('/tangents/');
+    rememberDraft(); navigate('/tangents/');
   });
   $('more-tangents').addEventListener('click', () => action($('more-tangents'), moreTangents));
   document.addEventListener('visibilitychange', () => { if (document.hidden) { activityNeedsRefresh = true; activityTransport?.setVisible(false); } else startActivity(); });
@@ -997,17 +1022,17 @@
     const body = Object.fromEntries(new FormData(event.target));
     if (activeTangentKey) {
       await request(tangentPath(activeTangentKey) + '/topics', body);
-      event.target.reset(); location.assign(topicUrl(activeTangentKey, body.key));
+      event.target.reset(); navigate(topicUrl(activeTangentKey, body.key));
       return;
     }
-    await request('/api/rooms', body); event.target.reset(); const created = (await request(roomPath(body.key))).data; location.assign(topicUrl(created.tangentKey, created.key));
+    await request('/api/rooms', body); event.target.reset(); const created = (await request(roomPath(body.key))).data; navigate(topicUrl(created.tangentKey, created.key));
   }); });
   $('create-tangent').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
     const body = Object.fromEntries(new FormData(event.target));
     body.name = body.name.trim(); body.key = body.key.trim(); body.description = body.description.trim(); body.motto = body.motto.trim();
     if (!body.name || !body.key || !validArtwork(body.artwork)) throw new Error('Give this Tangent a name and stable address. Artwork must use HTTPS or a supplied sample.');
     await request('/api/v1/tangents', body); event.target.reset(); await refreshTangents();
-    location.assign(tangentUrl(body.key));
+    navigate(tangentUrl(body.key));
   }); });
   $('create-tangent').addEventListener('input', renderCreatePreview);
   $('edit-tangent-form').addEventListener('input', renderEditorPreview);

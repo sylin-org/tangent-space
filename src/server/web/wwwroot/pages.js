@@ -72,6 +72,13 @@
   function prepare(site) {
     window.TangentAtmosphere?.configure(site.server, site.participant);
     document.body.dataset.signedIn = String(!!site.participant);
+    $('nav-sign-in').href = signInUrl();
+    // Route-owned decoration must never survive under the next URL while its
+    // policy-checked data is still loading.
+    currentTangent = currentTopic = undefined;
+    if (!['onboarding', 'sign-in'].includes(route.kind)) document.body.classList.remove('onboarding-active');
+    if (route.kind !== 'onboarding') $('onboarding').hidden = true;
+    if (route.kind !== 'participant') $('participant-profile').hidden = true;
     $('settings-page').hidden = route.kind !== 'settings';
     $('settings-sign-in').hidden = route.kind !== 'settings' || !!site.participant;
     $('activity-status').hidden = !site.participant || ['onboarding', 'sign-in'].includes(route.kind);
