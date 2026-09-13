@@ -6,5 +6,5 @@ public sealed record PublicTopicDescription(string Key, string TangentKey, strin
 {
     internal static PublicTopicDescription From(Room room)
         => new(room.Id, room.TangentKey, room.Title, room.Topic, room.ReadAudience,
-            $"/t/{Uri.EscapeDataString(room.TangentKey)}/{Uri.EscapeDataString(room.Id)}");
+            $"/t/{Uri.EscapeDataString(room.TangentKey)}/topics/{Uri.EscapeDataString(room.Id)}");
 }

@@ -30,6 +30,10 @@ public sealed class PublicTopicReadTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.NotFound, restrictedPosts.StatusCode);
         using (var directory = await anonymous.GetAsync($"/api/v1/public/tangents/{ExperienceWebApp.TangentKey}/topics"))
             Assert.Equal(HttpStatusCode.NotFound, directory.StatusCode);
+        using (var restrictedDocument = await anonymous.GetAsync($"/t/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}"))
+            Assert.Equal(HttpStatusCode.NotFound, restrictedDocument.StatusCode);
+        using (var restrictedPostDocument = await anonymous.GetAsync($"/t/{ExperienceWebApp.TangentKey}/m-agent-q1"))
+            Assert.Equal(HttpStatusCode.NotFound, restrictedPostDocument.StatusCode);
 
         using var owner = await CredentialClient(app.OwnerParticipantId, "public-topic-owner");
         using (var refused = await owner.PatchAsJsonAsync(
@@ -52,7 +56,7 @@ public sealed class PublicTopicReadTests : IAsyncLifetime
         Assert.Equal(ExperienceWebApp.TangentKey, root.GetProperty("tangentKey").GetString());
         Assert.Equal("Project Z", root.GetProperty("title").GetString());
         Assert.Equal("Public", root.GetProperty("readAudience").GetString());
-        Assert.Equal($"/t/{ExperienceWebApp.TangentKey}/{ExperienceWebApp.TopicKey}", root.GetProperty("path").GetString());
+        Assert.Equal($"/t/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}", root.GetProperty("path").GetString());
 
         using var postResponse = await anonymous.GetAsync(path + "/posts");
         Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
@@ -81,6 +85,11 @@ public sealed class PublicTopicReadTests : IAsyncLifetime
         using var rejectedPosts = await invalid.GetAsync(
             $"/api/v1/public/tangents/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}/posts");
         Assert.Equal(HttpStatusCode.Unauthorized, rejectedPosts.StatusCode);
+        using var rejectedDocument = await invalid.GetAsync(
+            $"/t/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}");
+        Assert.Equal(HttpStatusCode.Unauthorized, rejectedDocument.StatusCode);
+        using var rejectedPostDocument = await invalid.GetAsync($"/t/{ExperienceWebApp.TangentKey}/m-agent-q1");
+        Assert.Equal(HttpStatusCode.Unauthorized, rejectedPostDocument.StatusCode);
 
         using var anonymous = Client();
         using var wrongParent = await anonymous.GetAsync(
@@ -90,6 +99,58 @@ public sealed class PublicTopicReadTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, wrongParent.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         Assert.Equal(await missing.Content.ReadAsStringAsync(), await wrongParent.Content.ReadAsStringAsync());
+        using var wrongParentDocument = await anonymous.GetAsync("/t/wrong-parent/m-agent-q1");
+        using var missingDocument = await anonymous.GetAsync($"/t/{ExperienceWebApp.TangentKey}/missing-post");
+        Assert.Equal(HttpStatusCode.NotFound, wrongParentDocument.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missingDocument.StatusCode);
+        Assert.Equal(await missingDocument.Content.ReadAsStringAsync(), await wrongParentDocument.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Anonymous_topic_and_deep_post_links_are_readable_escaped_documents_with_stable_navigation()
+    {
+        await PublishDirectly();
+        using (EntityContext.NoCache())
+        {
+            var message = await Message.Get("m-agent-q1") ?? throw new InvalidOperationException("Seeded post missing.");
+            message.Content = message.Content with { Text = "A literal <script>alert('no')</script> stays text." };
+            await message.Save();
+            var renamed = await Room.Get(ExperienceWebApp.TopicKey) ?? throw new InvalidOperationException("Seeded Topic missing.");
+            renamed.Title = "Project Z revisited";
+            await renamed.Save();
+        }
+
+        using var anonymous = Client();
+        var topicPath = $"/t/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}";
+        using var topic = await anonymous.GetAsync(topicPath);
+        Assert.Equal(HttpStatusCode.OK, topic.StatusCode);
+        Assert.Equal("text/html", topic.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", topic.Headers.CacheControl?.ToString());
+        Assert.Contains("default-src 'none'", topic.Headers.GetValues("Content-Security-Policy").Single());
+        var topicHtml = await topic.Content.ReadAsStringAsync();
+        Assert.Contains("<link rel=\"canonical\" href=\"" + topicPath + "\">", topicHtml);
+        Assert.Contains("Project Z revisited", topicHtml);
+        Assert.Contains("three open questions remain", topicHtml);
+        Assert.Contains("&lt;script&gt;alert(&#39;no&#39;)&lt;/script&gt;", topicHtml);
+        Assert.DoesNotContain("<script>", topicHtml);
+        Assert.Contains($"href=\"/t/{ExperienceWebApp.TangentKey}/m-agent-q1\"", topicHtml);
+
+        using var deep = await anonymous.GetAsync($"/t/{ExperienceWebApp.TangentKey}/m-leo-r1");
+        Assert.Equal(HttpStatusCode.OK, deep.StatusCode);
+        var deepHtml = await deep.Content.ReadAsStringAsync();
+        Assert.Contains("id=\"post-m-leo-r1\" aria-current=\"true\"", deepHtml);
+        Assert.Contains("A literal &lt;script&gt;", deepHtml);
+        Assert.Contains("three open questions remain", deepHtml);
+        Assert.Contains("can you help us coordinate", deepHtml);
+        Assert.Contains($"<link rel=\"canonical\" href=\"/t/{ExperienceWebApp.TangentKey}/m-leo-r1\">", deepHtml);
+
+        using var around = await anonymous.GetAsync(
+            $"/api/v1/public/tangents/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}/posts?around=m-leo-r1");
+        Assert.Equal(HttpStatusCode.OK, around.StatusCode);
+        using var aroundJson = JsonDocument.Parse(await around.Content.ReadAsByteArrayAsync());
+        Assert.Contains(aroundJson.RootElement.GetProperty("posts").EnumerateArray(),
+            post => post.GetProperty("id").GetString() == "m-leo-r1");
+
     }
 
     [Fact]
@@ -131,6 +192,12 @@ public sealed class PublicTopicReadTests : IAsyncLifetime
         using var older = await anonymous.GetAsync(path + "?before=" + first + "&limit=25");
         Assert.Equal(HttpStatusCode.OK, older.StatusCode);
         Assert.True((await older.Content.ReadAsByteArrayAsync()).Length < 68 * 1024);
+
+        using var html = await anonymous.GetAsync($"/t/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}");
+        Assert.Equal(HttpStatusCode.OK, html.StatusCode);
+        var htmlBytes = await html.Content.ReadAsByteArrayAsync();
+        Assert.True(htmlBytes.Length < 72 * 1024, $"Public document was {htmlBytes.Length} bytes.");
+        Assert.Contains("rel=\"prev\"", System.Text.Encoding.UTF8.GetString(htmlBytes));
     }
 
     [Fact]

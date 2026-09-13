@@ -15,4 +15,9 @@ public sealed class PublicTopicAccess : EntityAccess<Room>
                 && (room.SpaceState == RoomSpaceState.Local
                     || room.SpaceState == RoomSpaceState.Ready && room.SpaceUri != null && room.SpaceUri != ""))
             : action is AccessAction.Update or AccessAction.Delete ? q.Where(room => false) : q;
+
+    internal static bool IsPublicAndReady(Room room)
+        => room.ReadAudience == RoomReadAudience.Public
+            && (room.SpaceState == RoomSpaceState.Local
+                || room.SpaceState == RoomSpaceState.Ready && !string.IsNullOrEmpty(room.SpaceUri));
 }

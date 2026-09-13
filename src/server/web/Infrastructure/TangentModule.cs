@@ -50,6 +50,7 @@ public sealed class TangentModule : KoanModule
         services.AddOptions<SpacesOptions>().BindConfiguration(SpacesOptions.Configuration);
         services.AddOptions<TangentSpace.Conversation.ConversationOptions>().BindConfiguration(TangentSpace.Conversation.ConversationOptions.Configuration);
         services.AddSingleton<RoomGovernance>();
+        services.AddSingleton<Rooms.Web.PublicConversationReader>();
         services.AddSingleton<TangentGovernance>();
         services.AddSingleton<CompanionGovernance>();
         services.AddSingleton<SpacesVerifier>();

@@ -16,12 +16,20 @@ gate, then return only a maximum of 25 safe projections inside a 64 KiB planning
 with stable sequence edges instead of participant-bound expiring cursors. Invalid bearer
 credentials return 401 before the visibility query on Koan revision `30586ebf`.
 
-The focused public-read/domain suite passes **36/36**, the full .NET suite passes
-**505/505**, and the browser suite passes **151/151**. The Docker app was rebuilt in
+Anonymous requests to the stable Topic and Post permalinks now receive escaped,
+server-rendered HTML from that same bounded projection. A deep Post resolves directly
+and shows surrounding context without traversing earlier history; older/newer links use
+stable sequence edges. Display-title changes do not change identifier URLs. Restricted,
+missing and wrong-parent documents remain indistinguishable empty 404s, while an
+authenticated direct load keeps the SPA workspace shell. Public documents are currently
+unlisted and explicitly `noindex` until discovery policy is implemented.
+
+The focused public-read/domain suite passes **37/37**, the full .NET suite passes
+**506/506**, and the browser suite passes **151/151**. The Docker app was rebuilt in
 place with existing state preserved. Closing smoke checks confirm healthy document and
 health responses, empty 404s for hidden Topic/Post resources, and 401s for invalid
-credentials. Public server-rendered documents, friendly rename aliases,
-directory listing/search and public media classification remain later S03/S09 work.
+credentials. Friendly aliases, a public Tangent doorstep/directory, indexed discovery
+and public media classification remain later S03/S09 work.
 
 ## Bounded moderation cases and optional stewardship tools — 12 September 2026
 
