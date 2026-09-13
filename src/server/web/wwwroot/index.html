@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/rooms.css?v=20260913-settings1">
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
-  <link rel="stylesheet" href="/landing.css?v=20260913-roles1">
+  <link rel="stylesheet" href="/landing.css?v=20260913-roles2">
   <link rel="stylesheet" href="/moderation.css?v=20260913-cases1">
   <link rel="stylesheet" href="/atmosphere.css?v=20260912-surfaces1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
@@ -23,7 +23,7 @@
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
   <script src="/moderation.js?v=20260913-cases1" defer></script>
   <script src="/rooms.js?v=20260913-settings1" defer></script>
-  <script src="/roles.js?v=20260913-roles1" defer></script>
+  <script src="/roles.js?v=20260913-roles2" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260913-spa2" defer></script>
@@ -92,40 +92,49 @@
               </details>
             </section>
             <section id="settings-roles-panel" class="roles-panel" role="tabpanel" aria-labelledby="settings-roles-tab" hidden>
-              <header class="roles-heading"><div><p class="eyebrow">ACCESS, WITHOUT MYSTERY</p><h2>Roles</h2><p>Shape who can participate and care for this place. Changes take effect immediately.</p></div><button id="role-create" class="btn btn-primary" type="button">Create role</button></header>
+              <header class="roles-heading"><div><p class="eyebrow">ACCESS, WITHOUT MYSTERY</p><h2>Roles</h2><p>Group people by responsibility, then give each role only what it needs.</p></div></header>
               <div class="role-scope-bar" aria-label="Role scope">
-                <label>Layer<select id="role-scope-kind" class="input"><option value="host">Server</option><option value="tangent">Tangent</option><option value="topic">Topic</option></select></label>
+                <label>Scope<select id="role-scope-kind" class="input"><option value="host">Server</option><option value="tangent">Tangent</option><option value="topic">Topic</option></select></label>
                 <label id="role-tangent-field" hidden>Tangent<select id="role-tangent-scope" class="input"></select></label>
                 <label id="role-topic-field" hidden>Topic<select id="role-topic-scope" class="input"></select></label>
                 <p id="role-scope-note" class="hint">Server roles can flow into every Tangent and Topic.</p>
               </div>
-              <div class="roles-workspace">
-                <aside class="role-browser" aria-label="Roles in this scope">
-                  <label class="role-search"><span class="visually-hidden">Search roles</span><input id="role-search" class="input" type="search" placeholder="Search roles"></label>
-                  <div id="role-list" class="role-list" role="listbox" aria-label="Roles"></div>
-                  <p id="role-list-status" class="hint" role="status">Loading roles…</p>
-                </aside>
-                <section id="role-detail" class="role-detail" aria-live="polite">
-                  <div id="role-empty" class="role-empty"><span class="role-empty-mark" aria-hidden="true">&#9672;</span><h3>Choose a role</h3><p>Select a role to tune its permissions and membership, or create a new one.</p></div>
-                  <form id="role-form" hidden>
-                    <header class="role-editor-heading"><div class="role-title-line"><span id="role-color-dot" class="role-color-dot" aria-hidden="true"></span><div><p id="role-editor-kicker" class="eyebrow">ROLE</p><h3 id="role-editor-title">New role</h3></div></div><span id="role-managed" class="role-managed" hidden>Managed by Tangent</span></header>
+              <section id="role-overview" class="role-overview" aria-labelledby="role-overview-heading">
+                <div class="role-overview-toolbar"><label class="role-search"><span class="visually-hidden">Search roles</span><input id="role-search" class="input" type="search" placeholder="Search roles"></label><button id="role-create" class="btn btn-primary" type="button">Create role</button></div>
+                <div class="role-directory-heading"><strong id="role-overview-heading">Roles</strong><span>Direct members</span></div>
+                <div id="role-directory-list" class="role-directory-list" role="listbox" aria-label="Roles"></div>
+                <p id="role-list-status" class="hint" role="status">Loading roles…</p>
+                <p class="role-count-note">Member counts show direct assignments in this scope. Inherited access remains visible in the role’s permissions.</p>
+              </section>
+              <section id="role-editor-view" class="role-editor-view" hidden>
+                <header class="role-editor-heading"><button id="role-back" class="role-back" type="button">← All roles</button><div class="role-title-line"><span id="role-color-dot" class="role-color-dot" aria-hidden="true"></span><div><p id="role-editor-kicker" class="eyebrow">ROLE</p><h3 id="role-editor-title">New role</h3></div></div><span id="role-managed" class="role-managed" hidden>Managed by Tangent</span></header>
+                <div class="role-editor-workspace">
+                  <aside class="role-browser" aria-label="Other roles in this scope"><div id="role-list" class="role-list" role="listbox" aria-label="Other roles"></div></aside>
+                  <form id="role-form">
                     <nav class="role-editor-tabs" role="tablist" aria-label="Role editor">
-                      <button type="button" role="tab" aria-selected="true" data-role-editor-tab="permissions">Permissions</button>
+                      <button type="button" role="tab" aria-selected="true" data-role-editor-tab="appearance">Appearance</button>
+                      <button type="button" role="tab" aria-selected="false" data-role-editor-tab="permissions">Permissions</button>
                       <button type="button" role="tab" aria-selected="false" data-role-editor-tab="members">Members <span id="role-member-count">0</span></button>
                     </nav>
-                    <section id="role-permissions-panel" role="tabpanel">
-                      <div class="role-fields"><label>Role name<input id="role-name" class="input" maxlength="160" required></label><label>Purpose<input id="role-purpose" class="input" maxlength="1024" placeholder="What is this role for?"></label><label class="role-color-field">Color<input id="role-color" type="color" value="#a98df0"></label></div>
+                    <section id="role-appearance-panel" role="tabpanel">
+                      <div class="role-fields"><label>Role name<input id="role-name" class="input" maxlength="160" required></label><label>Purpose<textarea id="role-purpose" class="input" maxlength="1024" rows="3" placeholder="What is this role for?"></textarea></label><label class="role-color-field">Color<input id="role-color" type="color" value="#a98df0"></label></div>
+                      <div class="role-preview"><p class="eyebrow">Preview</p><div><span id="role-preview-dot" class="role-list-dot" aria-hidden="true"></span><strong id="role-preview-name">New role</strong><small id="role-preview-purpose">What this role is for</small></div></div>
+                      <button id="role-retire" class="btn btn-quiet role-danger" type="button" hidden>Retire role</button>
+                    </section>
+                    <section id="role-permissions-panel" role="tabpanel" hidden>
+                      <label class="role-permission-search"><span class="visually-hidden">Search permissions</span><input id="role-permission-search" class="input" type="search" placeholder="Search permissions"></label>
                       <div id="role-capabilities" class="role-capabilities"></div>
-                      <div class="role-editor-actions"><button id="role-save" class="btn btn-primary">Save role</button><button id="role-retire" class="btn btn-quiet role-danger" type="button" hidden>Retire role</button><p id="role-status" role="status"></p></div>
                     </section>
                     <section id="role-members-panel" role="tabpanel" hidden>
-                      <div class="role-member-invite"><div><h4>Add someone</h4><p class="hint">Use their handle or DID. Membership is scoped to the layer selected above.</p></div><div class="role-member-add"><input id="role-member-identifier" class="input" maxlength="256" placeholder="alice.example.com or did:plc:…"><button id="role-member-add" class="btn btn-primary" type="button">Add</button></div></div>
+                      <div class="role-members-heading"><div><h4>Members of this role</h4><p class="hint">Add or remove direct assignments in the selected scope.</p></div><button id="role-member-open" class="btn btn-primary" type="button">Add member</button></div>
+                      <div id="role-member-invite" class="role-member-invite" hidden><div><h4>Add someone</h4><p class="hint">Use their handle or DID.</p></div><div class="role-member-add"><input id="role-member-identifier" class="input" maxlength="256" placeholder="alice.example.com or did:plc:…"><button id="role-member-add" class="btn btn-primary" type="button">Add</button><button id="role-member-cancel" class="btn btn-quiet" type="button">Cancel</button></div></div>
                       <div id="role-members" class="role-members"></div>
                       <p id="role-members-status" class="hint" role="status"></p>
                     </section>
+                    <div id="role-editor-actions" class="role-editor-actions"><button id="role-save" class="btn btn-primary">Save changes</button><button id="role-reset" class="btn btn-quiet" type="button">Reset</button><p id="role-status" role="status"></p></div>
                   </form>
-                </section>
-              </div>
+                </div>
+              </section>
             </section>
           </div>
         </div>
