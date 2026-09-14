@@ -16,10 +16,10 @@ public sealed class TangentRoleAuthority : IScopedRoleAuthorityContributor
     {
         if (!request.Actor.IsAuthenticated || request.Target.TenantId != TangentRoleScopes.Tenant) return [];
 
-        if (request.Operation == ScopedRoleAuthorityOperation.RevokeRole && IsOwnerRoleId(request.RoleId))
+        if (request.Operation == ScopedRoleAuthorityOperation.RemoveMember && IsOwnerRoleId(request.RoleId))
             return [];
 
-        if (request.Operation == ScopedRoleAuthorityOperation.AssignRole &&
+        if (request.Operation == ScopedRoleAuthorityOperation.AddMember &&
             IsOwnerRoleId(request.RoleId, out var ownerScope) &&
             !await IsCanonicalOwner(request.Subject, ownerScope, ct).ConfigureAwait(false))
             return [];
@@ -60,7 +60,7 @@ public sealed class TangentRoleAuthority : IScopedRoleAuthorityContributor
     }
 
     private static ScopedRoleAuthorityEnvelope Envelope(ScopedRoleScopeRef scope, string owner, long version, string kind)
-        => new(scope, all, Descendants: true, AllowSelfAssignment: true,
+        => new(scope, all, Descendants: true, AllowSelfMembership: true,
             ProofKey: $"{kind}:{owner}:{scope.Id}", ProofVersion: version);
 
     private static bool IsOwnerRoleId(string? roleId)

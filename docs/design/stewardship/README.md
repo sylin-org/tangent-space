@@ -21,7 +21,7 @@ Refactor `Room.CurrentPolicy`, `TangentGovernance`, `Permissions` and `PolicyGat
 Candidate records (reuse/extend existing entities where equivalent):
 
 - `AccessPolicy`: separate listing, reading, admission, replies, Topic creation, curation and stewardship; versioned preset expansion, not opaque flags.
-- `ScopedRoleDefinition`, `RoleBinding`, `AudienceGrant`: small named presets and explicit participant/group scope; guest access need not imply parent membership.
+- `ScopedRoleDefinition`, participant membership collections, `AudienceGrant`: small named presets and explicit participant/group scope; guest access need not imply parent membership.
 - `TopicOwnership`, `OwnershipTransfer`, `DelegationMandate`: ownership lifecycle and revocable action ceilings; use existing Tangent/Host ownership records.
 - `ModerationCase`, `ModerationAction`, `Appeal`: bounded case state, append-only action history and human review; reuse current restrictions/audit/journal/receipts.
 - `SavedReference`, `BranchOrigin`, `CurationRecord`, `ExportJob`: attention, source-preserving curation and resumable preservation; not authority records.
@@ -73,7 +73,7 @@ All suggested HTTP paths are under `/api/v1/experience`; existing public/browser
 | Defer / close / escalate case | `POST /moderation/cases/{id}/decisions`, `POST /moderation/cases/{id}/escalations` | `DecideCase`, `EscalateCase`; escalation status through case/receipt |
 | Create community/conversation | Extend `POST /tangents`, `POST /tangents/{id}/topics` | `CreateTangent`, `CreateTopic` when granted |
 | Invitations and admission | `POST /scopes/{id}/invitations`, `GET /scopes/{id}/admission-requests`, `POST /admission-requests/{id}/decisions` | `InviteParticipant`, `ListAdmissionRequests`, `DecideAdmission` |
-| Scoped policy and roles | `POST /scopes/{id}/policy-previews`, `PUT /scopes/{id}/policy`, `POST /scopes/{id}/role-bindings` | `PreviewPolicyChange`, `SetScopePolicy`, `SetRole` with delegation ceiling |
+| Scoped policy and roles | `POST /scopes/{id}/policy-previews`, `PUT /scopes/{id}/policy`, member-addressed role collection operations | `PreviewPolicyChange`, `SetScopePolicy`, `SetRole` with delegation ceiling |
 | Topic/Tangent ownership | `POST /scopes/{id}/ownership-transfers`, `POST /ownership-transfers/{id}/decisions` | `ProposeOwnershipTransfer`, `DecideOwnershipTransfer`; never Host-root transfer |
 | Safe Host assistance | `GET /server/health-summary`, `PATCH /server/presentation` and explicit permitted domain operations | Optional `GetServerHealth`, `UpdateServerPresentation`; sanitized, tightly typed fields |
 | Human emergency pause/recovery | `POST /participants/{id}/action-pauses`, explicit human-authorized resume and Host recovery flow | Human control surface only; no moderator tool for self-resume or overriding its pause |

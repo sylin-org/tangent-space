@@ -12,7 +12,8 @@ namespace TangentSpace.Authorization;
 [ApiController]
 [Authorize]
 [Route("api/roles/ui")]
-public sealed class ScopedRoleUiController(IAntiforgery antiforgery, ParticipantDirectory directory) : ControllerBase
+public sealed class ScopedRoleUiController(IAntiforgery antiforgery, ParticipantDirectory directory,
+    ParticipantProfiles profiles) : ControllerBase
 {
     public const int ParticipantWindow = 50;
 
@@ -35,11 +36,16 @@ public sealed class ScopedRoleUiController(IAntiforgery antiforgery, Participant
         var participant = match?.Participant;
         if (participant is null && Participant.IsValidId(identifier)) participant = await directory.ByInternal(identifier, ct);
         if (participant is null) return NotFound(new { error = "No participant is registered under that identity." });
+        var profile = await profiles.Read(participant.Id, ct);
+        var label = profile.DisplayName ?? profile.Handle ?? "Participant";
         return Ok(new
         {
             participant.Id,
-            Label = await directory.BestLabel(participant.Id, ct),
-            Did = await directory.AtprotoDidOf(participant.Id, ct)
+            Label = label,
+            Did = await directory.AtprotoDidOf(participant.Id, ct),
+            profile.Handle,
+            profile.DisplayName,
+            profile.Avatar
         });
     }
 
@@ -49,8 +55,19 @@ public sealed class ScopedRoleUiController(IAntiforgery antiforgery, Participant
         if (!await IsOwner(ct)) return Forbid();
         var window = ids.Where(Participant.IsValidId).Distinct(StringComparer.Ordinal).Take(ParticipantWindow + 1).ToArray();
         if (window.Length > ParticipantWindow) return BadRequest(new { error = $"Request at most {ParticipantWindow} participants." });
-        var labels = await directory.LabelsFor(window, ct);
-        return Ok(window.Select(id => new { Id = id, Label = labels.GetValueOrDefault(id, id) }).ToArray());
+        var people = await Task.WhenAll(window.Select(async id =>
+        {
+            var profile = await profiles.Read(id, ct);
+            return new
+            {
+                Id = id,
+                Label = profile.DisplayName ?? profile.Handle ?? "Participant",
+                profile.Handle,
+                profile.DisplayName,
+                profile.Avatar
+            };
+        }));
+        return Ok(people);
     }
 
     private async Task<bool> IsOwner(CancellationToken ct)

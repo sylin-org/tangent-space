@@ -26,8 +26,8 @@ public sealed class TangentRoles(IServiceScopeFactory scopes, TangentRoleContext
             using var serviceScope = scopes.CreateScope();
             var engine = serviceScope.ServiceProvider.GetRequiredService<RoleEngine>();
             var participant = await EnsureHost(engine, site, ct);
-            await Each<Participant>(async value => await engine.Assign(new(TangentRoleScopes.HostScope, value.Id, participant.Id,
-                ScopedRolePropagation.Descendants), ct), ct);
+            await Each<Participant>(async value => await engine.Add(
+                new ScopedRoleMember(TangentRoleScopes.HostScope, value.Id, participant.Id), ct), ct);
 
             await Each<TangentCommunity>(value => EnsureTangent(engine, value, syncMemberships: false, ct), ct);
             await Each<TangentMembership>(value => SyncTangentMembership(engine, value, ct), ct);
@@ -69,8 +69,7 @@ public sealed class TangentRoles(IServiceScopeFactory scopes, TangentRoleContext
             using var serviceScope = scopes.CreateScope();
             var engine = serviceScope.ServiceProvider.GetRequiredService<RoleEngine>();
             var participant = await EnsureHost(engine, site, ct);
-            await engine.Assign(new(TangentRoleScopes.HostScope, participantId, participant.Id,
-                ScopedRolePropagation.Descendants), ct);
+            await engine.Add(new ScopedRoleMember(TangentRoleScopes.HostScope, participantId, participant.Id), ct);
         }
         finally { reconcile.Release(); }
     }
@@ -137,8 +136,7 @@ public sealed class TangentRoles(IServiceScopeFactory scopes, TangentRoleContext
             [TangentRoleCapabilities.HostRead, TangentRoleCapabilities.TangentCreate, TangentRoleCapabilities.TangentRead,
              TangentRoleCapabilities.TopicCreate, TangentRoleCapabilities.TopicRead, TangentRoleCapabilities.TopicReply,
              TangentRoleCapabilities.PostEditOwn, TangentRoleCapabilities.PostDeleteOwn, TangentRoleCapabilities.PostReport], ct);
-        await engine.Assign(new(TangentRoleScopes.HostScope, site.OwnerParticipantId, owner.Id,
-            ScopedRolePropagation.Descendants), ct);
+        await engine.Add(new ScopedRoleMember(TangentRoleScopes.HostScope, site.OwnerParticipantId, owner.Id), ct);
         return participant;
     }
 
@@ -148,7 +146,7 @@ public sealed class TangentRoles(IServiceScopeFactory scopes, TangentRoleContext
         await EnsureScope(engine, scope, TangentRoleScopes.HostScope, ct);
         var owner = await EnsureRole(engine, scope, "owner", "Owner",
             TangentRoleCapabilities.All.Where(value => value != TangentRoleCapabilities.HostManage).ToArray(), ct);
-        await engine.Assign(new(scope, tangent.OwnerParticipantId, owner.Id, ScopedRolePropagation.Descendants), ct);
+        await engine.Add(new ScopedRoleMember(scope, tangent.OwnerParticipantId, owner.Id), ct);
         await EnsureRole(engine, scope, "admin", "Admin",
             [TangentRoleCapabilities.TangentRead, TangentRoleCapabilities.TangentManage,
              TangentRoleCapabilities.TopicCreate, TangentRoleCapabilities.TopicRead, TangentRoleCapabilities.TopicReply,
@@ -172,7 +170,7 @@ public sealed class TangentRoles(IServiceScopeFactory scopes, TangentRoleContext
              TangentRoleCapabilities.PostDeleteOwn, TangentRoleCapabilities.PostReport], ct);
         await EnsureRole(engine, scope, "reader", "Reader",
             [TangentRoleCapabilities.TopicRead, TangentRoleCapabilities.PostReport], ct);
-        await engine.Assign(new(scope, room.CreatorParticipantId, manager.Id), ct);
+        await engine.Add(new ScopedRoleMember(scope, room.CreatorParticipantId, manager.Id), ct);
         if (!syncMemberships) return;
         await EachRoomMembership(room.Id, value => SyncRoomMembership(engine, value, ct), ct);
     }
@@ -185,11 +183,9 @@ public sealed class TangentRoles(IServiceScopeFactory scopes, TangentRoleContext
         {
             var roleId = RoleId(scope, name);
             if (roleId == desiredId) continue;
-            var bindingId = ScopedRoleBinding.KeyFor(scope.TenantId, subject, roleId, scope);
-            if (await ScopedRoleBinding.Get(bindingId, ct) is { Revoked: false } binding)
-                await engine.Revoke(binding.Id, binding.Version, ct);
+            await engine.Remove(new ScopedRoleMember(scope, subject, roleId), ct);
         }
-        if (desiredId is not null) await engine.Assign(new(scope, subject, desiredId), ct);
+        if (desiredId is not null) await engine.Add(new ScopedRoleMember(scope, subject, desiredId), ct);
     }
 
     private static async Task EnsureScope(RoleEngine engine, ScopedRoleScopeRef scope, ScopedRoleScopeRef? parent, CancellationToken ct)

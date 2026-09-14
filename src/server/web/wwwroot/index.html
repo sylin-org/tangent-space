@@ -103,6 +103,7 @@
                 <div class="role-overview-toolbar"><label class="role-search"><span class="visually-hidden">Search roles</span><input id="role-search" class="input" type="search" placeholder="Search roles"></label><button id="role-create" class="btn btn-primary" type="button">Create role</button></div>
                 <div class="role-directory-heading"><strong id="role-overview-heading">Roles</strong><span>Direct members</span></div>
                 <div id="role-directory-list" class="role-directory-list" role="listbox" aria-label="Roles"></div>
+                <div class="role-directory-actions"><button id="role-counts-retry" class="btn btn-quiet" type="button" hidden>Retry counts</button><button id="role-page-previous" class="btn btn-quiet" type="button" hidden>Previous</button><button id="role-page-next" class="btn btn-quiet" type="button" hidden>Next</button></div>
                 <p id="role-list-status" class="hint" role="status">Loading roles…</p>
                 <p class="role-count-note">Member counts show direct assignments in this scope. Inherited access remains visible in the role’s permissions.</p>
               </section>
@@ -142,10 +143,11 @@
                         <div><h4>Add someone</h4><p class="hint">Find a participant by handle or DID, then confirm who receives this role.</p></div>
                         <label class="role-member-query"><span>Handle or DID</span><span class="role-member-add"><input id="role-member-identifier" class="input" maxlength="256" aria-describedby="role-member-lookup-status" placeholder="alice.example.com or did:plc:…"><button id="role-member-resolve" class="btn btn-primary" type="button">Find participant</button><button id="role-member-cancel" class="btn btn-quiet" type="button">Cancel</button></span></label>
                         <p id="role-member-lookup-status" class="hint" role="status"></p>
-                        <div id="role-member-resolved" class="role-member-resolved" hidden><span id="role-member-resolved-avatar" class="role-member-avatar" aria-hidden="true">?</span><span><strong id="role-member-resolved-name"></strong><small id="role-member-resolved-id"></small></span><button id="role-member-add" class="btn btn-primary" type="button">Add to role</button></div>
+                        <div id="role-member-resolved" class="role-member-resolved" hidden><span id="role-member-resolved-avatar" class="role-member-avatar" aria-hidden="true">?</span><span><strong id="role-member-resolved-name"></strong><small id="role-member-resolved-byline"></small></span><button id="role-member-add" class="btn btn-primary" type="button">Add to role</button></div>
                       </div>
                       <div id="role-member-protected" class="role-member-protected" hidden><strong>Ownership is protected</strong><p>The server owner is the human account designated by server administration. This role assignment cannot replace that ownership.</p></div>
                       <div id="role-members" class="role-members"></div>
+                      <div class="role-members-actions"><button id="role-member-profiles-retry" class="btn btn-quiet" type="button" hidden>Retry profiles</button><button id="role-members-previous" class="btn btn-quiet" type="button" hidden>Previous</button><button id="role-members-next" class="btn btn-quiet" type="button" hidden>Next</button></div>
                       <p id="role-members-status" class="hint" role="status"></p>
                     </section>
                     <div id="role-editor-actions" class="role-editor-actions"><button id="role-save" class="btn btn-primary">Save changes</button><button id="role-reset" class="btn btn-quiet" type="button">Reset</button><p id="role-status" role="status"></p></div>

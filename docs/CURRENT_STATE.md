@@ -5,17 +5,17 @@
 Tangent now contributes a Koan scoped-role catalog for the Host → Tangent → Topic
 hierarchy and exposes capabilities for reading, creation, management, participant
 administration, replying, editing/removing/reporting Posts and appointing Topic managers.
-Host and Tangent owners receive durable descendant-propagating `Owner` role membership;
-current Tangent/Topic membership changes project into direct deterministic Koan role-member
-entries. New arrivals and newly created Tangents/Topics update only their affected role set;
+Host and Tangent owners receive durable scoped `Owner` role membership; current
+Tangent/Topic membership changes update each participant's Koan `Roles[]` collection at
+that scope. Membership has no separate edge entity, identifier, revision or tombstone.
+New arrivals and newly created Tangents/Topics update only their affected role set;
 the bounded startup pass adopts existing POC rows.
 
 Topic policy snapshots now intersect their read, reply and management decisions with Koan's
 role result, while Tangent's suspension, restriction, admission, storage-readiness, locking,
 classification and ownership protections remain mandatory guards. Koan Identity Web exposes
-the application vocabulary and scoped management endpoints. A real integration test proves
-the descriptor, durable Host/Tangent Owner bindings, descendant authority, ordinary reply
-access, denied management and immediate Manager promotion/demotion.
+the application vocabulary and scoped management endpoints. Integration tests prove owner
+membership and capabilities, protected owner membership, and idempotent collection add/remove.
 
 The integration exposed a framework remove/re-add defect on Koan `950c7a894`. It was
 reported to **Sol High** and fixed upstream in `26b592c056075a7c5a8b2aaef143d838a36db322`,
@@ -23,9 +23,15 @@ which also adds immutable compiled membership predicates. An isolated red-team p
 and Sol High fixed stale conditional-delete and input-bound gaps in
 `2c556f185023a95db752002e22c1cbcceedb4208`. A narrow follow-up found that reapproval
 events still omitted policy-derived grants; final revision
-`1b986ec73acbff434933bd156b2de56dd3a83614` closes that lifecycle gap. Tangent pins it;
-the exact Owner promote → demote → promote regression passes against it. This role slice
-is not deployed yet.
+`1b986ec73acbff434933bd156b2de56dd3a83614` closed that lifecycle gap. The greenfield
+membership architecture was then simplified upstream in
+`585444e774bc312be32b08fd8c2ffd61861888aa`: one participant record per exact scope owns
+its `Roles[]` and `Groups[]` collections, while member directories remain provider-bounded.
+Tangent pins that revision and uses only the collection API. The corrected slice is deployed
+locally at `http://127.0.0.1:5220` against a freshly recreated disposable POC dataset; the next
+browser visit completes owner onboarding before role management is available. The role-management
+source passed its delight review at 8.3/10; the browser suite passes 163/163 and the focused
+collection-membership integration suite passes 3/3.
 
 ## Topic settings polish — 13 September 2026
 
