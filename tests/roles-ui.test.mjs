@@ -58,3 +58,10 @@ test('role editor keyboard navigation and responsive member rows remain accessib
 test('switching between Server settings tabs does not discard a dirty role draft', () => {
   assert.match(script, /name === 'roles' && !\(dirty && selected\)/);
 });
+
+test('an optional permission descriptor failure cannot erase a successful role list', () => {
+  assert.match(script, /Promise\.allSettled/);
+  assert.match(script, /rolePageResult\.status === 'rejected'/);
+  assert.match(script, /Roles loaded\. Permission details are temporarily unavailable/);
+  assert.match(script, /if \(descriptorError\) return \[\.\.\.new Set/);
+});

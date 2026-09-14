@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Microsoft.AspNetCore.Builder;
 using System.Net;
 using System.Net.Sockets;
 using Koan.Core.Hosting.App;

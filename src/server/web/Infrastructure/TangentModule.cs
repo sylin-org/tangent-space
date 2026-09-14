@@ -46,6 +46,7 @@ public sealed class TangentModule : KoanModule
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
+        services.AddAntiforgery();
         services.AddSingleton<TangentIdentityActorAccessor>();
         services.Replace(ServiceDescriptor.Singleton<IIdentityActorAccessor>(provider => provider.GetRequiredService<TangentIdentityActorAccessor>()));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IClaimsTransformation, HostOwnerClaimsTransformation>());

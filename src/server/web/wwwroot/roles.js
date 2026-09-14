@@ -4,7 +4,7 @@
   const groupOrder = ['host', 'tangent', 'topic', 'post', 'other'];
   const groupLabels = { host: 'Server', tangent: 'Tangents', topic: 'Topics', post: 'Posts', other: 'Other' };
   const roleMemberPageSize = 50;
-  let site, descriptor, roles = [], selected, loadVersion = 0, csrf, pendingMember;
+  let site, descriptor, descriptorError, roles = [], selected, loadVersion = 0, csrf, pendingMember;
   const rolePageSize = 100;
   let roleTotal = 0, editorTab = 'appearance', dirty = false;
   let roleListPage = 1, roleListHasPrevious = false, roleListHasNext = false;
@@ -183,12 +183,20 @@
     const version = ++loadVersion;
     message('role-list-status', 'Loading roles…'); message('role-status', ''); message('role-members-status', '');
     try {
-      const [description, rolePage] = await Promise.all([
+      const [descriptionResult, rolePageResult] = await Promise.allSettled([
         descriptor ? Promise.resolve({ data: descriptor }) : request('/api/roles/ui/descriptor'),
         request(api('roles?pageSize=' + rolePageSize + '&page=1'))
       ]);
       if (version !== loadVersion) return;
-      descriptor = description.data;
+      if (rolePageResult.status === 'rejected') throw rolePageResult.reason;
+      if (descriptionResult.status === 'fulfilled') {
+        descriptor = descriptionResult.value.data;
+        descriptorError = undefined;
+      } else {
+        descriptor ||= { capabilities: [] };
+        descriptorError = descriptionResult.reason;
+      }
+      const rolePage = rolePageResult.value;
       roles = (rolePage.data.items || []).map(normalizeRole);
       roleTotal = rolePage.data.totalCount ?? roles.length;
       roleListPage = 1;
@@ -211,7 +219,8 @@
         if (requested) roleUrl(undefined);
         showOverview(false);
       }
-      message('role-list-status', roles.length ? `Showing ${roles.length} of ${roleTotal}` : 'No roles have been created at this scope.');
+      message('role-list-status', descriptorError ? 'Roles loaded. Permission details are temporarily unavailable.'
+        : roles.length ? `Showing ${roles.length} of ${roleTotal}` : 'No roles have been created at this scope.', !!descriptorError);
       loadMemberCounts(roles, version).then(() => {
         if (version === loadVersion) { renderOverview(); updateCountRetry(); }
       });
@@ -396,6 +405,10 @@
 
   function renderCapabilities(role, managed) {
     const root = $('role-capabilities'); root.replaceChildren();
+    if (descriptorError) {
+      root.append(make('p', 'hint error', 'Permission details could not be loaded. The role and its members remain available; reload to retry.'));
+      return;
+    }
     const scope = currentKind();
     const term = $('role-permission-search').value.trim().toLocaleLowerCase();
     const available = (descriptor?.capabilities || []).filter(item => !item.scopeTypes || item.scopeTypes.includes(scope))
@@ -536,13 +549,14 @@
   }
 
   function roleGrants() {
+    if (descriptorError) return [...new Set((selected.grants || []).map(grant => grant.capability))];
     const known = new Set((descriptor?.capabilities || []).map(capability => capability.key));
     const grants = (selected.grants || []).filter(grant => !known.has(grant.capability));
     for (const capability of draftGrantKeys) {
       const original = (selected.grants || []).find(grant => grant.capability === capability);
       grants.push(original || { capability });
     }
-    return grants.map(grant => grant.capability);
+    return [...new Set(grants.map(grant => grant.capability))];
   }
 
   const roleKeyFor = name => 'role:' + name.toLocaleLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);

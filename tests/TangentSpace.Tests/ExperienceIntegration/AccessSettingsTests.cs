@@ -78,4 +78,26 @@ public sealed class AccessSettingsTests
             Assert.DoesNotContain(memberDocument.RootElement.GetProperty("members").EnumerateArray(),
                 member => member.GetString() == app.HumanParticipantId);
     }
+
+    [Fact]
+    public async Task Role_editor_support_endpoints_are_available_in_the_real_application_host()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        app.Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", app.OwnerToken);
+
+        using var descriptor = await app.Http.GetAsync("/api/roles/ui/descriptor",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, descriptor.StatusCode);
+        using (var document = JsonDocument.Parse(await descriptor.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
+            Assert.NotEmpty(document.RootElement.GetProperty("capabilities").EnumerateArray());
+
+        using var session = await app.Http.GetAsync("/api/roles/ui/session",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, session.StatusCode);
+        using (var document = JsonDocument.Parse(await session.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
+        {
+            Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("requestToken").GetString()));
+            Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("headerName").GetString()));
+        }
+    }
 }
