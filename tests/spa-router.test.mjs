@@ -9,11 +9,14 @@ test('core workspace routes have one stable client route contract', () => {
   assert.deepEqual(parseWorkspaceRoute('/t/home/topics/long%20talk'), { kind: 'topic', tangent: 'home', topic: 'long talk' });
   assert.deepEqual(parseWorkspaceRoute('/t/home/post-7'), { kind: 'post', tangent: 'home', post: 'post-7' });
   assert.deepEqual(parseWorkspaceRoute('/u/did%3Aplc%3Ax'), { kind: 'participant', identifier: 'did:plc:x' });
+  assert.deepEqual(parseWorkspaceRoute('/settings'), { kind: 'settings' });
+  assert.deepEqual(parseWorkspaceRoute('/t/home/settings'), { kind: 'tangent-settings', tangent: 'home' });
+  assert.deepEqual(parseWorkspaceRoute('/t/home/topics/lounge/settings'), { kind: 'topic-settings', tangent: 'home', topic: 'lounge' });
 });
 
 test('router refuses auth, administration, malformed and cross-origin destinations', () => {
   const origin = 'https://tangent.example';
-  for (const href of ['/sign-in/', '/settings', '/onboarding/', '/api/site', '/t/home/topics/extra/path', '/t/home/topics/a%2Fb', '/u/a%5Cb', '/u/%00x', 'https://other.example/t/home/topics']) {
+  for (const href of ['/sign-in/', '/onboarding/', '/api/site', '/t/home/topics/extra/path/nope', '/t/home/topics/a%2Fb', '/u/a%5Cb', '/u/%00x', 'https://other.example/t/home/topics']) {
     assert.equal(workspaceDestination(href, origin), null, href);
   }
 });

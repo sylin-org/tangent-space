@@ -11,19 +11,21 @@
   <link rel="stylesheet" href="/rooms.css?v=20260913-settings1">
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
-  <link rel="stylesheet" href="/landing.css?v=20260913-roles4">
+  <link rel="stylesheet" href="/landing.css?v=20260913-roles5">
+  <link rel="stylesheet" href="/access.css?v=20260913-access2">
   <link rel="stylesheet" href="/moderation.css?v=20260913-cases1">
   <link rel="stylesheet" href="/atmosphere.css?v=20260912-surfaces1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
   <script src="/atmosphere.js?v=20260912-welcome" defer></script>
-  <script src="/pages.js?v=20260913-spa3" defer></script>
+  <script src="/pages.js?v=20260913-spa4" defer></script>
   <script src="/onboarding.js?v=20260912-profile-cache" defer></script>
   <script src="/app.js?v=20260913-spa2" defer></script>
   <script src="/activity-transport.js?v=20260912-shared2" defer></script>
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
   <script src="/moderation.js?v=20260913-cases1" defer></script>
-  <script src="/rooms.js?v=20260913-settings1" defer></script>
-  <script src="/roles.js?v=20260913-roles4" defer></script>
+  <script src="/rooms.js?v=20260913-settings2" defer></script>
+  <script src="/roles.js?v=20260913-roles5" defer></script>
+  <script src="/access.js?v=20260913-access3" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260913-spa2" defer></script>
@@ -31,7 +33,7 @@
   <script src="/profile.js?v=20260913-spa5" defer></script>
   <script src="/profile-live.js?v=20260912-shared2" defer></script>
   <script src="/card-foil.js?v=20260912-welcome" defer></script>
-  <script type="module" src="/spa-router.js?v=20260913-spa4"></script>
+  <script type="module" src="/spa-router.js?v=20260913-spa5"></script>
   <script type="module" src="/agent-entry.js?v=20260913-discovery1"></script>
 </head>
 <body>
@@ -57,14 +59,16 @@
       </section>
 
       <section id="settings-page" class="settings-page" hidden aria-labelledby="settings-title">
-        <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Server settings</span></nav>
-        <header class="settings-page-heading"><p class="eyebrow">MAKE YOURSELF AT HOME</p><h1 id="settings-title">Server settings</h1><p>Name your place, set the mood, and decide who can help.</p></header>
+        <nav id="settings-breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Server settings</span></nav>
+        <header class="settings-page-heading"><p id="settings-eyebrow" class="eyebrow">MAKE YOURSELF AT HOME</p><h1 id="settings-title">Server settings</h1><p id="settings-intro">Name your place, set the mood, and decide who can help.</p></header>
         <p id="settings-denied" class="hint" hidden>Server settings are available to this server’s owner and authorized administrators.</p>
         <a id="settings-sign-in" class="btn btn-primary" href="/sign-in/?return=%2Fsettings" hidden>Sign in</a>
         <div id="settings-shell" class="settings-shell" hidden>
           <nav class="settings-tabs" role="tablist" aria-label="Server settings">
             <button id="settings-server-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-server-panel" aria-selected="true" data-settings-tab="server"><span aria-hidden="true">&#9671;</span><span><strong>Server</strong><small>Identity and atmosphere</small></span></button>
+            <button id="settings-context-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-context-panel" aria-selected="false" data-settings-tab="context" hidden><span aria-hidden="true">&#9671;</span><span><strong id="settings-context-label">Tangent</strong><small>Identity and details</small></span></button>
             <button id="settings-roles-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-roles-panel" aria-selected="false" data-settings-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Permissions and people</small></span></button>
+            <button id="settings-access-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-access-panel" aria-selected="false" data-settings-tab="access"><span aria-hidden="true">&#9670;</span><span><strong>Access</strong><small>Who can see and act</small></span></button>
           </nav>
           <div class="settings-tab-content">
             <section id="settings-server-panel" role="tabpanel" aria-labelledby="settings-server-tab">
@@ -91,14 +95,12 @@
                 </form>
               </details>
             </section>
+            <section id="settings-context-panel" class="settings-context-panel" role="tabpanel" aria-labelledby="settings-context-tab" hidden>
+              <div class="settings-context-card"><p id="settings-context-kicker" class="eyebrow">TANGENT</p><h2 id="settings-context-name">Loading…</h2><p id="settings-context-copy" class="lede"></p><div id="settings-context-editor"></div></div>
+            </section>
             <section id="settings-roles-panel" class="roles-panel" role="tabpanel" aria-labelledby="settings-roles-tab" hidden>
               <header class="roles-heading"><div><p class="eyebrow">ACCESS, WITHOUT MYSTERY</p><h2>Roles</h2><p>Group people by responsibility, then give each role only what it needs.</p></div></header>
-              <div class="role-scope-bar" aria-label="Role scope">
-                <label>Scope<select id="role-scope-kind" class="input"><option value="host">Server</option><option value="tangent">Tangent</option><option value="topic">Topic</option></select></label>
-                <label id="role-tangent-field" hidden>Tangent<select id="role-tangent-scope" class="input"></select></label>
-                <label id="role-topic-field" hidden>Topic<select id="role-topic-scope" class="input"></select></label>
-                <p id="role-scope-note" class="hint">Server roles can flow into every Tangent and Topic.</p>
-              </div>
+              <p id="role-scope-note" class="role-scope-note hint">These are server roles. They can be used by Access rules throughout this Tangent Space.</p>
               <section id="role-overview" class="role-overview" aria-labelledby="role-overview-heading">
                 <div class="role-overview-toolbar"><label class="role-search"><span class="visually-hidden">Search roles</span><input id="role-search" class="input" type="search" placeholder="Search roles"></label><button id="role-create" class="btn btn-primary" type="button">Create role</button></div>
                 <div class="role-directory-heading"><strong id="role-overview-heading">Roles</strong><span>Direct members</span></div>
@@ -154,6 +156,12 @@
                   </form>
                 </div>
               </section>
+            </section>
+            <section id="settings-access-panel" class="access-panel" role="tabpanel" aria-labelledby="settings-access-tab" hidden>
+              <header class="access-heading"><div><p class="eyebrow">A CLEAR DOOR</p><h2>Access</h2><p id="access-intro">Choose who can discover this place and what they may do here.</p></div><span id="access-scope-badge" class="access-scope-badge"></span></header>
+              <div id="access-loading" class="access-loading" role="status">Loading access rules…</div>
+              <div id="access-decisions" class="access-decisions"></div>
+              <p id="access-status" class="hint" role="status"></p>
             </section>
           </div>
         </div>

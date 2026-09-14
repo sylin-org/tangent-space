@@ -218,8 +218,8 @@ body[data-page='settings'] #server-welcome,body[data-page='settings'] #place { d
 @media(max-width:760px) {
   .settings-page-heading { margin-bottom:20px; }
   .settings-shell { grid-template-columns:1fr; gap:12px; }
-  .settings-tabs { position:static; display:flex; overflow-x:auto; padding:5px; }
-  .settings-tab { flex:1 0 145px; padding:9px 10px; }
+  .settings-tabs { position:static; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; padding:5px; }
+  .settings-tab { min-width:0; padding:9px 10px; }
   .settings-tab[aria-selected='true'] { box-shadow:inset 0 -3px 0 var(--accent); }
   .roles-heading { padding:20px; }
   .roles-heading p:last-child { display:none; }

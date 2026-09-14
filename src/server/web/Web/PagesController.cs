@@ -13,6 +13,8 @@ public sealed class PagesController(IWebHostEnvironment environment, PublicConve
     [HttpGet("/settings")]
     [HttpGet("/tangents/")]
     [HttpGet("/t/{tangent}/topics")]
+    [HttpGet("/t/{tangent}/settings")]
+    [HttpGet("/t/{tangent}/topics/{topic}/settings")]
     public IActionResult Page()
     {
         Response.Headers.CacheControl = "no-store";

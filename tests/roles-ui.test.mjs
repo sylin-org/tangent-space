@@ -31,7 +31,7 @@ test('role management is a first-class settings tab with an adaptive rail', () =
   assert.match(html, /server owner/);
   assert.doesNotMatch(html, /canonical owner/i);
   assert.match(css, /\.settings-shell\s*\{[^}]*grid-template-columns:210px minmax\(0,1fr\)/s);
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.settings-tabs\s*\{[^}]*display:flex/s);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.settings-tabs\s*\{[^}]*display:grid/s);
   assert.match(css, /@media\(max-width:1000px\)[^{]*\{[^}]*\.role-editor-workspace\s*\{[^}]*grid-template-columns:1fr/s);
 });
 
@@ -39,7 +39,7 @@ test('role UI uses Koan scoped roles with mutation safety and bounded identity l
   assert.match(script, /\/api\/identity\/scoped-roles\/descriptor/);
   assert.match(script, /\/api\/roles\/ui\/session/);
   assert.match(script, /'If-Match'/);
-  assert.match(script, /listing\.rooms \|\| listing\.channels \|\| \[\]/);
+  assert.match(script, /const currentScope = \(\) => \(\{ type: 'host', id: 'site' \}\)/);
   assert.match(script, /const roleMemberPageSize = 50/);
   assert.match(script, /const rolePageSize = 100/);
   assert.match(html, /id=\"role-member-lookup-status\"/);
@@ -99,6 +99,6 @@ test('role member lookup path includes local label duplicate short-circuit and i
   assert.doesNotMatch(script, /\[person\.id, person\.did, person\.label, person\.handle\]/);
   assert.match(script, /role-member-lookup-status/);
   assert.match(script, /already has this role/);
-  assert.match(script, /if \(kind === 'topic' && !\$\('role-topic-scope'\)\.options\.length\) await ensureTopics\(\)/);
-  assert.match(script, /\$\('role-topic-scope'\)\.addEventListener\('change', \(\) => changeScope\(\)/);
+  assert.match(script, /const currentScope = \(\) => \(\{ type: 'host', id: 'site' \}\)/);
+  assert.doesNotMatch(html, /id="role-scope-kind"/);
 });

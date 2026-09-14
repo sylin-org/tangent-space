@@ -7,7 +7,11 @@
   else if (parts[0] === 'u' && parts[1]) { route.kind = 'participant'; route.identifier = parts[1]; }
   else if (parts[0] === 't' && parts[1]) {
     route.tangent = parts[1];
-    if (parts[2] === 'topics') { route.kind = parts[3] ? 'topic' : 'topics'; route.topic = parts[3]; }
+    if (parts[2] === 'settings') route.kind = 'tangent-settings';
+    else if (parts[2] === 'topics') {
+      route.topic = parts[3];
+      route.kind = parts[4] === 'settings' ? 'topic-settings' : parts[3] ? 'topic' : 'topics';
+    }
     else { route.kind = 'post'; route.post = parts[2]; }
   }
   document.body.dataset.page = route.kind;
@@ -28,7 +32,7 @@
   let currentSite, currentTangent, currentTopic;
   function hero(site, tangent, topic) {
     currentSite = site;
-    if (route.kind === 'settings') { $('server-welcome').hidden = true; $('place').hidden = true; document.title = 'Server settings · ' + (site.server?.name || site.name); return; }
+    if (['settings', 'tangent-settings', 'topic-settings'].includes(route.kind)) { $('server-welcome').hidden = true; $('place').hidden = true; return; }
     if (route.kind === 'participant') { $('server-welcome').hidden = true; $('server-settings-toggle').hidden = true; return; }
     if (tangent) currentTangent = tangent;
     if (topic) currentTopic = topic;
@@ -64,8 +68,8 @@
     if (!site.participant && site.established) actions.append(link('Sign in to take part', signInUrl(), 'btn btn-primary'));
     if (route.kind === 'post' && topic) actions.append(link('Open conversation', topicUrl(topic.tangentKey, topic.key), 'btn btn-quiet'));
     if (route.kind === 'topics' && tangent?.canCreateTopic) actions.append(control('Create Topic', ['community-settings', 'site-setup'], 'create-room'));
-    if (route.kind === 'topics' && tangent?.canManage) actions.append(control('⚙ Tangent settings', ['community-settings', 'tangent-editor'], 'edit-tangent-form'));
-    if (reading && topic?.canManage) actions.append(control('⚙ Topic settings', ['channel-details', 'room-admin'], 'topic-form'));
+    if (route.kind === 'topics' && tangent?.canManage) actions.append(link('⚙ Tangent settings', '/t/' + encodeURIComponent(tangent.key) + '/settings', 'btn btn-quiet'));
+    if (reading && topic?.canManage) actions.append(link('⚙ Topic settings', topicUrl(topic.tangentKey, topic.key) + '/settings', 'btn btn-quiet'));
     $('server-welcome').hidden = false;
     document.title = title + ' · Tangent Space';
   }
@@ -79,8 +83,9 @@
     if (!['onboarding', 'sign-in'].includes(route.kind)) document.body.classList.remove('onboarding-active');
     if (route.kind !== 'onboarding') $('onboarding').hidden = true;
     if (route.kind !== 'participant') $('participant-profile').hidden = true;
-    $('settings-page').hidden = route.kind !== 'settings';
-    $('settings-sign-in').hidden = route.kind !== 'settings' || !!site.participant;
+    const settingsRoute = ['settings', 'tangent-settings', 'topic-settings'].includes(route.kind);
+    $('settings-page').hidden = !settingsRoute;
+    $('settings-sign-in').hidden = !settingsRoute || !!site.participant;
     $('activity-status').hidden = !site.participant || ['onboarding', 'sign-in'].includes(route.kind);
     const authentication = ['onboarding', 'sign-in'].includes(route.kind);
     $('nav-sign-in').hidden = !!site.participant;

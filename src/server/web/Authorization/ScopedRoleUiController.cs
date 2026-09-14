@@ -20,7 +20,8 @@ public sealed class ScopedRoleUiController(IAntiforgery antiforgery, Participant
     [HttpGet("session")]
     public async Task<ActionResult<object>> Session(CancellationToken ct)
     {
-        if (!await IsOwner(ct)) return Forbid();
+        // The token proves same-origin intent; Koan still authorizes every mutation.
+        // Issuing it to a signed-in participant does not grant role authority.
         Response.Headers.CacheControl = "no-store";
         var tokens = antiforgery.GetAndStoreTokens(HttpContext);
         return Ok(new { tokens.RequestToken, tokens.HeaderName });

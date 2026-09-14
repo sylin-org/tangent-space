@@ -1,4 +1,4 @@
-const workspaceKinds = new Set(['home', 'tangents', 'topics', 'topic', 'post', 'participant']);
+const workspaceKinds = new Set(['home', 'tangents', 'topics', 'topic', 'post', 'participant', 'settings', 'tangent-settings', 'topic-settings']);
 
 function decodeSegment(value) {
   try {
@@ -13,11 +13,14 @@ export function parseWorkspaceRoute(pathname) {
   if (parts.some(value => value == null)) return null;
   if (!parts.length) return { kind: 'home' };
   if (parts.length === 1 && parts[0] === 'tangents') return { kind: 'tangents' };
+  if (parts.length === 1 && parts[0] === 'settings') return { kind: 'settings' };
   if (parts.length === 2 && parts[0] === 'u') return { kind: 'participant', identifier: parts[1] };
   if (parts[0] !== 't' || !parts[1]) return null;
+  if (parts.length === 3 && parts[2] === 'settings') return { kind: 'tangent-settings', tangent: parts[1] };
   if (parts[2] === 'topics') {
     if (parts.length === 3) return { kind: 'topics', tangent: parts[1] };
     if (parts.length === 4) return { kind: 'topic', tangent: parts[1], topic: parts[3] };
+    if (parts.length === 5 && parts[4] === 'settings') return { kind: 'topic-settings', tangent: parts[1], topic: parts[3] };
     return null;
   }
   return parts.length === 3 ? { kind: 'post', tangent: parts[1], post: parts[2] } : null;

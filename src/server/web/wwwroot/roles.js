@@ -5,24 +5,21 @@
   const groupOrder = ['host', 'tangent', 'topic', 'post', 'other'];
   const groupLabels = { host: 'Server', tangent: 'Tangents', topic: 'Topics', post: 'Posts', other: 'Other' };
   const roleMemberPageSize = 50;
-  let site, descriptor, roles = [], selected, tangents = [], topics = [], loadVersion = 0, csrf, pendingMember;
+  let site, descriptor, roles = [], selected, loadVersion = 0, csrf, pendingMember;
   const rolePageSize = 100;
   let roleTotal = 0, editorTab = 'appearance', dirty = false;
   let roleListPage = 1, roleListHasPrevious = false, roleListHasNext = false;
   let membersByRole = new Map(), memberTotals = new Map(), loadedMemberRoles = new Set(), roleMemberState = new Map(), memberProfileCache = new Map();
   let memberProfileFailures = new Set();
-  let lastMemberScope = '', lastMemberIdentity = '', lastTangentScope = '';
+  let lastMemberScope = '', lastMemberIdentity = '';
   let draftGrantKeys = new Set();
 
   const color = value => /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#a98df0';
   const systemRole = role => role?.presentation?.system === 'true';
   const protectedOwnerRole = role => systemRole(role) && /:owner$/i.test(role?.id || '');
   const canManageMembers = role => !!role && !role._new && !protectedOwnerRole(role);
-  const currentKind = () => $('role-scope-kind').value;
-  const currentScope = () => {
-    const kind = currentKind();
-    return { type: kind, id: kind === 'host' ? 'site' : kind === 'tangent' ? $('role-tangent-scope').value : $('role-topic-scope').value };
-  };
+  const currentKind = () => 'host';
+  const currentScope = () => ({ type: 'host', id: 'site' });
   const api = suffix => {
     const scope = currentScope();
     return '/api/identity/scoped-roles/' + encodeURIComponent(tenant) + '/' + encodeURIComponent(scope.type) + '/' + encodeURIComponent(scope.id) + '/' + suffix;
@@ -131,21 +128,24 @@
   }
 
   function settingsTab(name, updateUrl = true) {
-    if (!['server', 'roles'].includes(name)) name = 'server';
+    if (!['server', 'context', 'roles', 'access'].includes(name)) name = 'server';
     document.querySelectorAll('[data-settings-tab]').forEach(button => {
       const active = button.dataset.settingsTab === name;
       button.setAttribute('aria-selected', String(active));
       button.tabIndex = active ? 0 : -1;
     });
     $('settings-server-panel').hidden = name !== 'server';
+    $('settings-context-panel').hidden = name !== 'context';
     $('settings-roles-panel').hidden = name !== 'roles';
+    $('settings-access-panel').hidden = name !== 'access';
     if (updateUrl) {
       const url = new URL(location.href);
-      if (name === 'roles') url.searchParams.set('tab', 'roles');
+      if (name !== 'server' && name !== 'context') url.searchParams.set('tab', name);
       else { url.searchParams.delete('tab'); url.searchParams.delete('role'); }
       history.replaceState({ ...(history.state || {}), tangentRoleEditor: false }, '', url.pathname + url.search + url.hash);
     }
     if (name === 'roles') loadScope();
+    window.TangentAccess?.activate?.(name);
   }
 
   function roleEditorTab(name) {
@@ -160,54 +160,6 @@
     $('role-permissions-panel').hidden = name !== 'permissions';
     $('role-members-panel').hidden = name !== 'members';
     $('role-editor-actions').hidden = name === 'members' || systemRole(selected);
-  }
-
-  function option(select, value, label) {
-    const node = document.createElement('option'); node.value = value; node.textContent = label; select.append(node);
-  }
-
-  async function ensureTangents() {
-    if (tangents.length) return;
-    const available = site?.tangents?.tangents;
-    tangents = Array.isArray(available) ? available : (await request('/api/v1/tangents')).data.tangents || [];
-    const select = $('role-tangent-scope'); select.replaceChildren();
-    for (const tangent of tangents) option(select, tangent.key, tangent.name || tangent.key);
-  }
-
-  async function ensureTopics(force = false) {
-    const tangent = $('role-tangent-scope').value;
-    if (!tangent) {
-      topics = [];
-      $('role-topic-scope').replaceChildren();
-      lastTangentScope = '';
-      return;
-    }
-    const selected = $('role-topic-scope').value;
-    if (!force && lastTangentScope === tangent && topics.length) return;
-    const listing = (await request('/api/v1/tangents/' + encodeURIComponent(tangent) + '/topics')).data;
-    topics = listing.rooms || listing.channels || [];
-    const select = $('role-topic-scope'); const keep = selected && topics.some(topic => topic.key === selected) ? selected : '';
-    select.replaceChildren();
-    for (const topic of topics) option(select, topic.key, topic.title || topic.key);
-    if (keep) select.value = keep;
-    lastTangentScope = tangent;
-  }
-
-  async function changeScope() {
-    const kind = currentKind();
-    $('role-tangent-field').hidden = kind === 'host';
-    $('role-topic-field').hidden = kind !== 'topic';
-    if (kind !== 'host') await ensureTangents();
-    if (kind === 'topic' && !$('role-topic-scope').options.length) await ensureTopics();
-    const notes = {
-      host: 'Server roles can flow into every Tangent and Topic.',
-      tangent: 'Tangent roles apply here and may flow into its Topics.',
-      topic: 'Topic roles stay local to this conversation.'
-    };
-    message('role-scope-note', notes[kind]);
-    roleUrl(undefined);
-    selected = undefined; dirty = false;
-    await loadScope();
   }
 
   async function loadScope() {
@@ -738,7 +690,8 @@
     const owner = site?.participant?.isOwner === true;
     $('settings-shell').hidden = !owner;
     if (!owner) return;
-    const initial = new URL(location.href).searchParams.get('tab') === 'roles' ? 'roles' : 'server';
+    const requested = new URL(location.href).searchParams.get('tab');
+    const initial = requested === 'roles' || requested === 'access' ? requested : 'server';
     settingsTab(initial, false);
   }
 
@@ -747,7 +700,7 @@
     button.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault();
-      const tabs = [...document.querySelectorAll('[data-settings-tab]')], index = tabs.indexOf(button);
+      const tabs = [...document.querySelectorAll('[data-settings-tab]')].filter(tab => !tab.hidden), index = tabs.indexOf(button);
       const next = tabs[(index + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length];
       next.focus(); settingsTab(next.dataset.settingsTab);
     });
@@ -770,9 +723,6 @@
       roleEditorTab(target.dataset.roleEditorTab);
     });
   });
-  $('role-scope-kind').addEventListener('change', () => changeScope().catch(error => message('role-list-status', error.message, true)));
-  $('role-tangent-scope').addEventListener('change', () => ensureTopics(true).then(changeScope).catch(error => message('role-list-status', error.message, true)));
-  $('role-topic-scope').addEventListener('change', () => changeScope().catch(error => message('role-list-status', error.message, true)));
   $('role-search').addEventListener('input', renderOverview);
   $('role-permission-search').addEventListener('input', () => selected && renderCapabilities(selected, systemRole(selected)));
   $('role-page-previous').addEventListener('click', event => changeRolePage(-1, event.currentTarget).catch(error => message('role-list-status', error.message, true)));

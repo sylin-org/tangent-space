@@ -255,7 +255,7 @@
       wrap.append(card);
       if (tangent.canManage || tangent.isOwner || can(tangent, 'manageTangent')) {
         const settings = element('button', 'card-settings btn btn-quiet', '⚙'); settings.type = 'button'; settings.title = 'Tangent settings'; settings.setAttribute('aria-label', 'Open settings for ' + (tangent.name || tangent.key));
-        settings.addEventListener('click', event => { event.stopPropagation(); activeTangentKey = tangent.key; show('community-settings', true); openTangentEditor(tangent); $('community-settings').open = true; $('tangent-editor').open = true; }); wrap.append(settings);
+        settings.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); navigate('/t/' + encodeURIComponent(tangent.key) + '/settings'); }); wrap.append(settings);
       }
       holder.append(wrap);
     }
@@ -965,7 +965,7 @@
     site = event.detail;
     routeFailure = undefined;
     if (['sign-in', 'onboarding'].includes(route().kind)) return;
-    if (['participant', 'settings'].includes(route().kind)) { window.TangentModeration?.topic?.(undefined, site.participant); refreshServer(); show('place', false); startActivity(); return; }
+    if (['participant', 'settings', 'tangent-settings', 'topic-settings'].includes(route().kind)) { window.TangentModeration?.topic?.(undefined, site.participant); refreshServer(); show('place', false); startActivity(); return; }
     show('place', true); document.body.classList.add('has-rooms'); refreshServer();
     show('site-setup', site.participant?.isOwner === true || currentTangents().some(t => t.canCreateTopic === true));
     const identity = identityEpoch, welcome = site;
