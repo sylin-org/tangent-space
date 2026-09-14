@@ -2,12 +2,14 @@ using System.Text.Json;
 using Koan.Core;
 using Koan.Core.Hosting.App;
 using Koan.Data.Core;
+using Koan.Identity.Roles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TangentSpace.Activity;
+using TangentSpace.Authorization;
 using TangentSpace.Communities;
 using TangentSpace.Conversation;
 using TangentSpace.Infrastructure;
@@ -195,7 +197,11 @@ public sealed class HumanHostAccountabilityTests
         var owner = await fixture.Enroll(OwnerDid);
         await fixture.Server.Claim(owner, OwnerDid, true, fixture.Ct);
         var agent = await fixture.Enroll(OtherDid, ParticipantClassification.Agent, true);
-        await fixture.Server.Update(owner, new ServerSettingsPatch(CreationPolicy: "everyone", AllowAgentTangentOwnership: true), fixture.Ct);
+        await fixture.Server.SetAccess(owner, new AccessMap
+        {
+            See = [AccessTokens.Everyone], Manage = [], CreateTangents = [AccessTokens.Authenticated]
+        }, fixture.Ct);
+        await fixture.Server.Update(owner, new ServerSettingsPatch(AllowAgentTangentOwnership: true), fixture.Ct);
 
         var tangent = await fixture.Tangents.Create(agent, "agent-place", "Agent-owned place", null, null, null, null, fixture.Ct);
 
@@ -237,9 +243,11 @@ public sealed class HumanHostAccountabilityTests
             AppHost.Current = host.Services;
             SQLitePCL.Batteries_V2.Init();
             var directory = new ParticipantDirectory(TimeProvider.System, new NoHandles());
-            Server = new(TimeProvider.System, gate, Options.Create(new SiteOptions { OwnerDid = ownerDid }), directory);
-            Companions = new(TimeProvider.System, gate, new RoomGovernance(TimeProvider.System, gate, directory), directory);
-            Tangents = new(TimeProvider.System, gate, Options.Create(new ConversationOptions()), directory);
+            var roles = host.Services.GetRequiredService<RoleCollection>();
+            var roleAccess = new TangentRoleAccess(roles);
+            Server = new(TimeProvider.System, gate, Options.Create(new SiteOptions { OwnerDid = ownerDid }), directory, roleAccess);
+            Companions = new(TimeProvider.System, gate, new RoomGovernance(TimeProvider.System, gate, directory, roleAccess), directory);
+            Tangents = new(TimeProvider.System, gate, Options.Create(new ConversationOptions()), directory, roleAccess);
         }
 
         public async Task<string> Enroll(string did, ParticipantClassification classification = ParticipantClassification.Undeclared, bool wasAgent = false)

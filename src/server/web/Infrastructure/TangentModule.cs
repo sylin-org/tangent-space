@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.Authentication;
 using Koan.Identity;
-using Koan.Identity.Roles;
 using Koan.Identity.Web.Initialization;
 using TangentSpace.Authorization;
 using TangentSpace.Site;
@@ -31,6 +31,7 @@ public sealed class TangentModule : KoanModule
 {
     public override void Register(IServiceCollection services)
     {
+        TangentOwnerRoleGuard.Register();
         Message.Lifecycle.BeforeUpsert(async context =>
         {
             var message = context.Current;
@@ -45,13 +46,10 @@ public sealed class TangentModule : KoanModule
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
-        services.AddSingleton<TangentRoleContext>();
-        services.Replace(ServiceDescriptor.Singleton<IIdentityActorAccessor>(provider => provider.GetRequiredService<TangentRoleContext>()));
-        services.Replace(ServiceDescriptor.Singleton<IScopedRoleSubjectAccessor>(provider => provider.GetRequiredService<TangentRoleContext>()));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IScopedRoleCatalogContributor, TangentRoleCatalog>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IScopedRoleAuthorityContributor, TangentRoleAuthority>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IScopedRoleGuardContributor, TangentRoleGuard>());
-        services.AddSingleton<TangentRoles>();
+        services.AddSingleton<TangentIdentityActorAccessor>();
+        services.Replace(ServiceDescriptor.Singleton<IIdentityActorAccessor>(provider => provider.GetRequiredService<TangentIdentityActorAccessor>()));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IClaimsTransformation, HostOwnerClaimsTransformation>());
+        services.AddSingleton<TangentRoleAccess>();
         services.AddSingleton<PolicyGate>();
         services.AddSingleton<Arrival>();
         services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
@@ -91,7 +89,8 @@ public sealed class TangentModule : KoanModule
     public override async Task Start(IServiceProvider services, CancellationToken ct)
     {
         await services.GetRequiredService<Arrival>().CheckConfiguration(ct);
-        await services.GetRequiredService<TangentRoles>().Reconcile(ct);
+        await services.GetRequiredService<TangentRoleAccess>().Seed(
+            await TangentSite.Get(TangentConstants.SiteId, ct), ct);
     }
 
     public override void Report(ProvenanceModuleWriter module, IConfiguration cfg, IHostEnvironment env)

@@ -27233,7 +27233,7 @@
     },
     {
       "name": "ConfigureServer",
-      "description": "Update the server welcome, MOTD, creation policies and animated background. Human server owner only.",
+      "description": "Update the server welcome, MOTD, agent-ownership preference and animated background. Human server owner only. Tangent creation authority is managed through Server Access.",
       "profile": "owner",
       "endpoint": "both",
       "annotations": {
@@ -27263,14 +27263,6 @@
           "motd": {
             "type": "string",
             "maxLength": 4096
-          },
-          "creationPolicy": {
-            "type": "string",
-            "enum": [
-              "owner_only",
-              "humans",
-              "everyone"
-            ]
           },
           "allowAgentTangentOwnership": {
             "type": "boolean"
@@ -28518,7 +28510,7 @@
     },
     {
       "name": "ConfigureTangent",
-      "description": "Update a Tangent card and member Topic creation policy within your permissions.",
+      "description": "Update a Tangent card within your permissions. Topic creation authority is managed through Tangent Access.",
       "profile": "owner",
       "endpoint": "both",
       "annotations": {
@@ -28562,9 +28554,6 @@
           "artwork": {
             "type": "string",
             "maxLength": 1024
-          },
-          "allowMemberTopics": {
-            "type": "boolean"
           },
           "requestId": {
             "type": "string",

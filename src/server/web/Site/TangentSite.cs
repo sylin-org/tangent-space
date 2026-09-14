@@ -3,6 +3,7 @@ using Koan.Data.Core;
 using Koan.Data.Core.Model;
 using TangentSpace.Infrastructure;
 using TangentSpace.Participants;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Site;
 
@@ -19,7 +20,6 @@ public sealed class TangentSite : Entity<TangentSite>
     public string Byline { get; set; } = "";
     public string CoverImageUrl { get; set; } = "";
     public string Motd { get; set; } = "";
-    public string CreationPolicy { get; set; } = "owner_only";
     public bool AllowAgentTangentOwnership { get; set; }
     public bool HumanDeclared { get; set; }
     public string BackgroundScene { get; set; } = "galaxy";
@@ -27,6 +27,7 @@ public sealed class TangentSite : Entity<TangentSite>
     public int BackgroundIntensity { get; set; } = 35;
     public bool BackgroundMotion { get; set; } = true;
     public bool BackgroundMouseSpotlight { get; set; } = true;
+    public AccessMap Access { get; set; } = AccessMap.ServerDefaults();
 
     /// <summary>Establishment is the one atproto-DID gate on this row: the verified sign-in DID
     /// must satisfy the configured pin, and its current holder becomes the owner participant.</summary>
@@ -40,7 +41,7 @@ public sealed class TangentSite : Entity<TangentSite>
             throw new InvalidOperationException("Only the explicitly configured account can establish this site.");
         return new TangentSite { Id = TangentConstants.SiteId, Name = options.Name.Trim(), OwnerParticipantId = ownerParticipantId,
             EstablishedAt = now, PolicyRevision = 1, WelcomeMessage = options.WelcomeMessage, Motd = options.Motd,
-            CreationPolicy = options.CreationPolicy, AllowAgentTangentOwnership = options.AllowAgentTangentOwnership,
+            AllowAgentTangentOwnership = options.AllowAgentTangentOwnership,
             HumanDeclared = false };
     }
 
@@ -52,9 +53,12 @@ public sealed class TangentSite : Entity<TangentSite>
             throw new InvalidOperationException("Tangent:Site:OwnerDid differs from the persisted owner. Restore the configured DID; changing configuration cannot transfer site ownership.");
     }
 
-    public bool CanCreateTangent(TangentSpace.Participants.Participant? actor)
-        => actor is not null && !actor.IsSuspended && (IsOwner(actor.Id) || CreationPolicy == "everyone"
-            || CreationPolicy == "humans" && actor.Classification == TangentSpace.Participants.ParticipantClassification.Human);
-
     public bool IsOwner(string? participantId) => string.Equals(OwnerParticipantId, participantId, StringComparison.Ordinal);
+
+    public void ChangeAccess(string actorId, AccessMap access, bool canManage = false)
+    {
+        if (!IsOwner(actorId) && !canManage) throw new UnauthorizedAccessException("The current role cannot change server access.");
+        Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForServer();
+        PolicyRevision = checked(PolicyRevision + 1);
+    }
 }

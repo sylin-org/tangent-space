@@ -12,7 +12,7 @@ namespace TangentSpace.Rooms;
 
 /// <summary>Register once as a singleton; policy and acceptance share the host's arrival gate.</summary>
 public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentSpace.Participants.ParticipantDirectory directory,
-    TangentRoles? roles = null)
+    TangentRoleAccess roleAccess)
 {
     private static readonly QueryDefinition directoryQuery = new QueryDefinition
     {
@@ -41,8 +41,8 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                 var tangent = await TangentCommunity.Get(room.TangentKey, ct);
                 var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
                 var restriction = actorId is null ? null : await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, now, ct);
-                var policy = await Project(room.CurrentPolicy(site, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
-                    participant?.Classification ?? ParticipantClassification.Undeclared, restriction), ct);
+                var policy = await Project(room, tangent, room.CurrentPolicy(site, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
+                    participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
                 // A directory must not become an oracle for invitation-only channel names.
                 if (policy.CanRead || policy.CanManage) descriptions.Add(RoomDescription.From(room, policy));
             }
@@ -83,8 +83,8 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             {
                 var membership = actorId is null ? null : await RoomMembership.Get(RoomMembership.Key(room.Id, actorId), ct);
                 var restriction = actorId is null ? null : await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, now, ct);
-                var policy = await Project(room.CurrentPolicy(site, actorId, membership, false, tangent, tangentMembership,
-                    participant?.Classification ?? ParticipantClassification.Undeclared, restriction), ct);
+                var policy = await Project(room, tangent, room.CurrentPolicy(site, actorId, membership, false, tangent, tangentMembership,
+                    participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
                 if (policy.CanRead || policy.CanManage) descriptions.Add(RoomDescription.From(room, policy));
             }
             await EntityContext.Commit(ct);
@@ -142,7 +142,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             (site, room, actor, targetId, target, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
-                return new Change(current, current.ChangeMembership(site, actorId, actor, targetId!, target, role, now, tangent, tangentMembership));
+                return new Change(current, current.ChangeMembership(site, actorId, actor, targetId!, target, role, now, tangent, tangentMembership, authorized: true));
             }, ct);
 
     public Task<RoomAdministrationResult> SetTopic(string actorId, string roomKey, string topic, CancellationToken ct)
@@ -150,7 +150,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             (site, room, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
-                current.ChangeTopic(site, actorId, actor, topic, now, tangent, tangentMembership);
+                current.ChangeTopic(site, actorId, actor, topic, now, tangent, tangentMembership, authorized: true);
                 return new Change(current);
             }, ct);
 
@@ -159,7 +159,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             (site, room, _, _, _, tangent, _, now) =>
             {
                 var current = RequireRoom(room);
-                current.ChangeAdmission(site, actorId, admission, now, tangent);
+                current.ChangeAdmission(site, actorId, admission, now, tangent, authorized: true);
                 return new Change(current);
             }, ct);
 
@@ -169,7 +169,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             (site, room, _, _, _, tangent, _, now) =>
             {
                 var current = RequireRoom(room);
-                current.ChangeReadAudience(site, actorId, audience, publishExistingHistory, now, tangent);
+                current.ChangeReadAudience(site, actorId, audience, publishExistingHistory, now, tangent, authorized: true);
                 return new Change(current);
             }, ct, audience, publishExistingHistory);
 
@@ -179,7 +179,51 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             (site, room, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
-                current.ChangeSettings(site, actorId, actor, allowPostEditing, isLocked, title, topic, now, tangent, tangentMembership);
+                current.ChangeSettings(site, actorId, actor, allowPostEditing, isLocked, title, topic, now, tangent, tangentMembership, authorized: true);
+                return new Change(current);
+            }, ct);
+
+    public async Task<AccessMapView> GetAccess(string actorId, string roomKey, string? expectedTangentKey, CancellationToken ct)
+    {
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            var site = await TangentSite.Get(TangentConstants.SiteId, ct);
+            await TangentBootstrap.EnsureHome(site, clock, ct);
+            var room = await Room.Get(roomKey, ct)
+                ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The requested Topic does not exist.");
+            if (expectedTangentKey is not null && room.TangentKey != expectedTangentKey)
+                throw new RoomRuleViolation(RoomDenial.NotFound, "The requested Topic does not exist in this Tangent.");
+            var participant = await Participant.Get(actorId, ct);
+            var membership = await RoomMembership.Get(RoomMembership.Key(roomKey, actorId), ct);
+            var tangent = await TangentCommunity.Get(room.TangentKey, ct)
+                ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The Topic's Tangent does not exist.");
+            var tangentMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
+            var restriction = await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, clock.GetUtcNow(), ct);
+            var policy = await Project(room, tangent, room.CurrentPolicy(site, actorId, membership, participant?.IsSuspended == true, tangent,
+                tangentMembership, participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
+            if (!policy.CanManage)
+                throw new RoomRuleViolation(RoomDenial.Forbidden, "Only a Topic administrator can inspect its access settings.");
+            var selected = (room.Access ?? AccessMap.TopicDefaults()).NormalizeForTopic();
+            var parent = tangent.Access ?? AccessMap.TangentDefaults();
+            var inherited = new List<string>(3);
+            if (selected.See is null) inherited.Add("see");
+            if (selected.Post is null) inherited.Add("post");
+            if (selected.Manage is null) inherited.Add("manage");
+            await EntityContext.Commit(ct);
+            return new AccessMapView(selected, selected.ResolveTopic(parent), inherited, parent.ResolveTangent());
+        }
+        finally { gate.Exit(); }
+    }
+
+    public Task<RoomAdministrationResult> SetAccess(string actorId, string roomKey, AccessMap access, CancellationToken ct)
+        => Administer(actorId, roomKey, null, RoomAdministration.SetAccess, null,
+            (site, room, actor, _, _, tangent, tangentMembership, now) =>
+            {
+                var current = RequireRoom(room);
+                current.ChangeAccess(site, actorId, actor, access, now, tangent, tangentMembership, authorized: true);
                 return new Change(current);
             }, ct);
 
@@ -189,9 +233,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             (site, room, actor, _, _, tangent, tangentMembership, _) =>
             {
                 var current = RequireRoom(room);
-                // A delegated channel administrator provisions without gaining ownership.
-                if (!current.CurrentPolicy(site, actorId, actor, false, tangent, tangentMembership).CanManage)
-                    throw new RoomRuleViolation(RoomDenial.Forbidden, "Only the owner or a current channel administrator can provision a room.");
                 return new Change(current);
             }, ct);
 
@@ -201,7 +242,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             (site, room, _, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireRoom(room);
-                current.CompleteSpace(site, actorId, expectedRevision, spaceUri, now, tangent, tangentMembership);
+                current.CompleteSpace(site, actorId, expectedRevision, spaceUri, now, tangent, tangentMembership, authorized: true);
                 return new Change(current);
             }, ct);
 
@@ -229,8 +270,8 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
             var restriction = room is null || actorId is null ? null
                 : await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, clock.GetUtcNow(), ct);
-            var policy = room is null ? null : await Project(room.CurrentPolicy(site, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
-                participant?.Classification ?? ParticipantClassification.Undeclared, restriction), ct);
+            var policy = room is null ? null : await Project(room, tangent, room.CurrentPolicy(site, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
+                participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
             policy ??= new RoomPolicy(roomKey, actorId, 0, site?.PolicyRevision ?? 0, RoomAdmission.InvitationOnly,
                     RoomSpaceState.Pending, null, null, false, false, false, false, false, "room-not-found");
             var result = await operation(policy, ct);
@@ -246,7 +287,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
         CancellationToken ct, RoomReadAudience? requestedReadAudience = null, bool? publishExistingHistory = null)
     {
         RoomAdministrationResult result;
-        var changed = false;
         await gate.Enter(ct);
         try
         {
@@ -266,7 +306,8 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             {
                 Room.CheckKey(roomKey);
                 room = await Room.Get(roomKey, ct);
-                if ((await Participant.Get(actorId, ct))?.IsSuspended == true)
+                var actorParticipant = await Participant.Get(actorId, ct);
+                if (actorParticipant?.IsSuspended == true)
                     throw new RoomRuleViolation(RoomDenial.Forbidden, "A suspended participant cannot administer rooms.");
                 // Scoped restrictions apply to administration as well as conversation: a banned or timed-out
                 // participant cannot administer here. Owners are never restriction targets.
@@ -279,7 +320,11 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                 var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
                 if (room is not null)
                 {
-                    var projected = await Project(room.CurrentPolicy(site, actorId, actor, false, tangent, tangentMembership), ct);
+                    var restriction = await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, now, ct);
+                    var projected = await Project(room, tangent,
+                        room.CurrentPolicy(site, actorId, actor, false, tangent, tangentMembership,
+                            actorParticipant?.Classification ?? ParticipantClassification.Undeclared, restriction),
+                        actorParticipant, restriction, ct);
                     var allowed = operation switch
                     {
                         RoomAdministration.SetMembership => projected.CanManage,
@@ -316,20 +361,20 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                     audit.SelectedPolicyRevision, room?.SpaceUri, audit.Id), ct);
             await EntityContext.Commit(ct);
             if (change is not null) ActivityJournal.SignalAfterCommit();
-            changed = change is not null;
             result = new RoomAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, roomKey,
                 audit.SelectedPolicyRevision, room?.SpaceUri, audit.Id);
         }
         finally { gate.Exit(); }
-        if (changed && roles is not null) await roles.ReconcileTopic(roomKey, ct);
         return result;
     }
 
     private static Room RequireRoom(Room? room)
         => room ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The requested room does not exist.");
 
-    private Task<RoomPolicy> Project(RoomPolicy policy, CancellationToken ct)
-        => roles?.ProjectTopic(policy, ct) ?? Task.FromResult(policy);
+    private Task<RoomPolicy> Project(Room room, TangentCommunity? tangent, RoomPolicy policy,
+        Participant? participant, EffectiveRestriction? restriction, CancellationToken ct)
+        => roleAccess.ProjectTopic(room, tangent, policy, participant?.IsSuspended == true, restriction,
+            participant?.Classification ?? ParticipantClassification.Undeclared, ct);
 
     private sealed record Change(Room Room, RoomMembership? Membership = null);
 }

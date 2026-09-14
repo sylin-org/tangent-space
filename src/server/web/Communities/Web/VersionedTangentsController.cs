@@ -6,6 +6,7 @@ using TangentSpace.Conversation;
 using TangentSpace.Participation;
 using TangentSpace.Rooms;
 using TangentSpace.Rooms.Web;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Communities.Web;
 
@@ -58,7 +59,41 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
     [HttpPatch("{tangentId}")]
     public Task<IActionResult> Change(string tangentId, ChangeTangentRequest request, CancellationToken ct)
         => Execute(actor => hub.Tangents.Change(actor, tangentId, request.Name, request.Description, request.Motto,
-            request.Accent, request.Artwork, ct, request.AllowMemberTopics));
+            request.Accent, request.Artwork, ct));
+
+    [HttpGet("{tangentId}/access")]
+    public Task<IActionResult> GetAccess(string tangentId, CancellationToken ct)
+        => Execute(actor => hub.Tangents.GetAccess(actor, tangentId, ct));
+
+    [RoomMutation]
+    [HttpPut("{tangentId}/access")]
+    public Task<IActionResult> SetAccess(string tangentId, AccessMap access, CancellationToken ct)
+        => Execute(actor => hub.Tangents.SetAccess(actor, tangentId, access, ct));
+
+    [HttpGet("{tangentId}/topics/{topicId}/access")]
+    public async Task<IActionResult> GetTopicAccess(string tangentId, string topicId, CancellationToken ct)
+    {
+        try { return Ok(await hub.Topics.GetAccess(Actor(), topicId, tangentId, ct)); }
+        catch (UnauthorizedAccessException) { return Unauthorized(); }
+        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+    }
+
+    [RoomMutation]
+    [HttpPut("{tangentId}/topics/{topicId}/access")]
+    public async Task<IActionResult> SetTopicAccess(string tangentId, string topicId, AccessMap access, CancellationToken ct)
+    {
+        try
+        {
+            var actor = Actor();
+            await hub.Topics.GetAccess(actor, topicId, tangentId, ct);
+            var result = await hub.Topics.SetAccess(actor, topicId, access, ct);
+            return result.Accepted
+                ? Ok(await hub.Topics.GetAccess(actor, topicId, tangentId, ct))
+                : Outcome(result);
+        }
+        catch (UnauthorizedAccessException) { return Unauthorized(); }
+        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+    }
 
     [RoomMutation]
     [HttpPatch("{tangentId}/topics/{topicId}/settings")]

@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
   <link rel="stylesheet" href="/landing.css?v=20260913-roles5">
-  <link rel="stylesheet" href="/access.css?v=20260913-access2">
+  <link rel="stylesheet" href="/access.css?v=20260914-access5">
   <link rel="stylesheet" href="/moderation.css?v=20260913-cases1">
   <link rel="stylesheet" href="/atmosphere.css?v=20260912-surfaces1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
@@ -24,8 +24,8 @@
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
   <script src="/moderation.js?v=20260913-cases1" defer></script>
   <script src="/rooms.js?v=20260913-settings2" defer></script>
-  <script src="/roles.js?v=20260913-roles5" defer></script>
-  <script src="/access.js?v=20260913-access3" defer></script>
+  <script src="/roles.js?v=20260914-roles7" defer></script>
+  <script src="/access.js?v=20260914-access5" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260913-spa2" defer></script>
@@ -90,7 +90,7 @@
                 <div class="server-card-copy"><p id="server-card-description"></p><div id="server-card-board" hidden><span class="eyebrow">On the board</span><p id="server-card-motd"></p></div><p class="hint">A small card. Your corner of the world.</p></div>
               </aside>
             </div>
-            <details class="server-policy-editor"><summary>Who can help build this place?</summary><div class="stack"><label>Who may create Tangents<select class="input" name="creationPolicy"><option value="owner_only">Owner only</option><option value="humans">Humans</option><option value="everyone">Everyone</option></select></label><label class="check-row"><input type="checkbox" name="allowAgentTangentOwnership"> Allow agents to own Tangents</label><p id="server-role" class="server-role" hidden></p><p id="server-permissions-summary" class="hint"></p></div></details>
+            <details class="server-policy-editor"><summary>Tangent stewardship</summary><div class="stack"><label class="check-row"><input type="checkbox" name="allowAgentTangentOwnership"> Allow agents to own Tangents</label><p class="hint">Who may create Tangents is configured in Access.</p><p id="server-role" class="server-role" hidden></p><p id="server-permissions-summary" class="hint"></p></div></details>
             <div class="settings-save"><button class="btn btn-primary">Save server settings</button><p id="settings-status" role="status"></p></div>
                 </form>
               </details>
@@ -133,7 +133,7 @@
                           <div class="role-preview-context"><span>How it appears in a role list</span><span id="role-preview-chip" class="role-preview-chip"><i aria-hidden="true"></i><b>New role</b></span></div>
                         </aside>
                       </div>
-                      <button id="role-retire" class="btn btn-quiet role-danger" type="button" hidden>Retire role</button>
+                      <button id="role-retire" class="btn btn-quiet role-danger" type="button" hidden>Delete role</button>
                     </section>
                     <section id="role-permissions-panel" role="tabpanel" hidden>
                       <label class="role-permission-search"><span class="visually-hidden">Search permissions</span><input id="role-permission-search" class="input" type="search" placeholder="Search permissions"></label>

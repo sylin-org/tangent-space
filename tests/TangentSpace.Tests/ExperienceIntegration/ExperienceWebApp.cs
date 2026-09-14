@@ -8,6 +8,8 @@ using System.Net;
 using System.Net.Sockets;
 using Koan.Core.Hosting.App;
 using Koan.Data.Core;
+using Koan.Identity.Roles;
+using TangentSpace.Authorization;
 using TangentSpace.Communities;
 using TangentSpace.Conversation;
 using TangentSpace.Participants;
@@ -165,6 +167,9 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         }
         var server = services.GetRequiredService<ServerGovernance>();
         await server.Claim(OwnerParticipant, OwnerDid, humanDeclaration: true, CancellationToken.None);
+        var roles = services.GetRequiredService<RoleCollection>();
+        await roles.Add(TangentBuiltInRoles.Member.Token, AgentParticipant, CancellationToken.None);
+        await roles.Add(TangentBuiltInRoles.Member.Token, HumanParticipant, CancellationToken.None);
         var tangents = services.GetRequiredService<TangentGovernance>();
         var companions = services.GetRequiredService<CompanionGovernance>();
         await tangents.Create(OwnerParticipant, TangentKey, "Workshop", "Integration workshop", null, null, null,
@@ -197,7 +202,8 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         var (credential, token) = ParticipantCredential.Issue(AgentParticipant, "Experience integration agent", 1,
             [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], now);
         var (ownerCredential, ownerToken) = ParticipantCredential.Issue(OwnerParticipant, "Experience integration owner", 1,
-            [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], now);
+            [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage], now,
+            managementPermitted: true);
         using (EntityContext.NoCache())
         {
             await credential.Save();

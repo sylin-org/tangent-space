@@ -3,6 +3,7 @@ using Koan.Data.Core.Model;
 using TangentSpace.Infrastructure;
 using TangentSpace.Participants;
 using TangentSpace.Site;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Communities;
 
@@ -17,7 +18,7 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     public string Artwork { get; set; } = "";
     public string OwnerParticipantId { get; set; } = "";
     public bool OpenToSignedIn { get; set; }
-    public bool AllowMemberTopics { get; set; } = true;
+    public AccessMap Access { get; set; } = AccessMap.TangentDefaults();
     // Manual-approval admission queues durable join requests instead of granting membership.
     public bool ApprovalRequired { get; set; }
     // Classification policy: persisted zero-value defaults Everyone/Write keep every existing participant allowed.
@@ -80,10 +81,13 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
 
     public bool IsOwner(string? participantId) => string.Equals(OwnerParticipantId, participantId, StringComparison.Ordinal);
 
-    public void ChangeTopicCreation(string actorDid, bool allowMemberTopics, DateTimeOffset now, bool authorized = false)
+    public void ChangeAccess(string actorDid, AccessMap access, DateTimeOffset now, bool authorized = false)
     {
-        if (!IsOwner(actorDid) && !authorized) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can change topic creation policy.");
-        AllowMemberTopics = allowMemberTopics; UpdatedAt = now; PolicyRevision = checked(PolicyRevision + 1);
+        if (!IsOwner(actorDid) && !authorized) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can change access.");
+        try { Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTangent(); }
+        catch (ArgumentException invalid) { throw Invalid(invalid.Message); }
+        UpdatedAt = now;
+        PolicyRevision = checked(PolicyRevision + 1);
     }
 
     /// <summary>The effective admission combining the legacy open bit with the approval bit.</summary>

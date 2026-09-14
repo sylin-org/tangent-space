@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TangentSpace.Participation;
 using TangentSpace.Site;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Web;
 
@@ -34,6 +35,23 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
         try { return Ok(await governance.Claim(participantId, User.FindFirst(AtprotoClaimTypes.Did)?.Value, request.HumanDeclaration, ct)); }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+    }
+
+    [Authorize, HttpGet("/api/server/access")]
+    public async Task<IActionResult> GetAccess(CancellationToken ct)
+    {
+        try { return Ok(await governance.GetAccess(ParticipationAccess.Require(User, ParticipationGrants.Welcome), ct)); }
+        catch (UnauthorizedAccessException) { return StatusCode(403); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
+    [HttpPut("/api/server/access"), TangentSpace.Rooms.Web.RoomMutation]
+    public async Task<IActionResult> SetAccess([FromBody] AccessMap access, CancellationToken ct)
+    {
+        try { return Ok(await governance.SetAccess(ParticipationAccess.Require(User, ParticipationGrants.Welcome), access, ct)); }
+        catch (UnauthorizedAccessException) { return StatusCode(403); }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 }
 

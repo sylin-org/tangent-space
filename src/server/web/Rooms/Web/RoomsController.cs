@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TangentSpace.AtProtocol;
 using TangentSpace.Participation;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Rooms.Web;
 
@@ -78,6 +79,18 @@ public sealed class RoomsController(TangentServer hub) : ControllerBase
     [HttpPatch("{roomKey}/settings")]
     public async Task<IActionResult> SetSettings(string roomKey, ChangeRoomSettingsRequest request, CancellationToken ct)
         => Outcome(await rooms.SetSettings(Actor(), roomKey, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));
+
+    [HttpGet("{roomKey}/access")]
+    public async Task<IActionResult> GetAccess(string roomKey, CancellationToken ct)
+    {
+        try { return Ok(await rooms.GetAccess(Actor(), roomKey, null, ct)); }
+        catch (RoomRuleViolation rejected) { return StatusCode(rejected.Denial == RoomDenial.NotFound ? 404 : 403, new { reason = rejected.Message }); }
+    }
+
+    [RoomMutation]
+    [HttpPut("{roomKey}/access")]
+    public async Task<IActionResult> SetAccess(string roomKey, AccessMap access, CancellationToken ct)
+        => Outcome(await rooms.SetAccess(Actor(), roomKey, access, ct));
 
     [RoomMutation]
     [HttpPut("/api/site/participants/{targetDid}/suspension")]

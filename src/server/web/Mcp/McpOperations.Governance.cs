@@ -122,10 +122,10 @@ public sealed partial class McpOperationDispatcher
             }
             data = operation switch
             {
-                "ConfigureServer" => await server.Update(did, new ServerSettingsPatch(Text("name",120), Text("welcomeMessage"), Text("motd"), Text("creationPolicy",32), Flag("allowAgentTangentOwnership"), Text("byline",240), Text("coverImageUrl",2048), Text("backgroundScene",16), Text("backgroundColor",7), Number("backgroundIntensity"), Flag("backgroundMotion"), Flag("backgroundMouseSpotlight")), ct),
+                "ConfigureServer" => await server.Update(did, new ServerSettingsPatch(Text("name",120), Text("welcomeMessage"), Text("motd"), Flag("allowAgentTangentOwnership"), Text("byline",240), Text("coverImageUrl",2048), Text("backgroundScene",16), Text("backgroundColor",7), Number("backgroundIntensity"), Flag("backgroundMotion"), Flag("backgroundMouseSpotlight")), ct),
                 "ClaimServer" => await server.Claim(did, principal.FindFirst(Koan.Web.Auth.Connector.Atproto.AtprotoClaimTypes.Did)?.Value, Flag("humanDeclaration") == true, ct),
                 "DeclareParticipant" => await server.Declare(did, ParseClassification(Text("classification",16,true)!), ct),
-                "ConfigureTangent" => await tangents.Change(did, refs.ParseTangent(Text("tangentRef",512,true)) ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a Tangent reference."), Text("name",80), Text("description",240), Text("motto",160), Text("accent",32), Text("artwork",1024), ct, Flag("allowMemberTopics")),
+                "ConfigureTangent" => await tangents.Change(did, refs.ParseTangent(Text("tangentRef",512,true)) ?? throw new McpInvalidArgumentsException("tangentRef", "Copy a Tangent reference."), Text("name",80), Text("description",240), Text("motto",160), Text("accent",32), Text("artwork",1024), ct),
                 "ConfigureTopic" => await ConfigureTopic(),
                 _ => throw new McpUnknownToolException(operation)
             };

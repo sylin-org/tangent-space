@@ -107,7 +107,7 @@
     show('settings-denied', route().kind === 'settings' && !canManage);
     if (canManage) {
       const form = $('server-settings-form');
-      for (const key of ['name', 'byline', 'coverImageUrl', 'welcomeMessage', 'motd', 'creationPolicy']) if (form.elements.namedItem(key)) form.elements.namedItem(key).value = server[key] || (key === 'creationPolicy' ? 'owner_only' : '');
+      for (const key of ['name', 'byline', 'coverImageUrl', 'welcomeMessage', 'motd']) if (form.elements.namedItem(key)) form.elements.namedItem(key).value = server[key] || '';
       form.elements.namedItem('allowAgentTangentOwnership').checked = server.allowAgentTangentOwnership === true;
       previewServerCard();
       text('server-permissions-summary', Array.isArray(server.permissions) ? server.permissions.map(p => [p.role, p.scope, (p.allowedActions || []).join(', ')].filter(Boolean).join(': ')).join(' · ') : '');

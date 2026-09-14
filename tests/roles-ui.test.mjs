@@ -5,100 +5,56 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile(new URL('../src/server/web/wwwroot/index.html', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/server/web/wwwroot/landing.css', import.meta.url), 'utf8');
 const script = await readFile(new URL('../src/server/web/wwwroot/roles.js', import.meta.url), 'utf8');
-const controller = await readFile(new URL('../src/server/web/Authorization/ScopedRoleUiController.cs', import.meta.url), 'utf8');
+const controller = await readFile(new URL('../src/server/web/Authorization/RoleUiController.cs', import.meta.url), 'utf8');
 
-test('role management is a first-class settings tab with an adaptive rail', () => {
+test('role management is a first-class settings tab with adaptive list and editor', () => {
   assert.match(html, /id="settings-roles-tab"[^>]+role="tab"/);
-  assert.match(html, /id="settings-roles-panel"[^>]+role="tabpanel"/);
-  assert.match(html, /id="role-overview"/);
   assert.match(html, /id="role-directory-list"[^>]+role="listbox"/);
   assert.match(html, /id="role-create"[^>]*>Create role</);
   assert.match(html, /data-role-editor-tab="appearance"/);
   assert.match(html, /data-role-editor-tab="permissions"/);
   assert.match(html, /data-role-editor-tab="members"/);
-  assert.match(html, /id="role-back"[^>]*>← All roles</);
-  assert.match(html, /class="role-appearance-layout"/);
-  assert.match(html, /id="role-preview"[^>]+aria-label="Role preview"/);
-  assert.match(html, /id="role-member-resolve"[^>]*>Find participant</);
-  assert.match(html, /id="role-member-resolved"/);
-  assert.match(html, /id="role-member-protected"/);
-  assert.match(html, /id="role-page-previous"[^>]*hidden>Previous</);
-  assert.match(html, /id="role-page-next"[^>]*hidden>Next</);
-  assert.match(html, /id="role-members-previous"[^>]*hidden>Previous</);
-  assert.match(html, /id="role-members-next"[^>]*hidden>Next</);
-  assert.match(html, /id="role-counts-retry"[^>]*hidden>Retry counts</);
-  assert.match(html, /id="role-member-profiles-retry"[^>]*hidden>Retry profiles</);
-  assert.match(html, /server owner/);
-  assert.doesNotMatch(html, /canonical owner/i);
+  assert.match(html, /id="role-member-open"[^>]*>Add member</);
+  assert.match(html, /id="role-retire"[^>]*>Delete role</);
   assert.match(css, /\.settings-shell\s*\{[^}]*grid-template-columns:210px minmax\(0,1fr\)/s);
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.settings-tabs\s*\{[^}]*display:grid/s);
-  assert.match(css, /@media\(max-width:1000px\)[^{]*\{[^}]*\.role-editor-workspace\s*\{[^}]*grid-template-columns:1fr/s);
 });
 
-test('role UI uses Koan scoped roles with mutation safety and bounded identity lookup', () => {
-  assert.match(script, /\/api\/identity\/scoped-roles\/descriptor/);
-  assert.match(script, /\/api\/roles\/ui\/session/);
-  assert.match(script, /'If-Match'/);
-  assert.match(script, /const currentScope = \(\) => \(\{ type: 'host', id: 'site' \}\)/);
-  assert.match(script, /const roleMemberPageSize = 50/);
-  assert.match(script, /const rolePageSize = 100/);
-  assert.match(html, /id=\"role-member-lookup-status\"/);
-  assert.match(html, /id=\"role-member-identifier\"[^>]*aria-describedby=\"role-member-lookup-status\"/);
-  assert.match(script, /showOverview/);
-  assert.match(script, /showEditor/);
-  assert.match(script, /members\?pageSize=1/);
-  assert.match(script, /new URLSearchParams\(\{ pageSize: String\(roleMemberPageSize\) \}\)/);
-  assert.match(script, /method: 'PUT'/);
+test('role UI uses the singular Koan Role collection without versions or scoped policy APIs', () => {
+  assert.match(script, /\/api\/identity\/roles/);
+  assert.match(script, /\/api\/roles\/ui\/descriptor/);
+  assert.match(script, /permissions: roleGrants\(\)/);
+  assert.match(script, /metadata: \{ purpose:/);
+  assert.match(script, /method: selected\._new \? 'PUT' : 'PATCH'/);
   assert.match(script, /method: 'DELETE'/);
-  assert.doesNotMatch(script, /binding|revoke|revoked/i);
-  assert.doesNotMatch(script, /members\/['" + ]+[\s\S]{0,120}If-Match/);
-  assert.match(script, /protectedOwnerRole/);
-  assert.match(script, /canManageMembers/);
-  assert.match(script, /document\.querySelectorAll\('\[data-role-editor-tab\]'\)\.forEach/);
-  assert.match(script, /roleEditorTab\(target\.dataset\.roleEditorTab\)/);
-  assert.match(script, /event\.key === 'Home'/);
-  assert.match(script, /event\.key === 'End'/);
-  assert.match(script, /target\.focus\(\)/);
-  assert.doesNotMatch(script, /canonical owner/i);
+  assert.match(script, /\/members/);
+  assert.doesNotMatch(script, /scoped-roles|If-Match|selected\.version|binding|tombstone/i);
+});
+
+test('Appearance and Members preserve the delightful interaction requirements', () => {
+  assert.match(script, /updateRolePreview/);
+  assert.match(script, /metadata\.purpose/);
+  assert.match(script, /metadata\.color/);
+  assert.match(script, /showAvatar/);
+  assert.match(script, /memberByline/);
   assert.match(script, /async function resolveMember/);
   assert.match(script, /Confirm the assignment/);
   assert.match(script, /'role-member-remove', '×'/);
   assert.match(script, /remove\.setAttribute\('aria-label', removeLabel\)/);
-  assert.match(script, /showAvatar/);
-  assert.match(script, /memberByline/);
-  assert.match(script, /normalizeLookupIdentifier/);
-  assert.match(script, /memberProfileCache/);
-  assert.match(script, /memberProfileFailures/);
-  assert.match(script, /countUnavailable/);
-  assert.match(script, /changeRolePage/);
-  assert.match(script, /changeMemberPage/);
-  assert.match(script, /roles = \(rolePage\.items \|\| \[\]\)/);
-  assert.match(script, /membersByRole = new Map\(\[\[role\.id, items\]\]\)/);
-  assert.match(script, /needed\.slice\(cursor, cursor \+ roleMemberPageSize\)/);
-  assert.match(script, /const page = Math\.max\(memberState\(role\.id\)\.page \|\| 1, 1\)/);
-  assert.match(script, /stepBackIfEmpty && page > 1 && !roleMembers\(role\)\.length/);
-  assert.match(script, /role-member-lookup-status/);
-  assert.doesNotMatch(controller, /BestLabel/);
+  assert.match(script, /already has this role/);
+  assert.match(script, /const roleMemberPageSize = 50/);
+  assert.match(controller, /ParticipantWindow = 50/);
   assert.match(controller, /profile\.DisplayName \?\? profile\.Handle \?\? "Participant"/);
 });
 
-test('role editor mobile layout and copy match compactness and member-row constraints', () => {
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.role-editor-heading \{[\s\S]*?padding:12px 16px;/s);
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.role-editor-tabs \{[\s\S]*?padding:0 16px 0;/s);
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.role-editor-actions \{[\s\S]*?padding:12px 0 16px;/s);
+test('role editor keyboard navigation and responsive member rows remain accessible', () => {
+  assert.match(script, /event\.key === 'Home'/);
+  assert.match(script, /event\.key === 'End'/);
+  assert.match(script, /target\.focus\(\)/);
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.role-member \{[\s\S]*?grid-template-columns:36px minmax\(0,1fr\) 44px/s);
   assert.match(css, /@media\(max-width:760px\)[\s\S]*?\.role-member-remove \{[\s\S]*?width:44px; height:44px/);
-  assert.match(css, /@container \(max-width:560px\) \{ \.role-appearance-layout \{ grid-template-columns:1fr;/);
-  assert.doesNotMatch(css, /\.role-preview-context \{[^}]*position:absolute/);
 });
 
-test('role member lookup path includes local label duplicate short-circuit and inline lookup status', () => {
-  assert.match(script, /const duplicate = \[\.\.\.memberProfileCache\.values\(\)\]\.find/);
-  assert.match(script, /currentSubjects\.has\(person\.id\)/);
-  assert.match(script, /\[person\.id, person\.did, person\.handle\]/);
-  assert.doesNotMatch(script, /\[person\.id, person\.did, person\.label, person\.handle\]/);
-  assert.match(script, /role-member-lookup-status/);
-  assert.match(script, /already has this role/);
-  assert.match(script, /const currentScope = \(\) => \(\{ type: 'host', id: 'site' \}\)/);
-  assert.doesNotMatch(html, /id="role-scope-kind"/);
+test('switching between Server settings tabs does not discard a dirty role draft', () => {
+  assert.match(script, /name === 'roles' && !\(dirty && selected\)/);
 });

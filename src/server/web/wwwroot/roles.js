@@ -1,7 +1,6 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  const tenant = 'tangent-space';
   const groupOrder = ['host', 'tangent', 'topic', 'post', 'other'];
   const groupLabels = { host: 'Server', tangent: 'Tangents', topic: 'Topics', post: 'Posts', other: 'Other' };
   const roleMemberPageSize = 50;
@@ -20,9 +19,11 @@
   const canManageMembers = role => !!role && !role._new && !protectedOwnerRole(role);
   const currentKind = () => 'host';
   const currentScope = () => ({ type: 'host', id: 'site' });
-  const api = suffix => {
-    const scope = currentScope();
-    return '/api/identity/scoped-roles/' + encodeURIComponent(tenant) + '/' + encodeURIComponent(scope.type) + '/' + encodeURIComponent(scope.id) + '/' + suffix;
+  const api = suffix => '/api/identity/roles' + String(suffix || '').replace(/^roles/, '');
+  const normalizeRole = role => {
+    const metadata = role?.metadata || {};
+    return { ...role, purpose: metadata.purpose || '', presentation: { color: metadata.color || '#a98df0', system: metadata.system || 'false' },
+      grants: (role?.permissions || []).map(capability => ({ capability })) };
   };
   const message = (id, value, error = false) => { const node = $(id); node.textContent = value || ''; node.classList.toggle('error', error); };
   const make = (tag, className, text) => { const node = document.createElement(tag); node.className = className || ''; if (text !== undefined) node.textContent = text; return node; };
@@ -62,7 +63,7 @@
   function memberPaginationPath(roleId, page) {
     const params = new URLSearchParams({ pageSize: String(roleMemberPageSize) });
     if (typeof page === 'number' && page > 1) params.set('page', String(page));
-    return `roles/${encodeURIComponent(roleId)}/members?${params}`;
+    return api(`roles/${encodeURIComponent(roleId)}/members?${params}`);
   }
 
   function hydrateMemberRows(roleId) {
@@ -144,7 +145,7 @@
       else { url.searchParams.delete('tab'); url.searchParams.delete('role'); }
       history.replaceState({ ...(history.state || {}), tangentRoleEditor: false }, '', url.pathname + url.search + url.hash);
     }
-    if (name === 'roles') loadScope();
+    if (name === 'roles' && !(dirty && selected)) loadScope();
     window.TangentAccess?.activate?.(name);
   }
 
@@ -183,12 +184,12 @@
     message('role-list-status', 'Loading roles…'); message('role-status', ''); message('role-members-status', '');
     try {
       const [description, rolePage] = await Promise.all([
-        descriptor ? Promise.resolve({ data: descriptor }) : request('/api/identity/scoped-roles/descriptor'),
+        descriptor ? Promise.resolve({ data: descriptor }) : request('/api/roles/ui/descriptor'),
         request(api('roles?pageSize=' + rolePageSize + '&page=1'))
       ]);
       if (version !== loadVersion) return;
       descriptor = description.data;
-      roles = (rolePage.data.items || []).filter(role => role.status !== 'Retired' && role.status !== 2);
+      roles = (rolePage.data.items || []).map(normalizeRole);
       roleTotal = rolePage.data.totalCount ?? roles.length;
       roleListPage = 1;
       roleListHasPrevious = false;
@@ -201,8 +202,8 @@
       let target = requested === 'new' && selected?._new ? selected : roles.find(role => role.id === requested);
       if (requested && requested !== 'new' && !target) {
         try {
-          const direct = (await request(api('roles/' + encodeURIComponent(requested)))).data;
-          if (direct && direct.status !== 'Retired' && direct.status !== 2) target = direct;
+          const direct = normalizeRole((await request(api('roles/' + encodeURIComponent(requested)))).data);
+          if (direct) target = direct;
         } catch (_) { /* The normal unavailable route below keeps the deep link honest. */ }
       }
       if (target) showEditor(target, null, selected?._new ? editorTab : 'appearance');
@@ -223,24 +224,13 @@
   }
 
   async function loadMemberCounts(values, version) {
-    const countTargets = [...values];
-    const totalConcurrency = 6;
-    for (let cursor = 0; cursor < countTargets.length && version === loadVersion; cursor += totalConcurrency) {
-      const batch = countTargets.slice(cursor, cursor + totalConcurrency);
-      await Promise.all(batch.map(async role => {
-        try {
-          const page = (await request(api('roles/' + encodeURIComponent(role.id) + '/members?pageSize=1')).data);
-          if (version !== loadVersion) return;
-          const total = page?.totalCount ?? (page?.items || []).length;
-          memberTotals.set(role.id, total);
-          const state = memberState(role.id);
-          roleMemberState.set(role.id, { ...state, total, countUnavailable: false });
-        } catch (_) {
-          roleMemberState.set(role.id, { ...(memberState(role.id)), countUnavailable: true });
-        }
-      }));
-      if (version === loadVersion) renderOverview();
+    for (const role of values) {
+      if (version !== loadVersion) return;
+      const total = role.memberCount ?? role.members?.length ?? 0;
+      memberTotals.set(role.id, total);
+      roleMemberState.set(role.id, { ...memberState(role.id), total, countUnavailable: false });
     }
+    renderOverview();
   }
 
   function updateCountRetry() {
@@ -269,7 +259,7 @@
     message('role-list-status', 'Loading roles…');
     try {
       const rolePage = (await request(api('roles?pageSize=' + rolePageSize + '&page=' + encodeURIComponent(page)))).data;
-      roles = (rolePage.items || []).filter(role => role.status !== 'Retired' && role.status !== 2);
+      roles = (rolePage.items || []).map(normalizeRole);
       roleListPage = page;
       roleTotal = rolePage.totalCount ?? roleTotal;
       roleListHasPrevious = page > 1;
@@ -299,8 +289,8 @@
     if (!role || role._new) return;
     const state = memberState(role.id);
     const data = (await request(memberPaginationPath(role.id, page))).data;
-    const items = Array.isArray(data?.items) ? data.items : [];
-    const total = data?.totalCount ?? memberTotals.get(role.id);
+    const items = (Array.isArray(data?.items) ? data.items : []).map(value => typeof value === 'string' ? { subject: value } : value);
+    const total = data?.totalCount ?? role.memberCount ?? role.members?.length ?? memberTotals.get(role.id);
     const hasNext = typeof total === 'number' ? page * roleMemberPageSize < total : items.length === roleMemberPageSize;
     roleMemberState.set(role.id, { ...state, page, total, hasPrevious: page > 1, hasNext, pageSize: roleMemberPageSize });
     membersByRole = new Map([[role.id, items]]);
@@ -400,7 +390,7 @@
   }
 
   function capabilityGroup(key) {
-    const prefix = String(key || '').split('.')[0];
+    const prefix = String(key || '').replace(/^global:/, '').split(/[._]/)[0];
     return groupOrder.includes(prefix) ? prefix : 'other';
   }
 
@@ -408,7 +398,7 @@
     const root = $('role-capabilities'); root.replaceChildren();
     const scope = currentKind();
     const term = $('role-permission-search').value.trim().toLocaleLowerCase();
-    const available = (descriptor?.capabilities || []).filter(item => (item.scopeTypes || []).includes(scope))
+    const available = (descriptor?.capabilities || []).filter(item => !item.scopeTypes || item.scopeTypes.includes(scope))
       .filter(item => !term || `${item.key} ${item.label || ''} ${item.description || ''}`.toLocaleLowerCase().includes(term));
     for (const group of groupOrder) {
       const values = available.filter(item => capabilityGroup(item.key) === group);
@@ -552,8 +542,10 @@
       const original = (selected.grants || []).find(grant => grant.capability === capability);
       grants.push(original || { capability });
     }
-    return grants;
+    return grants.map(grant => grant.capability);
   }
+
+  const roleKeyFor = name => 'role:' + name.toLocaleLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
   async function saveRole(button) {
     if (!selected || systemRole(selected)) return;
@@ -561,11 +553,16 @@
     if (!name) { message('role-status', 'Give this role a name.', true); return; }
     button.disabled = true; message('role-status', selected._new ? 'Creating…' : 'Saving…');
     try {
-      const body = { name, purpose: purpose || null, grants: roleGrants(), presentation: { ...(selected.presentation || {}), color: $('role-color').value } };
-      const result = selected._new
-        ? await request(api('roles'), { method: 'POST', body })
-        : await request(api('roles/' + encodeURIComponent(selected.id)), { method: 'PUT', body, headers: { 'If-Match': '"' + selected.version + '"' } });
-      selected = result.data; dirty = false; roleUrl(selected, 'replace');
+      const body = { name, permissions: roleGrants(), metadata: { purpose: purpose || '', color: $('role-color').value } };
+      let key = selected.id;
+      if (selected._new) {
+        key = roleKeyFor(name);
+        if (key === 'role:') throw new Error('Use at least one letter or number in the role name.');
+        try { await request(api('roles/' + encodeURIComponent(key))); throw new Error('A role with that stable key already exists. Choose a more distinct name.'); }
+        catch (error) { if (error.status !== 404) throw error; }
+      }
+      const result = await request(api('roles/' + encodeURIComponent(key)), { method: selected._new ? 'PUT' : 'PATCH', body });
+      selected = normalizeRole(result.data); dirty = false; roleUrl(selected, 'replace');
       await loadScope(); message('role-status', 'Role saved.');
     } catch (error) {
       if (error.status === 400 && /antiforgery/i.test(error.message)) csrf = undefined;
@@ -577,18 +574,18 @@
     if (!selected || systemRole(selected)) return;
     const tab = editorTab;
     selected = selected._new
-      ? { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0' } }
+      ? { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0', system: 'false' } }
       : roles.find(role => role.id === selected.id) || selected;
     dirty = false; renderRole(); roleEditorTab(tab); message('role-status', 'Changes reset.');
   }
 
   async function retireRole(button) {
     if (!selected || selected._new || systemRole(selected)) return;
-    button.disabled = true; message('role-status', 'Retiring…');
+    button.disabled = true; message('role-status', 'Deleting…');
     try {
-      await request(api('roles/' + encodeURIComponent(selected.id) + '/retire'), { method: 'POST', headers: { 'If-Match': '"' + selected.version + '"' } });
+      await request(api('roles/' + encodeURIComponent(selected.id)), { method: 'DELETE' });
       selected = undefined; dirty = false; roleUrl(undefined, 'replace'); await loadScope();
-      message('role-list-status', 'Role retired.');
+      message('role-list-status', 'Role deleted.');
     } catch (error) { message('role-status', error.message, true); }
     finally { button.disabled = false; }
   }
@@ -664,7 +661,7 @@
   }
 
   function createRole() {
-    const role = { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0' } };
+    const role = { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0', system: 'false' } };
     showEditor(role); $('role-name').select();
   }
 

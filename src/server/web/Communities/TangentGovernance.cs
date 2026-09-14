@@ -13,7 +13,7 @@ namespace TangentSpace.Communities;
 
 /// <summary>Coordinates card ownership, community membership and channel creation under the host policy gate.</summary>
 public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Microsoft.Extensions.Options.IOptions<TangentSpace.Conversation.ConversationOptions> conversation,
-    TangentSpace.Participants.ParticipantDirectory directory, TangentRoles? roles = null)
+    TangentSpace.Participants.ParticipantDirectory directory, TangentRoleAccess roleAccess)
 {
     public const int TangentsPerPage = 50;
     public const int ChannelsPerTangent = 100;
@@ -42,22 +42,22 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             if (tangent is null) return null;
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
             var membership = actorId is null ? null : await TangentMembership.Get(TangentMembership.Key(key, actorId), ct);
-            if (site?.IsOwner(actorId) != true && !tangent.CanParticipate(actorId, membership)
-                && (actorId is null || tangent.EffectiveAdmission != TangentAdmission.Approval)) return null;
             if (participant?.IsSuspended == true) return null;
+            var bag = await roleAccess.Bag(actorId, ct);
+            var effective = (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent();
             var owner = tangent.IsOwner(actorId) || site?.IsOwner(actorId) == true;
+            if (!owner && !TangentRoleAccess.CanDo(effective.See, bag)) return null;
             var restricted = actorId is not null && !owner && await Restrictions.ForTangent(actorId, tangent.Id, clock.GetUtcNow(), ct) is not null;
-            var canManage = owner || membership?.Role == TangentRole.Admin && !restricted;
-            var canCreateTopic = canManage || tangent.AllowMemberTopics && membership?.Role is TangentRole.Member
-                && !restricted && tangent.ParticipationRights(participant?.Classification ?? ParticipantClassification.Undeclared).Write;
+            var canManage = !restricted && (owner || TangentRoleAccess.CanDo(effective.Manage, bag));
+            var canCreateTopic = !restricted && (owner || TangentRoleAccess.CanDo(effective.CreateTopics, bag))
+                && tangent.ParticipationRights(participant?.Classification ?? ParticipantClassification.Undeclared).Write;
             var channels = await VisibleChannels(site, actorId, participant, tangent.Id, tangent, membership, 1, includeManage: true, ct);
             var pending = actorId is not null && membership is null
                 && await TangentJoinRequest.Get(TangentJoinRequest.Key(tangent.Id, actorId), ct) is { Pending: true };
             var result = new TangentDescription(tangent.Id, tangent.Name, tangent.Description, tangent.Motto, tangent.Accent, tangent.Artwork,
                 tangent.OwnerParticipantId, owner, canManage, channels.Items, channels.NextPage is not null, channels.NextPage, channels.ScanLimited,
-                owner || membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader, membership?.Role,
-                tangent.EffectiveAdmission, pending,
-                tangent.AllowMemberTopics, canCreateTopic,
+                owner || bag.Contains(TangentBuiltInRoles.Member.Token), membership?.Role,
+                tangent.EffectiveAdmission, pending, canCreateTopic,
                 new TangentSpace.Authorization.PermissionView(owner ? "owner" : membership?.Role.ToString().ToLowerInvariant() ?? "visitor", "tangent",
                     canManage ? ["read", "createTopic", "manageTangent", "manageParticipants"] : canCreateTopic ? ["read", "createTopic"] : ["read"], new Dictionary<string, string>()));
             await EntityContext.Commit(ct);
@@ -77,6 +77,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
             var home = await TangentBootstrap.EnsureHome(site, clock, ct);
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
+            var bag = await roleAccess.Bag(actorId, ct);
             if (participant?.IsSuspended == true)
             {
                 await EntityContext.Commit(ct);
@@ -89,20 +90,22 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
                 var membership = actorId is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
                 var owner = tangent.IsOwner(actorId) || site?.IsOwner(actorId) == true;
                 var restricted = actorId is not null && !owner && await Restrictions.ForTangent(actorId, tangent.Id, clock.GetUtcNow(), ct) is not null;
-                var canManage = owner || membership?.Role == TangentRole.Admin && !restricted;
-                var canCreateTopic = canManage || tangent.AllowMemberTopics && membership?.Role is TangentRole.Member && !restricted && tangent.ParticipationRights(participant?.Classification ?? ParticipantClassification.Undeclared).Write;
-                var isMember = owner || membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader;
+                var effective = (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent();
+                var canManage = !restricted && (owner || TangentRoleAccess.CanDo(effective.Manage, bag));
+                var canCreateTopic = !restricted && (owner || TangentRoleAccess.CanDo(effective.CreateTopics, bag))
+                    && tangent.ParticipationRights(participant?.Classification ?? ParticipantClassification.Undeclared).Write;
+                var isMember = owner || bag.Contains(TangentBuiltInRoles.Member.Token);
                 var pending = !isMember && actorId is not null
                     && await TangentJoinRequest.Get(TangentJoinRequest.Key(tangent.Id, actorId), ct) is { Pending: true };
                 var channels = await VisibleChannels(site, actorId, participant, tangent.Id, tangent, membership, channelPage, includeManage: true, ct);
                 visible.Add(new TangentDescription(tangent.Id, tangent.Name, tangent.Description, tangent.Motto, tangent.Accent, tangent.Artwork,
                     tangent.OwnerParticipantId, owner, canManage, channels.Items, channels.NextPage is not null, channels.NextPage, channels.ScanLimited,
-                    isMember, membership?.Role, tangent.EffectiveAdmission, pending, tangent.AllowMemberTopics, canCreateTopic,
+                    isMember, membership?.Role, tangent.EffectiveAdmission, pending, canCreateTopic,
                     new TangentSpace.Authorization.PermissionView(owner ? "owner" : membership?.Role.ToString().ToLowerInvariant() ?? "visitor", "tangent",
                         canManage ? new[] { "read", "createTopic", "manageTangent", "manageParticipants" } : canCreateTopic ? new[] { "read", "createTopic" } : new[] { "read" }, new Dictionary<string, string>())));
             }
             await EntityContext.Commit(ct);
-            return new TangentsResponse(visible, site?.CanCreateTangent(participant) == true,
+            return new TangentsResponse(visible, await CanCreateTangent(site, participant, ct),
                 site is null || site.IsOwner(actorId) && home?.SetupComplete != true, page, selected.NextPage, selected.ScanLimited);
         }
         finally { gate.Exit(); }
@@ -142,8 +145,8 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             await TangentBootstrap.EnsureHome(site, clock, ct);
             var actor = await Participant.Get(actorId, ct);
             if (actor?.IsSuspended == true) throw new TangentRuleViolation(TangentDenial.Forbidden, "A suspended participant cannot create a Tangent.");
-            var canCreate = site?.CanCreateTangent(actor) == true;
-            if (!canCreate) throw new TangentRuleViolation(TangentDenial.Forbidden, "The server creation policy does not permit this participant.");
+            var canCreate = await CanCreateTangent(site, actor, ct);
+            if (!canCreate) throw new TangentRuleViolation(TangentDenial.Forbidden, "Server access does not permit this participant to create a Tangent.");
             var existing = await TangentCommunity.Get(key, ct);
             if (existing is not null)
             {
@@ -174,7 +177,6 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             }
         }
         finally { gate.Exit(); }
-        if (roles is not null) await roles.ReconcileTangent(key, ct);
         return result;
     }
 
@@ -207,7 +209,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
     }
 
     public async Task<TangentDescription> Change(string actorId, string key, string? name, string? description, string? motto,
-        string? accent, string? artwork, CancellationToken ct, bool? allowMemberTopics = null)
+        string? accent, string? artwork, CancellationToken ct)
     {
         await gate.Enter(ct);
         try
@@ -219,15 +221,67 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             var tangent = await TangentCommunity.Get(key, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var actor = await Participant.Get(actorId, ct);
             if (actor?.IsSuspended == true) throw new TangentRuleViolation(TangentDenial.Forbidden, "A suspended participant cannot manage a Tangent.");
-            var tangentMembership = await TangentMembership.Get(TangentMembership.Key(key, actorId), ct);
-            var canManage = tangent.IsOwner(actorId) || site?.IsOwner(actorId) == true || tangentMembership?.Role == TangentRole.Admin && await Restrictions.ForTangent(actorId, tangent.Id, clock.GetUtcNow(), ct) is null;
+            var bag = await roleAccess.Bag(actorId, ct);
+            var canManage = (tangent.IsOwner(actorId) || TangentRoleAccess.CanDo(
+                (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().Manage, bag))
+                && await Restrictions.ForTangent(actorId, tangent.Id, clock.GetUtcNow(), ct) is null;
             tangent.ChangeAuthorized(actorId, canManage, name, description, motto, accent, artwork, clock.GetUtcNow());
-            if (allowMemberTopics is not null) tangent.ChangeTopicCreation(actorId, allowMemberTopics.Value, clock.GetUtcNow(), canManage);
             await tangent.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: tangent.Id, ct: ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             return await DescribeForOwner(tangent, actorId, ct);
+        }
+        finally { gate.Exit(); }
+    }
+
+    public async Task<AccessMapView> GetAccess(string actorId, string key, CancellationToken ct)
+    {
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            var site = await TangentSite.Get(TangentConstants.SiteId, ct);
+            await TangentBootstrap.EnsureHome(site, clock, ct);
+            var tangent = await TangentCommunity.Get(key, ct)
+                ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
+            var bag = await roleAccess.Bag(actorId, ct);
+            var canManage = (tangent.IsOwner(actorId) || TangentRoleAccess.CanDo(
+                (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().Manage, bag))
+                && await Restrictions.ForTangent(actorId, key, clock.GetUtcNow(), ct) is null;
+            if (!canManage) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can inspect its access settings.");
+            var selected = (tangent.Access ?? AccessMap.TangentDefaults()).NormalizeForTangent();
+            await EntityContext.Commit(ct);
+            return new AccessMapView(selected, selected.ResolveTangent(), []);
+        }
+        finally { gate.Exit(); }
+    }
+
+    public async Task<AccessMapView> SetAccess(string actorId, string key, AccessMap access, CancellationToken ct)
+    {
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            var site = await TangentSite.Get(TangentConstants.SiteId, ct);
+            await TangentBootstrap.EnsureHome(site, clock, ct);
+            var tangent = await TangentCommunity.Get(key, ct)
+                ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
+            var actor = await Participant.Get(actorId, ct);
+            var bag = await roleAccess.Bag(actorId, ct);
+            var canManage = actor?.IsSuspended != true
+                && (tangent.IsOwner(actorId) || TangentRoleAccess.CanDo(
+                    (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().Manage, bag))
+                && await Restrictions.ForTangent(actorId, key, clock.GetUtcNow(), ct) is null;
+            tangent.ChangeAccess(actorId, access, clock.GetUtcNow(), canManage);
+            await tangent.Save(ct);
+            await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: key, ct: ct);
+            await EntityContext.Commit(ct);
+            ActivityJournal.SignalAfterCommit();
+            var selected = tangent.Access!.NormalizeForTangent();
+            return new AccessMapView(selected, selected.ResolveTangent(), []);
         }
         finally { gate.Exit(); }
     }
@@ -246,12 +300,12 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             var tangent = await TangentCommunity.Get(tangentKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var actor = await Participant.Get(actorId, ct);
             var actorMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-            // The owner creates channels directly; a community administrator creates them under delegated
-            // authority and never gains ownership of the channel or the Tangent.
-            var delegatedAdmin = actorMembership?.Role == TangentRole.Admin;
-            var delegatedMember = tangent.AllowMemberTopics && actorMembership?.Role == TangentRole.Member && tangent.ParticipationRights(actor?.Classification ?? ParticipantClassification.Undeclared).Write;
-            if (actor?.IsSuspended == true || !(site?.IsOwner(actorId) == true || tangent.IsOwner(actorId) || delegatedAdmin || delegatedMember))
-                throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the Tangent owner or a community administrator can create its channels.");
+            var bag = await roleAccess.Bag(actorId, ct);
+            var canCreate = TangentRoleAccess.CanDo(
+                (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().CreateTopics, bag);
+            if (actor?.IsSuspended == true || !tangent.ParticipationRights(actor?.Classification ?? ParticipantClassification.Undeclared).Write
+                || !(tangent.IsOwner(actorId) || canCreate))
+                throw new TangentRuleViolation(TangentDenial.Forbidden, "The current role cannot create Topics in this Tangent.");
             var now = clock.GetUtcNow();
             // Scoped restrictions apply to administration as well: a banned or timed-out delegated administrator
             // cannot create channels. The owner is never a restriction target.
@@ -275,7 +329,6 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             result = new TangentChannelCreation(new RoomAdministrationResult(true, null, "Accepted.", room.Id, room.PolicyRevision, room.SpaceUri, audit.Id), RoomDescription.From(room, policy));
         }
         finally { gate.Exit(); }
-        if (roles is not null) await roles.ReconcileTopic(roomKey, ct);
         return result;
     }
 
@@ -305,7 +358,6 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             result = new TangentMembershipResult(member.TangentKey, member.ParticipantId, member.Role);
         }
         finally { gate.Exit(); }
-        if (roles is not null) await roles.ReconcileTangent(tangentKey, ct);
         return result;
     }
 
@@ -321,12 +373,12 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             await TangentBootstrap.EnsureHome(site, clock, ct);
             var participant = await Participant.Get(did, ct);
             var tangent = await TangentCommunity.Get(tangentKey, ct);
-            var membership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangentKey, did), ct);
-            // Moderation denies activity even without room context; classification presets gate the same
-            // participation the channels enforce, and ownership remains authority rather than participation.
-            var allowed = site is not null && participant?.IsSuspended != true && tangent?.CanParticipate(did, membership) == true
+            var bag = await roleAccess.Bag(did, ct);
+            var allowed = site is not null && participant?.IsSuspended != true && tangent is not null
                 && await Restrictions.ForTangent(did, tangentKey, clock.GetUtcNow(), ct) is null
-                && (tangent!.IsOwner(did) || tangent.ParticipationRights(participant?.Classification ?? ParticipantClassification.Undeclared).Read);
+                && tangent.ParticipationRights(participant?.Classification ?? ParticipantClassification.Undeclared).Read
+                && (tangent.IsOwner(did) || TangentRoleAccess.CanDo(
+                    (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().See, bag));
             await EntityContext.Commit(ct);
             return allowed;
         }
@@ -344,7 +396,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
         return new TangentDescription(tangent.Id, tangent.Name, tangent.Description, tangent.Motto, tangent.Accent, tangent.Artwork,
             tangent.OwnerParticipantId, owner, manage, channels.Items, channels.NextPage is not null, channels.NextPage, channels.ScanLimited,
             IsMember: true, MembershipRole: membership?.Role, Admission: tangent.EffectiveAdmission,
-            AllowMemberTopics: tangent.AllowMemberTopics, CanCreateTopic: manage,
+            CanCreateTopic: manage,
             Permissions: new TangentSpace.Authorization.PermissionView(owner ? "owner" : "admin", "tangent",
                 manage ? ["read", "createTopic", "manageTangent", "manageParticipants"] : ["read"], new Dictionary<string,string>()));
     }
@@ -352,6 +404,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
     private async Task<TangentSlice> VisibleTangents(TangentSite? site, string? did, int page, CancellationToken ct)
     {
         if (site is null) return new TangentSlice([], null);
+        var bag = await roleAccess.Bag(did, ct);
         var skipped = checked((page - 1) * TangentsPerPage);
         var output = new List<TangentCommunity>(TangentsPerPage + 1);
         var visible = 0;
@@ -362,11 +415,8 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             foreach (var tangent in candidates.Items)
             {
                 if (++scanned > MaximumDirectoryScan) return new TangentSlice(output, null, true);
-                var membership = did is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, did), ct);
-                // Invite-only tangents stay invisible to non-members. Approval tangents are discoverable
-                // cards for signed-in participants so a join request can be made; their channels remain gated.
-                if (site?.IsOwner(did) != true && !tangent.CanParticipate(did, membership)
-                    && (did is null || tangent.EffectiveAdmission != TangentAdmission.Approval)) continue;
+                if (!tangent.IsOwner(did)
+                    && !TangentRoleAccess.CanDo((tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().See, bag)) continue;
                 if (visible++ < skipped) continue;
                 output.Add(tangent);
                 if (output.Count > TangentsPerPage)
@@ -374,6 +424,13 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             }
             if (!candidates.HasNextPage) return new TangentSlice(output, null, false);
         }
+    }
+
+    private async Task<bool> CanCreateTangent(TangentSite? site, Participant? actor, CancellationToken ct)
+    {
+        if (site is null || actor is null || actor.IsSuspended) return false;
+        var bag = await roleAccess.Bag(actor.Id, ct);
+        return TangentRoleAccess.CanDo((site.Access ?? AccessMap.ServerDefaults()).ResolveServer().CreateTangents, bag);
     }
 
     private async Task<ChannelSlice> VisibleChannels(TangentSite? site, string? did, Participant? participant, string? tangentKey,
@@ -415,8 +472,11 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
                 // before its Tangent's inherited record.
                 var restriction = did is null ? null
                     : await Restrictions.ForRoom(did, room.Id, room.TangentKey, now, ct);
-                var policy = room.CurrentPolicy(site, did, roomMembership, participant?.IsSuspended == true, tangent, membership,
-                    participant?.Classification ?? ParticipantClassification.Undeclared, restriction);
+                var policy = await roleAccess.ProjectTopic(room, tangent,
+                    room.CurrentPolicy(site, did, roomMembership, participant?.IsSuspended == true, tangent, membership,
+                        participant?.Classification ?? ParticipantClassification.Undeclared, restriction),
+                    participant?.IsSuspended == true, restriction,
+                    participant?.Classification ?? ParticipantClassification.Undeclared, ct);
                 if (!policy.CanRead && !(includeManage && policy.CanManage)) continue;
                 if (visible++ < skipped) continue;
                 output.Add(RoomDescription.From(room, policy));

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using TangentSpace.Participation;
 using TangentSpace.Rooms;
 using TangentSpace.Rooms.Web;
+using TangentSpace.Authorization;
 
 namespace TangentSpace.Communities.Web;
 
@@ -36,7 +37,16 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
     [RoomMutation]
     [HttpPatch("{tangentKey}")]
     public Task<IActionResult> Change(string tangentKey, ChangeTangentRequest request, CancellationToken ct)
-        => Execute(actor => tangents.Change(actor, tangentKey, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct, request.AllowMemberTopics));
+        => Execute(actor => tangents.Change(actor, tangentKey, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct));
+
+    [HttpGet("{tangentKey}/access")]
+    public Task<IActionResult> GetAccess(string tangentKey, CancellationToken ct)
+        => Execute(actor => tangents.GetAccess(actor, tangentKey, ct));
+
+    [RoomMutation]
+    [HttpPut("{tangentKey}/access")]
+    public Task<IActionResult> SetAccess(string tangentKey, AccessMap access, CancellationToken ct)
+        => Execute(actor => tangents.SetAccess(actor, tangentKey, access, ct));
 
     [RoomMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentKey}/channels")]

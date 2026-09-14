@@ -8,23 +8,36 @@ using TangentSpace.Site;
 
 namespace TangentSpace.Authorization;
 
-/// <summary>Small browser adapter for Koan's otherwise headless scoped-role surface.</summary>
+/// <summary>Browser helpers for the server-role editor: CSRF intent and bounded participant identity lookup.</summary>
 [ApiController]
 [Authorize]
 [Route("api/roles/ui")]
-public sealed class ScopedRoleUiController(IAntiforgery antiforgery, ParticipantDirectory directory,
+public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirectory directory,
     ParticipantProfiles profiles) : ControllerBase
 {
     public const int ParticipantWindow = 50;
 
     [HttpGet("session")]
-    public async Task<ActionResult<object>> Session(CancellationToken ct)
+    public ActionResult<object> Session()
     {
-        // The token proves same-origin intent; Koan still authorizes every mutation.
-        // Issuing it to a signed-in participant does not grant role authority.
         Response.Headers.CacheControl = "no-store";
         var tokens = antiforgery.GetAndStoreTokens(HttpContext);
         return Ok(new { tokens.RequestToken, tokens.HeaderName });
+    }
+
+    [HttpGet("descriptor")]
+    public async Task<ActionResult<object>> Descriptor(CancellationToken ct)
+    {
+        if (!await IsOwner(ct)) return Forbid();
+        return Ok(new
+        {
+            Capabilities = TangentPermissions.Catalog.Select(permission => new
+            {
+                Key = permission.Token,
+                Label = permission.Name,
+                permission.Description
+            })
+        });
     }
 
     [HttpGet("resolve")]

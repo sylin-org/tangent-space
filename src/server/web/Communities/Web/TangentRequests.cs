@@ -20,8 +20,7 @@ public sealed record ChangeTangentRequest(
     [property: JsonProperty] string? Description,
     [property: JsonProperty] string? Motto,
     [property: JsonProperty] string? Accent,
-    [property: JsonProperty] string? Artwork,
-    [property: JsonProperty] bool? AllowMemberTopics = null);
+    [property: JsonProperty] string? Artwork);
 
 [JsonObject(MissingMemberHandling = MissingMemberHandling.Error)]
 public sealed record CreateTangentChannelRequest(
