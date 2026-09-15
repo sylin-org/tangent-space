@@ -38,9 +38,6 @@ public sealed class Message : Entity<Message>
     /// snapshots chain oldest → newest. Null on the original's first snapshot; live rows carry null.</summary>
     public string? PreviousChangeId { get; set; }
 
-    /// <summary>Snapshot rows only: the classification computed once at edit time. Reads never classify.</summary>
-    public ChangeClass? ChangeClass { get; set; }
-
     /// <summary>Live rows only: the newest changelog snapshot for this message. Null until the first change.</summary>
     public string? ChangeId { get; set; }
 

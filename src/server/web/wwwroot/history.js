@@ -1,7 +1,7 @@
 // Edit-history viewer (W2-C): the closed disclosure under an edited post. Reads the post's
 // recorded pre-edit snapshots from the changelog partition of the generic history surface and
-// renders each era verbatim from the snapshot payload — the server's text, facets, timestamps
-// and change classification; nothing is reconstructed or recomputed client-side. Plain JS.
+// renders each era verbatim from the snapshot payload — the server's text, facets and
+// timestamps; nothing is reconstructed or recomputed client-side. Plain JS.
 'use strict';
 (() => {
   const MAX_ERAS = 20;    // Bounded rendering: the newest eras only, with an honest omission line.
@@ -60,38 +60,9 @@
     return context.resolved?.[did]?.displayName || (handle ? '@' + handle.replace(/^@/, '') : 'Participant');
   }
 
-  /// Compact change chips from the snapshot's own ChangeClass: mention and group deltas
-  /// (a retarget appears as remove+add because the diff is over occurrences), surface
-  /// distance as a percentage, and the semantic distance only when the axis carried a
-  /// number — with the classifier id in the title. Every value comes from the payload.
-  function chipHolder(changeClass, context) {
-    const holder = element('div', 'history-chips', '');
-    const delta = changeClass && typeof changeClass === 'object' ? changeClass.facetDelta : null;
-    if (delta && typeof delta === 'object') {
-      for (const did of Array.isArray(delta.mentionsRemoved) ? delta.mentionsRemoved : [])
-        holder.append(element('span', 'history-chip', '\u2212' + authorLabel(did, context)));
-      for (const did of Array.isArray(delta.mentionsAdded) ? delta.mentionsAdded : [])
-        holder.append(element('span', 'history-chip', '+' + authorLabel(did, context)));
-      for (const name of Array.isArray(delta.groupsRemoved) ? delta.groupsRemoved : [])
-        holder.append(element('span', 'history-chip', '\u2212@' + name));
-      for (const name of Array.isArray(delta.groupsAdded) ? delta.groupsAdded : [])
-        holder.append(element('span', 'history-chip', '+@' + name));
-    }
-    const metrics = [];
-    if (Number.isFinite(changeClass?.surfaceDistance)) metrics.push('Text difference: ' + Math.round(changeClass.surfaceDistance * 100) + '%');
-    if (Number.isFinite(changeClass?.semanticDistance)) metrics.push('Semantic distance: ' + changeClass.semanticDistance);
-    if (metrics.length) {
-      const details = element('details', 'history-metrics', '');
-      details.append(element('summary', '', 'Change analysis'), element('p', 'hint', metrics.join(' · ')));
-      if (changeClass.classifier) details.append(element('p', 'hint', 'Classifier: ' + changeClass.classifier));
-      holder.append(details);
-    }
-    return holder.childElementCount ? holder : null;
-  }
-
   /// One era: verbatim snapshot text — facet decoration only through the shared renderer,
   /// which validates every range against this era's own text and degrades to plain text
-  /// otherwise — plus the author label, the era's own timestamp, and the change chips.
+  /// otherwise — plus the author label and the era's own timestamp.
   function eraNode(row, context) {
     const era = element('div', 'history-era', '');
     const byline = element('div', 'message-byline', '');
@@ -102,8 +73,6 @@
     const text = row.content && typeof row.content.text === 'string' ? row.content.text : '';
     const faceted = window.TangentFacets?.renderFacetedText?.(text, Array.isArray(row.facets) ? row.facets : undefined, context.resolved);
     era.append(faceted || element('p', 'message-text', text));
-    const chips = chipHolder(row.changeClass, context);
-    if (chips) era.append(chips);
     return era;
   }
 

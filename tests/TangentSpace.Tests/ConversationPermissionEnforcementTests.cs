@@ -1,6 +1,4 @@
 using System.Text.Json;
-using Koan.AI.Contracts.Routing;
-using Koan.Core.Hosting.App;
 using Koan.Data.Core;
 using Microsoft.Extensions.DependencyInjection;
 using TangentSpace.Activity;
@@ -164,74 +162,6 @@ public sealed class ConversationPermissionEnforcementTests : IAsyncLifetime
         Assert.Single(await Snapshots(post.Id));
     }
 
-    [Theory]
-    [InlineData("author-becomes-reader")]
-    [InlineData("moderator-loses-reading")]
-    [InlineData("post-removed")]
-    [InlineData("post-moved")]
-    public async Task Commit_rechecks_current_authority_and_current_post_after_pending_receipt(string interveningChange)
-    {
-        var post = await CreatePost();
-        var authorEdit = interveningChange == "author-becomes-reader";
-        if (!authorEdit) await Assign(ExperienceWebApp.HumanDid, RoomRole.Manager);
-        var actor = authorEdit ? app.AgentParticipantId : app.HumanParticipantId;
-        const string operation = "staged-change";
-        var receiptId = PostChange.Key(actor, Topic, post.Id, operation);
-        PersistedState? afterInterveningChange = null;
-
-        // ResolveEmbedder is the existing yield boundary after the first policy transaction
-        // has committed its pending receipt, but before the mutation's fresh-policy callback.
-        // A flow-scoped provider runs this competing change exactly there; all persistence
-        // remains real SQLite and the competitor uses the same governance gate. No sleep,
-        // probabilistic race, production hook or fake authorization/persistence is involved.
-        var boundary = new BeforeEmbedderProvider(app.Services, async () =>
-        {
-            using (EntityContext.NoCache())
-            {
-                var pending = await PostChange.Get(receiptId);
-                Assert.NotNull(pending);
-                Assert.Equal("pending", pending.State);
-            }
-            if (authorEdit)
-                await Assign(ExperienceWebApp.AgentDid, RoomRole.Reader);
-            else if (interveningChange == "moderator-loses-reading")
-                await MakeTopicUnreadable();
-            else
-                await Rooms.WithCurrentPolicy(app.OwnerParticipantId, Topic, async (_, token) =>
-                {
-                    var current = await Message.Get(post.Id, token);
-                    Assert.NotNull(current);
-                    // Simulate another committed local projection update, including a stale
-                    // message ID that no longer belongs to the requested Topic.
-                    if (interveningChange == "post-removed")
-                    {
-                        current.Removed = true;
-                        current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
-                        current.RemovedAt = DateTimeOffset.UtcNow;
-                        current.RemovedByParticipantId = app.OwnerParticipantId;
-                        current.Facets = null;
-                    }
-                    else current.RoomKey = "another-topic";
-                    await current.Save(token);
-                    return true;
-                }, CancellationToken.None);
-            afterInterveningChange = await Capture();
-        });
-
-        using (AppHost.PushScope(boundary))
-            await Denied(() => Change(actor, post.Id, operation, delete: !authorEdit,
-                text: authorEdit ? "Must not survive revocation." : null));
-
-        Assert.True(boundary.Invoked);
-        Assert.NotNull(afterInterveningChange);
-        // The initial pending receipt is intentional. Denial at the second policy gate
-        // must not settle it, add history/journal entries, or mutate the competing state.
-        Assert.Equal(afterInterveningChange, await Capture());
-        Assert.Empty(await Snapshots(post.Id));
-        using var fresh = EntityContext.NoCache();
-        Assert.Equal("pending", (await PostChange.Get(receiptId))!.State);
-    }
-
     private async Task<Message> CreatePost()
     {
         var operation = "permission-post-" + Guid.CreateVersion7().ToString("N");
@@ -305,21 +235,5 @@ public sealed class ConversationPermissionEnforcementTests : IAsyncLifetime
             JsonSerializer.Serialize(await Room.Get(Topic)),
             JsonSerializer.Serialize((await RoomMembership.All()).OrderBy(row => row.Id)),
             JsonSerializer.Serialize((await RoomAudit.All()).OrderBy(row => row.Id)));
-    }
-
-    private sealed class BeforeEmbedderProvider(IServiceProvider inner, Func<Task> intervene) : IServiceProvider
-    {
-        private int invoked;
-        public bool Invoked => Volatile.Read(ref invoked) != 0;
-
-        public object? GetService(Type serviceType)
-        {
-            if (serviceType != typeof(IAiAdapterRegistry)) return inner.GetService(serviceType);
-            // Do not depend on the test runner's synchronization context while the
-            // production resolver synchronously waits for this boundary to finish.
-            if (Interlocked.Exchange(ref invoked, 1) == 0) Task.Run(intervene).GetAwaiter().GetResult();
-            // Embedding is unrelated to authorization and must not add network/model timing.
-            return null;
-        }
     }
 }

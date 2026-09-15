@@ -12,9 +12,6 @@ function New-TangentLocalConfiguration {
             Identity = @{ Posture = 'Closed'; SeedDevUsers = $false }
             Security = @{ Trust = @{ DevIdentity = @{ Enabled = $false } } }
             Data = @{ Sources = @{ Default = @{ Adapter = 'sqlite'; ConnectionString = "Data Source=$($StateDirectory.TrimEnd('/') + '/tangent.sqlite')" } } }
-            # The in-process embedding model ships in the image under /app/models; relative paths
-            # resolve against the app base directory. Keep in step with src/server/web/appsettings.json.
-            Ai = @{ Onnx = @{ ModelPath = 'models/all-MiniLM-L6-v2/model_quantized.onnx'; VocabPath = 'models/all-MiniLM-L6-v2/vocab.txt'; ModelName = 'all-MiniLM-L6-v2' } }
             Web = @{ Auth = @{
                 PreferredProviderId = 'atproto'
                 Providers = @{ atproto = @{ Type = 'atproto'; ClientId = $clientId; Scopes = $scopes } }

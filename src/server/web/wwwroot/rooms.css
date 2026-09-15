@@ -257,10 +257,6 @@ a.reply-label:hover { color:var(--accent-strong); }
 .history-era + .history-era { margin-top:1rem; padding-top:1rem; border-top:1px solid var(--line); }
 .history-era .message-text { font-size:.9rem; }
 .history-era .message-byline { padding:0; }
-.history-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.6rem; }
-.history-chip { padding:.15rem .35rem; border:1px solid var(--line); border-radius:5px; font-size:.72rem; }
-.history-metrics { width:100%; color:var(--ink-soft); }
-.history-metrics > summary { cursor:pointer; font-size:.72rem; }
 .compose { border-color:color-mix(in srgb,var(--accent) 20%,var(--line)); border-radius:14px; }
 .compose textarea { width:100%; min-width:0; box-sizing:border-box; max-width:100%; line-height:1.6; resize:vertical; }
 .compose label { font-size:.86rem; }

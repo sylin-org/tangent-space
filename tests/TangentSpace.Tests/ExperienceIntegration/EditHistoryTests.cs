@@ -88,8 +88,8 @@ public sealed class EditHistoryTests : IAsyncLifetime
         return await client.SendAsync(request);
     }
 
-    /// <summary>The changelog rows visible to one client (each row carries ofMessageId,
-    /// previousChangeId and changeClass on top of the copied pre-edit fields).</summary>
+    /// <summary>The changelog rows visible to one client (each row carries ofMessageId and
+    /// previousChangeId on top of the copied pre-edit fields).</summary>
     private static async Task<List<JsonElement>> History(HttpClient client, string query = "set=changelog")
     {
         using var response = await client.GetAsync($"/api/history/messages?{query}");
@@ -138,15 +138,6 @@ public sealed class EditHistoryTests : IAsyncLifetime
         Assert.Equal("history-first-original", Get(Get(row, "content"), "text").GetString());
         Assert.Equal(app.AgentParticipantId, Get(row, "authorParticipantId").GetString());
         Assert.True(AbsentOrNull(row, "previousChangeId"));
-        var classification = Get(row, "changeClass");
-        Assert.True(classification.ValueKind is JsonValueKind.Object);
-        Assert.True(TryGet(classification, "surfaceDistance", out var surface) && surface.GetDouble() >= 0);
-        Assert.True(TryGet(classification, "tokenOverlap", out var overlap) && overlap.GetDouble() >= 0);
-        // The configured in-process embedder is active in this host, so the semantic axis carries
-        // a real value and the classifier names the model instead of an inactive marker.
-        Assert.True(TryGet(classification, "semanticDistance", out var semantic)
-            && semantic.ValueKind is JsonValueKind.Number && semantic.GetDouble() >= 0);
-        Assert.Contains("onnx:", Get(classification, "classifier").GetString());
 
         var updated = await LiveMessage("history-first-edited");
         Assert.Equal(Get(row, "id").GetString(), Get(updated, "changeId").GetString());

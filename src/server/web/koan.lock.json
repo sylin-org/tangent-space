@@ -7,22 +7,6 @@
   },
   "modules": [
     {
-      "id": "Koan.AI",
-      "version": "1.0"
-    },
-    {
-      "id": "Koan.AI.Connector.Onnx",
-      "version": "1.0"
-    },
-    {
-      "id": "Koan.AI.Contracts",
-      "version": "1.0"
-    },
-    {
-      "id": "Koan.AI.Contracts.Shared",
-      "version": "1.0"
-    },
-    {
       "id": "Koan.Cache.Abstractions",
       "version": "1.0"
     },
@@ -84,10 +68,6 @@
     }
   ],
   "directReferences": [
-    {
-      "kind": "project",
-      "id": "Koan.AI.Connector.Onnx"
-    },
     {
       "kind": "project",
       "id": "Koan.Data.Connector.Sqlite"

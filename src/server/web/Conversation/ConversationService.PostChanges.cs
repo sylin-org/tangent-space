@@ -50,7 +50,6 @@ public sealed partial class ConversationService
             // mint a second snapshot.
             if (change.State is "accepted" or "moderated" or "deleted") return new(change.State, messageId, change.Detail);
 
-            var embedder = ChangeClassification.ResolveEmbedder();
             var message = await governance.WithCurrentPolicy(participantId, roomKey,
                 (policy, token) => ReadPostForChange(policy, roomKey, messageId, token), ct);
             if (change.Delete && message.AuthorParticipantId != participantId)
@@ -59,7 +58,7 @@ public sealed partial class ConversationService
                 {
                     var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
                     RequirePostChange(currentPolicy, current, delete: true);
-                    await SnapshotChange(current, "", null, embedder, token);
+                    await SnapshotChange(current, token);
                     current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
                     current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
                     // The words are gone; their byte ranges are meaningless on a removed row.
@@ -81,7 +80,7 @@ public sealed partial class ConversationService
                 RequirePostChange(currentPolicy, current, change.Delete);
                 if (change.Delete)
                 {
-                    await SnapshotChange(current, "", null, embedder, token);
+                    await SnapshotChange(current, token);
                     current.Removed = true;
                     current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
                     current.RemovedAt = clock.GetUtcNow();
@@ -92,8 +91,7 @@ public sealed partial class ConversationService
                 {
                     // D2a: provided facets ride the new version; absent facets re-detect
                     // deterministically. The pre-edit structure rides its snapshot.
-                    var effective = await MessageFacets.Effective(change.Text!, change.Facets, token);
-                    await SnapshotChange(current, change.Text!, effective, embedder, token);
+                    await SnapshotChange(current, token);
                     current.Content = new MessageContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
                     current.EditedAt = clock.GetUtcNow();
                     current.Facets = change.Facets;
@@ -121,10 +119,8 @@ public sealed partial class ConversationService
     /// used identity. Must run inside the caller's governance transaction so the snapshot, the live
     /// mutation, the PostChange record and the activity journal commit together or not at all — a
     /// failure between the snapshot write and the live save rolls the transaction back.</summary>
-    private static async Task SnapshotChange(Message live, string newText, IReadOnlyList<PostFacet>? newFacets,
-        ChangeEmbedder? embedder, CancellationToken token)
+    private static async Task SnapshotChange(Message live, CancellationToken token)
     {
-        var classification = await ChangeClassification.Classify(live.Content.Text, newText, live.Facets, newFacets, embedder, token);
         var snapshot = new Message
         {
             Id = Guid.CreateVersion7().ToString(),
@@ -132,7 +128,7 @@ public sealed partial class ConversationService
             Sequence = live.Sequence, AcceptedAt = live.AcceptedAt, Content = live.Content, Removed = live.Removed,
             RemovedAt = live.RemovedAt, RemovedByParticipantId = live.RemovedByParticipantId, EditedAt = live.EditedAt,
             Permissions = live.Permissions, OperationId = live.OperationId, Facets = live.Facets,
-            OfMessageId = live.Id, PreviousChangeId = live.ChangeId, ChangeClass = classification,
+            OfMessageId = live.Id, PreviousChangeId = live.ChangeId,
         };
         // The vendored framework copy exposes no partitioned insert (Entity.Insert arrives upstream
         // after its pin), so the write-once construction rests on the fresh GUIDv7 identity — this

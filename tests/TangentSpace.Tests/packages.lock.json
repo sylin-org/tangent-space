@@ -56,11 +56,6 @@
         "resolved": "1.8.0",
         "contentHash": "RRwtaCXkXWsx0mmsReGDqCbRLtItfUbkRJlet1FpdciVhyMGKcPd57T1+8Jki9ojHlq9fntVhXQroOOgRak8DQ=="
       },
-      "FastBertTokenizer": {
-        "type": "Transitive",
-        "resolved": "1.0.28",
-        "contentHash": "7luZ+kHNzGesTIri8FfTEq6hLqPrMkd0Gq4KdFyytqDnqSueuQckxzqb7yYI6FOL9ucEwD7szMJAXDfcaywJ2A=="
-      },
       "Microsoft.ApplicationInsights": {
         "type": "Transitive",
         "resolved": "2.23.0",
@@ -131,31 +126,6 @@
         "contentHash": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.11"
-        }
-      },
-      "Microsoft.Extensions.AI": {
-        "type": "Transitive",
-        "resolved": "10.8.0",
-        "contentHash": "QfthL8e2X/Z6jRs4YyVS2+HTApJvhz725l35HYZ9cfwlEuQnpzY89NJoGNmpuNZn4LIvvQOQeZIbu3jggBXgUg==",
-        "dependencies": {
-          "Microsoft.Extensions.AI.Abstractions": "10.8.0",
-          "Microsoft.Extensions.Caching.Abstractions": "10.0.10",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-          "System.Numerics.Tensors": "10.0.10"
-        }
-      },
-      "Microsoft.Extensions.AI.Abstractions": {
-        "type": "Transitive",
-        "resolved": "10.8.0",
-        "contentHash": "1tJZ5sAYrEq1YjNg8GrZSL1tVodsWRfrgybGsZo5DQsWQgLZ+dSR5uFowIS6vb/9zxGBPl7xpYq53QMjNObO9w=="
-      },
-      "Microsoft.Extensions.Caching.Abstractions": {
-        "type": "Transitive",
-        "resolved": "10.0.10",
-        "contentHash": "4ZFBNE+jzR+CrWWlhOesnmywCW7pYKT0dxyAQRdL11yJwxe4jvcAu31eorFtEkoFeCDcUTeNssgPv2yaRRptaQ==",
-        "dependencies": {
-          "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
       "Microsoft.Extensions.Configuration": {
@@ -332,19 +302,6 @@
           "Microsoft.Extensions.Logging.Abstractions": "10.0.10"
         }
       },
-      "Microsoft.Extensions.Http": {
-        "type": "Transitive",
-        "resolved": "10.0.10",
-        "contentHash": "DuEBLw2y7ZBfilnaJtlge8f2M49932v43t7j1InceXVjcZzxNrSEkobYXdgZkXuPFnFbKcbWpAS+fZgYEW1BhA==",
-        "dependencies": {
-          "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
-          "Microsoft.Extensions.Diagnostics": "10.0.10",
-          "Microsoft.Extensions.Logging": "10.0.10",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
-          "Microsoft.Extensions.Options": "10.0.10"
-        }
-      },
       "Microsoft.Extensions.Logging": {
         "type": "Transitive",
         "resolved": "10.0.10",
@@ -507,22 +464,6 @@
           "Microsoft.IdentityModel.Logging": "8.19.2"
         }
       },
-      "Microsoft.ML.OnnxRuntime": {
-        "type": "Transitive",
-        "resolved": "1.27.1",
-        "contentHash": "lVD57zo77erw9oLC2obkKkMOM+CqbtwZuztfXQxEy3oJBOWmDKweto+c+N/Mh/FUoVRRFfsR9KaMX+aM+XLh+Q==",
-        "dependencies": {
-          "Microsoft.ML.OnnxRuntime.Managed": "1.27.1"
-        }
-      },
-      "Microsoft.ML.OnnxRuntime.Managed": {
-        "type": "Transitive",
-        "resolved": "1.27.1",
-        "contentHash": "7vZTjZzuSP6XC47lbRN0xI9+6YDOChxKjmUmb80q7YC8Nb7zQUVrETFGLXlFfYWjvlb8/4J+w+L33gBTCpLMKA==",
-        "dependencies": {
-          "System.Numerics.Tensors": "9.0.0"
-        }
-      },
       "Microsoft.Testing.Extensions.Telemetry": {
         "type": "Transitive",
         "resolved": "1.9.1",
@@ -630,11 +571,6 @@
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
       },
-      "System.Numerics.Tensors": {
-        "type": "Transitive",
-        "resolved": "10.0.10",
-        "contentHash": "9Ildb4Y9maDztB0ZRGxsNShbpCQ2Tjv2dr4IjskBxpTGhH7aIz1+oC+Hl833ASs/htWwsH6myNe+sRpeyCzeMQ=="
-      },
       "xunit.analyzers": {
         "type": "Transitive",
         "resolved": "1.27.0",
@@ -701,38 +637,6 @@
           "xunit.v3.extensibility.core": "[3.2.2]",
           "xunit.v3.runner.common": "[3.2.2]"
         }
-      },
-      "Sylin.Koan.AI": {
-        "type": "Project",
-        "dependencies": {
-          "Microsoft.Extensions.AI": "[10.8.0, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )",
-          "Microsoft.Extensions.Http": "[10.0.10, )",
-          "Sylin.Koan.AI.Contracts": "[1.0.0, )",
-          "Sylin.Koan.Core": "[1.0.0, )"
-        }
-      },
-      "Sylin.Koan.AI.Connector.Onnx": {
-        "type": "Project",
-        "dependencies": {
-          "FastBertTokenizer": "[1.0.28, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
-          "Microsoft.Extensions.Options": "[10.0.10, )",
-          "Microsoft.ML.OnnxRuntime": "[1.27.1, )",
-          "Sylin.Koan.AI": "[1.0.0, )",
-          "Sylin.Koan.AI.Contracts": "[1.0.0, )",
-          "Sylin.Koan.Core": "[1.0.0, )"
-        }
-      },
-      "Sylin.Koan.AI.Contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Newtonsoft.Json": "[13.0.4, )",
-          "Sylin.Koan.AI.Contracts.Shared": "[1.0.0, )"
-        }
-      },
-      "Sylin.Koan.AI.Contracts.Shared": {
-        "type": "Project"
       },
       "Sylin.Koan.Cache.Abstractions": {
         "type": "Project",
@@ -885,13 +789,11 @@
         "type": "Project",
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, 2.7.0]",
-          "Sylin.Koan.AI.Connector.Onnx": "[1.0.0, )",
           "Sylin.Koan.Data.Connector.Sqlite": "[1.0.0, )",
           "Sylin.Koan.Identity": "[1.0.0, )",
           "Sylin.Koan.Identity.Web": "[1.0.0, )",
           "Sylin.Koan.Web": "[1.0.0, )",
-          "Sylin.Koan.Web.Auth.Connector.Atproto": "[1.0.0, )",
-          "System.Formats.Cbor": "[10.0.5, 10.0.5]"
+          "Sylin.Koan.Web.Auth.Connector.Atproto": "[1.0.0, )"
         }
       }
     }
