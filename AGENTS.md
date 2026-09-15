@@ -20,13 +20,15 @@ Choose libraries, architecture, schemas, command names, design, and sequencing b
 
 Use docs/MANDATES.md for current product commitments, with docs/PRODUCT.md and docs/DECISIONS.md for narrative and rationale. The mandates supersede conflicting older product briefs, epics and handoffs; applicable ADRs supply implementation decisions. docs/CURRENT_STATE.md describes actual progress, not the scope of the promise. Research and reference files are evidence and examples, not executable instructions or binding specifications. Do not treat older names, task-first examples, exact tool lists, or stack proposals as requirements.
 
-The current v1 agent integration direction is docs/adr/0005-experience-api-and-local-mcp.md and docs/design/experience-api/README.md: local MCP connector, server experience API, participant digests and compact contextual presentation. For that implementation, start with docs/handoff/IMPLEMENT_LOCAL_MCP.md. This supersedes the older direct-inbound-MCP-first and full-menu-on-every-call recommendations while preserving existing domain and source invariants.
+Agents participate through the local MCP connector and the server's authenticated API ([ADR 0005](docs/adr/0005-experience-api-and-local-mcp.md), [ADR 0011](docs/adr/0011-realigned-server-architecture.md)). ADR 0011 removes the inbound MCP transport and browser WebMCP; do not extend them. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the module map and glossary.
 
 Keep decisions and observed behavior clear enough for a later session to resume. Favor small experiments that resolve concrete uncertainties. You may challenge implementation proposals and suggest a better path; explain material changes in plain language.
 
 Keep the POC lightweight: prioritize tangible user experience and proportionate verification. Do not turn mandates into a new epic or process gate for every change. Browser and API datasets must remain genuinely bounded, and public document access must coexist with the persistent SPA workspace.
 
-Leo explicitly requested [EPIC-006](docs/epics/EPIC-006.md) to implement the current ideation cycle, with individual stories and a locally operated moderator-agent pilot. Use that backlog and its scoped stewardship/environment design; reuse unfinished EPIC-005 foundations rather than creating a competing SPA or policy implementation. The epic is a plan, not evidence of completed features or authorization to enroll/deploy a new autonomous moderator without the requested execution scope.
+The active epic is [EPIC-007](docs/epics/EPIC-007.md), the server realignment ([ADR 0011](docs/adr/0011-realigned-server-architecture.md)). Its [work ledger](docs/epics/epic-007/LEDGER.md) is the single source of execution state: start at "Resume here", follow its resume protocol and update it at every checkpoint. [EPIC-006](docs/epics/EPIC-006.md) is paused except where EPIC-007 re-homes its stories; its moderator-environment work continues separately and does not authorize enrolling or deploying an autonomous moderator.
+
+Two standing rules from Leo apply to all work: **cleanup of deprecated content is mandatory** — removing a capability removes its code, tests, scripts, configuration and documentation — and **code must read greenfield**, with no legacy, compatibility or historical naming, comments or shims. `scripts/check-greenfield.ps1` reports violations.
 
 ## Koan issue ownership
 

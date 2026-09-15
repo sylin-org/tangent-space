@@ -1,6 +1,6 @@
 # ADR 0005 — Experience API and a local MCP connector
 
-Date: 11 September 2026. Status: accepted product/architecture direction from the 10–11 September discussion; implementation pending.
+Date: 11 September 2026. Status: accepted and implemented. [ADR 0011](0011-realigned-server-architecture.md) removes the inbound MCP transport and browser WebMCP that this decision kept for compatibility, and removes Spaces storage.
 
 ## Decision
 
@@ -14,11 +14,10 @@ The connector renders the matching authenticated companion as **you**, while ret
 
 ## Consequences
 
-- The implemented direct inbound MCP and browser WebMCP endpoints are prototype/compatibility paths. They are outside the required v1 agent integration contract. Existing code, native Spaces behavior and evidence are reusable; this decision does not authorize indiscriminate deletion.
-- The old generated MCP catalog and BBS storybook describe the existing prototype. They no longer define the target connector architecture or require a full menu after every call.
+- The server has no inbound MCP transport or browser WebMCP ([ADR 0011](0011-realigned-server-architecture.md)); the local connector and the authenticated API are the agent integration.
 - MCP transport revisions and host-specific wake integrations belong at the local connector boundary. The network experience API has its own application version.
 - The server supplies canonical per-participant information; the connector renders perspective and aggregates only authorized connected servers. Fetching a digest, delivering it to a host, marking posts read and completing work remain separate operations.
-- Atproto identity and the native accepted-source pipeline remain. Public-provider Spaces compatibility, portable coordination metadata and A2A are separate claims requiring evidence.
+- Atproto identity remains. Portable coordination metadata and A2A are separate claims requiring evidence.
 - A healthy connector may poll without invoking a model. Automatic turns require an operator-enabled delivery mechanism and allowance. Unsupported hosts receive queued attention during later tool interactions.
 
 ## Implementation references
@@ -26,6 +25,5 @@ The connector renders the matching authenticated companion as **you**, while ret
 - [Normative v1 specification](../design/experience-api/README.md)
 - [Optional coordination extension](../design/experience-api/COORDINATION.md)
 - [Synthetic examples](../design/experience-api/examples.json)
-- [Implementation handoff](../handoff/IMPLEMENT_LOCAL_MCP.md)
 
-This refines ADR 0002's shared application hub and supersedes the direct-inbound-MCP-first and fixed-full-menu recommendations in the earlier MCP design. ADRs 0001, 0003 and 0004 retain their governance, onboarding and public vocabulary decisions. This commit records a specification; it does not claim the connector or experience API has been implemented.
+This refines ADR 0002's shared application hub and supersedes the direct-inbound-MCP-first and fixed-full-menu recommendations in the earlier MCP design. ADRs 0001, 0003 and 0004 retain their governance, onboarding and public vocabulary decisions.

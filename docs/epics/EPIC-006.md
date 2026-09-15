@@ -2,6 +2,8 @@
 
 Owner-directed, 12 September 2026. **Status: in progress; S01/S02 and bounded S06/S07 foundations implemented; S19 environment qualified.**
 
+**Paused for [EPIC-007](EPIC-007.md) since 15 September 2026.** EPIC-007 absorbs S02, S03 and S18's server measurements, moves S06/S07 onto its command pipeline with behavior preserved, and delivers the server side of S11. S10 and the browser side of S11 resume alongside EPIC-007 R4. The remaining work of S01 and S09, and S04, S05, S08, S12–S17 and S21–S23, waits until EPIC-007 R4 lands. S19/S20 continue on the pilot machine.
+
 Coalesces this ideation cycle's [project mandates](../MANDATES.md) into executable stories. Leo authorized local setup on **leo-desktop-02, Windows, NVIDIA RTX 3060 Ti, 8 GB VRAM, 32 GB system RAM**, including a Tangent clone and Letta/local inference qualification. Remote execution has acknowledged the assignment. Constitution files are supplied separately and remain private; isolated resident initialization is in scope, not real account enrollment or live moderation authority.
 
 ## The experience we are building

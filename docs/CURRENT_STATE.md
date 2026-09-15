@@ -1,5 +1,11 @@
 # Current state
 
+## Server realignment accepted — 15 September 2026
+
+Leo accepted [EPIC-007](epics/EPIC-007.md) and [ADR 0011](adr/0011-realigned-server-architecture.md). Work proceeds on `claude/epic-007-realignment`; the tag `archive/pre-epic-007` preserves the pre-realignment tree. The [work ledger](epics/epic-007/LEDGER.md) tracks progress, and this page records verified results as slices land. No application behavior has changed yet.
+
+Baseline at `d682c26`: the .NET suite passes 506 of 518. The 12 failures all assign Topic authority through room membership roles, which no longer change effective permissions because Koan role bags decide them; the room-membership endpoints therefore do not change what a participant may do. The ledger lists the tests. The browser suite passes 170 of 170 and the connector suite 98 of 98.
+
 ## Scoped Host, Tangent and Topic roles — 13 September 2026
 
 Tangent now contributes a Koan scoped-role catalog for the Host → Tangent → Topic

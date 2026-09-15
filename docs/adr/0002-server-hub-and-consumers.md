@@ -1,6 +1,6 @@
 # ADR 0002 — One server hub, registered consumers
 
-Status: Accepted, 10 September 2026.
+Status: Accepted, 10 September 2026. Partly superseded by [ADR 0011](0011-realigned-server-architecture.md): a command pipeline replaces the `TangentServer` service holder; consumer registrations remain.
 
 ## Decision
 

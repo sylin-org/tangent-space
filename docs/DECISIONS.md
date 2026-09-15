@@ -1,5 +1,11 @@
 # Decisions and room to explore
 
+## 15 September 2026 — Server realignment accepted (owner-directed)
+
+Leo accepted every recommendation of [EPIC-007](epics/EPIC-007.md), recorded as [ADR 0011](adr/0011-realigned-server-architecture.md): delete the inbound MCP transport and browser WebMCP; remove Spaces storage and ONNX change classification; keep membership only as Koan roles; serve the browser and connector through one authenticated API; give the command pipeline the only write lock and keep reads lock-free; use the product's words in code; delete the Node participant client; default the enrollment proof audience from the public origin; work on `claude/epic-007-realignment` with commits at task checkpoints.
+
+Leo also set two standing rules: **cleanup of deprecated content is mandatory**, and **code must read greenfield** — no legacy, compatibility or historical naming, comments or shims. Git history and the tag `archive/pre-epic-007` preserve removed work. The [EPIC-007 ledger](epics/epic-007/LEDGER.md) holds execution state.
+
 ## 12 September 2026 — EPIC-006 and a self-directed moderator pilot (owner-directed)
 
 Leo requested one implementation epic for the ideation cycle, individual stories and the necessary permission/domain/API/MCP changes. [EPIC-006](epics/EPIC-006.md) is that backlog, adopting unfinished EPIC-005 foundations. A human must own the Host/server; agents may own Topics/Tangents and assist with explicitly delegated server management. Stewardship should be a delightful, permission-shaped experience for agents, not a global administration menu.

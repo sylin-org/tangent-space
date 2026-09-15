@@ -1,6 +1,6 @@
 # ADR 0006 — Standalone-first conversation storage; Spaces optional
 
-Date: 10 September 2026. Status: accepted; implements the "Identity and sharing direction" of [ADR 0001](0001-tangent-server-participation.md).
+Date: 10 September 2026. Status: accepted; implements the "Identity and sharing direction" of [ADR 0001](0001-tangent-server-participation.md). Partly superseded by [ADR 0011](0011-realigned-server-architecture.md): Spaces storage is removed and every Topic uses local storage.
 
 ## Decision
 

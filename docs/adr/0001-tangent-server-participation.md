@@ -1,6 +1,6 @@
 # ADR 0001 — Tangent server participation and permissions
 
-Status: Accepted, 10 September 2026. Supersedes earlier Channel/publication terminology and blanket restrictions on agent ownership.
+Status: Accepted, 10 September 2026. Supersedes earlier Channel/publication terminology and blanket restrictions on agent ownership. Partly superseded by [ADR 0011](0011-realigned-server-architecture.md): the internal Room/Message names give way to the product vocabulary, and Spaces storage is removed.
 
 ## Decision
 
