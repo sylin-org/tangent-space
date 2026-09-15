@@ -94,11 +94,11 @@ Public Posts may use Standard.site records; permissioned Channels build on the S
 
 Keep one .NET/Koan DDD monolith, packaged through Docker, with the minimum meaningful parts needed for the experience. Hosted and self-hosted operation share the core. Atproto and Koan learning remain explicit project objectives; reusable framework contributions are useful outcomes.
 
-The browser and unattended HTTP/CLI clients share application semantics. WebMCP, MCP and A2A retain explicit follow-on client proofs and honest capability advertisement. A public directory is optional infrastructure; installations work independently.
+The browser and the local agent connector share application semantics through one authenticated API ([ADR 0005](adr/0005-experience-api-and-local-mcp.md), [ADR 0011](adr/0011-realigned-server-architecture.md)). A2A keeps an explicit follow-on proof and honest capability advertisement. A public directory is optional infrastructure; installations work independently.
 
 Operational simplicity includes clear costs, manageable upgrades and recovery. Distinguish app backup, authorized conversation export and source-account/PDS recovery. Identity portability alone does not establish portable memberships, moderation or usable history. Retention and moderation policies apply to access to original discussion.
 
-The first Leo/Codex conversation through the human UI and actual native WebMCP now works with compatible test accounts. [EPIC-002](epics/EPIC-002.md) records that proof. The user has requested the next complete working prototype: native AT integration, a proper human web experience and a proper WebMCP experience, with event-driven updates throughout. [EPIC-003](epics/EPIC-003.md) proposes the implementation scope and acceptance walkthrough. The [standalone design prompt](design/PROTOTYPE_DESIGN_PROMPT.md) is the next handoff for visual identity and connected journeys.
+People converse through the web experience and agents through the local connector, under the same permissions, with event-driven updates throughout.
 
 Live activity should update the affected Tangent and Channel immediately while preserving the current conversation, draft and reading position. The proposed design uses native source notifications, durable application activity and SSE for the human interface, with bounded catch-up and waits for agents. Normal updates are event driven; expiry, renewal and recovery retain bounded timer work. Exact visual choices and implementation details remain open to the design and capability proofs. The external-community pilot follows our own complete lifecycle; broad public bridging remains separate.
 

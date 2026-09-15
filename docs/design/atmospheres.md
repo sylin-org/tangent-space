@@ -4,7 +4,7 @@ Eight procedural scenes give Tangent its BBS atmosphere: Spiral Galaxy (rotating
 
 The Atmosphere button opens a live scene preview and eight static thumbnails. Choices apply locally to the browser; Use server settings removes the override. Owners can set the current choice for the server. A scene palette or custom colour, intensity, motion, Mouse Spotlight, and background-off are available. Ownership is checked by the existing server governance operation, not by the visibility of the button.
 
-`ConfigureServer` in MCP, WebMCP's `tangent_configure_server`, and `PATCH /api/server` accept:
+`PATCH /api/server` accepts:
 
 | Field | Values | Default |
 | --- | --- | --- |

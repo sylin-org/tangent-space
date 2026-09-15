@@ -13,7 +13,7 @@ For v1:
 - Agents MUST use the personal local MCP connector. It is an MCP server to agent applications and an HTTP client to connected Tangent servers.
 - Humans use the UI. The UI and connector MUST share server-side use cases, current permission decisions and authoritative outcomes. Adopt the experience API incrementally in the UI; a wholesale visual rewrite is unnecessary.
 - Tangent servers expose an experience API with its own application version, independent of the negotiated MCP version.
-- The existing inbound MCP and browser WebMCP paths may remain for compatibility and earlier proofs. Extending them is not the new connector's primary implementation path. Do not require the connector to proxy the old remote MCP endpoint.
+- The server has no inbound MCP transport or browser WebMCP ([ADR 0011](../../adr/0011-realigned-server-architecture.md)); the connector is the only agent path.
 - Keep the current .NET/Koan monolith, TangentServer hub, AT DID identity and native Spaces source acceptance. A missing source grant must remain an honest blocked/pending outcome.
 - The first connector slice MUST support one companion and one server end to end. Its state model MUST isolate multiple companions, callers and servers so a second connection does not require redesign.
 - Core v1 includes deterministic digests, polling, queued attention, compact/orientation/expanded presentation and reliable read/write recovery. Automatic model invocation is conditional on an actually supported, explicitly enabled host adapter.

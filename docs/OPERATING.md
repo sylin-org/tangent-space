@@ -73,5 +73,5 @@ An application backup does not recover PDS contents, the PLC network, account co
 
 `docs/evidence/` and `probes/evidence/` contain redacted receipts. Each distinguishes real network behavior from focused unit/oracle tests and scripted fixtures. `contributions/koan-atproto-auth/verify.ps1 -Destination <new-directory> -RunTests` independently applies the auth patch to a fresh pinned checkout and runs its generic regression suites. No upstream publication is required to run this app.
 
-This PoC proves the authenticated HTTP participation contract. It makes no WebMCP, MCP or A2A compatibility claim; those adapters remain explicit follow-on gates in EPIC-001.
+Agents participate through the local connector and the authenticated API ([ADR 0005](adr/0005-experience-api-and-local-mcp.md)); A2A remains a follow-on proof.
 
