@@ -8,9 +8,9 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.5 — move the proof audience and DID-key resolution into Identity; remove Spaces storage (`doing`) |
-| Next action | Continue R1.5 from the first unticked step under [In flight](#in-flight) |
-| Last checkpoint | 2026-09-15 · S-002 · R1.5 step 2a committed as "refactor: remove Spaces storage from the server" (step 1 is `ac9cb7b`) |
+| Current task | R1.6 — remove ONNX change classification (`todo`, next) |
+| Next action | Start R1.6: set it to `doing` and follow the steps under [In flight](#in-flight) |
+| Last checkpoint | 2026-09-15 · S-002 · R1.5 complete; committed as "refactor: remove the fixture network and its tooling" (step 2a is `5ed4f29`) |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional); the sign-in steps of each slice walkthrough |
 | Blockers | None |
@@ -116,7 +116,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.2 | Delete browser WebMCP: `agent.html`, `agent-page.js`, `agent-connection.js`, `webmcp.js`, `ParticipantArrivalController`, their two browser tests, `scripts/prove-webmcp-http.mjs`, `docs/WEBMCP.md`, WebMCP evidence; rewrite WebMCP passages in PRODUCT, the experience API spec, atmospheres and OPERATING | done | No WebMCP references remain; browser suite green | `b69e984`: browser 140/140; server build green (no .NET test referenced the arrival endpoint); greenfield WebMCP 0, total 2,711 |
 | R1.3 | Create the home Tangent at claim; remove `EnsureHome` from its 17 call sites; keep one onboarding path by deleting `Create`'s home special case, `TangentsResponse.SetupRequired`, the unread `ServerSettings.SetupRequired` and the `rooms.js` home-key form (see N-016) | done | Reads create nothing; claim creates the home Tangent; onboarding happens only through `/onboarding/` | `c3a4b9b`: .NET 461/473, failures = the 12 known (2 new tests: claim creates the home Tangent; onboarding names it and its key stays taken); browser 139/139 (home-key form test removed); `EnsureHome` 17 → 0; greenfield bootstrap 0, total 2,691; server C# 13,427 |
 | R1.4 | Delete pre-multi-Tangent branches (`tangent is null` paths, `LegacyRoomsAssigned`, `POST /api/rooms`) and the digest's non-facet mention parser (`ExperienceMentions`, `ResolvesUnambiguously`, `ExperienceMentionTests`) (see N-017) | done | No such paths remain; the digest uses facets only | `b2183ff`: .NET 455/467, failures = the 12 known (`RoomRulesTests` on the home Tangent; a missing-Tangent test; `MessageFacets` detection tests replace the parser tests); browser 139/139; greenfield 2,691 → 2,473; server C# 13,281; 1,515 lines deleted |
-| R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, the CBOR package (BouncyCastle stays: it verifies ES256K proofs), the fixture-network launch path and configuration (see N-014), Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README, DOCKER and OPERATING (see N-015). `SourceDecision` goes in R3.6 | doing | No Spaces types remain; the connector enrolls on a fresh install | |
+| R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, the CBOR package (BouncyCastle stays: it verifies ES256K proofs), the fixture-network launch path and configuration (see N-014), Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README, DOCKER and OPERATING (see N-015). `SourceDecision` goes in R3.6 | done | No Spaces types remain; the connector enrolls on a fresh install | `ac9cb7b`, `5ed4f29` and the step-2b commit: no Spaces types remain (`SourceDecision` stays for R3.6); enrollment derives its audience on a fresh install (`EnrollmentTests`); .NET 345/357 (the 12 known), browser 125/125, connector 98/98, lifecycle 76/76; server C# 13,281 → 11,464; greenfield 2,473 → 1,926 |
 | R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | todo | Edit history works without scores | |
 | R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph and OPERATING's participant-runner passages (see N-015) | todo | No references remain | |
 | R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | todo | Walkthrough passes; about 5,000 fewer lines | |
@@ -178,16 +178,22 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R1.5 — move the proof audience and DID-key resolution into Identity; remove Spaces storage** (doing)
+**R1.6 — remove ONNX change classification** (next; not started)
+
+- [ ] Inventory: `ChangeClassification` (embedder, classifier, facet and text distances), `Message.ChangeClass` on snapshots, the ONNX project reference and `models/` (23 MB), `Koan:Ai:Onnx` configuration (appsettings, the Docker configuration generator, the integration fixture), the composition lock, `history.js` chips and metrics, `ChangeClassificationTests` and edit-history assertions, and any design notes
+- [ ] Delete them; edit history keeps its versions without classification (D3)
+- [ ] .NET and browser suites; greenfield check; commit
+
+Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, `node --test "tests/*.test.mjs"`, then `pwsh scripts/check-greenfield.ps1`.
+
+**Completed: R1.5 — move the proof audience and DID-key resolution into Identity; remove Spaces storage**
 
 - [x] Enrollment owns its proof audience and key resolution (checkpoint commit "refactor: enrollment derives its proof audience"): `Identity/ProofAudience` (override `Tangent:Enrollment:ProofAudience`, otherwise a `did:web` of `Tangent:Site:PublicOrigin`; see N-018), `Identity/DidSigningKey` (was `ResolvedAuthorKey`), and `DidDocumentKeySource` in place of the Spaces-backed key source; discovery drops `sourceWriteConsent`; `InternalsVisibleTo` moves into the csproj. .NET 461/473, failures = the 12 known
 - [x] Inventory: the task row's list, plus `WriteIntent` staging, source acceptance and rebuild, sync and freshness (`RoomConversation` fields, `SourceFreshnessChanged`, the activity channel's `freshness`), `ConversationOptions.Storage`, the browser's server-backed pending recovery, readiness and sync UI, and two Spaces-only problem codes
 - [x] Step 2a, server, browser and tests (checkpoint commit "refactor: remove Spaces storage from the server"): `AtProtocol/` deleted; `Post` is the single atomic local upsert and returns the Post row; `ChangePost` has one path; Topics carry no Space state; `rooms.js` keeps only the in-flight retry; `DidSigningKeyTests` keeps the key-vector coverage; `prove-pending-access` deleted. .NET 345/357 (the 12 known), browser 125/125, greenfield 1,964, server C# 11,468
-- [ ] Step 2b: scripts, the fixture-network launch path and configuration, probes, and documentation (README, DOCKER, OPERATING per N-015); rename the connector build step in `server-lifecycle.ps1` (N-014)
-- [ ] The connector still enrolls on a fresh install (focused test now; walkthrough at R1.8)
-- [ ] .NET, browser and connector suites; greenfield check; commit
-
-Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, `node --test "tests/*.test.mjs"`, `cargo test --manifest-path src/server/mcp/Cargo.toml`, then `pwsh scripts/check-greenfield.ps1`.
+- [x] Step 2b (commit "refactor: remove the fixture network and its tooling"): fixture network, native lifecycle scripts, Spaces probes, fixture OAuth, proof and demo scripts, and OPERATING removed; Launch keeps the Docker workflow; DOCKER rewritten; the connector build step renamed (N-014). Lifecycle suite 76/76, connector 98/98, greenfield 1,926
+- [x] The connector still enrolls on a fresh install: `EnrollmentTests` exercise the derived audience end to end; the live check is W5 at R1.8
+- [x] Suites green; commit
 
 ## Known baseline failures
 
@@ -205,22 +211,22 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 
 ## Metrics
 
-| Measure | Baseline (`d682c26`) | Now (after R1.4) | Target |
+| Measure | Baseline (`d682c26`) | Now (after R1.5) | Target |
 |---|---|---|---|
-| Server C# lines | 16,830 | 13,281 | about 11,000 |
-| Authenticated API families | 5 | 4 | 1 |
-| Persisted entity types | 30 | 28 | about 20 |
-| Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 47 / 31 | 0 |
-| `EntityContext.Transaction` outside the pipeline | 41 | 41 | 0 |
-| `bool authorized` parameters | 9 | 9 | 0 |
+| Server C# lines | 16,830 | 11,464 | about 11,000 |
+| Authenticated API families | 5 | 3 (`/api/v1/experience`, `/api/v1/tangents`, legacy REST) | 1 |
+| Persisted entity types | 30 | 25 | about 20 |
+| Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 44 / 18 | 0 |
+| `EntityContext.Transaction` outside the pipeline | 41 | 38 | 0 |
+| `bool authorized` parameters | 9 | 8 | 0 |
 | `EnsureHome` call sites | 17 | 0 | 0 |
-| `Mcp` folder lines | 3,697 | 364 (enrollment) | 0 |
-| Greenfield findings (lines): total | 4,132 | 2,473 | 0 |
-| — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 32 / 0 / 211 / 38 | 0 |
-| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 2,170 / 22 / 0 | 0 |
-| .NET tests | 506 of 518 (12 known failures) | 455 of 467 (the same 12) | all pass |
-| Browser tests | 170 of 170 | 139 of 139 | all pass |
-| Connector tests | 98 of 98 | not re-run (no connector change) | all pass |
+| `Mcp` folder lines | 3,697 | 358 (enrollment) | 0 |
+| Greenfield findings (lines): total | 4,132 | 1,926 | 0 |
+| — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 30 / 0 / 21 (`SourceDecision`, R3.6) / 38 | 0 |
+| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,829 / 8 / 0 | 0 |
+| .NET tests | 506 of 518 (12 known failures) | 345 of 357 (the same 12) | all pass |
+| Browser tests | 170 of 170 | 125 of 125 | all pass |
+| Connector tests | 98 of 98 | 98 of 98 (R1.5) | all pass |
 
 Recompute with the commands in note N-008 and the greenfield check.
 
@@ -267,11 +273,12 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-011** (2026-09-15) Historical documents (CURRENT_STATE history sections, handoffs, older epics, evidence) are removed or rewritten wholesale in R6.6. Until then, links in them to files removed by earlier tasks may break; links in living documents are fixed in the task that removes the target.
 - **N-012** (R1.1) The enrollment discovery document no longer lists `endpoints` or `standardMcpOAuthAuthorizationSupport`; the connector reads only `serviceProof`. The enrollment code stays in `Mcp/Authentication` until R2 moves it into Identity, and its `/mcp/token` and `/.well-known/tangent-mcp` routes stay until R6.2.
 - **N-013** (R1.1) The .NET suite went from 518 to 471 tests: transport-only tests were removed; tests for `References` and `OperationReceipt` were added. Operation ids for new receipts now start with `op-`.
-- **N-014** (R1.2) `scripts/server-lifecycle.ps1` names its connector build step with `Mcp` identifiers (2 greenfield lines). Rename them to connector wording in R1.5, which already edits the launch scripts' fixture paths.
-- **N-015** (R1.2) `docs/OPERATING.md` predates Docker operation and mixes participant-runner and Spaces recovery content. R1.5 and R1.7 remove those parts; anything still useful merges into `docs/DOCKER.md` and OPERATING is deleted.
+- **N-014** (R1.2) `scripts/server-lifecycle.ps1` names its connector build step with `Mcp` identifiers (2 greenfield lines). Rename them to connector wording in R1.5, which already edits the launch scripts' fixture paths. Done in R1.5.
+- **N-015** (R1.2) `docs/OPERATING.md` predates Docker operation and mixes participant-runner and Spaces recovery content. R1.5 and R1.7 remove those parts; anything still useful merges into `docs/DOCKER.md` and OPERATING is deleted. Done in R1.5: OPERATING held only Spaces and native-PoC content; DOCKER was rewritten around the Docker workflow.
 - **N-016** (R1.3) Onboarding had two paths: `/onboarding/` (`CompleteOnboarding`) and a `rooms.js` form that pre-filled the key `home` and relied on `Create` quietly editing the placeholder, driven by `TangentsResponse.SetupRequired`. Only the first remains, and `SiteWelcome.Onboarding` is the single onboarding state. `ServerSettings.SetupRequired` had no reader and was removed. `Claim` creates the home Tangent after its validations, so reads no longer write. `docs/handoff/RUNBOOK.md` still queries removed fields; it goes in R6.6 (N-011).
 - **N-017** (R1.4) Removing the `home` default meant removing its last writer, `POST /api/rooms` (`RoomGovernance.Create`), a slice of R4.2 pulled forward; the rest of `/api/rooms` still goes in R4.2. The browser's create form now requires an active Tangent. Five fixture-network proof scripts called that route and were deleted: `prepare-demo` with its wrapper, `prove-ui`, `prove-outage`, `prove-rooms` and `prove-conversation`. `prove-arrival-suspension` and `prove-pending-access` go with the other Spaces scripts in R1.5. `MessageFacets.Detect` is now internal so its rules are unit-tested.
 - **N-018** (R1.5) D9 confirmed: the `aud` parameter of `com.atproto.server.getServiceAuth` has `format: did`, so the default audience is a bare `did:web` of the public origin's host and port (`did:web:127.0.0.1%3A5220` locally), without the `#service` fragment the fixture-era value carried. Tangent verifies proofs itself, so the did:web need not resolve; the connector accepts any `did:` audience and its OAuth scope already allows `aud=*`. The override `Tangent:Enrollment:ProofAudience` is validated as a DID at startup. BouncyCastle stays for ES256K verification.
+- **N-019** (R1.5) Removing the fixture network removed everything that signed in with its disposable accounts: the connector walkthrough script, the fixture OAuth driver, the native Windows-hosted lifecycle scripts, the arrival and activity proofs, the Spaces probes and the demo capture tooling (with its orphaned model adapter). Walkthroughs are now operator-run with real accounts (R1.8); the archive tag keeps the removed tooling. The `SourceDecision` references that remain under the greenfield "Spaces storage" rule go with R3.6.
 
 ## Findings to route
 
@@ -293,8 +300,9 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R1.3 (`c3a4b9b`): the home Tangent is created at claim; reads no longer write; one onboarding path. .NET 461/473 with only the 12 known failures; browser 139/139; greenfield 2,691.
 - R1.4 (`b2183ff`): every Topic names its Tangent; `POST /api/rooms` and five fixture-network scripts removed; the digest reads facets only. .NET 455/467 with only the 12 known failures; browser 139/139; greenfield 2,473.
 - R1.5 step 1 (`ac9cb7b`): enrollment derives its proof audience from the public origin (D9). .NET 461/473 with only the 12 known failures.
-- R1.5 step 2a: Spaces storage removed from the server, browser and tests. .NET 345/357 with only the 12 known failures; browser 125/125; greenfield 1,964; server C# 11,468.
-- Next: R1.5 step 2b, the scripts, launch path, probes and documentation.
+- R1.5 step 2a (`5ed4f29`): Spaces storage removed from the server, browser and tests. .NET 345/357 with only the 12 known failures; browser 125/125; greenfield 1,964; server C# 11,468.
+- R1.5 step 2b: fixture network, native lifecycle scripts, Spaces probes and OPERATING removed; DOCKER rewritten. Lifecycle suite 76/76; connector 98/98; greenfield 1,926.
+- Next: R1.6.
 
 ## Evidence index
 

@@ -32,13 +32,13 @@ Our [project mandates](docs/MANDATES.md) commit to anonymously readable public c
 
 [AT Protocol](https://atproto.com/) supplies the current account identity integration. [MCP](https://modelcontextprotocol.io/) connects agent applications to the same conversation and permission rules used by the browser. Ordinary software handles background checks and compact catch-up; checking for new activity does not require a model call.
 
-Conversation storage is local by default. Experimental atproto Spaces support is available as an optional path for authored records. Broader federation, external social bridges, A2A work coordination, and integrations that can start an idle agent turn remain directions for development.
+Conversation is stored by the Tangent server that hosts it. Broader federation, external social bridges, A2A work coordination, and integrations that can start an idle agent turn remain directions for development.
 
 The ambition is a distributed home for conversation. The current application runs as a single server process with a separate local agent connector.
 
 ## Try it locally
 
-Tangent is an early working prototype under active development. The browser, local conversation storage, participant identities, and MCP connector are implemented. Production deployment, scale, and broader interoperability still need validation. See [current state and evidence](docs/CURRENT_STATE.md) for the detailed boundaries.
+Tangent is an early working prototype under active development. The browser, conversation storage, participant identities, and MCP connector are implemented. Production deployment, scale, and broader interoperability still need validation. See [current state and evidence](docs/CURRENT_STATE.md) for the detailed boundaries.
 
 The maintained development setup uses Windows, Docker Desktop with Linux containers and Compose, PowerShell 7 (`pwsh`), Git, and a current stable Rust toolchain with Cargo and its native build tools. The .NET SDK is supplied by the Docker build.
 
@@ -53,14 +53,14 @@ cd tangent-space
 
 Open [http://127.0.0.1:5220](http://127.0.0.1:5220), sign in with an atproto account, confirm ownership of your new server, and name your first Tangent.
 
-The build prepares the pinned Koan framework contribution, builds the web image, and compiles the local connector. A fresh launch uses SQLite and Local conversation storage; no experimental Spaces test network is required. Existing configuration is retained on subsequent launches.
+The build prepares the pinned Koan framework contribution, builds the web image, and compiles the local connector. A fresh launch uses SQLite; existing configuration is retained on subsequent launches.
 
 ```powershell
 docker compose logs -f tangent
 docker compose stop tangent
 ```
 
-Application state lives under `.local/docker/site`. See the [Docker guide](docs/DOCKER.md) for configuration, backups, restore, and optional Spaces fixtures.
+Application state lives under `.local/docker/site`. See the [Docker guide](docs/DOCKER.md) for configuration, backup and restore.
 
 ## Bring an agent
 

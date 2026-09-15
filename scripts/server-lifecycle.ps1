@@ -1,19 +1,18 @@
 # Tangent Space server lifecycle engine. Two servers live under src/server:
-#   web  — the .NET/Koan Tangent web+experience server; runs as the Docker container.
-#   mcp  — the Rust local connector; a host-run binary (stdio MCP + CLI), no container.
+#   web       — the .NET/Koan Tangent web+experience server; runs as the Docker container.
+#   connector — the Rust local connector (src/server/mcp); a host-run binary, no container.
 # Every action applies to all servers where it is meaningful:
 # Wipe: stop/remove only the Compose tangent service, then clear one validated state
 #   directory under <repo>/.local/docker. Interactive use requires typing WIPE; -Force
 #   is the internal/script path and -WhatIf performs a dry run that touches nothing.
-#   The mcp server keeps no server-side state: its local state belongs to the operator
+#   The connector keeps no server-side state: its local state belongs to the operator
 #   (TANGENT_CONNECTOR_HOME) and is never touched here.
 # Build: verify the pinned framework contribution, then docker compose build tangent
-#   (web) and cargo build --release (mcp). No stop, no wipe and no protocol-network
-#   interaction.
-# Launch: delegate to scripts/start-docker.ps1 (retain config or create a standalone
-#   configuration, then start only Tangent; fixture infrastructure is opt-in). The mcp server is launched by its
-#   hosts (agent applications run `tangent-connector serve`; operators use the CLI), so
-#   launch reports its binary path instead of starting a process.
+#   (web) and cargo build --release (connector). No stop and no wipe.
+# Launch: delegate to scripts/start-docker.ps1 (retain or create the configuration, then
+#   start only Tangent). The connector is launched by its hosts (agent applications run
+#   `tangent-connector serve`; operators use the CLI), so launch reports its binary path
+#   instead of starting a process.
 [CmdletBinding()]
 param(
     [ValidateSet('Wipe', 'Build', 'Launch')][string]$Action,
@@ -21,9 +20,6 @@ param(
     [switch]$Force,
     [switch]$WhatIf,
     [switch]$Build,
-    [switch]$MigrateWindowsState,
-    [switch]$UseFixtureNetwork,
-    [string]$FixtureFile,
     [scriptblock]$CommandRunner,
     [scriptblock]$FrameworkPreparer,
     [scriptblock]$Prompt
@@ -155,7 +151,7 @@ function Invoke-TangentWipe {
 }
 
 # Build the image: verify the pinned framework contribution, then build only the tangent
-# service. This never stops containers and never touches the protocol network.
+# service. This never stops containers.
 function Invoke-TangentDockerBuild {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RepoRoot, [scriptblock]$CommandRunner, [scriptblock]$FrameworkPreparer)
@@ -171,24 +167,24 @@ function Invoke-TangentDockerBuild {
     Write-Output 'Built the Tangent image. Nothing was stopped or removed.'
 }
 
-# Build the mcp server (src/server/mcp): a release binary of the local connector. Kept
-# separate from the web image build so lifecycle tests can drive the web path with mocks.
-function Invoke-McpConnectorBuild {
+# Build the connector (src/server/mcp): a release binary. Kept separate from the web image
+# build so lifecycle tests can drive the web path with mocks.
+function Invoke-ConnectorBuild {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RepoRoot, [scriptblock]$CommandRunner)
     $runner = if ($CommandRunner) { $CommandRunner } else { $script:DefaultTangentCommandRunner }
     $connector = Join-Path $RepoRoot 'src/server/mcp'
     if (-not (Test-Path -LiteralPath (Join-Path $connector 'Cargo.toml'))) {
-        throw "The mcp server sources are missing: $connector"
+        throw "The connector sources are missing: $connector"
     }
     $cargo = Get-Command cargo -ErrorAction SilentlyContinue
-    if (-not $cargo) { throw 'cargo (Rust) is required to build the mcp server: install the Rust toolchain or add it to PATH.' }
+    if (-not $cargo) { throw 'cargo (Rust) is required to build the connector: install the Rust toolchain or add it to PATH.' }
     $previous = Get-Location
     Set-Location -LiteralPath $connector
     try { & $runner @('cargo', 'build', '--release') }
     finally { Set-Location -LiteralPath $previous.Path }
     $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'tangent-connector.exe' } else { 'tangent-connector' }
-    Write-Output "Built the mcp connector: $(Join-Path $connector "target/release/$binary")"
+    Write-Output "Built the connector: $(Join-Path $connector "target/release/$binary")"
 }
 
 # Entry point. Tests dot-source this file with $TangentLifecycleSkipMain set and call the
@@ -203,21 +199,20 @@ if (-not ($TangentLifecycleSkipMain -or $global:TangentLifecycleSkipMain)) {
             $result = Invoke-TangentWipe -TargetPath $targetPath -AllowedRoot $allowedRoot -RepoRoot $repoRoot -Force:$Force -CommandRunner $CommandRunner -Prompt $Prompt -WhatIf:$WhatIf
             if ($result.status -in @('wiped', 'absent')) {
                 Write-Output 'A fresh site is configured on the next launch; use Launch.bat (or scripts/start-docker.ps1).'
-                Write-Output 'The mcp server keeps no server-side state; operator-local connector state is intentionally untouched.'
+                Write-Output 'The connector keeps no server-side state; operator-local connector state is untouched.'
             }
         }
         'Build' {
             Invoke-TangentDockerBuild -RepoRoot $repoRoot -CommandRunner $CommandRunner -FrameworkPreparer $FrameworkPreparer
-            Invoke-McpConnectorBuild -RepoRoot $repoRoot -CommandRunner $CommandRunner
+            Invoke-ConnectorBuild -RepoRoot $repoRoot -CommandRunner $CommandRunner
         }
         'Launch' {
-            $launchArguments = @{ Build = [bool]$Build; MigrateWindowsState = [bool]$MigrateWindowsState; UseFixtureNetwork = [bool]$UseFixtureNetwork }
-            if ($FixtureFile) { $launchArguments.FixtureFile = $FixtureFile }
+            $launchArguments = @{ Build = [bool]$Build }
             if ($CommandRunner) { $launchArguments.CommandRunner = $CommandRunner }
             & (Join-Path $repoRoot 'scripts/start-docker.ps1') @launchArguments
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'tangent-connector.exe' } else { 'tangent-connector' }
-            Write-Output "The mcp server is host-run, not containerized: agent hosts start it via 'tangent-connector serve' (see src/server/mcp/README.md). Expected binary after Build: $(Join-Path $repoRoot "src/server/mcp/target/release/$binary")"
+            Write-Output "The connector is host-run, not containerized: agent hosts start it via 'tangent-connector serve' (see src/server/mcp/README.md). Expected binary after Build: $(Join-Path $repoRoot "src/server/mcp/target/release/$binary")"
         }
     }
 }

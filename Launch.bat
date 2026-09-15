@@ -1,9 +1,7 @@
 @echo off
 rem Tangent Space Docker lifecycle: LAUNCH the Tangent app container.
-rem Prepares missing local configuration (retains an existing one byte-for-byte),
-rem then starts only the tangent service. No fixture network is needed by default.
-rem Add -Build to rebuild first. Experimental Spaces fixtures require -UseFixtureNetwork;
-rem add -MigrateWindowsState only for their one-time legacy Windows migration.
+rem Prepares a missing local configuration (retains an existing one byte-for-byte),
+rem then starts only the tangent service. Add -Build to rebuild first.
 setlocal
 set "ROOT=%~dp0"
 where pwsh >nul 2>nul

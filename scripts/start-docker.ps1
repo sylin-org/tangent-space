@@ -1,18 +1,10 @@
 [CmdletBinding()]
 param(
     [switch]$Build,
-    # Explicit opt-in for the one-time legacy Windows state migration. Never automatic.
-    [switch]$MigrateWindowsState,
-    # Experimental Spaces fixtures are opt-in; standalone Local storage is the default.
-    [switch]$UseFixtureNetwork,
     # Internal seams used only by scripts/test-server-lifecycle.ps1. Defaults exercise the real system.
     [string]$StateRoot,
-    [string]$FixtureFile,
     [int]$Port = 5220,
-    [scriptblock]$HealthProbe,
-    [scriptblock]$Registrar,
-    [scriptblock]$CommandRunner,
-    [scriptblock]$WindowsStateMigrator
+    [scriptblock]$CommandRunner
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -25,54 +17,8 @@ $commandRunner = if ($CommandRunner) { $CommandRunner } else {
         if ($LASTEXITCODE -ne 0) { throw "Command failed (exit $LASTEXITCODE): $($CommandArguments -join ' ')" }
     }
 }
-$healthProbe = if ($HealthProbe) { $HealthProbe } else { { param([int]$ProbePort) Invoke-RestMethod 'http://localhost:2585/health' -TimeoutSec 5 } }
-$registrar = if ($Registrar) { $Registrar } else {
-    { param([string]$Root, [int]$ServicePort) & (Join-Path $Root 'probes/spaces-network/register-tangent-service.ps1') -Port $ServicePort }
-}
-# The default migrator performs the one-time legacy Windows copy described in docs/DOCKER.md.
-$windowsStateMigrator = if ($WindowsStateMigrator) { $WindowsStateMigrator } else {
-    {
-        param([string]$Root, [long]$NetworkId, [string]$StateDirectory)
-        $windowsState = Join-Path $Root ".local/tangent/$NetworkId/site"
-        if (-not (Test-Path -LiteralPath (Join-Path $windowsState 'tangent.sqlite'))) { return 'no-windows-state' }
-        # Stop and snapshot before copying SQLite; never move or decrypt the Windows key ring.
-        & (Join-Path $Root 'scripts/stop-local.ps1') -Instance site
-        if (-not (Test-Path -LiteralPath (Join-Path $StateDirectory 'tangent.sqlite'))) {
-            $backup = & (Join-Path $Root 'scripts/backup-local.ps1') -Instance site
-            foreach ($name in @('tangent.sqlite', 'tangent.sqlite-wal', 'tangent.sqlite-shm')) {
-                $source = Join-Path $backup.backupDirectory $name
-                if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $StateDirectory }
-            }
-            @{ sourceBackup = $backup.backupDirectory; copiedAt = [DateTimeOffset]::UtcNow.ToString('O');
-                sessions = 'New Linux key ring; OAuth sign-in required. Original DPAPI state retained in backup.' } |
-                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $StateDirectory 'migration.json') -Encoding utf8
-        }
-        return 'migrated'
-    }
-}
 Push-Location $repoRoot
 try {
-    $fixtureMode = $UseFixtureNetwork -or [bool]$FixtureFile
-    if ($MigrateWindowsState -and -not $fixtureMode) { throw 'Legacy Windows migration requires -UseFixtureNetwork (or -FixtureFile) to identify its source network.' }
-    $fixture = $null
-    $networkId = $null
-    # Only an explicitly requested fixture launch contacts the disposable test network.
-    if ($fixtureMode) {
-        $fixturePath = if ($FixtureFile) { [IO.Path]::GetFullPath($FixtureFile, $repoRoot) } else { Join-Path $repoRoot '.local/spaces-network/fixtures.json' }
-        if (-not (Test-Path -LiteralPath $fixturePath)) {
-            throw "The disposable Spaces network is not initialized. Start it once with: ./probes/spaces-network/start.ps1 -Build (keep an existing network running; recreating it creates new DIDs). Then launch Tangent again."
-        }
-        $fixture = Get-Content -LiteralPath $fixturePath -Raw | ConvertFrom-Json
-        if ($fixture.status -ne 'ready') {
-            throw "The disposable Spaces network is not ready (status: $($fixture.status)). Start it once with: ./probes/spaces-network/start.ps1 -Build and wait for http://localhost:2585/health to report status 'passed'. Do not restart or recreate an existing network."
-        }
-        $health = & $healthProbe $Port
-        if ($health.status -ne 'passed') {
-            throw "The protocol test network baseline did not pass (health: $($health.status)). Start it once with: ./probes/spaces-network/start.ps1 -Build and wait for http://localhost:2585/health to report status 'passed'. Do not restart or recreate an existing network."
-        }
-        $networkId = ([DateTimeOffset]$fixture.startedAt).ToUnixTimeMilliseconds()
-    }
-
     # State directory: default <repo>/.local/docker/site, always strictly inside <repo>/.local/docker.
     $allowedRoot = Join-Path $repoRoot '.local/docker'
     $stateRootPath = if ($StateRoot) {
@@ -87,35 +33,13 @@ try {
     $state = Join-Path $stateRootPath 'site'
     New-Item -ItemType Directory -Path $state -Force | Out-Null
 
-    if ($fixtureMode) {
-        $marker = Set-TangentNetworkMarker -HostStateDirectory $state -NetworkId $networkId
-        Write-Output "Fixture network marker $($marker.status) (networkId $($marker.networkId))."
-    }
-
-    if (-not $fixtureMode -or (Test-Path -LiteralPath (Join-Path $state 'appsettings.json'))) {
-        # Repeat launch: the existing configuration is retained byte-for-byte and the
-        # fixture container is not contacted for registration.
-        $service = $null
-    } else {
-        # Fresh site: register this Tangent service with the existing fixture network
-        # (a PLC service record only; it reuses the persisted registration for this port)
-        # and leave ownership open for the first verified sign-in.
-        $service = & $registrar $repoRoot $Port
-        if (-not $service -or -not $service.managingApp) { throw 'Tangent managing-app fixture registration failed.' }
-    }
-    $managingApp = if ($service) { $service.managingApp } else { '' }
-    $configuration = Save-TangentDockerConfiguration -Fixture $fixture -ManagingApp $managingApp -Origin "http://127.0.0.1:$Port" -HostStateDirectory $state -OwnerDid ''
+    # An existing configuration is retained byte-for-byte; a fresh site leaves ownership open
+    # for the first verified sign-in.
+    $configuration = Save-TangentDockerConfiguration -Origin "http://127.0.0.1:$Port" -HostStateDirectory $state
     Write-Output "Configuration $($configuration.status): $($configuration.path)"
 
     # The composition lock is refreshed from the current source tree on every launch.
     Copy-Item -LiteralPath (Join-Path $repoRoot 'src/server/web/koan.lock.json') -Destination (Join-Path $state 'koan.lock.json') -Force
-
-    if ($MigrateWindowsState) {
-        $migration = & $windowsStateMigrator $repoRoot $networkId $state
-        Write-Output "Legacy Windows state migration: $migration"
-    } elseif ($fixtureMode -and (Test-Path -LiteralPath (Join-Path (Join-Path $repoRoot ".local/tangent/$networkId/site") 'tangent.sqlite'))) {
-        Write-Output 'Legacy Windows state is present but was not migrated. Use -MigrateWindowsState to migrate it explicitly.'
-    }
 
     if ($Build) {
         & $commandRunner @('docker', 'compose', 'build', 'tangent')

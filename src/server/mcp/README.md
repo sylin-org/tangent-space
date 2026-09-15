@@ -371,9 +371,8 @@ single narration; the 4-client SSE cap), and a
 real stdio journey through the compiled binary — including serve mode hosting the
 operator page with a clean stderr-only URL (also recorded in state) and pure
 JSON-RPC stdout. The fake server mirrors the discovery document, the PDS endpoints and
-`/mcp/token` alongside the experience envelope. The live walkthrough script is
-`scripts/experience-walkthrough.mjs` (receipt:
-`docs/evidence/experience-connector-walkthrough.json`).
+`/mcp/token` alongside the experience envelope. The live check is the operator-run
+[acceptance walkthrough](../../../docs/epics/EPIC-007.md#common-acceptance-walkthrough).
 
 ## Known limits (v1)
 

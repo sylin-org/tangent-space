@@ -88,13 +88,6 @@ try {
             if ((Get-FileHash -LiteralPath $candidate).Hash -ne $file.sha256) { throw "Backup integrity check failed: $($file.path)" }
         }
         if (@(Get-ChildItem -LiteralPath $source -File -Recurse -Force).Count -ne $manifest.files.Count) { throw 'Backup file inventory changed.' }
-        # Source identities are external to the app snapshot; refuse known mismatches.
-        $marker = Join-Path $source 'network.json'
-        $fixture = Join-Path $repoRoot '.local/spaces-network/fixtures.json'
-        if ((Test-Path -LiteralPath $marker) -and (Test-Path -LiteralPath $fixture)) {
-            $networkId = ([DateTimeOffset](Get-Content -LiteralPath $fixture -Raw | ConvertFrom-Json).startedAt).ToUnixTimeMilliseconds()
-            if ((Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).networkId -ne $networkId) { throw 'This backup belongs to a different source test network.' }
-        }
         Write-Host "Restore from: $backup"
         Write-Host "Replace app state: $state"
         if ($WhatIfPreference) { $null = $PSCmdlet.ShouldProcess($state, 'Replace with verified backup'); return }

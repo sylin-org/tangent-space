@@ -39,7 +39,7 @@ Each module is a folder under `src/server/web` and a namespace `TangentSpace.<Mo
 | `Hosting` | The Host: settings, accountable human owner, posture, artwork | `Site/*` |
 | `Community` | Tangents, Topics, invitations, join requests; membership as Koan roles | `Communities/*`, `Rooms/*` |
 | `Conversation` | Posts, facets, edit history, read positions, Topic windows | `Conversation/*` |
-| `Identity` | Participants, identities, sessions, enrollment proofs, profiles, the atproto gateway | `Participants/*`, `Participation/*`, `Mcp/Authentication/*`, identity parts of `AtProtocol/*` |
+| `Identity` | Participants, identities, sessions, enrollment proofs, profiles, the atproto gateway | `Identity/*`, `Participants/*`, `Participation/*`, `Mcp/Authentication/*` |
 | `Stewardship` | Reports, moderation cases, restrictions, audit | `Moderation/*`, `Rooms/ScopedRestriction`, `Rooms/RoomAudit` |
 | `Api` | HTTP adapters: authenticated API, public pages and JSON, identity endpoints, consumer registrations | `Web/*`, `*/Web/*`, `Hosting/*`, presentation in `Experience/*` |
 | `Infrastructure` | Koan module composition, options, constants | `Infrastructure/TangentModule` |
