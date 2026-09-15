@@ -129,12 +129,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
         finally { gate.Exit(); }
     }
 
-    public Task<RoomAdministrationResult> Create(string actorId, string roomKey, string title, RoomAdmission admission, CancellationToken ct)
-        => Administer(actorId, roomKey, null, RoomAdministration.Create, null,
-            (site, existing, _, _, _, _, _, now) => existing is not null
-                ? throw new RoomRuleViolation(RoomDenial.AlreadyExists, "That stable room key already exists; reconcile its pending Space instead of creating another room.")
-                : new Change(Room.Create(site, actorId, roomKey, title, admission, now)), ct);
-
     public Task<RoomAdministrationResult> SetMembership(string actorId, string roomKey, string targetIdentifier, RoomRole role, CancellationToken ct)
         => Administer(actorId, roomKey, targetIdentifier, RoomAdministration.SetMembership, role,
             (site, room, actor, targetId, target, tangent, tangentMembership, now) =>

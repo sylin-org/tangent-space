@@ -285,8 +285,8 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "A scoped restriction currently denies channel administration.");
             if (await Room.Get(roomKey, ct) is not null) throw new TangentRuleViolation(TangentDenial.AlreadyExists, "That stable channel key already exists.");
             var room = tangent.IsOwner(actorId)
-                ? Room.Create(site, actorId, roomKey, title, admission, now, tangentKey, tangent, conversation.Value.NewTopicState)
-                : Room.CreateDelegated(site, actorId, roomKey, title, admission, now, tangentKey, tangent, conversation.Value.NewTopicState);
+                ? Room.Create(site, actorId, roomKey, title, admission, now, tangent, conversation.Value.NewTopicState)
+                : Room.CreateDelegated(site, actorId, roomKey, title, admission, now, tangent, conversation.Value.NewTopicState);
             room.MembersOnly = membersOnly;
             if (topic is not null) room.ChangeTopic(site, actorId, null, topic, now, tangent, actorMembership);
             await room.Save(ct);

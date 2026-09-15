@@ -113,7 +113,6 @@ public sealed class ExperienceDigest(
             var read = await ReadPosition.Get(ReadPosition.Key(did, room.Key), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
             var recipientDid = await hub.Directory.AtprotoDidOf(did, token);
-            var recipientHandle = await hub.Directory.LabelOf(did, token);
             var unread = (await Message.Query(
                 message => message.RoomKey == room.Key && message.Sequence > readSequence, UnreadWindow, token))
                 .OrderBy(message => message.Sequence).ToList();
@@ -137,22 +136,11 @@ public sealed class ExperienceDigest(
                         continue;
                     }
                 }
-                // Facet mentions are trusted structure (ADR 0008): minted by the picker,
-                // they carry the perennial identity value (atproto DID or internal DID) and
-                // need no prose resolution.
-                if (message.Facets is not null && message.Facets.Any(
-                        facet => recipientDid is not null && facet.References(recipientDid)
-                            || facet.References(ParticipantIdentity.InternalValue(did))))
-                {
-                    addressedPosts.Add(message.Id);
-                    directed.Add(Item(did, room, stored.TangentKey, message, "direct_mention", "addressed_to_you", authorHandle));
-                    continue;
-                }
-                // Direct mentions use deterministic token resolution against the recipient's
-                // canonical identity; ambiguous or quoted/code occurrences do not count.
-                var candidates = ExperienceMentions.Candidates(message.Content.Text);
-                if (message.Facets is null && ExperienceMentions.Addresses(candidates, recipientDid, recipientHandle)
-                    && await ResolvesUnambiguously(candidates, did, recipientHandle, token))
+                // Mentions are facets (ADR 0008): minted by the picker or detected when the post is saved,
+                // they carry the perennial identity value (atproto DID or internal DID) and need no prose resolution.
+                var facets = message.Facets ?? [];
+                if (facets.Any(facet => recipientDid is not null && facet.References(recipientDid)
+                        || facet.References(ParticipantIdentity.InternalValue(did))))
                 {
                     addressedPosts.Add(message.Id);
                     directed.Add(Item(did, room, stored.TangentKey, message, "direct_mention", "addressed_to_you", authorHandle));
@@ -160,10 +148,8 @@ public sealed class ExperienceDigest(
                 }
                 // Group mentions expand to current holders of the scoped roles: the group is
                 // resolved at digest time, never stored in anyone's words (ADR 0008).
-                var knownHandles = handles.Select(pair => pair.Value).Where(value => value is not null).Cast<string>().ToList();
-                var groups = (message.Facets is null ? ExperienceMentions.GroupCandidates(message.Content.Text, knownHandles) : [])
-                    .Concat((message.Facets ?? []).Where(facet => facet.Kind == Conversation.PostFacet.Group)
-                        .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal)))
+                var groups = facets.Where(facet => facet.Kind == Conversation.PostFacet.Group)
+                    .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 if (groups.Count > 0 && message.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, token))
                 {
@@ -190,22 +176,6 @@ public sealed class ExperienceDigest(
         if (admin && groups.Any(group => group is "admins" or "moderators")) return true;
         if (membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader && groups.Contains("members")) return true;
         return false;
-    }
-
-    /// <summary>A token that equals the recipient's label resolves to the recipient only when
-    /// no other identity entry carries the same label string.</summary>
-    private static async Task<bool> ResolvesUnambiguously(IReadOnlyList<string> candidates, string participantId, string? handle, CancellationToken ct)
-    {
-        if (handle is not { Length: > 1 }) return candidates.Contains(participantId, StringComparer.Ordinal);
-        var token = candidates.FirstOrDefault(candidate =>
-            string.Equals(candidate, handle, StringComparison.OrdinalIgnoreCase));
-        if (token is null) return candidates.Contains(participantId, StringComparer.Ordinal);
-        using var fresh = EntityContext.NoCache();
-        var holders = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var entry in await ParticipantIdentity.Query(value => value.Label != null, ct))
-            if (string.Equals(entry.Label!.Trim(), token, StringComparison.OrdinalIgnoreCase))
-                holders.Add(entry.ParticipantId);
-        return holders.Count <= 1 && holders.Contains(participantId);
     }
 
     private static int DirectOrder(ExperienceAttentionItem left, ExperienceAttentionItem right)

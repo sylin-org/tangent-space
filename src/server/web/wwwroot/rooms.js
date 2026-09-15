@@ -1047,13 +1047,10 @@
     updateNewPosts(); checkpointState();
   }));
   $('create-room').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
+    if (!activeTangentKey) throw new Error('Choose a Tangent before starting a Topic.');
     const body = Object.fromEntries(new FormData(event.target));
-    if (activeTangentKey) {
-      await request(tangentPath(activeTangentKey) + '/topics', body);
-      event.target.reset(); navigate(topicUrl(activeTangentKey, body.key));
-      return;
-    }
-    await request('/api/rooms', body); event.target.reset(); const created = (await request(roomPath(body.key))).data; navigate(topicUrl(created.tangentKey, created.key));
+    await request(tangentPath(activeTangentKey) + '/topics', body);
+    event.target.reset(); navigate(topicUrl(activeTangentKey, body.key));
   }); });
   $('create-tangent').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => {
     const body = Object.fromEntries(new FormData(event.target));

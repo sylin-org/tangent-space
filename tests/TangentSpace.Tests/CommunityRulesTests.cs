@@ -39,7 +39,7 @@ public sealed class CommunityRulesTests
     {
         var site = Site();
         var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
-        var room = Room.Create(site, HostOwner, "kintsugi-lounge", "Lounge", RoomAdmission.SignedIn, Now, tangent.Id, tangent);
+        var room = Room.Create(site, HostOwner, "kintsugi-lounge", "Lounge", RoomAdmission.SignedIn, Now, tangent);
         room.CompleteSpace(site, HostOwner, room.PolicyRevision, "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/chat.tangent.space/kintsugi-lounge", Now, tangent);
 
         var outsider = room.CurrentPolicy(site, Visitor, null, tangent: tangent);
@@ -53,14 +53,16 @@ public sealed class CommunityRulesTests
     }
 
     [Fact]
-    public void Legacy_home_rooms_keep_their_key_and_signed_in_admission_behavior()
+    public void A_topic_whose_Tangent_is_missing_admits_no_one()
     {
         var site = Site();
-        var room = Room.Create(site, HostOwner, "lounge", "Lounge", RoomAdmission.SignedIn, Now);
-        room.CompleteSpace(site, HostOwner, room.PolicyRevision, "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/chat.tangent.space/lounge", Now);
+        var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
+        var room = Room.Create(site, HostOwner, "kintsugi-lounge", "Lounge", RoomAdmission.SignedIn, Now, tangent, RoomSpaceState.Local);
 
-        Assert.Equal(TangentCommunity.HomeKey, room.TangentKey);
-        Assert.True(room.CurrentPolicy(site, Visitor, null).CanRead);
+        var policy = room.CurrentPolicy(site, HostOwner, null);
+
+        Assert.False(policy.CanRead || policy.CanManage);
+        Assert.Equal("tangent-not-found", policy.Reason);
     }
 
     [Fact]
@@ -69,7 +71,7 @@ public sealed class CommunityRulesTests
         var site = Site();
         var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
         var communityMember = TangentMembership.Assign(tangent, Member, TangentRole.Member, HostOwner, Now);
-        var room = Room.Create(site, HostOwner, "kintsugi-private", "Private", RoomAdmission.InvitationOnly, Now, tangent.Id, tangent);
+        var room = Room.Create(site, HostOwner, "kintsugi-private", "Private", RoomAdmission.InvitationOnly, Now, tangent);
         room.CompleteSpace(site, HostOwner, room.PolicyRevision, "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/chat.tangent.space/kintsugi-private", Now, tangent);
 
         Assert.False(room.CurrentPolicy(site, Member, null, tangent: tangent, tangentMembership: communityMember).CanRead);
@@ -109,7 +111,7 @@ public sealed class CommunityRulesTests
     {
         var site = Site();
         var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
-        var room = Room.Create(site, HostOwner, "kintsugi-pending", "Pending", RoomAdmission.InvitationOnly, Now, tangent.Id, tangent);
+        var room = Room.Create(site, HostOwner, "kintsugi-pending", "Pending", RoomAdmission.InvitationOnly, Now, tangent);
 
         var policy = room.CurrentPolicy(site, HostOwner, null, tangent: tangent);
         Assert.False(policy.CanRead);

@@ -39,11 +39,6 @@ public sealed class RoomsController(TangentServer hub) : ControllerBase
     }
 
     [RoomMutation]
-    [HttpPost]
-    public async Task<IActionResult> Create(CreateRoomRequest request, CancellationToken ct)
-        => Outcome(await rooms.Create(Actor(), request.Key, request.Title, request.Admission, ct));
-
-    [RoomMutation]
     [HttpPost("{roomKey}/provision")]
     public async Task<IActionResult> Provision(string roomKey, CancellationToken ct)
     {

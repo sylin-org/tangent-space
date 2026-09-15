@@ -24,8 +24,6 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     // Classification policy: persisted zero-value defaults Everyone/Write keep every existing participant allowed.
     public ParticipationPreset ParticipationPreset { get; set; }
     public UndeclaredAccess UndeclaredAccess { get; set; }
-    // Only used by the host-owned home record to make the flat-room migration resumable.
-    public bool LegacyRoomsAssigned { get; set; }
     public bool SetupComplete { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

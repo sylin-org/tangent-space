@@ -9,9 +9,7 @@ namespace TangentSpace.Rooms;
 
 public sealed class Room : Entity<Room>
 {
-    // "home" is deliberately the stable legacy namespace. Existing room keys and
-    // native Space URIs remain unchanged when a site becomes multi-Tangent.
-    public string TangentKey { get; set; } = TangentCommunity.HomeKey;
+    public string TangentKey { get; set; } = "";
     public string Title { get; set; } = "";
     public string Topic { get; set; } = "";
     public RoomAdmission Admission { get; set; }
@@ -29,36 +27,31 @@ public sealed class Room : Entity<Room>
     public string? SpaceUri { get; set; }
 
     public static Room Create(TangentSite? site, string actorDid, string key, string title, RoomAdmission admission, DateTimeOffset now,
-        string tangentKey = TangentCommunity.HomeKey, TangentCommunity? tangent = null, RoomSpaceState spaceState = RoomSpaceState.Pending)
+        TangentCommunity tangent, RoomSpaceState spaceState = RoomSpaceState.Pending)
     {
         RequireOwner(site, tangent, actorDid);
-        return Validate(site, actorDid, key, title, admission, now, tangentKey, tangent, spaceState);
+        return Validate(actorDid, key, title, admission, now, tangent, spaceState);
     }
 
     /// <summary>A tangent administrator creates a channel under delegated authority; the creator gains no ownership.</summary>
     internal static Room CreateDelegated(TangentSite? site, string actorDid, string key, string title, RoomAdmission admission,
-        DateTimeOffset now, string tangentKey, TangentCommunity tangent, RoomSpaceState spaceState = RoomSpaceState.Pending)
+        DateTimeOffset now, TangentCommunity tangent, RoomSpaceState spaceState = RoomSpaceState.Pending)
     {
         if (site is null || !Participant.IsValidId(actorDid))
             throw Forbidden("A delegated channel needs an established site and a verified participant.");
-        if (tangent.Id != tangentKey)
-            throw Invalid("The selected Tangent does not match this channel.");
-        return Validate(site, actorDid, key, title, admission, now, tangentKey, tangent, spaceState);
+        return Validate(actorDid, key, title, admission, now, tangent, spaceState);
     }
 
-    private static Room Validate(TangentSite? site, string actorDid, string key, string title, RoomAdmission admission,
-        DateTimeOffset now, string tangentKey, TangentCommunity? tangent, RoomSpaceState spaceState)
+    private static Room Validate(string actorDid, string key, string title, RoomAdmission admission,
+        DateTimeOffset now, TangentCommunity tangent, RoomSpaceState spaceState)
     {
         CheckKey(key);
-        TangentCommunity.CheckKey(tangentKey);
-        if (tangent is not null && tangent.Id != tangentKey)
-            throw Invalid("The selected Tangent does not match this channel.");
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > RoomConstants.MaximumTitleLength)
             throw Invalid("A room title must contain 1–120 characters.");
         if (!Enum.IsDefined(admission)) throw Invalid("Choose signed-in or invitation-only admission.");
         return new Room
         {
-            Id = key, TangentKey = tangentKey, Title = title.Trim(), Admission = admission, CreatorParticipantId = actorDid,
+            Id = key, TangentKey = tangent.Id, Title = title.Trim(), Admission = admission, CreatorParticipantId = actorDid,
             PolicyRevision = 1, CreatedAt = now, UpdatedAt = now, SpaceState = spaceState
         };
     }
@@ -70,11 +63,11 @@ public sealed class Room : Entity<Room>
         CheckMembership(membership, actorDid);
         CheckTangentMembership(tangent, tangentMembership, actorDid);
         var signedIn = actorDid is not null && Participant.IsValidId(actorDid);
-        var owner = signedIn && (site?.IsOwner(actorDid) == true || tangent?.IsOwner(actorDid) == true
-            || (tangent is null && site is not null && (site.IsOwner(actorDid) || CreatorParticipantId == actorDid)));
-        var communityAdmitted = owner || tangent is null || tangent.CanParticipate(actorDid, tangentMembership);
+        // A Topic whose Tangent is missing admits no one, its owners included.
+        var owner = signedIn && tangent is not null && (site?.IsOwner(actorDid) == true || tangent.IsOwner(actorDid));
+        var communityAdmitted = owner || tangent?.CanParticipate(actorDid, tangentMembership) == true;
         // Classification presets gate conversation participation for ordinary members; ownership is authority, not participation.
-        var rights = tangent?.ParticipationRights(classification) ?? (Read: true, Write: true);
+        var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
         var classificationRead = owner || rights.Read;
         var classificationWrite = owner || rights.Write;
         // A ban blocks everything; a timeout blocks writing and administration while reading stays available.
@@ -97,7 +90,7 @@ public sealed class Room : Entity<Room>
             || SpaceState == RoomSpaceState.Ready && !string.IsNullOrWhiteSpace(SpaceUri);
         // An explicit channel grant of member or manager widens a community reader inside that channel only.
         var communityReader = !owner && communityRole == TangentRole.Reader && role is not (RoomRole.Member or RoomRole.Manager);
-        var reason = site is null ? "site-unavailable" : tangent is null && TangentKey != TangentCommunity.HomeKey ? "tangent-not-found"
+        var reason = site is null ? "site-unavailable" : tangent is null ? "tangent-not-found"
             : !signedIn ? "sign-in-required" : suspended ? "suspended"
             : banned ? "banned"
             : !owner && role == RoomRole.Removed ? "removed"
@@ -133,9 +126,8 @@ public sealed class Room : Entity<Room>
         if (!authorized && !policy.CanManage) throw Forbidden("Only the owner or a current room manager can change room membership.");
         if (!Participant.IsValidId(targetDid)) throw Invalid("A membership target must be a valid participant.");
         if (!Enum.IsDefined(role)) throw Invalid("Choose manager, member, reader, or removed.");
-        // Ownership protections: site/tangent owners can never become membership targets. In legacy flat
-        // rooms the creator is the owner; inside a Tangent the creator of a delegated channel holds no ownership.
-        if (tangent?.IsOwner(targetDid) == true || (tangent is null && (site?.IsOwner(targetDid) == true || targetDid == CreatorParticipantId)))
+        // The Tangent owner can never become a membership target; the creator of a delegated channel holds no ownership.
+        if (tangent?.IsOwner(targetDid) == true)
             throw Forbidden("Room membership cannot change or remove the owner.");
         if (!authorized && !policy.CanAppointManagers && role == RoomRole.Manager)
             throw Forbidden("Only the owner can appoint room managers.");
@@ -257,7 +249,7 @@ public sealed class Room : Entity<Room>
 
     private static void RequireOwner(TangentSite? site, TangentCommunity? tangent, string actorDid)
     {
-        if (site is null || !Participant.IsValidId(actorDid) || (tangent is not null ? !tangent.IsOwner(actorDid) : !site.IsOwner(actorDid)))
+        if (site is null || !Participant.IsValidId(actorDid) || tangent?.IsOwner(actorDid) != true)
             throw Forbidden("Only the current Tangent owner can perform this operation.");
     }
 

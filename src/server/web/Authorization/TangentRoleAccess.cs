@@ -31,12 +31,12 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         var ownsResource = selected.IsOwner
             || string.Equals(room.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
         var siteUnavailable = selected.SitePolicyRevision <= 0;
-        var missingParent = tangent is null && room.TangentKey != TangentCommunity.HomeKey;
+        var missingParent = tangent is null;
         var ready = room.SpaceState == RoomSpaceState.Local
             || room.SpaceState == RoomSpaceState.Ready && !string.IsNullOrWhiteSpace(room.SpaceUri);
         var banned = restriction is { Banned: true } && !ownsResource;
         var timedOut = restriction is { Banned: false } && !ownsResource;
-        var rights = tangent?.ParticipationRights(classification) ?? (Read: true, Write: true);
+        var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
         var read = !siteUnavailable && !suspended && !missingParent && ready && !banned && rights.Read
             && (ownsResource || CanDo(effective.See, bag));
         var write = read && !timedOut && !room.IsLocked && rights.Write

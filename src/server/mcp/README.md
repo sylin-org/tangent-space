@@ -390,6 +390,6 @@ JSON-RPC stdout. The fake server mirrors the discovery document, the PDS endpoin
 - Sessions and atproto sessions rest unencrypted in user-profile state (cookie-jar
   exposure class, by owner decision); an OS-store tier can be revisited if the model
   changes.
-- Mentions resolve against the recipient's canonical handle/DID among server participants;
-  resolution boundaries are documented in `ExperienceMentions` (server side).
+- Mentions are post facets: the server detects them when a post is saved (`MessageFacets`),
+  resolving a handle or DID to exactly one server participant; the digest reads facets only.
 - No coordination extension (`COORDINATION.md` is a separate slice, intentionally absent).

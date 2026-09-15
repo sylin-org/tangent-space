@@ -68,7 +68,7 @@ public sealed class AccessMapTests
         var site = Site();
         var tangent = TangentCommunity.Create(site, Owner, "garden", "Garden", "", "", "", "", Now);
         var room = Room.Create(site, Owner, "garden-notes", "Notes", RoomAdmission.InvitationOnly, Now,
-            tangent.Id, tangent, RoomSpaceState.Local);
+            tangent, RoomSpaceState.Local);
 
         Assert.Throws<UnauthorizedAccessException>(() => site.ChangeAccess(Other, AccessMap.ServerDefaults()));
         Assert.Equal(TangentDenial.Forbidden, Assert.Throws<TangentRuleViolation>(() =>

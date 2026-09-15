@@ -16,9 +16,8 @@ public static partial class MessageFacets
         return Detect(text, await ParticipantIdentity.Query(_ => true, ct));
     }
 
-    // The candidate rules mirror the digest parser (Experience/ExperienceMentions.cs), which offers
-    // no offset-bearing API: the regexes, code-fence handling, token boundaries, trailing-punctuation
-    // trim, exact-handle resolution and ambiguity guard are copied verbatim and must stay in step.
+    // A mention candidate is an @handle or DID token outside ``` fences, at a token boundary, with
+    // trailing punctuation trimmed. There is no display-name matching and no inference.
     [GeneratedRegex(@"(?<![\w@])@(?<handle>[A-Za-z0-9][A-Za-z0-9.-]{1,252})", RegexOptions.CultureInvariant)]
     private static partial Regex HandleToken();
 
@@ -32,7 +31,7 @@ public static partial class MessageFacets
     /// Ranges are absolute whole-text UTF-8 byte offsets: each pass tracks the byte offset of the
     /// current line's start (raw segment bytes plus one byte per '\n'), matching what the composer
     /// mints and the renderer expects.</summary>
-    private static IReadOnlyList<PostFacet> Detect(string text, IReadOnlyList<ParticipantIdentity> identities)
+    internal static IReadOnlyList<PostFacet> Detect(string text, IReadOnlyList<ParticipantIdentity> identities)
     {
         var facets = new List<PostFacet>();
         var targets = new HashSet<string>(StringComparer.Ordinal);

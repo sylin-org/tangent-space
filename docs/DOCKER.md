@@ -22,13 +22,7 @@ The app binds `.local/docker/site` to `/state`. It holds SQLite, instance config
 
 Only with explicit `start-docker.ps1 -UseFixtureNetwork -MigrateWindowsState`, the launcher stops the known Windows `site` process, creates its consistent backup under `.local/backups`, and copies its SQLite database and any journal files into the new Docker state directory. It never overwrites an existing Docker database. Participants, ownership, room rules, source decisions, conversation projections, credential hashes and durable read positions are retained. `migration.json` records the original backup. The original Windows directory and DPAPI keys remain intact.
 
-DPAPI-protected Windows login keys cannot be used by the Linux container. Sign in again and reconnect the authority/room grants. For the disposable demo:
-
-```powershell
-./scripts/prepare-demo.ps1 -HumanOnly -Reconnect
-```
-
-This preserves the existing messages and model reply, renews the real fixture OAuth connections, and performs no model inference. Existing site bearer credentials are retained in SQLite. Old opaque read cursors protected by the Windows key ring must be discarded; retain any pending write operation and resume from the server's durable read position. Ordinary subsequent Docker restarts retain the Linux key ring, cookies and OAuth grants.
+DPAPI-protected Windows login keys cannot be used by the Linux container. Sign in again and reconnect the authority/room grants. Existing site bearer credentials are retained in SQLite. Old opaque read cursors protected by the Windows key ring must be discarded; retain any pending write operation and resume from the server's durable read position. Ordinary subsequent Docker restarts retain the Linux key ring, cookies and OAuth grants.
 
 The Linux development key ring is persisted without an additional XML key encryptor. Treat the entire state directory and its backups as sensitive local operator material. This setup is for the local PoC; production hosting needs its own encrypted key custody and deployment policy.
 

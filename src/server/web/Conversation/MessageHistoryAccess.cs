@@ -109,12 +109,13 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
             var now = DateTimeOffset.UtcNow;
             foreach (var room in candidates.Values)
             {
-                var ownerHere = siteOwner || owned.Contains(room.TangentKey);
-                // Room admission parity with CurrentPolicy: owners are always admitted; a missing
-                // Tangent row admits (the legacy home rule); otherwise the Tangent's own admission
-                // rule decides with the viewer's membership, where a durable removal overrides.
+                // Room admission parity with CurrentPolicy: a Topic whose Tangent is missing admits no one;
+                // owners are always admitted; otherwise the Tangent's own admission rule decides with the
+                // viewer's membership, where a durable removal overrides.
                 var tangent = Block<TangentCommunity?>().Invoke(TangentCommunity.Get(room.TangentKey, CancellationToken.None));
-                var admitted = ownerHere || tangent is null
+                if (tangent is null) continue;
+                var ownerHere = siteOwner || owned.Contains(room.TangentKey);
+                var admitted = ownerHere
                     || tangent.CanParticipate(participantId, tangentMemberships.GetValueOrDefault(room.TangentKey));
                 // A durable ban removes the manager tier for non-owners (owners are never
                 // restriction targets); time-scoped timeouts stay ignored for reads.
