@@ -35,7 +35,7 @@ namespace TangentSpace.Tests;
 public sealed class EnrollmentTests
 {
     private const string Origin = "http://127.0.0.1:5220";
-    private const string Audience = "did:web:127.0.0.1%3A5220";
+    private const string Audience = "did:web:localhost%3A5220";
     private const string OtherService = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
     private const long FixedNow = 1_800_000_000;
 
@@ -752,13 +752,27 @@ public sealed class EnrollmentTests
 
     [Theory]
     [InlineData("https://tangent.example", "", "did:web:tangent.example")]
-    [InlineData("https://Tangent.Example:8443", "", "did:web:tangent.example%3A8443")]
+    [InlineData("https://Tangent.Example:8443", "", null)]
+    [InlineData("https://192.0.2.10", "", null)]
     [InlineData(Origin, "", Audience)]
+    [InlineData("http://localhost:5220", "", Audience)]
     [InlineData(Origin, OtherService, OtherService)]
     [InlineData("", "", null)]
     [InlineData("http://tangent.example", "", null)]
-    public void The_proof_audience_is_the_override_or_a_did_web_of_the_public_origin(string origin, string configured, string? expected)
+    public void The_proof_audience_is_the_override_or_an_atproto_did_web_of_the_public_origin(string origin, string configured, string? expected)
         => Assert.Equal(expected, ProofAudience.From(configured, origin));
+
+    [Theory]
+    [InlineData("did:web:localhost%3A5220", true)]
+    [InlineData("did:web:tangent.example", true)]
+    [InlineData("did:plc:ewvi7nxzyoun6zhxrhs64oiz", true)]
+    [InlineData("did:web:127.0.0.1%3A5220", false)]
+    [InlineData("did:web:tangent.example%3A8443", false)]
+    [InlineData("did:web:tangent.example:path", false)]
+    [InlineData("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK", false)]
+    [InlineData("", false)]
+    public void Only_atproto_audiences_are_accepted(string value, bool accepted)
+        => Assert.Equal(accepted, ProofAudience.IsAtprotoAudience(value));
 
     private static TangentMcpDiscoveryController Discovery(ProofAudience audience, TangentSpace.Site.SiteOptions site, HttpContext? context = null)
         => new(audience, Options.Create(site)) { ControllerContext = new ControllerContext { HttpContext = context ?? new DefaultHttpContext() } };

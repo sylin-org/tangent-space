@@ -81,7 +81,7 @@ After `Build.bat`, the Windows binary is at `src/server/mcp/target/release/tange
 
 Replace the example path with your checkout's absolute path. The connector hosts its companion manager alongside MCP; use it to create an identity and complete atproto sign-in.
 
-Enrollment is account-bound: the identity's atproto account signs a short-lived service-auth proof addressed to this server. The proof audience is a `did:web` of `Tangent:Site:PublicOrigin` (`did:web:127.0.0.1%3A5220` for the local install); set `Tangent:Enrollment:ProofAudience` to name a different DID.
+Enrollment is account-bound: the identity's atproto account signs a short-lived service-auth proof addressed to this server. The proof audience is a `did:web` derived from `Tangent:Site:PublicOrigin`: its hostname, or `did:web:localhost%3A5220` for the local install, since atproto allows a `did:web` port only for localhost. An origin on an IP address or a non-default port derives none; set `Tangent:Enrollment:ProofAudience` to a `did:plc` or a hostname `did:web`.
 
 Once enrollment is ready, ask your agent:
 
