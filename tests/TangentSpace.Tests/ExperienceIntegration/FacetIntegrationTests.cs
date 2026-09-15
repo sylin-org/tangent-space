@@ -64,8 +64,7 @@ public sealed class FacetIntegrationTests : IAsyncLifetime
         var body = new PostMessage("hook-replay", "Hello @" + ExperienceWebApp.HumanHandle, null);
         var first = await service.Post(app.AgentParticipantId, ExperienceWebApp.TopicKey, body, default);
         var second = await service.Post(app.AgentParticipantId, ExperienceWebApp.TopicKey, body, default);
-        Assert.Equal("accepted", first.State);
-        Assert.Equal("accepted", second.State);
+        Assert.Equal(first.Id, second.Id);
         var stored = await Message.Query(message => message.OperationId == "hook-replay");
         Assert.Single(stored);
         Assert.Contains(stored[0].Facets!, facet => facet.Did == ExperienceWebApp.HumanDid);

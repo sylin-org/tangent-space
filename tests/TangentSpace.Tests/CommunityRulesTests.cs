@@ -40,7 +40,6 @@ public sealed class CommunityRulesTests
         var site = Site();
         var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
         var room = Room.Create(site, HostOwner, "kintsugi-lounge", "Lounge", RoomAdmission.SignedIn, Now, tangent);
-        room.CompleteSpace(site, HostOwner, room.PolicyRevision, "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/chat.tangent.space/kintsugi-lounge", Now, tangent);
 
         var outsider = room.CurrentPolicy(site, Visitor, null, tangent: tangent);
         Assert.False(outsider.CanRead);
@@ -57,7 +56,7 @@ public sealed class CommunityRulesTests
     {
         var site = Site();
         var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
-        var room = Room.Create(site, HostOwner, "kintsugi-lounge", "Lounge", RoomAdmission.SignedIn, Now, tangent, RoomSpaceState.Local);
+        var room = Room.Create(site, HostOwner, "kintsugi-lounge", "Lounge", RoomAdmission.SignedIn, Now, tangent);
 
         var policy = room.CurrentPolicy(site, HostOwner, null);
 
@@ -72,7 +71,6 @@ public sealed class CommunityRulesTests
         var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
         var communityMember = TangentMembership.Assign(tangent, Member, TangentRole.Member, HostOwner, Now);
         var room = Room.Create(site, HostOwner, "kintsugi-private", "Private", RoomAdmission.InvitationOnly, Now, tangent);
-        room.CompleteSpace(site, HostOwner, room.PolicyRevision, "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/chat.tangent.space/kintsugi-private", Now, tangent);
 
         Assert.False(room.CurrentPolicy(site, Member, null, tangent: tangent, tangentMembership: communityMember).CanRead);
         var channelMember = room.ChangeMembership(site, HostOwner, null, Member, null, RoomRole.Member, Now, tangent);
@@ -105,19 +103,4 @@ public sealed class CommunityRulesTests
         Assert.Equal(TangentDenial.MembershipMismatch,
             Assert.Throws<TangentRuleViolation>(() => tangent.CanParticipate(Member, malformed)).Denial);
     }
-
-    [Fact]
-    public void A_pending_channel_remains_manageable_by_its_owner_before_native_provisioning()
-    {
-        var site = Site();
-        var tangent = TangentCommunity.Create(site, HostOwner, "kintsugi", "Kintsugi", "", "", "", "", Now);
-        var room = Room.Create(site, HostOwner, "kintsugi-pending", "Pending", RoomAdmission.InvitationOnly, Now, tangent);
-
-        var policy = room.CurrentPolicy(site, HostOwner, null, tangent: tangent);
-        Assert.False(policy.CanRead);
-        Assert.True(policy.CanManage);
-        Assert.Equal("space-pending", policy.Reason);
-    }
-
-
 }

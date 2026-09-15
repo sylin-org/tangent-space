@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TangentSpace.Participation;
-using TangentSpace.Rooms.Web;
 
 namespace TangentSpace.Conversation;
 
@@ -23,9 +22,8 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         => Execute(async () =>
         {
             var did = ParticipationAccess.Require(User, ParticipationGrants.Post);
-            var receipt = await conversation.Post(did, roomKey, message, ct);
-            return StatusCode(receipt.State == "pending" ? 202 : receipt.State == "accepted" ? 200 : 409,
-                new { receipt.OperationId, receipt.State, receipt.SourceUri, receipt.SourceCid, receipt.Detail });
+            var post = await conversation.Post(did, roomKey, message, ct);
+            return Ok(new { post.OperationId, State = "accepted", post.SourceUri, post.SourceCid });
         });
 
     [HttpPatch("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
@@ -35,7 +33,7 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
             var did = await RequireChangeActor(roomKey, messageId, ct);
             var result = await conversation.ChangePost(did, roomKey, messageId, input.Text, false, input.OperationId, ct,
                 facets: input.Facets);
-            return StatusCode(result.State == "pending" ? 202 : result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
+            return StatusCode(result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
         });
 
     [HttpDelete("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
@@ -44,15 +42,7 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         {
             var did = await RequireChangeActor(roomKey, messageId, ct);
             var result = await conversation.ChangePost(did, roomKey, messageId, null, true, input.OperationId, ct);
-            return StatusCode(result.State == "pending" ? 202 : result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
-        });
-
-    [HttpGet("messages/pending")]
-    public Task<IActionResult> PendingMessages(string roomKey, CancellationToken ct)
-        => Execute(async () =>
-        {
-            var did = ParticipationAccess.Require(User, ParticipationGrants.Post);
-            return Ok(await conversation.PendingMessages(did, roomKey, ct));
+            return StatusCode(result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
         });
 
     [HttpGet("updates")]
@@ -62,14 +52,6 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
     [HttpPost("read-position"), ConversationMutation]
     public Task<IActionResult> Acknowledge(string roomKey, ReadAcknowledgement input, CancellationToken ct)
         => Execute(async () => Ok(new { sequence = await conversation.Acknowledge(ParticipationAccess.Require(User, ParticipationGrants.Read), roomKey, input.Cursor, ct) }));
-
-    [HttpPost("sync"), ConversationMutation]
-    public Task<IActionResult> Sync(string roomKey, CancellationToken ct)
-        => Execute(async () => Ok(new { freshness = await conversation.Reconcile(ParticipationAccess.Require(User, ParticipationGrants.Read), roomKey, ct) }));
-
-    [HttpPost("rebuild"), RoomMutation]
-    public Task<IActionResult> Rebuild(string roomKey, CancellationToken ct)
-        => Execute(async () => Ok(new { rebuilt = await conversation.Rebuild(ParticipationAccess.Require(User, ParticipationGrants.Read), roomKey, ct) }));
 
     private async Task<string> RequireChangeActor(string roomKey, string messageId, CancellationToken ct)
     {

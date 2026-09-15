@@ -131,7 +131,7 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
     {
         using var fresh = EntityContext.NoCache();
         var room = await Room.Get(topicId, ct);
-        if (room is null || room.TangentKey != tangentId || !PublicTopicAccess.IsPublicAndReady(room)) return null;
+        if (room is null || room.TangentKey != tangentId || !PublicTopicAccess.IsPublic(room)) return null;
         return await TangentCommunity.Get(tangentId, ct) is null ? null : PublicTopicDescription.From(room);
     }
 

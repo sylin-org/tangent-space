@@ -237,10 +237,10 @@ public sealed class ConversationPermissionEnforcementTests : IAsyncLifetime
         var operation = "permission-post-" + Guid.CreateVersion7().ToString("N");
         var result = await Conversation.Post(app.AgentParticipantId, Topic,
             new PostMessage(operation, "Original words belong to their author."), CancellationToken.None);
-        Assert.Equal("accepted", result.State);
         using var fresh = EntityContext.NoCache();
         var post = Assert.Single(await Message.Query(message => message.RoomKey == Topic
             && message.AuthorParticipantId == app.AgentParticipantId && message.OperationId == operation));
+        Assert.Equal(result.Id, post.Id);
         Assert.StartsWith("local://", post.SourceUri);
         return post;
     }
@@ -260,14 +260,16 @@ public sealed class ConversationPermissionEnforcementTests : IAsyncLifetime
     private Task<RoomPolicy> Policy(string actor)
         => Rooms.WithCurrentPolicy(actor, Topic, (policy, _) => Task.FromResult(policy), CancellationToken.None);
 
+    // Humans lose conversation participation, reading included; management is authority, not participation.
     private Task<bool> MakeTopicUnreadable()
         => Rooms.WithCurrentPolicy(app.OwnerParticipantId, Topic, async (_, token) =>
         {
             var room = await Room.Get(Topic, token);
             Assert.NotNull(room);
-            room.SpaceState = RoomSpaceState.Pending;
-            room.SpaceUri = null;
-            await room.Save(token);
+            var tangent = await TangentSpace.Communities.TangentCommunity.Get(room.TangentKey, token);
+            Assert.NotNull(tangent);
+            tangent.ParticipationPreset = TangentSpace.Communities.ParticipationPreset.AgentsOnly;
+            await tangent.Save(token);
             return true;
         }, CancellationToken.None);
 
@@ -285,7 +287,7 @@ public sealed class ConversationPermissionEnforcementTests : IAsyncLifetime
     }
 
     private sealed record PersistedState(string Live, string History, string Sources, string Changes,
-        string Writes, string Conversation, string Journal, string Head, string Room, string Memberships, string Audits);
+        string Conversation, string Journal, string Head, string Room, string Memberships, string Audits);
 
     private static async Task<PersistedState> Capture()
     {
@@ -297,7 +299,6 @@ public sealed class ConversationPermissionEnforcementTests : IAsyncLifetime
             JsonSerializer.Serialize((await Message.All(Message.ChangelogPartition)).OrderBy(row => row.Id)),
             JsonSerializer.Serialize((await SourceDecision.All()).OrderBy(row => row.Id)),
             JsonSerializer.Serialize((await PostChange.All()).OrderBy(row => row.Id)),
-            JsonSerializer.Serialize((await WriteIntent.All()).OrderBy(row => row.Id)),
             JsonSerializer.Serialize(await RoomConversation.Get(Topic)),
             JsonSerializer.Serialize((await ActivityJournal.All()).OrderBy(row => row.Id)),
             JsonSerializer.Serialize(await ActivityHead.Get(ActivityHead.Key)),

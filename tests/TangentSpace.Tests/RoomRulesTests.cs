@@ -22,7 +22,7 @@ public sealed class RoomRulesTests
     private static TangentCommunity Home(TangentSite site) => TangentCommunity.Home(site);
 
     [Fact]
-    public void Creation_requires_the_Tangent_owner_and_starts_pending()
+    public void Creation_requires_the_Tangent_owner_and_is_ready_at_once()
     {
         var site = Site();
         var home = Home(site);
@@ -34,13 +34,11 @@ public sealed class RoomRulesTests
         Assert.Equal("Lounge", room.Title);
         Assert.Equal(Owner, room.CreatorParticipantId);
         Assert.Equal(1, room.PolicyRevision);
-        Assert.Equal(RoomSpaceState.Pending, room.SpaceState);
-        Assert.Null(room.SpaceUri);
         var policy = room.CurrentPolicy(site, Owner, null, tangent: home);
-        Assert.False(policy.CanRead);
-        Assert.False(policy.CanWrite);
+        Assert.True(policy.CanRead);
+        Assert.True(policy.CanWrite);
         Assert.True(policy.CanManage);
-        Assert.Equal("space-pending", policy.Reason);
+        Assert.Equal("allowed", policy.Reason);
     }
 
     [Theory]
@@ -57,27 +55,10 @@ public sealed class RoomRulesTests
     }
 
     [Fact]
-    public void Mapping_requires_current_revision_and_retries_cannot_rebind_a_ready_room()
-    {
-        var site = Site();
-        var home = Home(site);
-        var room = Room.Create(site, Owner, "workshop", "Workshop", RoomAdmission.InvitationOnly, Now, home);
-        Assert.Equal(RoomDenial.PolicyChanged, Assert.Throws<RoomRuleViolation>(() => room.CompleteSpace(site, Owner, 0, Space("workshop"), Now, home)).Denial);
-        Assert.Null(room.SpaceUri);
-        room.CompleteSpace(site, Owner, 1, Space("workshop"), Now, home);
-        Assert.Equal(RoomSpaceState.Ready, room.SpaceState);
-        Assert.Equal(2, room.PolicyRevision);
-        room.CompleteSpace(site, Owner, 1, Space("workshop"), Now.AddMinutes(1), home);
-        Assert.Equal(2, room.PolicyRevision);
-        Assert.Equal(RoomDenial.SpaceAlreadyMapped, Assert.Throws<RoomRuleViolation>(() => room.CompleteSpace(site, Owner, 2, Space("other"), Now, home)).Denial);
-        Assert.Equal(Space("workshop"), room.SpaceUri);
-    }
-
-    [Fact]
     public void Public_reading_is_an_explicit_owner_change_that_acknowledges_existing_history()
     {
         var site = Site();
-        var room = Ready(site, Home(site), "salon", RoomAdmission.InvitationOnly);
+        var room = Topic(site, Home(site), "salon", RoomAdmission.InvitationOnly);
         Assert.Equal(RoomReadAudience.Restricted, room.ReadAudience);
         var revision = room.PolicyRevision;
 
@@ -105,8 +86,7 @@ public sealed class RoomRulesTests
         {
             Id = "salon", OwnerParticipantId = tangentOwner, Name = "Salon"
         };
-        var room = Room.CreateDelegated(site, Manager, "salon-talk", "Talk", RoomAdmission.SignedIn,
-            Now, tangent, RoomSpaceState.Local);
+        var room = Room.CreateDelegated(site, Manager, "salon-talk", "Talk", RoomAdmission.SignedIn, Now, tangent);
 
         Assert.Equal(RoomDenial.Forbidden, Assert.Throws<RoomRuleViolation>(() => room.ChangeReadAudience(
             site, Manager, RoomReadAudience.Public, true, Now.AddMinutes(1), tangent)).Denial);
@@ -120,7 +100,7 @@ public sealed class RoomRulesTests
     {
         var site = Site();
         var home = Home(site);
-        var room = Ready(site, home, "lounge", RoomAdmission.SignedIn);
+        var room = Topic(site, home, "lounge", RoomAdmission.SignedIn);
         Assert.True(room.CurrentPolicy(site, Agent, null, tangent: home).CanWrite);
         Assert.False(room.CurrentPolicy(site, null, null, tangent: home).CanRead);
         var reader = room.ChangeMembership(site, Owner, null, Agent, null, RoomRole.Reader, Now, home);
@@ -141,7 +121,7 @@ public sealed class RoomRulesTests
     {
         var site = Site();
         var home = Home(site);
-        var room = Ready(site, home, "workshop", RoomAdmission.InvitationOnly);
+        var room = Topic(site, home, "workshop", RoomAdmission.InvitationOnly);
         var manager = room.ChangeMembership(site, Owner, null, Manager, null, RoomRole.Manager, Now, home);
         Assert.False(room.CurrentPolicy(site, Agent, null, tangent: home).CanRead);
         var member = room.ChangeMembership(site, Manager, manager, Agent, null, RoomRole.Member, Now, home);
@@ -162,7 +142,7 @@ public sealed class RoomRulesTests
     {
         var site = Site();
         var home = Home(site);
-        var room = Ready(site, home, "workshop", RoomAdmission.InvitationOnly);
+        var room = Topic(site, home, "workshop", RoomAdmission.InvitationOnly);
         var manager = room.ChangeMembership(site, Owner, null, Manager, null, RoomRole.Manager, Now, home);
         var other = room.ChangeMembership(site, Owner, null, OtherManager, null, RoomRole.Manager, Now, home);
         var revision = room.PolicyRevision;
@@ -181,7 +161,7 @@ public sealed class RoomRulesTests
     {
         var site = Site();
         var home = Home(site);
-        var room = Ready(site, home, "workshop", RoomAdmission.InvitationOnly);
+        var room = Topic(site, home, "workshop", RoomAdmission.InvitationOnly);
         var manager = room.ChangeMembership(site, Owner, null, Manager, null, RoomRole.Manager, Now, home);
         Assert.True(room.CurrentPolicy(site, Manager, manager, tangent: home).CanManage);
         var member = room.ChangeMembership(site, Owner, null, Manager, manager, RoomRole.Member, Now, home);
@@ -199,8 +179,8 @@ public sealed class RoomRulesTests
     {
         var site = Site();
         var home = Home(site);
-        var workshop = Ready(site, home, "workshop", RoomAdmission.InvitationOnly);
-        var lounge = Ready(site, home, "lounge", RoomAdmission.SignedIn);
+        var workshop = Topic(site, home, "workshop", RoomAdmission.InvitationOnly);
+        var lounge = Topic(site, home, "lounge", RoomAdmission.SignedIn);
         var manager = workshop.ChangeMembership(site, Owner, null, Manager, null, RoomRole.Manager, Now, home);
         Assert.Equal(RoomDenial.MembershipMismatch, Assert.Throws<RoomRuleViolation>(() => lounge.CurrentPolicy(site, Manager, manager, tangent: home)).Denial);
         Assert.Throws<RoomRuleViolation>(() => workshop.CurrentPolicy(site, Agent, manager, tangent: home));
@@ -213,7 +193,7 @@ public sealed class RoomRulesTests
     {
         var site = Site();
         var home = Home(site);
-        var room = Ready(site, home, "workshop", RoomAdmission.InvitationOnly);
+        var room = Topic(site, home, "workshop", RoomAdmission.InvitationOnly);
         var manager = room.ChangeMembership(site, Owner, null, Manager, null, RoomRole.Manager, Now, home);
         var member = room.ChangeMembership(site, Manager, manager, Manager, manager, RoomRole.Member, Now, home);
         Assert.False(room.CurrentPolicy(site, Manager, member, tangent: home).CanManage);
@@ -225,7 +205,7 @@ public sealed class RoomRulesTests
     {
         var site = Site();
         var home = Home(site);
-        var room = Ready(site, home, "workshop", RoomAdmission.InvitationOnly);
+        var room = Topic(site, home, "workshop", RoomAdmission.InvitationOnly);
         var manager = room.ChangeMembership(site, Owner, null, Manager, null, RoomRole.Manager, Now, home);
         var denied = room.CurrentPolicy(site, Manager, manager, suspended: true, tangent: home);
         Assert.False(denied.CanRead);
@@ -292,12 +272,6 @@ public sealed class RoomRulesTests
         }
     }
 
-    private static Room Ready(TangentSite site, TangentCommunity home, string key, RoomAdmission admission)
-    {
-        var room = Room.Create(site, Owner, key, key, admission, Now, home);
-        room.CompleteSpace(site, Owner, room.PolicyRevision, Space(key), Now, home);
-        return room;
-    }
-
-    private static string Space(string key) => $"at://{Owner}/chat.tangent.space/{key}";
+    private static Room Topic(TangentSite site, TangentCommunity home, string key, RoomAdmission admission)
+        => Room.Create(site, Owner, key, key, admission, Now, home);
 }

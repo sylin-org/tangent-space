@@ -16,7 +16,4 @@
     <ProjectReference Include="../../src/server/web/TangentSpace.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Testing.Hosting/Koan.Testing.Hosting.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Content Include="../../probes/SpaceVerificationProbe/fixtures/**" Link="VerificationFixtures/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
 </Project>

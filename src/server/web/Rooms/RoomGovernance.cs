@@ -124,7 +124,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             await EntityContext.Commit(ct);
             if (denial is null) ActivityJournal.SignalAfterCommit();
             return new RoomAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, "",
-                audit.SitePolicyRevision, null, audit.Id);
+                audit.SitePolicyRevision, audit.Id);
         }
         finally { gate.Exit(); }
     }
@@ -218,29 +218,10 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                 return new Change(current);
             }, ct);
 
-    /// <summary>Audited authorization before external provisioning. The network call happens after this gate is released.</summary>
-    public Task<RoomAdministrationResult> BeginProvisioning(string actorId, string roomKey, CancellationToken ct)
-        => Administer(actorId, roomKey, null, RoomAdministration.Provision, null,
-            (site, room, actor, _, _, tangent, tangentMembership, _) =>
-            {
-                var current = RequireRoom(room);
-                return new Change(current);
-            }, ct);
-
-    /// <summary>Called after the real transport verifies authority/type/key. Retries preserve an existing identical mapping.</summary>
-    public Task<RoomAdministrationResult> MapSpace(string actorId, string roomKey, long expectedRevision, string spaceUri, CancellationToken ct)
-        => Administer(actorId, roomKey, null, RoomAdministration.MapSpace, null,
-            (site, room, _, _, _, tangent, tangentMembership, now) =>
-            {
-                var current = RequireRoom(room);
-                current.CompleteSpace(site, actorId, expectedRevision, spaceUri, now, tangent, tangentMembership, authorized: true);
-                return new Change(current);
-            }, ct);
-
     /// <summary>
     /// Reload current authority and execute bounded local work under the same gate and transaction as administration.
     /// Do not call PDS/network services, nest a transaction, or reenter RoomGovernance/Arrival inside the callback.
-    /// A denied snapshot still carries the selected revisions so source acceptance can retain its decision.
+    /// A denied snapshot still carries the selected revisions.
     /// </summary>
     public async Task<T> WithCurrentPolicy<T>(string? actorId, string roomKey,
         Func<RoomPolicy, CancellationToken, Task<T>> operation, CancellationToken ct)
@@ -263,7 +244,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             var policy = room is null ? null : await Project(room, tangent, room.CurrentPolicy(site, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
                 participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
             policy ??= new RoomPolicy(roomKey, actorId, 0, site?.PolicyRevision ?? 0, RoomAdmission.InvitationOnly,
-                    RoomSpaceState.Pending, null, null, false, false, false, false, false, "room-not-found");
+                    null, false, false, false, false, false, "room-not-found");
             var result = await operation(policy, ct);
             await EntityContext.Commit(ct);
             return result;
@@ -347,11 +328,11 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             await audit.Save(ct);
             if (audit.Accepted)
                 await CommandCommit.Report(new RoomAdministrationResult(true, null, audit.Reason, roomKey,
-                    audit.SelectedPolicyRevision, room?.SpaceUri, audit.Id), ct);
+                    audit.SelectedPolicyRevision, audit.Id), ct);
             await EntityContext.Commit(ct);
             if (change is not null) ActivityJournal.SignalAfterCommit();
             result = new RoomAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, roomKey,
-                audit.SelectedPolicyRevision, room?.SpaceUri, audit.Id);
+                audit.SelectedPolicyRevision, audit.Id);
         }
         finally { gate.Exit(); }
         return result;

@@ -7,8 +7,6 @@ public sealed record RoomPolicy(
     long SelectedPolicyRevision,
     long SitePolicyRevision,
     RoomAdmission Admission,
-    RoomSpaceState SpaceState,
-    string? SpaceUri,
     RoomRole? Role,
     bool IsOwner,
     bool CanRead,

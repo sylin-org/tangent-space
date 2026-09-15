@@ -8,7 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="[2.7.0]" />
-    <PackageReference Include="System.Formats.Cbor" Version="[10.0.5]" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />

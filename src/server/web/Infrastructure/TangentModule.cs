@@ -14,8 +14,6 @@ using TangentSpace.Application;
 using TangentSpace.Authorization;
 using TangentSpace.Site;
 using TangentSpace.Rooms;
-using TangentSpace.AtProtocol;
-using TangentSpace.AtProtocol.Verification;
 using TangentSpace.Participation;
 using TangentSpace.Conversation;
 using TangentSpace.Communities;
@@ -66,15 +64,10 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<TangentSpace.Participants.ParticipantProfiles>();
         services.AddHostedService<TangentSpace.Participants.ProfileCapture>();
         services.AddSingleton<ServerGovernance>();
-        services.AddOptions<SpacesOptions>().BindConfiguration(SpacesOptions.Configuration);
-        services.AddOptions<TangentSpace.Conversation.ConversationOptions>().BindConfiguration(TangentSpace.Conversation.ConversationOptions.Configuration);
         services.AddSingleton<RoomGovernance>();
         services.AddSingleton<Rooms.Web.PublicConversationReader>();
         services.AddSingleton<TangentGovernance>();
         services.AddSingleton<CompanionGovernance>();
-        services.AddSingleton<SpacesVerifier>();
-        services.AddSingleton<SpacesService>();
-        services.AddSingleton<ServiceAuthentication>();
         services.AddParticipation();
         services.AddTangentMcpAuthentication();
         services.AddSingleton<References>();
@@ -85,8 +78,6 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<Experience.ExperienceDigest>();
         services.AddSingleton<Experience.ExperienceService>();
         services.AddSingleton<ModerationCaseService>();
-        services.AddSingleton<SourceNotifications>();
-        services.AddSingleton<SourceReadiness>();
         var protection = services.AddDataProtection().SetApplicationName(nameof(TangentSpace));
         if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
         services.AddOptions<KeyManagementOptions>().Configure<IHostEnvironment, ILoggerFactory>((keyOptions, host, logger) =>

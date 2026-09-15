@@ -12,7 +12,7 @@ using TangentSpace.Authorization;
 namespace TangentSpace.Communities;
 
 /// <summary>Coordinates card ownership, community membership and channel creation under the host policy gate.</summary>
-public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Microsoft.Extensions.Options.IOptions<TangentSpace.Conversation.ConversationOptions> conversation,
+public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
     TangentSpace.Participants.ParticipantDirectory directory, TangentRoleAccess roleAccess)
 {
     public const int TangentsPerPage = 50;
@@ -285,8 +285,8 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "A scoped restriction currently denies channel administration.");
             if (await Room.Get(roomKey, ct) is not null) throw new TangentRuleViolation(TangentDenial.AlreadyExists, "That stable channel key already exists.");
             var room = tangent.IsOwner(actorId)
-                ? Room.Create(site, actorId, roomKey, title, admission, now, tangent, conversation.Value.NewTopicState)
-                : Room.CreateDelegated(site, actorId, roomKey, title, admission, now, tangent, conversation.Value.NewTopicState);
+                ? Room.Create(site, actorId, roomKey, title, admission, now, tangent)
+                : Room.CreateDelegated(site, actorId, roomKey, title, admission, now, tangent);
             room.MembersOnly = membersOnly;
             if (topic is not null) room.ChangeTopic(site, actorId, null, topic, now, tangent, actorMembership);
             await room.Save(ct);
@@ -298,7 +298,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate, Micro
             ActivityJournal.SignalAfterCommit();
             var policy = room.CurrentPolicy(site, actorId, null, actor?.IsSuspended == true, tangent, actorMembership,
                 actor?.Classification ?? ParticipantClassification.Undeclared);
-            result = new TangentChannelCreation(new RoomAdministrationResult(true, null, "Accepted.", room.Id, room.PolicyRevision, room.SpaceUri, audit.Id), RoomDescription.From(room, policy));
+            result = new TangentChannelCreation(new RoomAdministrationResult(true, null, "Accepted.", room.Id, room.PolicyRevision, audit.Id), RoomDescription.From(room, policy));
         }
         finally { gate.Exit(); }
         return result;

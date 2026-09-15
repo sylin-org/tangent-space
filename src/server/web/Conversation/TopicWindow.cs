@@ -2,7 +2,7 @@ namespace TangentSpace.Conversation;
 
 /// <summary>A bounded window of one Topic's history. Activity snapshots and read acknowledgement are separate.</summary>
 public sealed record TopicWindow(IReadOnlyList<Message> Messages, string? OlderCursor, string? NewerCursor,
-    string? ReadCursor, string Position, string Freshness, DateTimeOffset? LastCheckedAt,
+    string? ReadCursor, string Position,
     IReadOnlyDictionary<string, string> AuthorHandles,
     IReadOnlyDictionary<string, ParticipantResolution>? Resolved = null);
 

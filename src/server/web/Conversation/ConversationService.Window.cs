@@ -92,7 +92,7 @@ public sealed partial class ConversationService
                      posts.Select(m => m.AuthorParticipantId).Distinct(StringComparer.Ordinal), token))
                 if (handle is { Length: > 0 and <= 253 }) handles[author] = handle;
             return new TopicWindow(posts, older, newer, readCursor, position,
-                state.Freshness, state.LastCompleteAt, handles, await ResolveParticipants(posts, token));
+                handles, await ResolveParticipants(posts, token));
         }, ct);
 
     private static QueryDefinition SequenceQuery(int size, bool descending = false)

@@ -2,19 +2,15 @@ using Koan.Data.Core;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Options;
-using TangentSpace.AtProtocol;
 using TangentSpace.Participants;
 using TangentSpace.Rooms;
 
 namespace TangentSpace.Conversation;
 
-public sealed partial class ConversationService(RoomGovernance governance, SpacesService spaces,
-    IOptions<SpacesOptions> options, TimeProvider clock, IDataProtectionProvider protection, ILogger<ConversationService> logger,
-    SourceReadiness sourceReadiness, TangentSpace.Participants.ParticipantDirectory directory, ParticipantProfiles profiles) : IDisposable
+public sealed partial class ConversationService(RoomGovernance governance, TimeProvider clock, IDataProtectionProvider protection,
+    TangentSpace.Participants.ParticipantDirectory directory, ParticipantProfiles profiles) : IDisposable
 {
     private readonly SemaphoreSlim writes = new(1, 1);
-    private readonly SemaphoreSlim sync = new(1, 1);
     private readonly IDataProtector cursors = protection.CreateProtector("Tangent.Conversation.Cursor.v1");
 
     public Task<RoomPolicy> ReadPolicy(string did, string room, CancellationToken ct)
@@ -24,7 +20,7 @@ public sealed partial class ConversationService(RoomGovernance governance, Space
             return Task.FromResult(policy);
         }, ct);
 
-    public void Dispose() { writes.Dispose(); sync.Dispose(); }
+    public void Dispose() => writes.Dispose();
 
     /// <summary>Read-time resolution for every author and facet-referenced participant in a
     /// page (ADR 0008): fresh labels for stable identity values, bounded to distinct targets.

@@ -58,10 +58,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
 
     public IServiceProvider Services => app.Services;
 
-    public static Task<ExperienceWebApp> StartAsync() => StartAsync("Local");
-
-    /// <summary>Boots the app with the given conversation storage scope (ADR 0006).</summary>
-    public static async Task<ExperienceWebApp> StartAsync(string storage)
+    public static async Task<ExperienceWebApp> StartAsync()
     {
         // Koan caches data-source configuration statically; reset so this fixture's temp
         // database neither inherits nor leaks into another fixture's host.
@@ -81,9 +78,6 @@ public sealed class ExperienceWebApp : IAsyncDisposable
             ["Tangent:Site:Name"] = "Experience Integration Site",
             ["Tangent:Site:OwnerDid"] = OwnerDid,
             ["Tangent:Site:PublicOrigin"] = origin,
-            ["Tangent:Conversation:Storage"] = storage,
-            ["Tangent:Spaces:AuthorityDid"] = "did:plc:experienceauthorityAAA",
-            ["Tangent:Spaces:ManagingApp"] = "did:plc:experienceauthorityAAA#tangent",
             ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
             ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={Path.Combine(root, "site.sqlite")}",
             ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={Path.Combine(root, "site.sqlite")}",
@@ -101,7 +95,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         app.Urls.Add(origin);
         await app.StartAsync();
         AppHost.Current = app.Services;
-        var (token, credentialId, ownerToken, ownerParticipant, agentParticipant, humanParticipant) = await SeedAsync(app.Services, storage);
+        var (token, credentialId, ownerToken, ownerParticipant, agentParticipant, humanParticipant) = await SeedAsync(app.Services);
         var fixture = new ExperienceWebApp(app, root, origin, token, credentialId, ownerToken)
         {
             OwnerParticipantId = ownerParticipant,
@@ -135,7 +129,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     /// three accepted source messages: the agent's own question, Leo's direct reply to it,
     /// and Leo's fresh post mentioning the agent. Accepted history is a SourceDecision plus
     /// its Message projection and the room's sequence, exactly like the acceptance path.</summary>
-    private static async Task<(string Token, string CredentialId, string OwnerToken, string OwnerParticipant, string AgentParticipant, string HumanParticipant)> SeedAsync(IServiceProvider services, string storage)
+    private static async Task<(string Token, string CredentialId, string OwnerToken, string OwnerParticipant, string AgentParticipant, string HumanParticipant)> SeedAsync(IServiceProvider services)
     {
         var clock = services.GetRequiredService<TimeProvider>();
         var now = clock.GetUtcNow();
@@ -176,18 +170,6 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         await tangents.CreateChannel(OwnerParticipant, TangentKey, TopicKey, "Project Z", RoomAdmission.SignedIn,
             "Coordinate Project Z", CancellationToken.None);
         await companions.Join(AgentParticipant, TangentKey, null, CancellationToken.None);
-        if (storage == "Spaces")
-        {
-            // The state real provisioning produces, with the source network itself absent:
-            // reads work, writes must stay honestly pending.
-            using (EntityContext.NoCache())
-            {
-                var room = await Room.Get(TopicKey) ?? throw new InvalidOperationException("The seeded Topic was not created.");
-                room.SpaceState = RoomSpaceState.Ready;
-                room.SpaceUri = $"at://did:plc:experienceauthorityAAA/space/local.tangent.room/{TopicKey}";
-                await room.Save();
-            }
-        }
 
         var agentPost = await Accept(TopicKey, AgentDid, "agent-q1", 1, now.AddMinutes(-30),
             "I can review the Project Z plan if someone summarizes the open questions.", null);

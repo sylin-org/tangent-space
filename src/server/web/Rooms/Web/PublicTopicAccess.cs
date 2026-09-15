@@ -11,13 +11,8 @@ public sealed class PublicTopicAccess : EntityAccess<Room>
 
     public override IAccessFilter<Room> Constrain(IAccessFilter<Room> q, AccessAction action)
         => action == AccessAction.Read
-            ? q.Where(room => room.ReadAudience == RoomReadAudience.Public
-                && (room.SpaceState == RoomSpaceState.Local
-                    || room.SpaceState == RoomSpaceState.Ready && room.SpaceUri != null && room.SpaceUri != ""))
+            ? q.Where(room => room.ReadAudience == RoomReadAudience.Public)
             : action is AccessAction.Update or AccessAction.Delete ? q.Where(room => false) : q;
 
-    internal static bool IsPublicAndReady(Room room)
-        => room.ReadAudience == RoomReadAudience.Public
-            && (room.SpaceState == RoomSpaceState.Local
-                || room.SpaceState == RoomSpaceState.Ready && !string.IsNullOrEmpty(room.SpaceUri));
+    internal static bool IsPublic(Room room) => room.ReadAudience == RoomReadAudience.Public;
 }

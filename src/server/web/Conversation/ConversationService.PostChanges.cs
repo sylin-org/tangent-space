@@ -1,8 +1,6 @@
-using System.Text.Json;
 using Koan.Data.Core;
 using Koan.Data.Core.Model;
 using TangentSpace.Activity;
-using TangentSpace.AtProtocol;
 using TangentSpace.Authorization;
 using TangentSpace.Participants;
 using TangentSpace.Rooms;
@@ -35,9 +33,9 @@ public sealed partial class ConversationService
                 {
                     if (previous.Delete != delete || previous.Text != text) throw new ArgumentException("That operation ID was already used with different content.");
                     // Facet conflict parity with create: the ledger remembers the client-sent facet
-                    // payload, so the same package replays its receipt regardless of later edits or
-                    // pending-retry timing. Re-detection is server-side derivation computed at
-                    // application time; world state is not part of the delivered package (ADR 0007).
+                    // payload, so the same package replays its receipt regardless of later edits.
+                    // Re-detection is server-side derivation computed at application time; world
+                    // state is not part of the delivered package (ADR 0007).
                     if (Canonical(previous.Facets) != Canonical(facets)) throw new WriteConflict();
                     if (previous.State is "accepted" or "deleted" or "moderated") return previous;
                 }
@@ -49,154 +47,69 @@ public sealed partial class ConversationService
                 return created;
             }, ct);
             // Completed operations return before any mutation, so an idempotent re-delivery can never
-            // mint a second snapshot; pending Spaces operations retry below with the same guard.
+            // mint a second snapshot.
             if (change.State is "accepted" or "moderated" or "deleted") return new(change.State, messageId, change.Detail);
 
             var embedder = ChangeClassification.ResolveEmbedder();
-            try
+            var message = await governance.WithCurrentPolicy(participantId, roomKey,
+                (policy, token) => ReadPostForChange(policy, roomKey, messageId, token), ct);
+            if (change.Delete && message.AuthorParticipantId != participantId)
             {
-                var message = await governance.WithCurrentPolicy(participantId, roomKey,
-                    (policy, token) => ReadPostForChange(policy, roomKey, messageId, token), ct);
-                if (change.Delete && message.AuthorParticipantId != participantId)
-                {
-                    await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
-                    {
-                        var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
-                        RequirePostChange(currentPolicy, current, delete: true);
-                        await SnapshotChange(current, "", null, embedder, token);
-                        current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
-                        current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
-                        // The words are gone; their byte ranges are meaningless on a removed row.
-                        current.Facets = null;
-                        await current.Save(token);
-                        change.State = "moderated"; change.Detail = "post-removed-by-moderator"; change.UpdatedAt = clock.GetUtcNow();
-                        var room = await Room.Get(roomKey, token);
-                        await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, participantId, current.AuthorParticipantId,
-                            room?.TangentKey, current.Sequence, change.UpdatedAt, token);
-                        await change.Save(token); return true;
-                    }, ct);
-                    updates.Pulse(roomKey); ActivityJournal.SignalAfterCommit();
-                    return new(change.State, messageId, change.Detail);
-                }
-                // Local-storage posts change the entity directly: there is no source record
-                // to update or delete (ADR 0006). Authorship policy is unchanged.
-                if (message.SourceUri.StartsWith("local://", StringComparison.Ordinal))
-                {
-                    await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
-                    {
-                        var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
-                        RequirePostChange(currentPolicy, current, change.Delete);
-                        if (change.Delete)
-                        {
-                            await SnapshotChange(current, "", null, embedder, token);
-                            current.Removed = true;
-                            current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
-                            current.RemovedAt = clock.GetUtcNow();
-                            current.RemovedByParticipantId = participantId;
-                            current.Facets = null;
-                        }
-                        else
-                        {
-                            // D2a: provided facets ride the new version; absent facets re-detect
-                            // deterministically. The pre-edit structure rides its snapshot.
-                            var effective = await MessageFacets.Effective(change.Text!, change.Facets, token);
-                            await SnapshotChange(current, change.Text!, effective, embedder, token);
-                            current.Content = new MessageContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
-                            current.EditedAt = clock.GetUtcNow();
-                            current.Facets = change.Facets;
-                        }
-                        await current.Save(token);
-                        change.State = change.Delete ? "deleted" : "accepted";
-                        change.Detail = change.Delete ? "post-deleted-local" : "post-edited-local";
-                        change.UpdatedAt = clock.GetUtcNow();
-                        var room = await Room.Get(roomKey, token);
-                        await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.MessageDeleted : ActivityKind.MessageEdited,
-                            roomKey, participantId, current.AuthorParticipantId, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
-                        await change.Save(token);
-                        return true;
-                    }, ct);
-                    updates.Pulse(roomKey);
-                    ActivityJournal.SignalAfterCommit();
-                    return new(change.State, messageId, change.Detail);
-                }
-                // Source changes are atproto-scoped: both the acting editor and the post's
-                // author cross to their atproto identities at this boundary.
-                var dispatch = await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
-                {
-                    var current = await ReadPostForChange(policy, roomKey, messageId, token);
-                    RequirePostChange(policy, current, change.Delete);
-                    var did = await directory.AtprotoDidOf(participantId, token)
-                        ?? throw new UnauthorizedAccessException("Editing a Spaces post requires an atproto identity.");
-                    if (!current.SourceUri.StartsWith("at://", StringComparison.Ordinal))
-                        throw new InvalidDataException("The post source URI is invalid.");
-                    var sourceParts = current.SourceUri[5..].Split('/');
-                    if (sourceParts.Length != 7 || sourceParts[5] != SpacesOptions.Collection
-                        || sourceParts[4] != await directory.AtprotoDidOf(current.AuthorParticipantId, token))
-                        throw new InvalidDataException("The post source URI is invalid.");
-                    return (Message: current, ActorDid: did, Parts: sourceParts);
-                }, ct);
-                // No policy gate spans the network. This pre-dispatch decision does not imply
-                // an already-sent external request can be cancelled or rolled back locally.
-                message = dispatch.Message;
-                var actorDid = dispatch.ActorDid;
-                var parts = dispatch.Parts;
-                var space = "at://" + string.Join('/', parts[..4]);
-                var recordKey = parts[6];
-                string? putCid = null;
-                if (change.Delete) await spaces.DeleteRecord(actorDid, space, recordKey, ct);
-                else
-                {
-                    var content = new MessageContent(change.Text!, message.Content.CreatedAt, message.Content.ReplyTo);
-                    var result = await spaces.PutRecord(actorDid, space, recordKey, content.ToRecord(), ct);
-                    if (!result.TryGetProperty("cid", out _)) throw new InvalidDataException("The source did not return a new record CID.");
-                    putCid = result.GetProperty("cid").GetString();
-                }
-                var source = await spaces.ReadRepo(actorDid, space, parts[4], ct);
-                var record = source.Records.SingleOrDefault(r => r.Collection == SpacesOptions.Collection && r.RecordKey == recordKey);
-                if (change.Delete ? record is not null : record is null) throw new InvalidDataException("The source did not confirm the requested post change.");
-                if (!change.Delete)
-                {
-                    if (record!.Cid != putCid) throw new InvalidDataException("The source CID does not match the confirmed write.");
-                    MessageContent confirmed;
-                    try { confirmed = MessageContent.FromCbor(record.DagCbor); }
-                    catch (Exception error) when (error is InvalidDataException or ArgumentException or System.Formats.Cbor.CborContentException)
-                    { throw new InvalidDataException("The source content could not be verified."); }
-                    if (confirmed.Text != change.Text) throw new InvalidDataException("The source content does not match the requested edit.");
-                }
                 await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                 {
                     var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
-                    RequirePostChange(currentPolicy, current, change.Delete);
-                    if (change.Delete)
-                    {
-                        await SnapshotChange(current, "", null, embedder, token);
-                        current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo); current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
-                        current.Facets = null;
-                    }
-                    else
-                    {
-                        // Source records carry no facet package; classify the same derivation that
-                        // the Message save hook will apply to this new live version.
-                        var effective = await MessageFacets.Effective(change.Text!, null, token);
-                        await SnapshotChange(current, change.Text!, effective, embedder, token);
-                        current.Content = new MessageContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
-                        current.SourceCid = record!.Cid;
-                        current.EditedAt = clock.GetUtcNow();
-                        current.Facets = null;
-                    }
+                    RequirePostChange(currentPolicy, current, delete: true);
+                    await SnapshotChange(current, "", null, embedder, token);
+                    current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
+                    // The words are gone; their byte ranges are meaningless on a removed row.
+                    current.Facets = null;
                     await current.Save(token);
-                    change.State = change.Delete ? "deleted" : "accepted"; change.Detail = change.Delete ? "post-deleted" : "post-edited"; change.UpdatedAt = clock.GetUtcNow();
+                    change.State = "moderated"; change.Detail = "post-removed-by-moderator"; change.UpdatedAt = clock.GetUtcNow();
                     var room = await Room.Get(roomKey, token);
-                    await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.MessageDeleted : ActivityKind.MessageEdited,
-                        roomKey, participantId, current.AuthorParticipantId, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
+                    await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, participantId, current.AuthorParticipantId,
+                        room?.TangentKey, current.Sequence, change.UpdatedAt, token);
                     await change.Save(token); return true;
                 }, ct);
                 updates.Pulse(roomKey); ActivityJournal.SignalAfterCommit();
+                return new(change.State, messageId, change.Detail);
             }
-            catch (Exception error) when (error is SpacesUnavailable or HttpRequestException or InvalidDataException or JsonException)
+            // An author's own edit or deletion changes the entity directly; authorship policy is unchanged.
+            await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
             {
-                change.State = "pending"; change.Detail = "source-change-failed-retry-same-operation"; change.UpdatedAt = clock.GetUtcNow(); await change.Save(ct);
-            }
+                var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
+                RequirePostChange(currentPolicy, current, change.Delete);
+                if (change.Delete)
+                {
+                    await SnapshotChange(current, "", null, embedder, token);
+                    current.Removed = true;
+                    current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.RemovedAt = clock.GetUtcNow();
+                    current.RemovedByParticipantId = participantId;
+                    current.Facets = null;
+                }
+                else
+                {
+                    // D2a: provided facets ride the new version; absent facets re-detect
+                    // deterministically. The pre-edit structure rides its snapshot.
+                    var effective = await MessageFacets.Effective(change.Text!, change.Facets, token);
+                    await SnapshotChange(current, change.Text!, effective, embedder, token);
+                    current.Content = new MessageContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.EditedAt = clock.GetUtcNow();
+                    current.Facets = change.Facets;
+                }
+                await current.Save(token);
+                change.State = change.Delete ? "deleted" : "accepted";
+                change.Detail = change.Delete ? "post-deleted" : "post-edited";
+                change.UpdatedAt = clock.GetUtcNow();
+                var room = await Room.Get(roomKey, token);
+                await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.MessageDeleted : ActivityKind.MessageEdited,
+                    roomKey, participantId, current.AuthorParticipantId, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
+                await change.Save(token);
+                return true;
+            }, ct);
+            updates.Pulse(roomKey);
+            ActivityJournal.SignalAfterCommit();
             return new(change.State, messageId, change.Detail);
         }
         finally { writes.Release(); }

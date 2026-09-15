@@ -44,8 +44,6 @@ public sealed record ExperienceProblem(string Code, string Message, string? Fiel
         ["needs_operator_connection"] = true,
         ["not_admitted"] = false,
         ["approval_pending"] = true,
-        ["source_permission_missing"] = true,
-        ["source_unsupported"] = false,
         ["permission_denied"] = false,
         ["cursor_expired"] = false,
         ["request_conflict"] = false,
@@ -88,8 +86,6 @@ public static class ExperienceProblemCodes
     public const string NeedsOperatorConnection = "needs_operator_connection";
     public const string NotAdmitted = "not_admitted";
     public const string ApprovalPending = "approval_pending";
-    public const string SourcePermissionMissing = "source_permission_missing";
-    public const string SourceUnsupported = "source_unsupported";
     public const string PermissionDenied = "permission_denied";
     public const string CursorExpired = "cursor_expired";
     public const string RequestConflict = "request_conflict";

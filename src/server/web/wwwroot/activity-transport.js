@@ -39,7 +39,7 @@
       if (!object(channel) || !string(channel.roomKey, 1024) || !channel.roomKey || rooms.has(channel.roomKey)
         || !string(channel.tangentKey, 1024) || !integer(channel.unreadCount) || !integer(channel.directReplies)
         || !integer(channel.lastSequence) || !integer(channel.readSequence) || typeof channel.unreadCountCapped !== 'boolean'
-        || !string(channel.freshness, 128) || !nullableString(channel.lastMessageAt)) throw new Error('invalid-channel');
+        || !nullableString(channel.lastMessageAt)) throw new Error('invalid-channel');
       rooms.add(channel.roomKey);
     }
     return value;

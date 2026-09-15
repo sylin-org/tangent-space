@@ -66,7 +66,7 @@ public sealed class RoomSettingsAuthorityTests
             Id = "stewardship", OwnerParticipantId = Owner, Name = "Stewardship",
         };
         var room = Room.CreateDelegated(site, Creator, "stewardship-work", "Workshop",
-            RoomAdmission.SignedIn, Now, tangent, RoomSpaceState.Local);
+            RoomAdmission.SignedIn, Now, tangent);
         return (site, tangent, room);
     }
 

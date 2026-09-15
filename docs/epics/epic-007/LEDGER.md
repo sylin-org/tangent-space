@@ -10,7 +10,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current slice | R1 — Subtract |
 | Current task | R1.5 — move the proof audience and DID-key resolution into Identity; remove Spaces storage (`doing`) |
 | Next action | Continue R1.5 from the first unticked step under [In flight](#in-flight) |
-| Last checkpoint | 2026-09-15 · S-002 · R1.5 step 1 committed as "refactor: enrollment derives its proof audience" (R1.4 is `b2183ff`) |
+| Last checkpoint | 2026-09-15 · S-002 · R1.5 step 2a committed as "refactor: remove Spaces storage from the server" (step 1 is `ac9cb7b`) |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional); the sign-in steps of each slice walkthrough |
 | Blockers | None |
@@ -181,8 +181,9 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 **R1.5 — move the proof audience and DID-key resolution into Identity; remove Spaces storage** (doing)
 
 - [x] Enrollment owns its proof audience and key resolution (checkpoint commit "refactor: enrollment derives its proof audience"): `Identity/ProofAudience` (override `Tangent:Enrollment:ProofAudience`, otherwise a `did:web` of `Tangent:Site:PublicOrigin`; see N-018), `Identity/DidSigningKey` (was `ResolvedAuthorKey`), and `DidDocumentKeySource` in place of the Spaces-backed key source; discovery drops `sourceWriteConsent`; `InternalsVisibleTo` moves into the csproj. .NET 461/473, failures = the 12 known
-- [ ] Inventory Spaces storage: services, notifications, readiness, controllers (`/provision`, connections), `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches in conversation writes and acceptance, `RoomSpaceState`/`SpaceUri`/`CompleteSpace`, the CBOR package (BouncyCastle stays: `ResolvedAuthorKey` verifies ES256K proofs with it), the fixture-network launch path and configuration, probes and remaining scripts (`prove-arrival-suspension`, `prove-pending-access` and others), the `rooms.js` Spaces status UI, the discovery document's `sourceWriteConsent`
-- [ ] Delete them with their tests, configuration and documentation (README, DOCKER, OPERATING per N-015); rename the connector build step in `server-lifecycle.ps1` (N-014)
+- [x] Inventory: the task row's list, plus `WriteIntent` staging, source acceptance and rebuild, sync and freshness (`RoomConversation` fields, `SourceFreshnessChanged`, the activity channel's `freshness`), `ConversationOptions.Storage`, the browser's server-backed pending recovery, readiness and sync UI, and two Spaces-only problem codes
+- [x] Step 2a, server, browser and tests (checkpoint commit "refactor: remove Spaces storage from the server"): `AtProtocol/` deleted; `Post` is the single atomic local upsert and returns the Post row; `ChangePost` has one path; Topics carry no Space state; `rooms.js` keeps only the in-flight retry; `DidSigningKeyTests` keeps the key-vector coverage; `prove-pending-access` deleted. .NET 345/357 (the 12 known), browser 125/125, greenfield 1,964, server C# 11,468
+- [ ] Step 2b: scripts, the fixture-network launch path and configuration, probes, and documentation (README, DOCKER, OPERATING per N-015); rename the connector build step in `server-lifecycle.ps1` (N-014)
 - [ ] The connector still enrolls on a fresh install (focused test now; walkthrough at R1.8)
 - [ ] .NET, browser and connector suites; greenfield check; commit
 
@@ -291,8 +292,9 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R1.2 (`b69e984`): browser WebMCP removed; browser 140/140; greenfield 2,711.
 - R1.3 (`c3a4b9b`): the home Tangent is created at claim; reads no longer write; one onboarding path. .NET 461/473 with only the 12 known failures; browser 139/139; greenfield 2,691.
 - R1.4 (`b2183ff`): every Topic names its Tangent; `POST /api/rooms` and five fixture-network scripts removed; the digest reads facets only. .NET 455/467 with only the 12 known failures; browser 139/139; greenfield 2,473.
-- R1.5 step 1: enrollment derives its proof audience from the public origin (D9). .NET 461/473 with only the 12 known failures.
-- Next: R1.5 step 2, removing Spaces storage.
+- R1.5 step 1 (`ac9cb7b`): enrollment derives its proof audience from the public origin (D9). .NET 461/473 with only the 12 known failures.
+- R1.5 step 2a: Spaces storage removed from the server, browser and tests. .NET 345/357 with only the 12 known failures; browser 125/125; greenfield 1,964; server C# 11,468.
+- Next: R1.5 step 2b, the scripts, launch path, probes and documentation.
 
 ## Evidence index
 

@@ -279,7 +279,7 @@ public sealed class HumanHostAccountabilityTests
             var roleAccess = new TangentRoleAccess(roles);
             Server = new(TimeProvider.System, gate, Options.Create(new SiteOptions { OwnerDid = ownerDid }), directory, roleAccess);
             Companions = new(TimeProvider.System, gate, new RoomGovernance(TimeProvider.System, gate, directory, roleAccess), directory);
-            Tangents = new(TimeProvider.System, gate, Options.Create(new ConversationOptions()), directory, roleAccess);
+            Tangents = new(TimeProvider.System, gate, directory, roleAccess);
         }
 
         public async Task<string> Enroll(string did, ParticipantClassification classification = ParticipantClassification.Undeclared, bool wasAgent = false)

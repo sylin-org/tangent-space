@@ -9,7 +9,7 @@ using TangentSpace.Authorization;
 namespace TangentSpace.Site;
 
 // This host-owned operation coordinates two records. Tangent runs one writer process.
-public sealed class Arrival(IOptions<SiteOptions> options, IOptions<ConversationOptions> conversation, TimeProvider clock, PolicyGate gate,
+public sealed class Arrival(IOptions<SiteOptions> options, TimeProvider clock, PolicyGate gate,
     TangentSpace.Participants.ParticipantDirectory directory, IAtprotoHandleSource handles, ParticipantProfiles profiles)
 {
     public async Task CheckConfiguration(CancellationToken ct)
@@ -20,26 +20,8 @@ public sealed class Arrival(IOptions<SiteOptions> options, IOptions<Conversation
             using var fresh = EntityContext.NoCache();
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
             if (site is not null) await site.CheckConfiguredOwner(options.Value, ct);
-            await AdoptLocalStorageDefault(ct);
         }
         finally { gate.Exit(); }
-    }
-
-    /// <summary>ADR 0006: when local storage is the configured default, Topics that are still
-    /// unprovisioned and have never held a message adopt the local scope. Anything that has
-    /// content, an intent or a mapped Space keeps its recorded storage scope.</summary>
-    private async Task AdoptLocalStorageDefault(CancellationToken ct)
-    {
-        if (!conversation.Value.LocalByDefault) return;
-        foreach (var room in await Room.Query(value => value.SpaceState == RoomSpaceState.Pending, ct))
-        {
-            if (room.SpaceUri is not null) continue;
-            var state = await RoomConversation.Get(room.Id, ct);
-            if (state?.LastSequence > 0) continue;
-            if ((await WriteIntent.Query(intent => intent.RoomKey == room.Id, ct)).Count > 0) continue;
-            room.SpaceState = RoomSpaceState.Local;
-            await room.Save(ct);
-        }
     }
 
     /// <summary>One verified atproto arrival: first arrival enrolls a new participant (GUIDv7

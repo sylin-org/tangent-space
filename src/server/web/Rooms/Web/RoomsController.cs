@@ -1,7 +1,6 @@
 using Koan.Web.Auth.Connector.Atproto;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TangentSpace.AtProtocol;
 using TangentSpace.Participation;
 using TangentSpace.Authorization;
 
@@ -13,7 +12,6 @@ namespace TangentSpace.Rooms.Web;
 public sealed class RoomsController(TangentServer hub) : ControllerBase
 {
     private RoomGovernance rooms => hub.Topics;
-    private SpacesService spaces => hub.Source;
 
     [AllowAnonymous]
     [HttpGet]
@@ -36,18 +34,6 @@ public sealed class RoomsController(TangentServer hub) : ControllerBase
             return room is null ? NotFound() : Ok(room);
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-    }
-
-    [RoomMutation]
-    [HttpPost("{roomKey}/provision")]
-    public async Task<IActionResult> Provision(string roomKey, CancellationToken ct)
-    {
-        try { return Outcome(await spaces.Provision(Actor(), roomKey, ct)); }
-        catch (UnauthorizedAccessException) { return StatusCode(403, new { reason = "Only the current owner can provision this room." }); }
-        catch (Exception failure) when (failure is SpacesUnavailable or InvalidDataException or HttpRequestException)
-        {
-            return StatusCode(503, new { reason = "The real Space could not be confirmed. Check the site connection and retry provisioning." });
-        }
     }
 
     [RoomMutation]
@@ -106,7 +92,7 @@ public sealed class RoomsController(TangentServer hub) : ControllerBase
         {
             RoomDenial.Forbidden => StatusCodes.Status403Forbidden,
             RoomDenial.NotFound => StatusCodes.Status404NotFound,
-            RoomDenial.AlreadyExists or RoomDenial.PolicyChanged or RoomDenial.SpaceAlreadyMapped => StatusCodes.Status409Conflict,
+            RoomDenial.AlreadyExists => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest
         }, result);
 }

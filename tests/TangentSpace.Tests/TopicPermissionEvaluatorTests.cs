@@ -14,7 +14,7 @@ public sealed class TopicPermissionEvaluatorTests
         bool canRead = true, bool canWrite = true, bool canManage = false, bool canAppointManagers = false,
         bool editingAllowed = true, bool locked = false, string reason = "allowed",
         string? actor = Author, RoomRole? role = RoomRole.Member, long revision = Revision) =>
-        new("workshop", actor, revision, 3, RoomAdmission.SignedIn, RoomSpaceState.Ready, null,
+        new("workshop", actor, revision, 3, RoomAdmission.SignedIn,
             role, canAppointManagers, canRead, canWrite, canManage, canAppointManagers, reason, editingAllowed, locked);
 
     private static TopicPermissionDecision Evaluate(RoomPolicy policy, TopicCapability capability)

@@ -6,7 +6,6 @@ public enum ActivityKind
     MessageAccepted,
     MessageEdited,
     MessageDeleted,
-    SourceFreshnessChanged,
     ReadAcknowledged,
     RoomChanged,
     MembershipChanged,

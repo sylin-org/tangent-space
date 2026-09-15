@@ -23,27 +23,25 @@ public sealed class Room : Entity<Room>
     public long PolicyRevision { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
-    public RoomSpaceState SpaceState { get; set; }
-    public string? SpaceUri { get; set; }
 
     public static Room Create(TangentSite? site, string actorDid, string key, string title, RoomAdmission admission, DateTimeOffset now,
-        TangentCommunity tangent, RoomSpaceState spaceState = RoomSpaceState.Pending)
+        TangentCommunity tangent)
     {
         RequireOwner(site, tangent, actorDid);
-        return Validate(actorDid, key, title, admission, now, tangent, spaceState);
+        return Validate(actorDid, key, title, admission, now, tangent);
     }
 
     /// <summary>A tangent administrator creates a channel under delegated authority; the creator gains no ownership.</summary>
     internal static Room CreateDelegated(TangentSite? site, string actorDid, string key, string title, RoomAdmission admission,
-        DateTimeOffset now, TangentCommunity tangent, RoomSpaceState spaceState = RoomSpaceState.Pending)
+        DateTimeOffset now, TangentCommunity tangent)
     {
         if (site is null || !Participant.IsValidId(actorDid))
             throw Forbidden("A delegated channel needs an established site and a verified participant.");
-        return Validate(actorDid, key, title, admission, now, tangent, spaceState);
+        return Validate(actorDid, key, title, admission, now, tangent);
     }
 
     private static Room Validate(string actorDid, string key, string title, RoomAdmission admission,
-        DateTimeOffset now, TangentCommunity tangent, RoomSpaceState spaceState)
+        DateTimeOffset now, TangentCommunity tangent)
     {
         CheckKey(key);
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > RoomConstants.MaximumTitleLength)
@@ -52,7 +50,7 @@ public sealed class Room : Entity<Room>
         return new Room
         {
             Id = key, TangentKey = tangent.Id, Title = title.Trim(), Admission = admission, CreatorParticipantId = actorDid,
-            PolicyRevision = 1, CreatedAt = now, UpdatedAt = now, SpaceState = spaceState
+            PolicyRevision = 1, CreatedAt = now, UpdatedAt = now
         };
     }
 
@@ -85,9 +83,6 @@ public sealed class Room : Entity<Room>
         var admitted = signedIn && communityAdmitted && !suspended && !banned && classificationRead && (owner || roleAdmitted || delegatedAdmin
             || MembersOnly && role is null && memberRecord
             || !MembersOnly && role is null && Admission == RoomAdmission.SignedIn && communityAdmitted);
-        // Local storage is complete without a Space; Spaces storage is ready once mapped.
-        var ready = SpaceState == RoomSpaceState.Local
-            || SpaceState == RoomSpaceState.Ready && !string.IsNullOrWhiteSpace(SpaceUri);
         // An explicit channel grant of member or manager widens a community reader inside that channel only.
         var communityReader = !owner && communityRole == TangentRole.Reader && role is not (RoomRole.Member or RoomRole.Manager);
         var reason = site is null ? "site-unavailable" : tangent is null ? "tangent-not-found"
@@ -96,11 +91,10 @@ public sealed class Room : Entity<Room>
             : !owner && role == RoomRole.Removed ? "removed"
             : !owner && role is null && (MembersOnly ? !memberRecord : !communityAdmitted) ? "community-membership-required"
             : !classificationRead ? "participation-policy"
-            : !admitted ? "invitation-required"
-            : !ready ? "space-pending" : "allowed";
-        return new RoomPolicy(Id, actorDid, PolicyRevision, site?.PolicyRevision ?? 0, Admission, SpaceState, SpaceUri,
-            role, owner, admitted && ready,
-            admitted && ready && !timedOut && !IsLocked
+            : !admitted ? "invitation-required" : "allowed";
+        return new RoomPolicy(Id, actorDid, PolicyRevision, site?.PolicyRevision ?? 0, Admission,
+            role, owner, admitted,
+            admitted && !timedOut && !IsLocked
                 && (owner || role != RoomRole.Reader && !communityReader && classificationWrite),
             (owner && !suspended) || (manager && !timedOut), owner && !suspended, reason,
             AllowPostEditing, IsLocked);
@@ -196,33 +190,6 @@ public sealed class Room : Entity<Room>
             throw Invalid("Confirm that the Topic's existing history will become publicly readable.");
         if (ReadAudience == audience) return;
         ReadAudience = audience;
-        Advance(now);
-    }
-
-    public void CompleteSpace(TangentSite? site, string actorDid, long expectedRevision, string spaceUri, DateTimeOffset now,
-        TangentCommunity? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
-    {
-        CheckTangentMembership(tangent, tangentMembership, actorDid);
-        // The site or Tangent owner maps rooms; a delegated community administrator finishes provisioning
-        // for channels they manage without ever gaining ownership.
-        var delegatedProvisioner = tangent is not null && Participant.IsValidId(actorDid) && !tangent.IsOwner(actorDid)
-            && tangent.CanParticipate(actorDid, tangentMembership) && (tangentMembership?.Role == TangentRole.Admin || CreatorParticipantId == actorDid);
-        if (!authorized && !delegatedProvisioner) RequireOwner(site, tangent, actorDid);
-        if (SpaceState == RoomSpaceState.Local)
-            throw new RoomRuleViolation(RoomDenial.SpaceAlreadyMapped, "A locally stored room cannot be mapped to a Space.");
-        if (SpaceState == RoomSpaceState.Ready)
-        {
-            if (string.Equals(SpaceUri, spaceUri, StringComparison.Ordinal)) return;
-            throw new RoomRuleViolation(RoomDenial.SpaceAlreadyMapped, "A ready room cannot be mapped to another Space.");
-        }
-        if (expectedRevision != PolicyRevision)
-            throw new RoomRuleViolation(RoomDenial.PolicyChanged, "The room policy changed; reload it before reconciling the Space mapping.");
-        if (string.IsNullOrWhiteSpace(spaceUri) || !spaceUri.StartsWith("at://", StringComparison.Ordinal)
-            || spaceUri.Length > 2048 || spaceUri.Any(char.IsWhiteSpace) || spaceUri.Contains('?') || spaceUri.Contains('#'))
-            throw Invalid("Supply the verified canonical AT Space URI.");
-        // The real Spaces integration verifies authority, type and key before calling this domain operation.
-        SpaceUri = spaceUri;
-        SpaceState = RoomSpaceState.Ready;
         Advance(now);
     }
 

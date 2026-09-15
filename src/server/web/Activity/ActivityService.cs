@@ -167,7 +167,7 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
             var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
             // The window itself overflowed: any count derived from it may be clipped at the cap.
             return new ActivityChannel(roomKey, room.TangentKey, attention, unreadWindow.Count > MaximumUnread,
-                Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, state.Freshness, last?.AcceptedAt);
+                Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, last?.AcceptedAt);
         }, ct);
 
     /// <summary>Personal watch preference layered after the access check; never widens access.</summary>

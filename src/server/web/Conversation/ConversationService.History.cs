@@ -54,7 +54,7 @@ public sealed partial class ConversationService
                 handles[author] = label;
                 bytes += handleBytes;
             }
-            return new MessagePage(messages, next, resume, boundary, state.Freshness, state.LastCompleteAt, handles,
+            return new MessagePage(messages, next, resume, boundary, handles,
                 await ResolveParticipants(messages, token));
         }, ct);
 

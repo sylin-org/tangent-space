@@ -50,5 +50,5 @@ public sealed class PermissionProjectionTests
     }
 
     private static RoomPolicy Policy() => new("workshop", Actor, 42, 3, RoomAdmission.SignedIn,
-        RoomSpaceState.Local, null, RoomRole.Manager, false, true, true, true, false, "allowed", true, false);
+        RoomRole.Manager, false, true, true, true, false, "allowed", true, false);
 }

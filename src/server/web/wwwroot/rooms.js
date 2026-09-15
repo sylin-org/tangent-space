@@ -1,11 +1,11 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  let site, room, epoch = 0, identityEpoch = 0, routeEpoch = 0, renderedRoute = '', nextRoomPage, nextCursor, resumeCursor, reply, restoring;
+  let site, room, epoch = 0, identityEpoch = 0, routeEpoch = 0, renderedRoute = '', nextRoomPage, nextCursor, resumeCursor, reply;
   const mentionCache = new Map();
   let activityTransport, activityActive = false, activityMode = 'stopped', activityOverviewNote = '', activityNeedsRefresh = false;
   let activityRecovering = false, activityRecoveryLabel = '', activityAutomaticRecoveries = 0, noticeTimer;
-  let sourceReadiness, activeTangentKey, activitySignature = '', tangentNextPage;
+  let activeTangentKey, activitySignature = '', tangentNextPage;
   let routeTangent, routeTopics, routeFailure;
   const route = () => window.TangentPages?.route || { kind: 'home' };
   const tangentPath = key => '/api/v1/tangents/' + encodeURIComponent(key);
@@ -21,7 +21,6 @@
   const tangentByKey = new Map();
   const pending = new Map();
   const postMutations = new Map();
-  const recoveryBlocked = new Set();
   const drafts = new Map();
   const draftStoragePrefix = 'tangent-space:draft:v1:';
   const sending = new Map();
@@ -139,7 +138,7 @@
     for (const entry of listing.rooms || listing.channels || []) {
       const activity = activityFor(entry.key);
       const button = element('a', 'room-link', ''); button.href = topicUrl(entry.tangentKey || activeTangentKey, entry.key); button.dataset.key = entry.key;
-      const state = entry.spaceState === 'Pending' ? 'Setup pending' : entry.admission === 'InvitationOnly' ? 'By invitation' : 'Open to signed-in participants';
+      const state = entry.admission === 'InvitationOnly' ? 'By invitation' : 'Open to signed-in participants';
       const label = element('span', 'room-name', entry.title);
       if (activity.directReplies > 0) label.append(element('span', 'activity-diamond', '◆'));
       else if (activity.unreadCount > 0) label.append(element('span', 'activity-count', activity.unreadCountCapped || activity.unreadCount > 50 ? '50+' : String(activity.unreadCount)));
@@ -327,10 +326,9 @@
     site.tangents.nextPage = page.nextPage; site.tangents.directoryIncomplete = !!page.directoryIncomplete; site.tangents.channelsIncomplete = !!page.channelsIncomplete;
     renderTangents();
   }
-  function resetMessages() { historyRevision++; rendered.clear(); visibleMessages.clear(); newPosts.clear(); updateNewPosts(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); show('read-checkpoint', false); text('freshness', ''); }
+  function resetMessages() { historyRevision++; rendered.clear(); visibleMessages.clear(); newPosts.clear(); updateNewPosts(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); show('read-checkpoint', false); text('history-note', ''); }
   function unavailableRoute(code) {
-    routeFailure = code; epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
-    window.TangentModeration?.topic?.(undefined, site?.participant);
+    routeFailure = code; epoch++; resetMessages(); room = null; reply = undefined;    window.TangentModeration?.topic?.(undefined, site?.participant);
     routeTangent = routeTopics = undefined;
     for (const id of ['room-title', 'room-topic', 'topic-permissions', 'room-access']) text(id, '');
     field('topic-form', 'topic').value = '';
@@ -389,14 +387,13 @@
     text('room-admission', room.readAudience === 'Public'
       ? 'Publicly readable · signed-in participation'
       : room.admission === 'InvitationOnly' ? 'By invitation' : 'Signed-in participants');
-    const access = { 'sign-in-required': 'Sign in to enter this room.', 'invitation-required': 'A room manager can invite your DID to join.', removed: 'Your access to this room has been removed.', suspended: 'Your participation at this site is suspended.', 'space-pending': 'Room setup is pending. Its owner can finish connecting it.' };
+    const access = { 'sign-in-required': 'Sign in to enter this room.', 'invitation-required': 'A room manager can invite your DID to join.', removed: 'Your access to this room has been removed.', suspended: 'Your participation at this site is suspended.' };
     text('room-access', access[room.accessState] || (room.canWrite ? 'You can read and take part.' : room.canRead ? 'You can read this room.' : 'Content is not available under your current access.'));
     show('choose-room', false); show('room-content', true); show('room-admin', room.canManage || can(room, 'manageTopic'));
     const topicSettings = $('topic-settings-form');
     if (topicSettings) { topicSettings.elements.namedItem('allowPostEditing').checked = room.allowPostEditing === true; topicSettings.elements.namedItem('isLocked').checked = room.isLocked === true; show('topic-settings-form', room.canManage || can(room, 'manageTopic')); }
-    show('provision-room', room.canAppointManagers && room.spaceState === 'Pending');
-    show('sync-room', room.canRead); show('message-form', room.canWrite);
-    $('channel-details').open = !room.canRead || room.spaceState === 'Pending';
+    show('message-form', room.canWrite);
+    $('channel-details').open = !room.canRead;
     field('topic-form', 'topic').value = room.topic || '';
     field('admission-form', 'admission').value = room.admission;
     show('admission-form', room.canAppointManagers); show('manager-choice', room.canAppointManagers);
@@ -408,12 +405,10 @@
       show('read-audience-form', room.canAppointManagers);
       updateReadAudience();
     }
-    show('reconnect-room-access', false);
     $('manager-choice').disabled = !room.canAppointManagers;
     if (!room.canAppointManagers && field('member-form', 'role').value === 'Manager') field('member-form', 'role').value = 'Member';
     updateTopicRoleNote();
     renderDraft();
-    refreshSourceReadiness();
     updateHero();
   }
   async function choose(key) {
@@ -424,8 +419,6 @@
     const data = (await request(route().tangent ? tangentPath(route().tangent) + '/topics/' + encodeURIComponent(key) : roomPath(key))).data;
     if (version !== epoch) return;
     renderRoom(data);
-    if (data.canWrite) await restorePending(version, key);
-    if (version !== epoch) return;
     if (data.canRead) await historyPage(undefined, version, key, true);
   }
   async function openPost() {
@@ -435,40 +428,6 @@
     if (version !== epoch) return;
     renderRoom(result.topic);
     renderPage(result.window, false);
-    if (room.canWrite) await restorePending(version, room.key);
-  }
-  async function restorePending(version, key) {
-    if (pending.has(key)) return;
-    const lookup = { version, identity: identityEpoch, key }; restoring = lookup;
-    recoveryBlocked.add(key);
-    renderDraft();
-    try {
-      const result = (await request(roomPath(key) + '/messages/pending')).data;
-      if (version !== epoch || lookup.identity !== identityEpoch || room?.key !== key || !room.canWrite || pending.has(key)) return;
-      if (!Array.isArray(result?.messages) || !result.messages.every(saved => saved
-        && typeof saved.operationId === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(saved.operationId)
-        && typeof saved.text === 'string' && saved.text.trim() && new TextEncoder().encode(saved.text).length <= 4096
-        && (saved.replyTo == null || (typeof saved.replyTo.uri === 'string' && typeof saved.replyTo.cid === 'string'))))
-        throw new Error('Saved messages could not be verified.');
-      const saved = result.messages?.[0];
-      if (saved && typeof saved.operationId === 'string' && typeof saved.text === 'string') {
-        rememberDraft();
-        pending.set(key, { operationId: saved.operationId, text: saved.text, ...(saved.replyTo ? { replyTo: saved.replyTo } : {}), detail: saved.detail, saved: true });
-      }
-      recoveryBlocked.delete(key);
-    } catch (error) {
-      if (version !== epoch || lookup.identity !== identityEpoch) return;
-      if (error.status === 401 || error.status === 403) {
-        room.canWrite = false; show('message-form', false);
-      }
-      if (error.status === 409) {
-        room.canRead = room.canWrite = false; show('message-form', false); show('sync-room', false);
-        status('Your signed-in account changed. Reload this page before continuing.', true);
-      } else status('Saved messages could not be checked. Use Check for updates to try again.', true);
-    } finally {
-      if (restoring === lookup) restoring = undefined;
-      if (version === epoch && lookup.identity === identityEpoch) renderDraft();
-    }
   }
   async function historyPage(cursor, version = epoch, key = room?.key, fromStart = false, context) {
     if (context && !context.isCurrent()) return false;
@@ -545,30 +504,6 @@
       refreshingHistory = false;
       const queued = queuedHistoryRefresh; queuedHistoryRefresh = undefined;
       if (queued?.key === room?.key && queued) action(null, () => refreshOpenHistory(queued.force));
-    }
-  }
-  async function refreshSourceReadiness() {
-    const key = room?.key, identity = identityEpoch, version = epoch;
-    if (!key || !site?.participant?.did) return;
-    // Local storage has no source to authorize: room policy alone governs posting, and a
-    // Spaces readiness answer must never hide the composer here (ADR 0006).
-    if (room?.spaceState === 'Local') return;
-    try {
-      const readiness = (await request('/api/connections/status?room=' + encodeURIComponent(key))).data;
-      if (identity !== identityEpoch || version !== epoch || room?.key !== key || !readiness || typeof readiness.state !== 'string') return;
-      sourceReadiness = readiness;
-      if (!readiness.canWriteSource && room.canWrite) {
-        show('message-form', false);
-        text('room-access', readiness.reason || (readiness.state === 'provider-unsupported'
-          ? 'This account provider cannot grant the room source permission needed to write here.'
-          : 'Your account needs room permission before it can post here.'));
-        const reconnectable = readiness.state === 'consent-required' || readiness.state === 'disconnected';
-        const link = $('reconnect-room-access'); link.href = readiness.connectUrl || '/api/connections/rooms?room=' + encodeURIComponent(key);
-        link.textContent = 'Connect room access'; show('reconnect-room-access', reconnectable);
-      }
-    } catch (_) {
-      // The server still makes the final room-policy decision.  A missing
-      // readiness endpoint must not be mistaken for account consent.
     }
   }
   function participantLabel(id, page) {
@@ -662,10 +597,8 @@
       nextCursor = nativeHistory ? page.nextCursor : undefined; resumeCursor = nativeHistory ? page.resumeCursor : undefined;
       displayedSequence = nextCursor ? Math.max(0, ...[...visibleMessages.values()].map(message => message.sequence || 0)) : page.boundary || 0;
       show('more-messages', !!nextCursor); checkpointState(); updateNewPosts();
-      const freshness = { 'writer-checked': 'Latest source update received.', checked: 'Up to date with the source.', 'catching-up': 'Catching up with the source…', unavailable: 'The source is unavailable. You can still read saved posts.', 'authority-reauthorization-required': 'The owner needs to reconnect this Topic’s source.', 'not-yet-checked': 'Checking for source updates…' };
-      const state = room.spaceState === 'Local' ? '' : freshness[page.freshness] || 'Checking for source updates…';
-      text('freshness', state + (!rendered.size ? ' No posts yet. Start the conversation.' : ''));
-      show('freshness', !!$('freshness').textContent.trim());
+      text('history-note', rendered.size ? '' : 'No posts yet. Start the conversation.');
+      show('history-note', !rendered.size);
       restoreReadingAnchor(anchor);
   }
   function beginEdit(li, message) {
@@ -684,8 +617,7 @@
       const intent = postMutations.get(mutationKey) ?? { method: 'PATCH', body: { text: input.value, operationId: crypto.randomUUID() } };
       postMutations.set(mutationKey, intent); input.readOnly = true; save.textContent = 'Retry edit';
       const response = await request(roomPath(key) + '/messages/' + encodeURIComponent(message.id), intent.body, intent.method);
-      if (response.data.state === 'pending') { status('Your edit is saved for this visit. Retry it to confirm the source result.'); return; }
-      if (response.data.state !== 'accepted') throw new Error('The source has not confirmed this edit.');
+      if (response.data.state !== 'accepted') throw new Error('The edit was not accepted.');
       postMutations.delete(mutationKey); await refreshOpenHistory(true);
     }); });
   }
@@ -697,8 +629,7 @@
     postMutations.set(mutationKey, intent);
     action(null, async () => {
       const response = await request(roomPath(key) + '/messages/' + encodeURIComponent(message.id), intent.body, intent.method);
-      if (response.data.state === 'pending') { status('Deletion is pending. Retry Delete to confirm the source result.'); return; }
-      if (!['deleted','moderated'].includes(response.data.state)) throw new Error('The source has not confirmed deletion.');
+      if (!['deleted','moderated'].includes(response.data.state)) throw new Error('The post was not removed.');
       postMutations.delete(mutationKey); await refreshOpenHistory(true);
     });
   }
@@ -827,8 +758,7 @@
     // Quarantine the old world immediately, before the asynchronous welcome request.
     // Retain the old actor on site solely so the welcome transition clears its drafts
     // and uncertain operations correctly; nothing is re-attributed or automatically sent.
-    identityEpoch++; epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
-    routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
+    identityEpoch++; epoch++; resetMessages(); room = null; reply = undefined;    routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
     activitySignature = ''; activityOverviewNote = '';
     for (const id of ['room-content', 'place', 'community-settings', 'settings-page', 'server-welcome']) show(id, false);
     activityRecoveryLabel = typeof detail?.bestLabel === 'string' ? detail.bestLabel : '';
@@ -887,16 +817,10 @@
     if (intent) { $('message-text').value = intent.text; reply = intent.replyTo; }
     else { const draft = room && readStoredDraft(room.key); $('message-text').value = draft?.text || ''; reply = draft?.replyTo; }
     $('message-text').readOnly = !!intent;
-    $('send-message').disabled = !!room && (sending.has(room.key) || recoveryBlocked.has(room.key) || restoring?.version === epoch);
-    text('send-message', intent ? 'Retry saved message' : 'Send message');
-    const reconnect = intent?.detail === 'reauthorization-required';
-    text('pending-message', !intent ? '' : reconnect
-      ? 'Your message is saved. Your account is connected, but it has not granted permission to send messages here. Connect room access, then retry your saved message.'
-      : intent.saved ? 'Your message is saved. It has not finished sending. Retry this message to continue.'
-      : 'This message has not been confirmed as sent. Retry the same message to check and continue.');
+    $('send-message').disabled = !!room && sending.has(room.key);
+    text('send-message', intent ? 'Retry message' : 'Send message');
+    text('pending-message', intent ? 'This message has not been confirmed as sent. Retry the same message to check and continue.' : '');
     show('pending-message', !!intent);
-    $('reconnect-room-access').href = '/api/connections/rooms?room=' + encodeURIComponent(room?.key || '');
-    show('reconnect-room-access', reconnect);
     const preview = replyPreview(reply);
     text('reply-context', reply ? 'Replying to: ' + (preview?.text.replace(/\s+/g, ' ').slice(0, 140) || 'an earlier post') : ''); show('reply-context', !!reply); show('cancel-reply', !!reply && !intent);
     size();
@@ -938,7 +862,7 @@
       // rather than silently re-attributed to the new account.
       const recovered = activityRecovering, previousActor = site?.participant?.participantRef;
       forgetStoredDrafts(previousActor);
-      identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); recoveryBlocked.clear(); drafts.clear(); sending.clear(); restoring = undefined; room = null; reply = undefined; sourceReadiness = undefined; activeTangentKey = undefined; routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
+      identityEpoch++; epoch++; resetMessages(); stopActivity(); pending.clear(); drafts.clear(); sending.clear(); room = null; reply = undefined; activeTangentKey = undefined; routeTangent = routeTopics = undefined; activityByRoom.clear(); tangentByKey.clear();
       window.TangentModeration?.topic?.(undefined, event.detail.participant);
       activityAutomaticRecoveries = 0;
       window.TangentFacets?.clearAll?.();
@@ -947,8 +871,7 @@
       renderDraft(); show('room-content', false); show('choose-room', true); text('choose-room', 'Choose a room to see its topic and current access.'); status('');
       if (recovered) acknowledge = 'Now viewing as ' + (event.detail.participant?.handle || activityRecoveryLabel || event.detail.participant?.did || event.detail.participant?.participantRef || 'another account') + '.';
     } else if (routeChanged) {
-      rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; sourceReadiness = undefined;
-      activeTangentKey = undefined; routeTangent = routeTopics = undefined; routeFailure = undefined;
+      rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined;      activeTangentKey = undefined; routeTangent = routeTopics = undefined; routeFailure = undefined;
       window.TangentModeration?.topic?.(undefined, event.detail.participant);
       document.body.classList.remove('conversation-open');
       renderDraft(); show('room-content', false); show('choose-room', true); status('');
@@ -1034,8 +957,6 @@
   $('conversation-elsewhere').addEventListener('keydown', event => { if (event.key === 'Escape') { $('conversation-elsewhere').open = false; $('elsewhere-label').focus(); } });
   $('message-text').addEventListener('input', () => { size(); rememberDraft(); });
   $('cancel-reply').addEventListener('click', () => { saveDraft(room.key, { text: $('message-text').value }); renderDraft(); });
-  $('provision-room').addEventListener('click', () => action($('provision-room'), () => mutateRoom('/provision', {})));
-  $('sync-room').addEventListener('click', () => action($('sync-room'), async () => { const key = room.key; status(room.spaceState === 'Local' ? 'Checking for updates…' : 'Checking source repositories…'); await request(roomPath(key) + '/sync', {}); if (room?.key === key) { status(''); await choose(key); } }));
   $('acknowledge').addEventListener('click', () => action($('acknowledge'), async () => {
     if (route().kind === 'post' || !resumeCursor) return;
     const key = room.key, version = epoch, cursor = resumeCursor, sequence = displayedSequence;
@@ -1099,7 +1020,7 @@
   $('server-settings-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, async () => { const body = Object.fromEntries(new FormData(event.target)); body.allowAgentTangentOwnership = field('server-settings-form', 'allowAgentTangentOwnership').checked; try { await request('/api/server', body, 'PATCH'); } catch (error) { text('settings-status', error.status === 403 ? 'Your account can no longer change these settings.' : 'Settings could not be saved. Please try again.'); if (error.status === 403) { administrativeDenied(); return; } throw error; } await refreshServer(); text('settings-status', 'Server settings saved.'); }); });
   $('message-form').addEventListener('submit', event => {
     event.preventDefault();
-    if (!room?.canWrite || sending.has(room.key) || recoveryBlocked.has(room.key) || restoring?.version === epoch) return;
+    if (!room?.canWrite || sending.has(room.key)) return;
     action($('send-message'), async () => {
       const key = room.key, identity = identityEpoch, version = epoch;
       const current = () => identity === identityEpoch && version === epoch && room?.key === key;
@@ -1114,31 +1035,23 @@
         const body = { operationId: intent.operationId, text: intent.text, ...(intent.facets?.length ? { facets: intent.facets } : {}), ...(intent.replyTo ? { replyTo: intent.replyTo } : {}) };
         const receipt = (await request(roomPath(key) + '/messages', body)).data;
         if (identity !== identityEpoch) return;
-        if (receipt.state === 'pending') {
-          intent.detail = receipt.detail; intent.saved = true;
-          if (current()) renderDraft();
-          return;
-        }
+        if (receipt.state !== 'accepted') throw new Error('The post was not accepted.');
         pending.delete(key);
-        if (receipt.state === 'accepted') window.TangentFacets?.clearFacets?.(key);
-        if (receipt.state === 'accepted') {
-          const draft = drafts.get(key);
-          if (draft?.text === intent.text && draft.replyTo?.uri === intent.replyTo?.uri && draft.replyTo?.cid === intent.replyTo?.cid) forgetDraft(key);
-        } else saveDraft(key, { text: intent.text, replyTo: intent.replyTo });
+        window.TangentFacets?.clearFacets?.(key);
+        const draft = drafts.get(key);
+        if (draft?.text === intent.text && draft.replyTo?.uri === intent.replyTo?.uri && draft.replyTo?.cid === intent.replyTo?.cid) forgetDraft(key);
         if (room?.key === key) {
           const completionVersion = epoch;
           const completionCurrent = () => identity === identityEpoch && completionVersion === epoch && room?.key === key;
+          // Refresh in place. Reloading the Topic would discard the reading window and move the composer.
           reply = undefined; renderDraft();
-          // Refresh in place. Reloading the Topic would discard the reading window and
-          // move the composer. Recover the next saved intent without re-entering it.
-          await restorePending(completionVersion, key);
           if (completionCurrent()) {
-            status(receipt.state === 'accepted' ? 'Post sent.' : 'This post did not meet the topic’s current rules.', receipt.state !== 'accepted');
+            status('Post sent.');
             try {
               if (route().kind === 'post') await refreshOpenHistory();
               else if (!nextCursor) await historyPage(resumeCursor, completionVersion, key, !resumeCursor);
             } catch (error) {
-              if (completionCurrent() && receipt.state === 'accepted') status('Post sent. The conversation could not refresh; use Check for updates to see it.', true);
+              if (completionCurrent()) status('Post sent. The conversation could not refresh; reload the Topic to see it.', true);
               else throw error;
             }
           }

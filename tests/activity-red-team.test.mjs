@@ -229,7 +229,7 @@ function roomFixture() {
   const storage = new Map(); window.sessionStorage = { get length() { return storage.size; }, key: i => [...storage.keys()][i],
     getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) };
   Object.assign(document, { body: new Element(), hidden: false, getElementById: get, createElement: () => new Element() });
-  const topic = { key: 'lounge', title: 'Readable muted topic', tangentKey: 'home', canRead: true, canWrite: true, spaceState: 'Local' };
+  const topic = { key: 'lounge', title: 'Readable muted topic', tangentKey: 'home', canRead: true, canWrite: true };
   const tangent = { key: 'home', name: 'Home', channels: [topic] };
   const route = { kind: 'topic', tangent: 'home', topic: 'lounge' };
   window.TangentPages = { route, tangentUrl: key => '/t/' + key + '/topics', topicUrl: (key, room) => '/t/' + key + '/topics/' + room,
@@ -259,8 +259,8 @@ function roomFixture() {
     else if (clean === '/api/rooms/lounge/messages') {
       if (f.holdHistory) { const held = f.holdHistory; f.holdHistory = null; return held.promise; }
       if (f.failHistory) return new Response('{}', { status: 503 });
-      value = { messages: [], boundary: 0, resumeCursor: 'history-c0', nextCursor: null, freshness: 'checked' };
-    } else if (clean.endsWith('/messages/pending')) value = { messages: [] };
+      value = { messages: [], boundary: 0, resumeCursor: 'history-c0', nextCursor: null };
+    }
     return json(value);
   };
   class FormData { *[Symbol.iterator]() {} }
@@ -277,7 +277,7 @@ function roomFixture() {
 }
 
 const loungeChannel = { roomKey: 'lounge', tangentKey: 'home', unreadCount: 0, unreadCountCapped: false,
-  directReplies: 0, lastSequence: 0, readSequence: 0, freshness: 'checked', lastMessageAt: null };
+  directReplies: 0, lastSequence: 0, readSequence: 0, lastMessageAt: null };
 
 test('red team integration: a readable muted topic survives a complete activity overview that omits it', async t => {
   const f = roomFixture(); t.after(() => f.activity()?.stop()); f.welcome(); await settle();
@@ -325,7 +325,7 @@ test('red team integration: expired same-actor delivery cannot render its delaye
   f.document.hidden = true; f.document.emit('visibilitychange'); await settle();
   held.resolve(json({ messages: [{ id: 'expired-delivery', authorParticipantId: 'bob', sequence: 1,
     acceptedAt: '2026-09-12T12:00:00Z', content: { text: 'Stale response must not render' } }],
-    boundary: 1, resumeCursor: 'old-history', nextCursor: null, freshness: 'checked' }));
+    boundary: 1, resumeCursor: 'old-history', nextCursor: null }));
   await settle();
   assert.equal(f.get('messages').children.length, 0, 'expired callback cannot mutate the retained room DOM');
   assert.equal(historyRequest.init.signal?.aborted, true, 'dependent history fetch shares activity delivery cancellation');

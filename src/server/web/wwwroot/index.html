@@ -23,7 +23,7 @@
   <script src="/activity-transport.js?v=20260912-shared2" defer></script>
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
   <script src="/moderation.js?v=20260913-cases1" defer></script>
-  <script src="/rooms.js?v=20260915-topics" defer></script>
+  <script src="/rooms.js?v=20260915-local" defer></script>
   <script src="/roles.js?v=20260914-roles8" defer></script>
   <script src="/access.js?v=20260914-access5" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
@@ -257,7 +257,7 @@
             </dl>
           </details>
         </div>
-        <div class="identity-actions"><p><a class="btn btn-quiet" href="/api/connections/rooms">Room access settings</a></p>
+        <div class="identity-actions">
         <form id="sign-out-form" method="post" class="sign-out" hidden>
           <input type="hidden" name="return" value="/">
           <button type="submit" class="btn btn-quiet">Sign out</button>
@@ -332,7 +332,6 @@
               <div id="conversation-updates" class="conversation-updates" hidden><span id="new-posts-count" role="status"></span><button id="view-new-posts" class="btn btn-quiet" type="button">View new posts ↓</button></div>
               <header class="conversation-head"><div class="conversation-place"><span id="room-tangent-mark" class="tiny-card-mark" aria-hidden="true">✦</span><p class="eyebrow" id="room-admission"></p><button id="return-to-tangents" class="btn btn-quiet return-to-tangents" type="button">All Tangents</button></div><h2 id="room-title"></h2><p id="room-topic" class="topic"></p></header>
               <details id="channel-details" class="channel-details"><summary>Topic details</summary><div class="channel-details-body"><p id="room-access" class="note"></p><p id="topic-permissions" class="hint"></p>
-              <div class="room-actions"><button id="sync-room" class="btn btn-quiet" type="button" hidden>Check for updates</button><button id="provision-room" class="btn btn-primary" type="button" hidden>Finish room setup</button></div>
               <details id="room-admin" class="setup" hidden><summary>Topic settings</summary>
                 <section class="topic-settings-section" aria-labelledby="topic-about-heading">
                   <header><h3 id="topic-about-heading">About</h3><p class="hint">Set the scene for this conversation.</p></header>
@@ -353,11 +352,11 @@
                   <form id="member-form" class="stack"><label>Participant DID<input class="input" name="did" required maxlength="2048" autocomplete="off" spellcheck="false"></label><label>Topic role<select class="input" name="role" aria-describedby="topic-role-note"><option value="Member">Member</option><option value="Reader">Read only</option><option value="Removed">Remove access</option><option id="manager-choice" value="Manager">Manager</option></select></label><p id="topic-role-note" class="hint" aria-live="polite"></p><button class="btn btn-quiet">Update membership</button></form>
                 </section>
               </details>
-              <p id="freshness" class="hint" aria-live="polite"></p></div></details>
+              <p id="history-note" class="hint" aria-live="polite"></p></div></details>
               <ol id="messages" class="messages" aria-label="Messages"></ol>
               <button id="more-messages" class="btn btn-quiet" type="button" hidden>Read more</button>
               <div id="read-checkpoint" class="read-checkpoint" hidden><p id="read-state-note" class="hint">Caught up with the posts loaded here.</p><button id="acknowledge" class="btn btn-quiet" type="button" hidden>Mark these posts as read</button></div>
-              <form id="message-form" class="compose" hidden><p id="reply-context" class="reply-strip" hidden></p><button id="cancel-reply" class="btn btn-quiet" type="button" hidden>Cancel reply</button><label for="message-text">Your post</label><textarea id="message-text" class="input" rows="4" required placeholder="Add to the conversation…"></textarea><div class="compose-footer"><span id="message-size" class="hint">0 / 4096 bytes</span><button id="send-message" class="btn btn-primary">Send post</button></div><p id="pending-message" class="hint" role="status" hidden></p></form><a id="reconnect-room-access" class="btn btn-quiet" href="/api/connections/rooms" hidden>Connect room access</a>
+              <form id="message-form" class="compose" hidden><p id="reply-context" class="reply-strip" hidden></p><button id="cancel-reply" class="btn btn-quiet" type="button" hidden>Cancel reply</button><label for="message-text">Your post</label><textarea id="message-text" class="input" rows="4" required placeholder="Add to the conversation…"></textarea><div class="compose-footer"><span id="message-size" class="hint">0 / 4096 bytes</span><button id="send-message" class="btn btn-primary">Send post</button></div><p id="pending-message" class="hint" role="status" hidden></p></form>
             </div>
           </section>
           <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" hidden>

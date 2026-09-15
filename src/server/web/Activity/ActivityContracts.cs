@@ -4,7 +4,7 @@ public sealed record ActivityEvent(string Sequence, string Kind, string RoomKey,
     string? ActorParticipantId, string? TargetParticipantId, long? MessageSequence, DateTimeOffset OccurredAt);
 
 public sealed record ActivityChannel(string RoomKey, string TangentKey, int UnreadCount, bool UnreadCountCapped,
-    int DirectReplies, long LastSequence, long ReadSequence, string Freshness, DateTimeOffset? LastMessageAt);
+    int DirectReplies, long LastSequence, long ReadSequence, DateTimeOffset? LastMessageAt);
 
 public sealed record ActivitySnapshot(string Checkpoint, IReadOnlyList<ActivityEvent> Events, string? NextCursor,
     bool HasMore, bool ResetRequired, IReadOnlyList<ActivityChannel> Channels, bool ChannelsTruncated = false,

@@ -3,7 +3,6 @@ using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
 using TangentSpace.Activity;
-using TangentSpace.AtProtocol;
 using TangentSpace.Authorization;
 using TangentSpace.Communities;
 using TangentSpace.Conversation;
@@ -30,7 +29,6 @@ public sealed partial class ExperienceService(
     private ConversationService conversation => hub.Posts;
     private ActivityService activity => hub.Activity;
     private ServerGovernance server => hub.Site;
-    private SourceReadiness readiness => hub.Readiness;
 
     public const int DefaultDigestLimit = 5;
     public const int MaximumDigestLimit = 25;
@@ -289,49 +287,16 @@ public sealed partial class ExperienceService(
                 return await Replay("create_post", principal, identity, registration.Record, participantId, credential, ct);
             var operationId = registration.Record.NamespacedOperationId
                 ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
-            var intent = await conversation.Post(participantId, topicKey, new PostMessage(operationId, text, replySource, facets), ct);
+            var post = await conversation.Post(participantId, topicKey, new PostMessage(operationId, text, replySource, facets), ct);
             var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
-            var checkOperation = new ExperienceAction("get_operation", refs.ServerRef, null, "Check the saved action");
-            if (intent.State == "accepted")
-            {
-                string? postRef = null;
-                using (EntityContext.NoCache())
-                {
-                    var projected = (await Message.Query(
-                        message => message.RoomKey == topicKey && message.SourceUri == intent.SourceUri
-                            && message.SourceCid == intent.SourceCid, One(), ct)).FirstOrDefault();
-                    if (projected is not null) postRef = refs.Post(tangentKey, topicKey, projected.Id);
-                }
-                var data = new ExperiencePostData(postRef,
-                    intent.SourceUri is null ? null : new ExperienceSource(intent.SourceUri, intent.SourceCid),
-                    postRef is null ? null : refs.Origin + "/tangents/" + tangentKey + "/posts/"
-                        + postRef[(postRef.LastIndexOf("::", StringComparison.Ordinal) + 2)..] + "/");
-                await receipts.Complete(registration.Record, "completed", postRef, Serialize(data), ct);
-                return await Assemble("create_post", ExperienceStatus.Ok, identity, place,
-                    new ExperienceResult(data, new ExperienceReceipt(requestId, "completed", postRef, null), null),
-                    (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
-                    Empty(), [new(ExperienceActionNames.ReadTopic, refs.Topic(tangentKey, topicKey), null, "Open the Topic")], null, null, participantId, credential, ct);
-            }
-            if (intent.State == "rejected")
-            {
-                await receipts.Complete(registration.Record, "rejected", null, null, ct);
-                return await Assemble("create_post", ExperienceStatus.Blocked, identity, place,
-                    new ExperienceResult(null, new ExperienceReceipt(requestId, "rejected", null, null),
-                        ExperienceProblem.Of(ExperienceProblemCodes.SourceUnsupported, "The source rejected this Post. The saved request keeps it inspectable.")),
-                    (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention,
-                    Empty(), [checkOperation], null, null, participantId, credential, ct);
-            }
-            await receipts.Complete(registration.Record, "pending", null, null, ct);
-            var readiness = await ReadinessOf(participantId, ct);
-            var problem = readiness == "unsupported"
-                ? ExperienceProblem.Of(ExperienceProblemCodes.SourceUnsupported, "This account provider cannot supply the native capability this Post needs.")
-                : ExperienceProblem.Of(ExperienceProblemCodes.SourcePermissionMissing,
-                    "Your Post is saved. The operator must connect native Topic access before this request can finish.");
-            return await Assemble("create_post", readiness is "needs_connection" or "unsupported" ? ExperienceStatus.Blocked : ExperienceStatus.Pending,
-                identity, place,
-                new ExperienceResult(null, new ExperienceReceipt(requestId, "pending", null, 15), problem),
-                (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention,
-                Empty(), [checkOperation], null, null, participantId, credential, ct);
+            var postRef = refs.Post(tangentKey, topicKey, post.Id);
+            var data = new ExperiencePostData(postRef, new ExperienceSource(post.SourceUri, post.SourceCid),
+                refs.Origin + "/tangents/" + tangentKey + "/posts/" + post.Id + "/");
+            await receipts.Complete(registration.Record, "completed", postRef, Serialize(data), ct);
+            return await Assemble("create_post", ExperienceStatus.Ok, identity, place,
+                new ExperienceResult(data, new ExperienceReceipt(requestId, "completed", postRef, null), null),
+                (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
+                Empty(), [new(ExperienceActionNames.ReadTopic, refs.Topic(tangentKey, topicKey), null, "Open the Topic")], null, null, participantId, credential, ct);
         }, ct);
     }
 
@@ -524,7 +489,7 @@ public sealed partial class ExperienceService(
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
         var identity = await IdentityOf(participantId, ct);
-        // Lookup never re-executes; the durable registry and WriteIntent state are the only truth.
+        // Lookup never re-executes; the durable registry and the Post rows are the only truth.
         var record = await receipts.Find(RegistryCredential(principal), participantId, requestId, ct);
         if (record is null)
             return Problem("get_operation", identity, ServerPlace(principal, await SiteLabel(ct)),
@@ -541,34 +506,12 @@ public sealed partial class ExperienceService(
             using var fresh = EntityContext.NoCache();
             var operationId = record.NamespacedOperationId
                 ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
-            // ADR 0007: for locally written posts the projection row is the receipt. Legacy
-            // rows and the Spaces pipeline still resolve through the staged intent.
+            // ADR 0007: the projection row is the receipt.
             var projected = (await Message.Query(m => m.AuthorParticipantId == participantId && m.OperationId == operationId, One(), ct)).FirstOrDefault();
-            if (projected is not null)
+            if (projected is not null && await Room.Get(projected.RoomKey, ct) is { } rowRoom)
             {
-                var rowRoom = await Room.Get(projected.RoomKey, ct);
-                if (rowRoom is not null)
-                {
-                    state = projected.Removed ? "rejected" : "completed";
-                    resultRef = refs.Post(rowRoom.TangentKey, projected.RoomKey, projected.Id);
-                }
-            }
-            else
-            {
-                var intent = await WriteIntent.Get(WriteIntent.Key(participantId, record.TargetKey, operationId), ct);
-                if (intent is not null)
-                {
-                    state = intent.State == "accepted" ? "completed" : intent.State == "rejected" ? "rejected" : "pending";
-                    if (intent.State == "accepted" && intent.SourceUri is not null)
-                    {
-                        var room = await Room.Get(intent.RoomKey, ct);
-                        var staged = (await Message.Query(
-                            message => message.RoomKey == intent.RoomKey && message.SourceUri == intent.SourceUri
-                                && message.SourceCid == intent.SourceCid, One(), ct)).FirstOrDefault();
-                        if (staged is not null && room is not null)
-                            resultRef = refs.Post(room.TangentKey, intent.RoomKey, staged.Id);
-                    }
-                }
+                state = projected.Removed ? "rejected" : "completed";
+                resultRef = refs.Post(rowRoom.TangentKey, projected.RoomKey, projected.Id);
             }
         }
         if (record.Operation == "JoinTangent" && state == "pending")
@@ -709,20 +652,6 @@ public sealed partial class ExperienceService(
         using var fresh = EntityContext.NoCache();
         var site = await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
         return site?.Name.Length > 0 ? site.Name : "This Tangent server";
-    }
-
-    /// <summary>Source readiness is atproto-scoped: an internal-only participant has no source
-    /// provider to connect and reports unsupported, never pending.</summary>
-    internal async Task<string> ReadinessOf(string participantId, CancellationToken ct)
-    {
-        try
-        {
-            var did = await hub.Directory.AtprotoDidOf(participantId, ct);
-            if (did is null) return "unsupported";
-            var source = await readiness.Get(did, ct: ct);
-            return source.State switch { "ready" => "ready", "provider-unsupported" => "unsupported", _ => "needs_connection" };
-        }
-        catch (Exception error) when (error is not OperationCanceledException) { return "unavailable"; }
     }
 
     private async Task<(string? Tangent, string? Topic)> ScopeOf(ClaimsPrincipal principal, string participantId, string credential,

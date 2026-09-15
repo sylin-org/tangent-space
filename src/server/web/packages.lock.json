@@ -8,12 +8,6 @@
         "resolved": "2.7.0",
         "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
       },
-      "System.Formats.Cbor": {
-        "type": "Direct",
-        "requested": "[10.0.5, 10.0.5]",
-        "resolved": "10.0.5",
-        "contentHash": "9Zk1wBawwHQ8uRTJPhlksc8hrY7ho4F/4GKSA/0v3iRJ0zQDpCHbZGlPl06kv0raPtBuy1dO14Yz1yrNXNZv/Q=="
-      },
       "CarpaNet": {
         "type": "Transitive",
         "resolved": "1.1.0-alpha.5",

@@ -32,19 +32,17 @@ public sealed class TangentRoleAccess(RoleCollection roles)
             || string.Equals(room.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
         var siteUnavailable = selected.SitePolicyRevision <= 0;
         var missingParent = tangent is null;
-        var ready = room.SpaceState == RoomSpaceState.Local
-            || room.SpaceState == RoomSpaceState.Ready && !string.IsNullOrWhiteSpace(room.SpaceUri);
         var banned = restriction is { Banned: true } && !ownsResource;
         var timedOut = restriction is { Banned: false } && !ownsResource;
         var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
-        var read = !siteUnavailable && !suspended && !missingParent && ready && !banned && rights.Read
+        var read = !siteUnavailable && !suspended && !missingParent && !banned && rights.Read
             && (ownsResource || CanDo(effective.See, bag));
         var write = read && !timedOut && !room.IsLocked && rights.Write
             && (ownsResource || CanDo(effective.Post, bag));
         var manage = !siteUnavailable && !suspended && !missingParent && !banned && !timedOut
             && (ownsResource || CanDo(effective.Manage, bag));
         var reason = siteUnavailable ? "site-unavailable" : missingParent ? "tangent-not-found" : suspended ? "suspended" : banned ? "banned"
-            : !ready ? "space-pending" : !read ? "role-required" : "allowed";
+            : !read ? "role-required" : "allowed";
         return selected with
         {
             IsOwner = ownsResource,

@@ -121,10 +121,9 @@ public sealed class ExperienceApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_local_write_accepts_immediately_and_becomes_readable_history()
+    public async Task A_post_is_accepted_immediately_and_becomes_readable_history()
     {
-        // ADR 0006: standalone storage. No Spaces, no authority, no source grant — the Post
-        // is accepted under current policy and appears as ordinary history.
+        // The Post is accepted under current policy and appears as ordinary history.
         var body = new { requestId = "integration-post-1", text = "A standalone reply with no source network anywhere." };
         using var created = await app.Http.PostAsJsonAsync($"/api/v1/experience/topics/{ExperienceWebApp.TopicKey}/posts", body);
         using var document = await Ok(created);
@@ -163,20 +162,6 @@ public sealed class ExperienceApiTests : IAsyncLifetime
         using var read = await app.Http.GetAsync($"/api/v1/experience/topics/{ExperienceWebApp.TopicKey}?limit=10");
         using var history = await Ok(read);
         Assert.Equal(4, history.RootElement.GetProperty("result").GetProperty("data").GetProperty("posts").GetArrayLength());
-    }
-
-    [Fact]
-    public async Task A_spaces_mode_write_without_a_source_stays_honestly_pending()
-    {
-        await using var spaces = await ExperienceWebApp.StartAsync("Spaces");
-        var body = new { requestId = "integration-spaces-1", text = "A source-backed reply with no source network." };
-        using var created = await spaces.Http.PostAsJsonAsync($"/api/v1/experience/topics/{ExperienceWebApp.TopicKey}/posts", body);
-        using var document = await Ok(created);
-        var root = document.RootElement;
-        Assert.False(root.GetProperty("status").GetString() == "ok");
-        var receipt = root.GetProperty("result").GetProperty("receipt");
-        Assert.Equal("pending", receipt.GetProperty("state").GetString());
-        Assert.NotNull(root.GetProperty("result").GetProperty("problem"));
     }
 
     [Fact]

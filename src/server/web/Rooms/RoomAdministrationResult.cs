@@ -6,5 +6,4 @@ public sealed record RoomAdministrationResult(
     string Reason,
     string RoomKey,
     long PolicyRevision,
-    string? SpaceUri,
     string AuditId);
