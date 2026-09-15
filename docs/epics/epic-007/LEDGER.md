@@ -8,9 +8,9 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.3 — create the home Tangent at claim; remove `EnsureHome` from reads (`todo`, next) |
-| Next action | Start R1.3: set it to `doing` and follow the steps under [In flight](#in-flight) |
-| Last checkpoint | 2026-09-15 · S-002 · R1.2 complete; committed as "refactor: remove browser WebMCP" (R1.1 is `f7192d7`) |
+| Current task | R1.4 — delete pre-multi-Tangent branches and the digest's non-facet mention parser (`todo`, next) |
+| Next action | Start R1.4: set it to `doing` and follow the steps under [In flight](#in-flight) |
+| Last checkpoint | 2026-09-15 · S-002 · R1.3 complete; committed as "refactor: establish the home Tangent at claim" (R1.2 is `b69e984`) |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional); the sign-in steps of each slice walkthrough |
 | Blockers | None |
@@ -113,8 +113,8 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | ID | Task | Status | Done when | Evidence |
 |---|---|---|---|---|
 | R1.1 | Remove the inbound MCP transport; move its live pieces to accurate homes (`Application/References`, `Application/OperationReceipts`, `Hosting/BearerRegistration`, `Tangent:Site:PublicOrigin`, `Communities/Web/InvitationController`, `TopicWindow`/`WindowPlanner`/`ReadWindow`); delete the rest of `Mcp/`, the embedded `tools.json`, `docs/design/tangent-mcp/`, transport tests and transport evidence | done | No `/mcp` route; build green; .NET failures equal the known set | `f7192d7`: .NET 459/471, failures = the 12 known; server C# 16,830 → 13,546; `Mcp/` 3,697 → 364 lines (enrollment only); entity types 30 → 28; greenfield 4,132 → 2,850 |
-| R1.2 | Delete browser WebMCP: `agent.html`, `agent-page.js`, `agent-connection.js`, `webmcp.js`, `ParticipantArrivalController`, their two browser tests, `scripts/prove-webmcp-http.mjs`, `docs/WEBMCP.md`, WebMCP evidence; rewrite WebMCP passages in PRODUCT, the experience API spec, atmospheres and OPERATING | done | No WebMCP references remain; browser suite green | Browser 140/140; server build green (no .NET test referenced the arrival endpoint); greenfield WebMCP 0, total 2,711 |
-| R1.3 | Create the home Tangent at claim or onboarding; remove `EnsureHome` from its 17 call sites | todo | `EnsureHome` runs only at claim | |
+| R1.2 | Delete browser WebMCP: `agent.html`, `agent-page.js`, `agent-connection.js`, `webmcp.js`, `ParticipantArrivalController`, their two browser tests, `scripts/prove-webmcp-http.mjs`, `docs/WEBMCP.md`, WebMCP evidence; rewrite WebMCP passages in PRODUCT, the experience API spec, atmospheres and OPERATING | done | No WebMCP references remain; browser suite green | `b69e984`: browser 140/140; server build green (no .NET test referenced the arrival endpoint); greenfield WebMCP 0, total 2,711 |
+| R1.3 | Create the home Tangent at claim; remove `EnsureHome` from its 17 call sites; keep one onboarding path by deleting `Create`'s home special case, `TangentsResponse.SetupRequired`, the unread `ServerSettings.SetupRequired` and the `rooms.js` home-key form (see N-016) | done | Reads create nothing; claim creates the home Tangent; onboarding happens only through `/onboarding/` | .NET 461/473, failures = the 12 known (2 new tests: claim creates the home Tangent; onboarding names it and its key stays taken); browser 139/139 (home-key form test removed); `EnsureHome` 17 → 0; greenfield bootstrap 0, total 2,691; server C# 13,427 |
 | R1.4 | Delete pre-multi-Tangent branches (`tangent is null` paths, `LegacyRoomsAssigned`) and the digest's non-facet mention parser (`ExperienceMentions`, `ResolvesUnambiguously`, `ExperienceMentionTests`) | todo | No such paths remain; the digest uses facets only | |
 | R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, BouncyCastle and CBOR packages, the fixture-network launch path and configuration (see N-014), Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README, DOCKER and OPERATING (see N-015). `SourceDecision` goes in R3.6 | todo | No Spaces types remain; the connector enrolls on a fresh install | |
 | R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | todo | Edit history works without scores | |
@@ -178,12 +178,12 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R1.3 — create the home Tangent at claim; remove `EnsureHome` from reads** (next; not started)
+**R1.4 — delete pre-multi-Tangent branches and the digest's non-facet mention parser** (next; not started)
 
-- [ ] Map the claim and onboarding flow (`ServerGovernance.Claim`, `TangentGovernance.CompleteOnboarding`, `OnboardingController`) and what relies on the home Tangent existing
-- [ ] Create the home Tangent in the same transaction that establishes the Host
-- [ ] Remove `EnsureHome` from its 17 call sites, keeping one creation point
-- [ ] Tests: establishing the Host creates the home Tangent; directory reads create nothing
+- [ ] Inventory the single-Tangent assumptions: `Room.TangentKey`'s `home` default and `Room.Create`'s default Tangent parameter, the `tangent is null` branches in `Room.CurrentPolicy` and `TangentRoleAccess.ProjectTopic`, `LegacyRoomsAssigned`, and the tests that rely on them (for example `CommunityRulesTests` line 62)
+- [ ] Every Topic names its Tangent: remove the defaults; a missing Tangent denies
+- [ ] Delete `LegacyRoomsAssigned`
+- [ ] Digest mentions come from facets only: delete `ExperienceMentions`, `ResolvesUnambiguously` and `ExperienceMentionTests`
 - [ ] .NET suite equals the known failures; greenfield check; commit
 
 Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, then `pwsh scripts/check-greenfield.ps1`.
@@ -204,21 +204,21 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 
 ## Metrics
 
-| Measure | Baseline (`d682c26`) | Now (after R1.2) | Target |
+| Measure | Baseline (`d682c26`) | Now (after R1.3) | Target |
 |---|---|---|---|
-| Server C# lines | 16,830 | 13,475 | about 11,000 |
+| Server C# lines | 16,830 | 13,427 | about 11,000 |
 | Authenticated API families | 5 | 4 | 1 |
 | Persisted entity types | 30 | 28 | about 20 |
 | Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 47 / 31 | 0 |
 | `EntityContext.Transaction` outside the pipeline | 41 | 41 | 0 |
 | `bool authorized` parameters | 9 | 9 | 0 |
-| `EnsureHome` call sites | 17 | 17 | 1 |
+| `EnsureHome` call sites | 17 | 0 | 0 |
 | `Mcp` folder lines | 3,697 | 364 (enrollment) | 0 |
-| Greenfield findings (lines): total | 4,132 | 2,711 | 0 |
+| Greenfield findings (lines): total | 4,132 | 2,691 | 0 |
 | — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 32 / 0 / 211 / 38 | 0 |
-| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 2,387 / 25 / 18 | 0 |
-| .NET tests | 506 of 518 (12 known failures) | 459 of 471 (the same 12; R1.1) | all pass |
-| Browser tests | 170 of 170 | 140 of 140 | all pass |
+| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 2,385 / 25 / 0 | 0 |
+| .NET tests | 506 of 518 (12 known failures) | 461 of 473 (the same 12) | all pass |
+| Browser tests | 170 of 170 | 139 of 139 | all pass |
 | Connector tests | 98 of 98 | not re-run (no connector change) | all pass |
 
 Recompute with the commands in note N-008 and the greenfield check.
@@ -268,6 +268,7 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-013** (R1.1) The .NET suite went from 518 to 471 tests: transport-only tests were removed; tests for `References` and `OperationReceipt` were added. Operation ids for new receipts now start with `op-`.
 - **N-014** (R1.2) `scripts/server-lifecycle.ps1` names its connector build step with `Mcp` identifiers (2 greenfield lines). Rename them to connector wording in R1.5, which already edits the launch scripts' fixture paths.
 - **N-015** (R1.2) `docs/OPERATING.md` predates Docker operation and mixes participant-runner and Spaces recovery content. R1.5 and R1.7 remove those parts; anything still useful merges into `docs/DOCKER.md` and OPERATING is deleted.
+- **N-016** (R1.3) Onboarding had two paths: `/onboarding/` (`CompleteOnboarding`) and a `rooms.js` form that pre-filled the key `home` and relied on `Create` quietly editing the placeholder, driven by `TangentsResponse.SetupRequired`. Only the first remains, and `SiteWelcome.Onboarding` is the single onboarding state. `ServerSettings.SetupRequired` had no reader and was removed. `Claim` creates the home Tangent after its validations, so reads no longer write. `docs/handoff/RUNBOOK.md` still queries removed fields; it goes in R6.6 (N-011).
 
 ## Findings to route
 
@@ -285,8 +286,9 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - Leo accepted every recommendation and set two standing rules: cleanup of deprecated content is mandatory; code must read greenfield.
 - R0 (`ea55313`): branch and archive tag; ADR 0011, ARCHITECTURE and the greenfield check; EPIC-006 reconciled; README, AGENTS, DECISIONS and CURRENT_STATE updated. Baseline: .NET 506/518 with 12 known failures; browser 170/170; connector 98/98; greenfield 4,132.
 - R1.1 (`f7192d7`): inbound MCP transport removed and its live pieces renamed; .NET 459/471 with only the 12 known failures; server C# 13,546 lines.
-- R1.2: browser WebMCP removed; browser 140/140; greenfield 2,711.
-- Next: R1.3.
+- R1.2 (`b69e984`): browser WebMCP removed; browser 140/140; greenfield 2,711.
+- R1.3: the home Tangent is created at claim; reads no longer write; one onboarding path. .NET 461/473 with only the 12 known failures; browser 139/139; greenfield 2,691.
+- Next: R1.4.
 
 ## Evidence index
 

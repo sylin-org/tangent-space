@@ -211,6 +211,38 @@ public sealed class HumanHostAccountabilityTests
         Assert.Equal(ParticipantClassification.Agent, (await Participant.Get(agent, fixture.Ct))!.Classification);
     }
 
+    [Fact]
+    public async Task Claim_creates_the_home_Tangent_and_reads_create_nothing()
+    {
+        using var fixture = new Fixture();
+        var owner = await fixture.Enroll(OwnerDid);
+        await fixture.Tangents.List(owner, fixture.Ct);
+        using (EntityContext.NoCache())
+            Assert.Null(await TangentCommunity.Get(TangentCommunity.HomeKey, fixture.Ct));
+
+        await fixture.Server.Claim(owner, OwnerDid, true, fixture.Ct);
+
+        using var fresh = EntityContext.NoCache();
+        var home = await TangentCommunity.Get(TangentCommunity.HomeKey, fixture.Ct);
+        Assert.Equal(owner, home!.OwnerParticipantId);
+        Assert.False(home.SetupComplete);
+    }
+
+    [Fact]
+    public async Task Onboarding_names_the_home_Tangent_and_its_key_stays_taken()
+    {
+        using var fixture = new Fixture();
+        var owner = await fixture.Enroll(OwnerDid);
+        await fixture.Server.Claim(owner, OwnerDid, true, fixture.Ct);
+
+        var home = await fixture.Tangents.CompleteOnboarding(owner, "Porch", "Where conversations start.", skip: false, fixture.Ct);
+        var error = await Assert.ThrowsAsync<TangentRuleViolation>(() =>
+            fixture.Tangents.Create(owner, TangentCommunity.HomeKey, "Another", null, null, null, null, fixture.Ct));
+
+        Assert.Equal((TangentCommunity.HomeKey, "Porch"), (home.Key, home.Name));
+        Assert.Equal(TangentDenial.AlreadyExists, error.Denial);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly IHost host;

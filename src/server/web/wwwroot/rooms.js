@@ -207,14 +207,6 @@
     cardArtwork(preview, value);
     preview.append(...cardContents(value));
   }
-  function configureCreateForm() {
-    const form = $('create-tangent'); if (!form) return;
-    const key = field('create-tangent', 'key'), home = currentTangents().find(tangent => tangent.key === 'home');
-    const onboarding = !!site?.tangents?.setupRequired && !!site?.tangents?.canCreate;
-    if (onboarding) { key.value = 'home'; key.readOnly = true; if (home) { field('create-tangent', 'name').value ||= home.name || ''; field('create-tangent', 'description').value ||= home.description || ''; field('create-tangent', 'motto').value ||= home.motto || ''; field('create-tangent', 'accent').value = home.accent || '#d88957'; field('create-tangent', 'artwork').value ||= home.artwork || ''; } }
-    else { if (key.readOnly) key.value = ''; key.readOnly = false; }
-    renderCreatePreview();
-  }
   function openTangentEditor(tangent) {
     const form = $('edit-tangent-form'); if (!form) return;
     $('edit-tangent-form').dataset.artworkKey = tangent.key;
@@ -228,7 +220,7 @@
     document.querySelectorAll('.tangent-card').forEach(card => card.setAttribute('aria-current', String(card.dataset.key === tangent.key)));
     listRooms({ rooms: channels });
     text('rooms-heading', route().kind === 'topics' ? 'Conversations' : tangent.name || 'Topics');
-    show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || tangent.canManage || tangent.isOwner || tangent.canCreateTopic === true));
+    show('community-settings', !!(site?.tangents?.canCreate || site?.participant?.isOwner || tangent.canManage || tangent.isOwner || tangent.canCreateTopic === true));
     show('site-setup', site?.participant?.isOwner === true || tangent.canCreateTopic === true || can(tangent, 'createTopic'));
     show('tangent-members', !!(tangent.canManage || tangent.isOwner));
     $('tangent-admin-choice').hidden = !tangent.isOwner;
@@ -262,12 +254,12 @@
     if (routeTangent && !tangentByKey.has(routeTangent.key)) tangentByKey.set(routeTangent.key, routeTangent);
     text('no-tangents', site?.participant ? 'No Tangents are available to this account yet.' : 'Sign in to discover the Tangents available to you.');
     show('no-tangents', !tangents.length);
-    show('tangent-setup', !!site?.tangents?.setupRequired || !!site?.tangents?.canCreate);
+    show('tangent-setup', !!site?.tangents?.canCreate);
     show('create-tangent-open', !!site?.participant && !!site?.tangents?.canCreate && site?.onboarding === 'complete');
     const active = tangentByKey.get(activeTangentKey);
-    show('community-settings', !!(site?.tangents?.setupRequired || site?.tangents?.canCreate || site?.participant?.isOwner || active?.canManage || active?.isOwner || active?.canCreateTopic === true));
+    show('community-settings', !!(site?.tangents?.canCreate || site?.participant?.isOwner || active?.canManage || active?.isOwner || active?.canCreateTopic === true));
     show('site-setup', site?.participant?.isOwner === true || active?.canCreateTopic === true || can(active, 'createTopic'));
-    configureCreateForm();
+    renderCreatePreview();
     tangentNextPage = site?.tangents?.nextPage;
     show('more-tangents', !!tangentNextPage);
     const incomplete = site?.tangents?.directoryIncomplete || site?.tangents?.channelsIncomplete;

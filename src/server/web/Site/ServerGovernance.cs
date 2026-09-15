@@ -1,5 +1,6 @@
 using Koan.Data.Core;
 using TangentSpace.Activity;
+using TangentSpace.Communities;
 using TangentSpace.Infrastructure;
 using TangentSpace.Participants;
 using TangentSpace.Rooms;
@@ -33,7 +34,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await EntityContext.Commit(ct);
             return new ServerSettings(site?.Name ?? "", site?.WelcomeMessage ?? "", site?.Motd ?? "",
                 site?.AllowAgentTangentOwnership ?? false,
-                site?.OwnerParticipantId ?? "", canManage, site is null, !declared && HumanHostAccountability.CanClaim(participant) && configured, Permissions.Server(owner, canCreate), site?.Byline ?? "", site?.CoverImageUrl ?? "", site?.BackgroundScene ?? "galaxy", site?.BackgroundColor ?? "", site?.BackgroundIntensity ?? 35, site?.BackgroundMotion ?? true, site?.BackgroundMouseSpotlight ?? true);
+                site?.OwnerParticipantId ?? "", canManage, !declared && HumanHostAccountability.CanClaim(participant) && configured, Permissions.Server(owner, canCreate), site?.Byline ?? "", site?.CoverImageUrl ?? "", site?.BackgroundScene ?? "galaxy", site?.BackgroundColor ?? "", site?.BackgroundIntensity ?? 35, site?.BackgroundMotion ?? true, site?.BackgroundMouseSpotlight ?? true);
         }
         finally { gate.Exit(); }
     }
@@ -55,6 +56,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
                 throw new InvalidOperationException("A known agent cannot reserve human server ownership.");
             if (site is not null && !site.IsOwner(actorId))
                 throw new InvalidOperationException("Server ownership is already claimed.");
+            var establishing = site is null;
             if (site is null)
             {
                 if (verifiedAtprotoDid is null)
@@ -70,11 +72,13 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await participant.Save(ct);
             site.HumanDeclared = true;
             await site.Save(ct);
+            // The Host and its home Tangent are established together; the owner names it during onboarding.
+            if (establishing) await TangentCommunity.Home(site).Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             result = new ServerSettings(site.Name, site.WelcomeMessage, site.Motd, site.AllowAgentTangentOwnership,
-                site.OwnerParticipantId, true, false, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
+                site.OwnerParticipantId, true, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
         }
         finally { gate.Exit(); }
         await roleAccess.EnsureOwner(result.OwnerParticipantId, ct);
@@ -122,7 +126,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             return new ServerSettings(site.Name, site.WelcomeMessage, site.Motd, site.AllowAgentTangentOwnership,
-                site.OwnerParticipantId, true, false, false, Permissions.Server(site.IsOwner(actorId)), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
+                site.OwnerParticipantId, true, false, Permissions.Server(site.IsOwner(actorId)), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
         }
         finally { gate.Exit(); }
     }
@@ -203,7 +207,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
 }
 
 public sealed record ServerSettings(string Name, string WelcomeMessage, string Motd,
-    bool AllowAgentTangentOwnership, string OwnerParticipantId, bool CanManage, bool SetupRequired, bool CanClaim,
+    bool AllowAgentTangentOwnership, string OwnerParticipantId, bool CanManage, bool CanClaim,
     PermissionView? Permissions = null, string Byline = "", string CoverImageUrl = "",
     string BackgroundScene = "galaxy", string BackgroundColor = "", int BackgroundIntensity = 35, bool BackgroundMotion = true, bool BackgroundMouseSpotlight = true);
 public sealed record ServerSettingsPatch(string? Name = null, string? WelcomeMessage = null, string? Motd = null,

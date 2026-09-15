@@ -358,7 +358,6 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            await TangentBootstrap.EnsureHome(site, clock, ct);
             var tangent = await TangentCommunity.Get(tangentKey, ct)
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var actor = await Participant.Get(actorId, ct)
@@ -642,7 +641,6 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
     private async Task<(Room Room, RoomPolicy Policy)> RoomWithPolicy(string actorId, string roomKey, string? expectedTangentKey, CancellationToken ct)
     {
         var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-        await TangentBootstrap.EnsureHome(site, clock, ct);
         var room = await Room.Get(roomKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested channel does not exist.");
         if (expectedTangentKey is not null && room.TangentKey != expectedTangentKey)
             throw new TangentRuleViolation(TangentDenial.InvalidInput, "The channel does not belong to this Tangent.");

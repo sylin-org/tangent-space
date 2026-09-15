@@ -30,7 +30,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            await TangentBootstrap.EnsureHome(site, clock, ct);
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
             var result = await Room.AllWithCount(directoryQuery.WithPagination(page, RoomConstants.PageSize), ct);
             var now = clock.GetUtcNow();
@@ -70,7 +69,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            await TangentBootstrap.EnsureHome(site, clock, ct);
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
             var tangent = await TangentCommunity.Get(tangentKey, ct);
             if (tangent is null || participant?.IsSuspended == true) return new TangentChannelDirectory([], page, null);
@@ -191,7 +189,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            await TangentBootstrap.EnsureHome(site, clock, ct);
             var room = await Room.Get(roomKey, ct)
                 ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The requested Topic does not exist.");
             if (expectedTangentKey is not null && room.TangentKey != expectedTangentKey)
@@ -261,7 +258,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            await TangentBootstrap.EnsureHome(site, clock, ct);
             var room = await Room.Get(roomKey, ct);
             var membership = room is null || actorId is null ? null
                 : await RoomMembership.Get(RoomMembership.Key(roomKey, actorId), ct);
@@ -294,7 +290,6 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-            await TangentBootstrap.EnsureHome(site, clock, ct);
             // Administration targets arrive as external identifiers and resolve to participant ids here.
             var targetId = targetIdentifier is null ? null
                 : (await directory.ByIdentifier(targetIdentifier, ct))?.Participant.Id

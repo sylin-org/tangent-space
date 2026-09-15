@@ -110,16 +110,6 @@ test('server recovery shows permission guidance and reconnect link without autom
   assert.equal(f.requests.filter(request => request.method === 'POST').length, 0);
 });
 
-test('fresh owner setup is bound to the persisted home key, then returns to an editable blank key', async () => {
-  const f = fixture();
-  const home = { tangents: [{ key: 'home', name: '', description: '', motto: '', accent: '#d88957', artwork: '', channels: [] }], canCreate: true, setupRequired: true };
-  f.welcome('did:plc:owner', 'home', home); await settle();
-  const key = f.get('create-tangent').elements.namedItem('key');
-  assert.equal(key.value, 'home'); assert.equal(key.readOnly, true);
-  f.welcome('did:plc:owner', 'home', { tangents: [{ ...home.tangents[0], name: 'Home' }], canCreate: true, setupRequired: false }); await settle();
-  assert.equal(key.value, ''); assert.equal(key.readOnly, false);
-});
-
 const ownerRoom = {
   tangentKey: 'home', topic: 'Saved description', admission: 'InvitationOnly', readAudience: 'Restricted',
   canManage: true, canAppointManagers: true, allowPostEditing: false, isLocked: false

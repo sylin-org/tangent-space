@@ -9,7 +9,7 @@ public sealed record TangentDescription(string Key, string Name, string Descript
     TangentAdmission Admission = TangentAdmission.Invite, bool MembershipPending = false,
     bool CanCreateTopic = false, PermissionView? Permissions = null);
 
-public sealed record TangentsResponse(IReadOnlyList<TangentDescription> Tangents, bool CanCreate, bool SetupRequired,
+public sealed record TangentsResponse(IReadOnlyList<TangentDescription> Tangents, bool CanCreate,
     int Page = 1, int? NextPage = null, bool DirectoryIncomplete = false);
 
 public sealed record TangentChannelCreation(RoomAdministrationResult Result, RoomDescription? Channel);

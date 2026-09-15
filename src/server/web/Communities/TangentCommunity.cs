@@ -55,10 +55,11 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
             PolicyRevision = 1, SetupComplete = true };
     }
 
-    internal static TangentCommunity Home(TangentSite site, DateTimeOffset now) => new()
+    /// <summary>The first Tangent, established with the Host and named by its owner during onboarding.</summary>
+    internal static TangentCommunity Home(TangentSite site) => new()
     {
-        Id = HomeKey, Name = site.Name, Description = "", Motto = "", Accent = "", Artwork = "", OwnerParticipantId = site.OwnerParticipantId,
-        OpenToSignedIn = true, CreatedAt = site.EstablishedAt == default ? now : site.EstablishedAt, UpdatedAt = now, PolicyRevision = 1
+        Id = HomeKey, Name = site.Name, OwnerParticipantId = site.OwnerParticipantId, OpenToSignedIn = true,
+        CreatedAt = site.EstablishedAt, UpdatedAt = site.EstablishedAt, PolicyRevision = 1
     };
 
     public void Change(string actorDid, string? name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)
