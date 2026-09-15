@@ -7,7 +7,6 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="../../../docs/design/tangent-mcp/tools.json" LogicalName="TangentSpace.Mcp.Contracts.tools.json" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="[2.7.0]" />
     <PackageReference Include="System.Formats.Cbor" Version="[10.0.5]" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />

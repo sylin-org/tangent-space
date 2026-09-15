@@ -4,9 +4,8 @@ namespace TangentSpace.Participants;
 
 /// <summary>Exact participant resolution over the identity collection: `did:*` and
 /// `tangent:local:*` are exact identity-value lookups, anything else is a handle matched
-/// against identity-entry labels. The label rule is the twin of CompanionIdentity.Matches in
-/// TangentSpace.Mcp — trimmed, one optional leading @, OrdinalIgnoreCase against the stored
-/// label; identity values compare Ordinal. Misses are honest: never fuzzy, and a label held
+/// against identity-entry labels: trimmed, one optional leading @, OrdinalIgnoreCase against the
+/// stored label; identity values compare Ordinal. Misses are honest: never fuzzy, and a label held
 /// by more than one participant resolves to nothing.</summary>
 public static class ParticipantLookup
 {

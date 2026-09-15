@@ -136,7 +136,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     public void The_stdio_mcp_intake_negotiates_and_serves_the_full_flow()
     {
         Run("enroll", "--name", "agent", "--server", app.Origin, "--token-file", credentialFile);
-        using var peer = McpPeer.Start(ConnectorBinary(), home);
+        using var peer = ConnectorPeer.Start(ConnectorBinary(), home);
         var initialize = peer.Call("initialize", new
         {
             protocolVersion = "2025-06-18",
@@ -164,21 +164,21 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>A minimal stdio JSON-RPC client over the connector's real transport.</summary>
-    private sealed class McpPeer : IDisposable
+    private sealed class ConnectorPeer : IDisposable
     {
         private readonly Process process;
         private readonly StreamReader output;
         private readonly StreamWriter input;
         private int nextId = 1;
 
-        private McpPeer(Process process, StreamReader output, StreamWriter input)
+        private ConnectorPeer(Process process, StreamReader output, StreamWriter input)
         {
             this.process = process;
             this.output = output;
             this.input = input;
         }
 
-        public static McpPeer Start(string binary, string home)
+        public static ConnectorPeer Start(string binary, string home)
         {
             var information = new ProcessStartInfo(binary)
             {
@@ -193,7 +193,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
             information.Environment["TANGENT_CONNECTOR_PLAINTEXT_CREDENTIALS"] = "1";
             var process = Process.Start(information)!;
             _ = process.StandardError.ReadToEndAsync(); // drain to avoid pipe blocking
-            return new McpPeer(process, process.StandardOutput, process.StandardInput);
+            return new ConnectorPeer(process, process.StandardOutput, process.StandardInput);
         }
 
         public JsonElement Call(string method, object parameters)

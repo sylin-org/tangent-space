@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Koan.Identity;
 using Koan.Identity.Web.Initialization;
+using TangentSpace.Application;
 using TangentSpace.Authorization;
 using TangentSpace.Site;
 using TangentSpace.Rooms;
@@ -19,7 +20,6 @@ using TangentSpace.Participation;
 using TangentSpace.Conversation;
 using TangentSpace.Communities;
 using TangentSpace.Activity;
-using TangentSpace.Mcp;
 using TangentSpace.Mcp.Authentication;
 using TangentSpace.Moderation;
 
@@ -43,6 +43,8 @@ public sealed class TangentModule : KoanModule
         services.AddOptions<SiteOptions>().BindConfiguration(TangentConstants.SiteConfiguration)
             .Validate(o => !string.IsNullOrWhiteSpace(o.Name) && o.Name.Length <= 120, "Set Tangent:Site:Name to a name of 1–120 characters.")
             .Validate(o => string.IsNullOrWhiteSpace(o.OwnerDid) || IdentityResolver.IsValidDid(o.OwnerDid), "Tangent:Site:OwnerDid must be blank for first-login ownership, or a valid AT DID.")
+            .Validate(o => string.IsNullOrWhiteSpace(o.PublicOrigin) || SiteOptions.IsCanonicalOrigin(o.PublicOrigin, out _),
+                "Tangent:Site:PublicOrigin must be a canonical absolute origin like https://tangent.example.")
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
@@ -71,7 +73,8 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<ServiceAuthentication>();
         services.AddParticipation();
         services.AddTangentMcpAuthentication();
-        services.AddTangentMcp();
+        services.AddSingleton<References>();
+        services.AddSingleton<OperationReceipts>();
         services.AddSingleton<ConversationService>();
         services.AddSingleton<ActivityService>();
         services.AddSingleton<LiveSessions>();

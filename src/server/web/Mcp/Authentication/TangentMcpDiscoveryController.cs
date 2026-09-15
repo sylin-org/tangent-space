@@ -3,13 +3,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using TangentSpace.AtProtocol;
 using TangentSpace.Participation;
+using TangentSpace.Site;
 
 namespace TangentSpace.Mcp.Authentication;
 
-/// <summary>Public discovery for the named application proof-exchange profile. Advertises the configured
-/// canonical public origin and audience; it is not a claim of standard MCP OAuth authorization-server support.</summary>
+/// <summary>Public discovery for service-proof enrollment: the configured canonical public origin and the
+/// proof audience and method the connector must request.</summary>
 [ApiController, AllowAnonymous, Route(McpAuthenticationConstants.DiscoveryRoute)]
-public sealed class TangentMcpDiscoveryController(IOptions<SpacesOptions> spaces, IOptions<Mcp.McpOptions> mcp) : ControllerBase
+public sealed class TangentMcpDiscoveryController(IOptions<SpacesOptions> spaces, IOptions<SiteOptions> site) : ControllerBase
 {
     [HttpGet]
     public IActionResult Discover()
@@ -18,14 +19,13 @@ public sealed class TangentMcpDiscoveryController(IOptions<SpacesOptions> spaces
         var audience = spaces.Value.ManagingApp;
         if (string.IsNullOrWhiteSpace(audience))
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "exchange_unconfigured" });
-        // The canonical origin comes from configuration (Tangent:Mcp:PublicBaseUrl), never from the request Host.
-        if (!McpOptionsValidation.IsCanonicalOrigin(mcp.Value.PublicBaseUrl, out var origin))
+        // The canonical origin comes from configuration (Tangent:Site:PublicOrigin), never from the request Host.
+        if (!SiteOptions.IsCanonicalOrigin(site.Value.PublicOrigin, out var origin))
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "public_origin_unconfigured" });
         return Ok(new
         {
             protocolVersion = McpAuthenticationConstants.ProtocolVersion,
             authenticationProfile = McpAuthenticationConstants.Profile,
-            standardMcpOAuthAuthorizationSupport = false,
             serviceProof = new
             {
                 method = McpAuthenticationConstants.ExchangeMethod,
@@ -34,7 +34,6 @@ public sealed class TangentMcpDiscoveryController(IOptions<SpacesOptions> spaces
                 transport = "authorization_header",
                 endpoint = origin + "/" + McpAuthenticationConstants.TokenRoute
             },
-            endpoints = new { mcp = origin + "/mcp", token = origin + "/" + McpAuthenticationConstants.TokenRoute },
             credentials = new
             {
                 type = "tangent_participant_token",

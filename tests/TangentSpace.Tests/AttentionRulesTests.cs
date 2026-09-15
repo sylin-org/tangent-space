@@ -4,8 +4,8 @@ using Xunit;
 
 namespace TangentSpace.Tests;
 
-/// <summary>Rule tests for companion attention: own-message exclusion, watch state, priority, and read independence.</summary>
-public sealed class McpAttentionTests
+/// <summary>Rule tests for participant attention: own-message exclusion, watch state, priority, and read independence.</summary>
+public sealed class AttentionRulesTests
 {
     private const string Watcher = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
     private const string Author = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";

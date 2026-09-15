@@ -33,7 +33,7 @@ namespace TangentSpace.Tests;
 // Shares the ambient-host collection with the experience integration tests: both set
 // AppHost.Current and must never run concurrently.
 [Xunit.Collection("Experience integration")]
-public sealed class McpAuthenticationTests
+public sealed class EnrollmentTests
 {
     private const string ManagingApp = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb#tangent";
     private const string Authority = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
@@ -297,7 +297,7 @@ public sealed class McpAuthenticationTests
         await fixture.Exchange.Exchange(Bearer(fixture.Keys, owner), null, CancellationToken.None);
         var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
         var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
-        var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Mcp.McpRequests>();
+        var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Application.OperationReceipts>();
         var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         await tangents.Create(await Pid(owner), "atomic-invites", "Atomic invitations", null, null, null, null, CancellationToken.None);
@@ -333,7 +333,7 @@ public sealed class McpAuthenticationTests
         await fixture.Exchange.Exchange(Bearer(fixture.Keys, owner), null, CancellationToken.None);
         var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
         var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
-        var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Mcp.McpRequests>();
+        var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Application.OperationReceipts>();
         var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         await tangents.Create(await Pid(owner), "atomic-rollback", "Atomic rollback", null, null, null, null, CancellationToken.None);
@@ -459,40 +459,6 @@ public sealed class McpAuthenticationTests
             Assert.Equal(await Pid(owner), (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerParticipantId);
     }
 
-    [Fact]
-    public async Task Companion_and_context_bindings_are_distinct_and_cannot_cross_credentials_or_servers()
-    {
-        await using var fixture = await HostFixture.StartAsync();
-        const string did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
-        var first = await fixture.Exchange.Exchange(Bearer(fixture.Keys, did), null, CancellationToken.None);
-        var second = await fixture.Exchange.Exchange(Bearer(fixture.Keys, did), null, CancellationToken.None);
-        var credentials = fixture.Host.Services.GetRequiredService<ParticipationCredentials>();
-        var principal = (await credentials.Authenticate(first.Issued!.Token, CancellationToken.None))!;
-        var other = (await credentials.Authenticate(second.Issued!.Token, CancellationToken.None))!;
-        var contexts = fixture.Host.Services.GetRequiredService<TangentSpace.Mcp.McpContexts>();
-        var selected = await contexts.Select(principal, did, CancellationToken.None);
-        Assert.StartsWith("cmp_", selected.Companion.Id);
-        await Assert.ThrowsAsync<TangentSpace.Mcp.McpContextExpiredException>(() => contexts.Resolve(principal, selected.Companion.Id, CancellationToken.None));
-        await Assert.ThrowsAsync<TangentSpace.Mcp.McpContextExpiredException>(() => contexts.SelectionOf(other, selected.Companion.Id, CancellationToken.None));
-        var arrived = await contexts.Bind(selected.Companion, CancellationToken.None);
-        Assert.StartsWith("ctx_", arrived.Context.Id);
-        Assert.Equal(selected.Companion.Id, arrived.Context.CompanionId);
-        Assert.Equal("http://127.0.0.1:5220", arrived.Context.Origin);
-        Assert.Equal(arrived.Context.Id, (await contexts.Bind(selected.Companion, CancellationToken.None)).Context.Id);
-        await Assert.ThrowsAsync<TangentSpace.Mcp.McpContextExpiredException>(() => contexts.Resolve(other, arrived.Context.Id, CancellationToken.None));
-        using (EntityContext.NoCache())
-        {
-            var saved = await TangentSpace.Mcp.McpContext.Get(arrived.Context.Id, CancellationToken.None);
-            saved!.Origin = "https://another.tangent.example";
-            await saved.Save(CancellationToken.None);
-        }
-        await Assert.ThrowsAsync<TangentSpace.Mcp.McpContextExpiredException>(() => contexts.Resolve(principal, arrived.Context.Id, CancellationToken.None));
-        var cookie = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(AtprotoClaimTypes.Did, did), new Claim(ParticipationConstants.ParticipantClaim, await Pid(did))], "atproto"));
-        await credentials.Revoke(cookie, first.Issued.Credential.Id, CancellationToken.None);
-        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() => contexts.SelectionOf(principal, selected.Companion.Id, CancellationToken.None));
-    }
-
     private sealed class HostFixture : IAsyncDisposable
     {
         public required IntegrationHost Host { get; init; }
@@ -502,15 +468,15 @@ public sealed class McpAuthenticationTests
         public static async Task<HostFixture> StartAsync(string? databasePath = null, string ownerDid = "did:plc:mcptestowneraaaaaaaaaaa")
         {
             var keys = new ProofKeys();
-            var root = Path.Combine(Path.GetTempPath(), "TangentSpace-McpAuth", Guid.CreateVersion7().ToString("n"));
+            var root = Path.Combine(Path.GetTempPath(), "TangentSpace-Enrollment", Guid.CreateVersion7().ToString("n"));
             Directory.CreateDirectory(root);
             var database = databasePath ?? Path.Combine(root, "proofs.sqlite");
             var host = await KoanIntegrationHost.Configure()
                 .WithSettings(new Dictionary<string, string?>
                 {
-                    ["Tangent:Site:Name"] = "MCP Proof Test Site",
+                    ["Tangent:Site:Name"] = "Enrollment Test Site",
                     ["Tangent:Site:OwnerDid"] = ownerDid,
-                    ["Tangent:Mcp:PublicBaseUrl"] = "http://127.0.0.1:5220",
+                    ["Tangent:Site:PublicOrigin"] = "http://127.0.0.1:5220",
                     ["Tangent:Spaces:AuthorityDid"] = Authority,
                     ["Tangent:Spaces:ManagingApp"] = ManagingApp,
                     ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
@@ -542,7 +508,7 @@ public sealed class McpAuthenticationTests
 
     private sealed class TestWebHostEnvironment(string root) : IWebHostEnvironment
     {
-        public string ApplicationName { get; set; } = nameof(McpAuthenticationTests);
+        public string ApplicationName { get; set; } = nameof(EnrollmentTests);
         public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
         public string WebRootPath { get; set; } = Path.Combine(root, "wwwroot");
         public string EnvironmentName { get; set; } = "Testing";
@@ -761,8 +727,8 @@ public sealed class McpAuthenticationTests
     public void Discovery_pins_the_configured_origin_audience_and_profile()
     {
         var spaces = new SpacesOptions { AuthorityDid = Authority, ManagingApp = ManagingApp };
-        var mcp = new TangentSpace.Mcp.McpOptions { PublicBaseUrl = "http://127.0.0.1:5220" };
-        var controller = new TangentMcpDiscoveryController(Options.Create(spaces), Options.Create(mcp))
+        var site = new TangentSpace.Site.SiteOptions { PublicOrigin = "http://127.0.0.1:5220" };
+        var controller = new TangentMcpDiscoveryController(Options.Create(spaces), Options.Create(site))
         {
             ControllerContext = new ControllerContext
             {
@@ -772,17 +738,16 @@ public sealed class McpAuthenticationTests
         var ok = Assert.IsType<OkObjectResult>(controller.Discover());
         var body = JsonSerializer.Serialize(ok.Value);
         Assert.Contains("http://127.0.0.1:5220/mcp/token", body);
-        Assert.Contains("http://127.0.0.1:5220/mcp", body);
+        Assert.DoesNotContain("\"endpoints\"", body);
         Assert.Contains(McpAuthenticationConstants.ExchangeMethod, body);
         Assert.Contains(ManagingApp, body);
         Assert.Contains(McpAuthenticationConstants.Profile, body);
         Assert.Contains(McpAuthenticationConstants.ProtocolVersion, body);
         Assert.DoesNotContain("evil.example", body);
         Assert.Contains("\"includedInProof\":false", body);
-        Assert.Contains("\"standardMcpOAuthAuthorizationSupport\":false", body);
         Assert.Contains("independently verifies current authority", body);
         Assert.Contains("/api/connections/rooms", body);
-        var unconfiguredAudience = new TangentMcpDiscoveryController(Options.Create(new SpacesOptions()), Options.Create(mcp))
+        var unconfiguredAudience = new TangentMcpDiscoveryController(Options.Create(new SpacesOptions()), Options.Create(site))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -790,7 +755,7 @@ public sealed class McpAuthenticationTests
         foreach (var invalid in new[] { "", "   ", "ftp://example.com", "http://user:pass@127.0.0.1:5220", "http://127.0.0.1:5220/evil", "http://127.0.0.1:5220?x=1" })
         {
             var noOrigin = new TangentMcpDiscoveryController(Options.Create(spaces),
-                Options.Create(new TangentSpace.Mcp.McpOptions { PublicBaseUrl = invalid }))
+                Options.Create(new TangentSpace.Site.SiteOptions { PublicOrigin = invalid }))
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
             };

@@ -80,7 +80,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         {
             ["Tangent:Site:Name"] = "Experience Integration Site",
             ["Tangent:Site:OwnerDid"] = OwnerDid,
-            ["Tangent:Mcp:PublicBaseUrl"] = origin,
+            ["Tangent:Site:PublicOrigin"] = origin,
             ["Tangent:Conversation:Storage"] = storage,
             ["Tangent:Spaces:AuthorityDid"] = "did:plc:experienceauthorityAAA",
             ["Tangent:Spaces:ManagingApp"] = "did:plc:experienceauthorityAAA#tangent",
@@ -96,7 +96,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         builder.Services.AddKoan();
         // The test host's entry assembly is this test project; add the application's
         // controllers explicitly so route discovery matches the deployed app.
-        builder.Services.AddControllers().AddApplicationPart(typeof(TangentSpace.Mcp.McpController).Assembly);
+        builder.Services.AddControllers().AddApplicationPart(typeof(Program).Assembly);
         var app = builder.Build();
         app.Urls.Add(origin);
         await app.StartAsync();

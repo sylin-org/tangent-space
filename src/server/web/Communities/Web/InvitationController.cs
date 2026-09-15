@@ -2,14 +2,13 @@ using System.Net;
 using Koan.Data.Core;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TangentSpace.Communities;
 using TangentSpace.Participation;
 
-namespace TangentSpace.Mcp;
+namespace TangentSpace.Communities.Web;
 
 /// <summary>Invitations are links to review, never GET requests that silently join an account.</summary>
 [ApiController, Route("invite/{invitationId}"), RequestSizeLimit(1024)]
-public sealed class McpInvitationController(TangentServer hub, TimeProvider clock) : ControllerBase
+public sealed class InvitationController(TangentServer hub, TimeProvider clock) : ControllerBase
 {
     private CompanionGovernance companions => hub.Participants;
 
@@ -40,7 +39,7 @@ public sealed class McpInvitationController(TangentServer hub, TimeProvider cloc
     public async Task<IActionResult> Accept(string invitationId, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        // Cookie flow: exact origin + JSON; bearer clients use JoinTangent instead.
+        // Browser flow only: exact origin and JSON. API clients join through the membership endpoint.
         if (Request.Headers.ContainsKey("Authorization") || !Request.HasJsonContentType()
             || Request.Headers.Origin.Count != 1
             || !string.Equals(Request.Headers.Origin.ToString(), $"{Request.Scheme}://{Request.Host}", StringComparison.OrdinalIgnoreCase))

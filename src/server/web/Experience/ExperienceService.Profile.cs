@@ -65,7 +65,7 @@ public sealed partial class ExperienceService
             visibleMessages.Add(message);
             string? replyTo = null;
             posts.Add(new ExperiencePostDto(
-                refs.Message(description.TangentKey, message.RoomKey, message.Id), participantId,
+                refs.Post(description.TangentKey, message.RoomKey, message.Id), participantId,
                 profile.DisplayName ?? label ?? "Participant", message.Removed ? "" : message.Content.Text, replyTo,
                 refs.Origin + "/t/" + Uri.EscapeDataString(description.TangentKey) + "/" + Uri.EscapeDataString(message.Id),
                 Format(message.AcceptedAt), message.EditedAt is { } edited ? Format(edited) : null, message.Removed,

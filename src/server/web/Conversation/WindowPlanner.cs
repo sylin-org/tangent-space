@@ -2,8 +2,8 @@ using System.Text.Json;
 
 namespace TangentSpace.Conversation;
 
-/// <summary>Keeps a complete, contiguous window around the chosen message inside a byte budget.</summary>
-public static class McpWindowPlanner
+/// <summary>Keeps a complete, contiguous window around the chosen post inside a byte budget.</summary>
+public static class WindowPlanner
 {
     public const int ResultBudget = 16 * 1024;
     // Reserve space for references, handles and the three protected continuation strings.
@@ -18,7 +18,7 @@ public static class McpWindowPlanner
         var left = anchorIndex;
         var right = anchorIndex;
         var bytes = EnvelopeReserve + Size(ordered[anchorIndex]);
-        if (bytes > resultBudget) throw new InvalidDataException("The retained message exceeds the supported window budget.");
+        if (bytes > resultBudget) throw new InvalidDataException("The anchor post exceeds the supported window budget.");
         var tryLeft = true;
         var leftBlocked = false;
         var rightBlocked = false;
@@ -44,7 +44,7 @@ public static class McpWindowPlanner
         return ordered.Skip(left).Take(right - left + 1).ToArray();
     }
 
-    private static int Size(Message message)
-        // Includes domain provenance as a conservative bound on the smaller wire message.
-        => JsonSerializer.SerializeToUtf8Bytes(message).Length + 512;
+    private static int Size(Message post)
+        // The stored row is a conservative bound on the smaller wire representation.
+        => JsonSerializer.SerializeToUtf8Bytes(post).Length + 512;
 }

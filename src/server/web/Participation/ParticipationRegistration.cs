@@ -10,7 +10,7 @@ public static class ParticipationRegistration
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<TangentSpace.Hosting.ConsumerRegistrations>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<TangentSpace.Hosting.IRegistration, TangentSpace.Web.WebRegistration>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<TangentSpace.Hosting.IRegistration, TangentSpace.Mcp.McpConsumerRegistration>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<TangentSpace.Hosting.IRegistration, TangentSpace.Hosting.BearerRegistration>());
         services.AddSingleton<ParticipationCredentials>();
         services.AddAuthentication()
             .AddScheme<AuthenticationSchemeOptions, ParticipantAuthenticationHandler>(ParticipationConstants.Scheme, _ => { })

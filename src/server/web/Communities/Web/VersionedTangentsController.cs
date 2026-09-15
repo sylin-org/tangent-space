@@ -137,14 +137,14 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         {
             var actor = ReadActor();
             if (actor is null) return Unauthorized();
-            // Resolve only the anchor key, then let the room policy and McpWindow enforce access.
+            // Resolve only the anchor key, then let the Topic policy and window enforce access.
             Message? message;
             using (EntityContext.NoCache())
                 message = await Message.Get(postId, ct);
             if (message is null) return NotFound();
             var description = await hub.Topics.Describe(actor, message.RoomKey, ct);
             if (description is null || description.TangentKey != tangentId) return NotFound();
-            var window = await hub.Posts.McpWindow(actor, message.RoomKey, null, postId, 25, ct);
+            var window = await hub.Posts.ReadWindow(actor, message.RoomKey, null, postId, 25, ct);
             return Ok(new { topic = description, window });
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }

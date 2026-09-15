@@ -9,7 +9,7 @@ using TangentSpace.Communities;
 using TangentSpace.Conversation;
 using TangentSpace.Participants;
 using TangentSpace.Participation;
-using TangentSpace.Mcp;
+using TangentSpace.Application;
 using TangentSpace.Rooms;
 
 namespace TangentSpace.Experience;
@@ -21,7 +21,7 @@ namespace TangentSpace.Experience;
 /// distinct from mere watched-topic activity.</summary>
 public sealed class ExperienceDigest(
     TangentGovernance tangents, RoomGovernance governance, TimeProvider clock,
-    IDataProtectionProvider protection, McpRefs refs, TangentServer hub)
+    IDataProtectionProvider protection, References refs, TangentServer hub)
 {
     public const int MaximumRooms = 100;
     public const int MaximumUnread = 100;
@@ -217,7 +217,7 @@ public sealed class ExperienceDigest(
         string kind, string? relationship, string? authorHandle)
         => new("att:" + room.Key + ":" + message.Id, kind, message.AuthorParticipantId,
             string.IsNullOrEmpty(authorHandle) ? null : authorHandle, did,
-            refs.Channel(tangentKey, room.Key), refs.Message(tangentKey, room.Key, message.Id),
+            refs.Topic(tangentKey, room.Key), refs.Post(tangentKey, room.Key, message.Id),
             relationship, Preview(message.Content.Text, 160),
             message.SourceCid ?? "seq:" + message.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "pending");

@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TangentSpace.Application;
 using TangentSpace.Experience;
-using TangentSpace.Mcp;
 using TangentSpace.Participation;
 using TangentSpace.Moderation;
 
@@ -114,11 +114,11 @@ public sealed class ExperienceController(ExperienceService experience) : Control
         {
             return Forbid();
         }
-        catch (McpInvalidArgumentsException error)
+        catch (RequestArgumentException error)
         {
             return Problem(ExperienceProblem.Of("invalid_arguments", error.Message, error.Field), 400);
         }
-        catch (McpRequestConflictException error)
+        catch (RequestConflictException error)
         {
             return Problem(ExperienceProblem.Of("request_conflict",
                 $"{error.RequestId} already identifies a different action. Inspect its receipt before creating another action."), 409);

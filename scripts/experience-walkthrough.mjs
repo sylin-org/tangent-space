@@ -48,7 +48,7 @@ async function request(path, { method = 'GET', bearer, cookie, body } = {}) {
 }
 
 // A minimal stdio JSON-RPC peer for the MCP intake.
-class McpPeer {
+class ConnectorPeer {
   constructor(process_) { this.process = process_; this.nextId = 1; this.pending = new Map()
     let buffer = ''
     this.process.stdout.on('data', chunk => {
@@ -170,7 +170,7 @@ step('connector-cli-intake', { calls: cliCalls.map(call => ({ tool: call.tool, e
 
 // 7. Connector, MCP intake: the real stdio transport.
 const serve = spawn(connector, ['serve'], { env: connectorEnvironment, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] })
-const peer = new McpPeer(serve)
+const peer = new ConnectorPeer(serve)
 const initialize = await peer.call('initialize', {
   protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'experience-walkthrough', version: '1' }
 })

@@ -6,7 +6,7 @@ using Koan.Data.Core.Sorting;
 using TangentSpace.Authorization;
 using TangentSpace.Conversation;
 using TangentSpace.Infrastructure;
-using TangentSpace.Mcp;
+using TangentSpace.Application;
 using TangentSpace.Rooms;
 using TangentSpace.Site;
 
@@ -14,7 +14,7 @@ namespace TangentSpace.Moderation;
 
 /// <summary>First accountable case path: report, bounded steward read, defer, or escalate.
 /// It deliberately cannot conceal content or sanction a participant.</summary>
-public sealed class ModerationCaseService(RoomGovernance rooms, McpRefs refs, TimeProvider clock)
+public sealed class ModerationCaseService(RoomGovernance rooms, References refs, TimeProvider clock)
 {
     public const int PageSize = 10;
     public const int MaximumPage = 10_000;
@@ -212,8 +212,8 @@ public sealed class ModerationCaseService(RoomGovernance rooms, McpRefs refs, Ti
     }
 
     private ModerationCaseSummary Summary(ModerationCase item, Message? subject, RoomPolicy policy)
-        => new(refs.Case(item.TangentKey, item.RoomKey, item.Id), refs.Channel(item.TangentKey, item.RoomKey),
-            refs.Message(item.TangentKey, item.RoomKey, item.SubjectMessageId), item.State, item.Revision,
+        => new(refs.Case(item.TangentKey, item.RoomKey, item.Id), refs.Topic(item.TangentKey, item.RoomKey),
+            refs.Post(item.TangentKey, item.RoomKey, item.SubjectMessageId), item.State, item.Revision,
             subject is null ? "unavailable" : SubjectRevision(subject),
             subject is not null && subject.RoomKey == item.RoomKey && !subject.Removed,
             item.Testimonies.Count, item.TestimonySaturated, item.DecisionSaturated,

@@ -8,9 +8,9 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.1 — remove the inbound MCP transport (`doing`: preparing edits) |
-| Next action | Follow the R1.1 steps under [In flight](#in-flight) |
-| Last checkpoint | 2026-09-15 · S-002 · R0 complete and committed on `claude/epic-007-realignment` (commit "docs: accept EPIC-007 and open its work ledger"); no R1 code changed yet |
+| Current task | R1.2 — delete browser WebMCP (`todo`, next) |
+| Next action | Start R1.2: set it to `doing` and follow the steps under [In flight](#in-flight) |
+| Last checkpoint | 2026-09-15 · S-002 · R1.1 complete; committed as "refactor: remove the inbound MCP transport" (R0 is `ea55313`) |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional); the sign-in steps of each slice walkthrough |
 | Blockers | None |
@@ -51,6 +51,7 @@ Status values: `todo` · `doing` · `waiting` (on Leo) · `blocked` · `done` ·
 | Toolchains on this machine | .NET SDK 10.0.401 (`global.json`), Node 24.20.0, Cargo 1.98.1, Docker 29.7.2, PowerShell 7 |
 | New machine | Run `./Build.bat` (or `pwsh scripts/prepare-framework.ps1`) before `dotnet test` |
 | Server | `http://127.0.0.1:5220`; health `/health/ready`; logs `docker compose logs -f tangent` |
+| Public origin | `Tangent:Site:PublicOrigin` (`Tangent__Site__PublicOrigin` in `compose.yaml`) |
 | Connector companion manager | `http://127.0.0.1:5219` (`tangent-connector serve`) |
 | App state | `.local/docker/site`, mounted at `/state` |
 | Build · launch | `./Build.bat` · `./Launch.bat` |
@@ -97,13 +98,13 @@ Accepted by Leo on 2026-09-15 ("Accept all recommendations"). Details in [EPIC-0
 | ID | Task | Status | Done when | Evidence |
 |---|---|---|---|---|
 | R0.1 | Owner decisions D1–D10 | done | Every decision answered | All accepted, 2026-09-15 |
-| R0.2 | ADR 0011, a DECISIONS entry, and supersession notes on ADRs 0001, 0002, 0005, 0006 | done | The ADR records the accepted decisions | `docs/adr/0011-realigned-server-architecture.md` |
-| R0.3 | `docs/ARCHITECTURE.md`: modules, glossary, shared components | done | Glossary follows D7 | `docs/ARCHITECTURE.md` |
-| R0.4 | Reconcile EPIC-006: absorbed, re-homed and paused stories | done | EPIC-006 and its stories link here | EPIC-006 status note; STORIES header |
-| R0.5 | Pointers: README, AGENTS, CURRENT_STATE | done | A fresh reader lands on EPIC-007 | README table, AGENTS epic paragraph, CURRENT_STATE entry |
+| R0.2 | ADR 0011, a DECISIONS entry, and supersession notes on ADRs 0001, 0002, 0005, 0006 | done | The ADR records the accepted decisions | `ea55313` |
+| R0.3 | `docs/ARCHITECTURE.md`: modules, glossary, shared components | done | Glossary follows D7 | `ea55313` |
+| R0.4 | Reconcile EPIC-006: absorbed, re-homed and paused stories | done | EPIC-006 and its stories link here | `ea55313` |
+| R0.5 | Pointers: README, AGENTS, CURRENT_STATE | done | A fresh reader lands on EPIC-007 | `ea55313` |
 | R0.6 | Baseline: full .NET, browser and connector suites; greenfield counts | done | [Metrics](#metrics) filled | .NET 506/518 (12 [known failures](#known-baseline-failures)); browser 170/170; connector 98/98; greenfield 4,132 |
 | R0.7 | Working branch and archive tag | done | Both exist | `claude/epic-007-realignment`; `archive/pre-epic-007` → `d682c26` |
-| R0.8 | `scripts/check-greenfield.ps1` | done | Reports counts per rule | Baseline recorded under Metrics |
+| R0.8 | `scripts/check-greenfield.ps1` | done | Reports counts per rule | `ea55313` |
 
 The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a freshly wiped install; until then the running instance keeps Leo's data.
 
@@ -111,11 +112,11 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 | ID | Task | Status | Done when | Evidence |
 |---|---|---|---|---|
-| R1.1 | Remove the inbound MCP transport. Move live pieces to accurate homes: `McpRefs` → `Application/References`; `McpRequests`, `McpRequestRecord` → `Application/OperationReceipts`, `OperationReceipt`; `McpConsumerRegistration` → `Hosting/BearerRegistration`; `McpOptions.PublicBaseUrl` → `Tangent:Site:PublicOrigin`; the two request exceptions → `Application`; `/invite/{invitationId}` → `Communities/Web/InvitationController`; the `McpWindow` family → Topic-window names. Delete the rest of `Mcp/`, the embedded `tools.json`, `docs/design/tangent-mcp/`, the transport tests and transport evidence; keep and rename tests of live behavior. Enrollment endpoints `/mcp/token` and `/.well-known/tangent-mcp` keep their paths until R6.2 | doing | No `/mcp` route; build green; .NET failures equal the known baseline set; browser and connector suites green | |
-| R1.2 | Delete browser WebMCP: `agent.html`, `agent-page.js`, `agent-connection.js`, `webmcp.js`, `ParticipantArrivalController`, `webmcp.test.mjs`, `agent-connection.test.mjs`, `scripts/prove-webmcp-http.mjs`, `docs/WEBMCP.md`. Keep `agent-entry.js`, `connect.html`, `connect.js` | todo | No WebMCP references remain; browser suite green | |
+| R1.1 | Remove the inbound MCP transport; move its live pieces to accurate homes (`Application/References`, `Application/OperationReceipts`, `Hosting/BearerRegistration`, `Tangent:Site:PublicOrigin`, `Communities/Web/InvitationController`, `TopicWindow`/`WindowPlanner`/`ReadWindow`); delete the rest of `Mcp/`, the embedded `tools.json`, `docs/design/tangent-mcp/`, transport tests and transport evidence | done | No `/mcp` route; build green; .NET failures equal the known set | .NET 459/471, failures = the 12 known; server C# 16,830 → 13,546; `Mcp/` 3,697 → 364 lines (enrollment only); entity types 30 → 28; greenfield 4,132 → 2,850 |
+| R1.2 | Delete browser WebMCP: `agent.html`, `agent-page.js`, `agent-connection.js`, `webmcp.js`, `ParticipantArrivalController`, `webmcp.test.mjs`, `agent-connection.test.mjs`, `scripts/prove-webmcp-http.mjs`, `docs/WEBMCP.md`, WebMCP evidence. Keep `agent-entry.js`, `connect.html`, `connect.js` | todo | No WebMCP references remain; browser suite green | |
 | R1.3 | Create the home Tangent at claim or onboarding; remove `EnsureHome` from its 17 call sites | todo | `EnsureHome` runs only at claim | |
 | R1.4 | Delete pre-multi-Tangent branches (`tangent is null` paths, `LegacyRoomsAssigned`) and the digest's non-facet mention parser (`ExperienceMentions`, `ResolvesUnambiguously`, `ExperienceMentionTests`) | todo | No such paths remain; the digest uses facets only | |
-| R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, BouncyCastle and CBOR packages, the fixture-network launch path and configuration, Spaces probes and scripts, the Spaces status UI in `rooms.js`, Spaces tests, and Spaces passages in README and DOCKER. `SourceDecision` goes in R3.6 | todo | No Spaces types remain; the connector enrolls on a fresh install | |
+| R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, BouncyCastle and CBOR packages, the fixture-network launch path and configuration, Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README and DOCKER. `SourceDecision` goes in R3.6 | todo | No Spaces types remain; the connector enrolls on a fresh install | |
 | R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | todo | Edit history works without scores | |
 | R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph | todo | No references remain | |
 | R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | todo | Walkthrough passes; about 5,000 fewer lines | |
@@ -126,7 +127,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 |---|---|---|---|---|
 | R2.1 | Apply the glossary to domain types, services and strings | todo | Retired vocabulary count is zero for the server | |
 | R2.2 | Split `CompanionGovernance` by responsibility: membership, admission, watches, classification | todo | No file owns unrelated responsibilities | |
-| R2.3 | Move folders into the modules of [ARCHITECTURE](../../ARCHITECTURE.md#modules) | todo | Namespaces match the module map | |
+| R2.3 | Move folders into the modules of [ARCHITECTURE](../../ARCHITECTURE.md#modules), including `Mcp/Authentication` into Identity | todo | Namespaces match the module map | |
 | R2.4 | Rename wire fields such as `channels` in the server, browser and connector together | todo | Connector and browser suites green | |
 | R2.5 | Wipe and verify | todo | Suites and walkthrough green | |
 
@@ -177,21 +178,15 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R1.1 — remove the inbound MCP transport** (S-002)
+**R1.2 — delete browser WebMCP** (next; not started)
 
-- [ ] Confirm which discovery fields the connector reads before changing the discovery document
-- [ ] `Application/References.cs` from `McpRefs`, keeping only members live code uses, with Topic and Post names and new data-protection purposes
-- [ ] `Application/OperationReceipts.cs` and `Application/OperationReceipt.cs` from `McpRequests` and `McpRequestRecord`; `RequestArgumentException` and `RequestConflictException` in `Application`
-- [ ] `Hosting/BearerRegistration.cs`; `ParticipationRegistration` updated
-- [ ] `Tangent:Site:PublicOrigin` on `SiteOptions` with its validation; `compose.yaml` and test fixtures; discovery controller updated and its `/mcp` entry removed
-- [ ] `Communities/Web/InvitationController.cs`
-- [ ] Window names: `TopicWindow`, `WindowCursor`, `WindowPlanner`, `ConversationService.ReadWindow`
-- [ ] Callers updated: Experience files, `ModerationCaseService`, `VersionedTangentsController`, `TangentModule`, `ExperienceWebApp`, `ConnectorIntegrationTests`
-- [ ] Delete the transport files, `McpRegistration`, `McpOptions`, the embedded `tools.json`, `docs/design/tangent-mcp/`, transport tests and transport evidence; keep and rename tests of live behavior
-- [ ] Fix living-document links to deleted files
-- [ ] Build; .NET suite equals the known baseline failures; browser and connector suites; greenfield check; commit
+- [ ] Confirm `ParticipantArrivalController` (`/api/participation/arrival`) has no caller besides `agent-page.js` and `webmcp.js`
+- [ ] Delete `agent.html`, `agent-page.js`, `agent-connection.js`, `webmcp.js` and `ParticipantArrivalController`
+- [ ] Delete `tests/webmcp.test.mjs`, `tests/agent-connection.test.mjs`, `scripts/prove-webmcp-http.mjs`, `docs/WEBMCP.md`, and the WebMCP evidence (`docs/evidence/webmcp.json`, `webmcp-http.json`, `epic004-webmcp.json`)
+- [ ] Remove links to deleted files from living documents
+- [ ] Browser suite; .NET build; greenfield check; commit
 
-Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, then `pwsh scripts/check-greenfield.ps1`.
+Check command: `node --test "tests/*.test.mjs"`, then `pwsh scripts/check-greenfield.ps1`.
 
 ## Known baseline failures
 
@@ -209,22 +204,22 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 
 ## Metrics
 
-| Measure | Baseline (`d682c26`) | Now | Target |
+| Measure | Baseline (`d682c26`) | Now (after R1.1) | Target |
 |---|---|---|---|
-| Server C# lines | 16,830 | 16,830 | about 11,000 |
-| Authenticated API families | 5 | 5 | 1 |
-| Persisted entity types | 30 | 30 | about 20 |
-| Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 49 / 31 | 0 |
+| Server C# lines | 16,830 | 13,546 | about 11,000 |
+| Authenticated API families | 5 | 4 | 1 |
+| Persisted entity types | 30 | 28 | about 20 |
+| Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 47 / 31 | 0 |
 | `EntityContext.Transaction` outside the pipeline | 41 | 41 | 0 |
 | `bool authorized` parameters | 9 | 9 | 0 |
 | `EnsureHome` call sites | 17 | 17 | 1 |
-| `Mcp` folder lines | 3,697 | 3,697 | 0 |
-| Greenfield findings (lines): total | 4,132 | 4,132 | 0 |
-| — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | same | 0 |
-| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | same | 0 |
-| .NET tests | 506 of 518 (12 known failures) | same | all pass |
-| Browser tests | 170 of 170 | same | all pass |
-| Connector tests | 98 of 98 | same | all pass |
+| `Mcp` folder lines | 3,697 | 364 (enrollment) | 0 |
+| Greenfield findings (lines): total | 4,132 | 2,850 | 0 |
+| — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 34 / 19 / 211 / 38 | 0 |
+| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 2,505 / 25 / 18 | 0 |
+| .NET tests | 506 of 518 (12 known failures) | 459 of 471 (the same 12) | all pass |
+| Browser tests | 170 of 170 | not re-run (no browser change) | all pass |
+| Connector tests | 98 of 98 | not re-run (no connector change) | all pass |
 
 Recompute with the commands in note N-008 and the greenfield check.
 
@@ -249,11 +244,11 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 
 - **N-001** (planning) Removing legacy REST moved from R1 to R4.2: `/api/v1` has no edit or remove post, membership or role operations yet, and `clients/participant` calls `/api/rooms`.
 - **N-002** (planning) Removing Spaces first requires moving the enrollment proof audience (`Tangent:Spaces:ManagingApp`, read by `ServiceProofAuthentication`) and DID-key resolution (`SpacesVerifier`) into Identity. Replies still reference Spaces-era source URI/CID through `SourceDecision`; that is simplified in R3.6.
-- **N-003** (planning) `/invite/{invitationId}` (`McpInvitationController` with `invitation.js`) is a live human page: relocate it, don't delete it.
-- **N-004** (planning) `Tangent:Mcp:PublicBaseUrl` is set in `compose.yaml` and in test fixtures and feeds `McpRefs`; it moves with the references (R1.1).
+- **N-003** (planning) `/invite/{invitationId}` is a live human page; R1.1 moved it to `Communities/Web/InvitationController`.
+- **N-004** (R1.1) The public origin is `Tangent:Site:PublicOrigin` on `SiteOptions`. Startup rejects a malformed value; `References` requires a value when first constructed.
 - **N-005** (planning) The connector calls `POST /api/v1/experience/identities/enroll` (`hub.rs` line 425), as specified in the W2 handoff documents, but the server has no such route (R6.2).
 - **N-006** (planning) `agent-entry.js` (footer connector discovery) and `connect.html`/`connect.js` are live and not part of the WebMCP deletion.
-- **N-007** (planning) `McpAuthenticationTests` covers both the live service-proof exchange and the inbound transport: split it, don't delete it.
+- **N-007** (R1.1) `McpAuthenticationTests` became `EnrollmentTests`; its one transport test was removed. Its owner-claim and receipt-atomicity tests use the enrollment host and move with the module split in R2.
 - **N-008** Metric commands, run from the repository root:
 
   ```powershell
@@ -269,6 +264,8 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-009** (2026-09-15) R1 was renumbered after acceptance: relocating live `Mcp` pieces and deleting the transport are one task (R1.1), because deleting first would otherwise require updating dead code. Archiving in the working tree was replaced by deletion under the cleanup rule.
 - **N-010** (2026-09-15) The 12 [known baseline failures](#known-baseline-failures) show the stacked permission models in action: membership roles and Koan role bags disagree, and the role bags win.
 - **N-011** (2026-09-15) Historical documents (CURRENT_STATE history sections, handoffs, older epics, evidence) are removed or rewritten wholesale in R6.6. Until then, links in them to files removed by earlier tasks may break; links in living documents are fixed in the task that removes the target.
+- **N-012** (R1.1) The enrollment discovery document no longer lists `endpoints` or `standardMcpOAuthAuthorizationSupport`; the connector reads only `serviceProof`. The enrollment code stays in `Mcp/Authentication` until R2 moves it into Identity, and its `/mcp/token` and `/.well-known/tangent-mcp` routes stay until R6.2 — these account for the remaining 34 inbound-MCP greenfield lines.
+- **N-013** (R1.1) The .NET suite went from 518 to 471 tests: transport-only tests were removed; tests for `References` and `OperationReceipt` were added. Operation ids for new receipts now start with `op-`.
 
 ## Findings to route
 
@@ -284,9 +281,9 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 ### S-002 · 2026-09-15 · Claude (Opus 5) — in progress
 
 - Leo accepted every recommendation and set two standing rules: cleanup of deprecated content is mandatory; code must read greenfield.
-- Created `claude/epic-007-realignment` and tag `archive/pre-epic-007`; wrote ADR 0011, ARCHITECTURE and the greenfield check; reconciled EPIC-006; updated README, AGENTS, DECISIONS and CURRENT_STATE.
-- Baseline: .NET 506/518 with 12 known failures; browser 170/170; connector 98/98; greenfield 4,132 findings.
-- R0 committed; R1.1 started.
+- R0 (`ea55313`): branch and archive tag; ADR 0011, ARCHITECTURE and the greenfield check; EPIC-006 reconciled; README, AGENTS, DECISIONS and CURRENT_STATE updated. Baseline: .NET 506/518 with 12 known failures; browser 170/170; connector 98/98; greenfield 4,132.
+- R1.1: inbound MCP transport removed and its live pieces renamed; .NET 459/471 with only the 12 known failures; server C# 13,546 lines.
+- Next: R1.2.
 
 ## Evidence index
 
