@@ -8,12 +8,12 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.8 — verify R1 on a fresh install (`todo`, next) |
-| Next action | Start R1.8: set it to `doing`, announce the wipe, back up first, then follow the steps under [In flight](#in-flight) |
-| Last checkpoint | 2026-09-15 · S-002 · R1.7 complete; committed as "refactor: remove the Node participant client" |
+| Current task | R1.8 — verify R1 on a fresh install (`doing`) |
+| Next action | Continue R1.8 from the first unticked step under [In flight](#in-flight) |
+| Last checkpoint | 2026-09-15 · S-002 · R1.8 in progress: fresh install running; checkpoint commit "fix: drop the removed tools.json from the image build"; the walkthrough is next |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
-| Waiting on | Leo: push authorization (optional); the sign-in steps of each slice walkthrough |
-| Blockers | None |
+| Waiting on | Leo: the sign-in steps of the R1 walkthrough; push authorization (optional) |
+| Blockers | None (Docker Desktop's startup crash was cleared on 2026-09-15; see N-023) |
 
 ## Resume protocol
 
@@ -118,7 +118,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.4 | Delete pre-multi-Tangent branches (`tangent is null` paths, `LegacyRoomsAssigned`, `POST /api/rooms`) and the digest's non-facet mention parser (`ExperienceMentions`, `ResolvesUnambiguously`, `ExperienceMentionTests`) (see N-017) | done | No such paths remain; the digest uses facets only | `b2183ff`: .NET 455/467, failures = the 12 known (`RoomRulesTests` on the home Tangent; a missing-Tangent test; `MessageFacets` detection tests replace the parser tests); browser 139/139; greenfield 2,691 → 2,473; server C# 13,281; 1,515 lines deleted |
 | R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, the CBOR package (BouncyCastle stays: it verifies ES256K proofs), the fixture-network launch path and configuration (see N-014), Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README, DOCKER and OPERATING (see N-015). `SourceDecision` goes in R3.6 | done | No Spaces types remain; the connector enrolls on a fresh install | `ac9cb7b`, `5ed4f29`, `99e89be`: no Spaces types remain (`SourceDecision` stays for R3.6); enrollment derives its audience on a fresh install (`EnrollmentTests`); .NET 345/357 (the 12 known), browser 125/125, connector 98/98, lifecycle 76/76; server C# 13,281 → 11,464; greenfield 2,473 → 1,926 |
 | R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | done | Edit history works without scores | `29de598`: no classifier, `ChangeClass`, Onnx reference, model (23 MB) or `Koan:Ai:Onnx` configuration remain; edit history keeps its versions (`EditHistoryTests`); .NET 338/346, failures = the 8 remaining known (N-020); browser 125/125; lifecycle 76/76; greenfield classification 38 → 0, total 1,926 → 1,883; server C# 11,464 → 11,276 |
-| R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph and any remaining participant-runner passages (OPERATING went in R1.5, N-015) | done | No references remain | Commit "refactor: remove the Node participant client": `clients/` is gone and no living document refers to it (R0 had already rewritten the README's credential paragraph; the Experience API spec's migration map and Spaces-era clauses were replaced, N-022); historical references wait for R6.6 (N-011); browser 125/125; greenfield 1,883; no server or connector change |
+| R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph and any remaining participant-runner passages (OPERATING went in R1.5, N-015) | done | No references remain | `5170f1b`: `clients/` is gone and no living document refers to it (R0 had already rewritten the README's credential paragraph; the Experience API spec's migration map and Spaces-era clauses were replaced, N-022); historical references wait for R6.6 (N-011); browser 125/125; greenfield 1,883; no server or connector change |
 | R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | todo | Walkthrough passes; about 5,000 fewer lines | |
 
 ### R2 — Rename to the product's words
@@ -178,11 +178,11 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R1.8 — verify R1 on a fresh install** (next; not started)
+**R1.8 — verify R1 on a fresh install** (doing)
 
-- [ ] Announce the wipe; back up `.local/docker/site` as the [Docker guide](../../DOCKER.md) describes and record the backup path here
-- [ ] Wipe, build (`Build.bat`), launch (`Launch.bat`); confirm `/health/ready`
-- [ ] .NET, browser, lifecycle and connector suites; greenfield check
+- [x] Announce the wipe; back up `.local/docker/site` as the [Docker guide](../../DOCKER.md) describes and record the backup path here. Announced 2026-09-15; backup `.local/backups/docker-20260915-134736-993` (164 files with a hash manifest)
+- [x] Wipe, build (`Build.bat`), launch (`Launch.bat`); confirm `/health/ready`. The first build failed on a stale Dockerfile line (N-024). After the fix the image and connector built in 36 s, a fresh configuration was created and the app was healthy at 09:51. The startup log holds only the Data Protection key-encryptor warning (expected locally; see DOCKER) and the `HTTP_PORTS` override notice
+- [x] .NET, browser, lifecycle and connector suites; greenfield check. At `5170f1b`: .NET 338/346 (only the 8 known failures), browser 125/125, lifecycle 76/76, connector 98/98, greenfield 1,883
 - [ ] Walkthrough W1–W10 with Leo, who does every sign-in; record results under [Walkthrough results](#walkthrough-results)
 - [ ] Update metrics, CURRENT_STATE's top section and the session log; commit
 
@@ -280,6 +280,8 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-020** (R1.6) The theory `Commit_rechecks_current_authority_and_current_post_after_pending_receipt` (four of the known failures) staged its competing change at the embedder resolution: `BeforeEmbedderProvider` intercepted `IAiAdapterRegistry`, the only yield point between `ChangePost`'s pending receipt and its commit. D3 removed that seam, so the theory and its provider were deleted. The window itself dates from Spaces: the pending receipt covered the remote write that ran between the transactions. R3.2 replaces the `PostChange` ledger and R3.3 makes check and commit one transaction; R3.4's tests cover an authority change racing a command at the pipeline's Access hook.
 - **N-021** (R1.6) Removing a `ProjectReference` did not refresh `packages.lock.json` during the build's restore. `dotnet restore tests/TangentSpace.Tests/TangentSpace.Tests.csproj --force-evaluate` regenerates both lock files; `koan.lock.json` regenerates on every build.
 - **N-022** (R1.7) The Experience API spec still described the pre-connector migration (a map of `src/TangentSpace` files, the MCP dispatcher, `tools.json` and the Node client) and Spaces source acceptance, which R1.1 and R1.5 missed. Section 8 now points to where the contract lives, and the Spaces-era clauses are gone. Its line "Preserve existing Room/Message storage names where convenient" goes with the R2 renames. Historical documents that mention `clients/participant` (S06, handoffs, evidence) wait for R6.6 (N-011).
+- **N-023** (R1.8, environment) Docker Desktop 4.89.0 crashed at start: its backend renames each of its Unix sockets to `*.stale` and fails ("The file cannot be accessed by the system") when socket entries from an earlier session remain, and those entries cannot be deleted either. Moving `%LOCALAPPDATA%\Docker\run` aside (to `run.stale-20260915-094424`) cleared the first failure; the next one, `%LOCALAPPDATA%\docker-secrets-engine\engine.sock`, cleared when Leo restarted Docker Desktop. If it recurs, move the stale folder aside or restart Windows; never use "Reset to factory defaults".
+- **N-024** (R1.8) The first real image build since R1.1 failed: the Dockerfile still copied `docs/design/tangent-mcp/tools.json`, which R1.1 deleted, and `.dockerignore` still re-included it. Both lines are gone. The lifecycle suite mocks Docker, so only a real `docker compose build` catches this; a task that removes files the image build names should run one.
 
 ## Findings to route
 
@@ -304,8 +306,9 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R1.5 step 2a (`5ed4f29`): Spaces storage removed from the server, browser and tests. .NET 345/357 with only the 12 known failures; browser 125/125; greenfield 1,964; server C# 11,468.
 - R1.5 step 2b (`99e89be`): fixture network, native lifecycle scripts, Spaces probes and OPERATING removed; DOCKER rewritten. Lifecycle suite 76/76; connector 98/98; greenfield 1,926.
 - R1.6 (`29de598`): ONNX change classification removed (classifier, `ChangeClass`, the 23 MB model, its configuration and the history chips); the theory that depended on the embedder seam went with it (N-020). .NET 338/346 with only the 8 remaining known failures; browser 125/125; lifecycle 76/76; greenfield 1,883; server C# 11,276.
-- R1.7: Node participant client deleted; the Experience API spec's migration map and Spaces-era clauses replaced (N-022). Browser 125/125; greenfield 1,883.
-- Next: R1.8.
+- R1.7 (`5170f1b`): Node participant client deleted; the Experience API spec's migration map and Spaces-era clauses replaced (N-022). Browser 125/125; greenfield 1,883.
+- R1.8 (in progress): suites green at `5170f1b`; Docker Desktop's startup crash cleared (N-023); backup `.local/backups/docker-20260915-134736-993`; state wiped; the Dockerfile's stale `tools.json` copy removed (N-024); the fresh install is healthy.
+- Next: the R1 walkthrough with Leo.
 
 ## Evidence index
 

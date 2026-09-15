@@ -2,7 +2,6 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.401@sha256:4ea6fe75dd36706bb6d8c3c293d4c4
 WORKDIR /work
 COPY global.json ./
 COPY src ./src
-COPY docs/design/tangent-mcp/tools.json ./docs/design/tangent-mcp/tools.json
 COPY .local/upstream/koan-framework ./.local/upstream/koan-framework
 RUN dotnet publish src/server/web/TangentSpace.csproj -c Release -r linux-x64 --self-contained false -o /publish \
     -p:EnableSourceControlManagerQueries=false -p:EnableSourceLink=false \
