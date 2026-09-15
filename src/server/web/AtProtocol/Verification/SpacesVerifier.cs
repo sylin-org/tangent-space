@@ -5,8 +5,8 @@ namespace TangentSpace.AtProtocol.Verification;
 /// <summary>Verifies a complete pinned-format Spaces CAR from an authenticated expected-PDS response, using its author's current DID key.</summary>
 public sealed class SpacesVerifier(AtprotoSessions sessions)
 {
-    public async Task<ResolvedAuthorKey> ResolveAuthorKey(string authorDid, CancellationToken ct = default)
-        => ResolvedAuthorKey.FromDidDocument(await sessions.ResolveDid(authorDid, ct), authorDid);
+    public async Task<TangentSpace.Identity.DidSigningKey> ResolveAuthorKey(string authorDid, CancellationToken ct = default)
+        => TangentSpace.Identity.DidSigningKey.FromDidDocument(await sessions.ResolveDid(authorDid, ct), authorDid);
 
     public async Task<VerifiedSpaceRepo> Verify(byte[] car, string expectedSpace, string expectedAuthor, CancellationToken ct = default)
     {

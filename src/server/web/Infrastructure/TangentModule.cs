@@ -46,6 +46,10 @@ public sealed class TangentModule : KoanModule
             .Validate(o => string.IsNullOrWhiteSpace(o.PublicOrigin) || SiteOptions.IsCanonicalOrigin(o.PublicOrigin, out _),
                 "Tangent:Site:PublicOrigin must be a canonical absolute origin like https://tangent.example.")
             .ValidateOnStart();
+        services.AddOptions<TangentSpace.Identity.EnrollmentOptions>().BindConfiguration(TangentSpace.Identity.EnrollmentOptions.Configuration)
+            .Validate(o => string.IsNullOrWhiteSpace(o.ProofAudience) || IdentityResolver.IsValidDid(o.ProofAudience.Trim()),
+                "Tangent:Enrollment:ProofAudience must be blank, to derive it from Tangent:Site:PublicOrigin, or a DID.")
+            .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
         services.AddAntiforgery();

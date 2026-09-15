@@ -3,23 +3,20 @@ using System.Text.Json;
 using System.Net.Sockets;
 using CarpaNet.Identity;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Options;
-using TangentSpace.AtProtocol;
-using TangentSpace.AtProtocol.Verification;
+using TangentSpace.Identity;
 
 namespace TangentSpace.Mcp.Authentication;
 
-/// <summary>Verifies a participant-issued AT service-auth JWT addressed to this Tangent's MCP proof exchange.
-/// Mirrors the authority-pinned callback verifier's hygiene while authenticating the token's own issuer DID.</summary>
-public sealed class ServiceProofAuthentication(IServiceProofKeySource keys, IOptions<SpacesOptions> configured,
+/// <summary>Verifies a participant-issued atproto service-auth JWT addressed to this server's enrollment proof
+/// exchange, authenticating the token's own issuer DID against its current signing key.</summary>
+public sealed class ServiceProofAuthentication(IServiceProofKeySource keys, ProofAudience proofAudience,
     TimeProvider clock, ILogger<ServiceProofAuthentication> logger)
 {
     private const string BearerPrefix = "Bearer ";
 
     public async Task<ServiceProofResult> Verify(string authorization, CancellationToken ct)
     {
-        var audience = configured.Value.ManagingApp;
-        if (string.IsNullOrWhiteSpace(audience)) return new(ServiceProofStatus.Unconfigured);
+        if (proofAudience.Value is not { } audience) return new(ServiceProofStatus.Unconfigured);
         if (!authorization.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase) || authorization.Length > 8192)
             return new(ServiceProofStatus.Invalid);
         try
@@ -51,7 +48,7 @@ public sealed class ServiceProofAuthentication(IServiceProofKeySource keys, IOpt
                 logger.LogDebug("MCP service proof rejected before key resolution.");
                 return new(ServiceProofStatus.Invalid);
             }
-            ResolvedAuthorKey key;
+            DidSigningKey key;
             try { key = await keys.Resolve(issuer, ct); }
             catch (Exception error) when (error is HttpRequestException or SocketException or TimeoutException)
             {

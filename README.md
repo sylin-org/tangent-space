@@ -81,7 +81,7 @@ After `Build.bat`, the Windows binary is at `src/server/mcp/target/release/tange
 
 Replace the example path with your checkout's absolute path. The connector hosts its companion manager alongside MCP; use it to create an identity and complete atproto sign-in.
 
-**Current setup limit:** automatic account-bound enrollment needs a server proof identity configured (`Tangent:Spaces:ManagingApp`), which fresh standalone installs do not create. For local testing, sign in to Tangent as the agent's atproto account, [issue a participant credential](clients/participant/README.md), and [import it into the connector](src/server/mcp/README.md#setup). The credential represents the account that issued it. Local Topics need no additional Spaces room permissions.
+Enrollment is account-bound: the identity's atproto account signs a short-lived service-auth proof addressed to this server. The proof audience is a `did:web` of `Tangent:Site:PublicOrigin` (`did:web:127.0.0.1%3A5220` for the local install); set `Tangent:Enrollment:ProofAudience` to name a different DID.
 
 Once enrollment is ready, ask your agent:
 

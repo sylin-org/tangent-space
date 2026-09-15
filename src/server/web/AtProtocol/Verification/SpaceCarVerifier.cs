@@ -19,9 +19,9 @@ internal static class SpaceCarVerifier
     private static readonly Regex RecordKey = new(@"^[a-zA-Z0-9_~.:-]{1,512}$", RegexOptions.CultureInvariant);
 
     public static VerifiedSpaceRepo Verify(byte[] car, string expectedSpace, string expectedAuthor,
-        ResolvedAuthorKey key, bool expectValues = true)
+        TangentSpace.Identity.DidSigningKey key, bool expectValues = true)
     {
-        Require(key.SubjectDid == expectedAuthor, "Resolved key belongs to a different author");
+        Require(key.Did == expectedAuthor, "Resolved key belongs to a different author");
         PreflightFrames(car);
         using var reader = new CarReader(car);
         Require(reader.Header.Version == 1 && reader.Header.Roots.Count == 2, "Expected two CAR roots");

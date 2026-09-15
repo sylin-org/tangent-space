@@ -110,7 +110,7 @@ public sealed class SpacesVerificationTests
             case "leading-zero": key.PublicKeyMultibase = "z1" + key.PublicKeyMultibase![1..]; break;
             case "too-long": key.PublicKeyMultibase = "z" + new string('2', 128); break;
         }
-        Assert.Throws<InvalidDataException>(() => ResolvedAuthorKey.FromDidDocument(document, author));
+        Assert.Throws<InvalidDataException>(() => TangentSpace.Identity.DidSigningKey.FromDidDocument(document, author));
     }
 
     [Fact]
@@ -121,26 +121,26 @@ public sealed class SpacesVerificationTests
         var author = vector.GetProperty("author").GetString()!;
         var document = Document(author, vector.GetProperty("multikey").GetString()!);
         document.VerificationMethod[0].Id = "#atproto";
-        Assert.Equal(author, ResolvedAuthorKey.FromDidDocument(document, author).SubjectDid);
+        Assert.Equal(author, TangentSpace.Identity.DidSigningKey.FromDidDocument(document, author).Did);
     }
 
-    private static ResolvedAuthorKey Key(string author, string multikey) => ResolvedAuthorKey.FromDidDocument(Document(author, multikey), author);
+    private static TangentSpace.Identity.DidSigningKey Key(string author, string multikey) => TangentSpace.Identity.DidSigningKey.FromDidDocument(Document(author, multikey), author);
     [Fact]
     public void Actual_legacy_PLC_documents_verify_real_service_signature_and_PDS_CAR()
     {
         using var fixtures = JsonDocument.Parse(LegacyFixtures);
         var authority = DidDocument.FromJson(fixtures.RootElement.GetProperty("authorityDocument").GetRawText());
-        var authorityKey = ResolvedAuthorKey.FromDidDocument(authority, authority.Id);
+        var authorityKey = TangentSpace.Identity.DidSigningKey.FromDidDocument(authority, authority.Id);
         var signature = fixtures.RootElement.GetProperty("expiredServiceSignature");
         Assert.True(authorityKey.VerifySignature(Encoding.ASCII.GetBytes(signature.GetProperty("signingInput").GetString()!),
             Convert.FromHexString(signature.GetProperty("signatureHex").GetString()!)));
         var agent = DidDocument.FromJson(fixtures.RootElement.GetProperty("agentDocument").GetRawText());
-        var key = ResolvedAuthorKey.FromDidDocument(agent, agent.Id);
+        var key = TangentSpace.Identity.DidSigningKey.FromDidDocument(agent, agent.Id);
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(Fixtures, "manifest.json")));
         var actual = manifest.RootElement.GetProperty("tests").EnumerateArray().Single(item => item.GetProperty("name").GetString() == "actual-pds-repository");
-        Assert.Equal(actual.GetProperty("author").GetString(), key.SubjectDid);
+        Assert.Equal(actual.GetProperty("author").GetString(), key.Did);
         var result = SpaceCarVerifier.Verify(File.ReadAllBytes(Path.Combine(Fixtures, "actual-pds-repository.car")),
-            actual.GetProperty("space").GetString()!, key.SubjectDid, key);
+            actual.GetProperty("space").GetString()!, key.Did, key);
         Assert.Equal(3, result.Records.Count);
     }
 

@@ -21,8 +21,7 @@ using Org.BouncyCastle.Crypto.EC;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using TangentSpace.AtProtocol;
-using TangentSpace.AtProtocol.Verification;
+using TangentSpace.Identity;
 using TangentSpace.Mcp.Authentication;
 using TangentSpace.Participants;
 using TangentSpace.Participation;
@@ -35,8 +34,9 @@ namespace TangentSpace.Tests;
 [Xunit.Collection("Experience integration")]
 public sealed class EnrollmentTests
 {
-    private const string ManagingApp = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb#tangent";
-    private const string Authority = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string Origin = "http://127.0.0.1:5220";
+    private const string Audience = "did:web:127.0.0.1%3A5220";
+    private const string OtherService = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
     private const long FixedNow = 1_800_000_000;
 
     private sealed class FixedTime(DateTimeOffset now) : TimeProvider
@@ -75,7 +75,7 @@ public sealed class EnrollmentTests
             return encoded + "." + Base64Url(signature);
         }
 
-        public string DefaultPayload(string issuerDid, string? audience = ManagingApp, string? method = null,
+        public string DefaultPayload(string issuerDid, string? audience = Audience, string? method = null,
             long? expiresAt = null, long? issuedAt = null, string? jti = null)
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -90,7 +90,7 @@ public sealed class EnrollmentTests
             });
         }
 
-        public ResolvedAuthorKey Resolved(string issuerDid) => ResolvedAuthorKey.FromDidDocument(EntryFor(issuerDid, null).Document, issuerDid);
+        public DidSigningKey Resolved(string issuerDid) => DidSigningKey.FromDidDocument(EntryFor(issuerDid, null).Document, issuerDid);
 
         private Entry EntryFor(string issuerDid, string? curve)
         {
@@ -120,12 +120,12 @@ public sealed class EnrollmentTests
 
     private sealed class FakeKeySource(ProofKeys keys) : IServiceProofKeySource
     {
-        public Task<ResolvedAuthorKey> Resolve(string issuerDid, CancellationToken ct) => Task.FromResult(keys.Resolved(issuerDid));
+        public Task<DidSigningKey> Resolve(string issuerDid, CancellationToken ct) => Task.FromResult(keys.Resolved(issuerDid));
     }
 
     private sealed class ThrowingKeySource : IServiceProofKeySource
     {
-        public Task<ResolvedAuthorKey> Resolve(string issuerDid, CancellationToken ct) => throw new HttpRequestException("resolver unreachable");
+        public Task<DidSigningKey> Resolve(string issuerDid, CancellationToken ct) => throw new HttpRequestException("resolver unreachable");
     }
 
     private static string Base64Url(byte[] value) => WebEncoders.Base64UrlEncode(value);
@@ -151,8 +151,12 @@ public sealed class EnrollmentTests
         return text.ToString();
     }
 
-    private static ServiceProofAuthentication Verifier(ProofKeys keys, string managingApp = ManagingApp, long? now = null)
-        => new(new FakeKeySource(keys), Options.Create(new SpacesOptions { AuthorityDid = Authority, ManagingApp = managingApp }),
+    private static ProofAudience ProofAudienceFor(string origin, string configured = "")
+        => new(Options.Create(new EnrollmentOptions { ProofAudience = configured }),
+            Options.Create(new TangentSpace.Site.SiteOptions { PublicOrigin = origin }));
+
+    private static ServiceProofAuthentication Verifier(ProofKeys keys, string origin = Origin, long? now = null)
+        => new(new FakeKeySource(keys), ProofAudienceFor(origin),
             new FixedTime(DateTimeOffset.FromUnixTimeSeconds(now ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds())),
             NullLogger<ServiceProofAuthentication>.Instance);
 
@@ -192,9 +196,9 @@ public sealed class EnrollmentTests
         var did = "did:plc:mcptestwrongaaaaaaaaaaaaa";
         var verifier = Verifier(keys);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
-            payloadJson: keys.DefaultPayload(did, audience: Authority)), CancellationToken.None)).Status);
+            payloadJson: keys.DefaultPayload(did, audience: OtherService)), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
-            payloadJson: keys.DefaultPayload(did, method: SpacesOptions.AccessMethod)), CancellationToken.None)).Status);
+            payloadJson: keys.DefaultPayload(did, method: "com.atproto.repo.createRecord")), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
             payloadJson: keys.DefaultPayload(did, method: McpAuthenticationConstants.ExchangeMethod + "x")), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
@@ -210,7 +214,7 @@ public sealed class EnrollmentTests
         var keys = new ProofKeys();
         var did = "did:plc:mcptesthostileaaaaaaaaaa";
         var verifier = Verifier(keys, now: FixedNow);
-        var baseClaims = $$"""{"iss":"{{did}}","aud":"{{ManagingApp}}","lxm":"{{McpAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}""";
+        var baseClaims = $$"""{"iss":"{{did}}","aud":"{{Audience}}","lxm":"{{McpAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}""";
         string With(string payload) => "Bearer " + keys.Token(did, payloadJson: payload);
         string WithHeader(string header) => "Bearer " + keys.Token(did, headerJson: header, payloadJson: baseClaims);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(With(baseClaims.Replace(",\"jti\"", ",\"sub\":\"did:plc:zzzzzzzzzzzzzzzzzzzzzzzz\",\"jti\"")), CancellationToken.None)).Status);
@@ -226,7 +230,7 @@ public sealed class EnrollmentTests
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(WithHeader("""{"typ":"JWT"}"""), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify("bearer " + keys.Token(did, payloadJson: baseClaims), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
-            payloadJson: $$"""{"iss":"{{did}}","aud":["{{ManagingApp}}"],"lxm":"{{McpAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}"""), CancellationToken.None)).Status);
+            payloadJson: $$"""{"iss":"{{did}}","aud":["{{Audience}}"],"lxm":"{{McpAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}"""), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did, payloadJson: baseClaims) + new string('A', 8192), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer not-a-jwt", CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer .", CancellationToken.None)).Status);
@@ -241,9 +245,8 @@ public sealed class EnrollmentTests
     {
         var keys = new ProofKeys();
         var did = "did:plc:mcptestunconfaaaaaaaaaaa";
-        Assert.Equal(ServiceProofStatus.Unconfigured, (await Verifier(keys, managingApp: "").Verify(Bearer(keys, did), CancellationToken.None)).Status);
-        var unreachable = new ServiceProofAuthentication(new ThrowingKeySource(),
-            Options.Create(new SpacesOptions { ManagingApp = ManagingApp }),
+        Assert.Equal(ServiceProofStatus.Unconfigured, (await Verifier(keys, origin: "").Verify(Bearer(keys, did), CancellationToken.None)).Status);
+        var unreachable = new ServiceProofAuthentication(new ThrowingKeySource(), ProofAudienceFor(Origin),
             new FixedTime(DateTimeOffset.UtcNow), NullLogger<ServiceProofAuthentication>.Instance);
         Assert.Equal(ServiceProofStatus.Unreachable, (await unreachable.Verify(Bearer(keys, did), CancellationToken.None)).Status);
     }
@@ -256,7 +259,7 @@ public sealed class EnrollmentTests
         // The claims clock read sees a valid proof; the post-resolution read advances past exp.
         var stepping = new SteppingClock(DateTimeOffset.FromUnixTimeSeconds(FixedNow), TimeSpan.FromSeconds(120));
         var verifier = new ServiceProofAuthentication(new FakeKeySource(keys),
-            Options.Create(new SpacesOptions { ManagingApp = ManagingApp }), stepping,
+            ProofAudienceFor(Origin), stepping,
             NullLogger<ServiceProofAuthentication>.Instance);
         var token = keys.Token(did, payloadJson: keys.DefaultPayload(did, expiresAt: FixedNow + 60, issuedAt: FixedNow - 5));
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + token, CancellationToken.None)).Status);
@@ -476,9 +479,7 @@ public sealed class EnrollmentTests
                 {
                     ["Tangent:Site:Name"] = "Enrollment Test Site",
                     ["Tangent:Site:OwnerDid"] = ownerDid,
-                    ["Tangent:Site:PublicOrigin"] = "http://127.0.0.1:5220",
-                    ["Tangent:Spaces:AuthorityDid"] = Authority,
-                    ["Tangent:Spaces:ManagingApp"] = ManagingApp,
+                    ["Tangent:Site:PublicOrigin"] = Origin,
                     ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
                     ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={database}",
                     ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={database}"
@@ -710,7 +711,7 @@ public sealed class EnrollmentTests
         Assert.Equal("no-store", tokenController.Response.Headers.CacheControl.ToString());
         var missing = await WithHeader(null).Exchange(null, CancellationToken.None);
         Assert.Equal(StatusCodes.Status401Unauthorized, ((ObjectResult)missing).StatusCode);
-        var wrongAudience = "Bearer " + fixture.Keys.Token(did, payloadJson: fixture.Keys.DefaultPayload(did, audience: Authority));
+        var wrongAudience = "Bearer " + fixture.Keys.Token(did, payloadJson: fixture.Keys.DefaultPayload(did, audience: OtherService));
         var rejected = await WithHeader(wrongAudience).Exchange(null, CancellationToken.None);
         Assert.Equal(StatusCodes.Status401Unauthorized, ((ObjectResult)rejected).StatusCode);
         var replay = await WithHeader(proof).Exchange(null, CancellationToken.None);
@@ -726,40 +727,39 @@ public sealed class EnrollmentTests
     [Fact]
     public void Discovery_pins_the_configured_origin_audience_and_profile()
     {
-        var spaces = new SpacesOptions { AuthorityDid = Authority, ManagingApp = ManagingApp };
-        var site = new TangentSpace.Site.SiteOptions { PublicOrigin = "http://127.0.0.1:5220" };
-        var controller = new TangentMcpDiscoveryController(Options.Create(spaces), Options.Create(site))
-        {
-            ControllerContext = new ControllerContext
-            {
-                HttpContext = new DefaultHttpContext { Request = { Headers = { Host = "evil.example" } } }
-            }
-        };
+        var site = new TangentSpace.Site.SiteOptions { PublicOrigin = Origin };
+        var controller = Discovery(ProofAudienceFor(Origin), site,
+            new DefaultHttpContext { Request = { Headers = { Host = "evil.example" } } });
         var ok = Assert.IsType<OkObjectResult>(controller.Discover());
         var body = JsonSerializer.Serialize(ok.Value);
         Assert.Contains("http://127.0.0.1:5220/mcp/token", body);
         Assert.DoesNotContain("\"endpoints\"", body);
+        Assert.DoesNotContain("sourceWriteConsent", body);
         Assert.Contains(McpAuthenticationConstants.ExchangeMethod, body);
-        Assert.Contains(ManagingApp, body);
+        Assert.Contains(Audience, body);
         Assert.Contains(McpAuthenticationConstants.Profile, body);
         Assert.Contains(McpAuthenticationConstants.ProtocolVersion, body);
         Assert.DoesNotContain("evil.example", body);
-        Assert.Contains("\"includedInProof\":false", body);
         Assert.Contains("independently verifies current authority", body);
-        Assert.Contains("/api/connections/rooms", body);
-        var unconfiguredAudience = new TangentMcpDiscoveryController(Options.Create(new SpacesOptions()), Options.Create(site))
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
-        };
-        Assert.Equal(StatusCodes.Status503ServiceUnavailable, ((ObjectResult)unconfiguredAudience.Discover()).StatusCode);
+        var overridden = Assert.IsType<OkObjectResult>(Discovery(ProofAudienceFor(Origin, OtherService), site).Discover());
+        Assert.Contains(OtherService, JsonSerializer.Serialize(overridden.Value));
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable,
+            ((ObjectResult)Discovery(ProofAudienceFor(""), new TangentSpace.Site.SiteOptions()).Discover()).StatusCode);
         foreach (var invalid in new[] { "", "   ", "ftp://example.com", "http://user:pass@127.0.0.1:5220", "http://127.0.0.1:5220/evil", "http://127.0.0.1:5220?x=1" })
-        {
-            var noOrigin = new TangentMcpDiscoveryController(Options.Create(spaces),
-                Options.Create(new TangentSpace.Site.SiteOptions { PublicOrigin = invalid }))
-            {
-                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
-            };
-            Assert.Equal(StatusCodes.Status503ServiceUnavailable, ((ObjectResult)noOrigin.Discover()).StatusCode);
-        }
+            Assert.Equal(StatusCodes.Status503ServiceUnavailable, ((ObjectResult)Discovery(ProofAudienceFor(invalid, Audience),
+                new TangentSpace.Site.SiteOptions { PublicOrigin = invalid }).Discover()).StatusCode);
     }
+
+    [Theory]
+    [InlineData("https://tangent.example", "", "did:web:tangent.example")]
+    [InlineData("https://Tangent.Example:8443", "", "did:web:tangent.example%3A8443")]
+    [InlineData(Origin, "", Audience)]
+    [InlineData(Origin, OtherService, OtherService)]
+    [InlineData("", "", null)]
+    [InlineData("http://tangent.example", "", null)]
+    public void The_proof_audience_is_the_override_or_a_did_web_of_the_public_origin(string origin, string configured, string? expected)
+        => Assert.Equal(expected, ProofAudience.From(configured, origin));
+
+    private static TangentMcpDiscoveryController Discovery(ProofAudience audience, TangentSpace.Site.SiteOptions site, HttpContext? context = null)
+        => new(audience, Options.Create(site)) { ControllerContext = new ControllerContext { HttpContext = context ?? new DefaultHttpContext() } };
 }
