@@ -1,7 +1,0 @@
-{
-  "name": "tangent-participant",
-  "private": true,
-  "type": "module",
-  "engines": { "node": ">=24" },
-  "scripts": { "test": "node --test client.test.mjs model-command.test.mjs" }
-}

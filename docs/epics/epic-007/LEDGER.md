@@ -8,9 +8,9 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.7 — delete `clients/participant` (`todo`, next) |
-| Next action | Start R1.7: set it to `doing` and follow the steps under [In flight](#in-flight) |
-| Last checkpoint | 2026-09-15 · S-002 · R1.6 complete; committed as "refactor: remove ONNX change classification" |
+| Current task | R1.8 — verify R1 on a fresh install (`todo`, next) |
+| Next action | Start R1.8: set it to `doing`, announce the wipe, back up first, then follow the steps under [In flight](#in-flight) |
+| Last checkpoint | 2026-09-15 · S-002 · R1.7 complete; committed as "refactor: remove the Node participant client" |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional); the sign-in steps of each slice walkthrough |
 | Blockers | None |
@@ -117,8 +117,8 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.3 | Create the home Tangent at claim; remove `EnsureHome` from its 17 call sites; keep one onboarding path by deleting `Create`'s home special case, `TangentsResponse.SetupRequired`, the unread `ServerSettings.SetupRequired` and the `rooms.js` home-key form (see N-016) | done | Reads create nothing; claim creates the home Tangent; onboarding happens only through `/onboarding/` | `c3a4b9b`: .NET 461/473, failures = the 12 known (2 new tests: claim creates the home Tangent; onboarding names it and its key stays taken); browser 139/139 (home-key form test removed); `EnsureHome` 17 → 0; greenfield bootstrap 0, total 2,691; server C# 13,427 |
 | R1.4 | Delete pre-multi-Tangent branches (`tangent is null` paths, `LegacyRoomsAssigned`, `POST /api/rooms`) and the digest's non-facet mention parser (`ExperienceMentions`, `ResolvesUnambiguously`, `ExperienceMentionTests`) (see N-017) | done | No such paths remain; the digest uses facets only | `b2183ff`: .NET 455/467, failures = the 12 known (`RoomRulesTests` on the home Tangent; a missing-Tangent test; `MessageFacets` detection tests replace the parser tests); browser 139/139; greenfield 2,691 → 2,473; server C# 13,281; 1,515 lines deleted |
 | R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, the CBOR package (BouncyCastle stays: it verifies ES256K proofs), the fixture-network launch path and configuration (see N-014), Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README, DOCKER and OPERATING (see N-015). `SourceDecision` goes in R3.6 | done | No Spaces types remain; the connector enrolls on a fresh install | `ac9cb7b`, `5ed4f29`, `99e89be`: no Spaces types remain (`SourceDecision` stays for R3.6); enrollment derives its audience on a fresh install (`EnrollmentTests`); .NET 345/357 (the 12 known), browser 125/125, connector 98/98, lifecycle 76/76; server C# 13,281 → 11,464; greenfield 2,473 → 1,926 |
-| R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | done | Edit history works without scores | Commit "refactor: remove ONNX change classification": no classifier, `ChangeClass`, Onnx reference, model (23 MB) or `Koan:Ai:Onnx` configuration remain; edit history keeps its versions (`EditHistoryTests`); .NET 338/346, failures = the 8 remaining known (N-020); browser 125/125; lifecycle 76/76; greenfield classification 38 → 0, total 1,926 → 1,883; server C# 11,464 → 11,276 |
-| R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph and any remaining participant-runner passages (OPERATING went in R1.5, N-015) | todo | No references remain | |
+| R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | done | Edit history works without scores | `29de598`: no classifier, `ChangeClass`, Onnx reference, model (23 MB) or `Koan:Ai:Onnx` configuration remain; edit history keeps its versions (`EditHistoryTests`); .NET 338/346, failures = the 8 remaining known (N-020); browser 125/125; lifecycle 76/76; greenfield classification 38 → 0, total 1,926 → 1,883; server C# 11,464 → 11,276 |
+| R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph and any remaining participant-runner passages (OPERATING went in R1.5, N-015) | done | No references remain | Commit "refactor: remove the Node participant client": `clients/` is gone and no living document refers to it (R0 had already rewritten the README's credential paragraph; the Experience API spec's migration map and Spaces-era clauses were replaced, N-022); historical references wait for R6.6 (N-011); browser 125/125; greenfield 1,883; no server or connector change |
 | R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | todo | Walkthrough passes; about 5,000 fewer lines | |
 
 ### R2 — Rename to the product's words
@@ -178,19 +178,21 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R1.7 — delete `clients/participant`** (next; not started)
+**R1.8 — verify R1 on a fresh install** (next; not started)
 
-- [ ] Inventory: `clients/participant` and everything that builds, tests, launches or documents it — the README's credential paragraph, other living documents, scripts, test globs, package manifests and ignore files
-- [ ] Delete it; rewrite the README's credential paragraph around the connector and remove any remaining participant-runner passages
-- [ ] .NET, browser and connector suites as affected; greenfield check; commit
+- [ ] Announce the wipe; back up `.local/docker/site` as the [Docker guide](../../DOCKER.md) describes and record the backup path here
+- [ ] Wipe, build (`Build.bat`), launch (`Launch.bat`); confirm `/health/ready`
+- [ ] .NET, browser, lifecycle and connector suites; greenfield check
+- [ ] Walkthrough W1–W10 with Leo, who does every sign-in; record results under [Walkthrough results](#walkthrough-results)
+- [ ] Update metrics, CURRENT_STATE's top section and the session log; commit
 
 Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, `node --test "tests/*.test.mjs"`, then `pwsh scripts/check-greenfield.ps1`.
 
-**Completed: R1.6 — remove ONNX change classification**
+**Completed: R1.7 — delete `clients/participant`**
 
-- [x] Inventory: the task row's list, plus the `MessageFacets` summary, the chip styles in `rooms.css`, both NuGet lock files, and the `Commit_rechecks…` theory whose only yield point was the embedder resolution (N-020)
-- [x] Deleted `ChangeClassification`, `Message.ChangeClass`, the Onnx project reference and `models/`, the `Koan:Ai:Onnx` configuration (appsettings, the Docker configuration generator, the integration fixture), the `history.js` chips and metrics with their styles, `ChangeClassificationTests` and the classification assertions in `EditHistoryTests`; `koan.lock.json` and both `packages.lock.json` regenerated (N-021). Edit history keeps its versions (D3)
-- [x] .NET 338/346 (the 8 remaining known failures), browser 125/125, lifecycle 76/76, greenfield 1,883; commit
+- [x] Inventory: 10 tracked files and no untracked leftovers; no script, test glob, manifest or ignore file refers to it; R0 had already rewritten the README's credential paragraph; the one living document with references was the Experience API spec
+- [x] Deleted `clients/participant`; the spec's migration map became a pointer to where the contract lives, and its Spaces-era clauses went too (N-022)
+- [x] Browser 125/125, greenfield 1,883; no server or connector change; commit
 
 ## Known baseline failures
 
@@ -207,7 +209,7 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 
 ## Metrics
 
-| Measure | Baseline (`d682c26`) | Now (after R1.6) | Target |
+| Measure | Baseline (`d682c26`) | Now (after R1.7) | Target |
 |---|---|---|---|
 | Server C# lines | 16,830 | 11,276 | about 11,000 |
 | Authenticated API families | 5 | 3 (`/api/v1/experience`, `/api/v1/tangents`, legacy REST) | 1 |
@@ -277,6 +279,7 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-019** (R1.5) Removing the fixture network removed everything that signed in with its disposable accounts: the connector walkthrough script, the fixture OAuth driver, the native Windows-hosted lifecycle scripts, the arrival and activity proofs, the Spaces probes and the demo capture tooling (with its orphaned model adapter). Walkthroughs are now operator-run with real accounts (R1.8); the archive tag keeps the removed tooling. The `SourceDecision` references that remain under the greenfield "Spaces storage" rule go with R3.6.
 - **N-020** (R1.6) The theory `Commit_rechecks_current_authority_and_current_post_after_pending_receipt` (four of the known failures) staged its competing change at the embedder resolution: `BeforeEmbedderProvider` intercepted `IAiAdapterRegistry`, the only yield point between `ChangePost`'s pending receipt and its commit. D3 removed that seam, so the theory and its provider were deleted. The window itself dates from Spaces: the pending receipt covered the remote write that ran between the transactions. R3.2 replaces the `PostChange` ledger and R3.3 makes check and commit one transaction; R3.4's tests cover an authority change racing a command at the pipeline's Access hook.
 - **N-021** (R1.6) Removing a `ProjectReference` did not refresh `packages.lock.json` during the build's restore. `dotnet restore tests/TangentSpace.Tests/TangentSpace.Tests.csproj --force-evaluate` regenerates both lock files; `koan.lock.json` regenerates on every build.
+- **N-022** (R1.7) The Experience API spec still described the pre-connector migration (a map of `src/TangentSpace` files, the MCP dispatcher, `tools.json` and the Node client) and Spaces source acceptance, which R1.1 and R1.5 missed. Section 8 now points to where the contract lives, and the Spaces-era clauses are gone. Its line "Preserve existing Room/Message storage names where convenient" goes with the R2 renames. Historical documents that mention `clients/participant` (S06, handoffs, evidence) wait for R6.6 (N-011).
 
 ## Findings to route
 
@@ -300,8 +303,9 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R1.5 step 1 (`ac9cb7b`): enrollment derives its proof audience from the public origin (D9). .NET 461/473 with only the 12 known failures.
 - R1.5 step 2a (`5ed4f29`): Spaces storage removed from the server, browser and tests. .NET 345/357 with only the 12 known failures; browser 125/125; greenfield 1,964; server C# 11,468.
 - R1.5 step 2b (`99e89be`): fixture network, native lifecycle scripts, Spaces probes and OPERATING removed; DOCKER rewritten. Lifecycle suite 76/76; connector 98/98; greenfield 1,926.
-- R1.6: ONNX change classification removed (classifier, `ChangeClass`, the 23 MB model, its configuration and the history chips); the theory that depended on the embedder seam went with it (N-020). .NET 338/346 with only the 8 remaining known failures; browser 125/125; lifecycle 76/76; greenfield 1,883; server C# 11,276.
-- Next: R1.7.
+- R1.6 (`29de598`): ONNX change classification removed (classifier, `ChangeClass`, the 23 MB model, its configuration and the history chips); the theory that depended on the embedder seam went with it (N-020). .NET 338/346 with only the 8 remaining known failures; browser 125/125; lifecycle 76/76; greenfield 1,883; server C# 11,276.
+- R1.7: Node participant client deleted; the Experience API spec's migration map and Spaces-era clauses replaced (N-022). Browser 125/125; greenfield 1,883.
+- Next: R1.8.
 
 ## Evidence index
 
