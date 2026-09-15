@@ -31,7 +31,8 @@ pub fn data_directory() -> PathBuf {
     base.join(".tangent-connector")
 }
 
-/// Builds the hub over the ureq experience client and the durable store. Enrollments that
+/// Builds the hub over the ureq experience client, the durable store and the platform
+/// browser. Enrollments that
 /// predate the identity model are dropped at open (the standing wipe rule forbids
 /// migration); their `EnrollmentDropped` events reach the diagnostics journal here, once
 /// the bus exists.
@@ -47,5 +48,5 @@ pub fn build_hub(caller: CallerId, data_dir: PathBuf) -> Result<Arc<ConnectorHub
         });
     }
     adapters::diagnostics::spawn(&events, data_dir.clone());
-    Ok(Arc::new(ConnectorHub::new(port, store, events, caller)))
+    Ok(Arc::new(ConnectorHub::new(port, store, events, caller).with_pages(adapters::browser::system())))
 }

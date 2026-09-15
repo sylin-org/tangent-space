@@ -6,12 +6,17 @@ mod common;
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 
 use serde_json::{json, Value};
 
 use common::{FakeServer, LUMEN_CREDENTIAL, STEWARD_CREDENTIAL};
+
+/// Each spawned connector hosts its operator page on its own fixed port, so parallel
+/// tests never share one and 5219 stays free for the operator's own connector.
+static NEXT_PAGE_PORT: AtomicU16 = AtomicU16::new(5230);
 
 struct Peer {
     child: Child,
@@ -24,11 +29,9 @@ impl Peer {
         let mut child = Command::new(env!("CARGO_BIN_EXE_tangent-connector"))
             .args(arguments)
             .env("TANGENT_CONNECTOR_HOME", home)
-            // Browser spawns are guarded in tests; URLs are still constructed.
+            // The spawned binary installs the platform browser; its tests never open one.
             .env("TANGENT_CONNECTOR_NO_BROWSER", "1")
-            // Tests run in parallel: the operator page takes an ephemeral port instead
-            // of the fixed default 5219 (the fixed-port discipline has its own tests).
-            .env("TANGENT_CONNECTOR_PORT", "0")
+            .env("TANGENT_CONNECTOR_PORT", NEXT_PAGE_PORT.fetch_add(1, Ordering::Relaxed).to_string())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -289,7 +292,7 @@ fn serve_mode_hosts_the_operator_page_with_a_clean_url_and_pure_stdout() {
     exchanges.push(tools.clone());
     assert_eq!(tools["result"]["tools"].as_array().expect("tools").len(), 14);
 
-    // OpenRegistration under the no-browser guard: ok, and the URL never renders.
+    // OpenRegistration without a browser: ok, and the URL never renders.
     peer.send(&json!({
         "jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": { "name": "OpenRegistration", "arguments": {} }

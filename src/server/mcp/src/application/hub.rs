@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::{json, Value};
 
 use crate::adapters::atproto_oauth::{self, AtprotoOauth, BindStart};
+use crate::adapters::browser::{self, PageOpener};
 use crate::adapters::operator::DEFAULT_PAGE_URL;
 use crate::adapters::store::{ServerCard, StateStore};
 use crate::application::bus::EventBus;
@@ -132,6 +133,9 @@ pub struct ConnectorHub {
     /// spawn one tab per retry. Keyed by the full target URL, so distinct anchors stay
     /// distinct.
     opened_pages: Mutex<HashSet<String>>,
+    /// How pages reach a browser: nothing by default; the binary installs the platform
+    /// browser with [`ConnectorHub::with_pages`].
+    pages: PageOpener,
     /// Waiting-for-operator connects (A3), shared with the one age-out sweeper.
     pending_connects: Arc<Mutex<Vec<PendingConnect>>>,
     /// The atproto OAuth client (the `/bind` flow's outbound spoke). Replaceable before
@@ -166,6 +170,7 @@ impl ConnectorHub {
             operator_page_url: Mutex::new(None),
             pending_bind: Mutex::new(None),
             opened_pages: Mutex::new(HashSet::new()),
+            pages: browser::silent(),
             pending_connects: Arc::new(Mutex::new(Vec::new())),
             atproto_oauth: Arc::new(Mutex::new(Arc::new(AtprotoOauth::new()))),
             bind_flights: Mutex::new(Vec::new()),
@@ -175,6 +180,17 @@ impl ConnectorHub {
             optional_tools: Mutex::new(HashMap::new()),
             sweep_once: std::sync::Once::new(),
         }
+    }
+
+    /// Gives the hub a way to open pages; the binary passes [`browser::system`].
+    pub fn with_pages(mut self, pages: PageOpener) -> Self {
+        self.pages = pages;
+        self
+    }
+
+    /// Opens a page the operator asked for (the startup open, the tray), every time.
+    pub fn open_page(&self, url: &str) {
+        (self.pages)(url);
     }
 
     pub fn optional_tool_names(&self) -> BTreeSet<String> {
@@ -281,16 +297,16 @@ impl ConnectorHub {
     /// The browser target a sign-in pop for this identity would open (this process's
     /// own page, or a recorded reachable one, at the identity's bind route).
     /// Test-visible mirror of the internal resolution, so the target is assertable
-    /// under the no-browser guard without spawning anything.
+    /// without opening anything.
     pub fn sign_in_target_url(&self, local_id: &str) -> Option<String> {
         let (page, _) = self.sign_in_page()?;
         Some(format!("{page}{}", bind_anchor(local_id)))
     }
 
     /// Opens one browser target once per process (F2). Returns whether THIS call is the
-    /// first to open it — a repeated target answers `false` without spawning, so a
-    /// looping model cannot pile up tabs. First-ness is independent of the no-browser
-    /// guard: a guarded first call is still the one that "opened" the page.
+    /// first to open it — a repeated target answers `false` without opening again, so a
+    /// looping model cannot pile up tabs. First-ness is independent of the page opener:
+    /// a first call "opened" the page even when the opener opens nothing.
     fn open_page_once(&self, target: &str) -> bool {
         let fresh = self
             .opened_pages
@@ -300,7 +316,7 @@ impl ConnectorHub {
         if !fresh {
             return false;
         }
-        let _ = crate::adapters::browser::open_guarded(target);
+        self.open_page(target);
         true
     }
 
@@ -2602,7 +2618,7 @@ mod server_card_checks {
 }
 
 /// The browser target of one operator-page anchor. Pure construction, so tests can
-/// assert the URL under the no-browser guard without spawning anything. The anchor
+/// assert the URL without opening anything. The anchor
 /// carries its own sigil: `#create-identity` (a fragment) or `bind/{localId}/atproto`
 /// (the connector-served bind route, a path).
 pub fn registration_target(page_url: &str, anchor: &str) -> String {

@@ -134,7 +134,6 @@ fn the_bind_route_starts_the_flow_immediately_and_binds_the_authenticated_accoun
     assert!(!operator_page.contains("type=\"password\"") && !operator_page.contains("appPassword"), "the operator page has no password form: {operator_page}");
 
     // A connect waits for the operator (no binding yet) — the honest popped-page answer.
-    let _guard = no_browser();
     let waiting = hub.invoke(IntakeChannel::Mcp, "Connect", &serde_json::json!({ "serverUrl": server.origin() }));
     assert!(waiting.is_error);
     assert_eq!(
@@ -447,8 +446,9 @@ fn the_port_discipline_is_default_then_environment_then_flag() {
     assert_eq!(port_from(None, None).unwrap(), DEFAULT_PORT);
     assert_eq!(port_from(None, Some("")).unwrap(), DEFAULT_PORT, "an empty environment value falls back");
     assert_eq!(port_from(None, Some("5321")).unwrap(), 5321);
-    assert_eq!(port_from(Some(0), Some("5321")).unwrap(), 0, "the flag wins, and 0 stays ephemeral");
-    assert_eq!(port_from(Some(60123), None).unwrap(), 60123);
+    assert_eq!(port_from(Some(5322), Some("5321")).unwrap(), 5322, "the flag wins");
+    assert!(port_from(Some(0), None).is_err(), "0 would pick a random port");
+    assert!(port_from(None, Some("0")).is_err(), "0 would pick a random port");
     let refused = port_from(None, Some("not-a-port")).expect_err("garbage is an honest refusal");
     assert!(refused.contains("TANGENT_CONNECTOR_PORT"), "the message names the knob: {refused}");
 }
@@ -469,20 +469,4 @@ fn an_in_use_port_is_a_refusal_naming_the_holder() {
     assert!(refused.contains("TANGENT_CONNECTOR_PORT"), "offers the escape: {refused}");
     // With the port free again, the same call binds.
     assert!(operator::bind_listener(&dir, operator::DEFAULT_PORT).is_ok(), "the fixed port binds once free");
-}
-
-// ---------- helpers ----------
-
-/// Restores the no-browser env var on drop, so parallel tests observe the prior world.
-struct EnvGuard(String);
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        std::env::set_var("TANGENT_CONNECTOR_NO_BROWSER", &self.0);
-    }
-}
-
-fn no_browser() -> EnvGuard {
-    let guard = EnvGuard(std::env::var("TANGENT_CONNECTOR_NO_BROWSER").unwrap_or_default());
-    std::env::set_var("TANGENT_CONNECTOR_NO_BROWSER", "1");
-    guard
 }

@@ -88,7 +88,8 @@ fn usage() {
          forget --name N                remove an enrollment and its stored session\n\
          \n\
          Environment: TANGENT_CONNECTOR_HOME (state directory);\n\
-         TANGENT_CONNECTOR_PORT (operator page port; default 5219, 0 = ephemeral)."
+         TANGENT_CONNECTOR_PORT (operator page port; default 5219);\n\
+         TANGENT_CONNECTOR_NO_BROWSER=1 (never open a browser)."
     );
 }
 
@@ -111,7 +112,7 @@ fn serve(rest: &[String]) -> i32 {
         }
     };
     // The SAME loopback operator server the operator verb hosts, in-process — on the
-    // same fixed default port (stable URL; TANGENT_CONNECTOR_PORT or --port overrides).
+    // same fixed port (5219, or the one TANGENT_CONNECTOR_PORT names).
     // Its URL goes to stderr and the diagnostics journal — NEVER stdout, which is
     // protocol-owned JSON-RPC and nothing else.
     let port = match tangent_connector::adapters::operator::resolve_operator_port(None) {
@@ -128,8 +129,7 @@ fn serve(rest: &[String]) -> i32 {
             return EXIT_FAILED;
         }
     };
-    let bound_port = listener.local_addr().map(|address| address.port()).unwrap_or_default();
-    let url = format!("http://127.0.0.1:{bound_port}/");
+    let url = format!("http://127.0.0.1:{port}/");
     eprintln!("Tangent connector operator page: {url}");
     eprintln!("The connector records it in its state so any Connect can pop this page.");
     // The hub is constructed when the initialize request names the connecting client;

@@ -2,8 +2,8 @@
 //! binding (createSession acquisition, password-never-logged, re-bind, unbind), the
 //! three-step bound enrollment (discovery → getServiceAuth → `/mcp/token`) with its
 //! exact wire discipline, honest 503/401/403 error mapping, audience
-//! percent-encoding, and the OpenRegistration tool's internal URL construction under
-//! the no-browser guard.
+//! percent-encoding, and the OpenRegistration tool's internal URL construction without
+//! opening a browser.
 
 mod common;
 
@@ -353,14 +353,6 @@ fn a_server_advertising_another_exchange_method_is_refused_before_any_proof() {
 
 // ---------- OpenRegistration ----------
 
-/// Restores the no-browser env var on drop, so parallel tests observe the prior world.
-struct EnvGuard(String);
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        std::env::set_var("TANGENT_CONNECTOR_NO_BROWSER", &self.0);
-    }
-}
-
 #[test]
 fn open_registration_opens_the_identity_view_without_ever_showing_the_token() {
     let (hub, _dir) = workspace("open-reg");
@@ -369,17 +361,14 @@ fn open_registration_opens_the_identity_view_without_ever_showing_the_token() {
     assert!(none.is_error);
     assert_eq!(none.structured.pointer("/problem/code").and_then(Value::as_str), Some("operator_page_unavailable"));
 
-    hub.set_operator_page_url("http://127.0.0.1:59999/?token=page-secret-1");
+    hub.set_operator_page_url("http://127.0.0.1:5219/?token=page-secret-1");
     // URL construction is pure and assertable without any browser.
     assert_eq!(registration_target("http://127.0.0.1:1/?token=x", "#create-identity"), "http://127.0.0.1:1/?token=x#create-identity");
     assert_eq!(
         hub.registration_target_url().as_deref(),
-        Some("http://127.0.0.1:59999/?token=page-secret-1#create-identity")
+        Some("http://127.0.0.1:5219/?token=page-secret-1#create-identity")
     );
 
-    let previous = std::env::var("TANGENT_CONNECTOR_NO_BROWSER").unwrap_or_default();
-    let _guard = EnvGuard(previous);
-    std::env::set_var("TANGENT_CONNECTOR_NO_BROWSER", "1");
     let outcome = hub.invoke(IntakeChannel::Mcp, "OpenRegistration", &json!({}));
     assert!(!outcome.is_error, "text: {}", outcome.text);
     assert_eq!(outcome.status, "ok");

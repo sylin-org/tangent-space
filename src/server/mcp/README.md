@@ -41,8 +41,8 @@ hand-rolled bounded JSON-RPC over stdio, blocking `ureq` HTTP — no SDK, no tok
   in-process event bus.
 - `src/adapters/` — the spokes: stdio MCP edge (`mcp.rs`), operator web page with its
   live SSE activity feed (`operator.rs` + the embedded `operator.html`), Windows tray
-  (`tray.rs` and the audited message-pump module under `tray/pump.rs`), browser opener
-  with no-browser guard (`browser.rs`), HTTP experience client (`experience.rs`), durable
+  (`tray.rs` and the audited message-pump module under `tray/pump.rs`), the page opener
+  the binary injects (`browser.rs`), HTTP experience client (`experience.rs`), durable
   store with per-enrollment sessions and per-identity atproto sessions (`store.rs`), the
   data-directory lock, background checker (`poller.rs`), diagnostics journal
   (`diagnostics.rs`).
@@ -148,8 +148,9 @@ and are expected to be operator-driven, not concurrent.
 tangent-connector operator [--port N] [--no-open] [--force]
 ```
 
-A long-running local web server (loopback `127.0.0.1` only, ephemeral port unless
-`--port`; `--force` overrides a stale data-directory lock), one page of embedded HTML+JS
+A long-running local web server (loopback `127.0.0.1` only, on the fixed port 5219 unless
+`--port` or `TANGENT_CONNECTOR_PORT` names another; port 0 is refused; `--force` overrides a
+stale data-directory lock), one page of embedded HTML+JS
 (no framework, no CDN), and a Windows tray icon. It prints the ready-to-use address
 `http://127.0.0.1:{port}/` to stdout (this process owns stdout; `serve` and `operator`
 never share a process), records it in connector state (see below), and opens the default
@@ -307,10 +308,11 @@ companion/context handles, identity handle on Connect, view, delivery mode, alia
 unresolved writes). Read operations accept an optional `view` of `orientation` |
 `compact` | `expanded`.
 
-`TANGENT_CONNECTOR_NO_BROWSER=1` skips **every** browser spawn — the tool opens
-(`OpenRegistration`, `Connect`'s popped sign-in page), the operator verb's startup open
-and the tray's "Open operator page" all route through the same guard (tests and headless
-environments); the URLs are still constructed, and the tools answer as usual.
+`TANGENT_CONNECTOR_NO_BROWSER=1` stops the binary opening any browser (headless hosts):
+the tool opens (`OpenRegistration`, `Connect`'s popped sign-in page), the operator verb's
+startup open and the tray's "Open operator page" share one page opener, chosen once at
+startup. The URLs are still constructed, and the tools answer as usual. A hub built without
+the platform browser opens nothing, so the test suites never open one.
 
 Operator commands:
 
@@ -355,8 +357,8 @@ acquire/refuse/force cycle, browser-open command construction), W2-D bound journ
 (atproto binding and re-bind against a fake PDS, the app password never reaching state or
 the diagnostics journal, the three-step bound enrollment with its exact aud/lxm/exp/body
 discipline, honest 503/401/403 mapping, hostile-audience percent-encoding, re-bind keeping
-enrollment sessions, OpenRegistration URL construction and once-per-process de-dup under
-the no-browser guard), the Connect realignment journeys (single-identity auto-resolution
+enrollment sessions, OpenRegistration URL construction and once-per-process de-dup without
+opening a browser), the Connect realignment journeys (single-identity auto-resolution
 with the full enroll-and-arrive success led by the "You are … — session …" line, the
 honest selection question for several identities and the explicit identity argument,
 the no-binding pop with zero enrollment side effects and per-identity anchor routing, the

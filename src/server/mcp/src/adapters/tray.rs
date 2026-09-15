@@ -9,7 +9,6 @@
 
 use std::sync::Arc;
 
-use crate::adapters::browser;
 use crate::application::hub::ConnectorHub;
 use crate::domain::events::DomainEvent;
 
@@ -92,11 +91,7 @@ fn run(hub: Arc<ConnectorHub>, url: String, quit: Box<dyn FnOnce() + Send>) -> R
         .spawn(move || loop {
             match MenuEvent::receiver().recv() {
                 Ok(event) => match event.id.0.as_str() {
-                    // Guarded like every other spawn path: TANGENT_CONNECTOR_NO_BROWSER=1
-                    // covers the tray open too.
-                    "open" => {
-                        let _ = browser::open_guarded(&url);
-                    }
+                    "open" => menu_hub.open_page(&url),
                     "quit" => {
                         menu_hub.events().publish(DomainEvent::Shutdown { reason: "tray quit".into() });
                         // The hook exits the process; take() satisfies FnOnce in a loop.

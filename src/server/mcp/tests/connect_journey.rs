@@ -80,20 +80,6 @@ fn code_of(outcome: &ToolOutcome) -> String {
         .to_string()
 }
 
-/// Restores the no-browser env var on drop, so parallel tests observe the prior world.
-struct EnvGuard(String);
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        std::env::set_var("TANGENT_CONNECTOR_NO_BROWSER", &self.0);
-    }
-}
-
-fn no_browser() -> EnvGuard {
-    let guard = EnvGuard(std::env::var("TANGENT_CONNECTOR_NO_BROWSER").unwrap_or_default());
-    std::env::set_var("TANGENT_CONNECTOR_NO_BROWSER", "1");
-    guard
-}
-
 // ---------- the Connect branches ----------
 
 #[test]
@@ -176,7 +162,6 @@ fn cli_shaped_connects_complete_statelessly_after_the_operator_signs_in() {
     // start-operator instruction, never a hang and never an invented enrollment.
     let first = Arc::new(workspace_at(&dir, CallerId("cli".into())));
     let identity = first.create_identity("ox_omega", None).expect("identity");
-    let _guard = no_browser();
     let waiting = connect_as(&first, IntakeChannel::Cli, server.origin(), None);
     assert!(waiting.is_error);
     assert_eq!(code_of(&waiting), "operator_page_unavailable");
@@ -239,8 +224,7 @@ fn several_identities_require_an_explicit_choice_and_the_argument_resolves() {
     let _beta = hub.create_identity("beta", None).expect("identity");
     hub.bind_atproto(&alpha.local_id, "alpha.bsky.example", "app-pass-a", Some(server.origin()))
         .expect("binding");
-    hub.set_operator_page_url("http://127.0.0.1:59998/");
-    let _guard = no_browser();
+    hub.set_operator_page_url("http://127.0.0.1:5218/");
 
     // No argument: the honest question lists both handles.
     let question = connect(&hub, server.origin());
@@ -277,8 +261,7 @@ fn connect_with_no_binding_pops_the_sign_in_page_and_enrolls_nothing() {
     let server = FakeServer::start();
     let hub = mcp_workspace("pop", "codex-host");
     let identity = hub.create_identity("ox_omega", None).expect("identity");
-    hub.set_operator_page_url("http://127.0.0.1:59999/");
-    let _guard = no_browser();
+    hub.set_operator_page_url("http://127.0.0.1:5219/");
 
     let outcome = connect(&hub, server.origin());
     assert!(outcome.is_error, "the handshake must not pretend to have connected");
@@ -307,7 +290,7 @@ fn connect_with_no_binding_pops_the_sign_in_page_and_enrolls_nothing() {
     // R3: OpenRegistration now routes to this identity's bind page.
     assert_eq!(
         hub.registration_target_url().as_deref(),
-        Some(format!("http://127.0.0.1:59999/{}", bind_anchor(&identity.local_id)).as_str())
+        Some(format!("http://127.0.0.1:5219/{}", bind_anchor(&identity.local_id)).as_str())
     );
     assert_eq!(registration_target("http://127.0.0.1:1/", &bind_anchor("abc")), "http://127.0.0.1:1/bind/abc/atproto");
 
@@ -368,7 +351,6 @@ fn a_pageless_connect_pops_the_recorded_reachable_page_at_the_bind_anchor() {
         store.set_operator_page_url(&page_url);
         store.save().expect("save");
     }
-    let _guard = no_browser();
 
     let outcome = connect_as(&hub, IntakeChannel::Cli, server.origin(), None);
     assert_eq!(code_of(&outcome), "operator_action_needed");
@@ -404,7 +386,6 @@ fn an_unreachable_recorded_page_gets_the_honest_start_operator_instruction() {
         store.set_operator_page_url(&format!("http://127.0.0.1:{dead_port}/"));
         store.save().expect("save");
     }
-    let _guard = no_browser();
 
     let outcome = connect_as(&hub, IntakeChannel::Cli, server.origin(), None);
     assert_eq!(code_of(&outcome), "operator_page_unavailable");
@@ -510,7 +491,6 @@ fn a_waiting_connect_auto_resumes_when_the_operator_signs_in_with_live_sse() {
     // visible no later event can be missed.
     wait_for(&received, "text/event-stream", Duration::from_secs(10));
 
-    let _guard = no_browser();
     // The model connects; the identity has no binding yet, so the tool returns
     // waiting-for-operator honestly.
     let waiting = connect(&hub, server.origin());
@@ -652,8 +632,7 @@ fn repeated_connects_while_waiting_for_the_operator_all_answer_promptly() {
     let server = FakeServer::start();
     let hub = mcp_workspace("loop", "codex-host");
     let identity = hub.create_identity("ox_omega", None).expect("identity");
-    hub.set_operator_page_url("http://127.0.0.1:59999/");
-    let _guard = no_browser();
+    hub.set_operator_page_url("http://127.0.0.1:5219/");
     let events = hub.events().subscribe();
 
     let hub_caller = hub.clone();
@@ -685,8 +664,7 @@ fn three_waiting_connects_narrate_the_wait_once_with_the_initiator() {
     let server = FakeServer::start();
     let hub = mcp_workspace("coalesce", "codex-host");
     let _identity = hub.create_identity("ox_omega", None).expect("identity");
-    hub.set_operator_page_url("http://127.0.0.1:59997/");
-    let _guard = no_browser();
+    hub.set_operator_page_url("http://127.0.0.1:5217/");
     let events = hub.events().subscribe();
 
     for _ in 0..3 {
@@ -706,7 +684,7 @@ fn three_waiting_connects_narrate_the_wait_once_with_the_initiator() {
     // The CLI intake labels its own connect lines "operator (CLI)".
     let cli = workspace("coalesce-cli", CallerId("cli".into()));
     let _cli_identity = cli.create_identity("ox_cli", None).expect("identity");
-    cli.set_operator_page_url("http://127.0.0.1:59996/");
+    cli.set_operator_page_url("http://127.0.0.1:5216/");
     let cli_events = cli.events().subscribe();
     let outcome = connect_as(&cli, IntakeChannel::Cli, server.origin(), None);
     assert_eq!(code_of(&outcome), "operator_action_needed");
@@ -759,7 +737,6 @@ fn a_pending_connect_never_freezes_the_page_or_operator_mutations() {
             .expect("server thread");
     }
     hub.set_operator_page_url(&format!("http://{address}/"));
-    let _guard = no_browser();
 
     // Connect #1: waiting for the operator, honest return.
     let hub_caller = hub.clone();

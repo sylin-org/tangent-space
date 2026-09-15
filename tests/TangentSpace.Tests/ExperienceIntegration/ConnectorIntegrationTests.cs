@@ -60,6 +60,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         // ArgumentList applies correct platform quoting; JSON arguments contain quotes.
         foreach (var argument in arguments) information.ArgumentList.Add(argument);
         information.Environment["TANGENT_CONNECTOR_HOME"] = home;
+        information.Environment["TANGENT_CONNECTOR_NO_BROWSER"] = "1";
         using var process = Process.Start(information)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
@@ -190,7 +191,9 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
                 CreateNoWindow = true,
             };
             information.Environment["TANGENT_CONNECTOR_HOME"] = home;
-            information.Environment["TANGENT_CONNECTOR_PLAINTEXT_CREDENTIALS"] = "1";
+            information.Environment["TANGENT_CONNECTOR_NO_BROWSER"] = "1";
+            // Its own fixed page port, so an operator's running connector keeps 5219.
+            information.Environment["TANGENT_CONNECTOR_PORT"] = "5229";
             var process = Process.Start(information)!;
             _ = process.StandardError.ReadToEndAsync(); // drain to avoid pipe blocking
             return new ConnectorPeer(process, process.StandardOutput, process.StandardInput);

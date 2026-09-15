@@ -1,6 +1,6 @@
 //! The operator spoke: a loopback-only web page for identity and enrollment stewardship,
-//! on a fixed default port (5219 — stable URL; `TANGENT_CONNECTOR_PORT` or `--port`
-//! overrides, 0 stays ephemeral for tests). Hand-rolled minimal HTTP/1.1 in the house
+//! on a fixed port (5219 — a stable URL; `TANGENT_CONNECTOR_PORT` or `--port` names
+//! another fixed port). Hand-rolled minimal HTTP/1.1 in the house
 //! style — request line, headers and a Content-Length body under an 8 KiB header cap
 //! and a 1 MiB body cap, GET/POST only, `Connection: close`, a 30 s read timeout,
 //! JSON-only `/api/*` bodies (form-encoded bodies are refused on every surface). The
@@ -33,7 +33,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use crate::adapters::lockfile::DataDirLock;
-use crate::adapters::{browser, tray};
+use crate::adapters::tray;
 use crate::application::hub::ConnectorHub;
 use crate::domain::events::DomainEvent;
 use crate::domain::identity::CallerId;
@@ -67,8 +67,8 @@ fn operator_index() -> String {
         .replace("<!-- TANGENT_ATMOSPHERE -->", &atmosphere_assets())
 }
 /// The operator page's fixed default port (owner direction): a stable URL any Connect
-/// can name. Overridable via `--port` or `TANGENT_CONNECTOR_PORT`; `0` stays ephemeral
-/// (tests and parallel runs).
+/// can name. `--port` or `TANGENT_CONNECTOR_PORT` names another fixed port; there is no
+/// random port.
 pub const DEFAULT_PORT: u16 = 5219;
 /// The deterministic page URL that goes with [`DEFAULT_PORT`].
 pub const DEFAULT_PAGE_URL: &str = "http://127.0.0.1:5219/";
@@ -76,7 +76,7 @@ pub const DEFAULT_PAGE_URL: &str = "http://127.0.0.1:5219/";
 const BIND_PROVIDER_ATPROTO: &str = "atproto";
 
 /// The port the operator page serves on: the `--port` flag wins, then
-/// `TANGENT_CONNECTOR_PORT`, then the fixed default. `0` means ephemeral (tests).
+/// `TANGENT_CONNECTOR_PORT`, then the fixed default. Port 0 is refused.
 pub fn resolve_operator_port(flag: Option<u16>) -> Result<u16, String> {
     port_from(flag, std::env::var("TANGENT_CONNECTOR_PORT").ok().as_deref())
 }
@@ -84,15 +84,19 @@ pub fn resolve_operator_port(flag: Option<u16>) -> Result<u16, String> {
 /// The pure decision behind [`resolve_operator_port`], so the discipline is assertable
 /// without touching the process environment.
 pub fn port_from(flag: Option<u16>, environment: Option<&str>) -> Result<u16, String> {
-    if let Some(port) = flag {
-        return Ok(port);
+    let port = match (flag, environment.map(str::trim)) {
+        (Some(port), _) => port,
+        (None, None | Some("")) => DEFAULT_PORT,
+        (None, Some(value)) => value
+            .parse::<u16>()
+            .map_err(|_| format!("TANGENT_CONNECTOR_PORT must be a port number, not '{value}'"))?,
+    };
+    if port == 0 {
+        return Err("the operator page needs a fixed port; 0 would pick a random one. \
+            Name one from 1 to 65535 with --port or TANGENT_CONNECTOR_PORT."
+            .to_string());
     }
-    match environment.map(str::trim) {
-        None | Some("") => Ok(DEFAULT_PORT),
-        Some(value) => value.parse::<u16>().map_err(|_| {
-            format!("TANGENT_CONNECTOR_PORT must be a port number (0 for an ephemeral port), not '{value}'")
-        }),
-    }
+    Ok(port)
 }
 
 /// Binds the operator listener on loopback. An in-use fixed port is an honest refusal
@@ -102,7 +106,7 @@ pub fn port_from(flag: Option<u16>, environment: Option<&str>) -> Result<u16, St
 pub fn bind_listener(data_dir: &std::path::Path, port: u16) -> Result<TcpListener, String> {
     match TcpListener::bind(("127.0.0.1", port)) {
         Ok(listener) => Ok(listener),
-        Err(error) if port != 0 && error.kind() == std::io::ErrorKind::AddrInUse => Err(format!(
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => Err(format!(
             "cannot host the operator page on 127.0.0.1:{port}: another process is already listening there \n             (state lock: {}; last recorded operator page: {}). \n             Stop whatever holds the port, or choose another with --port or TANGENT_CONNECTOR_PORT.",
             crate::adapters::lockfile::holder_of(data_dir),
             recorded_page_url(data_dir).unwrap_or_else(|| "none recorded".to_string()),
@@ -173,21 +177,14 @@ pub fn operator(rest: &[String]) -> i32 {
             return 4;
         }
     };
-    let bound_port = listener.local_addr().map(|address| address.port()).unwrap_or_default();
-    let url = format!("http://127.0.0.1:{bound_port}/");
+    let url = format!("http://127.0.0.1:{port}/");
     println!("Tangent connector operator page: {url}");
-    if bound_port == DEFAULT_PORT {
-        println!("This address is the connector's fixed default; it is recorded in state so any Connect can pop this page.");
-    } else {
-        println!("This address lives for the life of this process; the connector records it in its state so any Connect can pop this page.");
-    }
+    println!("The connector records this address in its state so any Connect can pop this page.");
     // The page URL is recorded in memory AND durable state (P4): a Connect in any
     // process — the CLI one-shots included — pops this page at the sign-in anchor.
     hub.announce_operator_page(&url);
     if open_browser {
-        // Guarded like every other spawn path: TANGENT_CONNECTOR_NO_BROWSER=1 covers
-        // the startup open too (tests, headless hosts).
-        let _ = browser::open_guarded(&url);
+        hub.open_page(&url);
     }
     // The tray's Quit releases the data-directory lock and clears the recorded page
     // URL before exiting the process.

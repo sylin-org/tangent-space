@@ -1,8 +1,13 @@
 //! Browser opening for the operator page: the platform's own handler, spawned detached
-//! with null stdio so the connector never owns or waits on a browser process. The
-//! ghostlight `browser_command()` shape (win-peer/bridge house style).
+//! with null stdio so the connector never owns or waits on a browser process. The hub
+//! reaches it only through a [`PageOpener`]: the binary installs [`system`], and a hub
+//! built without one opens nothing, so the test suites never reach a real browser.
 
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+
+/// How the hub hands a page to a browser.
+pub type PageOpener = Arc<dyn Fn(&str) + Send + Sync>;
 
 /// The platform command that hands a URL to the user's default browser.
 pub fn browser_command(url: &str) -> Command {
@@ -24,13 +29,7 @@ pub fn browser_command(url: &str) -> Command {
     command
 }
 
-/// Opens the URL detached; failures are silent (the operator page prints the URL too).
-pub fn open(url: &str) {
-    let _ = browser_command(url).spawn();
-}
-
-/// Tests and headless environments set this to skip browser spawns; the URL is still
-/// constructed and asserted by the caller.
+/// Headless hosts set this to `1` so the binary never opens a browser.
 pub const NO_BROWSER_ENV: &str = "TANGENT_CONNECTOR_NO_BROWSER";
 
 /// Whether a browser spawn is allowed for a given value of [`NO_BROWSER_ENV`].
@@ -38,15 +37,20 @@ pub fn spawn_allowed(flag: Option<&str>) -> bool {
     flag != Some("1")
 }
 
-/// Opens the URL detached unless the no-browser guard is set. Returns whether a spawn
-/// was attempted (the guard answers `false` without touching the platform).
-pub fn open_guarded(url: &str) -> bool {
-    let flag = std::env::var(NO_BROWSER_ENV).ok();
-    if !spawn_allowed(flag.as_deref()) {
-        return false;
+/// The platform browser, spawned detached; failures are silent because the operator page
+/// prints its URL too. [`NO_BROWSER_ENV`] is read once, when the process builds its hub.
+pub fn system() -> PageOpener {
+    if !spawn_allowed(std::env::var(NO_BROWSER_ENV).ok().as_deref()) {
+        return silent();
     }
-    open(url);
-    true
+    Arc::new(|url: &str| {
+        let _ = browser_command(url).spawn();
+    })
+}
+
+/// Opens nothing. Every hub starts with it.
+pub fn silent() -> PageOpener {
+    Arc::new(|_: &str| {})
 }
 
 #[cfg(test)]
@@ -75,10 +79,10 @@ mod tests {
     }
 
     #[test]
-    fn the_no_browser_guard_disables_spawning_only_when_set_to_one() {
+    fn the_no_browser_setting_disables_spawning_only_when_set_to_one() {
         assert!(spawn_allowed(None), "unset means spawns are allowed");
         assert!(spawn_allowed(Some("0")), "only the exact value 1 disables");
         assert!(spawn_allowed(Some("")));
-        assert!(!spawn_allowed(Some("1")), "the guard value disables spawns");
+        assert!(!spawn_allowed(Some("1")), "the setting value disables spawns");
     }
 }
