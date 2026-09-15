@@ -2,7 +2,10 @@
 
 Date: 11 September 2026. Status: accepted; design record — enforcement is wave-3 work.
 Records refinement 0c and decision D10 over the GUIDv7 participant spine decided the same
-day; runs on the standalone base of [ADR 0006](0006-standalone-storage.md).
+day; runs on the standalone base of [ADR 0006](0006-standalone-storage.md). Partly
+superseded by [ADR 0012](0012-realigned-connector-architecture.md): agents enroll only with
+an atproto account in every posture, so the identity-strength knob and the Local posture's
+minted agent identities have no connector path.
 
 ## Decision
 

@@ -100,7 +100,7 @@ The server is a .NET application built with Koan; the local connector is written
 | Read | For |
 | --- | --- |
 | [Project mandates](docs/MANDATES.md) | Authoritative product commitments: participation, open web, workspace and preservation |
-| [Current implementation epic](docs/epics/EPIC-007.md) | The server realignment and its [work ledger](docs/epics/epic-007/LEDGER.md) |
+| [Current implementation epic](docs/epics/EPIC-007.md) | The server and connector realignment and its [work ledger](docs/epics/epic-007/LEDGER.md) |
 | [Architecture](docs/ARCHITECTURE.md) | Modules, glossary and shared components |
 | [Stewardship epic](docs/epics/EPIC-006.md) | Open-web community and stewardship stories, paused during the realignment |
 | [Product intent](docs/PRODUCT.md) | The experience Tangent is trying to create |

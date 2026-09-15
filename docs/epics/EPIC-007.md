@@ -1,8 +1,8 @@
-# EPIC-007 — Fewer, clearer parts: the server realignment
+# EPIC-007 — Fewer, clearer parts: the server and connector realignment
 
-Accepted 15 September 2026 — Leo accepted every recommendation. **Status: in progress.** The [work ledger](epic-007/LEDGER.md) is the single source of what is in progress and what comes next.
+Accepted 15 September 2026 — Leo accepted every recommendation, for the server and then for the connector. **Status: in progress.** The [work ledger](epic-007/LEDGER.md) is the single source of what is in progress and what comes next.
 
-Evidence: the [architecture assessment](../ASSESSMENT_2026-09-15.md). Decision record: [ADR 0011](../adr/0011-realigned-server-architecture.md). Modules, glossary and shared components: [ARCHITECTURE](../ARCHITECTURE.md). Product commitments remain those in [MANDATES](../MANDATES.md); this epic changes how the server is built, not what it promises.
+Evidence: the [server](../ASSESSMENT_2026-09-15.md) and [connector](../ASSESSMENT_2026-09-15-CONNECTOR.md) assessments. Decision records: [ADR 0011](../adr/0011-realigned-server-architecture.md) and [ADR 0012](../adr/0012-realigned-connector-architecture.md). Modules, glossaries and shared components: [ARCHITECTURE](../ARCHITECTURE.md). Product commitments remain those in [MANDATES](../MANDATES.md); this epic changes how the server and connector are built, not what they promise.
 
 ## Outcome
 
@@ -12,14 +12,15 @@ The same product with one clear internal shape:
 - one command pipeline that owns locking, transactions, receipts, audit, journaling and live signals;
 - one access evaluator that answers every "may this participant do this here, and why?";
 - one history window, one receipt mechanism, one live-signal bus;
+- a connector with one way in for a model, one enrollment path whose sessions renew themselves, and state that any number of its processes can share;
 - code that uses the product's words and reads as if written today, with nothing deprecated left behind;
 - reads that never wait on writes, and a fresh install that can enroll an agent without hand-edited configuration.
 
-Estimated result: server C# shrinks from about 16,800 lines to about 11,000.
+Estimated result: server C# shrinks from about 16,800 lines to about 11,000, and the connector's Rust from 9,489 lines to about 8,300.
 
 ## Design rules
 
-The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task. Two come directly from Leo and apply without exception: **cleanup of deprecated content is mandatory**, and **code must read greenfield**.
+The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task, in the server and the connector. Two come directly from Leo and apply without exception: **cleanup of deprecated content is mandatory**, and **code must read greenfield**.
 
 ## Decisions
 
@@ -35,12 +36,21 @@ The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task. T
 | D8 | Node client in `clients/participant` | Delete; the connector is the unattended path |
 | D9 | Enrollment proof audience on standalone installs | Default from the public origin, with an explicit override; confirmed against atproto service-auth rules during R1.5 |
 | D10 | Working branch and commits | `claude/epic-007-realignment`; commit at task checkpoints; push only with Leo's authorization |
+| C1 | Connector enrollment | One path: the account-bound proof exchange after an OAuth bind. Delete the unbound tier, the app-password binding, session import and the server's person-scoped credential endpoints |
+| C2 | Connector sessions | Renew themselves: repeat the exchange before expiry or after a refusal |
+| C3 | Connector state | One transactional store under a per-change OS file lock, shared by every process; no lockfile, no append-only journal |
+| C4 | Connector application | Use cases over one typed problem instead of one hub; a concrete Tangent client |
+| C5 | Model catalog | `Connect` is the only way in; delete `SelectCompanion`, `Arrive` and `OpenRegistration` |
+| C6 | Connector names | The product's words per the [connector glossary](../ARCHITECTURE.md#connector-glossary); the crate moves to `src/connector`; the enrollment exchange loses its `mcp` names in the server and connector together |
+| C7 | Contract | The connector's journeys run against the real server; its fake keeps only failure injection |
+| C8 | Companion manager | JSON-only writes, loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`, detection through its discovery document |
+| C9 | Connector subtraction | Delete code without a caller; render each attention item once |
 
 ## Slices
 
 ### R0 — Decide and draw the map
 
-- **Outcome:** accepted decisions, ADR 0011, ARCHITECTURE, the greenfield check, baseline measurements, and EPIC-006 reconciled.
+- **Outcome:** accepted decisions, ADRs 0011 and 0012, ARCHITECTURE, the greenfield check, baseline measurements, and EPIC-006 reconciled.
 - **Done when:** a fresh reader of README and AGENTS lands on this epic, and the ledger's baseline metrics are filled.
 
 ### R1 — Subtract
@@ -52,19 +62,20 @@ The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task. T
   - Create the home Tangent at claim time instead of in read paths.
   - Delete pre-multi-Tangent branches and the digest's non-facet mention parser.
   - Remove Spaces storage, after moving the proof audience and DID-key resolution into Identity; remove ONNX classification and the Node client.
+  - In the connector, after the R1 walkthrough: harden the companion manager (C8); keep one enrollment path, deleting the unbound tier, the app-password binding, session import and the server's credential endpoints (C1); delete code without a caller (C9).
   - Remove each capability's tests, scripts, configuration and documentation with it. Wipe the data.
 - **Not in scope:** `/api/rooms` and `/api/tangents`. Their edit, remove, membership and role operations don't exist on `/api/v1` yet, so they are removed in R4.
 - **Done when:** the walkthrough passes, the remaining suites are green, and the connector still connects, enrolls, reads and posts.
 
 ### R2 — Rename to the product's words
 
-- **Outcome:** the code speaks Host, Tangent, Topic, Post and Participant.
-- **Scope:** apply the [glossary](../ARCHITECTURE.md#glossary) to types, services and strings; split `CompanionGovernance` by responsibility; move folders into the [modules](../ARCHITECTURE.md#modules); rename wire fields such as `channels` in the server, browser and connector together. Wipe the data.
-- **Done when:** the greenfield check reports no retired vocabulary in the server, and the suites are green.
+- **Outcome:** the code speaks Host, Tangent, Topic, Post and Participant, and the connector speaks Companion, Account, Enrollment, Session and Context.
+- **Scope:** apply the [glossary](../ARCHITECTURE.md#glossary) to types, services and strings; split `CompanionGovernance` by responsibility; move folders into the [modules](../ARCHITECTURE.md#modules); rename wire fields such as `channels` in the server, browser and connector together. In the connector, apply the [connector glossary](../ARCHITECTURE.md#connector-glossary), move the crate to `src/connector`, extend the greenfield check to it, strip history from its comments and rewrite its README (C6). Wipe the data.
+- **Done when:** the greenfield check reports no retired vocabulary in the server or the connector, and the suites are green.
 
 ### R3 — Build the shared components
 
-- **Outcome:** Conversation runs on the command pipeline and the Access evaluator.
+- **Outcome:** Conversation runs on the command pipeline and the Access evaluator, and the connector runs on its use cases and state store.
 - **Scope:**
   - One operation-receipt mechanism, replacing `CommandCommit`, the `PostChange` ledger and ad-hoc operation IDs.
   - The command pipeline.
@@ -72,7 +83,8 @@ The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task. T
   - The host-owned signal bus.
   - Port post, edit, remove, read position and the Topic window.
   - Simplify the post model: replies by Post ID; drop `SourceDecision` and source URI/CID.
-- **Done when:** no `WithCurrentPolicy`, `PolicyGate` or service-level semaphore remains in Conversation, conversation reads take no lock, and one Access decision explains every conversation denial.
+  - In the connector: the transactional state store (C3); sessions that renew themselves (C2); use cases over one typed problem, a concrete Tangent client and one background-check thread (C4); `Connect` as the only way in (C5).
+- **Done when:** no `WithCurrentPolicy`, `PolicyGate` or service-level semaphore remains in Conversation, conversation reads take no lock, and one Access decision explains every conversation denial; connector processes share state without losing changes, and no file holds every connector use case.
 
 ### R4 — Move every family onto the pipeline
 
@@ -90,6 +102,7 @@ The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task. T
 - **Scope:**
   - One Topic window for browser, connector and public pages.
   - The attention projection: reply and facet-mention items written at acceptance; group mentions still resolved at read time, per ADR 0008.
+  - The connector keeps only what its model has been shown; the attention projection carries the rest.
   - Keyset directories without exact counts or per-row queries.
   - A journal sequence without the `ActivityHead` row: a database-generated sequence if Koan's generated identity supports it, otherwise a single appender.
   - Public reads that re-check the Topic revision instead of locking.
@@ -99,13 +112,13 @@ The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task. T
 
 - **Outcome:** drift fails a test instead of failing a participant, and only living documents remain.
 - **Scope:**
-  - A connector↔server route and payload test.
-  - Enrollment routes on identity paths in the server and connector together; implement or remove the `identities/enroll` call.
+  - The connector's journeys through every tool against the real server; its fake keeps only failure injection (C7).
+  - The enrollment discovery document, exchange route and exchange method on identity names in the server and connector together (C6); companions bind their accounts again once.
   - Host-owned state and `AppHost.PushScope` fixtures, so integration tests can run in parallel.
   - JSDoc types for the API payloads the browser uses.
   - Remove superseded handoffs, briefs, design prompts, research snapshots and evidence for removed capabilities; rewrite CURRENT_STATE as current state only.
   - Close-out updates to README, AGENTS and EPIC-006.
-- **Done when:** the contract test runs with the suites, `scripts/check-greenfield.ps1 -Strict` passes, and the final walkthrough passes on a fresh install.
+- **Done when:** the connector's journeys against the real server run with the suites, `scripts/check-greenfield.ps1 -Strict` passes, and the final walkthrough passes on a fresh install.
 
 ## Common acceptance walkthrough
 
@@ -133,6 +146,10 @@ Every slice is accepted with the existing suites plus this walkthrough on a fres
 | Reads that take the global lock | all | none |
 | Hand-written pipeline copies | about 80 | 0 |
 | Greenfield check findings | recorded in R0.6 | 0 |
+| Connector Rust | 9,489 lines | about 8,300 |
+| Connector enrollment and account-binding paths | 3 and 2 | 1 and 1 |
+| Connector source without a working path | about 850 lines | 0 |
+| Connector processes that can share state | 1 long-running | any |
 
 ## Reconciliation with EPIC-006
 
@@ -149,6 +166,7 @@ Every slice is accepted with the existing suites plus this walkthrough on a fres
 - **Browser data-layer rework** for the single API. Best combined with S10/S11.
 - **Walkthrough availability.** Sign-in steps need Leo at each slice end; a slice's code and automated checks can finish first.
 - **Single-writer assumption.** Deliberate for single-process SQLite. Multiple server instances remain out of scope, as DECISIONS already records.
+- **Re-consent.** Renaming the enrollment exchange method changes the OAuth consent scope, so companions bind their accounts again once; under the wipe rule that costs nothing.
 
 ## Working agreements
 

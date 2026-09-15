@@ -9,10 +9,10 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
 | Current task | R1.8 — verify R1 on a fresh install (`doing`) |
-| Next action | Continue R1.8 from the first unticked step under [In flight](#in-flight) |
-| Last checkpoint | 2026-09-15 · S-002 · R1.8 in progress: fresh install running; checkpoint commit "fix: drop the removed tools.json from the image build"; the walkthrough is next |
+| Next action | Continue the R1.8 walkthrough at W4, whose mention draft is typed, unsent, in the Open questions composer of Leo's Chrome; after R1.8's close-out, the connector tasks R1.11–R1.14 |
+| Last checkpoint | 2026-09-15 · S-002 · Leo accepted the connector realignment (R0.9, ADR 0012); commit "docs: accept the connector realignment"; the R1.8 walkthrough resumes at W4 |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
-| Waiting on | Leo: the sign-in steps of the R1 walkthrough; push authorization (optional) |
+| Waiting on | Leo: the sign-in steps of the R1 walkthrough (W9); push authorization (optional) |
 | Blockers | None (Docker Desktop's startup crash was cleared on 2026-09-15; see N-023) |
 
 ## Resume protocol
@@ -107,6 +107,7 @@ Accepted by Leo on 2026-09-15 ("Accept all recommendations"). Details in [EPIC-0
 | R0.6 | Baseline: full .NET, browser and connector suites; greenfield counts | done | [Metrics](#metrics) filled | .NET 506/518 (12 [known failures](#known-baseline-failures)); browser 170/170; connector 98/98; greenfield 4,132 |
 | R0.7 | Working branch and archive tag | done | Both exist | `claude/epic-007-realignment`; `archive/pre-epic-007` → `d682c26` |
 | R0.8 | `scripts/check-greenfield.ps1` | done | Reports counts per rule | `ea55313` |
+| R0.9 | Connector realignment: assessment, decisions C1–C9, ADR 0012, ARCHITECTURE's connector section, EPIC-007 | done | Every recommendation accepted | Leo accepted all, 2026-09-15 (N-031); commit "docs: accept the connector realignment" |
 
 The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a freshly wiped install; until then the running instance keeps Leo's data.
 
@@ -124,6 +125,10 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | doing | Walkthrough passes; about 5,000 fewer lines | |
 | R1.9 | Per Leo (15 September): no dialogs. Replace the post-removal `confirm()`, the report `<dialog>`, the atmosphere `<dialog>` and the connector page's three `confirm()` calls with inline controls; guard against their return (N-027) | done | No dialog remains; the guards pass; the walkthrough uses the inline controls | Commit "refactor: replace every dialog with inline controls": `inline-confirm.js` confirms post removal in place, the report form and the atmosphere picker are in-page panels, the companion page confirms inline; `tests/no-dialogs.test.mjs` and `the_page_opens_no_dialog` guard it; browser 129/129, connector 99/99; the inline removal passed live in W3 |
 | R1.10 | Per Leo (15 September): no random ports. The connector refuses port 0; its hub opens pages only through an injected opener, silent unless the binary installs the platform browser; tests lose the shared no-browser guard and their random-looking fake addresses (N-028) | done | No product code picks a random port; no test opens a browser | Commit "fix: open pages only through the hub and drop random ports": `PageOpener` injected (silent by default, the platform browser only in `build_hub`); port 0 refused; the env guards and random-looking fake addresses gone; connector 99/99; .NET connector integration 3/3 on the release binary |
+| R1.11 | Per C8: harden the companion manager — JSON-only writes, a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; detect the page through `/api/discovery`; tests inject the page address; no example keeps state outside the user profile | todo | A cross-site `text/plain` POST and a foreign `Host` are refused; connector suite green | |
+| R1.12 | Per C1: one enrollment path — delete the unbound tier (`enroll-unbound`, `enroll_unbound`, its payloads, wording, fake route and tests), the app-password binding (`bind_atproto`, `createSession`) and session import (`enroll --token-file`), with the server's `/api/participation/credentials` endpoints; tests seed connector state directly, and the .NET connector tests enroll through the bound exchange against the fake account server; README passages go with them | todo | One enrollment path and one binding path remain; suites green | |
+| R1.13 | Per C9: delete code without a caller (`adapters/delivery.rs`, the automatic-turn policy, `ExperiencePort::wait`, `ToolOutcome::exit_code`, `experience::shared`, `Perspective::from_identity`, `Budget::truncated`, `StopFlag`, `CallerId::default`), the legacy-enrollment drop, the pre-scope client id and `StateFile.version`; render each attention item once | todo | No listed identifier remains; suites green | |
+| R1.14 | Verify the connector: suites, greenfield check, and W5 again on the release binary | todo | W5 passes; metrics updated | |
 
 ### R2 — Rename to the product's words
 
@@ -133,7 +138,8 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R2.2 | Split `CompanionGovernance` by responsibility: membership, admission, watches, classification | todo | No file owns unrelated responsibilities | |
 | R2.3 | Move folders into the modules of [ARCHITECTURE](../../ARCHITECTURE.md#modules), including `Mcp/Authentication` into Identity | todo | Namespaces match the module map | |
 | R2.4 | Rename wire fields such as `channels` in the server, browser and connector together | todo | Connector and browser suites green | |
-| R2.5 | Wipe and verify | todo | Suites and walkthrough green | |
+| R2.5 | Per C6: the connector glossary in code, CLI and tools (`Companion`, `Account`, `Enrollment`, `Session`, `Context`, `Receipt`, the `manager` command); `room` → `topic`; the crate moves to `src/connector`; the greenfield check scans the connector, with rules for plan-item codes and owner narration; comments lose their history; the README describes the current connector only | todo | The greenfield check reports no retired vocabulary or history in the connector | |
+| R2.6 | Wipe and verify | todo | Suites and walkthrough green | |
 
 ### R3 — Build the shared components
 
@@ -145,7 +151,11 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R3.4 | Access evaluator grown from `TopicPermissionEvaluator`, with a single adapter over Koan role bags and table-driven tests; rewrite the [known baseline failures](#known-baseline-failures) against it, and cover an authority change racing a command at the Access hook (N-020); derive the Host owner's authority from the site so the Owner role stores no members (N-025) | todo | The evaluator explains every Topic decision; the known failures pass | |
 | R3.5 | Host-owned live bus replacing the static bus and `ConversationUpdates` | todo | No process-wide signal state | |
 | R3.6 | Port Conversation (post, edit, remove, read position, Topic window); replies by Post ID; drop `SourceDecision` and source URI/CID | todo | No `WithCurrentPolicy` or semaphores in Conversation; reads take no lock | |
-| R3.7 | Verify with the suites and walkthrough; update metrics | todo | Green | |
+| R3.7 | Per C3: the connector's transactional state store — reads without a lock, each write under an OS file lock with a re-read; receipts in the state; account-session refresh under the lock; the lockfile, `--force` and the one-process rule removed; a second `serve` shares a running companion manager | todo | Two processes changing state concurrently lose nothing | |
+| R3.8 | Per C2: sessions renew themselves — expiry recorded from the exchange; renewal before expiry or after a 401, once | todo | An expired session renews without a person | |
+| R3.9 | Per C4: use cases instead of the hub (companions, enrollment, participation, activity) over one `Problem`; a concrete Tangent client with one route table; intakes stop reaching into the store; one background-check thread; the waiting `Connect` stays inside its use case (N-031) | todo | No file holds every use case; no `Result<_, String>` in the application | |
+| R3.10 | Per C5: `Connect` as the only way in; `SelectCompanion`, `Arrive` and `OpenRegistration` removed; the Experience API spec and the connector README updated | todo | The base catalog has 11 tools | |
+| R3.11 | Verify with the suites and walkthrough; update metrics | todo | Green | |
 
 ### R4 — Move every family onto the pipeline
 
@@ -167,14 +177,15 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R5.3 | Keyset directories without exact counts or per-row queries | todo | Query plans are bounded | |
 | R5.4 | Journal sequence without the `ActivityHead` row | todo | No shared counter row | |
 | R5.5 | Public reads without the lock, re-checking the Topic revision | todo | A concurrent audience-narrowing test passes | |
-| R5.6 | Measure on the EPIC-005 synthetic dataset through the real API | todo | Results recorded here | |
+| R5.6 | The connector keeps only what its model has been shown; the attention projection carries the rest | todo | The connector stores no waiting counts, revisions or withdrawal heuristics | |
+| R5.7 | Measure on the EPIC-005 synthetic dataset through the real API | todo | Results recorded here | |
 
 ### R6 — Lock the contract and finish the cleanup
 
 | ID | Task | Status | Done when | Evidence |
 |---|---|---|---|---|
-| R6.1 | Connector↔server route and payload contract test | todo | The test fails on a missing route | |
-| R6.2 | Enrollment routes: implement or remove the `identities/enroll` call; move `/mcp/token` and `/.well-known/tangent-mcp` to identity paths in server and connector together | todo | Connector and server agree; no `mcp` paths on the server | |
+| R6.1 | Per C7: the connector's journeys through every tool against the real server in the .NET suite; the Rust fake keeps only failure injection and loses the routes the server lacks | todo | A missing route or a renamed field fails a test | |
+| R6.2 | Enrollment names: move `/mcp/token` and `/.well-known/tangent-mcp` to identity paths and rename the exchange method `local.tangent.mcp.exchange`, and with it the OAuth consent scope, in server and connector together; companions bind again once | todo | Connector and server agree; no `mcp` names on either side | |
 | R6.3 | Parallel integration tests: host-owned state; fixtures use `AppHost.PushScope` | todo | `DisableParallelization` removed or justified | |
 | R6.4 | JSDoc types for the browser's API payloads | todo | `node --check` and the suites green | |
 | R6.5 | Close-out: CURRENT_STATE rewritten as current state only; README, AGENTS, EPIC-006; final walkthrough on a fresh install | todo | Epic marked done | |
@@ -187,7 +198,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 - [x] Announce the wipe; back up `.local/docker/site` as the [Docker guide](../../DOCKER.md) describes and record the backup path here. Announced 2026-09-15; backup `.local/backups/docker-20260915-134736-993` (164 files with a hash manifest). After the claim fix (N-025) a second backup, `.local/backups/docker-20260915-141626-412`, preceded a second wipe
 - [x] Wipe, build (`Build.bat`), launch (`Launch.bat`); confirm `/health/ready`. The first build failed on a stale Dockerfile line (N-024). After the fix the image and connector built in 36 s, a fresh configuration was created and the app was healthy at 09:51. The startup log holds only the Data Protection key-encryptor warning (expected locally; see DOCKER) and the `HTTP_PORTS` override notice
 - [x] .NET, browser, lifecycle and connector suites; greenfield check. At `5170f1b`: .NET 338/346 (only the 8 known failures), browser 125/125, lifecycle 76/76, connector 98/98, greenfield 1,883
-- [ ] Walkthrough W1–W10 with Leo, who does every sign-in; record results under [Walkthrough results](#walkthrough-results)
+- [ ] Walkthrough W1–W10 with Leo, who does every sign-in; record results under [Walkthrough results](#walkthrough-results). W1–W3 and W8 pass and W5 is in progress; paused at W4 for the connector assessment
 - [ ] Update metrics, CURRENT_STATE's top section and the session log; commit
 
 Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, `node --test "tests/*.test.mjs"`, then `pwsh scripts/check-greenfield.ps1`.
@@ -228,7 +239,11 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 | — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,824 / 8 / 0 | 0 |
 | .NET tests | 506 of 518 (12 known failures) | 338 of 346 (the 8 remaining known failures, N-020) | all pass |
 | Browser tests | 170 of 170 | 125 of 125 | all pass |
-| Connector tests | 98 of 98 | 98 of 98 (R1.5) | all pass |
+| Connector tests | 98 of 98 | 99 of 99 (R1.10) | all pass |
+| Connector Rust lines (baseline at `deb70ab`) | 9,489 | 9,489 | about 8,300 |
+| Connector enrollment / account-binding paths | 3 / 2 | 3 / 2 | 1 / 1 |
+| Connector source without a working path | about 850 | about 850 | 0 |
+| Mutexes in `ConnectorHub` | 10 | 10 | no hub |
 
 Recompute with the commands in note N-008 and the greenfield check.
 
@@ -242,10 +257,10 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 | W2 Topic created and made public | pass: Claude created "Open questions" and set "Anyone on the web"; the signed-out page answers 200 (N-026) | | | | | |
 | W3 Post, reply, edit, remove; edit history | pass after R1.9: Claude posted, replied, edited (history shows the original, without scores) and removed through the inline confirmation; the first removal attempt opened a native dialog (N-027) | | | | | |
 | W4 Participant and group mentions reach catch-up | | | | | | |
-| W5 Agent enrolls, reads, posts, gets attention | | | | | | |
+| W5 Agent enrolls, reads, posts, gets attention | in progress: after N-029 the agent enrolled against Bluesky, joined Workshop once granted Member (N-030), read Open questions and posted (p7, p8); attention through `GetUpdates` follows W4 | | | | | |
 | W6 Report, case list, defer, escalate | | | | | | |
 | W7 Signed-out permalink with older/newer paging | | | | | | |
-| W8 Live post in another tab keeps a draft | | | | | | |
+| W8 Live post in another tab keeps a draft | pass: the agent's second post (p8) appeared live in Leo's open Topic, marked by the "1 new post" bar, while an unsent draft stayed in the composer | | | | | |
 | W9 Account switch re-renders | | | | | | |
 | W10 Container restart keeps state and sessions | | | | | | |
 
@@ -292,6 +307,8 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-028** (R1.10) Leo saw random ports such as 59998. Connector tests set and restored the process-wide `TANGENT_CONNECTOR_NO_BROWSER` around each test, but `cargo test` runs tests in parallel, so one test's restore could clear it while another popped a page: Chrome opened at the tests' fake `127.0.0.1:59998` address or at their OS-assigned listener ports. The hub now opens pages only through an injected `PageOpener` (silent unless `build_hub` installs the platform browser), the env guards are gone, the fake addresses use fixed ports, and the connector refuses port 0 (`--port`, `TANGENT_CONNECTOR_PORT`). Spawned test connectors get `NO_BROWSER` and their own fixed page ports (5229 for .NET, 5230 and up for the stdio journeys). In-process test fakes still bind OS-assigned loopback ports; nothing shows them now.
 - **N-029** (R1.8, W5) N-018's derivation was wrong for atproto: Bluesky refused `did:web:127.0.0.1%3A5220` ("aud must be a valid atproto DID or did#serviceId reference"). atproto's did:web profile admits a hostname and allows a port only for localhost. A loopback origin now derives `did:web:localhost%3A<port>`, a hostname on its default port derives `did:web:<host>`, and an IP literal or other port derives nothing; `ProofAudience.IsAtprotoAudience` validates the configured override at startup. `EnrollmentTests` passed with the old value because their fake account server does not enforce the profile. The first reconnect also showed that after a server wipe the connector's saved enrollment is dead: Connect blocks with "the operator must renew this enrollment's session", and `forget` then Connect enrolls afresh.
 - **N-030** (R1.8, W5) A newly enrolled participant sees no Tangent. The home Tangent is created "open to signed-in" (`TangentCommunity.Home`), but its access map inherits See = @Member, and a new participant holds no Member role until the owner grants it. The admission flag and the access map disagree — another instance of N-010's stacked permission models. R3.4's Access evaluator decides what "open to signed-in" means; the walkthrough grants the agent Member through the Roles UI.
+- **N-031** (R0.9) Leo accepted C1–C9 with the standing rules and the server's architecture concepts: a DDD monolith, clear separation of concerns and the fewest meaningful moving parts, simple but not simplistic. Two findings shape the connector tasks. The waiting `Connect` that finishes by itself once the operator signs in was Leo's own addendum, so R3.9 keeps it, inside the Connect use case and without its sweeper thread. `ExperiencePort` has one implementation, and the tests reach the same `ureq` client over TCP, so by rule 3 R3.9 makes the Tangent client concrete. Leo also asked to take greenfield realignments where they fit: the crate leaves `src/server/mcp` for `src/connector` in R2.5.
+- **N-032** (R0.9, environment) The walkthrough's connector state holds a lock from process 36356 (12 September), which no longer runs. CLI calls ignore it, but `serve` and `operator` refuse to start without `--force`. R3.7 removes the lockfile; until then, start the manager with `--force` if the walkthrough needs it.
 
 ## Findings to route
 
@@ -320,10 +337,14 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R1.8 (in progress): suites green at `5170f1b`; Docker Desktop's startup crash cleared (N-023); backup `.local/backups/docker-20260915-134736-993`; state wiped; the Dockerfile's stale `tools.json` copy removed (N-024); the fresh install is healthy.
 - R1.8 walkthrough: W1 passed after the Owner-role fix (N-025, `b7061dd`), W2 passed (N-026 UI findings), W3 passed after R1.9 removed every dialog (N-027). Leo: the app never opens dialogs; the ports report is next.
 - R1.10: the random ports Leo saw came from connector tests opening real browser tabs; the hub now opens pages only through an injected opener and the connector refuses port 0 (N-028).
-- Next: W4–W10.
+- The derived proof audience became atproto-valid (`did:web:localhost%3A5220`, N-029, `deb70ab`); the agent enrolled, joined Workshop once granted Member (N-030) and posted; W8 passed.
+- Leo paused development for a connector assessment in the server assessment's form: [ASSESSMENT_2026-09-15-CONNECTOR](../../ASSESSMENT_2026-09-15-CONNECTOR.md). Connector suite 99/99; clippy 10 lints; no code changed.
+- R0.9: Leo accepted every connector recommendation (C1–C9); ADR 0012, ARCHITECTURE's connector section, EPIC-007 and this ledger carry them (N-031).
+- Next: W4–W7, W9 and W10; then R1.8's close-out and the connector tasks R1.11–R1.14.
 
 ## Evidence index
 
 - [Architecture assessment, 15 September](../../ASSESSMENT_2026-09-15.md)
+- [Connector architecture assessment, 15 September](../../ASSESSMENT_2026-09-15-CONNECTOR.md)
 - [Previous assessment, 12 September](../../ASSESSMENT_2026-09-12.md)
 - Recorded suite results before this epic: [CURRENT_STATE](../../CURRENT_STATE.md)

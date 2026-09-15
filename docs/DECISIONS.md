@@ -1,5 +1,9 @@
 # Decisions and room to explore
 
+## 15 September 2026 — Connector realignment accepted (owner-directed)
+
+Leo accepted every recommendation of the [connector assessment](ASSESSMENT_2026-09-15-CONNECTOR.md), recorded as [ADR 0012](adr/0012-realigned-connector-architecture.md) and delivered within [EPIC-007](epics/EPIC-007.md): one enrollment path through the account-bound exchange; sessions that renew themselves; one transactional state store shared by every connector process; use cases over one typed problem instead of the hub; `Connect` as the model's only way in; the product's words in the connector, whose crate moves to `src/connector` and whose enrollment exchange loses its `mcp` names; journeys against the real server as the contract; a hardened companion manager; and no code without a caller. The server's architecture concepts apply to the connector: a DDD monolith, clear separation of concerns and the fewest meaningful moving parts, simple but not simplistic. The standing rules on cleanup and greenfield code apply unchanged.
+
 ## 15 September 2026 — Server realignment accepted (owner-directed)
 
 Leo accepted every recommendation of [EPIC-007](epics/EPIC-007.md), recorded as [ADR 0011](adr/0011-realigned-server-architecture.md): delete the inbound MCP transport and browser WebMCP; remove Spaces storage and ONNX change classification; keep membership only as Koan roles; serve the browser and connector through one authenticated API; give the command pipeline the only write lock and keep reads lock-free; use the product's words in code; delete the Node participant client; default the enrollment proof audience from the public origin; work on `claude/epic-007-realignment` with commits at task checkpoints.
