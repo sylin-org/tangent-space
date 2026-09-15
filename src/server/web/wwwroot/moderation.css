@@ -47,20 +47,18 @@
 .moderation-preview-actions .btn { min-height:34px; padding:6px 10px; font-size:.72rem; }
 .moderation-terminal { padding:12px; border:1px solid var(--line); border-radius:9px; background:#111016; color:var(--ink-soft); font-size:.76rem; line-height:1.55; }
 
-.report-dialog { width:min(560px,calc(100vw - 28px)); max-height:calc(100dvh - 32px); padding:0; border:1px solid var(--line-strong); border-radius:18px; background:#17151d; color:var(--ink); color-scheme:dark; box-shadow:0 36px 100px #000b; overflow:auto; }
-.report-dialog::backdrop { background:#07060ba8; backdrop-filter:blur(3px); }
-.report-dialog form { display:grid; gap:15px; padding:24px; }
+.report-panel { margin:0 0 16px; border:1px solid var(--line-strong); border-radius:14px; background:#17151d; color:var(--ink); color-scheme:dark; }
+.report-panel form { display:grid; gap:15px; padding:22px; }
 .report-heading { display:flex; align-items:start; justify-content:space-between; gap:18px; }
 .report-heading .eyebrow { margin:0 0 6px; color:var(--accent); }
 .report-heading h2 { margin:0; font:500 28px/1.2 Georgia,serif; }
 .report-heading .btn { flex:none; min-height:32px; padding:5px 9px; font-size:.72rem; }
 .report-context { margin:0; color:var(--ink); font-weight:600; overflow-wrap:anywhere; }
 .report-explanation { margin:0; padding:11px 13px; border:1px solid var(--line); border-radius:9px; background:#111016; color:var(--ink-soft); font-size:.76rem; line-height:1.55; }
-.report-dialog label { display:grid; gap:7px; color:var(--ink-soft); font-size:.78rem; }
-.report-dialog .input { font-size:.86rem; }
+.report-panel label { display:grid; gap:7px; color:var(--ink-soft); font-size:.78rem; }
+.report-panel .input { font-size:.86rem; }
 .report-actions { display:flex; flex-wrap:wrap; gap:9px; }
-.report-dialog #report-status { min-height:1.2em; margin:0; }
-body:has(.report-dialog[open]) { overflow:hidden; }
+.report-panel #report-status { min-height:1.2em; margin:0; }
 
 @media(min-width:1100px) {
   body[data-stewardship='true']:is([data-page='topic'],[data-page='post']) { --page-width:1240px; }
@@ -79,7 +77,7 @@ body:has(.report-dialog[open]) { overflow:hidden; }
   .stewardship-panel { padding:17px; border-radius:13px; }
   .stewardship-heading { display:grid; }
   .stewardship-heading .btn { justify-self:start; }
-  .report-dialog form { padding:19px; }
+  .report-panel form { padding:18px; }
   .report-heading h2 { font-size:24px; }
   .moderation-metrics { grid-template-columns:1fr; }
 }

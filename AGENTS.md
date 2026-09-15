@@ -30,6 +30,8 @@ The active epic is [EPIC-007](docs/epics/EPIC-007.md), the server realignment ([
 
 Two standing rules from Leo apply to all work: **cleanup of deprecated content is mandatory** — removing a capability removes its code, tests, scripts, configuration and documentation — and **code must read greenfield**, with no legacy, compatibility or historical naming, comments or shims. `scripts/check-greenfield.ps1` reports violations.
 
+Leo also set a UI rule: **the app never opens a dialog**. The browser and the connector's companion page do not block with `alert`, `confirm`, `prompt` or a modal `<dialog>`; a destructive action confirms inline in place, and a form opens as a panel in the page. `tests/no-dialogs.test.mjs` and the connector's operator tests enforce it.
+
 ## Koan issue ownership
 
 Leo requires Koan bugs discovered while developing Tangent to be passed to Koan's agent.

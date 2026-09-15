@@ -8,22 +8,23 @@
   <title>Tangent Space</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/app.css?v=20260912-polish1">
-  <link rel="stylesheet" href="/rooms.css?v=20260915-history1">
+  <link rel="stylesheet" href="/rooms.css?v=20260915-inline1">
   <link rel="stylesheet" href="/onboarding.css?v=20260912-live1">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
   <link rel="stylesheet" href="/landing.css?v=20260913-roles5">
   <link rel="stylesheet" href="/access.css?v=20260914-access5">
-  <link rel="stylesheet" href="/moderation.css?v=20260913-cases1">
-  <link rel="stylesheet" href="/atmosphere.css?v=20260912-surfaces1">
+  <link rel="stylesheet" href="/moderation.css?v=20260915-inline1">
+  <link rel="stylesheet" href="/atmosphere.css?v=20260915-inline1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
-  <script src="/atmosphere.js?v=20260912-welcome" defer></script>
+  <script src="/atmosphere.js?v=20260915-inline1" defer></script>
   <script src="/pages.js?v=20260913-spa4" defer></script>
   <script src="/onboarding.js?v=20260912-profile-cache" defer></script>
   <script src="/app.js?v=20260913-spa2" defer></script>
   <script src="/activity-transport.js?v=20260912-shared2" defer></script>
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
-  <script src="/moderation.js?v=20260913-cases1" defer></script>
-  <script src="/rooms.js?v=20260915-local" defer></script>
+  <script src="/moderation.js?v=20260915-inline1" defer></script>
+  <script src="/inline-confirm.js?v=20260915-inline1" defer></script>
+  <script src="/rooms.js?v=20260915-inline1" defer></script>
   <script src="/roles.js?v=20260914-roles8" defer></script>
   <script src="/access.js?v=20260914-access5" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
@@ -83,7 +84,7 @@
                 <label>Card and cover image<input class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"><span class="hint">An image URL, used on your welcome header and server card.</span></label>
                 <label>Description &amp; welcome<textarea class="input" name="welcomeMessage" rows="3" maxlength="1000" placeholder="What happens here? Who is this place for?"></textarea></label>
                 <label>Message of the day<input class="input" name="motd" maxlength="500" placeholder="A little news for anyone dropping by"></label>
-                <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet">Choose an atmosphere</button></div>
+                <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet" aria-controls="atmosphere-panel" aria-expanded="false">Choose an atmosphere</button></div>
               </div>
               <aside class="server-card-preview" aria-label="Your server card preview">
                 <div class="server-card-art"><img id="server-card-image" alt="" referrerpolicy="no-referrer" hidden><span class="eyebrow">Tangent server · ✧</span><div><span class="server-card-sigil" aria-hidden="true">✦</span><h3 id="server-card-name">Your place</h3><p id="server-card-byline"></p></div></div>
@@ -356,6 +357,17 @@
               <ol id="messages" class="messages" aria-label="Messages"></ol>
               <button id="more-messages" class="btn btn-quiet" type="button" hidden>Read more</button>
               <div id="read-checkpoint" class="read-checkpoint" hidden><p id="read-state-note" class="hint">Caught up with the posts loaded here.</p><button id="acknowledge" class="btn btn-quiet" type="button" hidden>Mark these posts as read</button></div>
+              <section id="report-panel" class="report-panel" hidden aria-labelledby="report-title">
+                <form id="report-form">
+                  <header class="report-heading"><div><p class="eyebrow">A private signal to stewards</p><h2 id="report-title">Report this post</h2></div><button id="report-close" class="btn btn-quiet" type="button" aria-label="Close report form">Close</button></header>
+                  <p id="report-context" class="report-context"></p>
+                  <p class="report-explanation">This creates or adds to a private moderation case. It does not remove the post or decide that a rule was broken.</p>
+                  <label>What concerns you?<select class="input" name="reasonCode"><option value="conduct">Harassment or harmful conduct</option><option value="spam">Spam or manipulation</option><option value="privacy">Privacy or safety</option><option value="other">Something else</option></select></label>
+                  <label>What should the stewards understand?<textarea class="input" name="statement" rows="4" maxlength="512" required placeholder="Describe the concern in your own words."></textarea></label>
+                  <div class="report-actions"><button id="report-submit" class="btn btn-primary" type="submit">Send report</button><button id="report-cancel" class="btn btn-quiet" type="button">Cancel</button></div>
+                  <p id="report-status" class="hint" role="status" aria-live="polite"></p>
+                </form>
+              </section>
               <form id="message-form" class="compose" hidden><p id="reply-context" class="reply-strip" hidden></p><button id="cancel-reply" class="btn btn-quiet" type="button" hidden>Cancel reply</button><label for="message-text">Your post</label><textarea id="message-text" class="input" rows="4" required placeholder="Add to the conversation…"></textarea><div class="compose-footer"><span id="message-size" class="hint">0 / 4096 bytes</span><button id="send-message" class="btn btn-primary">Send post</button></div><p id="pending-message" class="hint" role="status" hidden></p></form>
             </div>
           </section>
@@ -382,18 +394,6 @@
         </div>
         <p id="action-status" class="note" role="status" aria-live="polite" hidden></p>
       </section>
-
-      <dialog id="report-dialog" class="report-dialog" aria-labelledby="report-title">
-        <form id="report-form">
-          <header class="report-heading"><div><p class="eyebrow">A private signal to stewards</p><h2 id="report-title">Report this post</h2></div><button id="report-close" class="btn btn-quiet" type="button" aria-label="Close report form">Close</button></header>
-          <p id="report-context" class="report-context"></p>
-          <p class="report-explanation">This creates or adds to a private moderation case. It does not remove the post or decide that a rule was broken.</p>
-          <label>What concerns you?<select class="input" name="reasonCode"><option value="conduct">Harassment or harmful conduct</option><option value="spam">Spam or manipulation</option><option value="privacy">Privacy or safety</option><option value="other">Something else</option></select></label>
-          <label>What should the stewards understand?<textarea class="input" name="statement" rows="4" maxlength="512" required placeholder="Describe the concern in your own words."></textarea></label>
-          <div class="report-actions"><button id="report-submit" class="btn btn-primary" type="submit">Send report</button><button id="report-cancel" class="btn btn-quiet" type="button">Cancel</button></div>
-          <p id="report-status" class="hint" role="status" aria-live="polite"></p>
-        </form>
-      </dialog>
 
       <section id="participant-profile" class="participant-profile" hidden aria-labelledby="profile-name">
         <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Participant</span></nav>

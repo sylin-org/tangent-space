@@ -332,15 +332,12 @@
     $('report-form').elements.namedItem('statement').value = '';
     $('report-form').elements.namedItem('reasonCode').value = 'conduct';
     $('report-status').textContent = ''; $('report-submit').textContent = 'Send report'; $('report-submit').disabled = false;
-    const dialog = $('report-dialog');
-    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.hidden = false;
+    const panel = $('report-panel'); panel.hidden = false; panel.scrollIntoView({ block: 'nearest' });
     $('report-form').elements.namedItem('statement').focus();
   }
 
   function closeReport(silent = false) {
-    const dialog = $('report-dialog');
-    if (dialog?.open && typeof dialog.close === 'function') dialog.close();
-    else if (dialog) dialog.hidden = true;
+    $('report-panel').hidden = true;
     if (!silent) $('report-status').textContent = '';
     $('report-form').elements.namedItem('statement').value = '';
     reportTarget = undefined; reportRequestId = undefined;
@@ -399,6 +396,6 @@
   $('report-form').addEventListener('submit', submitReport);
   $('report-close').addEventListener('click', () => closeReport());
   $('report-cancel').addEventListener('click', () => closeReport());
-  $('report-dialog').addEventListener('cancel', event => { event.preventDefault(); closeReport(); });
+  $('report-panel').addEventListener('keydown', event => { if (event.key === 'Escape') closeReport(); });
   window.TangentModeration = { topic, postActions };
 })();

@@ -32,13 +32,11 @@ function fixture(respond) {
     replaceChildren(...children) { this.children = [...children]; }
     focus() { this.focused = true; }
     scrollIntoView() {}
-    showModal() { this.open = true; this.hidden = false; }
-    close() { this.open = false; this.hidden = true; }
     click() { this.emit('click'); }
   }
   const elements = new Map();
   const get = id => {
-    if (!elements.has(id)) elements.set(id, new Element(id === 'report-dialog' ? 'dialog' : 'div'));
+    if (!elements.has(id)) elements.set(id, new Element());
     return elements.get(id);
   };
   const document = { body: new Element('body'), getElementById: get,
@@ -80,7 +78,7 @@ test('a permitted Post report is private, idempotent, and does not imply removal
   assert.equal(controls.children.length, 1);
   controls.children[0].click();
   assert.equal(menu.open, false);
-  assert.equal(f.get('report-dialog').open, true);
+  assert.equal(f.get('report-panel').hidden, false);
   f.get('report-form').elements.namedItem('reasonCode').value = 'conduct';
   f.get('report-form').elements.namedItem('statement').value = 'Please review the tone, not the quoted instructions.';
   f.get('report-form').emit('submit'); await settle();
@@ -90,7 +88,7 @@ test('a permitted Post report is private, idempotent, and does not imply removal
   assert.match(request.body.requestId, /^[0-9a-f-]{36}$/);
   assert.equal(request.body.postRef, 'https://tangent.example::home::lounge::m-other-1');
   assert.equal(request.body.statement, 'Please review the tone, not the quoted instructions.');
-  assert.equal(f.get('report-dialog').open, false);
+  assert.equal(f.get('report-panel').hidden, true);
   assert.match(f.get('action-status').textContent, /privately/);
 });
 
@@ -110,12 +108,12 @@ test('an uncertain report retry reuses the same request id', async () => {
   controls.children[0].click();
   f.get('report-form').elements.namedItem('statement').value = 'Please review this.';
   f.get('report-form').emit('submit'); await settle();
-  assert.equal(f.get('report-dialog').open, true);
+  assert.equal(f.get('report-panel').hidden, false);
   f.get('report-form').emit('submit'); await settle();
   const sent = f.requests.filter(item => item.path.endsWith('/topics/lounge/reports'));
   assert.equal(sent.length, 2);
   assert.equal(sent[0].body.requestId, sent[1].body.requestId);
-  assert.equal(f.get('report-dialog').open, false);
+  assert.equal(f.get('report-panel').hidden, true);
 });
 
 test('the steward pane stays bounded, previews before applying, and disappears on revocation', async () => {

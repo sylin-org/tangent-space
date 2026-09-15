@@ -53,14 +53,13 @@ const SSE_KEEPALIVE: Duration = Duration::from_secs(15);
 const INDEX_HTML: &str = include_str!("operator.html");
 const OPERATOR_STYLE: &str = include_str!("operator.css");
 
-// Both products use the same bounded ASCII renderer and accessible appearance controls.
-// Embed the assets so the local manager remains one self-contained executable.
+// Both products draw the same bounded ASCII atmosphere. Embed its assets so the local
+// manager remains one self-contained executable.
 fn atmosphere_assets() -> String {
-    let controls = include_str!("../../../web/wwwroot/atmosphere.js")
-        .replace("Use server settings", "Use default settings");
-    format!("<style>{}</style><script>{}</script><script>{controls}</script>",
+    format!("<style>{}</style><script>{}</script><script>{}</script>",
         include_str!("../../../web/wwwroot/atmosphere.css"),
-        include_str!("../../../web/wwwroot/ascii-scenes.js"))
+        include_str!("../../../web/wwwroot/ascii-scenes.js"),
+        include_str!("../../../web/wwwroot/atmosphere.js"))
 }
 
 fn operator_index() -> String {
@@ -889,6 +888,14 @@ fn respond(writer: &mut TcpStream, status: u16, body: Value, location: Option<&s
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn the_page_opens_no_dialog() {
+        let page = operator_index();
+        for blocking in ["alert(", "confirm(", "prompt(", "showModal(", "<dialog", "createElement('dialog')"] {
+            assert!(!page.contains(blocking), "the companion page must not use {blocking}");
+        }
+    }
 
     #[test]
     fn capped_reads_consume_one_line_at_a_time_and_refuse_oversize() {

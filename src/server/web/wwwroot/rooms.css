@@ -245,6 +245,10 @@ a.reply-label:hover { color:var(--accent-strong); }
 .message-menu-panel > a,.message-menu-panel > .btn { display:block; width:100%; box-sizing:border-box; padding:.5rem .6rem; border:0; text-align:left; border-radius:5px; text-decoration:none; font:.8rem var(--sans); color:var(--ink); }
 .message-menu-panel > a:hover { background:rgba(255,255,255,.06); }
 .message-menu-panel .message-danger { color:#eeaaa2; }
+.inline-confirm { display:grid; gap:.35rem; padding:.5rem .6rem; border-radius:6px; background:rgba(238,170,162,.07); }
+.inline-confirm-question { font:.78rem var(--sans); color:var(--ink); }
+.inline-confirm .btn { width:100%; min-height:2rem; padding:.4rem .6rem; font:.78rem var(--sans); text-align:left; }
+.inline-confirm .inline-confirm-yes,.inline-confirm .inline-confirm-yes:hover,.inline-confirm .inline-confirm-yes:focus-visible { color:#1b1822; background:#eeaaa2; border-color:#eeaaa2; }
 .message-menu .source-details { margin:0; padding:.35rem .6rem; border-top:1px solid var(--line); }
 .message-menu .did { white-space:normal; overflow-wrap:anywhere; }
 .message-edit-form { display:flex; flex-wrap:wrap; gap:.5rem; }

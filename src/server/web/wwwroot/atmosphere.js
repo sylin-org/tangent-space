@@ -23,17 +23,19 @@
   const canvas = document.createElement('canvas'); canvas.id = 'ascii-atmosphere'; canvas.setAttribute('aria-hidden', 'true');
   document.body.prepend(canvas);
   const background = renderer(canvas);
-  const dialog = document.createElement('dialog'); dialog.id = 'atmosphere-dialog'; dialog.setAttribute('aria-labelledby', 'atmosphere-heading');
-  dialog.innerHTML = `<header class="atmosphere-heading"><div><p class="eyebrow">LIGHT, LETTERS & A LITTLE WONDER</p><h2 id="atmosphere-heading">Find the mood.</h2></div><button type="button" id="atmosphere-close" class="btn btn-quiet" aria-label="Close atmosphere settings">Close <span aria-hidden="true">×</span></button></header>
+  const panel = document.createElement('section'); panel.id = 'atmosphere-panel'; panel.hidden = true; panel.setAttribute('aria-labelledby', 'atmosphere-heading');
+  panel.innerHTML = `<header class="atmosphere-heading"><div><p class="eyebrow">LIGHT, LETTERS & A LITTLE WONDER</p><h2 id="atmosphere-heading">Find the mood.</h2></div><button type="button" id="atmosphere-close" class="btn btn-quiet" aria-label="Close atmosphere settings">Close <span aria-hidden="true">×</span></button></header>
     <div class="atmosphere-stage"><canvas id="atmosphere-preview" aria-hidden="true"></canvas><div class="atmosphere-stage-caption"><span id="atmosphere-number"></span><h3 id="atmosphere-scene-name"></h3><p id="atmosphere-scene-note"></p></div><span class="atmosphere-material">MADE OF CHARACTERS. FULL OF LIFE.</span></div>
     <div class="atmosphere-scenes" role="group" aria-label="Choose an ASCII scene"></div>
     <div class="atmosphere-controls"><label class="atmosphere-intensity" for="atmosphere-intensity">Intensity <output id="atmosphere-intensity-value"></output><input id="atmosphere-intensity" type="range" min="0" max="100" step="1"></label><div class="atmosphere-color"><label><input id="atmosphere-palette" type="checkbox"> Scene colours</label><input id="atmosphere-color" type="color" aria-label="Custom background colour" value="#d4b57c"></div><label class="atmosphere-motion"><input id="atmosphere-motion" type="checkbox"> Gentle motion</label><label class="atmosphere-spotlight" title="Let nearby characters brighten as you move your mouse"><input id="atmosphere-spotlight" type="checkbox"> Mouse Spotlight</label></div>
     <p id="atmosphere-motion-note" class="hint" hidden>Your device prefers reduced motion. This scene will stay still.</p>
     <footer class="atmosphere-footer"><div class="atmosphere-secondary"><button type="button" id="atmosphere-reset" class="btn btn-quiet">Reset preview</button><button type="button" id="atmosphere-off" class="btn btn-quiet" aria-pressed="false">Background off</button></div><button type="button" id="atmosphere-save" class="btn btn-primary" hidden>Save atmosphere</button></footer>
     <p id="atmosphere-status" class="hint" role="status">Choose the atmosphere everyone sees here. Changes stay in preview until saved.</p>`;
-  document.body.append(dialog);
+  // The picker opens in place in Server settings, below the identity editor.
+  const editor = document.querySelector('.server-identity-editor');
+  if (editor) editor.after(panel); else document.body.append(panel);
   const $ = id => document.getElementById(id);
-  const choices = dialog.querySelector('.atmosphere-scenes');
+  const choices = panel.querySelector('.atmosphere-scenes');
   const thumbs = [];
   scenes.forEach((scene, i) => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'atmosphere-scene'; button.dataset.scene = scene.id; button.setAttribute('aria-pressed', 'false');
@@ -45,7 +47,7 @@
   });
   previewRenderer = renderer($('atmosphere-preview'));
   function change(patch) {
-    if (!canManage || !dialog.open || saving) return;
+    if (!canManage || panel.hidden || saving) return;
     draft = { ...settings(), ...sanitize(patch) }; update(); restart();
     $('atmosphere-status').textContent = 'Previewing your changes. Save when it feels right.';
   }
@@ -68,12 +70,12 @@
     $('atmosphere-motion-note').textContent = reduced.matches ? 'Your device prefers reduced motion. This scene will stay still.' : 'Data Saver is on. This scene will stay still.';
     $('atmosphere-save').hidden = !canManage; $('atmosphere-save').disabled = saving;
     $('atmosphere-off').setAttribute('aria-pressed', String(s.scene === 'none'));
-    dialog.querySelectorAll('.atmosphere-controls input, .atmosphere-scene, #atmosphere-reset, #atmosphere-off').forEach(control => { control.disabled = saving; });
+    panel.querySelectorAll('.atmosphere-controls input, .atmosphere-scene, #atmosphere-reset, #atmosphere-off').forEach(control => { control.disabled = saving; });
     $('atmosphere-color').disabled = saving || !s.color;
   }
   function dimensions() {
     background.resize(innerWidth, innerHeight);
-    if (dialog.open) {
+    if (!panel.hidden) {
       const box = $('atmosphere-preview').getBoundingClientRect();
       previewWidth = box.width; previewRenderer.resize(box.width, box.height);
       thumbs.forEach(thumb => { const width = thumb.canvas.clientWidth; if (width > 0 && width !== thumb.width) { thumb.width = width; thumb.painter.resize(width, thumb.canvas.clientHeight); thumb.painter.draw(thumb.scene, 47); } });
@@ -85,7 +87,7 @@
       ? { x: pointer.x, y: pointer.y, radius: Math.max(180, Math.min(420, Math.min(innerWidth, innerHeight) * .26)) } : undefined;
     background.draw(s.scene, time, s.color, { opacity: s.intensity / 100 * .85, spotlight });
     canvas.dataset.spotlight = spotlight ? 'active' : 'off';
-    if (dialog.open && previewWidth > 0) {
+    if (!panel.hidden && previewWidth > 0) {
       const box = $('atmosphere-preview').getBoundingClientRect();
       const inside = spotlight && pointer.x >= box.left && pointer.x <= box.right && pointer.y >= box.top && pointer.y <= box.bottom;
       previewRenderer.draw(s.scene, time, s.color, { opacity: Math.sqrt(s.intensity / 100), spotlight: inside
@@ -108,9 +110,15 @@
     if (document.hidden) { pointer.active = false; pointerDirty = false; return; }
     draw(); pointerDirty = false; if (moving()) frame = requestAnimationFrame(tick);
   }
-  $('atmosphere-close').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('click', event => { if (event.target === dialog) { const b = dialog.getBoundingClientRect(); if (event.clientX < b.left || event.clientX > b.right || event.clientY < b.top || event.clientY > b.bottom) dialog.close(); } });
-  dialog.addEventListener('close', () => { resetWorking(); if (location.pathname.replace(/\/$/, '') === '/settings') $('server-atmosphere-open')?.focus(); });
+  function close() {
+    if (panel.hidden) return;
+    panel.hidden = true; $('server-atmosphere-open')?.setAttribute('aria-expanded', 'false'); resetWorking();
+    if (location.pathname.replace(/\/$/, '') === '/settings') $('server-atmosphere-open')?.focus();
+  }
+  $('atmosphere-close').addEventListener('click', close);
+  panel.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+  // An unsaved preview never follows the owner out of Server settings.
+  window.addEventListener('tangent:route', () => { if (location.pathname.replace(/\/$/, '') !== '/settings') close(); });
   $('atmosphere-motion').addEventListener('change', event => change({ motion: event.target.checked }));
   $('atmosphere-spotlight').addEventListener('change', event => change({ mouseSpotlight: event.target.checked }));
   $('atmosphere-intensity').addEventListener('input', event => change({ intensity: Number(event.target.value) }));
@@ -127,7 +135,7 @@
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || result.reason || 'The atmosphere could not be saved. Try again.');
       if (participant?.participantRef !== actor) return;
-      server = fromServer(result); draft = dialog.open ? { ...server } : undefined; update(); restart();
+      server = fromServer(result); draft = panel.hidden ? undefined : { ...server }; update(); restart();
       $('atmosphere-status').textContent = 'A new atmosphere. Everyone arriving here will see it.';
     } catch (error) { $('atmosphere-status').textContent = error.message; }
     finally { saving = false; update(); }
@@ -135,17 +143,20 @@
   function fromServer(value) {
     return { ...defaults, ...sanitize({ scene: value?.backgroundScene, color: value?.backgroundColor, intensity: value?.backgroundIntensity, motion: value?.backgroundMotion, mouseSpotlight: value?.backgroundMouseSpotlight }) };
   }
-  function resetWorking() { draft = undefined; if (!dialog.open) previewWidth = 0; update(); restart(); }
+  function resetWorking() { draft = undefined; if (panel.hidden) previewWidth = 0; update(); restart(); }
   window.TangentAtmosphere = {
     configure(value, actor) {
       const changedActor = participant?.participantRef !== actor?.participantRef;
       server = fromServer(value); participant = actor; canManage = value?.canManage === true && !!actor?.participantRef;
-      if (changedActor || !canManage) { draft = undefined; if (dialog.open) dialog.close(); }
+      if (changedActor || !canManage) { draft = undefined; close(); }
       update(); restart();
     },
     open() {
-      if (!canManage || location.pathname.replace(/\/$/, '') !== '/settings' || dialog.open) return;
-      draft = { ...server }; dialog.showModal(); update(); dimensions(); restart();
+      if (!canManage || location.pathname.replace(/\/$/, '') !== '/settings') return;
+      if (!panel.hidden) { panel.scrollIntoView({ block: 'nearest' }); return; }
+      draft = { ...server }; panel.hidden = false; $('server-atmosphere-open')?.setAttribute('aria-expanded', 'true');
+      update(); dimensions(); restart(); panel.scrollIntoView({ block: 'nearest' });
+      (choices.querySelector('[aria-pressed="true"]') || choices.querySelector('button'))?.focus();
       $('atmosphere-status').textContent = 'Choose the atmosphere everyone sees here. Changes stay in preview until saved.';
     },
     resetWorking

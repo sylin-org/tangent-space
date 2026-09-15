@@ -66,6 +66,7 @@ Status values: `todo` · `doing` · `waiting` (on Leo) · `blocked` · `done` ·
 
 - **Cleanup is mandatory** (Leo, 15 September). Removing a capability removes its code, tests, scripts, configuration and documentation in the same task. Nothing deprecated stays in the working tree for reference; Git history and the `archive/pre-epic-007` tag are the archive.
 - **Code reads greenfield** (Leo, 15 September). No legacy, compatibility, transitional or historical naming, comments or shims; names follow the [glossary](../../ARCHITECTURE.md#glossary). The greenfield check must reach zero by the end of R6.
+- **No dialogs** (Leo, 15 September). The browser and the connector's companion page never block with `alert`, `confirm`, `prompt` or a modal `<dialog>`: destructive actions confirm inline in place, forms open as panels in the page. `tests/no-dialogs.test.mjs` and the connector's operator tests enforce it.
 - Commit at each task's end together with the ledger update (D10). Push only when Leo authorizes it.
 - Wipes are pre-authorized by the standing rule (DECISIONS, 11 September). Announce each one and back up first. Never delete backups or Git history.
 - No `git reset --hard`, `git clean` or checkout-wide replacement. Preserve unrelated work.
@@ -119,7 +120,8 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, the CBOR package (BouncyCastle stays: it verifies ES256K proofs), the fixture-network launch path and configuration (see N-014), Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README, DOCKER and OPERATING (see N-015). `SourceDecision` goes in R3.6 | done | No Spaces types remain; the connector enrolls on a fresh install | `ac9cb7b`, `5ed4f29`, `99e89be`: no Spaces types remain (`SourceDecision` stays for R3.6); enrollment derives its audience on a fresh install (`EnrollmentTests`); .NET 345/357 (the 12 known), browser 125/125, connector 98/98, lifecycle 76/76; server C# 13,281 → 11,464; greenfield 2,473 → 1,926 |
 | R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | done | Edit history works without scores | `29de598`: no classifier, `ChangeClass`, Onnx reference, model (23 MB) or `Koan:Ai:Onnx` configuration remain; edit history keeps its versions (`EditHistoryTests`); .NET 338/346, failures = the 8 remaining known (N-020); browser 125/125; lifecycle 76/76; greenfield classification 38 → 0, total 1,926 → 1,883; server C# 11,464 → 11,276 |
 | R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph and any remaining participant-runner passages (OPERATING went in R1.5, N-015) | done | No references remain | `5170f1b`: `clients/` is gone and no living document refers to it (R0 had already rewritten the README's credential paragraph; the Experience API spec's migration map and Spaces-era clauses were replaced, N-022); historical references wait for R6.6 (N-011); browser 125/125; greenfield 1,883; no server or connector change |
-| R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | todo | Walkthrough passes; about 5,000 fewer lines | |
+| R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | doing | Walkthrough passes; about 5,000 fewer lines | |
+| R1.9 | Per Leo (15 September): no dialogs. Replace the post-removal `confirm()`, the report `<dialog>`, the atmosphere `<dialog>` and the connector page's three `confirm()` calls with inline controls; guard against their return (N-027) | done | No dialog remains; the guards pass; the walkthrough uses the inline controls | Commit "refactor: replace every dialog with inline controls": `inline-confirm.js` confirms post removal in place, the report form and the atmosphere picker are in-page panels, the companion page confirms inline; `tests/no-dialogs.test.mjs` and `the_page_opens_no_dialog` guard it; browser 129/129, connector 99/99; the inline removal passed live in W3 |
 
 ### R2 — Rename to the product's words
 
@@ -180,7 +182,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 **R1.8 — verify R1 on a fresh install** (doing)
 
-- [x] Announce the wipe; back up `.local/docker/site` as the [Docker guide](../../DOCKER.md) describes and record the backup path here. Announced 2026-09-15; backup `.local/backups/docker-20260915-134736-993` (164 files with a hash manifest)
+- [x] Announce the wipe; back up `.local/docker/site` as the [Docker guide](../../DOCKER.md) describes and record the backup path here. Announced 2026-09-15; backup `.local/backups/docker-20260915-134736-993` (164 files with a hash manifest). After the claim fix (N-025) a second backup, `.local/backups/docker-20260915-141626-412`, preceded a second wipe
 - [x] Wipe, build (`Build.bat`), launch (`Launch.bat`); confirm `/health/ready`. The first build failed on a stale Dockerfile line (N-024). After the fix the image and connector built in 36 s, a fresh configuration was created and the app was healthy at 09:51. The startup log holds only the Data Protection key-encryptor warning (expected locally; see DOCKER) and the `HTTP_PORTS` override notice
 - [x] .NET, browser, lifecycle and connector suites; greenfield check. At `5170f1b`: .NET 338/346 (only the 8 known failures), browser 125/125, lifecycle 76/76, connector 98/98, greenfield 1,883
 - [ ] Walkthrough W1–W10 with Leo, who does every sign-in; record results under [Walkthrough results](#walkthrough-results)
@@ -234,9 +236,9 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 
 | Step | R1 | R2 | R3 | R4 | R5 | R6 |
 |---|---|---|---|---|---|---|
-| W1 Fresh install, claim, first Tangent | | | | | | |
-| W2 Topic created and made public | | | | | | |
-| W3 Post, reply, edit, remove; edit history | | | | | | |
+| W1 Fresh install, claim, first Tangent | pass on the second attempt: the first found N-025. Leo signed in; Claude claimed and named "Workshop" | | | | | |
+| W2 Topic created and made public | pass: Claude created "Open questions" and set "Anyone on the web"; the signed-out page answers 200 (N-026) | | | | | |
+| W3 Post, reply, edit, remove; edit history | pass after R1.9: Claude posted, replied, edited (history shows the original, without scores) and removed through the inline confirmation; the first removal attempt opened a native dialog (N-027) | | | | | |
 | W4 Participant and group mentions reach catch-up | | | | | | |
 | W5 Agent enrolls, reads, posts, gets attention | | | | | | |
 | W6 Report, case list, defer, escalate | | | | | | |
@@ -283,6 +285,8 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-023** (R1.8, environment) Docker Desktop 4.89.0 crashed at start: its backend renames each of its Unix sockets to `*.stale` and fails ("The file cannot be accessed by the system") when socket entries from an earlier session remain, and those entries cannot be deleted either. Moving `%LOCALAPPDATA%\Docker\run` aside (to `run.stale-20260915-094424`) cleared the first failure; the next one, `%LOCALAPPDATA%\docker-secrets-engine\engine.sock`, cleared when Leo restarted Docker Desktop. If it recurs, move the stale folder aside or restart Windows; never use "Reset to factory defaults".
 - **N-024** (R1.8) The first real image build since R1.1 failed: the Dockerfile still copied `docs/design/tangent-mcp/tools.json`, which R1.1 deleted, and `.dockerignore` still re-included it. Both lines are gone. The lifecycle suite mocks Docker, so only a real `docker compose build` catches this; a task that removes files the image build names should run one.
 - **N-025** (R1.8) W1 failed at the claim: "Confirm as Owner" reported "That step could not be completed" although the claim had committed. `ServerGovernance.Claim` projects the Owner role after its commit, and `TangentOwnerRoleGuard` refused every Owner-role change made with an HTTP actor, so the claim's own request was refused (a bodiless 401) and the owner held no Owner role until startup repaired it. Every test calls `Claim` outside a request, so none saw it. The guard now states the projection's rule and applies it whoever asks: members only converge on the site's owner, and the definition is only ever the built-in one. Two tests cover the signed-in claim and the refused edits. Ownership is still stored twice, and nothing requires it: Koan's `Operator` claim (`HostOwnerClaimsTransformation`) and the roles UI (`RoleUiController`) already read the site's owner, so only `TangentRoleAccess.Bag` decisions read the stored membership. R3.4 derives the owner's authority from the site in the Access evaluator and removes the stored membership, `EnsureOwner`, the startup repair and the guard's membership rule.
+- **N-026** (R1.8 walkthrough, UI findings for R5) Public reading is only settable from the conversation's "Topic details → Topic settings" panel; the settings page's Access tab edits role tokens and cannot make a Topic public. The settings page renders its checkboxes as large detached white squares. The permission sentence under "Topic details" shows the raw token `reportPost`. After "Create Topic" the create form stays open above the new conversation. Saving the reading audience collapses the panel without confirmation.
+- **N-027** (R1.8 walkthrough) Deleting a post opened the browser's native `confirm()`, which blocked the page and the automation driving it. Leo: dialogs are an antipattern, and the app never opens one. R1.9 replaces the removal confirm, the report `<dialog>`, the atmosphere `<dialog>` and the connector page's three confirms with inline controls, and guards against their return. The permission sentence's raw `reportPost` (N-026) comes from a missing entry in `rooms.js`'s action labels.
 
 ## Findings to route
 
@@ -309,7 +313,8 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R1.6 (`29de598`): ONNX change classification removed (classifier, `ChangeClass`, the 23 MB model, its configuration and the history chips); the theory that depended on the embedder seam went with it (N-020). .NET 338/346 with only the 8 remaining known failures; browser 125/125; lifecycle 76/76; greenfield 1,883; server C# 11,276.
 - R1.7 (`5170f1b`): Node participant client deleted; the Experience API spec's migration map and Spaces-era clauses replaced (N-022). Browser 125/125; greenfield 1,883.
 - R1.8 (in progress): suites green at `5170f1b`; Docker Desktop's startup crash cleared (N-023); backup `.local/backups/docker-20260915-134736-993`; state wiped; the Dockerfile's stale `tools.json` copy removed (N-024); the fresh install is healthy.
-- Next: the R1 walkthrough with Leo.
+- R1.8 walkthrough: W1 passed after the Owner-role fix (N-025, `b7061dd`), W2 passed (N-026 UI findings), W3 passed after R1.9 removed every dialog (N-027). Leo: the app never opens dialogs; the ports report is next.
+- Next: the random ports Leo saw (59998), then W4–W10.
 
 ## Evidence index
 

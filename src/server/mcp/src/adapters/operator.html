@@ -45,6 +45,18 @@ function note(message, isError) {
 function row(cells) { const tr = document.createElement("tr"); for (const cell of cells) { const td = document.createElement("td"); td.append(...(Array.isArray(cell) ? cell : [cell])); tr.append(td); } return tr; }
 function text(value) { return document.createTextNode(value == null ? "" : String(value)); }
 function element(tag, className, value) { const node = document.createElement(tag); if (className) node.className = className; if (value != null) node.textContent = value; return node; }
+// A destructive action confirms in place; the page never blocks with a dialog.
+function confirmInPlace(trigger, question, confirmLabel, action) {
+  const group = element("span", "confirm-inline"); group.setAttribute("role", "group"); group.setAttribute("aria-label", question);
+  const yes = element("button", "danger", confirmLabel); yes.type = "button";
+  const keep = element("button", "quiet", "Keep"); keep.type = "button";
+  group.append(element("span", "confirm-question", question), yes, keep);
+  const restore = () => { if (group.isConnected) group.replaceWith(trigger); };
+  trigger.addEventListener("click", () => { trigger.replaceWith(group); yes.focus(); });
+  yes.addEventListener("click", () => { restore(); action(); });
+  keep.addEventListener("click", () => { restore(); trigger.focus(); });
+  group.addEventListener("keydown", event => { if (event.key === "Escape") { event.stopPropagation(); restore(); trigger.focus(); } });
+}
 
 // ---------- the live activity feed (SSE) ----------
 const FEED_LIMIT = 20;
@@ -141,13 +153,12 @@ function renderIdentities() {
       if (result.status === "ok") { drafts.delete(identity.localId); note("Companion saved."); await refresh(); } else note(problem(result), true);
     };
     const del = element("button", "danger", "Remove companion"); del.type = "button";
-    del.onclick = async () => {
-      const consequence = identity.enrollmentCount > 0 ? " This also forgets its " + identity.enrollmentCount + " saved Tangent connection(s)." : "";
-      if (!window.confirm("Remove " + (identity.displayName || identity.handle) + " from this connector?" + consequence + " Its Atmosphere account and posts are not deleted.")) return;
+    const consequence = identity.enrollmentCount > 0 ? " This also forgets its " + identity.enrollmentCount + " saved Tangent connection(s)." : "";
+    confirmInPlace(del, "Remove " + (identity.displayName || identity.handle) + " from this connector?" + consequence + " Its Atmosphere account and posts are not deleted.", "Remove", async () => {
       const cascade = identity.enrollmentCount > 0;
       const result = await call("/api/identities/" + identity.localId + "/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cascade }) });
       if (result.status === "ok") { drafts.delete(identity.localId); openEditors.delete(identity.localId); note("Companion removed from this connector."); await refresh(); } else note(problem(result), true);
-    };
+    });
     const actions = element("div", "actions"); actions.append(save); if (account.accountAction) actions.append(account.accountAction); actions.append(del); form.append(actions); editor.append(form, element("p", "technical", "Local ID · " + identity.localId));
     card.append(editor); body.append(card);
   }
@@ -174,12 +185,11 @@ function atmosphereCell(identity) {
   label.append(text(identity.atproto.handle ? "@" + identity.atproto.handle.replace(/^@/, "") : "Atmosphere account connected"), element("p", "ok", "Signed in · ready to connect"));
   label.title = identity.atproto.did;
   cell.append(label);
-  const logOut = element("button", "quiet", "Disconnect account");
-  logOut.onclick = async () => {
-    if (!window.confirm("Disconnect this companion’s Atmosphere account? Its saved Tangent connections will still work. You can forget those separately below.")) return;
+  const logOut = element("button", "quiet", "Disconnect account"); logOut.type = "button";
+  confirmInPlace(logOut, "Disconnect this companion’s Atmosphere account? Its saved Tangent connections will still work. You can forget those separately below.", "Disconnect", async () => {
     const result = await call("/api/identities/" + identity.localId + "/atproto/unbind", { method: "POST", body: "{}" });
     result.status === "ok" ? note("Atmosphere account disconnected.") : note(problem(result), true); await refresh();
-  };
+  });
   cell.accountAction = logOut;
   return cell;
 }
@@ -227,13 +237,12 @@ function renderEnrollments(enrollments) {
     for (const enrollment of entries) {
       const name = byId.get(enrollment.identityId) || enrollment.displayName || enrollment.handle || "Companion";
       const connection = element("div", "saved-connection"); connection.append(element("p", "", name + " · " + (enrollment.autoCheck ? "Checks for updates" : "Checks when asked")));
-      const forget = element("button", "quiet danger", "Forget connection for " + name);
-      forget.onclick = async () => {
-        if (!window.confirm("Forget " + name + "’s connection to " + (profile.name || origin) + "? It will need to connect again to return. Existing posts are not deleted.")) return;
+      const forget = element("button", "quiet danger", "Forget connection for " + name); forget.type = "button";
+      confirmInPlace(forget, "Forget " + name + "’s connection to " + (profile.name || origin) + "? It will need to connect again to return. Existing posts are not deleted.", "Forget", async () => {
         forget.disabled = true;
         const result = await call("/api/enrollments/" + enrollment.companionId + "/forget", {method:"POST", body:"{}"});
         result.status === "ok" ? note("Connection forgotten.") : note(problem(result), true); await refresh();
-      };
+      });
       connection.append(forget); details.append(connection);
     }
     copy.append(details); destination.append(copy); body.append(destination);

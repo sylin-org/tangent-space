@@ -85,7 +85,7 @@
   }
   function permissionSummary(view) {
     if (!view) return '';
-    const labels = { read: 'read', reply: 'reply', manageServer: 'manage this server', createTangent: 'create Tangents', manageTangent: 'manage this Tangent', createTopic: 'create Topics', manageTopic: 'manage this Topic', manageParticipants: 'manage participants', editOwnPost: 'edit your posts', deleteOwnPost: 'delete your posts', removePost: 'remove posts' };
+    const labels = { read: 'read', reply: 'reply', manageServer: 'manage this server', createTangent: 'create Tangents', manageTangent: 'manage this Tangent', createTopic: 'create Topics', manageTopic: 'manage this Topic', manageParticipants: 'manage participants', editOwnPost: 'edit your posts', deleteOwnPost: 'delete your posts', removePost: 'remove posts', reportPost: 'report posts' };
     return 'Your role: ' + view.role + '. You can ' + (view.allowedActions || []).map(a => labels[a] || a).join(', ') + '.';
   }
   function renderServerSettings(server) {
@@ -585,7 +585,16 @@
         const controls = element('div', 'message-menu-panel', '');
         const permalink = element('a', 'post-permalink', 'Open post'); permalink.href = '/t/' + encodeURIComponent(room.tangentKey) + '/' + encodeURIComponent(message.id); controls.append(permalink);
         if (mayEdit) { const edit = element('button', 'btn btn-quiet', 'Edit post'); edit.type = 'button'; edit.addEventListener('click', () => { menu.open = false; beginEdit(li, message); }); controls.append(edit); }
-        if (mayDelete) { const remove = element('button', 'btn btn-quiet message-danger', actions.includes('removePost') && !isYou ? 'Remove post' : 'Delete post'); remove.type = 'button'; remove.addEventListener('click', () => { menu.open = false; removeMessage(message); }); controls.append(remove); }
+        if (mayDelete) {
+          const removing = actions.includes('removePost') && !isYou;
+          const remove = element('button', 'btn btn-quiet message-danger', removing ? 'Remove post' : 'Delete post'); remove.type = 'button';
+          const confirmation = window.TangentInlineConfirm.attach(remove, {
+            question: removing ? 'Remove this post for everyone here?' : 'Delete this post?', confirmLabel: removing ? 'Remove' : 'Delete',
+            onConfirm: () => { menu.open = false; removeMessage(message); }
+          });
+          menu.addEventListener('toggle', () => { if (!menu.open) confirmation.reset(); });
+          controls.append(remove);
+        }
         window.TangentModeration?.postActions?.(controls, message, { room, menu, authorName: profile.name });
         const details = element('details', 'source-details', ''); details.append(element('summary', '', 'Source details'));
         for (const value of [message.authorParticipantId, message.sourceUri, message.sourceCid]) if (value) details.append(element('p', 'did', value));
@@ -622,7 +631,6 @@
     }); });
   }
   function removeMessage(message) {
-    if (!confirm(message.permissions?.allowedActions?.includes('removePost') ? 'Remove this post for everyone here?' : 'Delete this post?')) return;
     const key = room.key, mutationKey = (site.participant?.participantRef || site.participant.did) + ':' + key + ':' + message.id;
     if (postMutations.get(mutationKey)?.method === 'PATCH') { status('An edit is pending. Retry Edit to finish it.'); return; }
     const intent = postMutations.get(mutationKey) ?? { method: 'DELETE', body: { operationId: crypto.randomUUID() } };
