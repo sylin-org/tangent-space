@@ -2,6 +2,7 @@ using System.Text.Json;
 using Koan.Core;
 using Koan.Core.Hosting.App;
 using Koan.Data.Core;
+using Koan.Identity;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -243,6 +244,43 @@ public sealed class HumanHostAccountabilityTests
         Assert.Equal(TangentDenial.AlreadyExists, error.Denial);
     }
 
+    [Fact]
+    public async Task A_signed_in_claim_makes_the_claimant_the_Owner_role_member()
+    {
+        using var fixture = new Fixture();
+        var owner = await fixture.Enroll(OwnerDid);
+        fixture.Actor.CurrentActorSubject = owner;
+
+        await fixture.Server.Claim(owner, OwnerDid, true, fixture.Ct);
+
+        using var fresh = EntityContext.NoCache();
+        Assert.Equal(new[] { owner }, (await fixture.Roles.Get(TangentBuiltInRoles.Owner.Token, fixture.Ct))!.Members);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_Owner_role_follows_the_site_owner_whoever_asks(bool signedIn)
+    {
+        using var fixture = new Fixture();
+        var owner = await fixture.Enroll(OwnerDid);
+        var other = await fixture.Enroll(OtherDid);
+        await fixture.Server.Claim(owner, OwnerDid, true, fixture.Ct);
+        fixture.Actor.CurrentActorSubject = signedIn ? owner : null;
+        var token = TangentBuiltInRoles.Owner.Token;
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Roles.Add(token, other, fixture.Ct));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Roles.Remove(token, owner, fixture.Ct));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Roles.Rename(token, "Co-owners", fixture.Ct));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Roles.SetPermissions(token, Array.Empty<string>(), fixture.Ct));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Roles.Delete(token, fixture.Ct));
+
+        using var fresh = EntityContext.NoCache();
+        var role = await fixture.Roles.Get(token, fixture.Ct);
+        Assert.Equal(new[] { owner }, role!.Members);
+        Assert.Equal(TangentBuiltInRoles.Owner.Name, role.Name);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly IHost host;
@@ -253,6 +291,9 @@ public sealed class HumanHostAccountabilityTests
         public ServerGovernance Server { get; }
         public CompanionGovernance Companions { get; }
         public TangentGovernance Tangents { get; }
+        public RoleCollection Roles { get; }
+        /// <summary>The acting subject Koan sees for role changes; null outside a request.</summary>
+        public SignedInActor Actor { get; } = new();
 
         public Fixture(string ownerDid = "")
         {
@@ -275,8 +316,9 @@ public sealed class HumanHostAccountabilityTests
             AppHost.Current = host.Services;
             SQLitePCL.Batteries_V2.Init();
             var directory = new ParticipantDirectory(TimeProvider.System, new NoHandles());
-            var roles = host.Services.GetRequiredService<RoleCollection>();
-            var roleAccess = new TangentRoleAccess(roles);
+            Roles = new RoleCollection(host.Services.GetRequiredService<RoleBagCache>(),
+                host.Services.GetRequiredService<IOptions<RoleOptions>>(), Actor);
+            var roleAccess = new TangentRoleAccess(Roles);
             Server = new(TimeProvider.System, gate, Options.Create(new SiteOptions { OwnerDid = ownerDid }), directory, roleAccess);
             Companions = new(TimeProvider.System, gate, new RoomGovernance(TimeProvider.System, gate, directory, roleAccess), directory);
             Tangents = new(TimeProvider.System, gate, directory, roleAccess);
@@ -322,6 +364,11 @@ public sealed class HumanHostAccountabilityTests
         private sealed class NoHandles : IAtprotoHandleSource
         {
             public Task<string?> HandleOf(string did, CancellationToken ct) => throw new InvalidOperationException("This fixture must not resolve remote handles.");
+        }
+
+        public sealed class SignedInActor : IIdentityActorAccessor
+        {
+            public string? CurrentActorSubject { get; set; }
         }
     }
 }

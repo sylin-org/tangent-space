@@ -1,4 +1,6 @@
+using Koan.Data.Core;
 using Koan.Identity.Roles;
+using TangentSpace.Infrastructure;
 using TangentSpace.Participants;
 using TangentSpace.Site;
 using TangentSpace.Communities;
@@ -79,7 +81,7 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         await roles.Add(owner.Id, participantId, ct);
     }
 
-    private static IReadOnlyDictionary<string, string> Metadata(TangentRoleSeed seed)
+    internal static IReadOnlyDictionary<string, string> Metadata(TangentRoleSeed seed)
         => new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["purpose"] = seed.Description,
@@ -89,8 +91,11 @@ public sealed class TangentRoleAccess(RoleCollection roles)
 }
 
 /// <summary>
-/// Keeps the one human-accountability role outside the generic editor. Application
-/// bootstrap may repair it without an HTTP actor; browser/API mutations may not.
+/// The Owner role is a stored projection of the Host: its only member is the site's
+/// accountable human owner and its definition is the built-in one. Koan role bags cannot take
+/// application-derived tokens, so the projection is stored, and this is its rule. A change that
+/// keeps to it passes whoever makes it (the owner's own claim, startup's repair); every other
+/// change is refused.
 /// </summary>
 public static class TangentOwnerRoleGuard
 {
@@ -100,12 +105,41 @@ public static class TangentOwnerRoleGuard
     {
         if (Interlocked.Exchange(ref registered, 1) != 0) return;
         var lifecycle = new RoleLifecycleBuilder();
-        lifecycle.MemberAdding(Protect).MemberRemoving(Protect).PermissionsChanging(Protect)
-            .RoleChanging(Protect).RoleDeleting(Protect);
+        lifecycle.MemberAdding(AddingMember).MemberRemoving(RemovingMember)
+            .RoleChanging(ChangingDefinition).PermissionsChanging(ChangingDefinition).RoleDeleting(Deleting);
     }
 
-    private static ValueTask<RoleChangeDecision> Protect(RoleChangeContext context)
-        => ValueTask.FromResult(context.Previous.Id == TangentBuiltInRoles.Owner.Token && context.Actor is not null
-            ? RoleChangeDecision.Veto("tangent.owner_role.protected", "The Owner role follows the server's accountable human owner.")
-            : RoleChangeDecision.Continue());
+    private static async ValueTask<RoleChangeDecision> AddingMember(RoleChangeContext context)
+        => !IsOwnerRole(context) || context.Subject == await SiteOwner(context.CancellationToken)
+            ? RoleChangeDecision.Continue() : Refused();
+
+    private static async ValueTask<RoleChangeDecision> RemovingMember(RoleChangeContext context)
+        => !IsOwnerRole(context) || context.Subject != await SiteOwner(context.CancellationToken)
+            ? RoleChangeDecision.Continue() : Refused();
+
+    private static ValueTask<RoleChangeDecision> ChangingDefinition(RoleChangeContext context)
+        => ValueTask.FromResult(!IsOwnerRole(context) || IsBuiltIn(context.Current) ? RoleChangeDecision.Continue() : Refused());
+
+    private static ValueTask<RoleChangeDecision> Deleting(RoleChangeContext context)
+        => ValueTask.FromResult(IsOwnerRole(context) ? Refused() : RoleChangeDecision.Continue());
+
+    private static bool IsOwnerRole(RoleChangeContext context) => context.Previous.Id == TangentBuiltInRoles.Owner.Token;
+
+    private static bool IsBuiltIn(Koan.Identity.Roles.Role role)
+    {
+        var metadata = TangentRoleAccess.Metadata(TangentBuiltInRoles.Owner);
+        return role.Name == TangentBuiltInRoles.Owner.Name
+            && role.Permissions.ToHashSet(StringComparer.Ordinal).SetEquals(TangentBuiltInRoles.Owner.Permissions)
+            && role.Metadata.Count == metadata.Count
+            && metadata.All(entry => role.Metadata.TryGetValue(entry.Key, out var value) && value == entry.Value);
+    }
+
+    private static async Task<string?> SiteOwner(CancellationToken ct)
+    {
+        using var fresh = EntityContext.NoCache();
+        return (await TangentSite.Get(TangentConstants.SiteId, ct))?.OwnerParticipantId;
+    }
+
+    private static RoleChangeDecision Refused()
+        => RoleChangeDecision.Veto("tangent.owner_role.protected", "The Owner role follows the server's accountable human owner.");
 }

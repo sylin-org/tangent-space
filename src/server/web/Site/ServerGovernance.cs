@@ -81,6 +81,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
                 site.OwnerParticipantId, true, false, Permissions.Server(true), site.Byline, site.CoverImageUrl, site.BackgroundScene, site.BackgroundColor, site.BackgroundIntensity, site.BackgroundMotion, site.BackgroundMouseSpotlight);
         }
         finally { gate.Exit(); }
+        // The Owner role projects the committed site; startup repeats the projection (TangentRoleAccess.Seed).
         await roleAccess.EnsureOwner(result.OwnerParticipantId, ct);
         return result;
     }
