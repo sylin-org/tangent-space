@@ -23,11 +23,11 @@ public sealed partial class ExperienceService
         var credential = CredentialOf(principal);
         var identity = await IdentityOf(participantId, ct);
         Rooms.Room? stored;
-        TangentCommunity? tangentRow;
+        Tangent? tangentRow;
         using (EntityContext.NoCache())
         {
             stored = await Room.Get(topicKey, ct);
-            tangentRow = stored is null ? null : await TangentCommunity.Get(stored.TangentKey, ct);
+            tangentRow = stored is null ? null : await Tangent.Get(stored.TangentKey, ct);
         }
         if (stored is null || tangentRow is null)
             return Problem("mentionables", identity, ServerPlace(principal, await SiteLabel(ct)),

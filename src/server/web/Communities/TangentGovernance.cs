@@ -11,7 +11,7 @@ using TangentSpace.Authorization;
 
 namespace TangentSpace.Communities;
 
-/// <summary>Coordinates card ownership, community membership and channel creation under the host policy gate.</summary>
+/// <summary>Coordinates card ownership, Tangent membership and channel creation under the host policy gate.</summary>
 public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
     TangentSpace.Participants.ParticipantDirectory directory, TangentRoleAccess roleAccess)
 {
@@ -21,7 +21,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
     // The prototype deliberately caps policy work. A scan-limit flag says the caller
     // did not receive a complete directory; it never reports a private count.
     public const int MaximumDirectoryScan = 500;
-    private static readonly QueryDefinition tangents = new() { Sort = SortSpecParser.ParseStrict<TangentCommunity>(nameof(TangentCommunity.Id)), CountStrategy = CountStrategy.Exact };
+    private static readonly QueryDefinition tangents = new() { Sort = SortSpecParser.ParseStrict<Tangent>(nameof(Tangent.Id)), CountStrategy = CountStrategy.Exact };
     private static readonly QueryDefinition rooms = new() { Sort = SortSpecParser.ParseStrict<Room>(nameof(Room.Id)), CountStrategy = CountStrategy.Exact };
 
     public Task<TangentsResponse> List(string? actorId, CancellationToken ct) => List(actorId, 1, 1, ct);
@@ -37,7 +37,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var tangent = await TangentCommunity.Get(key, ct);
+            var tangent = await Tangent.Get(key, ct);
             if (tangent is null) return null;
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
             var membership = actorId is null ? null : await TangentMembership.Get(TangentMembership.Key(key, actorId), ct);
@@ -141,11 +141,11 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             if (actor?.IsSuspended == true) throw new TangentRuleViolation(TangentDenial.Forbidden, "A suspended participant cannot create a Tangent.");
             if (space is null || !await CanCreateTangent(space, actor, ct))
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "Server access does not permit this participant to create a Tangent.");
-            if (await TangentCommunity.Get(key, ct) is not null)
+            if (await Tangent.Get(key, ct) is not null)
                 throw new TangentRuleViolation(TangentDenial.AlreadyExists, "That Tangent key already exists.");
             var tangent = space.IsOwner(actorId) || actor?.Classification == ParticipantClassification.Human || space.AllowAgentTangentOwnership
-                ? TangentCommunity.CreateForAuthorizedActor(space, actorId, space.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow())
-                : TangentCommunity.CreateForAuthorizedActor(space, space.OwnerParticipantId, space.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow());
+                ? Tangent.CreateForAuthorizedActor(space, actorId, space.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow())
+                : Tangent.CreateForAuthorizedActor(space, space.OwnerParticipantId, space.OwnerParticipantId, key, name, description, motto, accent, artwork, clock.GetUtcNow());
             if (admission is { } initialAdmission)
                 tangent.ChangeParticipationPolicy(tangent.OwnerParticipantId, initialAdmission, ParticipationPreset.Everyone, UndeclaredAccess.Write, clock.GetUtcNow());
             await tangent.Save(ct);
@@ -171,7 +171,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             var actor = await Participant.Get(actorId, ct);
             if (space?.IsOwner(actorId) != true || actor is null || actor.IsSuspended)
                 throw new UnauthorizedAccessException();
-            var home = await TangentCommunity.Get(TangentCommunity.HomeKey, ct)
+            var home = await Tangent.Get(Tangent.HomeKey, ct)
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The home Tangent does not exist.");
             if (!home.SetupComplete)
             {
@@ -195,7 +195,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
-            var tangent = await TangentCommunity.Get(key, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
+            var tangent = await Tangent.Get(key, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var actor = await Participant.Get(actorId, ct);
             if (actor?.IsSuspended == true) throw new TangentRuleViolation(TangentDenial.Forbidden, "A suspended participant cannot manage a Tangent.");
             var bag = await roleAccess.Bag(actorId, ct);
@@ -219,7 +219,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
-            var tangent = await TangentCommunity.Get(key, ct)
+            var tangent = await Tangent.Get(key, ct)
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var bag = await roleAccess.Bag(actorId, ct);
             var canManage = (tangent.IsOwner(actorId) || TangentRoleAccess.CanDo(
@@ -240,7 +240,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
-            var tangent = await TangentCommunity.Get(key, ct)
+            var tangent = await Tangent.Get(key, ct)
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var actor = await Participant.Get(actorId, ct);
             var bag = await roleAccess.Bag(actorId, ct);
@@ -269,7 +269,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var tangent = await TangentCommunity.Get(tangentKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
+            var tangent = await Tangent.Get(tangentKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var actor = await Participant.Get(actorId, ct);
             var actorMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
             var bag = await roleAccess.Bag(actorId, ct);
@@ -315,11 +315,11 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
-            var tangent = await TangentCommunity.Get(tangentKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
+            var tangent = await Tangent.Get(tangentKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var actor = await Participant.Get(actorId, ct);
             var target = (await directory.ByIdentifier(targetIdentifier, ct))?.Participant
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The participant must first establish a verified arrival.");
-            if (actor?.IsSuspended == true || !tangent.IsOwner(actorId)) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the current Tangent owner can change community membership.");
+            if (actor?.IsSuspended == true || !tangent.IsOwner(actorId)) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the current Tangent owner can change Tangent membership.");
             if (tangent.IsOwner(target.Id) || target.Id == actorId) throw new TangentRuleViolation(TangentDenial.InvalidInput, "Choose a non-owner participant for membership.");
             if (!Enum.IsDefined(role)) throw new TangentRuleViolation(TangentDenial.InvalidInput, "Choose member or removed.");
             var member = TangentMembership.Assign(tangent, target.Id, role, actorId, clock.GetUtcNow());
@@ -343,7 +343,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             var participant = await Participant.Get(did, ct);
-            var tangent = await TangentCommunity.Get(tangentKey, ct);
+            var tangent = await Tangent.Get(tangentKey, ct);
             var bag = await roleAccess.Bag(did, ct);
             var allowed = space is not null && participant?.IsSuspended != true && tangent is not null
                 && await Restrictions.ForTangent(did, tangentKey, clock.GetUtcNow(), ct) is null
@@ -356,7 +356,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         finally { gate.Exit(); }
     }
 
-    private async Task<TangentDescription> DescribeForOwner(TangentCommunity tangent, string actorId, CancellationToken ct)
+    private async Task<TangentDescription> DescribeForOwner(Tangent tangent, string actorId, CancellationToken ct)
     {
         var space = await Space.Get(TangentConstants.SpaceId, ct);
         var participant = await Participant.Get(actorId, ct);
@@ -377,12 +377,12 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         if (space is null) return new TangentSlice([], null);
         var bag = await roleAccess.Bag(did, ct);
         var skipped = checked((page - 1) * TangentsPerPage);
-        var output = new List<TangentCommunity>(TangentsPerPage + 1);
+        var output = new List<Tangent>(TangentsPerPage + 1);
         var visible = 0;
         var scanned = 0;
         for (var storagePage = 1; ; storagePage++)
         {
-            var candidates = await TangentCommunity.AllWithCount(tangents.WithPagination(storagePage, TangentsPerPage), ct);
+            var candidates = await Tangent.AllWithCount(tangents.WithPagination(storagePage, TangentsPerPage), ct);
             foreach (var tangent in candidates.Items)
             {
                 if (++scanned > MaximumDirectoryScan) return new TangentSlice(output, null, true);
@@ -405,14 +405,14 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
     }
 
     private async Task<ChannelSlice> VisibleChannels(Space? space, string? did, Participant? participant, string? tangentKey,
-        TangentCommunity? selectedTangent, TangentMembership? selectedMembership, int page, bool includeManage, CancellationToken ct)
+        Tangent? selectedTangent, TangentMembership? selectedMembership, int page, bool includeManage, CancellationToken ct)
     {
         if (space is null || participant?.IsSuspended == true) return new ChannelSlice([], null);
         var skipped = checked((page - 1) * ChannelsPerTangent);
         var output = new List<RoomDescription>(ChannelsPerTangent + 1);
         var visible = 0;
         var scanned = 0;
-        var tangentCache = new Dictionary<string, TangentCommunity?>();
+        var tangentCache = new Dictionary<string, Tangent?>();
         var membershipCache = new Dictionary<string, TangentMembership?>();
         var now = clock.GetUtcNow();
         for (var storagePage = 1; ; storagePage++)
@@ -429,7 +429,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
                 {
                     if (!tangentCache.TryGetValue(room.TangentKey, out tangent))
                     {
-                        tangent = await TangentCommunity.Get(room.TangentKey, ct);
+                        tangent = await Tangent.Get(room.TangentKey, ct);
                         tangentCache[room.TangentKey] = tangent;
                     }
                     if (did is not null && !membershipCache.TryGetValue(room.TangentKey, out membership))
@@ -464,6 +464,6 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             throw new TangentRuleViolation(TangentDenial.InvalidInput, "Choose a directory page between 1 and 10000.");
     }
 
-    private sealed record TangentSlice(IReadOnlyList<TangentCommunity> Items, int? NextPage, bool ScanLimited = false);
+    private sealed record TangentSlice(IReadOnlyList<Tangent> Items, int? NextPage, bool ScanLimited = false);
     private sealed record ChannelSlice(IReadOnlyList<RoomDescription> Items, int? NextPage, bool ScanLimited = false);
 }

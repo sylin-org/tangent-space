@@ -37,7 +37,7 @@ public sealed class WelcomeController(IOptions<SpaceOptions> options, TangentSer
             await hub.Directory.AtprotoDidOf(participant.Id, ct), await hub.Directory.LabelOf(participant.Id, ct),
             space?.IsOwner(participant.Id) == true, participant.JoinedAt);
         var settings = await server.Read(participantId, ct);
-        var home = space?.IsOwner(participantId) == true ? await TangentCommunity.Get(TangentCommunity.HomeKey, ct) : null;
+        var home = space?.IsOwner(participantId) == true ? await Tangent.Get(Tangent.HomeKey, ct) : null;
         var onboarding = space is null
             ? identity is null ? "sign_in" : settings.CanClaim ? "confirm_owner" : "waiting_owner"
             : space.IsOwner(participantId) && home?.SetupComplete != true ? "create_tangent" : "complete";

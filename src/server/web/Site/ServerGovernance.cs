@@ -73,7 +73,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             space.HumanDeclared = true;
             await space.Save(ct);
             // The Host and its home Tangent are established together; the owner names it during onboarding.
-            if (establishing) await TangentCommunity.Home(space).Save(ct);
+            if (establishing) await Tangent.Home(space).Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();

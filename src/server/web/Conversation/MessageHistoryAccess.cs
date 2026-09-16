@@ -58,7 +58,7 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
     /// <summary>The rooms where the viewer durably holds moderation authority, mirroring
     /// Room.CurrentPolicy's owner/manager clauses: space or Tangent ownership, room manager,
     /// delegated Tangent administrator, or channel creator — subject to room admission: a viewer
-    /// durably Removed from the parent Tangent community loses the tier, and an active durable
+    /// durably Removed from the parent Tangent loses the tier, and an active durable
     /// Banned restriction removes it for non-owners. Time-scoped timeouts are enforced on
     /// management actions in the domain layer and remain deliberately ignored by this read
     /// predicate. Constrain is synchronous on the endpoint read path (no SynchronizationContext)
@@ -84,8 +84,8 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
                 if (membership.Role == TangentRole.Admin) admin.Add(membership.TangentKey);
             }
             var owned = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var tangent in Block<IReadOnlyList<TangentCommunity>>()
-                .Invoke(TangentCommunity.Query(tangent => tangent.OwnerParticipantId == participantId, CancellationToken.None)))
+            foreach (var tangent in Block<IReadOnlyList<Tangent>>()
+                .Invoke(Tangent.Query(tangent => tangent.OwnerParticipantId == participantId, CancellationToken.None)))
                 owned.Add(tangent.Id);
 
             var candidates = new Dictionary<string, Room>(StringComparer.Ordinal);
@@ -112,7 +112,7 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
                 // Room admission parity with CurrentPolicy: a Topic whose Tangent is missing admits no one;
                 // owners are always admitted; otherwise the Tangent's own admission rule decides with the
                 // viewer's membership, where a durable removal overrides.
-                var tangent = Block<TangentCommunity?>().Invoke(TangentCommunity.Get(room.TangentKey, CancellationToken.None));
+                var tangent = Block<Tangent?>().Invoke(Tangent.Get(room.TangentKey, CancellationToken.None));
                 if (tangent is null) continue;
                 var ownerHere = siteOwner || owned.Contains(room.TangentKey);
                 var admitted = ownerHere

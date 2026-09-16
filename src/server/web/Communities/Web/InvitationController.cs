@@ -28,7 +28,7 @@ public sealed class InvitationController(TangentServer hub, TimeProvider clock) 
         if (invitation is null || invitation.RecipientParticipantId != did || !invitation.Usable(clock.GetUtcNow()))
             return Page("This invitation isn't available", "It may have expired, been used, or belong to another account.", "<a href='/'>Return to Tangent</a>");
         // The recipient can review the name carried by their own still-live invitation.
-        var tangent = await TangentCommunity.Get(invitation.TangentKey, ct);
+        var tangent = await Tangent.Get(invitation.TangentKey, ct);
         if (tangent is null) return NotFound();
         return Page("You're invited to " + tangent.Name, "Join with your signed-in account when you're ready.",
             $"<button id='join' data-invitation='{invitationId}'>Join Tangent</button>" +

@@ -23,7 +23,7 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         return Koan.Identity.Roles.Role.CanDo(criteria, bag);
     }
 
-    public async Task<RoomPolicy> ProjectTopic(Room room, TangentCommunity? tangent, RoomPolicy selected,
+    public async Task<RoomPolicy> ProjectTopic(Room room, Tangent? tangent, RoomPolicy selected,
         bool suspended, EffectiveRestriction? restriction, ParticipantClassification classification,
         CancellationToken ct = default)
     {

@@ -598,7 +598,7 @@ public sealed partial class ExperienceService(
     private async Task<ExperiencePlace> TangentPlaceOf(ClaimsPrincipal principal, string participantId, string tangentKey, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var tangent = await TangentCommunity.Get(tangentKey, ct);
+        var tangent = await Tangent.Get(tangentKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ListTopics, ExperienceActionNames.SetWatch };
         if (await tangents.CanAccess(participantId, tangentKey, ct)) allowed.Add(ExperienceActionNames.LeaveTangent);
         else allowed.Add(ExperienceActionNames.JoinTangent);
@@ -644,7 +644,7 @@ public sealed partial class ExperienceService(
     private async Task<string> TangentName(string tangentKey, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        return (await TangentCommunity.Get(tangentKey, ct))?.Name is { Length: > 0 } name ? name : tangentKey;
+        return (await Tangent.Get(tangentKey, ct))?.Name is { Length: > 0 } name ? name : tangentKey;
     }
 
     internal async Task<string> SiteLabel(CancellationToken ct)

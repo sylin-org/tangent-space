@@ -25,7 +25,7 @@ public sealed class Room : Entity<Room>
     public DateTimeOffset UpdatedAt { get; set; }
 
     public static Room Create(Space? space, string actorDid, string key, string title, RoomAdmission admission, DateTimeOffset now,
-        TangentCommunity tangent)
+        Tangent tangent)
     {
         RequireOwner(space, tangent, actorDid);
         return Validate(actorDid, key, title, admission, now, tangent);
@@ -33,7 +33,7 @@ public sealed class Room : Entity<Room>
 
     /// <summary>A tangent administrator creates a channel under delegated authority; the creator gains no ownership.</summary>
     internal static Room CreateDelegated(Space? space, string actorDid, string key, string title, RoomAdmission admission,
-        DateTimeOffset now, TangentCommunity tangent)
+        DateTimeOffset now, Tangent tangent)
     {
         if (space is null || !Participant.IsValidId(actorDid))
             throw Forbidden("A delegated channel needs an established space and a verified participant.");
@@ -41,7 +41,7 @@ public sealed class Room : Entity<Room>
     }
 
     private static Room Validate(string actorDid, string key, string title, RoomAdmission admission,
-        DateTimeOffset now, TangentCommunity tangent)
+        DateTimeOffset now, Tangent tangent)
     {
         CheckKey(key);
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > RoomConstants.MaximumTitleLength)
@@ -55,7 +55,7 @@ public sealed class Room : Entity<Room>
     }
 
     public RoomPolicy CurrentPolicy(Space? space, string? actorDid, RoomMembership? membership, bool suspended = false,
-        TangentCommunity? tangent = null, TangentMembership? tangentMembership = null,
+        Tangent? tangent = null, TangentMembership? tangentMembership = null,
         ParticipantClassification classification = ParticipantClassification.Undeclared, EffectiveRestriction? restriction = null)
     {
         CheckMembership(membership, actorDid);
@@ -63,7 +63,7 @@ public sealed class Room : Entity<Room>
         var signedIn = actorDid is not null && Participant.IsValidId(actorDid);
         // A Topic whose Tangent is missing admits no one, its owners included.
         var owner = signedIn && tangent is not null && (space?.IsOwner(actorDid) == true || tangent.IsOwner(actorDid));
-        var communityAdmitted = owner || tangent?.CanParticipate(actorDid, tangentMembership) == true;
+        var tangentAdmitted = owner || tangent?.CanParticipate(actorDid, tangentMembership) == true;
         // Classification presets gate conversation participation for ordinary members; ownership is authority, not participation.
         var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
         var classificationRead = owner || rights.Read;
@@ -72,39 +72,39 @@ public sealed class Room : Entity<Room>
         var banned = restriction is { Banned: true } && !owner;
         var timedOut = restriction is { Banned: false } && !owner;
         var role = membership?.Role;
-        var communityRole = tangentMembership?.Role;
-        // A delegated community administrator manages channels; a durable room removal still overrides that authority.
-        var delegatedAdmin = signedIn && communityAdmitted && !banned && communityRole == TangentRole.Admin && role != RoomRole.Removed;
-        var manager = signedIn && communityAdmitted && !suspended && !banned && (role == RoomRole.Manager || delegatedAdmin || CreatorParticipantId == actorDid && role != RoomRole.Removed);
+        var tangentRole = tangentMembership?.Role;
+        // A delegated Tangent administrator manages channels; a durable room removal still overrides that authority.
+        var delegatedAdmin = signedIn && tangentAdmitted && !banned && tangentRole == TangentRole.Admin && role != RoomRole.Removed;
+        var manager = signedIn && tangentAdmitted && !suspended && !banned && (role == RoomRole.Manager || delegatedAdmin || CreatorParticipantId == actorDid && role != RoomRole.Removed);
         // Channel grants can widen a reader within an admitted Tangent. Parent admission/removal
         // remains an upper bound; a channel role cannot restore access to a private or removed Tangent.
         var roleAdmitted = role is RoomRole.Manager or RoomRole.Member or RoomRole.Reader;
-        var memberRecord = communityRole is TangentRole.Member or TangentRole.Admin or TangentRole.Reader;
-        var admitted = signedIn && communityAdmitted && !suspended && !banned && classificationRead && (owner || roleAdmitted || delegatedAdmin
+        var memberRecord = tangentRole is TangentRole.Member or TangentRole.Admin or TangentRole.Reader;
+        var admitted = signedIn && tangentAdmitted && !suspended && !banned && classificationRead && (owner || roleAdmitted || delegatedAdmin
             || MembersOnly && role is null && memberRecord
-            || !MembersOnly && role is null && Admission == RoomAdmission.SignedIn && communityAdmitted);
-        // An explicit channel grant of member or manager widens a community reader inside that channel only.
-        var communityReader = !owner && communityRole == TangentRole.Reader && role is not (RoomRole.Member or RoomRole.Manager);
+            || !MembersOnly && role is null && Admission == RoomAdmission.SignedIn && tangentAdmitted);
+        // An explicit channel grant of member or manager widens a Tangent reader inside that channel only.
+        var tangentReader = !owner && tangentRole == TangentRole.Reader && role is not (RoomRole.Member or RoomRole.Manager);
         var reason = space is null ? "site-unavailable" : tangent is null ? "tangent-not-found"
             : !signedIn ? "sign-in-required" : suspended ? "suspended"
             : banned ? "banned"
             : !owner && role == RoomRole.Removed ? "removed"
-            : !owner && role is null && (MembersOnly ? !memberRecord : !communityAdmitted) ? "community-membership-required"
+            : !owner && role is null && (MembersOnly ? !memberRecord : !tangentAdmitted) ? "community-membership-required"
             : !classificationRead ? "participation-policy"
             : !admitted ? "invitation-required" : "allowed";
         return new RoomPolicy(Id, actorDid, PolicyRevision, space?.PolicyRevision ?? 0, Admission,
             role, owner, admitted,
             admitted && !timedOut && !IsLocked
-                && (owner || role != RoomRole.Reader && !communityReader && classificationWrite),
+                && (owner || role != RoomRole.Reader && !tangentReader && classificationWrite),
             (owner && !suspended) || (manager && !timedOut), owner && !suspended, reason,
             AllowPostEditing, IsLocked);
     }
 
     public RoomMembership ChangeMembership(Space? space, string actorDid, RoomMembership? actorMembership,
         string targetDid, RoomMembership? targetMembership, RoomRole role, DateTimeOffset now,
-        TangentCommunity? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
+        Tangent? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
     {
-        // Callers supply the community membership that matters to this change: their own when acting on
+        // Callers supply the Tangent membership that matters to this change: their own when acting on
         // delegated authority, or the target's when the owner adjusts a participant's standing. Authority
         // is never evaluated through a record belonging to someone else.
         var actorTangentMembership = tangentMembership;
@@ -112,7 +112,7 @@ public sealed class Room : Entity<Room>
         {
             if (actorTangentMembership.ParticipantId != targetDid || tangent is null
                 || actorTangentMembership.TangentKey != TangentKey || !Enum.IsDefined(actorTangentMembership.Role))
-                throw new RoomRuleViolation(RoomDenial.MembershipMismatch, "The community membership does not belong to this channel and participant.");
+                throw new RoomRuleViolation(RoomDenial.MembershipMismatch, "The Tangent membership does not belong to this channel and participant.");
             actorTangentMembership = null;
         }
         var policy = CurrentPolicy(space, actorDid, actorMembership, false, tangent, actorTangentMembership);
@@ -133,7 +133,7 @@ public sealed class Room : Entity<Room>
     }
 
     public void ChangeTopic(Space? space, string actorDid, RoomMembership? membership, string topic, DateTimeOffset now,
-        TangentCommunity? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
+        Tangent? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
     {
         if (!authorized && !CurrentPolicy(space, actorDid, membership, false, tangent, tangentMembership).CanManage)
             throw Forbidden("Only the owner or a current room manager can change the topic.");
@@ -144,7 +144,7 @@ public sealed class Room : Entity<Room>
     }
 
     public void ChangeSettings(Space? space, string actorDid, RoomMembership? membership, bool allowPostEditing,
-        bool isLocked, string? title, string? topic, DateTimeOffset now, TangentCommunity? tangent = null,
+        bool isLocked, string? title, string? topic, DateTimeOffset now, Tangent? tangent = null,
         TangentMembership? tangentMembership = null, bool authorized = false)
     {
         // Creation history is not a fallback grant: removals and parent admission
@@ -161,7 +161,7 @@ public sealed class Room : Entity<Room>
     }
 
     public void ChangeAccess(Space? space, string actorDid, RoomMembership? membership, AccessMap access,
-        DateTimeOffset now, TangentCommunity? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
+        DateTimeOffset now, Tangent? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
     {
         if (!authorized && !CurrentPolicy(space, actorDid, membership, false, tangent, tangentMembership).CanManage)
             throw Forbidden("Only a current Tangent or Topic administrator can change Topic access.");
@@ -171,7 +171,7 @@ public sealed class Room : Entity<Room>
     }
 
     public void ChangeAdmission(Space? space, string actorDid, RoomAdmission admission, DateTimeOffset now,
-        TangentCommunity? tangent = null, bool authorized = false)
+        Tangent? tangent = null, bool authorized = false)
     {
         if (!authorized) RequireOwner(space, tangent, actorDid);
         if (!Enum.IsDefined(admission)) throw Invalid("Choose signed-in or invitation-only admission.");
@@ -180,7 +180,7 @@ public sealed class Room : Entity<Room>
     }
 
     public void ChangeReadAudience(Space? space, string actorDid, RoomReadAudience audience,
-        bool publishExistingHistory, DateTimeOffset now, TangentCommunity? tangent = null, bool authorized = false)
+        bool publishExistingHistory, DateTimeOffset now, Tangent? tangent = null, bool authorized = false)
     {
         if (!authorized && (space is null || !Participant.IsValidId(actorDid)
             || !space.IsOwner(actorDid) && tangent?.IsOwner(actorDid) != true))
@@ -207,14 +207,14 @@ public sealed class Room : Entity<Room>
             throw new RoomRuleViolation(RoomDenial.MembershipMismatch, "The membership does not belong to this room and participant.");
     }
 
-    private void CheckTangentMembership(TangentCommunity? tangent, TangentMembership? membership, string? participantDid)
+    private void CheckTangentMembership(Tangent? tangent, TangentMembership? membership, string? participantDid)
     {
         if (membership is not null && (tangent is null || membership.TangentKey != TangentKey || membership.ParticipantId != participantDid
             || membership.Id != TangentMembership.Key(TangentKey, participantDid ?? "") || !Enum.IsDefined(membership.Role)))
-            throw new RoomRuleViolation(RoomDenial.MembershipMismatch, "The community membership does not belong to this channel and participant.");
+            throw new RoomRuleViolation(RoomDenial.MembershipMismatch, "The Tangent membership does not belong to this channel and participant.");
     }
 
-    private static void RequireOwner(Space? space, TangentCommunity? tangent, string actorDid)
+    private static void RequireOwner(Space? space, Tangent? tangent, string actorDid)
     {
         if (space is null || !Participant.IsValidId(actorDid) || tangent?.IsOwner(actorDid) != true)
             throw Forbidden("Only the current Tangent owner can perform this operation.");

@@ -7,8 +7,8 @@ using TangentSpace.Authorization;
 
 namespace TangentSpace.Communities;
 
-/// <summary>A durable, independently owned community within this host.</summary>
-public sealed class TangentCommunity : Entity<TangentCommunity>
+/// <summary>A durable, independently owned Tangent within this Space.</summary>
+public sealed class Tangent : Entity<Tangent>
 {
     public const string HomeKey = "home";
     public string Name { get; set; } = "";
@@ -29,32 +29,32 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     public DateTimeOffset UpdatedAt { get; set; }
     public long PolicyRevision { get; set; }
 
-    public static TangentCommunity Create(Space? space, string actorDid, string key, string name, string? description,
+    public static Tangent Create(Space? space, string actorDid, string key, string name, string? description,
         string? motto, string? accent, string? artwork, DateTimeOffset now)
     {
         if (space is null || !space.IsOwner(actorDid) || !Participant.IsValidId(actorDid))
             throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the persisted space owner can create a Tangent.");
         CheckKey(key); CheckCard(name, description, motto, accent, artwork);
-        return new TangentCommunity
+        return new Tangent
         {
             Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto), Accent = Clean(accent), Artwork = Clean(artwork),
             OwnerParticipantId = actorDid, CreatedAt = now, UpdatedAt = now, PolicyRevision = 1, SetupComplete = true
         };
     }
 
-    internal static TangentCommunity CreateForAuthorizedActor(Space space, string actorDid, string ownerDid, string key,
+    internal static Tangent CreateForAuthorizedActor(Space space, string actorDid, string ownerDid, string key,
         string name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)
     {
         if (!space.IsOwner(ownerDid) || !Participant.IsValidId(actorDid))
             throw new TangentRuleViolation(TangentDenial.Forbidden, "The server owner must authorize Tangent creation.");
         CheckKey(key); CheckCard(name, description, motto, accent, artwork);
-        return new TangentCommunity { Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto),
+        return new Tangent { Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto),
             Accent = Clean(accent), Artwork = Clean(artwork), OwnerParticipantId = actorDid, CreatedAt = now, UpdatedAt = now,
             PolicyRevision = 1, SetupComplete = true };
     }
 
     /// <summary>The first Tangent, established with the Host and named by its owner during onboarding.</summary>
-    internal static TangentCommunity Home(Space space) => new()
+    internal static Tangent Home(Space space) => new()
     {
         Id = HomeKey, Name = space.Name, OwnerParticipantId = space.OwnerParticipantId, OpenToSignedIn = true,
         CreatedAt = space.EstablishedAt, UpdatedAt = space.EstablishedAt, PolicyRevision = 1
@@ -89,7 +89,7 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
         PolicyRevision = checked(PolicyRevision + 1);
     }
 
-    /// <summary>The effective admission combining the legacy open bit with the approval bit.</summary>
+    /// <summary>The one admission the stored open and approval bits express together.</summary>
     public TangentAdmission EffectiveAdmission => ApprovalRequired ? TangentAdmission.Approval
         : OpenToSignedIn ? TangentAdmission.Open : TangentAdmission.Invite;
 
@@ -156,7 +156,7 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     {
         if (membership is not null && (membership.TangentKey != Id || membership.ParticipantId != participantId
             || membership.Id != TangentMembership.Key(Id, participantId ?? "") || !Enum.IsDefined(membership.Role)))
-            throw new TangentRuleViolation(TangentDenial.MembershipMismatch, "The community membership does not belong to this Tangent and participant.");
+            throw new TangentRuleViolation(TangentDenial.MembershipMismatch, "The membership does not belong to this Tangent and participant.");
         if (IsOwner(participantId)) return true;
         // A durable removal is an explicit override, including for an otherwise open home.
         if (membership?.Role == TangentRole.Removed) return false;

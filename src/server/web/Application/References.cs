@@ -109,7 +109,7 @@ public sealed class References(IOptions<SpaceOptions> options, IDataProtectionPr
 
     private static bool IsTangentKey(string key)
     {
-        try { TangentCommunity.CheckKey(key); return true; }
+        try { Communities.Tangent.CheckKey(key); return true; }
         catch (TangentRuleViolation) { return false; }
     }
 

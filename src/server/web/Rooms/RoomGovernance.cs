@@ -37,7 +37,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             foreach (var room in result.Items)
             {
                 var membership = actorId is null ? null : await RoomMembership.Get(RoomMembership.Key(room.Id, actorId), ct);
-                var tangent = await TangentCommunity.Get(room.TangentKey, ct);
+                var tangent = await Tangent.Get(room.TangentKey, ct);
                 var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
                 var restriction = actorId is null ? null : await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, now, ct);
                 var policy = await Project(room, tangent, room.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
@@ -70,7 +70,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
-            var tangent = await TangentCommunity.Get(tangentKey, ct);
+            var tangent = await Tangent.Get(tangentKey, ct);
             if (tangent is null || participant?.IsSuspended == true) return new TangentChannelDirectory([], page, null);
             var tangentMembership = actorId is null ? null : await TangentMembership.Get(TangentMembership.Key(tangentKey, actorId), ct);
             var rooms = await Room.QueryWithCount(room => room.TangentKey == tangentKey,
@@ -189,7 +189,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                 throw new RoomRuleViolation(RoomDenial.NotFound, "The requested Topic does not exist in this Tangent.");
             var participant = await Participant.Get(actorId, ct);
             var membership = await RoomMembership.Get(RoomMembership.Key(roomKey, actorId), ct);
-            var tangent = await TangentCommunity.Get(room.TangentKey, ct)
+            var tangent = await Tangent.Get(room.TangentKey, ct)
                 ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The Topic's Tangent does not exist.");
             var tangentMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
             var restriction = await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, clock.GetUtcNow(), ct);
@@ -237,7 +237,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
             var membership = room is null || actorId is null ? null
                 : await RoomMembership.Get(RoomMembership.Key(roomKey, actorId), ct);
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
-            var tangent = room is null ? null : await TangentCommunity.Get(room.TangentKey, ct);
+            var tangent = room is null ? null : await Tangent.Get(room.TangentKey, ct);
             var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
             var restriction = room is null || actorId is null ? null
                 : await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, clock.GetUtcNow(), ct);
@@ -254,7 +254,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
 
     private async Task<RoomAdministrationResult> Administer(string actorId, string roomKey, string? targetIdentifier,
         RoomAdministration operation, RoomRole? requestedRole,
-        Func<Space?, Room?, RoomMembership?, string?, RoomMembership?, TangentCommunity?, TangentMembership?, DateTimeOffset, Change> apply,
+        Func<Space?, Room?, RoomMembership?, string?, RoomMembership?, Tangent?, TangentMembership?, DateTimeOffset, Change> apply,
         CancellationToken ct, RoomReadAudience? requestedReadAudience = null, bool? publishExistingHistory = null)
     {
         RoomAdministrationResult result;
@@ -286,7 +286,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
                 var actor = room is null ? null : await RoomMembership.Get(RoomMembership.Key(roomKey, actorId), ct);
                 var target = room is null || targetId is null ? null
                     : await RoomMembership.Get(RoomMembership.Key(roomKey, targetId), ct);
-                var tangent = room is null ? null : await TangentCommunity.Get(room.TangentKey, ct);
+                var tangent = room is null ? null : await Tangent.Get(room.TangentKey, ct);
                 var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
                 if (room is not null)
                 {
@@ -341,7 +341,7 @@ public sealed class RoomGovernance(TimeProvider clock, PolicyGate gate, TangentS
     private static Room RequireRoom(Room? room)
         => room ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The requested room does not exist.");
 
-    private Task<RoomPolicy> Project(Room room, TangentCommunity? tangent, RoomPolicy policy,
+    private Task<RoomPolicy> Project(Room room, Tangent? tangent, RoomPolicy policy,
         Participant? participant, EffectiveRestriction? restriction, CancellationToken ct)
         => roleAccess.ProjectTopic(room, tangent, policy, participant?.IsSuspended == true, restriction,
             participant?.Classification ?? ParticipantClassification.Undeclared, ct);

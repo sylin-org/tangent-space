@@ -33,7 +33,7 @@ public sealed class PublicTopicsController(PublicConversationReader reader, Poli
             return HiddenNotFound();
         if (response is not ObjectResult { Value: PublicTopicDescription topic }) return response;
         using var fresh = EntityContext.NoCache();
-        return await TangentCommunity.Get(topic.TangentKey, ct) is null ? HiddenNotFound() : response;
+        return await Tangent.Get(topic.TangentKey, ct) is null ? HiddenNotFound() : response;
     }
 
     [HttpGet("{id}/posts")]

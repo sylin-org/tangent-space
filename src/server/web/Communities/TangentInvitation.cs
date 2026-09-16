@@ -23,7 +23,7 @@ public sealed class TangentInvitation : Entity<TangentInvitation>
 
     public static bool IsValidGrant(TangentRole role) => role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader;
 
-    public static TangentInvitation Issue(TangentCommunity tangent, string recipientDid, TangentRole grantedRole,
+    public static TangentInvitation Issue(Tangent tangent, string recipientDid, TangentRole grantedRole,
         string issuerDid, DateTimeOffset now)
     {
         if (!IsValidGrant(grantedRole) || !Enum.IsDefined(grantedRole))
