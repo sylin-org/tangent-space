@@ -1,1 +1,0 @@
-Unhandled exception. Koan.Data.Core.Routing.AdapterResolutionException: Configured default data adapter 'not-referenced' is unavailable. Correct Koan:Data:Sources:Default:Adapter or reference the connector package that owns the requested adapter. Available providers: json, sqlite.
