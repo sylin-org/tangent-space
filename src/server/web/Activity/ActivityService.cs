@@ -4,13 +4,14 @@ using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
 using Microsoft.AspNetCore.DataProtection;
-using TangentSpace.Conversation;
-using TangentSpace.Communities;
-using TangentSpace.Participation;
-using TangentSpace.Participants;
-using TangentSpace.Rooms;
+using Tangent.Conversation;
+using Tangent.Community;
+using Tangent.Identity;
+using Tangent.Identity;
+using Tangent.Community;
+using Tangent.Stewardship;
 
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 /// <summary>Builds bounded, current-policy participant activity snapshots from the durable journal.</summary>
 public sealed class ActivityService(TopicGovernance governance, TangentGovernance tangents, TimeProvider clock, IDataProtectionProvider protection)
@@ -19,7 +20,7 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     private const int MaximumEvents = 25;
     private const int MaximumTopics = 100;
     private const int MaximumUnread = 100;
-    private readonly IDataProtector cursors = protection.CreateProtector("Tangent.Activity.Cursor.v1");
+    private readonly IDataProtector cursors = protection.CreateProtector("Cursor.v1");
     private static readonly QueryDefinition JournalWindow = Window<ActivityJournal>(nameof(ActivityJournal.Sequence), MaximumJournalScan + 1);
     private static readonly QueryDefinition MessagesWindow = Window<Post>(nameof(Post.Sequence), MaximumUnread + 1, descending: true);
     private static readonly QueryDefinition OneMessageWindow = Window<Post>(nameof(Post.Sequence), 1, descending: true);

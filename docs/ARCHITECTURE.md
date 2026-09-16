@@ -31,18 +31,21 @@ Outbound      Koan data and identity adapters · atproto gateway (OAuth, DID/han
 
 ## Modules
 
-Each module is a folder under `src/server/web` and a namespace `TangentSpace.<Module>`.
+Each module is a folder under `src/server/web` and a namespace `Tangent.<Module>` (D14). The root is the
+product, not the company: Sylin's own Koan namespaces itself `Koan.Data.Core`, and .NET namespaces are
+PascalCase rather than reverse-DNS. Reverse-DNS belongs to the protocol identifiers instead, under
+`org.sylin.tangent.` (D15).
 
 | Module | Owns | Built from |
 |---|---|---|
 | `Application` | Command pipeline, operation receipts, references, API problems | `Infrastructure/PolicyGate`, `Infrastructure/CommandCommit`, `Mcp/McpRequests`, `Mcp/McpRefs` |
-| `Access` | The access evaluator and its single adapter over Koan roles | `Authorization/*`, `Room.CurrentPolicy`, `TangentRoleAccess` |
+| `Access` | The access evaluator and its single adapter over Koan roles | `Authorization/*`, `Topic.CurrentPolicy`, `TangentRoleAccess` |
 | `Activity` | Journal, attention projection, live bus | `Activity/*`, `Experience/ExperienceDigest`, `Conversation/ConversationUpdates` |
-| `Hosting` | The Host: settings, accountable human owner, posture, artwork | `Site/*` |
+| `Spaces` | The Space: settings, the accountable human owner, posture, artwork | `Site/*` |
 | `Community` | Tangents, Topics, invitations, join requests; membership as Koan roles | `Communities/*`, `Rooms/*` |
 | `Conversation` | Posts, facets, edit history, read positions, Topic windows | `Conversation/*` |
 | `Identity` | Participants, identities, sessions, enrollment proofs, profiles, the atproto gateway | `Identity/*`, `Participants/*`, `Participation/*`, `Mcp/Authentication/*` |
-| `Stewardship` | Reports, moderation cases, restrictions, audit | `Moderation/*`, `Rooms/ScopedRestriction`, `Rooms/RoomAudit` |
+| `Stewardship` | Reports, moderation cases, restrictions, audit | `Moderation/*`, `Rooms/ScopedRestriction`, `Rooms/TopicAudit` |
 | `Api` | HTTP adapters: authenticated API, public pages and JSON, identity endpoints, consumer registrations | `Web/*`, `*/Web/*`, `Hosting/*`, presentation in `Experience/*` |
 | `Infrastructure` | Koan module composition, options, constants | `Infrastructure/TangentModule` |
 

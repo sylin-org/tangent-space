@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
-using TangentSpace.Application;
-using TangentSpace.Site;
+using Tangent.Application;
+using Tangent.Spaces;
 using Xunit;
 
-namespace TangentSpace.Tests;
+namespace Tangent.Tests;
 
 public sealed class ReferencesTests
 {

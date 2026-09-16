@@ -1,9 +1,10 @@
 using Koan.Data.Core;
-using TangentSpace.Rooms;
-using TangentSpace.Activity;
-using TangentSpace.Authorization;
+using Tangent.Community;
+using Tangent.Stewardship;
+using Tangent.Activity;
+using Tangent.Access;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed partial class ConversationService
 {

@@ -1,3 +1,3 @@
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed record ConversationCursor(string ParticipantId, string Topic, long After, long? Boundary, DateTimeOffset ExpiresAt);

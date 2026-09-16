@@ -2,7 +2,7 @@ using Xunit;
 using System.Diagnostics;
 using System.Text.Json;
 
-namespace TangentSpace.Tests.ExperienceIntegration;
+namespace Tangent.Tests.ExperienceIntegration;
 
 /// <summary>Tier B of the cross-server integration: the real Rust connector binary speaking
 /// to the real web application over its genuine HTTP contract. Exercises both intakes of the

@@ -1,6 +1,6 @@
 using Koan.Data.Core.Model;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed class PostChange : Entity<PostChange>
 {

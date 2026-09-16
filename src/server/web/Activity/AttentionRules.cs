@@ -1,4 +1,4 @@
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 /// <summary>Pure attention rules shared by the activity service and its tests; access checks always apply after them.</summary>
 internal static class AttentionRules

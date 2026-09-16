@@ -1,4 +1,4 @@
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 internal sealed record ActivityPagePlan(IReadOnlyList<long> DeliveredSequences, long After, bool HasMore);
 

@@ -1,6 +1,6 @@
 using Koan.Data.Core.Model;
 
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 public sealed class ActivityHead : Entity<ActivityHead>
 {

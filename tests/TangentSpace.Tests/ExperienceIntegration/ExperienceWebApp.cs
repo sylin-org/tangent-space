@@ -8,15 +8,17 @@ using System.Net.Sockets;
 using Koan.Core.Hosting.App;
 using Koan.Data.Core;
 using Koan.Identity.Roles;
-using TangentSpace.Authorization;
-using TangentSpace.Communities;
-using TangentSpace.Conversation;
-using TangentSpace.Participants;
-using TangentSpace.Participation;
-using TangentSpace.Rooms;
-using TangentSpace.Site;
+using Tangent.Access;
+using Tangent.Community;
+using Tangent.Conversation;
+using Tangent.Activity;
+using Tangent.Identity;
+using Tangent.Identity;
+using Tangent.Community;
+using Tangent.Stewardship;
+using Tangent.Spaces;
 
-namespace TangentSpace.Tests.ExperienceIntegration;
+namespace Tangent.Tests.ExperienceIntegration;
 
 /// <summary>Boots the real web application (full Koan discovery, real controllers, real
 /// authentication handlers) on a pre-picked loopback port, seeds a small participation world,

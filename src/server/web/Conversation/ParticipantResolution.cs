@@ -1,4 +1,4 @@
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>Read-time label resolution for one participant (ADR 0008): facets bind the perennial
 /// identity value; this carries that value plus the fresh label and classification resolved at

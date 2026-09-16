@@ -13,7 +13,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using TangentSpace.Conversation;
+using Tangent.Conversation;
+using Tangent.Activity;
 
 // This is intentionally a query-path experiment. No host, HTTP server, hosted service,
 // source client, profile worker, auth flow or domain acceptance pipeline is started.

@@ -3,9 +3,9 @@ using System.Threading.Channels;
 using CarpaNet.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TangentSpace.Participation;
+using Tangent.Identity;
 
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 [ApiController, Authorize, Route("api/activity")]
 public sealed class ActivityController(TangentServer hub) : ControllerBase

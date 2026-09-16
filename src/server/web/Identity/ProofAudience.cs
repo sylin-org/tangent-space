@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
-using TangentSpace.Site;
+using Tangent.Spaces;
 
-namespace TangentSpace.Identity;
+namespace Tangent.Identity;
 
 /// <summary>The DID that enrollment proofs must name as their audience: the configured
 /// Tangent:Enrollment:ProofAudience, or a did:web derived from the public origin within atproto's

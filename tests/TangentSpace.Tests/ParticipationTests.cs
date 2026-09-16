@@ -7,19 +7,19 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TangentSpace.Participants;
-using TangentSpace.Participation;
+using Tangent.Identity;
+using Tangent.Identity;
 using Xunit;
 using CookieAuthentication = Koan.Web.Auth.Extensions.AuthenticationExtensions;
 
-namespace TangentSpace.Tests;
+namespace Tangent.Tests;
 
 public sealed class ParticipationTests
 {
     private const string Did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
     private const string Other = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
-    private static readonly string ParticipantId = TangentSpace.Participants.Participant.NewIdentifier();
-    private static readonly string OtherParticipant = TangentSpace.Participants.Participant.NewIdentifier();
+    private static readonly string ParticipantId = Participant.NewIdentifier();
+    private static readonly string OtherParticipant = Participant.NewIdentifier();
     private static readonly DateTimeOffset Now = new(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -112,7 +112,7 @@ public sealed class ParticipationTests
             .AddScheme<AuthenticationSchemeOptions, CookieFixtureHandler>(CookieAuthentication.CookieScheme, _ => { });
         services.AddParticipation();
         services.AddSingleton<IAtprotoHandleSource, NoAtprotoHandles>();
-        services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
+        services.AddSingleton<ParticipantDirectory>();
         return services.BuildServiceProvider();
     }
 

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>A structural reference inside a Post's verbatim text (ADR 0008): byte-range
 /// annotations carrying stable identities, never rewrites of the words. Mentions bind DIDs,

@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;
 
-namespace TangentSpace.Tests.ExperienceIntegration;
+namespace Tangent.Tests.ExperienceIntegration;
 
 public sealed class AccessSettingsTests
 {

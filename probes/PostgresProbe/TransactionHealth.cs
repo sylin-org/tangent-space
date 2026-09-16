@@ -1,7 +1,8 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
 using Npgsql;
-using TangentSpace.Conversation;
+using Tangent.Conversation;
+using Tangent.Activity;
 
 internal static class TransactionHealth
 {

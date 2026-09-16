@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using TangentSpace.Participants;
+using Tangent.Identity;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>One facet derivation shared by Post persistence and replay comparison. It reads
 /// only stored identities; no provider calls or writes.</summary>

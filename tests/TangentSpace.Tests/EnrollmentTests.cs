@@ -21,13 +21,17 @@ using Org.BouncyCastle.Crypto.EC;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using TangentSpace.Identity;
-using TangentSpace.Mcp.Authentication;
-using TangentSpace.Participants;
-using TangentSpace.Participation;
+using Tangent.Identity;
+using Tangent.Identity;
+using Tangent.Identity;
+using Tangent.Identity;
 using Xunit;
+using Tangent.Spaces;
+using Tangent.Community;
+using Tangent.Application;
+using Tangent.Infrastructure;
 
-namespace TangentSpace.Tests;
+namespace Tangent.Tests;
 
 // Shares the ambient-host collection with the experience integration tests: both set
 // AppHost.Current and must never run concurrently.
@@ -153,7 +157,7 @@ public sealed class EnrollmentTests
 
     private static ProofAudience ProofAudienceFor(string origin, string configured = "")
         => new(Options.Create(new EnrollmentOptions { ProofAudience = configured }),
-            Options.Create(new TangentSpace.Site.SpaceOptions { PublicOrigin = origin }));
+            Options.Create(new SpaceOptions { PublicOrigin = origin }));
 
     private static ServiceProofAuthentication Verifier(ProofKeys keys, string origin = Origin, long? now = null)
         => new(new FakeKeySource(keys), ProofAudienceFor(origin),
@@ -279,7 +283,7 @@ public sealed class EnrollmentTests
     [Fact]
     public void Manage_grant_is_bounded_and_requires_explicit_permission()
     {
-        var participant = TangentSpace.Participants.Participant.NewIdentifier();
+        var participant = Participant.NewIdentifier();
         var now = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
         var grants = new[] { ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage };
         Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(participant, "mcp", 1, grants, now));
@@ -298,10 +302,10 @@ public sealed class EnrollmentTests
         const string owner = "did:plc:mcptestowneraaaaaaaaaaa";
         const string target = "did:plc:mcptestinviteaaaaaaaaaa";
         await fixture.Exchange.Exchange(Bearer(fixture.Keys, owner), null, CancellationToken.None);
-        var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
-        var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.ParticipantGovernance>();
-        var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Application.OperationReceipts>();
-        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+        var tangents = fixture.Host.Services.GetRequiredService<TangentGovernance>();
+        var companions = fixture.Host.Services.GetRequiredService<ParticipantGovernance>();
+        var requests = fixture.Host.Services.GetRequiredService<OperationReceipts>();
+        var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         await tangents.Create(await Pid(owner), "atomic-invites", "Atomic invitations", null, null, null, null, CancellationToken.None);
         var ownerId = await Pid(owner);
@@ -310,15 +314,15 @@ public sealed class EnrollmentTests
             var registered = await requests.Register("runtime", ownerId, "invite-once", "InviteParticipant", "atomic-invites",
                 new Dictionary<string, string?> { ["target"] = target }, CancellationToken.None);
             requests.CompleteWithDomain(registered.Record, raw => ("completed", null,
-                ((TangentSpace.Communities.TangentInvitationResult)raw!).InvitationId));
-            await companions.Invite(ownerId, "atomic-invites", target, TangentSpace.Communities.ParticipantRole.Member, CancellationToken.None);
+                ((TangentInvitationResult)raw!).InvitationId));
+            await companions.Invite(ownerId, "atomic-invites", target, ParticipantRole.Member, CancellationToken.None);
             throw new IOException("Simulated lost response after commit");
         }, CancellationToken.None));
         var receipt = await requests.Find("runtime", ownerId, "invite-once", CancellationToken.None);
         Assert.Equal("completed", receipt!.State);
         using (EntityContext.NoCache())
         {
-            var invitations = await TangentSpace.Communities.TangentInvitation.Query(i => i.TangentKey == "atomic-invites", CancellationToken.None);
+            var invitations = await TangentInvitation.Query(i => i.TangentKey == "atomic-invites", CancellationToken.None);
             Assert.Single(invitations);
             Assert.Equal(invitations[0].Id, receipt.ResultData);
         }
@@ -334,10 +338,10 @@ public sealed class EnrollmentTests
         await using var fixture = await HostFixture.StartAsync();
         const string owner = "did:plc:mcptestowneraaaaaaaaaaa";
         await fixture.Exchange.Exchange(Bearer(fixture.Keys, owner), null, CancellationToken.None);
-        var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
-        var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.ParticipantGovernance>();
-        var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Application.OperationReceipts>();
-        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+        var tangents = fixture.Host.Services.GetRequiredService<TangentGovernance>();
+        var companions = fixture.Host.Services.GetRequiredService<ParticipantGovernance>();
+        var requests = fixture.Host.Services.GetRequiredService<OperationReceipts>();
+        var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         await tangents.Create(await Pid(owner), "atomic-rollback", "Atomic rollback", null, null, null, null, CancellationToken.None);
         var rollbackOwner = await Pid(owner);
@@ -346,11 +350,11 @@ public sealed class EnrollmentTests
             var registered = await requests.Register("runtime", rollbackOwner, "failed-invite", "InviteParticipant", "atomic-rollback",
                 new Dictionary<string, string?>(), CancellationToken.None);
             requests.CompleteWithDomain(registered.Record, _ => throw new IOException("Simulated receipt failure"));
-            await companions.Invite(rollbackOwner, "atomic-rollback", "did:plc:mcptestinviteaaaaaaaaaa", TangentSpace.Communities.ParticipantRole.Member, CancellationToken.None);
+            await companions.Invite(rollbackOwner, "atomic-rollback", "did:plc:mcptestinviteaaaaaaaaaa", ParticipantRole.Member, CancellationToken.None);
             return 0;
         }, CancellationToken.None));
         using (EntityContext.NoCache())
-            Assert.Empty(await TangentSpace.Communities.TangentInvitation.Query(i => i.TangentKey == "atomic-rollback", CancellationToken.None));
+            Assert.Empty(await TangentInvitation.Query(i => i.TangentKey == "atomic-rollback", CancellationToken.None));
         var receipt = await requests.Find("runtime", rollbackOwner, "failed-invite", CancellationToken.None);
         Assert.Equal("pending", receipt!.State);
         Assert.Null(receipt.ResultData);
@@ -368,8 +372,8 @@ public sealed class EnrollmentTests
         await using (var fixture = await HostFixture.StartAsync(ownerDid: ""))
         {
             database = fixture.DatabasePath;
-            var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
-            var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+            var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
+            var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
             await arrival.Enter(first, "first.test", CancellationToken.None);
             await arrival.Enter(second, "second.test", CancellationToken.None);
             await server.Claim(await Pid(first), first, humanDeclaration: true, CancellationToken.None);
@@ -377,19 +381,19 @@ public sealed class EnrollmentTests
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 server.Claim(secondId, second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
-                Assert.Equal(await Pid(first), (await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
+                Assert.Equal(await Pid(first), (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
         }
         await using (var fixture = await HostFixture.StartAsync(database, ownerDid: ""))
         {
-            var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
-            var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+            var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
+            var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
             await arrival.CheckConfiguration(CancellationToken.None);
             await arrival.Enter(second, "second.test", CancellationToken.None);
             var returningId = await Pid(second);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 server.Claim(returningId, second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
-                Assert.Equal(await Pid(first), (await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
+                Assert.Equal(await Pid(first), (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
         }
     }
 
@@ -402,8 +406,8 @@ public sealed class EnrollmentTests
         await using (var fixture = await HostFixture.StartAsync(ownerDid: owner))
         {
             database = fixture.DatabasePath;
-            var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
-            var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+            var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
+            var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
             await arrival.Enter(owner, null, CancellationToken.None);
             await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         }
@@ -417,8 +421,8 @@ public sealed class EnrollmentTests
     {
         await using var fixture = await HostFixture.StartAsync(ownerDid: "");
         string[] dids = ["did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb"];
-        var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
-        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+        var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
+        var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
         // Each arrival attempts the explicit claim; the policy gate serializes them, so
         // exactly one wins and the loser receives the already-claimed denial.
         var claims = await Task.WhenAll(dids.Select(async did =>
@@ -434,7 +438,7 @@ public sealed class EnrollmentTests
         Assert.Single(claims.Where(won => won));
         using (EntityContext.NoCache())
         {
-            var space = await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None);
+            var space = await Space.Get(TangentConstants.SpaceId, CancellationToken.None);
             var holders = await Task.WhenAll(dids.Select(did => Pid(did, CancellationToken.None)));
             Assert.Contains(space!.OwnerParticipantId, holders);
             foreach (var holder in holders) Assert.NotNull(await Participant.Get(holder, CancellationToken.None));
@@ -448,18 +452,18 @@ public sealed class EnrollmentTests
         // refused and the space stays unestablished until the configured account claims it.
         const string owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
         await using var fixture = await HostFixture.StartAsync(ownerDid: owner);
-        var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
-        var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
+        var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
+        var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
         await arrival.Enter("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", null, CancellationToken.None);
         var visitorId = await Pid("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb");
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             server.Claim(visitorId, "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", humanDeclaration: true, CancellationToken.None));
         using (EntityContext.NoCache())
-            Assert.Null(await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None));
+            Assert.Null(await Space.Get(TangentConstants.SpaceId, CancellationToken.None));
         await arrival.Enter(owner, null, CancellationToken.None);
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         using (EntityContext.NoCache())
-            Assert.Equal(await Pid(owner), (await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
+            Assert.Equal(await Pid(owner), (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
     }
 
     private sealed class HostFixture : IAsyncDisposable
@@ -730,7 +734,7 @@ public sealed class EnrollmentTests
     [Fact]
     public void Discovery_pins_the_configured_origin_audience_and_profile()
     {
-        var space = new TangentSpace.Site.SpaceOptions { PublicOrigin = Origin };
+        var space = new SpaceOptions { PublicOrigin = Origin };
         var controller = Discovery(ProofAudienceFor(Origin), space,
             new DefaultHttpContext { Request = { Headers = { Host = "evil.example" } } });
         var ok = Assert.IsType<OkObjectResult>(controller.Discover());
@@ -747,15 +751,15 @@ public sealed class EnrollmentTests
         var overridden = Assert.IsType<OkObjectResult>(Discovery(ProofAudienceFor(Origin, OtherService), space).Discover());
         Assert.Contains(OtherService, JsonSerializer.Serialize(overridden.Value));
         Assert.Equal(StatusCodes.Status503ServiceUnavailable,
-            ((ObjectResult)Discovery(ProofAudienceFor(""), new TangentSpace.Site.SpaceOptions()).Discover()).StatusCode);
+            ((ObjectResult)Discovery(ProofAudienceFor(""), new SpaceOptions()).Discover()).StatusCode);
         foreach (var invalid in new[] { "", "   ", "ftp://example.com", "http://user:pass@127.0.0.1:5220", "http://127.0.0.1:5220/evil", "http://127.0.0.1:5220?x=1" })
             Assert.Equal(StatusCodes.Status503ServiceUnavailable, ((ObjectResult)Discovery(ProofAudienceFor(invalid, Audience),
-                new TangentSpace.Site.SpaceOptions { PublicOrigin = invalid }).Discover()).StatusCode);
+                new SpaceOptions { PublicOrigin = invalid }).Discover()).StatusCode);
     }
 
     [Theory]
     [InlineData("https://tangent.example", "", "did:web:tangent.example")]
-    [InlineData("https://Tangent.Example:8443", "", null)]
+    [InlineData("https://Community.Tangent.Example:8443", "", null)]
     [InlineData("https://192.0.2.10", "", null)]
     [InlineData(Origin, "", Audience)]
     [InlineData("http://localhost:5220", "", Audience)]
@@ -777,6 +781,6 @@ public sealed class EnrollmentTests
     public void Only_atproto_audiences_are_accepted(string value, bool accepted)
         => Assert.Equal(accepted, ProofAudience.IsAtprotoAudience(value));
 
-    private static TangentMcpDiscoveryController Discovery(ProofAudience audience, TangentSpace.Site.SpaceOptions space, HttpContext? context = null)
+    private static TangentMcpDiscoveryController Discovery(ProofAudience audience, SpaceOptions space, HttpContext? context = null)
         => new(audience, Options.Create(space)) { ControllerContext = new ControllerContext { HttpContext = context ?? new DefaultHttpContext() } };
 }

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>Keeps a complete, contiguous window around the chosen post inside a byte budget.</summary>
 public static class WindowPlanner

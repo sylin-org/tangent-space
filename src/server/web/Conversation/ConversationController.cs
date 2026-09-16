@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TangentSpace.Participation;
+using Tangent.Identity;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 [ApiController, Authorize, Route("api/rooms/{roomKey}")]
 public sealed class ConversationController(TangentServer hub) : ControllerBase

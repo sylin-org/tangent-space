@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 /// <summary>Personal interest only: never affects admission, access, or read positions.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<WatchMode>))]

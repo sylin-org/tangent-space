@@ -6,7 +6,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using BcInteger = Org.BouncyCastle.Math.BigInteger;
 
-namespace TangentSpace.Identity;
+namespace Tangent.Identity;
 
 /// <summary>A DID's current document-controlled atproto signing key. JWT claims and algorithm checks belong to the caller.</summary>
 public sealed class DidSigningKey

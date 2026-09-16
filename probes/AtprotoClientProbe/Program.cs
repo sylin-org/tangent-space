@@ -16,7 +16,7 @@ builder.WebHost.UseUrls("http://localhost:5180");
 builder.Logging.ClearProviders();
 var stateDirectory = Path.Combine(builder.Environment.ContentRootPath, ".state");
 var protection = builder.Services.AddDataProtection()
-    .SetApplicationName("Tangent.AtprotoClientProbe")
+    .SetApplicationName("Community.Tangent.AtprotoClientProbe")
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(stateDirectory, "keys")));
 if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
 builder.Services.AddSingleton(sp => new ProtectedStore(sp.GetRequiredService<IDataProtectionProvider>(), stateDirectory));

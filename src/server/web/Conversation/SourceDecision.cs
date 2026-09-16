@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Koan.Data.Core.Model;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>Durable first acceptance decision and retained source content; the projection can be rebuilt from this ledger.</summary>
 public sealed class SourceDecision : Entity<SourceDecision>

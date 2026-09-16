@@ -1,7 +1,7 @@
 using Koan.Data.Core;
 using Koan.Data.Core.Model;
 
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 /// <summary>
 /// A compact, durable delivery journal. Call AppendInTransaction only from an already coordinated

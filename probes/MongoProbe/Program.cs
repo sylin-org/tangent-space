@@ -14,7 +14,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using TangentSpace.Conversation;
+using Tangent.Conversation;
+using Tangent.Activity;
 
 Fixture.SelfTest();
 if (args.SequenceEqual(["--self-test"])) { Console.WriteLine("Mongo probe checks passed."); return; }
@@ -63,7 +64,7 @@ var sourceFiles = new[] { "src/server/web/Conversation/Post.cs", "src/server/web
 var sourceHashes = sourceFiles.ToDictionary(path => path, path => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(repo, path)))));
 var phases = new List<object>(); var outcomes = new Dictionary<string, object?>();
 var failures = new List<string>();
-const string collectionName = "TangentSpace.Conversation.Post";
+const string collectionName = "Post";
 var collection = database.GetCollection<BsonDocument>(collectionName);
 var profiler = new Profiler(database, collectionName);
 async Task Guard()

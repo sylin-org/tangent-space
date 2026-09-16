@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using Koan.Data.Core;
-using TangentSpace.Infrastructure;
+using Tangent.Infrastructure;
 
-namespace TangentSpace.Application;
+namespace Tangent.Application;
 
 /// <summary>
 /// Registers a mutation before its side effects and reconciles retries. Within one participant

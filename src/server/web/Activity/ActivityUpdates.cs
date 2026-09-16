@@ -1,4 +1,4 @@
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 // A process-local hint only. ActivityJournal is the authoritative replay source after restarts.
 internal sealed class ActivityUpdates

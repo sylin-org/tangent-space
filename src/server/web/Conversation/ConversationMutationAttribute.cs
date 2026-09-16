@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using TangentSpace.Participation;
-using TangentSpace.Rooms.Web;
+using Tangent.Identity;
+using Tangent.Api;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class ConversationMutationAttribute : Attribute, IAuthorizationFilter

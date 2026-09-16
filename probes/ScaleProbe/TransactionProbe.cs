@@ -1,6 +1,7 @@
 using Koan.Data.Core;
 using Microsoft.Data.Sqlite;
-using TangentSpace.Conversation;
+using Tangent.Conversation;
+using Tangent.Activity;
 
 internal static class TransactionProbe
 {

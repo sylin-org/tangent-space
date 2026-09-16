@@ -1,4 +1,5 @@
-namespace TangentSpace.Conversation;
+using Tangent.Activity;
+namespace Tangent.Conversation;
 
 public sealed partial class ConversationService
 {

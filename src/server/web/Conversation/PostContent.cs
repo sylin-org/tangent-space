@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed record PostContent(string Text, DateTimeOffset CreatedAt, SourceReference? ReplyTo)
 {

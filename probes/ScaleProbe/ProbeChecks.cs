@@ -1,4 +1,5 @@
-using TangentSpace.Conversation;
+using Tangent.Conversation;
+using Tangent.Activity;
 
 internal static class ProbeChecks
 {

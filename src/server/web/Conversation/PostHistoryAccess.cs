@@ -1,14 +1,16 @@
 using Koan.Data.Core;
 using Koan.Web.Authorization;
-using TangentSpace.Participation;
+using Tangent.Identity;
 using Microsoft.Extensions.DependencyInjection;
-using TangentSpace.Communities;
-using TangentSpace.Infrastructure;
-using TangentSpace.Participants;
-using TangentSpace.Rooms;
-using TangentSpace.Site;
+using Tangent.Community;
+using Tangent.Infrastructure;
+using Tangent.Application;
+using Tangent.Identity;
+using Tangent.Community;
+using Tangent.Stewardship;
+using Tangent.Spaces;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>D4b read gate for Post rows on the generic entity surface (the gposingway
 /// governed-read pattern on the WEB-0068 rail): a changelog snapshot is visible only to its
@@ -38,7 +40,7 @@ public sealed class PostHistoryAccess : EntityAccess<Post>
         if (action == AccessAction.Read)
         {
             var viewer = Principal.FindFirst(ParticipationConstants.ParticipantClaim)?.Value;
-            if (viewer is null || !TangentSpace.Participants.Participant.IsValidId(viewer))
+            if (viewer is null || !Participant.IsValidId(viewer))
                 return q.Where(row => false);
             using (EntityContext.NoCache())
             {
@@ -84,8 +86,8 @@ public sealed class PostHistoryAccess : EntityAccess<Post>
                 if (membership.Role == TangentRole.Admin) admin.Add(membership.TangentKey);
             }
             var owned = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var tangent in Block<IReadOnlyList<Tangent>>()
-                .Invoke(Tangent.Query(tangent => tangent.OwnerParticipantId == participantId, CancellationToken.None)))
+            foreach (var tangent in Block<IReadOnlyList<Community.Tangent>>()
+                .Invoke(Community.Tangent.Query(tangent => tangent.OwnerParticipantId == participantId, CancellationToken.None)))
                 owned.Add(tangent.Id);
 
             var candidates = new Dictionary<string, Topic>(StringComparer.Ordinal);
@@ -112,7 +114,7 @@ public sealed class PostHistoryAccess : EntityAccess<Post>
                 // Topic admission parity with CurrentPolicy: a Topic whose Tangent is missing admits no one;
                 // owners are always admitted; otherwise the Tangent's own admission rule decides with the
                 // viewer's membership, where a durable removal overrides.
-                var tangent = Block<Tangent?>().Invoke(Tangent.Get(topic.TangentKey, CancellationToken.None));
+                var tangent = Block<Community.Tangent?>().Invoke(Community.Tangent.Get(topic.TangentKey, CancellationToken.None));
                 if (tangent is null) continue;
                 var ownerHere = siteOwner || owned.Contains(topic.TangentKey);
                 var admitted = ownerHere

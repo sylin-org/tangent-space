@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Koan.Data.Core.Model;
 
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 public sealed record WatchResult(string RoomKey, WatchMode Mode);
 

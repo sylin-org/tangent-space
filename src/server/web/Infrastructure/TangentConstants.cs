@@ -1,4 +1,4 @@
-namespace TangentSpace.Infrastructure;
+namespace Tangent.Infrastructure;
 
 internal static class TangentConstants
 {

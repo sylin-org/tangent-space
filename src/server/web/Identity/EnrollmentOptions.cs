@@ -1,4 +1,4 @@
-namespace TangentSpace.Identity;
+namespace Tangent.Identity;
 
 public sealed class EnrollmentOptions
 {

@@ -2,7 +2,7 @@ using Koan.Web.Controllers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>The Post history surface (D3): the app's first generic entity read mount, serving
 /// only the changelog partition and only reads. A read is honored only when it explicitly selects

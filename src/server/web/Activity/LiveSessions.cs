@@ -1,4 +1,4 @@
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 /// <summary>Token-only sessions (docs/DECISIONS.md, 11 September 2026): live SSE connections
 /// register under their session claim, so a replacing sign-in can push an identity_changed

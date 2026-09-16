@@ -3,14 +3,14 @@ using System.Text.Json;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Microsoft.AspNetCore.DataProtection;
-using TangentSpace.Participants;
-using TangentSpace.Authorization;
+using Tangent.Identity;
+using Tangent.Access;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed partial class ConversationService
 {
-    private readonly IDataProtector windowCursors = protection.CreateProtector("Tangent.Conversation.WindowCursor.v1");
+    private readonly IDataProtector windowCursors = protection.CreateProtector("WindowCursor.v1");
 
     /// <summary>A bounded window of one Topic for one participant: the unread posts by default, a page
     /// from a continuation cursor, or the neighborhood of an anchor post.</summary>

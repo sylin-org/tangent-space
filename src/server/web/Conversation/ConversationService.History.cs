@@ -4,12 +4,14 @@ using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
 using Microsoft.AspNetCore.DataProtection;
-using TangentSpace.Activity;
-using TangentSpace.Authorization;
-using TangentSpace.Participants;
-using TangentSpace.Rooms;
+using Tangent.Activity;
+using Tangent.Access;
+using Tangent.Identity;
+using Tangent.Community;
+using Tangent.Stewardship;
+using Tangent.Application;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed partial class ConversationService
 {
@@ -78,7 +80,7 @@ public sealed partial class ConversationService
                     currentTopic?.TangentKey, position.Sequence, position.AcknowledgedAt, token);
             }
             // The MCP boundary can persist a read receipt in this same transaction.
-            await TangentSpace.Infrastructure.CommandCommit.Report(position.Sequence, token);
+            await CommandCommit.Report(position.Sequence, token);
             return (position.Sequence, Changed: position.Sequence > previous);
         }, ct);
         if (result.Changed) ActivityJournal.SignalAfterCommit();

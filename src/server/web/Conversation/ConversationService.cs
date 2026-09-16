@@ -2,16 +2,17 @@ using Koan.Data.Core;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Microsoft.AspNetCore.DataProtection;
-using TangentSpace.Participants;
-using TangentSpace.Rooms;
+using Tangent.Identity;
+using Tangent.Community;
+using Tangent.Stewardship;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed partial class ConversationService(TopicGovernance governance, TimeProvider clock, IDataProtectionProvider protection,
-    TangentSpace.Participants.ParticipantDirectory directory, ParticipantProfiles profiles) : IDisposable
+    ParticipantDirectory directory, ParticipantProfiles profiles) : IDisposable
 {
     private readonly SemaphoreSlim writes = new(1, 1);
-    private readonly IDataProtector cursors = protection.CreateProtector("Tangent.Conversation.Cursor.v1");
+    private readonly IDataProtector cursors = protection.CreateProtector("Cursor.v1");
 
     public Task<TopicPolicy> ReadPolicy(string did, string topic, CancellationToken ct)
         => governance.WithCurrentPolicy(did, topic, (policy, _) =>
@@ -68,14 +69,13 @@ public sealed partial class ConversationService(TopicGovernance governance, Time
     private async Task<Participant?> ResolveHolder(string target, CancellationToken ct)
     {
         if (target.StartsWith("did:", StringComparison.Ordinal)) return await directory.ByDid(target, ct);
-        if (target.StartsWith(Participants.ParticipantLookup.LocalPrefix, StringComparison.Ordinal))
+        if (target.StartsWith(ParticipantLookup.LocalPrefix, StringComparison.Ordinal))
         {
-            var participant = await Participant.Get(target[Participants.ParticipantLookup.LocalPrefix.Length..], ct);
+            var participant = await Participant.Get(target[ParticipantLookup.LocalPrefix.Length..], ct);
             return participant is null ? null : await directory.ByInternal(participant.Id, ct);
         }
         return null;
     }
-
 
     private static QueryDefinition Window<T>(string property, int page, int size)
     {

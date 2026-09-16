@@ -1,4 +1,4 @@
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 public sealed record ActivityEvent(string Sequence, string Kind, string RoomKey, string TangentKey,
     string? ActorParticipantId, string? TargetParticipantId, long? MessageSequence, DateTimeOffset OccurredAt);

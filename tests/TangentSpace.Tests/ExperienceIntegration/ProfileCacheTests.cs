@@ -4,11 +4,11 @@ using Koan.Data.Core;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-using TangentSpace.Participants;
-using TangentSpace.Participation;
+using Tangent.Identity;
+using Tangent.Identity;
 using Xunit;
 
-namespace TangentSpace.Tests.ExperienceIntegration;
+namespace Tangent.Tests.ExperienceIntegration;
 
 [Collection("Experience integration")]
 public sealed class ProfileCacheTests

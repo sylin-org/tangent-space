@@ -19,7 +19,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
-using TangentSpace.Conversation;
+using Tangent.Conversation;
+using Tangent.Activity;
 
 // Adapter health only: never start a host, hosted worker, HTTP listener, auth flow,
 // source client or domain acceptance pipeline. No production connection is accepted.

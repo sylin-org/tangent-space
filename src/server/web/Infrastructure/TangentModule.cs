@@ -10,23 +10,31 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Koan.Identity;
 using Koan.Identity.Web.Initialization;
-using TangentSpace.Application;
-using TangentSpace.Authorization;
-using TangentSpace.Site;
-using TangentSpace.Rooms;
-using TangentSpace.Participation;
-using TangentSpace.Conversation;
-using TangentSpace.Communities;
-using TangentSpace.Activity;
-using TangentSpace.Mcp.Authentication;
-using TangentSpace.Moderation;
+using Tangent.Application;
+using Tangent.Access;
+using Tangent.Spaces;
+using Tangent.Community;
+using Tangent.Stewardship;
+using Tangent.Identity;
+using Tangent.Conversation;
+using Tangent.Activity;
+using Tangent.Community;
+using Tangent.Activity;
+using Tangent.Identity;
+using Tangent.Stewardship;
+using Tangent.Api;
 
-namespace TangentSpace.Infrastructure;
+namespace Tangent.Infrastructure;
 
 [After(typeof(AuthModule))]
 [After(typeof(SecIdentityWebModule))]
 public sealed class TangentModule : KoanModule
 {
+    /// <summary>Scopes every Data Protection payload, sign-in cookies and list cursors included, so a
+    /// change here signs everyone out and expires every cursor. It names the assembly, which D14 leaves
+    /// as TangentSpace while the namespaces become Tangent.*, and is held stable on purpose.</summary>
+    private const string DataProtectionApplicationName = "TangentSpace";
+
     public override void Register(IServiceCollection services)
     {
         TangentOwnerRoleGuard.Register();
@@ -44,8 +52,8 @@ public sealed class TangentModule : KoanModule
             .Validate(o => string.IsNullOrWhiteSpace(o.PublicOrigin) || SpaceOptions.IsCanonicalOrigin(o.PublicOrigin, out _),
                 "Tangent:Space:PublicOrigin must be a canonical absolute origin like https://tangent.example.")
             .ValidateOnStart();
-        services.AddOptions<TangentSpace.Identity.EnrollmentOptions>().BindConfiguration(TangentSpace.Identity.EnrollmentOptions.Configuration)
-            .Validate(o => string.IsNullOrWhiteSpace(o.ProofAudience) || TangentSpace.Identity.ProofAudience.IsAtprotoAudience(o.ProofAudience),
+        services.AddOptions<EnrollmentOptions>().BindConfiguration(EnrollmentOptions.Configuration)
+            .Validate(o => string.IsNullOrWhiteSpace(o.ProofAudience) || ProofAudience.IsAtprotoAudience(o.ProofAudience),
                 "Tangent:Enrollment:ProofAudience must be blank, to derive it from Tangent:Space:PublicOrigin, or an atproto audience: a did:plc, or a did:web of a hostname with a port only for localhost.")
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
@@ -57,15 +65,15 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<TangentRoleAccess>();
         services.AddSingleton<PolicyGate>();
         services.AddSingleton<Arrival>();
-        services.AddSingleton<TangentSpace.Participants.ParticipantDirectory>();
-        services.AddSingleton<TangentSpace.Participants.IAtprotoHandleSource, TangentSpace.Participants.AtprotoHandleResolver>();
+        services.AddSingleton<ParticipantDirectory>();
+        services.AddSingleton<IAtprotoHandleSource, AtprotoHandleResolver>();
         services.AddSingleton<TangentServer>();
         services.AddMemoryCache();
-        services.AddSingleton<TangentSpace.Participants.ParticipantProfiles>();
-        services.AddHostedService<TangentSpace.Participants.ProfileCapture>();
+        services.AddSingleton<ParticipantProfiles>();
+        services.AddHostedService<ProfileCapture>();
         services.AddSingleton<ServerGovernance>();
         services.AddSingleton<TopicGovernance>();
-        services.AddSingleton<Rooms.Web.PublicConversationReader>();
+        services.AddSingleton<PublicConversationReader>();
         services.AddSingleton<TangentGovernance>();
         services.AddSingleton<ParticipantGovernance>();
         services.AddParticipation();
@@ -75,10 +83,10 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<ConversationService>();
         services.AddSingleton<ActivityService>();
         services.AddSingleton<LiveSessions>();
-        services.AddSingleton<Experience.ExperienceDigest>();
-        services.AddSingleton<Experience.ExperienceService>();
+        services.AddSingleton<ExperienceDigest>();
+        services.AddSingleton<ExperienceService>();
         services.AddSingleton<ModerationCaseService>();
-        var protection = services.AddDataProtection().SetApplicationName(nameof(TangentSpace));
+        var protection = services.AddDataProtection().SetApplicationName(DataProtectionApplicationName);
         if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
         services.AddOptions<KeyManagementOptions>().Configure<IHostEnvironment, ILoggerFactory>((keyOptions, host, logger) =>
             keyOptions.XmlRepository = new FileSystemXmlRepository(

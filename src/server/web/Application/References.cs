@@ -2,11 +2,12 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
-using TangentSpace.Communities;
-using TangentSpace.Rooms;
-using TangentSpace.Site;
+using Tangent.Community;
+using Tangent.Community;
+using Tangent.Stewardship;
+using Tangent.Spaces;
 
-namespace TangentSpace.Application;
+namespace Tangent.Application;
 
 /// <summary>
 /// Qualified, opaque references to this server's Tangents, Topics, Posts, invitations and moderation
@@ -19,7 +20,7 @@ public sealed class References(IOptions<SpaceOptions> options, IDataProtectionPr
     public const string CasePrefix = "case_";
 
     private readonly string origin = ConfiguredOrigin(options.Value);
-    private readonly IDataProtector listCursors = protection.CreateProtector("Tangent.References.ListCursor.v1");
+    private readonly IDataProtector listCursors = protection.CreateProtector("Community.Tangent.References.ListCursor.v1");
 
     public static string ConfiguredOrigin(SpaceOptions options)
         => SpaceOptions.IsCanonicalOrigin(options.PublicOrigin, out var origin)
@@ -109,13 +110,13 @@ public sealed class References(IOptions<SpaceOptions> options, IDataProtectionPr
 
     private static bool IsTangentKey(string key)
     {
-        try { Communities.Tangent.CheckKey(key); return true; }
+        try { Community.Tangent.CheckKey(key); return true; }
         catch (TangentRuleViolation) { return false; }
     }
 
     private static bool IsTopicKey(string key)
     {
-        try { Rooms.Topic.CheckKey(key); return true; }
+        try { Community.Topic.CheckKey(key); return true; }
         catch (TopicRuleViolation) { return false; }
     }
 }

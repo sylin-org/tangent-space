@@ -14,7 +14,7 @@ public sealed class ProtectedStore : IOAuthStateStore, IOAuthSessionStore
     public ProtectedStore(IDataProtectionProvider provider, string directory)
     {
         Directory.CreateDirectory(directory);
-        protector = provider.CreateProtector("Tangent.AtprotoClientProbe.State.v1");
+        protector = provider.CreateProtector("Community.Tangent.AtprotoClientProbe.State.v1");
         file = Path.Combine(directory, "sessions.protected");
         data = File.Exists(file)
             ? JsonSerializer.Deserialize<StoreData>(protector.Unprotect(File.ReadAllText(file)))!

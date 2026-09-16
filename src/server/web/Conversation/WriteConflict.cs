@@ -1,3 +1,3 @@
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed class WriteConflict : Exception;

@@ -1,0 +1,50 @@
+using Koan.Data.Core;
+using Tangent.Community;
+using Koan.Web.Auth.Connector.Atproto;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Tangent.Infrastructure;
+using Tangent.Application;
+using Tangent.Identity;
+using Tangent.Identity;
+using Tangent.Community;
+using Tangent.Stewardship;
+using Tangent.Spaces;
+
+namespace Tangent.Api;
+
+[ApiController]
+public sealed class WelcomeController(IOptions<SpaceOptions> options, TangentServer hub) : ControllerBase
+{
+    private TopicGovernance topics => hub.Topics;
+    private ServerGovernance server => hub.Space;
+
+    [AllowAnonymous]
+    [HttpGet(TangentConstants.WelcomeRoute)]
+    public async Task<IActionResult> Welcome(CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        string? participantId;
+        try
+        {
+            participantId = User.Identity?.IsAuthenticated == true ? ParticipationAccess.Require(User, ParticipationGrants.Welcome) : null;
+            if (participantId is null && Request.Headers.ContainsKey("Authorization")) return Unauthorized();
+        }
+        catch (UnauthorizedAccessException) { return Unauthorized(); }
+        using var fresh = EntityContext.NoCache();
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var participant = participantId is null ? null : await Participant.Get(participantId, ct);
+        var identity = participant is null ? null : new ParticipantWelcome(participant.Id,
+            await hub.Directory.AtprotoDidOf(participant.Id, ct), await hub.Directory.LabelOf(participant.Id, ct),
+            space?.IsOwner(participant.Id) == true, participant.JoinedAt);
+        var settings = await server.Read(participantId, ct);
+        var home = space?.IsOwner(participantId) == true ? await Community.Tangent.Get(Community.Tangent.HomeKey, ct) : null;
+        var onboarding = space is null
+            ? identity is null ? "sign_in" : settings.CanClaim ? "confirm_owner" : "waiting_owner"
+            : space.IsOwner(participantId) && home?.SetupComplete != true ? "create_tangent" : "complete";
+        return Ok(new SpaceWelcome(space?.Name ?? options.Value.Name, space is not null, identity,
+            TangentConstants.SignInPath, identity is null ? null : TangentConstants.SignOutPath,
+            await topics.List(participantId, 1, ct), settings, onboarding));
+    }
+}

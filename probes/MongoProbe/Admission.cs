@@ -2,8 +2,9 @@ using Koan.Data.Abstractions;
 using Koan.Data.Core;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using TangentSpace.Activity;
-using TangentSpace.Conversation;
+using Tangent.Activity;
+using Tangent.Conversation;
+using Tangent.Activity;
 
 internal static class Admission
 {
@@ -51,7 +52,7 @@ internal static class Admission
     {
         var anchor = new ActivityHead { Id = "mongo-guard-initial", LastSequence = 0, UpdatedAt = Fixture.Epoch };
         using (EntityContext.NoCache()) await anchor.Save(ct);
-        const string headCollection = "TangentSpace.Activity.ActivityHead";
+        const string headCollection = "ActivityHead";
         await database.RunCommandAsync<BsonDocument>(new BsonDocument
         {
             { "collMod", headCollection }, { "validator", new BsonDocument("lastSequence", new BsonDocument("$lte", 10)) },

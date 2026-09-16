@@ -1,7 +1,8 @@
-using TangentSpace.Authorization;
-using TangentSpace.Rooms;
+using Tangent.Access;
+using Tangent.Community;
+using Tangent.Stewardship;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed partial class ConversationService
 {

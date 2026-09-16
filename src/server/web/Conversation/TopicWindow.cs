@@ -1,4 +1,4 @@
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 /// <summary>A bounded window of one Topic's history. Activity snapshots and read acknowledgement are separate.</summary>
 public sealed record TopicWindow(IReadOnlyList<Post> Messages, string? OlderCursor, string? NewerCursor,

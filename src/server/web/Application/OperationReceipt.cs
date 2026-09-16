@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Koan.Data.Core.Model;
 
-namespace TangentSpace.Application;
+namespace Tangent.Application;
 
 /// <summary>
 /// The durable receipt of one requested mutation. Its key binds the participant credential, the

@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Koan.Data.Core.Model;
 
-namespace TangentSpace.Activity;
+namespace Tangent.Activity;
 
 /// <summary>Per participant and Tangent default; a channel's explicit WatchSetting overrides it. Never affects access.</summary>
 public sealed class TangentWatchSetting : Entity<TangentWatchSetting>

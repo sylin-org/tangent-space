@@ -1,7 +1,7 @@
 using Koan.Data.Core.Model;
-using TangentSpace.Authorization;
+using Tangent.Access;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 public sealed class Post : Entity<Post>
 {
@@ -28,7 +28,7 @@ public sealed class Post : Entity<Post>
     public IReadOnlyList<PostFacet>? Facets { get; set; }
 
     /// <summary>The changelog partition name: pre-edit snapshots are insert-only rows
-    /// materialized as <c>TangentSpace.Conversation.Post#changelog</c> (adapter separator '#').</summary>
+    /// materialized as <c>Post#changelog</c> (adapter separator '#').</summary>
     public const string ChangelogPartition = "changelog";
 
     /// <summary>Snapshot rows only: the live row this pre-edit copy archives. Live rows carry null.</summary>

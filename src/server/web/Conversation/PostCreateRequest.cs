@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace TangentSpace.Conversation;
+namespace Tangent.Conversation;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 [Newtonsoft.Json.JsonObject(MissingMemberHandling = Newtonsoft.Json.MissingMemberHandling.Error)]
