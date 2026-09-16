@@ -11,8 +11,8 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current task | R2.6 — wipe and verify (`waiting` on Leo for the walkthrough). The wipe itself is done |
 | Next action | **Walkthrough W1–W11 with Leo on the fresh install**, which closes R2.6 and R2. The install is unclaimed, so W1 starts at the claim; the connector needs `forget` then Connect (N-056). After that, R3 begins with R3.1's design note. Two things still owed: the `probes/` question (N-047) and push authorization |
 | Last checkpoint | 2026-09-16 · S-004 · **R2.6's wipe is done and the install is fresh and healthy.** Greenfield 1,496 → 507 across R2. All four suites green. Only the walkthrough remains |
-| Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
-| Waiting on | Leo: push authorization (optional) — 32 commits exist only on this machine; also the R2.1 relaunch (N-044) and the `probes/` question (N-047). N-035 is settled — D11 and D12, [ADR 0013](../../adr/0013-access-contract-and-role-model.md) |
+| Durability | Commits at task checkpoints are authorized (D10). **Pushed to `origin/claude/epic-007-realignment` on 2026-09-16**, so the work no longer exists only on this machine |
+| Waiting on | Leo: the W1-W11 walkthrough on the fresh install, which closes R2.6. Nothing else |
 | Blockers | None. The stranded tables are gone with the wipe, so N-044 is closed |
 
 ## Resume protocol
