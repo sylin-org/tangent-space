@@ -1,4 +1,4 @@
-//! Input-model identity. An intake is a fact about the shape of the caller, not an open
+//! Input-model companion. An intake is a fact about the shape of the caller, not an open
 //! label: it is recorded for attribution and diagnostics, and it is never an input to a
 //! domain or authority decision. Both intakes translate their input model into the same
 //! closed [`Operation`](crate::application::operations::Operation) vocabulary and cross the
@@ -15,7 +15,7 @@ pub enum IntakeChannel {
     /// A local script or human, through the command line.
     Cli,
     /// The operator web page served by the `operator` verb's loopback listener.
-    Operator,
+    Manager,
 }
 
 impl IntakeChannel {
@@ -23,7 +23,7 @@ impl IntakeChannel {
         match self {
             Self::Mcp => "mcp",
             Self::Cli => "cli",
-            Self::Operator => "operator",
+            Self::Manager => "manager",
         }
     }
 }

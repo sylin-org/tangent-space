@@ -32,10 +32,10 @@ $rules = [ordered]@{
     # W2-A is a handoff brief and C1-C9 are connector-assessment items, and R6.6 deletes both, which
     # leaves the citation pointing at nothing. ADR NNNN is deliberately absent - decision records
     # survive, and the server already cites ADR 0007 and 0008 in living code.
-    'Plan-item codes'       = '\b(W\d-[A-D]\d?|C[1-9])\b'
+    'Plan-item codes'       = '\((W\d-[A-D]\d?|C[1-9]|P\d)\)|\b(W\d-[A-D]\d?|C[1-9])\b'
     # Who decided is not a rule. "per the owner direction" tells a reader nothing they can check;
     # the rule it stands for does.
-    'Owner narration'       = '(?i:owner direction|the owner (asked|wanted|said|directed)|per the owner)'
+    'Owner narration'       = '(?i:owner (direction|correction|decision|call|note)|the owner (asked|wanted|said|directed|corrected|decided)|per the owner|by owner)'
 }
 
 # Some words are retired on one side of the pair and current on the other, so a rule can name

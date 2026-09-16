@@ -1,9 +1,9 @@
 //! Deterministic model-facing presentation. The server supplies canonical facts; this module
 //! decides depth and perspective. Participant-authored strings stay recognizable as content:
 //! post bodies and excerpts are laid out as quoted blocks and sanitized of control
-//! characters so a post can never forge an identity, status or action line.
+//! characters so a post can never forge an companion, status or action line.
 
-use crate::application::contract::{AttentionItemDto, ExperienceDto, IdentityDto};
+use crate::application::contract::{AttentionItemDto, ExperienceDto, CompanionDto};
 pub use crate::application::operations::ViewMode;
 
 /// Whose eyes the text is written from: the verified acting companion. Since the W2
@@ -69,10 +69,10 @@ pub fn attention_line(item: &AttentionItemDto, actor_label: &str, alias: Option<
     }
 }
 
-/// The compact anchor: acting identity and current place, one line.
-pub fn anchor(identity: Option<&IdentityDto>, perspective: &Perspective, place_label: &str) -> String {
-    let name = identity
-        .map(|identity| identity.display_name.clone())
+/// The compact anchor: acting companion and current place, one line.
+pub fn anchor(companion: Option<&CompanionDto>, perspective: &Perspective, place_label: &str) -> String {
+    let name = companion
+        .map(|companion| companion.display_name.clone())
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| perspective.display.clone());
     if place_label.is_empty() {
@@ -83,9 +83,9 @@ pub fn anchor(identity: Option<&IdentityDto>, perspective: &Perspective, place_l
 }
 
 /// Orientation headline per the contract's fixed phrasing.
-pub fn orientation_headline(identity: Option<&IdentityDto>, perspective: &Perspective) -> String {
-    let name = identity
-        .map(|identity| identity.display_name.clone())
+pub fn orientation_headline(companion: Option<&CompanionDto>, perspective: &Perspective) -> String {
+    let name = companion
+        .map(|companion| companion.display_name.clone())
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| perspective.display.clone());
     format!("In this Tangent, you are participating as {name}.")

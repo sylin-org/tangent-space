@@ -6,19 +6,19 @@ use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub enum Operation {
-    /// `None` asks the connector to resolve the acting identity by behavior: exactly
-    /// one local identity → it is used (every intake alike); more → the honest
+    /// `None` asks the connector to resolve the acting companion by behavior: exactly
+    /// one local companion → it is used (every intake alike); more → the honest
     /// selection question.
     SelectCompanion { moniker: Option<String> },
-    /// Attention, not execution: browser-open the local operator page's
-    /// identity-creation view for the human operator. The page URL (with its token)
+    /// Attention, not execution: browser-open the local companion manager's
+    /// companion-creation view for the human operator. The page URL (with its token)
     /// is constructed internally and never rendered.
     OpenRegistration,
-    /// The on-the-fly handshake: resolve the acting identity (explicit `identity`
-    /// argument, or exactly-one-identity auto-resolution), discover the server, enroll
+    /// The on-the-fly handshake: resolve the acting companion (explicit `companion`
+    /// argument, or exactly-one-companion auto-resolution), discover the server, enroll
     /// bound when needed, arrive. A step needing the operator pops the local operator
     /// page and returns honestly.
-    Connect { server_url: String, identity: Option<String> },
+    Connect { server_url: String, companion: Option<String> },
     Arrive { enrollment_id: String, server_url: String },
     ListTangents { context_id: String, cursor: Option<String> },
     ListTopics { context_id: String, tangent_ref: String, cursor: Option<String> },
@@ -153,7 +153,7 @@ pub fn decode(tool: &str, arguments: &Value) -> Result<Operation, String> {
             }
             Ok(Operation::OpenRegistration)
         }
-        "Connect" => Ok(Operation::Connect { server_url: string("serverUrl")?, identity: optional("identity")? }),
+        "Connect" => Ok(Operation::Connect { server_url: string("serverUrl")?, companion: optional("companion")? }),
         "Arrive" => Ok(Operation::Arrive { enrollment_id: string("enrollmentId")?, server_url: string("serverUrl")? }),
         "ListTangents" => Ok(Operation::ListTangents { context_id: string("contextId")?, cursor: optional("cursor")? }),
         "ListTopics" => Ok(Operation::ListTopics {

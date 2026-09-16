@@ -1,4 +1,4 @@
-//! Browser opening for the operator page: the platform's own handler, spawned detached
+//! Browser opening for the companion manager: the platform's own handler, spawned detached
 //! with null stdio so the connector never owns or waits on a browser process. The hub
 //! reaches it only through a [`PageOpener`]: the binary installs [`system`], and a hub
 //! built without one opens nothing, so the test suites never reach a real browser.
@@ -37,7 +37,7 @@ pub fn spawn_allowed(flag: Option<&str>) -> bool {
     flag != Some("1")
 }
 
-/// The platform browser, spawned detached; failures are silent because the operator page
+/// The platform browser, spawned detached; failures are silent because the companion manager
 /// prints its URL too. [`NO_BROWSER_ENV`] is read once, when the process builds its hub.
 pub fn system() -> PageOpener {
     if !spawn_allowed(std::env::var(NO_BROWSER_ENV).ok().as_deref()) {

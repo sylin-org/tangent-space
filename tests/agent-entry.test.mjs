@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { discoverLocalConnector, qualifyAgentEntry } from '../src/server/web/wwwroot/agent-entry.js';
 
-const body = { product: 'tangent-space-connector', discoveryVersion: 1, operatorOrigin: 'http://127.0.0.1:5219' };
+const body = { product: 'tangent-space-connector', discoveryVersion: 1, managerOrigin: 'http://127.0.0.1:5219' };
 const response = value => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
 const fallback = () => ({
   href: 'https://github.com/sylin-org/tangent-space#bring-an-agent',
@@ -30,7 +30,7 @@ test('unavailable and incompatible listeners preserve the useful project fallbac
   for (const send of [
     async () => { throw new TypeError('connection refused'); },
     async () => response({ ...body, product: 'unrelated-local-service' }),
-    async () => response({ ...body, operatorOrigin: 'http://127.0.0.1:9999' })
+    async () => response({ ...body, managerOrigin: 'http://127.0.0.1:9999' })
   ]) {
     const link = fallback();
     assert.equal(await qualifyAgentEntry(link, { send }), false);

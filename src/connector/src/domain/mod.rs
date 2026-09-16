@@ -3,7 +3,7 @@
 
 pub mod attention;
 pub mod events;
-pub mod identity;
+pub mod companion;
 pub mod intake;
 pub mod policy;
 pub mod refs;

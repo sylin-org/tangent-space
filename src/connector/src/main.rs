@@ -12,11 +12,11 @@ use serde_json::{json, Value};
 
 use tangent_connector::adapters::lockfile;
 use tangent_connector::adapters::mcp;
-use tangent_connector::adapters::operator;
+use tangent_connector::adapters::manager;
 use tangent_connector::adapters::poller;
 use tangent_connector::application::hub::ConnectorHub;
 use tangent_connector::domain::events::DomainEvent;
-use tangent_connector::domain::identity::CallerId;
+use tangent_connector::domain::companion::CallerId;
 use tangent_connector::domain::intake::IntakeChannel;
 use tangent_connector::{build_hub, data_directory};
 
@@ -40,11 +40,11 @@ fn run(arguments: &[String]) -> i32 {
     let rest = &arguments[1..];
     match command.as_str() {
         "serve" => serve(rest),
-        "operator" => operator::operator(rest),
+        "manager" => manager::manager(rest),
         "call" => call(rest),
         "catalog" => catalog(rest),
-        "identities" => identities(rest),
         "companions" => companions(rest),
+        "enrollments" => enrollments(rest),
         "check" => check(rest),
         "forget" => forget(rest),
         "--help" | "-h" | "help" => {
@@ -64,23 +64,23 @@ fn usage() {
         "tangent-connector — the personal local MCP connector for Tangent\n\
          \n\
          serve [--force]                MCP stdio server (the agent-facing intake);
-                                        also hosts the loopback operator page in-process
+                                        also hosts the loopback companion manager in-process
                                         (its URL goes to stderr, never stdout)\n\
          operator [--port N] [--no-open] [--force]\n\
-                                        local operator web page + tray (identities,
+                                        local operator web page + tray (companions,
                                         atproto sign-in via the /bind route, enrollments,\n\
                                         status). Fixed default port 5219 (stable URL);\n\
                                         TANGENT_CONNECTOR_PORT or --port overrides\n\
          call <tool> [json] [--view V]  invoke one participation tool through the same hub\n\
          call --stdin [--json]          read `<tool> <json>` lines from standard input\n\
          catalog [--json]               list the tool catalog\n\
-         identities [--json]            list local identities\n\
+         companions [--json]            list local companions\n\
          companions [--json]            list enrollments (companions)\n\
          check [--name N]               run one background digest check (no model)\n\
          forget --name N                remove an enrollment and its stored session\n\
          \n\
          Environment: TANGENT_CONNECTOR_HOME (state directory);\n\
-         TANGENT_CONNECTOR_PORT (operator page port; default 5219);\n\
+         TANGENT_CONNECTOR_PORT (companion manager port; default 5219);\n\
          TANGENT_CONNECTOR_NO_BROWSER=1 (never open a browser)."
     );
 }
@@ -103,18 +103,18 @@ fn serve(rest: &[String]) -> i32 {
             return EXIT_FAILED;
         }
     };
-    // The SAME loopback operator server the operator verb hosts, in-process — on the
+    // The SAME loopback manager server the operator verb hosts, in-process — on the
     // same fixed port (5219, or the one TANGENT_CONNECTOR_PORT names).
     // Its URL goes to stderr and the diagnostics journal — NEVER stdout, which is
     // protocol-owned JSON-RPC and nothing else.
-    let port = match tangent_connector::adapters::operator::resolve_operator_port(None) {
+    let port = match tangent_connector::adapters::manager::resolve_manager_port(None) {
         Ok(port) => port,
         Err(error) => {
             eprintln!("{error}");
             return EXIT_FAILED;
         }
     };
-    let listener = match tangent_connector::adapters::operator::bind_listener(&data_dir, port) {
+    let listener = match tangent_connector::adapters::manager::bind_listener(&data_dir, port) {
         Ok(listener) => listener,
         Err(error) => {
             eprintln!("{error}");
@@ -122,11 +122,11 @@ fn serve(rest: &[String]) -> i32 {
         }
     };
     let url = format!("http://127.0.0.1:{port}/");
-    eprintln!("Tangent connector operator page: {url}");
+    eprintln!("Tangent connector companion manager: {url}");
     eprintln!("The connector records it in its state so any Connect can pop this page.");
     // The hub is constructed when the initialize request names the connecting client;
     // clientInfo.name becomes the caller (attribution + feed labeling, never a domain
-    // input). One process still serves exactly one client. The operator server joins
+    // input). One process still serves exactly one client. The manager server joins
     // at that moment, sharing the one hub (one state store, one lock).
     let build_data_dir = data_dir.clone();
     let build = move |client_name: &str| -> Result<Arc<ConnectorHub>, String> {
@@ -134,16 +134,16 @@ fn serve(rest: &[String]) -> i32 {
         // The URL enters the diagnostics journal (the operator's recovery path once
         // stderr has scrolled away) and durable state (so a Connect in any process —
         // the CLI one-shots included — can pop this page); no model-visible surface.
-        hub.events().publish(DomainEvent::OperatorPageReady { url: url.clone() });
-        hub.announce_operator_page(&url);
-        let operator_hub = hub.clone();
+        hub.events().publish(DomainEvent::ManagerPageReady { url: url.clone() });
+        hub.announce_manager_page(&url);
+        let manager_hub = hub.clone();
         std::thread::Builder::new()
             .name("tangent-operator".into())
-            .spawn(move || operator::serve(listener, operator_hub))
-            .expect("operator server thread");
+            .spawn(move || manager::serve(listener, manager_hub))
+            .expect("manager server thread");
         let (auto, poll_seconds) = {
             let store = hub.store().lock().expect("state lock");
-            let auto = store.companions().iter().filter(|entry| entry.auto_check).map(|entry| entry.enrollment_id.clone()).collect();
+            let auto = store.enrollments().iter().filter(|entry| entry.auto_check).map(|entry| entry.enrollment_id.clone()).collect();
             let poll_seconds = store.policy().poll_seconds;
             (auto, poll_seconds)
         };
@@ -153,11 +153,11 @@ fn serve(rest: &[String]) -> i32 {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     let code = mcp::serve(build, &mut out);
-    // Clean shutdown (stdin ended): the operator page died with this process, so the
+    // Clean shutdown (stdin ended): the companion manager died with this process, so the
     // recorded URL must not point a later Connect at a dead port. The reachability
     // probe would catch it too, but honest state beats a probe.
     if let Ok(mut store) = tangent_connector::adapters::store::StateStore::open(&data_dir) {
-        store.clear_operator_page_url();
+        store.clear_manager_page_url();
         let _ = store.save();
     }
     // stdin ended: the lock releases on drop as the process winds down.
@@ -284,7 +284,7 @@ fn catalog(rest: &[String]) -> i32 {
 
 // ---------- setup and stewardship ----------
 
-fn identities(rest: &[String]) -> i32 {
+fn companions(rest: &[String]) -> i32 {
     let json = rest.iter().any(|argument| argument == "--json");
     let hub = match build_hub(CallerId("cli".into()), data_directory()) {
         Ok(hub) => hub,
@@ -296,16 +296,16 @@ fn identities(rest: &[String]) -> i32 {
     let entries: Vec<(Value, usize)> = {
         let store = hub.store().lock().expect("state lock");
         store
-            .identities()
+            .companions()
             .iter()
-            .map(|identity| {
-                let enrollment_count = store.companions_of(&identity.local_id).len();
+            .map(|companion| {
+                let enrollment_count = store.enrollments_of(&companion.local_id).len();
                 (
                     json!({
-                        "localId": identity.local_id,
-                        "handle": identity.handle,
-                        "displayName": identity.display_name,
-                        "boundDid": identity.bound_did,
+                        "localId": companion.local_id,
+                        "handle": companion.handle,
+                        "displayName": companion.display_name,
+                        "boundDid": companion.bound_did,
                     }),
                     enrollment_count,
                 )
@@ -317,13 +317,13 @@ fn identities(rest: &[String]) -> i32 {
         println!("{}", serde_json::to_string_pretty(&plain).unwrap_or_default());
     } else {
         if entries.is_empty() {
-            println!("No identities exist yet. Create one in the operator page (tangent-connector operator).");
+            println!("No companions exist yet. Create one in the companion manager (tangent-connector manager).");
         }
-        for (identity, count) in &entries {
+        for (companion, count) in &entries {
             println!(
                 "{}\n    {} · {} enrollment(s)",
-                identity.get("handle").and_then(Value::as_str).unwrap_or_default(),
-                identity.get("localId").and_then(Value::as_str).unwrap_or_default(),
+                companion.get("handle").and_then(Value::as_str).unwrap_or_default(),
+                companion.get("localId").and_then(Value::as_str).unwrap_or_default(),
                 count
             );
         }
@@ -331,7 +331,7 @@ fn identities(rest: &[String]) -> i32 {
     EXIT_OK
 }
 
-fn companions(rest: &[String]) -> i32 {
+fn enrollments(rest: &[String]) -> i32 {
     let json = rest.iter().any(|argument| argument == "--json");
     let hub = match build_hub(CallerId("cli".into()), data_directory()) {
         Ok(hub) => hub,
@@ -342,12 +342,12 @@ fn companions(rest: &[String]) -> i32 {
     };
     let store = hub.store().lock().expect("state lock");
     let companions: Vec<Value> = store
-        .companions()
+        .enrollments()
         .iter()
         .map(|entry| {
             json!({
                 "enrollmentId": entry.enrollment_id,
-                "identityId": entry.local_id,
+                "companionId": entry.local_id,
                 "name": entry.name,
                 "participantRef": entry.participant_ref,
                 "did": entry.did,
@@ -363,13 +363,13 @@ fn companions(rest: &[String]) -> i32 {
         println!("{}", serde_json::to_string_pretty(&companions).unwrap_or_default());
     } else {
         if companions.is_empty() {
-            println!("No companions are enrolled. Use enroll or the operator page first.");
+            println!("No companions are enrolled. Use enroll or the companion manager first.");
         }
         for entry in &companions {
             println!(
-                "{}\n    identity {} · {} · {} · auto-check {}",
+                "{}\n    companion {} · {} · {} · auto-check {}",
                 entry.get("name").and_then(Value::as_str).unwrap_or_default(),
-                entry.get("identityId").and_then(Value::as_str).unwrap_or_default(),
+                entry.get("companionId").and_then(Value::as_str).unwrap_or_default(),
                 entry.get("participantRef").and_then(Value::as_str).unwrap_or_default(),
                 entry.get("server").and_then(Value::as_str).unwrap_or_default(),
                 entry.get("autoCheck").and_then(Value::as_bool).unwrap_or_default(),
@@ -401,7 +401,7 @@ fn check(rest: &[String]) -> i32 {
     let targets: Vec<(String, String)> = {
         let store = hub.store().lock().expect("state lock");
         store
-            .companions()
+            .enrollments()
             .iter()
             .filter(|entry| name.as_deref().is_none_or(|value| entry.matches(value) || entry.enrollment_id == value))
             .map(|entry| (entry.enrollment_id.clone(), entry.name.clone()))
@@ -449,7 +449,7 @@ fn forget(rest: &[String]) -> i32 {
         }
     };
     let mut store = hub.store().lock().expect("state lock");
-    let Some(entry) = store.find_companion(&name) else {
+    let Some(entry) = store.find_enrollment(&name) else {
         eprintln!("no companion matches '{name}'");
         return EXIT_USAGE;
     };

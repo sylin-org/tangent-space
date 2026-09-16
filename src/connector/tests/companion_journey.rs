@@ -1,5 +1,5 @@
-//! Identity journeys: identity CRUD and handle uniqueness, behavior-based identity
-//! resolution (exactly one identity → auto-resolve for every intake; several → honest
+//! Companion journeys: companion CRUD and handle uniqueness, behavior-based companion
+//! resolution (exactly one companion → auto-resolve for every intake; several → honest
 //! selection question; zero → creation instruction), the account-bound enrollment
 //! exchange against the fake server, and the companion manager's local-only discipline.
 //! All data is synthetic.
@@ -18,12 +18,12 @@ use tangent_connector::adapters::store::StateStore;
 use tangent_connector::application::bus::EventBus;
 use tangent_connector::application::hub::ConnectorHub;
 use tangent_connector::application::ports::ExperiencePort;
-use tangent_connector::domain::identity::CallerId;
+use tangent_connector::domain::companion::CallerId;
 use tangent_connector::domain::intake::IntakeChannel;
 
 fn workspace(label: &str, caller: CallerId) -> Arc<ConnectorHub> {
     // Test sessions are synthetic.
-    let dir = std::env::temp_dir().join(format!("tangent-connector-identity-{}-{}", label, std::process::id()));
+    let dir = std::env::temp_dir().join(format!("tangent-connector-companion-{}-{}", label, std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp dir");
     let events = Arc::new(EventBus::new());
@@ -44,43 +44,43 @@ fn select(hub: &ConnectorHub, moniker: Option<&str>) -> tangent_connector::appli
     hub.invoke(IntakeChannel::Mcp, "SelectCompanion", &arguments)
 }
 
-/// An identity enrolled the only way a companion can be: its atproto account bound
+/// An companion enrolled the only way a companion can be: its atproto account bound
 /// (seeded, since binding is [`bind_oauth_journey`]'s subject) and then the
 /// account-bound proof exchange.
 fn enrolled(hub: &ConnectorHub, server: &FakeServer, handle: &str) -> (String, String) {
     let account = format!("{handle}.bsky.example");
     let did = format!("did:plc:{handle}");
     server.add_account(&account, "unused", &did);
-    let local_id = common::seed_bound_identity(hub, &account, &did, server.origin());
+    let local_id = common::seed_bound_companion(hub, &account, &did, server.origin());
     let entry = hub.enroll_bound(&local_id, server.origin()).expect("bound enrollment");
     (local_id, entry.enrollment_id)
 }
 
-// ---------- identity CRUD ----------
+// ---------- companion CRUD ----------
 
 #[test]
-fn identity_crud_enforces_handle_uniqueness() {
+fn companion_crud_enforces_handle_uniqueness() {
     let hub = workspace("crud", CallerId("cli".into()));
-    let lumen = hub.create_identity("lumen", Some("Lumen")).expect("create");
+    let lumen = hub.create_companion("lumen", Some("Lumen")).expect("create");
     assert_eq!(lumen.handle, "lumen");
     assert_eq!(lumen.local_id.len(), 32, "local ids are guid-v7 hex");
 
     // Uniqueness is case-insensitive within the connector.
-    assert!(hub.create_identity("LUMEN", None).is_err());
-    let other = hub.create_identity("ada", None).expect("second identity");
-    assert!(hub.update_identity(&other.local_id, Some("lumen"), None).is_err(), "an update may not steal a handle");
-    assert!(hub.create_identity("x", None).is_err(), "handles are at least 2 characters");
-    assert!(hub.create_identity(&"h".repeat(254), None).is_err(), "handles are at most 253 characters");
+    assert!(hub.create_companion("LUMEN", None).is_err());
+    let other = hub.create_companion("ada", None).expect("second companion");
+    assert!(hub.update_companion(&other.local_id, Some("lumen"), None).is_err(), "an update may not steal a handle");
+    assert!(hub.create_companion("x", None).is_err(), "handles are at least 2 characters");
+    assert!(hub.create_companion(&"h".repeat(254), None).is_err(), "handles are at most 253 characters");
 
-    let renamed = hub.update_identity(&lumen.local_id, Some("lumen-primary"), Some(Some("Lumen E."))).expect("update");
+    let renamed = hub.update_companion(&lumen.local_id, Some("lumen-primary"), Some(Some("Lumen E."))).expect("update");
     assert_eq!(renamed.handle, "lumen-primary");
     assert_eq!(renamed.display_name.as_deref(), Some("Lumen E."));
-    let cleared = hub.update_identity(&lumen.local_id, None, Some(None)).expect("clear display name");
+    let cleared = hub.update_companion(&lumen.local_id, None, Some(None)).expect("clear display name");
     assert!(cleared.display_name.is_none());
 
-    hub.delete_identity(&other.local_id, false).expect("delete without enrollments");
-    assert!(hub.delete_identity(&other.local_id, false).is_err(), "the identity is gone");
-    assert!(hub.identity(&lumen.local_id).is_some());
+    hub.delete_companion(&other.local_id, false).expect("delete without enrollments");
+    assert!(hub.delete_companion(&other.local_id, false).is_err(), "the companion is gone");
+    assert!(hub.companion(&lumen.local_id).is_some());
 }
 
 #[test]
@@ -89,24 +89,24 @@ fn delete_refuses_while_enrollments_exist_and_cascades_when_confirmed() {
     let hub = workspace("cascade", CallerId("cli".into()));
     let (local_id, enrollment_id) = enrolled(&hub, &server, "lumen");
 
-    let refused = hub.delete_identity(&local_id, false).expect_err("must refuse");
+    let refused = hub.delete_companion(&local_id, false).expect_err("must refuse");
     assert!(refused.contains("enrollment"), "error was: {refused}");
 
-    hub.delete_identity(&local_id, true).expect("cascade delete");
-    assert!(hub.identity(&local_id).is_none());
+    hub.delete_companion(&local_id, true).expect("cascade delete");
+    assert!(hub.companion(&local_id).is_none());
     assert!(hub.enrollments_of(&local_id).is_empty());
-    assert!(hub.store().lock().unwrap().companion(&enrollment_id).is_none(), "the enrollment cascades");
+    assert!(hub.store().lock().unwrap().enrollment(&enrollment_id).is_none(), "the enrollment cascades");
 }
 
 // ---------- behavior-based resolution (every intake alike) ----------
 
 #[test]
-fn the_one_identity_resolves_automatically_for_every_intake() {
+fn the_one_companion_resolves_automatically_for_every_intake() {
     let server = FakeServer::start();
-    let hub = workspace("one-identity", CallerId("cli".into()));
+    let hub = workspace("one-companion", CallerId("cli".into()));
     let (local_id, enrollment_id) = enrolled(&hub, &server, "lumen");
 
-    // The CLI intake resolves exactly like the MCP intake: no moniker, one identity.
+    // The CLI intake resolves exactly like the MCP intake: no moniker, one companion.
     let outcome = hub.invoke(IntakeChannel::Cli, "SelectCompanion", &json!({}));
     assert!(!outcome.is_error, "text: {}", outcome.text);
     assert_eq!(
@@ -120,33 +120,33 @@ fn the_one_identity_resolves_automatically_for_every_intake() {
 }
 
 #[test]
-fn several_identities_resolve_nothing_without_an_explicit_choice() {
+fn several_companions_resolve_nothing_without_an_explicit_choice() {
     let server = FakeServer::start();
-    let hub = mcp_workspace("two-identities", "codex-host");
+    let hub = mcp_workspace("two-companions", "codex-host");
     let _ = enrolled(&hub, &server, "alpha");
-    let beta = hub.create_identity("beta", None).expect("identity");
+    let beta = hub.create_companion("beta", None).expect("companion");
     let _ = beta;
 
     let outcome = select(&hub, None);
     assert!(outcome.is_error);
     assert_eq!(
         outcome.structured.pointer("/problem/code").and_then(Value::as_str),
-        Some("identity_selection_required")
+        Some("companion_selection_required")
     );
     assert!(outcome.text.contains("alpha") && outcome.text.contains("beta"), "both handles are listed: {}", outcome.text);
     assert!(outcome.text.contains("moniker"), "the instruction names the explicit path: {}", outcome.text);
 }
 
 #[test]
-fn no_identities_point_at_creation() {
-    let hub = mcp_workspace("zero-identities", "codex-host");
+fn no_companions_point_at_creation() {
+    let hub = mcp_workspace("zero-companions", "codex-host");
     let outcome = select(&hub, None);
     assert!(outcome.is_error);
     assert_eq!(
         outcome.structured.pointer("/problem/code").and_then(Value::as_str),
-        Some("identity_selection_required")
+        Some("companion_selection_required")
     );
-    assert!(outcome.text.contains("No local identity exists yet"), "text: {}", outcome.text);
+    assert!(outcome.text.contains("No local companion exists yet"), "text: {}", outcome.text);
     assert!(outcome.text.contains("operator"), "the instruction names the operator path: {}", outcome.text);
 }
 
@@ -157,10 +157,10 @@ fn already_enrolled_is_an_honest_error_locally_and_from_the_server() {
     let server = FakeServer::start();
     let hub = workspace("already", CallerId("cli".into()));
     server.add_account("jeff.bsky.example", "unused", "did:plc:jeff");
-    let local_id = common::seed_bound_identity(&hub, "jeff.bsky.example", "did:plc:jeff", server.origin());
+    let local_id = common::seed_bound_companion(&hub, "jeff.bsky.example", "did:plc:jeff", server.origin());
     hub.enroll_bound(&local_id, server.origin()).expect("first enrollment");
 
-    // Local guard: the identity already holds a session for this origin.
+    // Local guard: the companion already holds a session for this origin.
     let local = hub.enroll_bound(&local_id, server.origin()).expect_err("must refuse");
     assert!(local.contains("already_enrolled"), "error was: {local}");
 
@@ -174,19 +174,19 @@ fn already_enrolled_is_an_honest_error_locally_and_from_the_server() {
 // ---------- two origins, two sessions ----------
 
 #[test]
-fn one_identity_at_two_servers_keeps_distinct_working_sessions() {
+fn one_companion_at_two_servers_keeps_distinct_working_sessions() {
     let server_a = FakeServer::start();
     let server_b = FakeServer::start();
     let hub = workspace("two-origins", CallerId("cli".into()));
     for server in [&server_a, &server_b] {
         server.add_account("jeff.bsky.example", "unused", "did:plc:jeff");
     }
-    let local_id = common::seed_bound_identity(&hub, "jeff.bsky.example", "did:plc:jeff", server_a.origin());
+    let local_id = common::seed_bound_companion(&hub, "jeff.bsky.example", "did:plc:jeff", server_a.origin());
 
     let at_a = hub.enroll_bound(&local_id, server_a.origin()).expect("enroll at a");
     // Each fake listener plays both the Tangent server and the account's PDS, so it only
     // honours proofs it minted itself. Pointing the binding at the second listener's PDS
-    // role is what lets the same identity enrol there; the subject under test is the
+    // role is what lets the same companion enrol there; the subject under test is the
     // session map, not where the account is hosted.
     common::seed_atproto_session(&hub, &local_id, "jeff.bsky.example", "did:plc:jeff", server_b.origin());
     let at_b = hub.enroll_bound(&local_id, server_b.origin()).expect("enroll at b");
@@ -247,7 +247,7 @@ fn one_identity_at_two_servers_keeps_distinct_working_sessions() {
     assert!(!again.is_error, "b still participates after forgetting a: {}", again.text);
 }
 
-// ---------- the operator listener ----------
+// ---------- the manager listener ----------
 
 fn http_round_trip(stream: &mut TcpStream, request: &str) -> (String, String) {
     stream.write_all(request.as_bytes()).expect("write request");
@@ -259,13 +259,13 @@ fn http_round_trip(stream: &mut TcpStream, request: &str) -> (String, String) {
     (head.to_string(), body.to_string())
 }
 
-/// The owner correction removed the page token: the operator is the trust root, a local
+/// The page carries no token: the operator is the trust root, a local
 /// process can read state.json anyway, and the browser drive-by class is blocked
 /// structurally (loopback bind, GET/POST only, caps, JSON bodies, no CORS). The page and
 /// its API answer plainly on loopback; the ceremony routes are gone.
 #[test]
 fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
-    let hub = workspace("operator-plain", CallerId("operator".into()));
+    let hub = workspace("operator-plain", CallerId("manager".into()));
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let address = listener.local_addr().unwrap();
     {
@@ -273,7 +273,7 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
         let serving = listener.try_clone().expect("clone listener");
         std::thread::Builder::new()
             .name("operator-under-test".into())
-            .spawn(move || tangent_connector::adapters::operator::serve(serving, hub))
+            .spawn(move || tangent_connector::adapters::manager::serve(serving, hub))
             .expect("server thread");
     }
 
@@ -282,43 +282,43 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
     let (head, body) = http_round_trip(&mut page, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
     assert!(body.contains("Atmosphere handle"), "the Atmosphere-handle column is live on the page");
-    // The enroll buttons are gone (R2): the page never enrolls, and the per-identity
+    // The enroll buttons are gone (R2): the page never enrolls, and the per-companion
     // bind pages exist for the Connect handshake to open.
     assert!(!body.contains("enroll-bound") && !body.contains("Enroll unbound") && !body.contains("Enroll with bound"), "no enroll buttons remain: {body}");
-    assert!(body.contains("/bind/"), "the per-identity bind pages are wired");
+    assert!(body.contains("/bind/"), "the per-companion bind pages are wired");
     // The sign-in form is gone: binding is an OAuth page, never a
-    // password form on the operator page.
+    // password form on the companion manager.
     assert!(!body.contains("type=\"password\"") && !body.contains("appPassword"), "no password form remains: {body}");
-    // The allowlist section is gone too (owner correction: resolution is behavior).
+    // The allowlist section is gone too: resolution is behavior, not configuration.
     assert!(!body.contains("allowlist") && !body.contains("Allowlist"), "no allowlist UI remains: {body}");
 
     // The API reads plainly — no token anywhere (structural absence: the generator is
     // gone from the codebase, so there is nothing to present).
     let mut bare = TcpStream::connect(address).expect("connect");
-    let (head, body) = http_round_trip(&mut bare, "GET /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    let (head, body) = http_round_trip(&mut bare, "GET /api/companions HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
     assert!(body.contains("\"status\":\"ok\""), "body was: {body}");
 
-    // A mutation works plainly: creating an identity through the API.
+    // A mutation works plainly: creating an companion through the API.
     let mut via_post = TcpStream::connect(address).expect("connect");
     let payload = json!({ "handle": "lumen", "displayName": "Lumen" }).to_string();
     let (head, body) = http_round_trip(
         &mut via_post,
         &format!(
-            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            "POST /api/companions HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
             payload.len()
         ),
     );
     assert!(head.starts_with("HTTP/1.1 200"), "head was: {head}");
     assert!(body.contains("\"handle\":\"lumen\""), "body was: {body}");
-    assert_eq!(hub.identities().len(), 1, "the mutation crossed the same hub");
+    assert_eq!(hub.companions().len(), 1, "the mutation crossed the same hub");
 
     // The enroll API routes are gone (R2), and the allowlist routes are gone (owner
     // correction): both answer an honest 404.
     let mut enroll_attempt = TcpStream::connect(address).expect("connect");
     let (head, _) = http_round_trip(
         &mut enroll_attempt,
-        "POST /api/identities/00000000000000000000000000000000/enroll HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+        "POST /api/companions/00000000000000000000000000000000/enroll HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
     );
     assert!(head.starts_with("HTTP/1.1 404"), "the enroll route is gone: {head}");
     let mut allowlist_read = TcpStream::connect(address).expect("connect");
@@ -341,7 +341,7 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
 /// a route, while the page's own write and the inert discovery document still work.
 #[test]
 fn the_companion_manager_refuses_foreign_hosts_and_cross_site_writes() {
-    let hub = workspace("operator-hardened", CallerId("operator".into()));
+    let hub = workspace("operator-hardened", CallerId("manager".into()));
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let address = listener.local_addr().unwrap();
     {
@@ -349,13 +349,13 @@ fn the_companion_manager_refuses_foreign_hosts_and_cross_site_writes() {
         let serving = listener.try_clone().expect("clone listener");
         std::thread::Builder::new()
             .name("operator-hardened-under-test".into())
-            .spawn(move || tangent_connector::adapters::operator::serve(serving, hub))
+            .spawn(move || tangent_connector::adapters::manager::serve(serving, hub))
             .expect("server thread");
     }
     let payload = json!({ "handle": "intruder" }).to_string();
     let write = |headers: &str| {
         format!(
-            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\n{headers}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            "POST /api/companions HTTP/1.1\r\nHost: 127.0.0.1\r\n{headers}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
             payload.len()
         )
     };
@@ -365,7 +365,7 @@ fn the_companion_manager_refuses_foreign_hosts_and_cross_site_writes() {
     let mut rebound = TcpStream::connect(address).expect("connect");
     let (head, _) = http_round_trip(
         &mut rebound,
-        "GET /api/identities HTTP/1.1\r\nHost: rebound.example\r\nConnection: close\r\n\r\n",
+        "GET /api/companions HTTP/1.1\r\nHost: rebound.example\r\nConnection: close\r\n\r\n",
     );
     assert!(head.starts_with("HTTP/1.1 403"), "a foreign host is refused, reads included: {head}");
 
@@ -375,7 +375,7 @@ fn the_companion_manager_refuses_foreign_hosts_and_cross_site_writes() {
     let (head, body) = http_round_trip(
         &mut plain,
         &format!(
-            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://attacker.example\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            "POST /api/companions HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://attacker.example\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
             payload.len()
         ),
     );
@@ -393,13 +393,13 @@ fn the_companion_manager_refuses_foreign_hosts_and_cross_site_writes() {
     let (head, _) = http_round_trip(&mut anonymous, &write(""));
     assert!(head.starts_with("HTTP/1.1 403"), "a write with no origin is refused: {head}");
 
-    assert!(hub.identities().is_empty(), "no refused write reached the hub");
+    assert!(hub.companions().is_empty(), "no refused write reached the hub");
 
     // The page's own write still works.
     let mut page = TcpStream::connect(address).expect("connect");
     let (head, _) = http_round_trip(&mut page, &write("Origin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\n"));
     assert!(head.starts_with("HTTP/1.1 200"), "the page's own write is served: {head}");
-    assert_eq!(hub.identities().len(), 1, "exactly one identity was created");
+    assert_eq!(hub.companions().len(), 1, "exactly one companion was created");
 
     // Discovery stays readable across origins: it is the inert document another process
     // reads to recognise this page, and it discloses nothing else.
@@ -410,5 +410,5 @@ fn the_companion_manager_refuses_foreign_hosts_and_cross_site_writes() {
     );
     assert!(head.starts_with("HTTP/1.1 200"), "discovery still answers: {head}");
     assert!(body.contains("tangent-space-connector"), "discovery names the product: {body}");
-    assert!(!body.contains("intruder"), "discovery discloses no identity: {body}");
+    assert!(!body.contains("intruder"), "discovery discloses no companion: {body}");
 }

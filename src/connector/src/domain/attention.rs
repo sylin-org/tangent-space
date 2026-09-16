@@ -1,5 +1,5 @@
 //! Attention records and their lifecycle. The server supplies canonical attention facts; the
-//! connector owns delivery state. Item identity is the server's stable item reference, so
+//! connector owns delivery state. Item companion is the server's stable item reference, so
 //! repeated mention delivery coalesces and unchanged digests never mint new records.
 
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub enum AttentionState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttentionRecord {
-    /// The server item reference (stable per source post), the deduplication identity.
+    /// The server item reference (stable per source post), the deduplication companion.
     pub id: String,
     pub enrollment_id: String,
     pub kind: String,

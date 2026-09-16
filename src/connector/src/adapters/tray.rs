@@ -13,7 +13,7 @@ use crate::application::hub::ConnectorHub;
 use crate::domain::events::DomainEvent;
 
 /// Spawns the tray on its own named thread. Failure to build the tray is reported on
-/// stderr and leaves the operator page fully functional. `quit` runs on Quit and is
+/// stderr and leaves the companion manager fully functional. `quit` runs on Quit and is
 /// expected to release the data-directory lock and exit the process.
 #[cfg(target_os = "windows")]
 pub fn spawn(hub: Arc<ConnectorHub>, url: String, quit: Box<dyn FnOnce() + Send>) {
@@ -21,7 +21,7 @@ pub fn spawn(hub: Arc<ConnectorHub>, url: String, quit: Box<dyn FnOnce() + Send>
         .name("tangent-tray".into())
         .spawn(move || {
             if let Err(error) = run(hub, url, quit) {
-                eprintln!("tangent-connector: tray unavailable ({error}); the operator page remains available");
+                eprintln!("tangent-connector: tray unavailable ({error}); the companion manager remains available");
             }
         });
     if let Err(error) = spawned {
@@ -42,15 +42,15 @@ fn run(hub: Arc<ConnectorHub>, url: String, quit: Box<dyn FnOnce() + Send>) -> R
     use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 
     fn build_menu(hub: &ConnectorHub) -> Menu {
-        let (identities, servers) = {
+        let (companions, servers) = {
             let store = hub.store().lock().expect("state lock");
-            let identities = store.identities().len();
-            let servers = store.companions().len();
-            (identities, servers)
+            let companions = store.companions().len();
+            let servers = store.enrollments().len();
+            (companions, servers)
         };
         let menu = Menu::new();
-        let status = MenuItem::with_id("status", format!("{identities} identitie(s) · {servers} server(s)"), false, None);
-        let open = MenuItem::with_id("open", "Open operator page", true, None);
+        let status = MenuItem::with_id("status", format!("{companions} identitie(s) · {servers} server(s)"), false, None);
+        let open = MenuItem::with_id("open", "Open companion manager", true, None);
         let quit = MenuItem::with_id("quit", "Quit", true, None);
         let _ = menu.append_items(&[&status, &open, &quit]);
         menu

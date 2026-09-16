@@ -40,12 +40,11 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         // The connector's state file is snake_case on the wire, matching its Rust structs.
         var state = new
         {
-            version = 1,
-            identities = new[]
+            companions = new[]
             {
                 new { local_id = localId, handle = "agent", display_name = (string?)null, bound_did = ExperienceWebApp.AgentDid, created_at = 1757000000000L },
             },
-            companions = new[]
+            enrollments = new[]
             {
                 new
                 {

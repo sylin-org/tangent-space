@@ -13,14 +13,14 @@ use serde_json::{json, Value};
 
 use crate::adapters::atproto_oauth::{self, AtprotoOauth, BindStart};
 use crate::adapters::browser::{self, PageOpener};
-use crate::adapters::operator::DEFAULT_PAGE_URL;
+use crate::adapters::manager::DEFAULT_PAGE_URL;
 use crate::adapters::store::{ServerCard, StateStore};
 use crate::application::bus::EventBus;
 use crate::application::contract::{self, ExperienceDto};
 use crate::application::operations::{decode, Operation, ViewMode};
 use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext};
 use crate::domain::events::DomainEvent;
-use crate::domain::identity::{valid_handle, AccountSession, CallerId, Enrollment, Identity, Context};
+use crate::domain::companion::{valid_handle, AccountSession, CallerId, Enrollment, Companion, Context};
 use crate::domain::intake::IntakeChannel;
 use crate::domain::refs;
 use crate::domain::writes::Receipt;
@@ -42,7 +42,7 @@ pub const DEFAULT_PDS: &str = "https://bsky.social";
 /// Live coordination state, not durable enrollment state — ten minutes of operator
 /// attention is the whole budget.
 pub const PENDING_CONNECT_TIMEOUT_MS: i64 = 10 * 60 * 1000;
-/// In-flight OAuth binds parked at once, across identities. A small bound: each pins
+/// In-flight OAuth binds parked at once, across companions. A small bound: each pins
 /// one DPoP key and one pushed request; an operator drives at most a few tabs.
 const BIND_FLIGHT_LIMIT: usize = 8;
 
@@ -66,17 +66,17 @@ pub struct ToolOutcome {
     pub structured: Value,
 }
 
-/// Read-only per-enrollment attention/pending-write snapshot for the operator page.
+/// Read-only per-enrollment attention/pending-write snapshot for the companion manager.
 pub struct EnrollmentStatus {
     pub enrollment_id: String,
-    pub identity_local_id: String,
+    pub companion_local_id: String,
     pub origin: String,
     pub waiting: i64,
     pub pending_attention: usize,
     pub unresolved_writes: usize,
 }
 
-/// Read-only atproto binding status for the operator page: what is bound and how old
+/// Read-only atproto binding status for the companion manager: what is bound and how old
 /// the session is — never the access token.
 pub struct AtprotoBinding {
     pub did: String,
@@ -112,11 +112,11 @@ pub struct ConnectorHub {
     store: Mutex<StateStore>,
     events: Arc<EventBus>,
     caller: CallerId,
-    /// The loopback operator page URL this process hosts (serve mode), set once at
+    /// The loopback companion manager URL this process hosts (serve mode), set once at
     /// startup so `OpenRegistration` can construct the browser target internally.
-    operator_page_url: Mutex<Option<String>>,
-    /// The identity whose sign-in a `Connect` popped last (R3): routes the next
-    /// `OpenRegistration` to that identity's bind anchor instead of identity creation.
+    manager_page_url: Mutex<Option<String>>,
+    /// The companion whose sign-in a `Connect` popped last (R3): routes the next
+    /// `OpenRegistration` to that companion's bind anchor instead of companion creation.
     pending_bind: Mutex<Option<String>>,
     /// Browser targets already opened by this process (F2): a looping model must not
     /// spawn one tab per retry. Keyed by the full target URL, so distinct anchors stay
@@ -137,11 +137,11 @@ pub struct ConnectorHub {
     /// default. A pub test seam shortens it so the TTL refusal is assertable without
     /// waiting out ten real minutes.
     bind_flight_ttl_ms: AtomicI64,
-    /// Per-identity refresh serialization (R5): one small mutex per identity so a MCP
+    /// Per-companion refresh serialization (R5): one small mutex per companion so a MCP
     /// Connect and the operator auto-resume can never double-refresh one session. The
-    /// map itself grows one entry per identity that ever refreshes.
+    /// map itself grows one entry per companion that ever refreshes.
     refresh_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
-    /// Public card refresh attempts are shared across identities visiting one origin.
+    /// Public card refresh attempts are shared across companions visiting one origin.
     server_card_attempts: Mutex<HashMap<String, i64>>,
     /// Permission-shaped optional schemas learned from authenticated responses. They
     /// are ephemeral and keyed by caller-bound context, never a selected/global actor.
@@ -157,7 +157,7 @@ impl ConnectorHub {
             store: Mutex::new(store),
             events,
             caller,
-            operator_page_url: Mutex::new(None),
+            manager_page_url: Mutex::new(None),
             pending_bind: Mutex::new(None),
             opened_pages: Mutex::new(HashSet::new()),
             pages: browser::silent(),
@@ -248,33 +248,33 @@ impl ConnectorHub {
         self.events.clone()
     }
 
-    /// Records this process's own operator page URL in memory. The URL never enters
+    /// Records this process's own companion manager URL in memory. The URL never enters
     /// model-visible output; only the internal browser open uses it. The full recording
     /// (memory + durable state for cross-process Connects) is
-    /// [`ConnectorHub::announce_operator_page`].
-    pub fn set_operator_page_url(&self, url: &str) {
-        if let Ok(mut slot) = self.operator_page_url.lock() {
+    /// [`ConnectorHub::announce_manager_page`].
+    pub fn set_manager_page_url(&self, url: &str) {
+        if let Ok(mut slot) = self.manager_page_url.lock() {
             *slot = Some(url.to_string());
         }
     }
 
-    /// Records the operator page URL this process hosts: in memory for this process's
+    /// Records the companion manager URL this process hosts: in memory for this process's
     /// own opens, and in durable state so a Connect in ANY process (the CLI one-shots)
     /// can pop this page at the sign-in anchor. Cookie-jar class by design — same
     /// exposure class as the per-enrollment sessions.
-    pub fn announce_operator_page(&self, url: &str) {
-        self.set_operator_page_url(url);
+    pub fn announce_manager_page(&self, url: &str) {
+        self.set_manager_page_url(url);
         if let Ok(mut store) = self.lock_store() {
-            store.set_operator_page_url(url);
+            store.set_manager_page_url(url);
             let _ = store.save();
         }
     }
 
-    /// Clears the persisted operator page URL on clean shutdown, so later Connects are
+    /// Clears the persisted companion manager URL on clean shutdown, so later Connects are
     /// not pointed at a page that died with this process.
-    pub fn clear_persisted_operator_page(&self) {
+    pub fn clear_persisted_manager_page(&self) {
         if let Ok(mut store) = self.lock_store() {
-            store.clear_operator_page_url();
+            store.clear_manager_page_url();
             let _ = store.save();
         }
     }
@@ -282,19 +282,19 @@ impl ConnectorHub {
     /// The browser target `OpenRegistration` opens. Never rendered into a view, a tool
     /// response or the journal; this accessor exists for the internal open and tests.
     /// The anchor is routed (R3): a pending sign-in popped by `Connect` wins over the
-    /// default identity-creation view.
+    /// default companion-creation view.
     pub fn registration_target_url(&self) -> Option<String> {
-        let page = self.operator_page_url.lock().ok()?.clone()?;
+        let page = self.manager_page_url.lock().ok()?.clone()?;
         let pending = self.pending_bind.lock().ok().and_then(|slot| slot.clone());
         let anchor = match pending.as_deref() {
             Some(local_id) => bind_anchor(local_id),
-            None => "#create-identity".to_string(),
+            None => "#create-companion".to_string(),
         };
         Some(registration_target(&page, &anchor))
     }
 
-    /// The browser target a sign-in pop for this identity would open (this process's
-    /// own page, or a recorded reachable one, at the identity's bind route).
+    /// The browser target a sign-in pop for this companion would open (this process's
+    /// own page, or a recorded reachable one, at the companion's bind route).
     /// Test-visible mirror of the internal resolution, so the target is assertable
     /// without opening anything.
     pub fn sign_in_target_url(&self, local_id: &str) -> Option<String> {
@@ -320,18 +320,18 @@ impl ConnectorHub {
     }
 
     /// Manual enrollment: import an existing session token, verify the participant
-    /// reference and origin against the server's own identity response, and record the
-    /// binding. Import never broadens the session's grants. When `identity` names no
-    /// existing identity, a fresh one is minted with `name` as its handle.
+    /// reference and origin against the server's own companion response, and record the
+    /// binding. Import never broadens the session's grants. When `companion` names no
+    /// existing companion, a fresh one is minted with `name` as its handle.
     pub fn enroll(&self, name: &str, origin: &str, session: &str, auto_check: bool) -> Result<Enrollment, String> {
         self.enroll_as(name, None, origin, session, auto_check)
     }
 
-    /// Manual enrollment bound to an explicit identity (handle or local id).
+    /// Manual enrollment bound to an explicit companion (handle or local id).
     pub fn enroll_as(
         &self,
         name: &str,
-        identity: Option<&str>,
+        companion: Option<&str>,
         origin: &str,
         session: &str,
         auto_check: bool,
@@ -353,55 +353,55 @@ impl ConnectorHub {
             ExperienceError::Transport(detail) => detail,
         })?;
         let experience = contract::parse(&raw).map_err(|error| format!("{error}; is this a Tangent experience API?"))?;
-        let identity_view = experience.identity.ok_or_else(|| "the server did not confirm a participant identity".to_string())?;
-        if identity_view.participant_ref.is_empty() {
+        let companion_view = experience.companion.ok_or_else(|| "the server did not confirm a participant companion".to_string())?;
+        if companion_view.participant_ref.is_empty() {
             return Err("the server did not confirm a participant reference".to_string());
         }
         let mut store = self.lock_store()?;
-        let bound_identity = match identity {
-            Some(handle_or_id) => store.identity_by_moniker(handle_or_id).ok_or_else(|| {
-                format!("no local identity matches '{handle_or_id}'; create one first in the operator page")
+        let bound_companion = match companion {
+            Some(handle_or_id) => store.companion_by_moniker(handle_or_id).ok_or_else(|| {
+                format!("no local companion matches '{handle_or_id}'; create one first in the companion manager")
             })?,
-            None => match store.identity_by_handle(name) {
+            None => match store.companion_by_handle(name) {
                 Some(existing) => existing,
                 None => {
                     if !valid_handle(name) {
-                        return Err(format!("'{name}' cannot become an identity handle; use 2-253 characters without spaces"));
+                        return Err(format!("'{name}' cannot become an companion handle; use 2-253 characters without spaces"));
                     }
-                    let minted = crate::domain::identity::Identity {
+                    let minted = crate::domain::companion::Companion {
                         local_id: crate::adapters::store::new_local_id(),
                         handle: name.to_string(),
                         display_name: None,
                         bound_did: None,
                         created_at: now_millis(),
                     };
-                    store.upsert_identity(minted.clone())?;
+                    store.upsert_companion(minted.clone())?;
                     minted
                 }
             },
         };
-        if let Some(existing) = store.enrollment_at(&bound_identity.local_id, &canonical) {
+        if let Some(existing) = store.enrollment_at(&bound_companion.local_id, &canonical) {
             return Err(format!(
-                "identity '{}' already holds an enrollment at {canonical} ({}); forget it first if you mean to replace it",
-                bound_identity.handle, existing.enrollment_id
+                "companion '{}' already holds an enrollment at {canonical} ({}); forget it first if you mean to replace it",
+                bound_companion.handle, existing.enrollment_id
             ));
         }
         // The imported session is stored per enrollment, keyed by its fresh companion id:
-        // one identity at two servers keeps two distinct sessions.
+        // one companion at two servers keeps two distinct sessions.
         let enrollment_id = format!("cmp_{}", crate::adapters::store::short_uuid());
         let entry = Enrollment {
             enrollment_id,
-            local_id: bound_identity.local_id.clone(),
+            local_id: bound_companion.local_id.clone(),
             name: name.to_string(),
             origin: canonical,
-            participant_ref: identity_view.participant_ref,
-            did: identity_view.did,
-            display_name: Some(identity_view.display_name),
-            handle: identity_view.handle,
+            participant_ref: companion_view.participant_ref,
+            did: companion_view.did,
+            display_name: Some(companion_view.display_name),
+            handle: companion_view.handle,
             enrolled_at: now_millis(),
             auto_check,
         };
-        store.upsert_companion(entry.clone());
+        store.upsert_enrollment(entry.clone());
         store.set_session(&entry.enrollment_id, session);
         store.save()?;
         drop(store);
@@ -412,10 +412,10 @@ impl ConnectorHub {
     /// Removes one enrollment and its stored session. Enrollment state (attention,
     /// checkpoints, contexts) cascades; the server side is untouched.
     pub fn forget_enrollment(&self, enrollment_id: &str) -> Result<(), String> {
-        self.attributed("operator.forget_enrollment", || {
+        self.attributed("manager.forget_enrollment", || {
             let mut store = self.lock_store()?;
-            store.companion(enrollment_id).ok_or_else(|| "no enrollment matches that id".to_string())?;
-            store.remove_companion(enrollment_id);
+            store.enrollment(enrollment_id).ok_or_else(|| "no enrollment matches that id".to_string())?;
+            store.remove_enrollment(enrollment_id);
             store.save()?;
             Ok(())
         })
@@ -423,38 +423,38 @@ impl ConnectorHub {
 
     // ---------- atproto binding (operator surface) ----------
 
-    /// Stores (or replaces) one identity's atproto session and mirrors the DID onto the
-    /// identity's `bound_did`. The write tail of the OAuth bind, so enrollments and
+    /// Stores (or replaces) one companion's atproto session and mirrors the DID onto the
+    /// companion's `bound_did`. The write tail of the OAuth bind, so enrollments and
     /// reads see one consistent shape. Existing enrollments keep their own Tangent
     /// sessions.
-    fn store_atproto_session(&self, local_id: &str, session: AccountSession) -> Result<Identity, String> {
+    fn store_atproto_session(&self, local_id: &str, session: AccountSession) -> Result<Companion, String> {
         let mut store = self.lock_store()?;
-        let mut updated = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+        let mut updated = store.companion(local_id).ok_or_else(|| "no local companion matches that id".to_string())?;
         updated.bound_did = Some(session.did.clone());
-        store.upsert_identity(updated.clone())?;
+        store.upsert_companion(updated.clone())?;
         store.set_atproto_session(local_id, session);
         store.save()?;
         Ok(updated)
     }
 
-    /// Clears one identity's atproto session and `bound_did`. Existing enrollments and
+    /// Clears one companion's atproto session and `bound_did`. Existing enrollments and
     /// their Tangent sessions are untouched — those are per enrollment, not per binding.
-    pub fn unbind_atproto(&self, local_id: &str) -> Result<crate::domain::identity::Identity, String> {
-        self.attributed("operator.unbind_atproto", || {
+    pub fn unbind_atproto(&self, local_id: &str) -> Result<crate::domain::companion::Companion, String> {
+        self.attributed("manager.unbind_atproto", || {
             let mut store = self.lock_store()?;
-            let mut identity = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
-            identity.bound_did = None;
-            store.upsert_identity(identity.clone())?;
+            let mut companion = store.companion(local_id).ok_or_else(|| "no local companion matches that id".to_string())?;
+            companion.bound_did = None;
+            store.upsert_companion(companion.clone())?;
             store.remove_atproto_session(local_id);
             store.save()?;
-            Ok(identity)
+            Ok(companion)
         })
     }
 
     // ---------- atproto OAuth binding (the /bind route) ----------
 
-    /// Starts one identity's OAuth bind (the `/bind` route's GET — no interstitial, the
-    /// owner correction). Without a handle it goes straight to the default
+    /// Starts one companion's OAuth bind (the `/bind` route's GET, with no
+    /// interstitial). Without a handle it goes straight to the default
     /// authorization server (`TANGENT_CONNECTOR_AUTHSERVER`, else the public Bluesky
     /// one) and parks no pre-declared account: the exchange's mandatory `sub` claim
     /// will name the bound DID. With a handle (the self-hosted escape hatch) it runs
@@ -462,14 +462,14 @@ impl ConnectorHub {
     /// and the exchange must then agree with the resolved DID. Either way the answer is
     /// the authorize URL the operator's browser is redirected to (a 302); the
     /// provider's own UI handles account selection and sign-in. Starting a new bind
-    /// for the same identity replaces its in-flight one; different identities bind
+    /// for the same companion replaces its in-flight one; different companions bind
     /// concurrently. All network I/O happens outside every guard. A flight
     /// that cannot be parked is an honest failure — never a dangling redirect.
     pub fn begin_atproto_bind(&self, local_id: &str, handle: Option<&str>, redirect_uri: &str) -> Result<String, String> {
-        self.attributed("operator.atproto_bind_start", || {
+        self.attributed("manager.atproto_bind_start", || {
             {
                 let store = self.lock_store()?;
-                store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+                store.companion(local_id).ok_or_else(|| "no local companion matches that id".to_string())?;
             }
             let start = self.oauth().start(handle, redirect_uri)?;
             let authorize_url = start.authorize_url.clone();
@@ -479,7 +479,7 @@ impl ConnectorHub {
                 .map_err(|_| "bind_unparkable: the connector's bind state is unavailable; restart the connector and try again".to_string())?;
             let now = now_millis();
             let ttl = self.bind_flight_ttl_ms.load(Ordering::Relaxed);
-            // Age out, then keep one bind at a time per identity.
+            // Age out, then keep one bind at a time per companion.
             flights.retain(|flight| now.saturating_sub(flight.created_at) < ttl);
             flights.retain(|flight| flight.local_id != local_id);
             flights.push(BindFlight { local_id: local_id.to_string(), created_at: now, start });
@@ -498,11 +498,11 @@ impl ConnectorHub {
     /// account_mismatch refusal. The PDS and canonical handle come from the bound
     /// DID's document when the flight parked none. The session — refresh token and
     /// DPoP key included, cookie-jar posture — is stored, any pending sign-in routing
-    /// is cleared, and every waiting-for-operator connect for this identity resumes:
+    /// is cleared, and every waiting-for-operator connect for this companion resumes:
     /// the handshake finishes connector-side, with no model involved.
     pub fn complete_atproto_bind(&self, state: &str, code: &str, issuer: Option<&str>, redirect_uri: &str) -> Result<String, String> {
         let mut bound_local: Option<String> = None;
-        let outcome = self.attributed("operator.bind_account", || {
+        let outcome = self.attributed("manager.bind_account", || {
             // The issuer comes first (RFC 9207): without `iss` the callback does not
             // even name which authorization server answered, so nothing else is
             // trustworthy enough to try.
@@ -580,8 +580,8 @@ impl ConnectorHub {
         outcome
     }
 
-    /// The per-identity refresh mutex (R5). Leaf lock: taken only around one
-    /// identity's refresh, never while holding the store lock (the refresh takes the
+    /// The per-companion refresh mutex (R5). Leaf lock: taken only around one
+    /// companion's refresh, never while holding the store lock (the refresh takes the
     /// store inside, briefly, in its own scopes).
     fn refresh_lock_of(&self, local_id: &str) -> Arc<Mutex<()>> {
         match self.refresh_locks.lock() {
@@ -598,7 +598,7 @@ impl ConnectorHub {
     /// Silent refresh before use (the OAuth bind's promise): an access token inside its
     /// refresh margin is renewed from the stored refresh token with the session's DPoP
     /// key, and the renewed session is stored before the caller proceeds. One small
-    /// per-identity mutex serializes this (R5), so a MCP Connect and the operator
+    /// per-companion mutex serializes this (R5), so a MCP Connect and the operator
     /// auto-resume can never double-refresh — the later waiter re-reads the session
     /// and finds the earlier one's renewal. The refreshed `sub` must be the same
     /// account (R3, mandatory now) or the honest re-bind error. App-password sessions
@@ -618,7 +618,7 @@ impl ConnectorHub {
         };
         let Some(session) = session else {
             return Err(
-                "atproto_session_missing: the atproto session is gone (it may have expired). Re-bind the identity on the operator page.".to_string(),
+                "atproto_session_missing: the atproto session is gone (it may have expired). Re-bind the companion on the companion manager.".to_string(),
             );
         };
         let (Some(refresh), Some(authserver), Some(key)) = (&session.refresh_jwt, &session.authserver, &session.dpop_key) else {
@@ -637,7 +637,7 @@ impl ConnectorHub {
             Ok(tokens) => {
                 if tokens.sub != session.did {
                     return Err(
-                        "atproto_session_expired: the refresh returned a different account. Re-bind the identity on the operator page.".to_string(),
+                        "atproto_session_expired: the refresh returned a different account. Re-bind the companion on the companion manager.".to_string(),
                     );
                 }
                 let mut renewed = session;
@@ -654,7 +654,7 @@ impl ConnectorHub {
                 Ok(renewed)
             }
             Err(_) => Err(
-                "atproto_session_expired: the PDS session could not be renewed (it may have expired or been revoked). Re-bind the identity on the operator page.".to_string(),
+                "atproto_session_expired: the PDS session could not be renewed (it may have expired or been revoked). Re-bind the companion on the companion manager.".to_string(),
             ),
         }
     }
@@ -671,24 +671,24 @@ impl ConnectorHub {
         })
     }
 
-    /// The operator page's whole identity table in one store guard: every identity with
+    /// The companion manager's whole companion table in one store guard: every companion with
     /// its atproto binding status (never the access token) and its enrollment count.
-    /// This is the ONLY shape the page should read identities through — a caller that
-    /// instead walks the store directly and then asks per-identity questions re-enters
+    /// This is the ONLY shape the page should read companions through — a caller that
+    /// instead walks the store directly and then asks per-companion questions re-enters
     /// the store lock and deadlocks the whole hub (the live popped-page freeze).
-    pub fn identity_inventory(&self) -> Vec<(crate::domain::identity::Identity, Option<AtprotoBinding>, usize)> {
+    pub fn companion_inventory(&self) -> Vec<(crate::domain::companion::Companion, Option<AtprotoBinding>, usize)> {
         let store = self.lock_store().expect("state lock");
         store
-            .identities()
+            .companions()
             .iter()
-            .map(|identity| {
-                let binding = store.atproto_session(&identity.local_id).map(|session| AtprotoBinding {
+            .map(|companion| {
+                let binding = store.atproto_session(&companion.local_id).map(|session| AtprotoBinding {
                     did: session.did,
                     handle: session.handle,
                     pds: session.pds,
                     obtained_at: session.obtained_at,
                 });
-                (identity.clone(), binding, store.companions_of(&identity.local_id).len())
+                (companion.clone(), binding, store.enrollments_of(&companion.local_id).len())
             })
             .collect()
     }
@@ -741,7 +741,7 @@ impl ConnectorHub {
         let mut nonce = self.oauth().resource_nonce(&atproto.pds);
         for attempt in 0..2 {
             let proof = self.oauth().resource_proof(key, "GET", &htu, &atproto.access_jwt, nonce.as_deref()).map_err(|_| {
-                "atproto_session_expired: the session's DPoP key is unusable. Re-bind the identity on the operator page.".to_string()
+                "atproto_session_expired: the session's DPoP key is unusable. Re-bind the companion on the companion manager.".to_string()
             })?;
             let context = RequestContext {
                 origin: atproto.pds.clone(),
@@ -763,46 +763,46 @@ impl ConnectorHub {
     }
 
     /// Bound enrollment — the primary path: verify the server's discovery document,
-    /// have the identity's PDS mint a service-auth proof for exactly that audience, and
+    /// have the companion's PDS mint a service-auth proof for exactly that audience, and
     /// exchange the proof at `/mcp/token` for a Tangent session stored per enrollment.
     /// The proof JWT is ephemeral (created and consumed here); the audience comes from
     /// the server, never hardcoded; the token never renders, logs or journals.
     pub fn enroll_bound(&self, local_id: &str, origin: &str) -> Result<Enrollment, String> {
-        self.attributed("operator.enroll_bound", || {
+        self.attributed("manager.enroll_bound", || {
             let canonical = refs::acceptable_origin(origin)
                 .ok_or_else(|| "Use one HTTPS server origin, or explicit loopback HTTP for development".to_string())?;
-            let (identity, atproto, already) = {
+            let (companion, atproto, already) = {
                 let store = self.lock_store()?;
-                let identity = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
+                let companion = store.companion(local_id).ok_or_else(|| "no local companion matches that id".to_string())?;
                 let atproto = store.atproto_session(local_id);
                 let already = store.enrollment_at(local_id, &canonical).is_some();
-                (identity, atproto, already)
+                (companion, atproto, already)
             };
             if already {
                 return Err(
-                    "already_enrolled: this identity already holds a session for that server. Use the existing enrollment, or forget it first to re-enroll."
+                    "already_enrolled: this companion already holds a session for that server. Use the existing enrollment, or forget it first to re-enroll."
                         .to_string(),
                 );
             }
-            let Some(bound_did) = identity.bound_did.clone() else {
+            let Some(bound_did) = companion.bound_did.clone() else {
                 return Err(
-                    "atproto_binding_required: bind this identity to an atproto account on the operator page first".to_string(),
+                    "atproto_binding_required: bind this companion to an atproto account on the companion manager first".to_string(),
                 );
             };
             let Some(atproto) = atproto else {
                 return Err(
-                    "atproto_session_missing: the atproto session is gone (it may have expired). Re-bind the identity on the operator page."
+                    "atproto_session_missing: the atproto session is gone (it may have expired). Re-bind the companion on the companion manager."
                         .to_string(),
                 );
             };
             if atproto.did != bound_did {
                 return Err(
-                    "atproto_binding_stale: the bound DID and the stored atproto session disagree. Re-bind the identity on the operator page."
+                    "atproto_binding_stale: the bound DID and the stored atproto session disagree. Re-bind the companion on the companion manager."
                         .to_string(),
                 );
             }
             // Silent refresh before use: an OAuth access token inside its margin renews
-            // here, outside every guard and under the identity's refresh mutex;
+            // here, outside every guard and under the companion's refresh mutex;
             // the renewed session is already stored.
             let atproto = self.refresh_atproto_if_stale(local_id)?;
 
@@ -833,7 +833,7 @@ impl ConnectorHub {
 
             // Step 3 — the exchange. Grants are bounded to welcome/read/post; manage is
             // explicitly never requested.
-            let body = json!({ "name": identity.handle, "lifetimeDays": 7, "grants": ["welcome", "read", "post"] });
+            let body = json!({ "name": companion.handle, "lifetimeDays": 7, "grants": ["welcome", "read", "post"] });
             let raw = self
                 .port
                 .exchange(&canonical, "/mcp/token", &body, &auth.token)
@@ -852,32 +852,32 @@ impl ConnectorHub {
 
             let mut store = self.lock_store()?;
             // Re-check under the write lock: a concurrent intake may have enrolled this
-            // (identity, origin) while the exchange was in flight. The freshly issued
+            // (companion, origin) while the exchange was in flight. The freshly issued
             // session is then discarded server-side untouched, and the honest answer is
             // already_enrolled with the existing enrollment intact.
             if let Some(existing) = store.enrollment_at(local_id, &canonical) {
                 return Err(format!(
-                    "already_enrolled: identity '{}' gained an enrollment at {canonical} during the exchange ({}); use it, or forget it first to re-enroll",
-                    identity.handle, existing.enrollment_id
+                    "already_enrolled: companion '{}' gained an enrollment at {canonical} during the exchange ({}); use it, or forget it first to re-enroll",
+                    companion.handle, existing.enrollment_id
                 ));
             }
             // The Tangent session is stored per enrollment, keyed by its fresh companion
-            // id — one identity at two servers keeps two distinct sessions, and the
-            // identity-level atproto session is a third, separate thing.
+            // id — one companion at two servers keeps two distinct sessions, and the
+            // companion-level atproto session is a third, separate thing.
             let enrollment_id = format!("cmp_{}", crate::adapters::store::short_uuid());
             let entry = Enrollment {
                 enrollment_id,
-                local_id: identity.local_id.clone(),
-                name: identity.handle.clone(),
+                local_id: companion.local_id.clone(),
+                name: companion.handle.clone(),
                 origin: canonical,
                 participant_ref: credential.participant_id,
                 did: Some(bound_did),
-                display_name: identity.display_name.clone().or(Some(atproto.handle.clone())),
+                display_name: companion.display_name.clone().or(Some(atproto.handle.clone())),
                 handle: Some(atproto.handle.clone()),
                 enrolled_at: now_millis(),
                 auto_check: true,
             };
-            store.upsert_companion(entry.clone());
+            store.upsert_enrollment(entry.clone());
             store.set_session(&entry.enrollment_id, &exchanged.token);
             store.save()?;
             drop(store);
@@ -888,18 +888,18 @@ impl ConnectorHub {
 
     // ---------- the on-the-fly handshake (Connect) ----------
 
-    /// `Connect { serverUrl, identity? }` — the on-the-fly handshake (owner-directed):
+    /// `Connect { serverUrl, companion? }` — the on-the-fly handshake (owner-directed):
     /// the model says "connect to server X" and enrollment is a consequence, not a
-    /// ceremony. (a) the acting identity resolves by behavior — an explicit `identity`
-    /// argument (exact match), or exactly one local identity, for every intake alike;
+    /// ceremony. (a) the acting companion resolves by behavior — an explicit `companion`
+    /// argument (exact match), or exactly one local companion, for every intake alike;
     /// (b) discovery against the operator-supplied origin; (c) with no usable atproto
-    /// binding the handshake pops the operator page (this process's own, or a recorded
-    /// reachable one) at that identity's sign-in anchor and returns honestly; (d) with
+    /// binding the handshake pops the companion manager (this process's own, or a recorded
+    /// reachable one) at that companion's sign-in anchor and returns honestly; (d) with
     /// a binding, enrollment runs only when no usable
     /// enrollment/session exists for the origin, and the handshake exits through
-    /// `Arrive`'s orientation view led by the "You are … — session …" line (P2).
+    /// `Arrive`'s orientation view led by the "You are … — session …" line.
     /// `SelectCompanion` + `Arrive` stay the explicit path.
-    fn connect(&self, server_url: &str, identity_arg: Option<&str>, initiator: &str) -> ToolOutcome {
+    fn connect(&self, server_url: &str, companion_arg: Option<&str>, initiator: &str) -> ToolOutcome {
         let Some(canonical) = refs::acceptable_origin(server_url) else {
             return self.problem_outcome(
                 "Connect",
@@ -908,23 +908,23 @@ impl ConnectorHub {
                 None,
             );
         };
-        let identity = match self.resolve_connect_identity(identity_arg) {
-            Ok(identity) => identity,
+        let companion = match self.resolve_connect_companion(companion_arg) {
+            Ok(companion) => companion,
             Err(reason) => {
-                self.connect_failed(&canonical, "", "identity_selection_required", initiator);
-                return self.identity_question(&reason);
+                self.connect_failed(&canonical, "", "companion_selection_required", initiator);
+                return self.companion_question(&reason);
             }
         };
-        // P5a coalescing: a live pending for this (identity, origin) means the waiting
+        // P5a coalescing: a live pending for this (companion, origin) means the waiting
         // state is already narrated on the feed — a looping caller's repeated Connects
         // refresh the pending but stay silent until state changes (sign-in, age-out, a
-        // different identity or origin).
-        let repeated = self.touch_pending_connect(&identity.local_id, &canonical);
+        // different companion or origin).
+        let repeated = self.touch_pending_connect(&companion.local_id, &canonical);
         if !repeated {
             self.events.publish(DomainEvent::ConnectStarted { origin: canonical.clone(), initiator: initiator.to_string() });
             self.events.publish(DomainEvent::ConnectResolved {
                 origin: canonical.clone(),
-                identity: identity.handle.clone(),
+                companion: companion.handle.clone(),
                 initiator: initiator.to_string(),
             });
         }
@@ -932,64 +932,64 @@ impl ConnectorHub {
         // do the proof exchange is an honest error, never a popped page.
         if let Err(error) = self.discover_proof_spec(&canonical) {
             let outcome = self.enrollment_problem("Connect", &error);
-            self.connect_failed(&canonical, &identity.handle, &problem_code_of(&outcome), initiator);
+            self.connect_failed(&canonical, &companion.handle, &problem_code_of(&outcome), initiator);
             return outcome;
         }
-        if !self.usable_binding(&identity.local_id) {
-            return self.pop_sign_in(&identity, &canonical, repeated, initiator);
+        if !self.usable_binding(&companion.local_id) {
+            return self.pop_sign_in(&companion, &canonical, repeated, initiator);
         }
-        self.clear_pending_bind(&identity.local_id);
+        self.clear_pending_bind(&companion.local_id);
         // The wait (if any) is over: this connect finishes model-side, so its pending
         // must not linger into a duplicate auto-resume.
-        self.drop_pending_connect(&identity.local_id, &canonical);
-        self.connect_finish(&identity, &canonical, initiator)
+        self.drop_pending_connect(&companion.local_id, &canonical);
+        self.connect_finish(&companion, &canonical, initiator)
     }
 
-    /// Identity resolution is behavior, not configuration (owner correction): an explicit
+    /// Companion resolution is behavior, not configuration: an explicit
     /// argument resolves exactly (handle or local id) with an honest miss; otherwise
-    /// exactly one local identity resolves automatically for every intake — the MCP
-    /// edge, the CLI and the operator channel alike — while zero or several resolve
+    /// exactly one local companion resolves automatically for every intake — the MCP
+    /// edge, the CLI and the manager channel alike — while zero or several resolve
     /// nothing, honestly, even when a choice would seem obvious.
-    fn resolve_connect_identity(&self, identity_arg: Option<&str>) -> Result<Identity, String> {
+    fn resolve_connect_companion(&self, companion_arg: Option<&str>) -> Result<Companion, String> {
         let store = self.lock_store().expect("state lock");
-        if let Some(argument) = identity_arg {
+        if let Some(argument) = companion_arg {
             return store
-                .identity_by_moniker(argument)
-                .ok_or_else(|| format!("No local identity matches '{argument}'"));
+                .companion_by_moniker(argument)
+                .ok_or_else(|| format!("No local companion matches '{argument}'"));
         }
-        let identities = store.identities();
-        match identities.len() {
-            0 => Err("No local identity exists yet".to_string()),
-            1 => Ok(identities[0].clone()),
-            _ => Err("Multiple local identities exist".to_string()),
+        let companions = store.companions();
+        match companions.len() {
+            0 => Err("No local companion exists yet".to_string()),
+            1 => Ok(companions[0].clone()),
+            _ => Err("Multiple local companions exist".to_string()),
         }
     }
 
-    /// The honest unresolvable-identity answer: why resolution failed, which identities
+    /// The honest unresolvable-companion answer: why resolution failed, which companions
     /// exist, and the explicit way forward. Never a guess, never machine-wide.
-    fn identity_question(&self, reason: &str) -> ToolOutcome {
-        let handles: Vec<String> = self.identities().iter().map(|identity| identity.handle.clone()).collect();
+    fn companion_question(&self, reason: &str) -> ToolOutcome {
+        let handles: Vec<String> = self.companions().iter().map(|companion| companion.handle.clone()).collect();
         let message = if handles.is_empty() {
             format!(
-                "{reason}. Ask the operator to create one (OpenRegistration opens the operator page), then connect again."
+                "{reason}. Ask the operator to create one (OpenRegistration opens the companion manager), then connect again."
             )
         } else {
             format!(
-                "{reason}. Available identities: {}. Ask which one is yours, then connect again with identity set to one of them.",
+                "{reason}. Available companions: {}. Ask which one is yours, then connect again with companion set to one of them.",
                 handles.join(" · ")
             )
         };
-        self.problem_outcome("Connect", "identity_selection_required", &message, None)
+        self.problem_outcome("Connect", "companion_selection_required", &message, None)
     }
 
-    /// Whether the identity holds an atproto binding usable for the proof exchange: a
+    /// Whether the companion holds an atproto binding usable for the proof exchange: a
     /// `bound_did` with a matching stored session. This is local staleness only — the
     /// PDS may still refuse the session, which the exchange maps honestly.
     fn usable_binding(&self, local_id: &str) -> bool {
         let Ok(store) = self.lock_store() else { return false };
-        let Some(identity) = store.identity(local_id) else { return false };
+        let Some(companion) = store.companion(local_id) else { return false };
         match store.atproto_session(local_id) {
-            Some(session) => identity.bound_did.as_deref() == Some(session.did.as_str()),
+            Some(session) => companion.bound_did.as_deref() == Some(session.did.as_str()),
             None => false,
         }
     }
@@ -1003,11 +1003,11 @@ impl ConnectorHub {
     }
 
     fn page_url(&self) -> Option<String> {
-        self.operator_page_url.lock().ok()?.clone()
+        self.manager_page_url.lock().ok()?.clone()
     }
 
-    /// The operator page a sign-in pop should open, and whether THIS process hosts it.
-    /// Order (P4): this process's own page first (trusted — it is in-process and alive);
+    /// The companion manager a sign-in pop should open, and whether THIS process hosts it.
+    /// Order: this process's own page first (trusted — it is in-process and alive);
     /// otherwise the page URL the current long-running process recorded in state, but
     /// only after one cheap reachability probe, so a stale record from an unclean
     /// shutdown points no one at a dead port. The fixed-port world adds one last
@@ -1019,7 +1019,7 @@ impl ConnectorHub {
         }
         let recorded = {
             let store = self.lock_store().ok()?;
-            store.operator_page_url()
+            store.manager_page_url()
         };
         for candidate in recorded.into_iter().chain([self.default_page.clone()]) {
             if let Some(origin) = page_origin(&candidate) {
@@ -1031,50 +1031,50 @@ impl ConnectorHub {
         None
     }
 
-    /// The waiting-for-operator branch (c): pops the operator page at this identity's
+    /// The waiting-for-operator branch (c): pops the companion manager at this companion's
     /// sign-in anchor (guarded, once per target per process), records the pending
     /// connect so the handshake auto-resumes when the operator completes the binding,
     /// narrates it on the feed, and returns the honest outcome. No enrollment side
     /// effect happens on this branch. `repeated` (P5a) means an identical pending is
     /// already narrated: the pending refreshes but the feed stays quiet.
-    fn pop_sign_in(&self, identity: &Identity, canonical: &str, repeated: bool, initiator: &str) -> ToolOutcome {
+    fn pop_sign_in(&self, companion: &Companion, canonical: &str, repeated: bool, initiator: &str) -> ToolOutcome {
         if let Ok(mut slot) = self.pending_bind.lock() {
-            *slot = Some(identity.local_id.clone());
+            *slot = Some(companion.local_id.clone());
         }
         if !repeated {
-            self.record_pending_connect(identity, canonical, initiator);
+            self.record_pending_connect(companion, canonical, initiator);
             self.events.publish(DomainEvent::ConnectWaitingForOperator {
                 origin: canonical.to_string(),
-                identity: identity.handle.clone(),
-                needed: format!("sign in identity '{}': its atproto account (the provider's sign-in page opens in the browser)", identity.handle),
+                companion: companion.handle.clone(),
+                needed: format!("sign in companion '{}': its atproto account (the provider's sign-in page opens in the browser)", companion.handle),
                 initiator: initiator.to_string(),
             });
         }
         let page = self.sign_in_page();
         let opened = page.as_ref().map(|(url, in_process)| {
-            let target = format!("{url}{}", bind_anchor(&identity.local_id));
+            let target = format!("{url}{}", bind_anchor(&companion.local_id));
             let fresh = self.open_page_once(&target);
             (fresh, *in_process)
         });
         let message = match opened {
             Some((true, true)) => format!(
-                "operator action needed — page opened to sign in identity '{}'; ask the operator, then connect again. The connect also finishes by itself once the sign-in is done.",
-                identity.handle
+                "operator action needed — page opened to sign in companion '{}'; ask the operator, then connect again. The connect also finishes by itself once the sign-in is done.",
+                companion.handle
             ),
             Some((true, false)) => format!(
-                "operator action needed — page opened to sign in identity '{}'; ask the operator, then connect again.",
-                identity.handle
+                "operator action needed — page opened to sign in companion '{}'; ask the operator, then connect again.",
+                companion.handle
             ),
             Some((false, _)) => format!(
-                "operator action needed — page already opened to sign in identity '{}'; ask the operator, then connect again.",
-                identity.handle
+                "operator action needed — page already opened to sign in companion '{}'; ask the operator, then connect again.",
+                companion.handle
             ),
             None => format!(
-                "operator action needed — no reachable operator page is running. Ask the operator to start tangent-connector operator to sign in identity '{}', then connect again.",
-                identity.handle
+                "operator action needed — no reachable companion manager is running. Ask the operator to start tangent-connector manager to sign in companion '{}', then connect again.",
+                companion.handle
             ),
         };
-        let code = if opened.is_some() { "operator_action_needed" } else { "operator_page_unavailable" };
+        let code = if opened.is_some() { "operator_action_needed" } else { "manager_page_unavailable" };
         self.problem_outcome("Connect", code, &message, None)
     }
 
@@ -1084,12 +1084,12 @@ impl ConnectorHub {
     /// enrollment is unusable for every operation, so the honest re-enroll path is
     /// forget + bound exchange (the same one the CLI documents). An existing enrollment
     /// (of either tier) with its session intact is used as-is.
-    fn connect_enroll(&self, identity: &Identity, canonical: &str, initiator: &str) -> Result<String, String> {
+    fn connect_enroll(&self, companion: &Companion, canonical: &str, initiator: &str) -> Result<String, String> {
         let mut forget: Option<String> = None;
         let mut ready: Option<String> = None;
         {
             let store = self.lock_store()?;
-            if let Some(entry) = store.enrollment_at(&identity.local_id, canonical) {
+            if let Some(entry) = store.enrollment_at(&companion.local_id, canonical) {
                 if store.has_session(&entry.enrollment_id) {
                     ready = Some(entry.enrollment_id);
                 } else {
@@ -1103,10 +1103,10 @@ impl ConnectorHub {
         if let Some(ready) = ready {
             return Ok(ready);
         }
-        let entry = self.enroll_bound(&identity.local_id, canonical)?;
+        let entry = self.enroll_bound(&companion.local_id, canonical)?;
         self.events.publish(DomainEvent::ConnectEnrolled {
             origin: canonical.to_string(),
-            identity: identity.handle.clone(),
+            companion: companion.handle.clone(),
             initiator: initiator.to_string(),
         });
         Ok(entry.enrollment_id)
@@ -1118,12 +1118,12 @@ impl ConnectorHub {
     /// calls carry. Shared by the model-facing connect and the service-side
     /// auto-resume so both narrate identically. A PDS session that died mid-flight
     /// pops the sign-in page again (just-in-time re-bind).
-    fn connect_finish(&self, identity: &Identity, canonical: &str, initiator: &str) -> ToolOutcome {
-        match self.connect_enroll(identity, canonical, initiator) {
+    fn connect_finish(&self, companion: &Companion, canonical: &str, initiator: &str) -> ToolOutcome {
+        match self.connect_enroll(companion, canonical, initiator) {
             Ok(enrollment_id) => {
                 let mut outcome = self.arrive(&enrollment_id, canonical);
                 if outcome.is_error {
-                    self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome), initiator);
+                    self.connect_failed(canonical, &companion.handle, &problem_code_of(&outcome), initiator);
                 } else {
                     let context_id = outcome
                         .structured
@@ -1131,24 +1131,24 @@ impl ConnectorHub {
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .to_string();
-                    outcome.text = format!("You are {} — session {context_id}\n{}", identity.handle, outcome.text);
+                    outcome.text = format!("You are {} — session {context_id}\n{}", companion.handle, outcome.text);
                     if let Some(connector) = outcome.structured.get_mut("connector").and_then(Value::as_object_mut) {
-                        connector.insert("identityHandle".into(), json!(identity.handle));
+                        connector.insert("companionHandle".into(), json!(companion.handle));
                     }
                     self.events.publish(DomainEvent::ConnectArrived {
                         origin: canonical.to_string(),
-                        identity: identity.handle.clone(),
+                        companion: companion.handle.clone(),
                         initiator: initiator.to_string(),
                     });
                 }
                 outcome
             }
             Err(error) if error.starts_with("atproto_session_expired") => {
-                self.pop_sign_in(identity, canonical, false, initiator)
+                self.pop_sign_in(companion, canonical, false, initiator)
             }
             Err(error) => {
                 let outcome = self.enrollment_problem("Connect", &error);
-                self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome), initiator);
+                self.connect_failed(canonical, &companion.handle, &problem_code_of(&outcome), initiator);
                 outcome
             }
         }
@@ -1174,7 +1174,7 @@ impl ConnectorHub {
             .unwrap_or(false)
     }
 
-    /// Drops the pending for one (identity, origin): the connect finished model-side,
+    /// Drops the pending for one (companion, origin): the connect finished model-side,
     /// so a later binding must not resume it a second time.
     fn drop_pending_connect(&self, local_id: &str, origin: &str) {
         if let Ok(mut pendings) = self.pending_connects.lock() {
@@ -1188,11 +1188,11 @@ impl ConnectorHub {
     /// The age-out runs on ONE shared sweeper thread (armed here on the first pending):
     /// a looping model's repeated Connects each refresh the pending but spawn nothing,
     /// and the sweeper touches the pending list only briefly, once per sweep — it can
-    /// never contend with the store, the operator page, or a Connect in flight.
-    fn record_pending_connect(&self, identity: &Identity, canonical: &str, initiator: &str) {
+    /// never contend with the store, the companion manager, or a Connect in flight.
+    fn record_pending_connect(&self, companion: &Companion, canonical: &str, initiator: &str) {
         let pending = PendingConnect {
-            local_id: identity.local_id.clone(),
-            handle: identity.handle.clone(),
+            local_id: companion.local_id.clone(),
+            handle: companion.handle.clone(),
             origin: canonical.to_string(),
             initiator: initiator.to_string(),
             recorded_at: now_millis(),
@@ -1202,7 +1202,7 @@ impl ConnectorHub {
                 Ok(pendings) => pendings,
                 Err(_) => return,
             };
-            // One pending per (identity, origin): a repeated connect refreshes it.
+            // One pending per (companion, origin): a repeated connect refreshes it.
             pendings.retain(|entry| !(entry.local_id == pending.local_id && entry.origin == pending.origin));
             pendings.push(pending);
         }
@@ -1232,7 +1232,7 @@ impl ConnectorHub {
                     for entry in expired {
                         events.publish(DomainEvent::ConnectFailed {
                             origin: entry.origin,
-                            identity: entry.handle,
+                            companion: entry.handle,
                             code: "operator_timeout: the pending connect aged out waiting for the operator".into(),
                             initiator: entry.initiator,
                         });
@@ -1242,7 +1242,7 @@ impl ConnectorHub {
     }
 
     /// The auto-resume (A3), armed right after an operator completed a binding: every
-    /// fresh pending connect for that identity finishes by itself — no model involved —
+    /// fresh pending connect for that companion finishes by itself — no model involved —
     /// through the same enroll-and-arrive steps with the same live progress. The
     /// model's next Connect or Arrive simply finds the enrollment and session ready.
     ///
@@ -1262,21 +1262,21 @@ impl ConnectorHub {
             due
         };
         for pending in resumes {
-            let Some(identity) = self.identity(&pending.local_id) else { continue };
+            let Some(companion) = self.companion(&pending.local_id) else { continue };
             self.events.publish(DomainEvent::ConnectOperatorCompleted {
                 origin: pending.origin.clone(),
-                identity: identity.handle.clone(),
+                companion: companion.handle.clone(),
                 // The resume is always armed by an operator action on the page.
-                initiator: "operator (page)".to_string(),
+                initiator: "companion manager".to_string(),
             });
-            let _ = self.connect_finish(&identity, &pending.origin, "operator (page)");
+            let _ = self.connect_finish(&companion, &pending.origin, "companion manager");
         }
     }
 
-    fn connect_failed(&self, origin: &str, identity: &str, code: &str, initiator: &str) {
+    fn connect_failed(&self, origin: &str, companion: &str, code: &str, initiator: &str) {
         self.events.publish(DomainEvent::ConnectFailed {
             origin: origin.to_string(),
-            identity: identity.to_string(),
+            companion: companion.to_string(),
             code: code.to_string(),
             initiator: initiator.to_string(),
         });
@@ -1292,14 +1292,14 @@ impl ConnectorHub {
         self.problem_outcome(tool, &code, &message, None)
     }
 
-    // ---------- identities (operator surface) ----------
+    // ---------- companions (operator surface) ----------
 
-    pub fn create_identity(&self, handle: &str, display_name: Option<&str>) -> Result<crate::domain::identity::Identity, String> {
-        self.attributed("operator.create_identity", || {
+    pub fn create_companion(&self, handle: &str, display_name: Option<&str>) -> Result<crate::domain::companion::Companion, String> {
+        self.attributed("manager.create_companion", || {
             if !valid_handle(handle) {
                 return Err("a handle is 2-253 characters without whitespace or ':'".to_string());
             }
-            let identity = crate::domain::identity::Identity {
+            let companion = crate::domain::companion::Companion {
                 local_id: crate::adapters::store::new_local_id(),
                 handle: handle.to_string(),
                 display_name: display_name.map(str::to_string),
@@ -1307,92 +1307,92 @@ impl ConnectorHub {
                 created_at: now_millis(),
             };
             let mut store = self.lock_store()?;
-            store.upsert_identity(identity.clone())?;
+            store.upsert_companion(companion.clone())?;
             store.save()?;
-            Ok(identity)
+            Ok(companion)
         })
     }
 
     /// Updates handle and/or display name. `display_name`: `None` leaves it unchanged,
     /// `Some(None)` clears it, `Some(Some(v))` sets it. The local id never changes.
-    pub fn update_identity(
+    pub fn update_companion(
         &self,
         local_id: &str,
         handle: Option<&str>,
         display_name: Option<Option<&str>>,
-    ) -> Result<crate::domain::identity::Identity, String> {
-        self.attributed("operator.update_identity", || {
+    ) -> Result<crate::domain::companion::Companion, String> {
+        self.attributed("manager.update_companion", || {
             let mut store = self.lock_store()?;
-            let mut identity = store.identity(local_id).ok_or_else(|| "no identity matches that id".to_string())?;
+            let mut companion = store.companion(local_id).ok_or_else(|| "no companion matches that id".to_string())?;
             if let Some(handle) = handle {
                 if !valid_handle(handle) {
                     return Err("a handle is 2-253 characters without whitespace or ':'".to_string());
                 }
-                identity.handle = handle.to_string();
+                companion.handle = handle.to_string();
             }
             if let Some(display) = display_name {
-                identity.display_name = display.map(str::to_string);
+                companion.display_name = display.map(str::to_string);
             }
-            store.upsert_identity(identity.clone())?;
+            store.upsert_companion(companion.clone())?;
             store.save()?;
-            Ok(identity)
+            Ok(companion)
         })
     }
 
-    /// Deletes an identity. Refuses while enrollments exist unless `cascade` forgets them
+    /// Deletes an companion. Refuses while enrollments exist unless `cascade` forgets them
     /// (and their sessions) first.
-    pub fn delete_identity(&self, local_id: &str, cascade: bool) -> Result<(), String> {
-        self.attributed("operator.delete_identity", || {
+    pub fn delete_companion(&self, local_id: &str, cascade: bool) -> Result<(), String> {
+        self.attributed("manager.delete_companion", || {
             let mut store = self.lock_store()?;
-            let identity = store.identity(local_id).ok_or_else(|| "no identity matches that id".to_string())?;
-            let enrollments = store.companions_of(local_id);
+            let companion = store.companion(local_id).ok_or_else(|| "no companion matches that id".to_string())?;
+            let enrollments = store.enrollments_of(local_id);
             if !enrollments.is_empty() && !cascade {
                 return Err(format!(
-                    "identity '{}' still holds {} enrollment(s); forget them first, or confirm a cascade delete",
-                    identity.handle,
+                    "companion '{}' still holds {} enrollment(s); forget them first, or confirm a cascade delete",
+                    companion.handle,
                     enrollments.len()
                 ));
             }
             for entry in &enrollments {
-                store.remove_companion(&entry.enrollment_id);
+                store.remove_enrollment(&entry.enrollment_id);
             }
-            store.remove_identity(local_id);
+            store.remove_companion(local_id);
             store.save()?;
             Ok(())
         })
     }
 
-    pub fn identities(&self) -> Vec<crate::domain::identity::Identity> {
+    pub fn companions(&self) -> Vec<crate::domain::companion::Companion> {
         let store = self.lock_store().expect("state lock");
-        store.identities().to_vec()
+        store.companions().to_vec()
     }
 
-    pub fn identity(&self, local_id: &str) -> Option<crate::domain::identity::Identity> {
+    pub fn companion(&self, local_id: &str) -> Option<crate::domain::companion::Companion> {
         let store = self.lock_store().expect("state lock");
-        store.identity(local_id)
+        store.companion(local_id)
     }
 
     pub fn enrollments_of(&self, local_id: &str) -> Vec<Enrollment> {
         let store = self.lock_store().expect("state lock");
-        store.companions_of(local_id)
+        store.enrollments_of(local_id)
     }
 
     /// Every enrollment, oldest first, with its session availability (never the token).
     pub fn enrollment_inventory(&self) -> Vec<(Enrollment, bool)> {
         let store = self.lock_store().expect("state lock");
-        store.companions().iter().map(|entry| (entry.clone(), store.has_session(&entry.enrollment_id))).collect()
+        store.enrollments().iter().map(|entry| (entry.clone(), store.has_session(&entry.enrollment_id))).collect()
     }
 
-    /// Read-only attention/pending-write state per enrollment, for the operator page.
+    /// Read-only attention/pending-write state per enrollment, for the companion manager.
     pub fn enrollment_statuses(&self) -> Vec<EnrollmentStatus> {
         let store = self.lock_store().expect("state lock");
         let unsettled = store.unsettled_writes();
         store
-            .companions()
+            .enrollments()
             .iter()
             .map(|entry| EnrollmentStatus {
                 enrollment_id: entry.enrollment_id.clone(),
-                identity_local_id: entry.local_id.clone(),
+                companion_local_id: entry.local_id.clone(),
                 origin: entry.origin.clone(),
                 waiting: store.waiting_count(&entry.enrollment_id),
                 pending_attention: store
@@ -1409,7 +1409,7 @@ impl ConnectorHub {
     /// servers still have an honest address card; no network runs while rendering it.
     pub fn server_cards(&self) -> Vec<ServerCard> {
         let store = self.lock_store().expect("state lock");
-        let mut origins: Vec<_> = store.companions().iter().map(|entry| entry.origin.clone()).collect();
+        let mut origins: Vec<_> = store.enrollments().iter().map(|entry| entry.origin.clone()).collect();
         origins.sort();
         origins.dedup();
         origins.into_iter().map(|origin| {
@@ -1441,7 +1441,7 @@ impl ConnectorHub {
         let now = now_millis();
         {
             let store = self.lock_store().expect("state lock");
-            if !store.companions().iter().any(|entry| entry.origin == origin)
+            if !store.enrollments().iter().any(|entry| entry.origin == origin)
                 || store.server_card(origin).is_some_and(|card| now.saturating_sub(card.refreshed_at) < FRESH_MS) {
                 return;
             }
@@ -1457,7 +1457,7 @@ impl ConnectorHub {
         let Some(card) = project_server_card(origin, &raw, now) else { return };
         let mut store = self.lock_store().expect("state lock");
         // A forgotten enrollment must not be resurrected by an in-flight request.
-        if store.companions().iter().any(|entry| entry.origin == origin) {
+        if store.enrollments().iter().any(|entry| entry.origin == origin) {
             store.set_server_card(card);
             let _ = store.save();
         }
@@ -1466,11 +1466,11 @@ impl ConnectorHub {
     /// Attribution wrapper for operator-page mutations: the same invoked/completed pair
     /// every intake records, with the `Operator` channel.
     fn attributed<T>(&self, action: &str, run: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
-        self.events.publish(DomainEvent::ToolInvoked { channel: IntakeChannel::Operator, tool: action.to_string() });
+        self.events.publish(DomainEvent::ToolInvoked { channel: IntakeChannel::Manager, tool: action.to_string() });
         let result = run();
         let status = if result.is_ok() { "ok" } else { "error" };
         self.events.publish(DomainEvent::ToolCompleted {
-            channel: IntakeChannel::Operator,
+            channel: IntakeChannel::Manager,
             tool: action.to_string(),
             status: status.into(),
             text_bytes: 0,
@@ -1486,7 +1486,7 @@ impl ConnectorHub {
     /// same thread blocks forever while still holding the mutex, freezing every other
     /// intake), and never network I/O: the exchange runs outside the lock and the state is re-checked after.
     /// Intakes that need composed facts should ask the hub for a batched read (see
-    /// [`ConnectorHub::identity_inventory`]) instead of walking the store themselves.
+    /// [`ConnectorHub::companion_inventory`]) instead of walking the store themselves.
     pub fn store(&self) -> &Mutex<StateStore> {
         &self.store
     }
@@ -1528,13 +1528,13 @@ impl ConnectorHub {
     }
 
     /// The feed's initiator label (P5b): who started this call. MCP tool calls are the
-    /// model acting through a named client; the command line and the operator page are
+    /// model acting through a named client; the command line and the companion manager are
     /// the operator.
     fn initiator_label(&self, channel: IntakeChannel) -> String {
         match channel {
             IntakeChannel::Mcp => format!("model (via {})", self.caller.mcp_client_name().unwrap_or("stdio")),
             IntakeChannel::Cli => "operator (CLI)".to_string(),
-            IntakeChannel::Operator => "operator (page)".to_string(),
+            IntakeChannel::Manager => "companion manager".to_string(),
         }
     }
 
@@ -1542,7 +1542,7 @@ impl ConnectorHub {
         match operation {
             Operation::SelectCompanion { moniker } => self.select_companion(moniker.as_deref()),
             Operation::OpenRegistration => self.open_registration(),
-            Operation::Connect { server_url, identity } => self.connect(&server_url, identity.as_deref(), initiator),
+            Operation::Connect { server_url, companion } => self.connect(&server_url, companion.as_deref(), initiator),
             Operation::Arrive { enrollment_id, server_url } => self.arrive(&enrollment_id, &server_url),
             Operation::ListTangents { context_id, cursor } => {
                 self.with_context("ListTangents", &context_id, ViewMode::Compact, |frame| {
@@ -1705,63 +1705,63 @@ impl ConnectorHub {
         }
     }
 
-    /// Selection resolves an identity first, then one of its enrollments. Without a
-    /// moniker the acting identity resolves by behavior — exactly one local identity is
+    /// Selection resolves an companion first, then one of its enrollments. Without a
+    /// moniker the acting companion resolves by behavior — exactly one local companion is
     /// used (every intake alike); zero or several resolve nothing, honestly, and the
     /// answer is a question — never a guess, never machine-wide.
     fn select_companion(&self, moniker: Option<&str>) -> ToolOutcome {
         let store = self.lock_store().expect("state lock");
         match moniker {
             Some(moniker) => {
-                if let Some(identity) = store.identity_by_moniker(moniker) {
-                    return self.select_enrollment_of(&store, &identity);
+                if let Some(companion) = store.companion_by_moniker(moniker) {
+                    return self.select_enrollment_of(&store, &companion);
                 }
-                match store.find_companion(moniker) {
+                match store.find_enrollment(moniker) {
                     Some(companion) => selected_outcome(&companion),
                     None => self.problem_outcome("SelectCompanion", "companion_unavailable",
-                        "No enrolled companion or identity matches that moniker. Ask the operator to enroll one.", None),
+                        "No enrolled companion or companion matches that moniker. Ask the operator to enroll one.", None),
                 }
             }
             None => {
                 let instruction = |detail: String| {
-                    self.problem_outcome("SelectCompanion", "identity_selection_required", &detail, None)
+                    self.problem_outcome("SelectCompanion", "companion_selection_required", &detail, None)
                 };
-                let identities = store.identities();
-                match identities.len() {
+                let companions = store.companions();
+                match companions.len() {
                     0 => instruction(
-                        "No local identity exists yet. Ask the operator to create one (the operator page), or pass a moniker."
+                        "No local companion exists yet. Ask the operator to create one (the companion manager), or pass a moniker."
                             .to_string(),
                     ),
-                    1 => self.select_enrollment_of(&store, &identities[0]),
+                    1 => self.select_enrollment_of(&store, &companions[0]),
                     _ => instruction(format!(
-                        "Multiple local identities exist: {}. Ask which one is yours, or pass a moniker (an identity handle).",
-                        identities.iter().map(|identity| identity.handle.clone()).collect::<Vec<_>>().join(" · ")
+                        "Multiple local companions exist: {}. Ask which one is yours, or pass a moniker (an companion handle).",
+                        companions.iter().map(|companion| companion.handle.clone()).collect::<Vec<_>>().join(" · ")
                     )),
                 }
             }
         }
     }
 
-    fn select_enrollment_of(&self, store: &StateStore, identity: &crate::domain::identity::Identity) -> ToolOutcome {
-        let enrollments = store.companions_of(&identity.local_id);
+    fn select_enrollment_of(&self, store: &StateStore, companion: &crate::domain::companion::Companion) -> ToolOutcome {
+        let enrollments = store.enrollments_of(&companion.local_id);
         match enrollments.len() {
             1 => selected_outcome(&enrollments[0]),
             0 => self.problem_outcome("SelectCompanion", "companion_unavailable",
-                &format!("Identity '{}' has no enrollment yet. Ask the operator to enroll it on a server first.", identity.handle), None),
-            _ => self.problem_outcome("SelectCompanion", "identity_selection_needed",
+                &format!("Companion '{}' has no enrollment yet. Ask the operator to enroll it on a server first.", companion.handle), None),
+            _ => self.problem_outcome("SelectCompanion", "companion_selection_needed",
                 &format!(
-                    "Identity '{}' is enrolled at {} servers. Select one explicitly with its companion id: {}",
-                    identity.handle,
+                    "Companion '{}' is enrolled at {} servers. Select one explicitly with its companion id: {}",
+                    companion.handle,
                     enrollments.len(),
                     enrollments.iter().map(|entry| format!("{} ({})", entry.enrollment_id, entry.origin)).collect::<Vec<_>>().join(", ")
                 ), None),
         }
     }
 
-    /// Attention, not execution (ADR 0009 invariant): browser-open the operator page
-    /// so the human operator can create an identity or complete a pending sign-in. The
-    /// anchor is routed (R3): after a `Connect` popped sign-in for one identity, this
-    /// opens that identity's bind anchor; the default is the identity-creation view.
+    /// Attention, not execution (ADR 0009 invariant): browser-open the companion manager
+    /// so the human operator can create an companion or complete a pending sign-in. The
+    /// anchor is routed (R3): after a `Connect` popped sign-in for one companion, this
+    /// opens that companion's bind anchor; the default is the companion-creation view.
     /// The URL is constructed internally; it never renders into the tool response or
     /// any view. Nothing auto-runs: signing in and enrolling remain operator actions on
     /// that page.
@@ -1771,19 +1771,19 @@ impl ConnectorHub {
         let Some(target) = self.registration_target_url() else {
             return self.problem_outcome(
                 "OpenRegistration",
-                "operator_page_unavailable",
-                "The local operator page is not running in this process. Ask the operator to start tangent-connector (serve or the operator verb) with its operator page.",
+                "manager_page_unavailable",
+                "The local companion manager is not running in this process. Ask the operator to start tangent-connector (serve or the operator verb) with its companion manager.",
                 None,
             );
         };
         let (text, registration) = if self.open_page_once(&target) {
             (
-                "Opened the local operator page for the operator to create or bind an identity; ask the operator when done.",
+                "Opened the local companion manager for the operator to create or bind an companion; ask the operator when done.",
                 "operator_page",
             )
         } else {
             (
-                "The operator page is already open for the operator to create or bind an identity; ask the operator when done.",
+                "The companion manager is already open for the operator to create or bind an companion; ask the operator when done.",
                 "operator_page_already_open",
             )
         };
@@ -1806,7 +1806,7 @@ impl ConnectorHub {
     fn arrive(&self, enrollment_id: &str, server_url: &str) -> ToolOutcome {
         let (companion, canonical_check) = {
             let store = self.lock_store().expect("state lock");
-            (store.companion(enrollment_id), refs::acceptable_origin(server_url))
+            (store.enrollment(enrollment_id), refs::acceptable_origin(server_url))
         };
         let Some(companion) = companion else {
             return self.problem_outcome("Arrive", "companion_unavailable",
@@ -1821,7 +1821,7 @@ impl ConnectorHub {
         }
         let session = match self.session_of(&companion) {
             Ok(session) => session,
-            Err(error) => return self.problem_outcome("Arrive", "needs_operator_connection", &error, Some((&companion, None))),
+            Err(error) => return self.problem_outcome("Arrive", "needs_manager_connection", &error, Some((&companion, None))),
         };
         let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None };
         let raw = match self.port.get(&request, "/api/v1/experience") {
@@ -1857,7 +1857,7 @@ impl ConnectorHub {
         };
         let session = match self.session_of(&companion) {
             Ok(session) => session,
-            Err(error) => return self.problem_outcome("GetUpdates", "needs_operator_connection", &error, Some((&companion, Some(&context_binding)))),
+            Err(error) => return self.problem_outcome("GetUpdates", "needs_manager_connection", &error, Some((&companion, Some(&context_binding)))),
         };
         let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None };
         let mut query = Vec::new();
@@ -1928,7 +1928,7 @@ impl ConnectorHub {
         }
         let session = match self.session_of(&companion) {
             Ok(session) => session,
-            Err(error) => return self.problem_outcome(tool, "needs_operator_connection", &error, Some((&companion, Some(&context_binding)))),
+            Err(error) => return self.problem_outcome(tool, "needs_manager_connection", &error, Some((&companion, Some(&context_binding)))),
         };
         let frame = CallFrame {
             request: RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None },
@@ -2254,7 +2254,7 @@ impl ConnectorHub {
 
     fn companion_of(&self, enrollment_id: &str) -> Option<Enrollment> {
         let store = self.lock_store().ok()?;
-        store.companion(enrollment_id)
+        store.enrollment(enrollment_id)
     }
 
     /// The enrollment's bearer session, from the per-enrollment session map. A missing
@@ -2286,7 +2286,7 @@ impl ConnectorHub {
     ) -> ToolOutcome {
         let (code, message) = match error {
             ExperienceError::Unreachable => ("unreachable".to_string(), "The Tangent server could not be reached. Saved actions and cursors remain available.".to_string()),
-            ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => ("needs_operator_connection".to_string(), "Authentication was rejected; the operator must renew this enrollment's session.".to_string()),
+            ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => ("needs_manager_connection".to_string(), "Authentication was rejected; the operator must renew this enrollment's session.".to_string()),
             ExperienceError::Application { code, message } => (code.clone(), message.clone()),
             ExperienceError::Transport(detail) => ("unreachable".to_string(), detail.clone()),
         };
@@ -2380,7 +2380,7 @@ fn selected_outcome(companion: &Enrollment) -> ToolOutcome {
             "problem": null,
             "connector": {
                 "enrollmentId": companion.enrollment_id,
-                "identityId": companion.local_id,
+                "companionId": companion.local_id,
                 "contextId": null,
                 "serverUrl": companion.origin,
                 "view": "compact",
@@ -2447,13 +2447,13 @@ mod server_card_checks {
 
 /// The browser target of one operator-page anchor. Pure construction, so tests can
 /// assert the URL without opening anything. The anchor
-/// carries its own sigil: `#create-identity` (a fragment) or `bind/{localId}/atproto`
+/// carries its own sigil: `#create-companion` (a fragment) or `bind/{localId}/atproto`
 /// (the connector-served bind route, a path).
 pub fn registration_target(page_url: &str, anchor: &str) -> String {
     format!("{page_url}{anchor}")
 }
 
-/// The per-identity sign-in target on the operator page (R2): the connector-served
+/// The per-companion sign-in target on the companion manager (R2): the connector-served
 /// `/bind` page `bind/{localId}/atproto` — a path, not a fragment, since the bind flow
 /// is its own route now.
 pub fn bind_anchor(local_id: &str) -> String {
@@ -2507,19 +2507,19 @@ fn discovery_error(error: &ExperienceError) -> String {
 /// here is almost always an expired PDS session: the message says to re-bind.
 fn service_auth_error(error: &ExperienceError) -> String {
     match error {
-        ExperienceError::Unreachable => "the PDS could not be reached; re-try, or re-bind the identity if the PDS moved".to_string(),
+        ExperienceError::Unreachable => "the PDS could not be reached; re-try, or re-bind the companion if the PDS moved".to_string(),
         ExperienceError::Unauthorized => {
-            "atproto_session_expired: the PDS session was rejected (it may have expired). Re-bind the identity on the operator page.".to_string()
+            "atproto_session_expired: the PDS session was rejected (it may have expired). Re-bind the companion on the companion manager.".to_string()
         }
         ExperienceError::DpopChallenge { .. } => {
-            "atproto_session_expired: the PDS kept challenging the DPoP proof for a fresh nonce. Re-try, or re-bind the identity on the operator page.".to_string()
+            "atproto_session_expired: the PDS kept challenging the DPoP proof for a fresh nonce. Re-try, or re-bind the companion on the companion manager.".to_string()
         }
         ExperienceError::Application { code, message } => match code.as_str() {
             // The reference PDS's granular-scope refusal: a session bound before the
             // rpc permission existed cannot mint service proofs. One re-bind (the
             // updated consent screen shows the permission) extends the grant.
             "ScopeMissingError" => format!(
-                "atproto_scope_missing: the bound account's OAuth grant lacks the service-proof permission this PDS demands ({message}). Re-bind the identity on the operator page to grant it."
+                "atproto_scope_missing: the bound account's OAuth grant lacks the service-proof permission this PDS demands ({message}). Re-bind the companion on the companion manager to grant it."
             ),
             _ => format!("the PDS refused the service-auth request ({code}): {message}"),
         },
@@ -2540,7 +2540,7 @@ fn exchange_error(error: &ExperienceError) -> String {
             "exchange_unavailable" | "exchange_unconfigured" | "public_origin_unconfigured" => {
                 format!("exchange_unavailable: this server has no proof audience configured ({message})")
             }
-            "participant_suspended" => format!("participant_suspended: the server reports this identity is suspended there ({message})"),
+            "participant_suspended" => format!("participant_suspended: the server reports this companion is suspended there ({message})"),
             "invalid_service_proof" | "service_proof_required" => {
                 format!("invalid_service_proof: the server rejected the proof ({message}); enroll again")
             }

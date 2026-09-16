@@ -1,4 +1,4 @@
-//! The operator spoke: a loopback-only web page for identity and enrollment stewardship,
+//! The operator spoke: a loopback-only web page for companion and enrollment stewardship,
 //! on a fixed port (5219 — a stable URL; `TANGENT_CONNECTOR_PORT` or `--port` names
 //! another fixed port). Hand-rolled minimal HTTP/1.1 in the house
 //! style — request line, headers and a Content-Length body under an 8 KiB header cap
@@ -6,12 +6,12 @@
 //! JSON-only `/api/*` bodies (any other encoding is refused on every surface). The
 //! one deliberately cross-origin route is `GET/OPTIONS /api/discovery`: it discloses
 //! only the connector product/version and this loopback origin, so a Tangent page can
-//! decide whether to offer its local operator page without exposing identities or
+//! decide whether to offer its local companion manager without exposing companions or
 //! credentials. The pages are inert embedded strings; every other `/api/*` JSON call
 //! crosses
 //! the SAME hub as the CLI and MCP intakes (attribution channel `Operator`). The
-//! `/bind/{identityId}/{provider}` route IS the atproto OAuth bind (owner correction:
-//! no interstitial): the GET immediately starts the flow — the default authorization
+//! `/bind/{companionId}/{provider}` route IS the atproto OAuth bind, with no
+//! interstitial: the GET immediately starts the flow — the default authorization
 //! server, or `?handle=` discovery for self-hosted PDSes — and answers the 302 to the
 //! provider's authorize page, whose own UI handles account selection and sign-in. The
 //! provider's loopback redirect (root path only, per the public local-client profile)
@@ -40,7 +40,7 @@ use crate::adapters::lockfile::DataDirLock;
 use crate::adapters::tray;
 use crate::application::hub::ConnectorHub;
 use crate::domain::events::DomainEvent;
-use crate::domain::identity::CallerId;
+use crate::domain::companion::CallerId;
 use crate::{build_hub, data_directory};
 
 const HEADER_LIMIT: usize = 8 * 1024;
@@ -54,8 +54,8 @@ const ACCEPT_ERROR_PAUSE: Duration = Duration::from_millis(100);
 const SSE_CLIENT_LIMIT: usize = 4;
 /// SSE keepalive cadence: a comment frame that also proves the peer is still there.
 const SSE_KEEPALIVE: Duration = Duration::from_secs(15);
-const INDEX_HTML: &str = include_str!("operator.html");
-const OPERATOR_STYLE: &str = include_str!("operator.css");
+const INDEX_HTML: &str = include_str!("manager.html");
+const MANAGER_STYLE: &str = include_str!("manager.css");
 
 // Both products draw the same bounded ASCII atmosphere. Embed its assets so the local
 // manager remains one self-contained executable.
@@ -66,8 +66,8 @@ fn atmosphere_assets() -> String {
         include_str!("../../../server/web/wwwroot/atmosphere.js"))
 }
 
-fn operator_index() -> String {
-    INDEX_HTML.replace("/* TANGENT_OPERATOR_STYLE */", OPERATOR_STYLE)
+fn manager_index() -> String {
+    INDEX_HTML.replace("/* TANGENT_MANAGER_STYLE */", MANAGER_STYLE)
         .replace("<!-- TANGENT_ATMOSPHERE -->", &atmosphere_assets())
 }
 /// The companion manager's fixed default port: a stable URL any Connect
@@ -84,13 +84,13 @@ pub const CONNECTOR_PRODUCT: &str = "tangent-space-connector";
 /// The one bind provider this connector serves today.
 const BIND_PROVIDER_ATPROTO: &str = "atproto";
 
-/// The port the operator page serves on: the `--port` flag wins, then
+/// The port the companion manager serves on: the `--port` flag wins, then
 /// `TANGENT_CONNECTOR_PORT`, then the fixed default. Port 0 is refused.
-pub fn resolve_operator_port(flag: Option<u16>) -> Result<u16, String> {
+pub fn resolve_manager_port(flag: Option<u16>) -> Result<u16, String> {
     port_from(flag, std::env::var("TANGENT_CONNECTOR_PORT").ok().as_deref())
 }
 
-/// The pure decision behind [`resolve_operator_port`], so the discipline is assertable
+/// The pure decision behind [`resolve_manager_port`], so the discipline is assertable
 /// without touching the process environment.
 pub fn port_from(flag: Option<u16>, environment: Option<&str>) -> Result<u16, String> {
     let port = match (flag, environment.map(str::trim)) {
@@ -101,14 +101,14 @@ pub fn port_from(flag: Option<u16>, environment: Option<&str>) -> Result<u16, St
             .map_err(|_| format!("TANGENT_CONNECTOR_PORT must be a port number, not '{value}'"))?,
     };
     if port == 0 {
-        return Err("the operator page needs a fixed port; 0 would pick a random one. \
+        return Err("the companion manager needs a fixed port; 0 would pick a random one. \
             Name one from 1 to 65535 with --port or TANGENT_CONNECTOR_PORT."
             .to_string());
     }
     Ok(port)
 }
 
-/// Binds the operator listener on loopback. An in-use fixed port is an honest refusal
+/// Binds the manager listener on loopback. An in-use fixed port is an honest refusal
 /// naming what is known about the holder: the data-directory lock's record and the
 /// page URL the durable state last recorded (the lockfile covers one connector
 /// process; the bind conflict may be any listener on that port).
@@ -116,22 +116,22 @@ pub fn bind_listener(data_dir: &std::path::Path, port: u16) -> Result<TcpListene
     match TcpListener::bind(("127.0.0.1", port)) {
         Ok(listener) => Ok(listener),
         Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => Err(format!(
-            "cannot host the operator page on 127.0.0.1:{port}: another process is already listening there \n             (state lock: {}; last recorded operator page: {}). \n             Stop whatever holds the port, or choose another with --port or TANGENT_CONNECTOR_PORT.",
+            "cannot host the companion manager on 127.0.0.1:{port}: another process is already listening there \n             (state lock: {}; last recorded companion manager: {}). \n             Stop whatever holds the port, or choose another with --port or TANGENT_CONNECTOR_PORT.",
             crate::adapters::lockfile::holder_of(data_dir),
             recorded_page_url(data_dir).unwrap_or_else(|| "none recorded".to_string()),
         )),
-        Err(error) => Err(format!("cannot bind the operator listener on 127.0.0.1:{port}: {error}")),
+        Err(error) => Err(format!("cannot bind the manager listener on 127.0.0.1:{port}: {error}")),
     }
 }
 
-/// The operator page URL durable state last recorded, when state is readable at all.
+/// The companion manager URL durable state last recorded, when state is readable at all.
 fn recorded_page_url(data_dir: &std::path::Path) -> Option<String> {
-    crate::adapters::store::StateStore::open(data_dir).ok().and_then(|store| store.operator_page_url())
+    crate::adapters::store::StateStore::open(data_dir).ok().and_then(|store| store.manager_page_url())
 }
 
 /// Entry point of the `operator` verb. Owns stdout for its banner; the MCP edge is a
 /// separate process and never runs here.
-pub fn operator(rest: &[String]) -> i32 {
+pub fn manager(rest: &[String]) -> i32 {
     let mut port: Option<u16> = None;
     let mut open_browser = true;
     let mut force = false;
@@ -163,14 +163,14 @@ pub fn operator(rest: &[String]) -> i32 {
             return 4;
         }
     };
-    let hub = match build_hub(CallerId("operator".into()), data_dir.clone()) {
+    let hub = match build_hub(CallerId("manager".into()), data_dir.clone()) {
         Ok(hub) => hub,
         Err(error) => {
             eprintln!("cannot open connector state: {error}");
             return 4;
         }
     };
-    let port = match resolve_operator_port(port) {
+    let port = match resolve_manager_port(port) {
         Ok(port) => port,
         Err(error) => {
             eprintln!("{error}");
@@ -187,11 +187,11 @@ pub fn operator(rest: &[String]) -> i32 {
         }
     };
     let url = format!("http://127.0.0.1:{port}/");
-    println!("Tangent connector operator page: {url}");
+    println!("Tangent connector companion manager: {url}");
     println!("The connector records this address in its state so any Connect can pop this page.");
-    // The page URL is recorded in memory AND durable state (P4): a Connect in any
+    // The page URL is recorded in memory AND durable state: a Connect in any
     // process — the CLI one-shots included — pops this page at the sign-in anchor.
-    hub.announce_operator_page(&url);
+    hub.announce_manager_page(&url);
     if open_browser {
         hub.open_page(&url);
     }
@@ -203,7 +203,7 @@ pub fn operator(rest: &[String]) -> i32 {
         hub.clone(),
         url,
         Box::new(move || {
-            quit_hub.clear_persisted_operator_page();
+            quit_hub.clear_persisted_manager_page();
             quit_lock.release();
             std::process::exit(0);
         }),
@@ -213,12 +213,12 @@ pub fn operator(rest: &[String]) -> i32 {
     let server = std::thread::Builder::new()
         .name("tangent-operator".into())
         .spawn(move || serve(serving, serve_hub))
-        .expect("operator server thread");
+        .expect("manager server thread");
     // The server thread owns the listener; the tray's Quit exits the process. Either
     // path releases the lock (Drop here, release() in the quit hook) and clears the
     // recorded page URL.
     let _ = server.join();
-    hub.clear_persisted_operator_page();
+    hub.clear_persisted_manager_page();
     0
 }
 
@@ -392,7 +392,7 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
     }
     // Cross-origin discovery is intentionally tiny and inert. It proves only that a
     // compatible connector is listening on this browser's loopback interface. Every
-    // identity, enrollment and mutation route remains same-origin and receives no
+    // companion, enrollment and mutation route remains same-origin and receives no
     // CORS headers.
     if request_path == "/api/discovery" && (method == "GET" || method == "OPTIONS") {
         let _ = respond_discovery(&mut writer, method == "OPTIONS", root_url.trim_end_matches('/'));
@@ -458,7 +458,7 @@ fn is_json(content_type: &str) -> bool {
 /// The SSE feed (owner addendum): the one deliberate exception to this server's
 /// one-response-per-connection shape — the response is held open and written as
 /// events arrive. Frames are the existing `DomainEvent` vocabulary serialized as
-/// `data:` JSON (the page reads `kind` from the payload). The `OperatorPageReady`
+/// `data:` JSON (the page reads `kind` from the payload). The `ManagerPageReady`
 /// event is deliberately skipped: it is journal material, not feed material. A
 /// keepalive comment every [`SSE_KEEPALIVE`] keeps intermediaries honest and surfaces
 /// a vanished peer as a write error; past [`SSE_CLIENT_LIMIT`] concurrent clients the
@@ -480,7 +480,7 @@ fn stream_events(mut writer: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc
     loop {
         match receiver.recv_timeout(SSE_KEEPALIVE) {
             Ok(event) => {
-                if matches!(event, DomainEvent::OperatorPageReady { .. }) {
+                if matches!(event, DomainEvent::ManagerPageReady { .. }) {
                     continue;
                 }
                 let data = serde_json::to_string(&event)
@@ -513,7 +513,7 @@ impl Drop for SseSlot {
 
 struct ApiResponse(u16, Value, Option<String>);
 
-/// The route table. The embedded page is inert HTML+JS; the `/bind/{identityId}/{provider}`
+/// The route table. The embedded page is inert HTML+JS; the `/bind/{companionId}/{provider}`
 /// route immediately starts the atproto OAuth flow (any other provider is an honest
 /// 404); everything under /api/ is the same local-only trust boundary (loopback bind,
 /// GET/POST, caps, JSON bodies).
@@ -530,28 +530,28 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
     };
     let segments: Vec<&str> = path.trim_start_matches("/api/").split('/').filter(|segment| !segment.is_empty()).collect();
     match (method, segments.as_slice()) {
-        ("GET", ["identities"]) => ApiResponse(200, ok_json(json!({ "identities": identity_list(hub) })), None),
-        ("POST", ["identities"]) => {
+        ("GET", ["companions"]) => ApiResponse(200, ok_json(json!({ "companions": companion_list(hub) })), None),
+        ("POST", ["companions"]) => {
             let handle = body.get("handle").and_then(Value::as_str).unwrap_or_default();
             let display = body.get("displayName").and_then(Value::as_str);
-            finish(hub.create_identity(handle, display), |identity| ok_json(json!({ "identity": identity_json(&identity) })))
+            finish(hub.create_companion(handle, display), |companion| ok_json(json!({ "companion": companion_json(&companion) })))
         }
-        ("POST", ["identities", local_id]) => {
+        ("POST", ["companions", local_id]) => {
             let handle = body.get("handle").and_then(Value::as_str);
             let display = match body.get("displayName") {
                 None | Some(Value::Null) => None,
                 Some(Value::String(value)) => Some(Some(value.as_str())),
                 Some(_) => return ApiResponse(400, problem_json("bad_request", "displayName must be a string or null"), None),
             };
-            finish(hub.update_identity(local_id, handle, display), |identity| ok_json(json!({ "identity": identity_json(&identity) })))
+            finish(hub.update_companion(local_id, handle, display), |companion| ok_json(json!({ "companion": companion_json(&companion) })))
         }
-        ("POST", ["identities", local_id, "delete"]) => {
+        ("POST", ["companions", local_id, "delete"]) => {
             let cascade = body.get("cascade").and_then(Value::as_bool).unwrap_or(false);
-            finish(hub.delete_identity(local_id, cascade), |_| ok_json(json!({ "deleted": local_id })))
+            finish(hub.delete_companion(local_id, cascade), |_| ok_json(json!({ "deleted": local_id })))
         }
-        ("GET", ["identities", local_id, "enrollments"]) => {
-            if hub.identity(local_id).is_none() {
-                return ApiResponse(200, blocked_json("unknown_identity", "no identity matches that id"), None);
+        ("GET", ["companions", local_id, "enrollments"]) => {
+            if hub.companion(local_id).is_none() {
+                return ApiResponse(200, blocked_json("unknown_companion", "no companion matches that id"), None);
             }
             let enrollments: Vec<Value> = hub
                 .enrollment_inventory()
@@ -567,9 +567,9 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
         //
         // Binding happens on the /bind route over OAuth, and nowhere else: there is no
         // password path on the page, in the hub or in the CLI.
-        ("POST", ["identities", local_id, "atproto", "unbind"]) => {
-            finish(hub.unbind_atproto(local_id), |identity| {
-                ok_json(json!({ "identity": identity_with_atproto(&identity, hub.atproto_binding(&identity.local_id)) }))
+        ("POST", ["companions", local_id, "atproto", "unbind"]) => {
+            finish(hub.unbind_atproto(local_id), |companion| {
+                ok_json(json!({ "companion": companion_with_atproto(&companion, hub.atproto_binding(&companion.local_id)) }))
             })
         }
         ("POST", ["enrollments", enrollment_id, "forget"]) => {
@@ -583,7 +583,7 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
                 .map(|status| {
                     json!({
                         "enrollmentId": status.enrollment_id,
-                        "identityId": status.identity_local_id,
+                        "companionId": status.companion_local_id,
                         "origin": status.origin,
                         "waiting": status.waiting,
                         "pendingAttention": status.pending_attention,
@@ -597,7 +597,7 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
     }
 }
 
-/// The human surfaces: the operator page, the bind route, and the loopback callback
+/// The human surfaces: the companion manager, the bind route, and the loopback callback
 /// that lands on `/` (the atproto local-client redirect rule — the public authorization
 /// server only ever redirects to `http://127.0.0.1[:port]/`).
 fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, _body: &RequestBody, root_url: &str) -> ApiResponse {
@@ -610,9 +610,9 @@ fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, _body:
             if parameters.iter().any(|(name, _)| name == "state") {
                 return bind_callback(hub, &parameters, root_url);
             }
-            ApiResponse(200, Value::String(operator_index()), None)
+            ApiResponse(200, Value::String(manager_index()), None)
         }
-        ("GET", ["index.html"]) => ApiResponse(200, Value::String(operator_index()), None),
+        ("GET", ["index.html"]) => ApiResponse(200, Value::String(manager_index()), None),
         ("GET", ["bind", local_id, provider]) => {
             if *provider != BIND_PROVIDER_ATPROTO {
                 return not_found_page(&format!(
@@ -620,10 +620,10 @@ fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, _body:
                     BIND_PROVIDER_ATPROTO
                 ));
             }
-            if hub.identity(local_id).is_none() {
-                return not_found_page("No local identity matches that id — open the operator page and pick one.");
+            if hub.companion(local_id).is_none() {
+                return not_found_page("No local companion matches that id — open the companion manager and pick one.");
             }
-            // No interstitial (owner correction): this GET IS the bind's start. The
+            // No interstitial: this GET is the bind's start. The
             // default authorization server handles account selection and sign-in in
             // its own UI; the answer is the 302 to its authorize page. `?handle=` is
             // the self-hosted escape hatch — it runs the handle→DID→PDS→AS discovery
@@ -641,7 +641,7 @@ fn html_routes(hub: &ConnectorHub, method: &str, path: &str, query: &str, _body:
         // No POST bind route exists (R4): the bind is a navigation, and a cross-origin
         // GET only ever starts a flow the operator sees at the provider. Form posts
         // anywhere outside /api/'s JSON surface fall through to the honest 404.
-        _ => not_found_page("only the operator page, its bind route and /api/* live here"),
+        _ => not_found_page("only the companion manager, its bind route and /api/* live here"),
     }
 }
 
@@ -680,7 +680,7 @@ fn html_escape(value: &str) -> String {
 
 /// The shared skeleton of the bind flow's small pages.
 fn bind_skeleton(title: &str, body: &str) -> String {
-    let style = OPERATOR_STYLE;
+    let style = MANAGER_STYLE;
     let atmosphere = atmosphere_assets();
     format!(r##"<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -785,13 +785,13 @@ fn percent_decode_form(value: &str) -> String {
     String::from_utf8_lossy(&out).to_string()
 }
 
-fn identity_list(hub: &ConnectorHub) -> Vec<Value> {
+fn companion_list(hub: &ConnectorHub) -> Vec<Value> {
     // One batched hub read (one store guard inside it), then pure JSON assembly. This
-    // route once walked the store under its own guard and asked the hub per identity —
+    // route once walked the store under its own guard and asked the hub per companion —
     // `atproto_binding` re-locked the same non-reentrant mutex on the same thread and
     // froze the entire hub (store held forever): every Connect, every operator
     // mutation, the page itself. Never re-enter the store from under a store guard.
-    let inventory = hub.identity_inventory();
+    let inventory = hub.companion_inventory();
     let availability: std::collections::HashMap<String, bool> = hub
         .enrollment_inventory()
         .into_iter()
@@ -799,9 +799,9 @@ fn identity_list(hub: &ConnectorHub) -> Vec<Value> {
         .collect();
     inventory
         .into_iter()
-        .map(|(identity, atproto, count)| {
-            let local_id = identity.local_id.clone();
-            let mut value = identity_with_atproto(&identity, atproto);
+        .map(|(companion, atproto, count)| {
+            let local_id = companion.local_id.clone();
+            let mut value = companion_with_atproto(&companion, atproto);
             value["enrollmentCount"] = json!(count);
             value["sessionsAvailable"] = json!(availability.get(&local_id).copied().unwrap_or(true));
             value
@@ -809,24 +809,24 @@ fn identity_list(hub: &ConnectorHub) -> Vec<Value> {
         .collect()
 }
 
-fn identity_json(identity: &crate::domain::identity::Identity) -> Value {
+fn companion_json(companion: &crate::domain::companion::Companion) -> Value {
     json!({
-        "localId": identity.local_id,
-        "handle": identity.handle,
-        "displayName": identity.display_name,
-        "boundDid": identity.bound_did,
-        "createdAt": identity.created_at,
+        "localId": companion.local_id,
+        "handle": companion.handle,
+        "displayName": companion.display_name,
+        "boundDid": companion.bound_did,
+        "createdAt": companion.created_at,
     })
 }
 
-/// The identity view plus its atproto binding status: what is bound, where, and how old
+/// The companion view plus its atproto binding status: what is bound, where, and how old
 /// the session is — never the access token. Pure rendering: the
 /// binding is fetched by the caller, so no store guard is ever held here.
-fn identity_with_atproto(
-    identity: &crate::domain::identity::Identity,
+fn companion_with_atproto(
+    companion: &crate::domain::companion::Companion,
     atproto: Option<crate::application::hub::AtprotoBinding>,
 ) -> Value {
-    let mut value = identity_json(identity);
+    let mut value = companion_json(companion);
     value["atproto"] = match atproto {
         Some(binding) => json!({
             "did": binding.did,
@@ -840,10 +840,10 @@ fn identity_with_atproto(
 }
 
 /// Session STATUS only: whether the enrollment holds one — never the token value.
-fn enrollment_json(entry: &crate::domain::identity::Enrollment, available: bool) -> Value {
+fn enrollment_json(entry: &crate::domain::companion::Enrollment, available: bool) -> Value {
     json!({
         "enrollmentId": entry.enrollment_id,
-        "identityId": entry.local_id,
+        "companionId": entry.local_id,
         "origin": entry.origin,
         "participantRef": entry.participant_ref,
         "did": entry.did,
@@ -888,14 +888,14 @@ fn problem_json(code: &str, message: &str) -> Value {
     blocked_json(code, message)
 }
 
-fn respond_discovery(writer: &mut impl Write, preflight: bool, operator_origin: &str) -> std::io::Result<()> {
+fn respond_discovery(writer: &mut impl Write, preflight: bool, manager_origin: &str) -> std::io::Result<()> {
     let bytes = if preflight {
         Vec::new()
     } else {
         serde_json::to_vec(&json!({
             "product": CONNECTOR_PRODUCT,
             "discoveryVersion": 1,
-            "operatorOrigin": operator_origin,
+            "managerOrigin": manager_origin,
         }))
         .unwrap_or_default()
     };
@@ -949,7 +949,7 @@ mod tests {
 
     #[test]
     fn the_page_opens_no_dialog() {
-        let page = operator_index();
+        let page = manager_index();
         for blocking in ["alert(", "confirm(", "prompt(", "showModal(", "<dialog", "createElement('dialog')"] {
             assert!(!page.contains(blocking), "the companion page must not use {blocking}");
         }
@@ -982,8 +982,8 @@ mod tests {
         assert!(response.contains("Access-Control-Allow-Origin: *"));
         assert!(response.contains("Access-Control-Allow-Private-Network: true"));
         assert!(response.contains("\"product\":\"tangent-space-connector\""));
-        assert!(response.contains("\"operatorOrigin\":\"http://127.0.0.1:5219\""));
-        assert!(!response.contains("identities") && !response.contains("enrollment") && !response.contains("token"));
+        assert!(response.contains("\"managerOrigin\":\"http://127.0.0.1:5219\""));
+        assert!(!response.contains("companions") && !response.contains("enrollment") && !response.contains("token"));
 
         let mut preflight = Vec::new();
         respond_discovery(&mut preflight, true, "http://127.0.0.1:5219").expect("preflight response");

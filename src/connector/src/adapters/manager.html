@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#111016">
 <title>Your companions · Tangent</title>
-<style>/* TANGENT_OPERATOR_STYLE */</style>
+<style>/* TANGENT_MANAGER_STYLE */</style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="masthead"><a class="brand" href="/"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/><path d="M15 4L9 20M8 7l11-1" stroke="currentColor" stroke-width="1.6"/></svg>Tangent <small>Companions</small></a><nav aria-label="Manager navigation"><a href="#companions">Companions</a><a href="#places">Places</a><span class="local-badge">ON YOUR COMPUTER</span></nav></header>
 <main id="main">
-  <section class="hero"><div class="hero-copy"><p class="eyebrow">A place between places</p><h1>Good company.<br><em>New worlds.</em></h1><p>Your companions, their accounts, and the places they return to. A little home base for every conversation.</p><div class="hero-actions"><a class="button primary" href="#create-identity">Add a companion <span aria-hidden="true">&nbsp;＋</span></a><span id="collection-count">Gathering your collection…</span></div></div><div class="hero-art" aria-hidden="true"><span>✦</span><i></i></div></section>
+  <section class="hero"><div class="hero-copy"><p class="eyebrow">A place between places</p><h1>Good company.<br><em>New worlds.</em></h1><p>Your companions, their accounts, and the places they return to. A little home base for every conversation.</p><div class="hero-actions"><a class="button primary" href="#create-companion">Add a companion <span aria-hidden="true">&nbsp;＋</span></a><span id="collection-count">Gathering your collection…</span></div></div><div class="hero-art" aria-hidden="true"><span>✦</span><i></i></div></section>
   <p id="notice" role="status" aria-live="polite"></p>
   <section id="companions" aria-labelledby="companions-title">
-    <div class="section-head"><div><p class="eyebrow">Your circle</p><h2 id="companions-title">Familiar faces.</h2><p class="hint">One identity. Every conversation.</p></div><button type="button" id="refresh-page" class="quiet">Refresh</button></div>
-    <div id="identities" class="companion-grid"><p class="muted">Loading your companions…</p></div>
-    <details class="creation" id="create-identity"><summary>Add a companion</summary><form id="create-form"><div class="create-fields"><label class="field" for="new-handle">Local handle<input type="text" id="new-handle" placeholder="lumen" required minlength="2" maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label class="field" for="new-display">Display name <span class="hint">optional</span><input type="text" id="new-display" placeholder="Lumen" autocomplete="off"></label><button type="submit" class="primary" data-action="create-identity">Create companion</button></div></form><p class="hint">The local handle is how you ask the connector to select this companion. After creating it, sign in with its Atmosphere account. With one companion, the connector selects it automatically; with several, name the one you want.</p></details>
+    <div class="section-head"><div><p class="eyebrow">Your circle</p><h2 id="companions-title">Familiar faces.</h2><p class="hint">One companion. Every conversation.</p></div><button type="button" id="refresh-page" class="quiet">Refresh</button></div>
+    <div id="companion-list" class="companion-grid"><p class="muted">Loading your companions…</p></div>
+    <details class="creation" id="create-companion"><summary>Add a companion</summary><form id="create-form"><div class="create-fields"><label class="field" for="new-handle">Local handle<input type="text" id="new-handle" placeholder="lumen" required minlength="2" maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label class="field" for="new-display">Display name <span class="hint">optional</span><input type="text" id="new-display" placeholder="Lumen" autocomplete="off"></label><button type="submit" class="primary" data-action="create-companion">Create companion</button></div></form><p class="hint">The local handle is how you ask the connector to select this companion. After creating it, sign in with its Atmosphere account. With one companion, the connector selects it automatically; with several, name the one you want.</p></details>
   </section>
   <section id="places" class="destinations" aria-labelledby="destinations-title"><div class="section-head"><div><p class="eyebrow">The collection</p><h2 id="destinations-title">Places they’ve been.</h2><p class="hint">Small worlds. Familiar company. Always a way back.</p></div></div><div id="enrollments"><p class="muted">Loading your places…</p></div></section>
   <details class="activity" open><summary><span>Happening now</span><span class="live" id="feed-state">CONNECTING</span></summary><div id="feed" class="feed" aria-live="polite"><p class="muted">Connection progress will appear here.</p></div></details>
@@ -25,7 +25,7 @@
 </main>
 <script>
 "use strict";
-let identities = [];
+let companions = [];
 let savedEnrollments = [], serverCards = [];
 const drafts = new Map();
 const openEditors = new Set();
@@ -79,15 +79,15 @@ function describeEvent(event) {
   const who = event.initiator ? event.initiator + " — " : "";
   switch (event.kind) {
     case "connect_started": return who + "Connecting to " + event.origin + "…";
-    case "connect_resolved": return who + "Acting as " + event.identity + ".";
-    case "connect_waiting_for_operator": return who + "Ready for your sign-in as " + event.identity + ". The account page has opened.";
-    case "connect_operator_completed": return who + event.identity + " signed in. Finishing the connection…";
+    case "connect_resolved": return who + "Acting as " + event.companion + ".";
+    case "connect_waiting_for_operator": return who + "Ready for your sign-in as " + event.companion + ". The account page has opened.";
+    case "connect_operator_completed": return who + event.companion + " signed in. Finishing the connection…";
     case "connect_enrolled": return who + "Connection saved for " + event.origin + ".";
     case "connect_arrived": return who + "Arrived at " + event.origin + ".";
-    case "connect_failed": return who + "Connect failed at " + event.origin + (event.identity ? " as " + event.identity : "") + ": " + event.code + ".";
+    case "connect_failed": return who + "Connect failed at " + event.origin + (event.companion ? " as " + event.companion : "") + ": " + event.code + ".";
     case "tool_completed": {
-      if (!event.tool || !event.tool.startsWith("operator.")) return null;
-      const names = { "operator.atproto_bind_start": "Account sign-in started", "operator.unbind_atproto": "Account disconnection" };
+      if (!event.tool || !event.tool.startsWith("manager.")) return null;
+      const names = { "manager.atproto_bind_start": "Account sign-in started", "manager.unbind_atproto": "Account disconnection" };
       return names[event.tool] ? names[event.tool] + (event.status === "ok" ? " completed." : ": " + event.status + ".") : null;
     }
     default: return null;
@@ -103,7 +103,7 @@ function startFeed() {
     let event; try { event = JSON.parse(message.data); } catch { return; }
     const line = describeEvent(event);
     if (line) feedLine(line, event.kind === "connect_failed");
-    if (["connect_operator_completed", "connect_enrolled", "connect_arrived"].includes(event.kind) || (event.kind === "tool_completed" && event.tool && event.tool.startsWith("operator.") && event.status === "ok")) refresh();
+    if (["connect_operator_completed", "connect_enrolled", "connect_arrived"].includes(event.kind) || (event.kind === "tool_completed" && event.tool && event.tool.startsWith("manager.") && event.status === "ok")) refresh();
   };
   source.onerror = () => {
     if (complained) return;
@@ -113,81 +113,81 @@ function startFeed() {
   };
 }
 
-// ---------- identities and their Atmosphere handles ----------
-function renderIdentities() {
-  const body = document.getElementById("identities");
+// ---------- companions and their Atmosphere handles ----------
+function renderCompanions() {
+  const body = document.getElementById("companion-list");
   const active = body.contains(document.activeElement) ? document.activeElement : null;
   const focusKey = active && active.dataset.editKey;
   const selection = active && active.selectionStart != null ? [active.selectionStart, active.selectionEnd] : null;
   body.replaceChildren();
-  for (const identity of identities) {
-    const draft = drafts.get(identity.localId) || { handle: identity.handle, displayName: identity.displayName || "" };
+  for (const companion of companions) {
+    const draft = drafts.get(companion.localId) || { handle: companion.handle, displayName: companion.displayName || "" };
     const card = element("article", "companion-card");
-    const hue = Array.from(identity.localId).reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 360;
+    const hue = Array.from(companion.localId).reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 360;
     card.style.setProperty('--card-hue', hue);
     const face = element("div", "card-face");
     const edition = element("div", "card-edition"); edition.append(text("Companion"), text("✦")); face.append(edition);
     const head = element("div", "companion-head");
-    const copy = element("div"); copy.append(element("h3", "", identity.displayName || identity.handle), element("p", "moniker", identity.handle));
-    const avatar = element("span", "avatar", Array.from(identity.displayName || identity.handle || "✦")[0].toUpperCase()); avatar.setAttribute("aria-hidden", "true");
+    const copy = element("div"); copy.append(element("h3", "", companion.displayName || companion.handle), element("p", "moniker", companion.handle));
+    const avatar = element("span", "avatar", Array.from(companion.displayName || companion.handle || "✦")[0].toUpperCase()); avatar.setAttribute("aria-hidden", "true");
     head.append(avatar, copy);
-    face.append(head, element("span", "card-state" + (identity.atproto ? " connected" : ""), identity.atproto ? "Account connected" : "Awaiting an account"));
-    const account = atmosphereCell(identity); card.append(face, account);
-    card.append(element("p", "companion-meta", identity.enrollmentCount === 1 ? "1 saved connection" : identity.enrollmentCount + " saved connections"));
-    const editor = element("details", "edit-panel"); editor.open = openEditors.has(identity.localId);
+    face.append(head, element("span", "card-state" + (companion.atproto ? " connected" : ""), companion.atproto ? "Account connected" : "Awaiting an account"));
+    const account = atmosphereCell(companion); card.append(face, account);
+    card.append(element("p", "companion-meta", companion.enrollmentCount === 1 ? "1 saved connection" : companion.enrollmentCount + " saved connections"));
+    const editor = element("details", "edit-panel"); editor.open = openEditors.has(companion.localId);
     editor.append(element("summary", "", "Companion settings"));
-    editor.addEventListener("toggle", () => { if (editor.isConnected) editor.open ? openEditors.add(identity.localId) : openEditors.delete(identity.localId); });
+    editor.addEventListener("toggle", () => { if (editor.isConnected) editor.open ? openEditors.add(companion.localId) : openEditors.delete(companion.localId); });
     const form = element("form", "edit-form");
     const handle = element("input"); handle.type = "text"; handle.value = draft.handle; handle.required = true; handle.minLength = 2; handle.maxLength = 253;
     const display = element("input"); display.type = "text"; display.value = draft.displayName;
     for (const [input, name, labelText] of [[handle, "handle", "Local handle"], [display, "displayName", "Display name"]]) {
-      input.dataset.editKey = identity.localId + ":" + name;
-      input.addEventListener("input", () => drafts.set(identity.localId, { handle: handle.value, displayName: display.value }));
+      input.dataset.editKey = companion.localId + ":" + name;
+      input.addEventListener("input", () => drafts.set(companion.localId, { handle: handle.value, displayName: display.value }));
       const label = element("label", "field", labelText); label.append(input); form.append(label);
     }
     const save = element("button", "primary", "Save changes"); save.type = "submit";
     form.onsubmit = async (event) => {
       event.preventDefault(); save.disabled = true;
-      const result = await call("/api/identities/" + identity.localId, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: handle.value, displayName: display.value || null }) });
+      const result = await call("/api/companions/" + companion.localId, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: handle.value, displayName: display.value || null }) });
       save.disabled = false;
-      if (result.status === "ok") { drafts.delete(identity.localId); note("Companion saved."); await refresh(); } else note(problem(result), true);
+      if (result.status === "ok") { drafts.delete(companion.localId); note("Companion saved."); await refresh(); } else note(problem(result), true);
     };
     const del = element("button", "danger", "Remove companion"); del.type = "button";
-    const consequence = identity.enrollmentCount > 0 ? " This also forgets its " + identity.enrollmentCount + " saved Tangent connection(s)." : "";
-    confirmInPlace(del, "Remove " + (identity.displayName || identity.handle) + " from this connector?" + consequence + " Its Atmosphere account and posts are not deleted.", "Remove", async () => {
-      const cascade = identity.enrollmentCount > 0;
-      const result = await call("/api/identities/" + identity.localId + "/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cascade }) });
-      if (result.status === "ok") { drafts.delete(identity.localId); openEditors.delete(identity.localId); note("Companion removed from this connector."); await refresh(); } else note(problem(result), true);
+    const consequence = companion.enrollmentCount > 0 ? " This also forgets its " + companion.enrollmentCount + " saved Tangent connection(s)." : "";
+    confirmInPlace(del, "Remove " + (companion.displayName || companion.handle) + " from this connector?" + consequence + " Its Atmosphere account and posts are not deleted.", "Remove", async () => {
+      const cascade = companion.enrollmentCount > 0;
+      const result = await call("/api/companions/" + companion.localId + "/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cascade }) });
+      if (result.status === "ok") { drafts.delete(companion.localId); openEditors.delete(companion.localId); note("Companion removed from this connector."); await refresh(); } else note(problem(result), true);
     });
-    const actions = element("div", "actions"); actions.append(save); if (account.accountAction) actions.append(account.accountAction); actions.append(del); form.append(actions); editor.append(form, element("p", "technical", "Local ID · " + identity.localId));
+    const actions = element("div", "actions"); actions.append(save); if (account.accountAction) actions.append(account.accountAction); actions.append(del); form.append(actions); editor.append(form, element("p", "technical", "Local ID · " + companion.localId));
     card.append(editor); body.append(card);
   }
-  if (!identities.length) {
-    const empty = element("div", "empty"); empty.append(element("strong", "", "Every journey starts with a hello."), text("Give your first companion a name below. Then connect their Atmosphere account, and they’ll have an identity to bring along.")); body.append(empty);
-    document.getElementById("create-identity").open = true;
+  if (!companions.length) {
+    const empty = element("div", "empty"); empty.append(element("strong", "", "Every journey starts with a hello."), text("Give your first companion a name below. Then connect their Atmosphere account, and they’ll have an companion to bring along.")); body.append(empty);
+    document.getElementById("create-companion").open = true;
   }
   if (focusKey) {
     const replacement = Array.from(body.querySelectorAll("input")).find(input => input.dataset.editKey === focusKey);
     if (replacement) { replacement.focus({ preventScroll: true }); if (selection) replacement.setSelectionRange(...selection); }
   }
 }
-function atmosphereCell(identity) {
+function atmosphereCell(companion) {
   const cell = element("div", "account");
   const label = element("div", "account-label");
-  if (!identity.atproto) {
+  if (!companion.atproto) {
     label.append(text("One more hello."), element("p", "", "Connect their Atmosphere account.")); cell.append(label);
     const signIn = document.createElement("a");
     signIn.textContent = "Sign in"; signIn.className = "button primary";
-    signIn.href = "/bind/" + identity.localId + "/atproto";
+    signIn.href = "/bind/" + companion.localId + "/atproto";
     cell.append(signIn);
     return cell;
   }
-  label.append(text(identity.atproto.handle ? "@" + identity.atproto.handle.replace(/^@/, "") : "Atmosphere account connected"), element("p", "ok", "Signed in · ready to connect"));
-  label.title = identity.atproto.did;
+  label.append(text(companion.atproto.handle ? "@" + companion.atproto.handle.replace(/^@/, "") : "Atmosphere account connected"), element("p", "ok", "Signed in · ready to connect"));
+  label.title = companion.atproto.did;
   cell.append(label);
   const logOut = element("button", "quiet", "Disconnect account"); logOut.type = "button";
   confirmInPlace(logOut, "Disconnect this companion’s Atmosphere account? Its saved Tangent connections will still work. You can forget those separately below.", "Disconnect", async () => {
-    const result = await call("/api/identities/" + identity.localId + "/atproto/unbind", { method: "POST", body: "{}" });
+    const result = await call("/api/companions/" + companion.localId + "/atproto/unbind", { method: "POST", body: "{}" });
     result.status === "ok" ? note("Atmosphere account disconnected.") : note(problem(result), true); await refresh();
   });
   cell.accountAction = logOut;
@@ -197,13 +197,13 @@ function atmosphereCell(identity) {
 function renderEnrollments(enrollments) {
   savedEnrollments = enrollments;
   const body = document.getElementById("enrollments"); body.replaceChildren();
-  const byId = new Map(identities.map(identity => [identity.localId, identity.displayName || identity.handle]));
+  const byId = new Map(companions.map(companion => [companion.localId, companion.displayName || companion.handle]));
   const places = new Map();
   for (const entry of enrollments) {
     if (!places.has(entry.origin)) places.set(entry.origin, []);
     places.get(entry.origin).push(entry);
   }
-  document.getElementById("collection-count").textContent = identities.length + (identities.length === 1 ? " companion" : " companions") + " · " + places.size + (places.size === 1 ? " place" : " places");
+  document.getElementById("collection-count").textContent = companions.length + (companions.length === 1 ? " companion" : " companions") + " · " + places.size + (places.size === 1 ? " place" : " places");
   for (const [origin, entries] of places) {
     const profile = serverCards.find(server => server.origin === origin) || {};
     let address; try { address = new URL(origin); } catch { continue; }
@@ -226,7 +226,7 @@ function renderEnrollments(enrollments) {
     const copy = element("div", "place-body");
     if (profile.description && profile.description !== profile.byline) copy.append(element("p", "place-description", profile.description));
     if (profile.motd) { const motd = element("div", "place-motd"); motd.append(element("span", "eyebrow", "On the board"), element("p", "", profile.motd)); copy.append(motd); }
-    copy.append(element("p", "place-visitors", entries.map(entry => byId.get(entry.identityId) || entry.displayName || entry.handle || "Companion").join(" · ")));
+    copy.append(element("p", "place-visitors", entries.map(entry => byId.get(entry.companionId) || entry.displayName || entry.handle || "Companion").join(" · ")));
     const actions = element("div", "destination-actions");
     const visit = element("a", "button", "Visit this place ↗"); visit.href = address.origin; visit.target = "_blank"; visit.rel = "noopener noreferrer"; actions.append(visit);
     const saved = entries.filter(entry => ["stored", "available"].includes(entry.sessionStatus)).length;
@@ -235,7 +235,7 @@ function renderEnrollments(enrollments) {
     if (profile.refreshedAt) details.append(element("p", "", "Server details saved · " + new Date(profile.refreshedAt).toLocaleDateString()));
     else details.append(element("p", "", "This server hasn’t shared its card yet. Its address keeps your place in the collection."));
     for (const enrollment of entries) {
-      const name = byId.get(enrollment.identityId) || enrollment.displayName || enrollment.handle || "Companion";
+      const name = byId.get(enrollment.companionId) || enrollment.displayName || enrollment.handle || "Companion";
       const connection = element("div", "saved-connection"); connection.append(element("p", "", name + " · " + (enrollment.autoCheck ? "Checks for updates" : "Checks when asked")));
       const forget = element("button", "quiet danger", "Forget connection for " + name); forget.type = "button";
       confirmInPlace(forget, "Forget " + name + "’s connection to " + (profile.name || origin) + "? It will need to connect again to return. Existing posts are not deleted.", "Forget", async () => {
@@ -261,19 +261,19 @@ async function refresh() {
   if (refresh.busy) { refresh.again = true; return; }
   refresh.busy = true;
   try {
-    const identitiesResult = await call("/api/identities");
-    if (identitiesResult.status !== "ok") {
-      note(problem(identitiesResult), true);
-      if (!refresh.loaded) document.getElementById("identities").replaceChildren(element("p", "empty", "Your companions couldn’t be loaded. Start the connector, then choose Refresh."));
+    const companionsResult = await call("/api/companions");
+    if (companionsResult.status !== "ok") {
+      note(problem(companionsResult), true);
+      if (!refresh.loaded) document.getElementById("companion-list").replaceChildren(element("p", "empty", "Your companions couldn’t be loaded. Start the connector, then choose Refresh."));
       return;
     }
     refresh.loaded = true;
-    identities = identitiesResult.identities || [];
-    renderIdentities();
+    companions = companionsResult.companions || [];
+    renderCompanions();
     let enrollments = [];
     let connectionsLoaded = true;
-    for (const identity of identities) {
-      const result = await call("/api/identities/" + identity.localId + "/enrollments");
+    for (const companion of companions) {
+      const result = await call("/api/companions/" + companion.localId + "/enrollments");
       if (result.status === "ok") enrollments = enrollments.concat(result.enrollments || []);
       else { connectionsLoaded = false; note(problem(result), true); }
     }
@@ -292,15 +292,15 @@ async function refresh() {
   }
 }
 
-// ---------- the identity-creation anchor ----------
-// #create-identity focuses identity creation. Sign-in anchors are /bind pages now —
+// ---------- the companion-creation anchor ----------
+// #create-companion focuses companion creation. Sign-in anchors are /bind pages now —
 // separate routes the connector serves, opened directly by a waiting Connect.
 function routeHash() {
   const hash = location.hash.slice(1);
-  if (hash === "create-identity") {
+  if (hash === "create-companion") {
     const input = document.getElementById("new-handle");
     if (!input) return;
-    document.getElementById("create-identity").open = true;
+    document.getElementById("create-companion").open = true;
     input.scrollIntoView({ block: "center" });
     input.focus();
   }
@@ -313,11 +313,11 @@ document.getElementById("create-form").addEventListener("submit", async (event) 
   const post = (path, payload) => call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   const handle = document.getElementById("new-handle").value.trim();
   const display = document.getElementById("new-display").value.trim();
-  const result = await post("/api/identities", { handle, displayName: display || null });
+  const result = await post("/api/companions", { handle, displayName: display || null });
   if (result.status === "ok") {
     note("Companion created. Sign in with its account to get started.");
     document.getElementById("new-handle").value = ""; document.getElementById("new-display").value = "";
-    document.getElementById("create-identity").open = false;
+    document.getElementById("create-companion").open = false;
   } else note(problem(result), true);
   button.disabled = false;
   await refresh();

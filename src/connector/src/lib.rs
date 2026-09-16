@@ -16,7 +16,7 @@ use crate::adapters::store::StateStore;
 use crate::application::bus::EventBus;
 use crate::application::hub::ConnectorHub;
 use crate::application::ports::ExperiencePort;
-use crate::domain::identity::CallerId;
+use crate::domain::companion::CallerId;
 
 /// Where durable state lives: `$TANGENT_CONNECTOR_HOME` or `~/.tangent-connector`.
 pub fn data_directory() -> PathBuf {

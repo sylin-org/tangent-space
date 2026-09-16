@@ -1,5 +1,5 @@
 //! The atproto OAuth client (the bind flow's outbound spoke): the default
-//! authorization server (no interstitial — the owner correction), identity resolution
+//! authorization server (no interstitial), identity resolution
 //! (handle → DID → DID document → PDS → AS) for the self-hosted `?handle=` escape
 //! hatch, a Pushed Authorization Request with PKCE (S256), the code exchange and the
 //! silent refresh — all under the local-client profile the atproto OAuth spec defines
@@ -48,7 +48,7 @@ pub const SCOPE: &str = "atproto rpc:local.tangent.mcp.exchange?aud=*";
 pub fn bind_client_id() -> String {
     format!("http://localhost?scope={}", percent_encode(SCOPE))
 }
-/// The default authorization server (owner correction): public Bluesky accounts live
+/// The default authorization server: public Bluesky accounts live
 /// here; `TANGENT_CONNECTOR_AUTHSERVER` overrides it for self-hosted worlds. The
 /// provider's own UI handles account selection and sign-in — the connector never
 /// duplicates it.
@@ -248,7 +248,7 @@ impl AtprotoOauth {
         client_id: &str,
     ) -> Result<OAuthTokens, String> {
         if refresh_token.is_empty() || refresh_token.len() > TOKEN_LIMIT {
-            return Err("invalid_refresh_token: the stored refresh token is unusable; re-bind the identity".to_string());
+            return Err("invalid_refresh_token: the stored refresh token is unusable; re-bind the companion".to_string());
         }
         let metadata = self.authorization_server_metadata(authserver)?;
         let key = decode_key(dpop_key)?;
@@ -720,7 +720,7 @@ fn encode_key(key: &SigningKey) -> String {
 }
 
 fn decode_key(encoded: &str) -> Result<SigningKey, String> {
-    let refused = || "invalid_dpop_key: the stored DPoP key is unusable; re-bind the identity".to_string();
+    let refused = || "invalid_dpop_key: the stored DPoP key is unusable; re-bind the companion".to_string();
     let bytes = base64url_decode(encoded).ok_or_else(refused)?;
     let field: [u8; 32] = bytes.try_into().map_err(|_| refused())?;
     SigningKey::from_bytes(&field.into()).map_err(|_| refused())

@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 use tangent_connector::application::hub::ConnectorHub;
-use tangent_connector::domain::identity::{AccountSession, CallerId, Enrollment};
+use tangent_connector::domain::companion::{AccountSession, CallerId, Enrollment};
 
 #[allow(dead_code)]
 pub const LUMEN_CREDENTIAL: &str = "ts_lumen_test_credential_000000000000000000";
@@ -892,20 +892,20 @@ fn respond(
     }
 }
 
-/// The W2-contract arrival identity segment: `participantRef` is the server's GUIDv7
-/// participant id, `did` is nullable, and the identity collection is ordered best-first.
+/// The W2-contract arrival companion segment: `participantRef` is the server's GUIDv7
+/// participant id, `did` is nullable, and the companion collection is ordered best-first.
 fn envelope(operation: &str, status: &str, data: Value) -> Value {
     json!({
         "experienceVersion": "1.0",
         "operation": operation,
         "status": status,
         "snapshot": { "revision": "att:41", "asOf": "2026-09-10T20:00:00Z", "coverage": "current" },
-        "identity": {
+        "companion": {
             "participantRef": "prt_7b3e10a2c4d5",
             "did": "did:plc:lumen",
             "displayName": "Lumen",
             "handle": "lumen.example.test",
-            "identities": [
+            "companions": [
                 { "kind": "atproto", "value": "did:plc:lumen" },
                 { "kind": "internal", "value": "tangent:local:prt_7b3e10a2c4d5" }
             ]
@@ -921,7 +921,7 @@ fn envelope(operation: &str, status: &str, data: Value) -> Value {
 }
 
 /// The enrollment endpoint's participant view for one client localId. The connector-client
-/// identity echoes the connector's local id, scoped to this server relationship.
+/// companion echoes the connector's local id, scoped to this server relationship.
 fn mention_item() -> Value {
     json!({
         "ref": "att:lounge:m40",
@@ -1401,26 +1401,26 @@ fn percent_decode(value: &str) -> String {
     String::from_utf8_lossy(&out).to_string()
 }
 
-/// Seeds the state the OAuth bind leaves behind, without driving the flow: an identity
+/// Seeds the state the OAuth bind leaves behind, without driving the flow: an companion
 /// whose atproto account is bound. Tests that are not *about* binding start here, so
 /// only [`bind_oauth_journey`] exercises the handshake itself.
 #[allow(dead_code)]
-pub fn seed_bound_identity(hub: &ConnectorHub, handle: &str, did: &str, pds: &str) -> String {
-    let identity = hub
-        .create_identity(handle.split('.').next().unwrap_or("user"), None)
-        .expect("identity");
-    seed_atproto_session(hub, &identity.local_id, handle, did, pds);
-    identity.local_id
+pub fn seed_bound_companion(hub: &ConnectorHub, handle: &str, did: &str, pds: &str) -> String {
+    let companion = hub
+        .create_companion(handle.split('.').next().unwrap_or("user"), None)
+        .expect("companion");
+    seed_atproto_session(hub, &companion.local_id, handle, did, pds);
+    companion.local_id
 }
 
-/// Seeds (or replaces) one identity's bound atproto session — the write tail of the
+/// Seeds (or replaces) one companion's bound atproto session — the write tail of the
 /// bind, as the OAuth flow would have left it.
 #[allow(dead_code)]
 pub fn seed_atproto_session(hub: &ConnectorHub, local_id: &str, handle: &str, did: &str, pds: &str) {
     let mut store = hub.store().lock().expect("state lock");
-    let mut identity = store.identity(local_id).expect("identity exists");
-    identity.bound_did = Some(did.to_string());
-    store.upsert_identity(identity).expect("bind the identity");
+    let mut companion = store.companion(local_id).expect("companion exists");
+    companion.bound_did = Some(did.to_string());
+    store.upsert_companion(companion).expect("bind the companion");
     store.set_atproto_session(
         local_id,
         AccountSession {
@@ -1438,7 +1438,7 @@ pub fn seed_atproto_session(hub: &ConnectorHub, local_id: &str, handle: &str, di
     store.save().expect("save seeded binding");
 }
 
-/// Seeds a state directory with one enrolled identity and its Tangent session — the
+/// Seeds a state directory with one enrolled companion and its Tangent session — the
 /// state a bound enrollment leaves behind — for tests that then spawn the binary over
 /// that directory instead of driving the handshake in process.
 #[allow(dead_code)]
@@ -1448,13 +1448,13 @@ pub fn seed_enrolled_state(home: &std::path::Path, handle: &str, origin: &str, t
         Arc::new(tangent_connector::adapters::experience::UreqExperience::new());
     let store = tangent_connector::adapters::store::StateStore::open(home).expect("state store");
     let hub = ConnectorHub::new(port, store, events, CallerId("cli".into()));
-    let identity = hub.create_identity(handle, None).expect("identity");
+    let companion = hub.create_companion(handle, None).expect("companion");
     let enrollment_id = format!("cmp_seeded_{handle}");
     {
         let mut store = hub.store().lock().expect("state lock");
-        store.upsert_companion(Enrollment {
+        store.upsert_enrollment(Enrollment {
             enrollment_id: enrollment_id.clone(),
-            local_id: identity.local_id.clone(),
+            local_id: companion.local_id.clone(),
             name: handle.to_string(),
             origin: origin.to_string(),
             participant_ref: format!("prt_seeded_{handle}"),

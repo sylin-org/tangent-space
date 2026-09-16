@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::attention::{AttentionRecord, AttentionState, ATTENTION_RECORD_LIMIT};
-use crate::domain::identity::{AccountSession, CallerId, Enrollment, Identity, Context};
+use crate::domain::companion::{AccountSession, CallerId, Enrollment, Companion, Context};
 use crate::domain::policy::AttentionPolicy;
 use crate::domain::writes::Receipt;
 
@@ -18,7 +18,7 @@ const STATE_FILE: &str = "state.json";
 const JOURNAL_FILE: &str = "pending-writes.jsonl";
 const JOURNAL_LINE_LIMIT: u64 = 256 * 1024;
 
-/// Public presentation only. The enrolled origin remains the routing identity.
+/// Public presentation only. The enrolled origin remains the routing companion.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerCard {
@@ -35,26 +35,26 @@ pub struct ServerCard {
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct StateFile {
     #[serde(default)]
-    identities: Vec<Identity>,
+    companions: Vec<Companion>,
     #[serde(default)]
     server_cards: HashMap<String, ServerCard>,
-    /// The loopback operator page URL (token included) of the long-running process
+    /// The loopback companion manager URL (token included) of the long-running process
     /// currently hosting it, so a Connect in ANY process can pop that page at the
-    /// sign-in anchor. Cookie-jar class by design (owner decision): the page token is
+    /// sign-in anchor. Cookie-jar class by design: the page token is
     /// user-profile state, the same exposure class as the sessions above; cleared on
     /// clean shutdown and re-checked for reachability before use.
     #[serde(default)]
-    operator_page_url: Option<String>,
+    manager_page_url: Option<String>,
     #[serde(default)]
-    companions: Vec<Enrollment>,
+    enrollments: Vec<Enrollment>,
     /// Bearer sessions per enrollment, keyed by companion id. Sessions live in
-    /// user-profile state BY DESIGN (owner decision): a `ts_…` token is a
+    /// user-profile state by design: a `ts_…` token is a
     /// cookie-equivalent session id, same exposure class as a browser cookie jar —
-    /// not a vault secret. Two enrollments of one identity hold two distinct entries.
+    /// not a vault secret. Two enrollments of one companion hold two distinct entries.
     #[serde(default)]
     sessions: HashMap<String, String>,
-    /// Atproto sessions per identity, keyed by the identity's local id. Same cookie-jar
-    /// posture as `sessions` (owner decision): the PDS `accessJwt` is a session token,
+    /// Atproto sessions per companion, keyed by the companion's local id. Same cookie-jar
+    /// posture as `sessions`: the PDS `accessJwt` is a session token,
     /// not a vault secret.
     #[serde(default)]
     atproto_sessions: HashMap<String, AccountSession>,
@@ -129,20 +129,20 @@ impl StateStore {
         self.state.sessions.contains_key(enrollment_id)
     }
 
-    // ----- atproto sessions (per identity) -----
+    // ----- atproto sessions (per companion) -----
 
-    /// The atproto session one identity holds. The token is handed only to the port layer;
+    /// The atproto session one companion holds. The token is handed only to the port layer;
     /// it never renders, logs or journals.
     pub fn atproto_session(&self, local_id: &str) -> Option<AccountSession> {
         self.state.atproto_sessions.get(local_id).cloned()
     }
 
-    /// Stores (or replaces — re-bind) the identity's atproto session.
+    /// Stores (or replaces — re-bind) the companion's atproto session.
     pub fn set_atproto_session(&mut self, local_id: &str, session: AccountSession) {
         self.state.atproto_sessions.insert(local_id.to_string(), session);
     }
 
-    /// Clears the identity's atproto session (unbind / identity cascade).
+    /// Clears the companion's atproto session (unbind / companion cascade).
     pub fn remove_atproto_session(&mut self, local_id: &str) {
         self.state.atproto_sessions.remove(local_id);
     }
@@ -155,110 +155,110 @@ impl StateStore {
         self.state.policy = Some(policy);
     }
 
-    // ----- identities -----
+    // ----- companions -----
 
-    pub fn identities(&self) -> &[Identity] {
-        &self.state.identities
+    pub fn companions(&self) -> &[Companion] {
+        &self.state.companions
     }
 
-    pub fn identity(&self, local_id: &str) -> Option<Identity> {
-        self.state.identities.iter().find(|identity| identity.local_id == local_id).cloned()
+    pub fn companion(&self, local_id: &str) -> Option<Companion> {
+        self.state.companions.iter().find(|companion| companion.local_id == local_id).cloned()
     }
 
     /// Exact handle lookup, case-insensitive; `@`-prefixed input is accepted.
-    pub fn identity_by_handle(&self, handle: &str) -> Option<Identity> {
+    pub fn companion_by_handle(&self, handle: &str) -> Option<Companion> {
         let supplied = handle.trim().strip_prefix('@').unwrap_or(handle.trim());
         self.state
-            .identities
+            .companions
             .iter()
-            .find(|identity| identity.handle.eq_ignore_ascii_case(supplied))
+            .find(|companion| companion.handle.eq_ignore_ascii_case(supplied))
             .cloned()
     }
 
-    pub fn identity_by_moniker(&self, moniker: &str) -> Option<Identity> {
-        if let Some(identity) = self.identity_by_handle(moniker) {
-            return Some(identity);
+    pub fn companion_by_moniker(&self, moniker: &str) -> Option<Companion> {
+        if let Some(companion) = self.companion_by_handle(moniker) {
+            return Some(companion);
         }
         let trimmed = moniker.trim();
-        self.state.identities.iter().find(|identity| identity.local_id == trimmed).cloned()
+        self.state.companions.iter().find(|companion| companion.local_id == trimmed).cloned()
     }
 
-    /// Inserts or updates one identity. The caller enforces handle validity; this side
-    /// enforces connector-wide handle uniqueness (case-insensitive, excluding the identity
+    /// Inserts or updates one companion. The caller enforces handle validity; this side
+    /// enforces connector-wide handle uniqueness (case-insensitive, excluding the companion
     /// being updated).
-    pub fn upsert_identity(&mut self, identity: Identity) -> Result<(), String> {
-        if let Some(clash) = self.state.identities.iter().find(|existing| {
-            existing.local_id != identity.local_id && existing.handle.eq_ignore_ascii_case(&identity.handle)
+    pub fn upsert_companion(&mut self, companion: Companion) -> Result<(), String> {
+        if let Some(clash) = self.state.companions.iter().find(|existing| {
+            existing.local_id != companion.local_id && existing.handle.eq_ignore_ascii_case(&companion.handle)
         }) {
-            return Err(format!("handle '{}' is already used by identity '{}'", identity.handle, clash.handle));
+            return Err(format!("handle '{}' is already used by companion '{}'", companion.handle, clash.handle));
         }
-        match self.state.identities.iter_mut().find(|existing| existing.local_id == identity.local_id) {
-            Some(existing) => *existing = identity,
-            None => self.state.identities.push(identity),
+        match self.state.companions.iter_mut().find(|existing| existing.local_id == companion.local_id) {
+            Some(existing) => *existing = companion,
+            None => self.state.companions.push(companion),
         }
         Ok(())
     }
 
-    /// Removes one identity. Enrollments must be gone first (the hub cascades them);
+    /// Removes one companion. Enrollments must be gone first (the hub cascades them);
     /// its atproto session goes too.
-    pub fn remove_identity(&mut self, local_id: &str) {
-        self.state.identities.retain(|identity| identity.local_id != local_id);
+    pub fn remove_companion(&mut self, local_id: &str) {
+        self.state.companions.retain(|companion| companion.local_id != local_id);
         self.state.atproto_sessions.remove(local_id);
     }
 
-    // ----- the running operator page (cross-process discovery) -----
+    // ----- the running companion manager (cross-process discovery) -----
 
-    /// The operator page URL a long-running process recorded (token included), if any.
-    pub fn operator_page_url(&self) -> Option<String> {
-        self.state.operator_page_url.clone()
+    /// The companion manager URL a long-running process recorded (token included), if any.
+    pub fn manager_page_url(&self) -> Option<String> {
+        self.state.manager_page_url.clone()
     }
 
-    /// Records the operator page URL this process hosts. Callers save afterwards.
-    pub fn set_operator_page_url(&mut self, url: &str) {
-        self.state.operator_page_url = Some(url.to_string());
+    /// Records the companion manager URL this process hosts. Callers save afterwards.
+    pub fn set_manager_page_url(&mut self, url: &str) {
+        self.state.manager_page_url = Some(url.to_string());
     }
 
-    /// Clears the recorded operator page URL (clean shutdown). Callers save afterwards.
-    pub fn clear_operator_page_url(&mut self) {
-        self.state.operator_page_url = None;
+    /// Clears the recorded companion manager URL (clean shutdown). Callers save afterwards.
+    pub fn clear_manager_page_url(&mut self) {
+        self.state.manager_page_url = None;
     }
 
-    // ----- companions (enrollments) -----
+    // ----- enrollments -----
 
-    pub fn companions(&self) -> &[Enrollment] {
-        &self.state.companions
+    pub fn enrollments(&self) -> &[Enrollment] {
+        &self.state.enrollments
     }
 
-    pub fn companion(&self, enrollment_id: &str) -> Option<Enrollment> {
-        self.state.companions.iter().find(|entry| entry.enrollment_id == enrollment_id).cloned()
+    pub fn enrollment(&self, enrollment_id: &str) -> Option<Enrollment> {
+        self.state.enrollments.iter().find(|entry| entry.enrollment_id == enrollment_id).cloned()
     }
 
-    pub fn find_companion(&self, moniker: &str) -> Option<Enrollment> {
-        self.state.companions.iter().find(|entry| entry.matches(moniker)).cloned()
+    pub fn find_enrollment(&self, moniker: &str) -> Option<Enrollment> {
+        self.state.enrollments.iter().find(|entry| entry.matches(moniker)).cloned()
     }
 
-    pub fn companions_of(&self, local_id: &str) -> Vec<Enrollment> {
-        self.state.companions.iter().filter(|entry| entry.local_id == local_id).cloned().collect()
+    pub fn enrollments_of(&self, local_id: &str) -> Vec<Enrollment> {
+        self.state.enrollments.iter().filter(|entry| entry.local_id == local_id).cloned().collect()
     }
 
-    /// The enrollment of one identity at one canonical origin.
+    /// The enrollment of one companion at one canonical origin.
     pub fn enrollment_at(&self, local_id: &str, origin: &str) -> Option<Enrollment> {
         self.state
-            .companions
+            .enrollments
             .iter()
             .find(|entry| entry.local_id == local_id && entry.origin == origin)
             .cloned()
     }
 
-    pub fn upsert_companion(&mut self, entry: Enrollment) {
-        match self.state.companions.iter_mut().find(|existing| existing.enrollment_id == entry.enrollment_id) {
+    pub fn upsert_enrollment(&mut self, entry: Enrollment) {
+        match self.state.enrollments.iter_mut().find(|existing| existing.enrollment_id == entry.enrollment_id) {
             Some(existing) => *existing = entry,
-            None => self.state.companions.push(entry),
+            None => self.state.enrollments.push(entry),
         }
     }
 
-    pub fn remove_companion(&mut self, enrollment_id: &str) {
-        remove_companion_state(&mut self.state, enrollment_id);
+    pub fn remove_enrollment(&mut self, enrollment_id: &str) {
+        remove_enrollment_state(&mut self.state, enrollment_id);
     }
 
     // ----- contexts -----
@@ -321,7 +321,7 @@ impl StateStore {
         self.state.attention.get(enrollment_id).cloned().unwrap_or_default()
     }
 
-    /// Upserts digest occurrences, coalescing by stable item identity. Returns how many
+    /// Upserts digest occurrences, coalescing by stable item companion. Returns how many
     /// occurrences matched an existing record (coalesced) and how many were genuinely new.
     pub fn upsert_attention(
         &mut self,
@@ -494,8 +494,8 @@ impl StateStore {
 
 /// Cascades every piece of derived state that belongs to one enrollment — including its
 /// session.
-fn remove_companion_state(state: &mut StateFile, enrollment_id: &str) {
-    state.companions.retain(|entry| entry.enrollment_id != enrollment_id);
+fn remove_enrollment_state(state: &mut StateFile, enrollment_id: &str) {
+    state.enrollments.retain(|entry| entry.enrollment_id != enrollment_id);
     state.sessions.remove(enrollment_id);
     state.attention.remove(enrollment_id);
     state.checkpoints.remove(enrollment_id);
@@ -520,7 +520,7 @@ pub fn short_uuid() -> String {
     uuid::Uuid::new_v4().simple().to_string()[..8].to_string()
 }
 
-/// Connector-minted identity id: GUIDv7, 32 hex characters. Never formatted as a DID.
+/// Connector-minted companion id: GUIDv7, 32 hex characters. Never formatted as a DID.
 pub fn new_local_id() -> String {
     uuid::Uuid::now_v7().simple().to_string()
 }

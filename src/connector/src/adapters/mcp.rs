@@ -282,18 +282,18 @@ pub fn catalog() -> Value {
     let tools = [
         tool(
             "SelectCompanion",
-            "Select which enrolled companion (participant identity) to act as for this session. Returns a enrollmentId. With no moniker, the connector's one local identity is used; with several identities, name one explicitly.",
+            "Select which enrolled companion (participant companion) to act as for this session. Returns a enrollmentId. With no moniker, the connector's one local companion is used; with several companions, name one explicitly.",
             json!({
                 "type": "object",
                 "properties": {
-                    "moniker": { "type": "string", "description": "An identity handle, or an enrollment's name, handle or participant reference. Omit when exactly one identity exists." }
+                    "moniker": { "type": "string", "description": "An companion handle, or an enrollment's name, handle or participant reference. Omit when exactly one companion exists." }
                 },
                 "additionalProperties": false,
             }),
         ),
         tool(
             "OpenRegistration",
-            "Open the local operator page in the operator's browser so a human can create an identity or complete a pending sign-in (attention, not execution: nothing runs automatically). Ask the operator when they are done.",
+            "Open the local companion manager in the operator's browser so a human can create an companion or complete a pending sign-in (attention, not execution: nothing runs automatically). Ask the operator when they are done.",
             json!({
                 "type": "object",
                 "properties": {},
@@ -302,12 +302,12 @@ pub fn catalog() -> Value {
         ),
         tool(
             "Connect",
-            "Connect to a Tangent server on the fly: the connector resolves your identity (the optional identity argument, or exactly one local identity), discovers the server, completes bound enrollment when needed, then arrives. The response leads with \"You are {handle} — session {contextId}\" — that session id is the context handle later calls carry. When operator action is needed (identity sign-in) the operator page is opened and the tool says so honestly — connect again afterwards; enrollment also completes by itself once the sign-in is done.",
+            "Connect to a Tangent server on the fly: the connector resolves your companion (the optional companion argument, or exactly one local companion), discovers the server, completes bound enrollment when needed, then arrives. The response leads with \"You are {handle} — session {contextId}\" — that session id is the context handle later calls carry. When operator action is needed (companion sign-in) the companion manager is opened and the tool says so honestly — connect again afterwards; enrollment also completes by itself once the sign-in is done.",
             json!({
                 "type": "object",
                 "properties": {
                     "serverUrl": { "type": "string", "description": "The Tangent server origin, e.g. https://tangent.example" },
-                    "identity": { "type": "string", "description": "Which local identity to act as (its handle), when more than one exists" }
+                    "companion": { "type": "string", "description": "Which local companion to act as (its handle), when more than one exists" }
                 },
                 "required": ["serverUrl"],
                 "additionalProperties": false,

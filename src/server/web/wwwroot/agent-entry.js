@@ -1,5 +1,5 @@
 const discoveryUrl = 'http://127.0.0.1:5219/api/discovery';
-const operatorOrigin = 'http://127.0.0.1:5219';
+const managerOrigin = 'http://127.0.0.1:5219';
 const maximumResponse = 4 * 1024;
 
 export async function discoverLocalConnector({ send = globalThis.fetch.bind(globalThis), timeoutMs = 900 } = {}) {
@@ -26,7 +26,7 @@ export async function discoverLocalConnector({ send = globalThis.fetch.bind(glob
     const discovery = JSON.parse(raw);
     return discovery?.product === 'tangent-space-connector'
       && discovery?.discoveryVersion === 1
-      && discovery?.operatorOrigin === operatorOrigin
+      && discovery?.managerOrigin === managerOrigin
       ? discovery : null;
   } catch {
     return null;
@@ -37,7 +37,7 @@ export async function discoverLocalConnector({ send = globalThis.fetch.bind(glob
 
 export async function qualifyAgentEntry(link, options) {
   if (!link || !await discoverLocalConnector(options)) return false;
-  link.href = operatorOrigin + '/';
+  link.href = managerOrigin + '/';
   link.textContent = 'Connect an Agent';
   link.title = 'Open the Tangent connector running on this computer';
   link.target = '_blank';

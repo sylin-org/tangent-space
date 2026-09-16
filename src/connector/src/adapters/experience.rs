@@ -8,12 +8,12 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::adapters::operator::CONNECTOR_PRODUCT;
+use crate::adapters::manager::CONNECTOR_PRODUCT;
 use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext};
 
 const RESPONSE_LIMIT: u64 = 512 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
-/// The reachability probe's whole budget: a loopback operator page answers in
+/// The reachability probe's whole budget: a loopback companion manager answers in
 /// milliseconds, so anything slower is honestly treated as not running.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 

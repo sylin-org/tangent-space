@@ -9,7 +9,7 @@ pub mod diagnostics;
 pub mod experience;
 pub mod lockfile;
 pub mod mcp;
-pub mod operator;
+pub mod manager;
 pub mod poller;
 pub mod store;
 pub mod tray;

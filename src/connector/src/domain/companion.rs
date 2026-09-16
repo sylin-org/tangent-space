@@ -1,14 +1,14 @@
-//! Local identity, enrollment and context bindings. Handles are routing state, never
-//! credentials: an identity is a locally minted participant persona, an enrollment is the
-//! credential + server binding for one identity at one origin, and a context binds one
+//! Local companion, enrollment and context bindings. Handles are routing state, never
+//! credentials: an companion is a locally minted participant persona, an enrollment is the
+//! credential + server binding for one companion at one origin, and a context binds one
 //! enrollment to one caller for one canonical origin.
 
 use serde::{Deserialize, Serialize};
 
-/// The local caller identity. stdio v1 admits exactly one operator-approved caller per
+/// The local caller companion. stdio v1 admits exactly one operator-approved caller per
 /// process; the field exists so a later daemon does not silently merge principals. For the
 /// MCP intake the caller is `mcp:{clientInfo.name}`; the CLI and operator intakes are
-/// `cli` and `operator`. Attribution and feed labeling only — identity resolution is the
+/// `cli` and `operator`. Attribution and feed labeling only — companion resolution is the
 /// same behavior for every caller.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallerId(pub String);
@@ -22,11 +22,11 @@ impl CallerId {
 }
 
 
-/// One local identity: the persona the connector acts as. Minted locally (GUIDv7,
+/// One local companion: the persona the connector acts as. Minted locally (GUIDv7,
 /// immutable); binding it to an atproto DID is a later wave, so `bound_did` is normally
 /// `None`. The handle is unique within the connector.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Identity {
+pub struct Companion {
     /// Connector-minted GUIDv7 (32 hex chars). Never formatted as a DID.
     pub local_id: String,
     /// Operator-chosen handle, 2..=253 characters, unique (case-insensitive) within the
@@ -39,7 +39,7 @@ pub struct Identity {
     pub created_at: i64,
 }
 
-/// Identity handle discipline: 2..=253 characters, no whitespace, no separators.
+/// Companion handle discipline: 2..=253 characters, no whitespace, no separators.
 pub fn valid_handle(handle: &str) -> bool {
     let trimmed = handle.trim();
     (2..=253).contains(&trimmed.chars().count())
@@ -47,15 +47,15 @@ pub fn valid_handle(handle: &str) -> bool {
         && !handle.chars().any(|c| c.is_whitespace() || c == ':')
 }
 
-/// One enrollment: the session + server binding for one identity at one origin, made
+/// One enrollment: the session + server binding for one companion at one origin, made
 /// by the account-bound proof exchange — the only way a companion enrolls. Verified at
-/// enrollment time against the server's own identity response. The bearer session itself lives in the store's per-enrollment
+/// enrollment time against the server's own companion response. The bearer session itself lives in the store's per-enrollment
 /// session map — deliberately NOT on this struct, so cloned entries never carry it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Enrollment {
     /// Stable local handle for this enrollment, e.g. `cmp_lumen`; also its session key.
     pub enrollment_id: String,
-    /// The owning identity's `local_id`.
+    /// The owning companion's `local_id`.
     #[serde(default)]
     pub local_id: String,
     /// Operator-chosen short name used for selection matching.
@@ -99,14 +99,14 @@ impl Enrollment {
     }
 }
 
-/// The atproto session one identity holds after the operator binds an account through
+/// The atproto session one companion holds after the operator binds an account through
 /// atproto OAuth (the `/bind` route): the PDS-issued bearer (`accessJwt`, cookie-jar
 /// posture — the same exposure class as the per-enrollment sessions) plus where to
 /// reach the PDS again, and the refresh token and DPoP key that let the connector renew
 /// it silently. Session state, never a vault secret.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AccountSession {
-    /// The bound account's DID (`did:plc:…`); mirrors the identity's `bound_did`.
+    /// The bound account's DID (`did:plc:…`); mirrors the companion's `bound_did`.
     pub did: String,
     /// The handle the PDS confirmed (canonical form, no leading `@`).
     pub handle: String,
@@ -154,7 +154,7 @@ impl std::fmt::Debug for AccountSession {
 }
 
 /// A participation context: caller + enrollment + canonical origin + credential binding.
-/// The acting identity rides the enrollment; it is never chosen here.
+/// The acting companion rides the enrollment; it is never chosen here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Context {
     /// Stable local handle, e.g. `ctx_9f01ab`.
