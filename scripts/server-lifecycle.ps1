@@ -16,7 +16,6 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Wipe', 'Build', 'Launch')][string]$Action,
-    [string]$Target,
     [switch]$Force,
     [switch]$WhatIf,
     [switch]$Build,
@@ -43,9 +42,12 @@ function Get-TangentDockerRunner {
 # $AllowedRoot; the allowed root itself, repository/drive roots, files and junction or
 # other reparse points (on the target or any existing component below the allowed root)
 # are rejected before any recursive delete can happen.
+# The only directory a wipe ever deletes, under the allowed root.
+$script:StateDirectoryName = 'site'
+
 function Resolve-TangentWipeTarget {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$TargetPath, [Parameter(Mandatory)][string]$AllowedRoot)
+    param([Parameter(Mandatory)][string]$AllowedRoot)
     $allowed = [IO.Path]::GetFullPath($AllowedRoot).TrimEnd('\')
     $allowedRootParent = Split-Path -Parent $allowed
     if (-not $allowedRootParent -or $allowed -eq [IO.Path]::GetPathRoot($allowed)) {
@@ -58,25 +60,14 @@ function Resolve-TangentWipeTarget {
     }
     $allowedAttributes = Get-Item -LiteralPath $allowed -Force -ErrorAction SilentlyContinue
     if ($allowedAttributes.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "The allowed wipe root is a reparse point: $allowed" }
-    $candidate = if ([IO.Path]::IsPathRooted($TargetPath)) { $TargetPath } else { Join-Path $allowed $TargetPath }
-    $absolute = [IO.Path]::GetFullPath($candidate)
-    $comparison = if ($IsWindows -eq $false) { [StringComparison]::Ordinal } else { [StringComparison]::OrdinalIgnoreCase }
-    $withSeparator = $allowed + [IO.Path]::DirectorySeparatorChar
-    if (-not $absolute.StartsWith($withSeparator, $comparison)) {
-        throw "Wipe target is outside the allowed root $allowed`: $absolute"
-    }
-    $remainder = $absolute.Substring($withSeparator.Length).TrimEnd('\')
-    if (-not $remainder) { throw "Refusing to wipe the allowed root itself: $absolute" }
-    if ($remainder -match '(\.\.|' + [regex]::Escape([IO.Path]::DirectorySeparatorChar) + '{2,})') { throw "Suspicious wipe target path: $absolute" }
-    # Reject reparse points on the target and on every existing directory component below the allowed root.
-    $existingAncestor = $allowed
-    foreach ($segment in $remainder -split [regex]::Escape([IO.Path]::DirectorySeparatorChar)) {
-        $existingAncestor = Join-Path $existingAncestor $segment
-        if (-not (Test-Path -LiteralPath $existingAncestor)) { continue }
-        $item = Get-Item -LiteralPath $existingAncestor -Force
-        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-            throw "Wipe path crosses a junction or reparse point: $existingAncestor"
-        }
+    # The target is not chosen: it is always the one state directory under the allowed root.
+    # Nothing can name another path, so traversal, an outside-the-root target and the root
+    # itself cannot arise, and none of them is checked for.
+    $absolute = [IO.Path]::GetFullPath((Join-Path $allowed $script:StateDirectoryName))
+    # A reparse point on the target is still reachable — something could plant a junction at
+    # the state directory — and a recursive delete would follow it out of the tree.
+    if ((Test-Path -LiteralPath $absolute) -and ((Get-Item -LiteralPath $absolute -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Wipe path crosses a junction or reparse point: $absolute"
     }
     $existed = Test-Path -LiteralPath $absolute
     if ($existed -and -not (Test-Path -LiteralPath $absolute -PathType Container)) {
@@ -116,14 +107,13 @@ function Stop-TangentComposeService {
 function Invoke-TangentWipe {
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [Parameter(Mandatory)][string]$TargetPath,
         [Parameter(Mandatory)][string]$AllowedRoot,
         [Parameter(Mandatory)][string]$RepoRoot,
         [switch]$Force,
         [scriptblock]$CommandRunner,
         [scriptblock]$Prompt
     )
-    $resolved = Resolve-TangentWipeTarget -TargetPath $TargetPath -AllowedRoot $AllowedRoot
+    $resolved = Resolve-TangentWipeTarget -AllowedRoot $AllowedRoot
     Write-Host "Wipe target: $($resolved.absolutePath)"
     Write-Host "Allowed root: $($resolved.allowedRoot)"
     $whatIf = $PSCmdlet.WhatIfPreference -or $WhatIfPreference
@@ -139,7 +129,7 @@ function Invoke-TangentWipe {
     $runner = Get-TangentDockerRunner $CommandRunner
     Stop-TangentComposeService -Runner $runner -RepoRoot $RepoRoot
     # Re-validate after the container stop in case anything changed underneath us.
-    $resolved = Resolve-TangentWipeTarget -TargetPath $TargetPath -AllowedRoot $AllowedRoot
+    $resolved = Resolve-TangentWipeTarget -AllowedRoot $AllowedRoot
     if ($resolved.existed) {
         Remove-Item -LiteralPath $resolved.absolutePath -Recurse -Force
         if (Test-Path -LiteralPath $resolved.absolutePath) { throw "The wipe target still exists after deletion: $($resolved.absolutePath)" }
@@ -195,8 +185,7 @@ if (-not ($TangentLifecycleSkipMain -or $global:TangentLifecycleSkipMain)) {
     switch ($Action) {
         'Wipe' {
             $allowedRoot = Join-Path $repoRoot '.local/docker'
-            $targetPath = if ($Target) { $Target } else { Join-Path $allowedRoot 'site' }
-            $result = Invoke-TangentWipe -TargetPath $targetPath -AllowedRoot $allowedRoot -RepoRoot $repoRoot -Force:$Force -CommandRunner $CommandRunner -Prompt $Prompt -WhatIf:$WhatIf
+            $result = Invoke-TangentWipe -AllowedRoot $allowedRoot -RepoRoot $repoRoot -Force:$Force -CommandRunner $CommandRunner -Prompt $Prompt -WhatIf:$WhatIf
             if ($result.status -in @('wiped', 'absent')) {
                 Write-Output 'A fresh site is configured on the next launch; use Launch.bat (or scripts/start-docker.ps1).'
                 Write-Output 'The connector keeps no server-side state; operator-local connector state is untouched.'

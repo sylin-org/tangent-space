@@ -51,25 +51,32 @@ try {
     # --- 3. Target resolution safety -----------------------------------------------------
     $TangentLifecycleSkipMain = $true
     . (Join-Path $repoRoot 'scripts/server-lifecycle.ps1')
-    Assert-That ((Resolve-TangentWipeTarget -TargetPath 'site' -AllowedRoot $allowedRoot).absolutePath -eq (Join-Path $allowedRoot 'site')) 'Resolver accepts the default state directory inside the allowed root'
-    Assert-That ((Resolve-TangentWipeTarget -TargetPath "lifecycle-test-$stamp/nested" -AllowedRoot $allowedRoot).existed -eq $false) 'Resolver accepts a non-existent nested target and reports it absent'
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath $allowedRoot -AllowedRoot $allowedRoot } 'Resolver rejects the allowed root itself'
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath $repoRoot -AllowedRoot $allowedRoot } 'Resolver rejects the repository root'
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath ([IO.Path]::GetPathRoot($allowedRoot)) -AllowedRoot $allowedRoot } 'Resolver rejects a filesystem root'
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath (Join-Path $outsideRoot 'site') -AllowedRoot $allowedRoot } 'Resolver rejects a target outside the repository'
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath 'site\..\..\..\outside' -AllowedRoot $allowedRoot } 'Resolver rejects traversal out of the allowed root'
-    'plain' | Set-Content -LiteralPath (Join-Path $scratch 'plain-file.txt')
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath "lifecycle-test-$stamp/plain-file.txt" -AllowedRoot $allowedRoot } 'Resolver rejects a plain file target'
+    # R1.16 fixed the target, so five former cases cannot arise at all and are not tested:
+    # a nested target, the allowed root itself, the repository root, a path outside it, and
+    # traversal out of it. Nothing can name a path. What remains is what a fixed path can
+    # still meet — a hostile or wrong thing sitting where the state directory belongs.
+    Assert-That ((Resolve-TangentWipeTarget -AllowedRoot $allowedRoot).absolutePath -eq (Join-Path $allowedRoot 'site')) 'Resolver resolves the one state directory under the allowed root'
+    Assert-Throws { Resolve-TangentWipeTarget -AllowedRoot ([IO.Path]::GetPathRoot($allowedRoot)) } 'Resolver rejects a filesystem root as the allowed root'
+
+    # A scratch root of its own, so each hazard can sit at that root's `site`.
+    $fileRoot = Join-Path $scratch 'root-with-file'
+    New-Item -ItemType Directory -Path $fileRoot -Force | Out-Null
+    'plain' | Set-Content -LiteralPath (Join-Path $fileRoot 'site')
+    Assert-Throws { Resolve-TangentWipeTarget -AllowedRoot $fileRoot } 'Resolver rejects a plain file where the state directory belongs'
+
     New-Item -ItemType Directory -Path (Join-Path $scratch 'junction-target') -Force | Out-Null
     'target-content' | Set-Content -LiteralPath (Join-Path $scratch 'junction-target/keep.txt')
-    $junctionLink = Join-Path $scratch 'junction-site'
+    $junctionRoot = Join-Path $scratch 'root-with-junction'
+    New-Item -ItemType Directory -Path $junctionRoot -Force | Out-Null
+    $junctionLink = Join-Path $junctionRoot 'site'
     New-Item -ItemType Junction -Path $junctionLink -Target (Join-Path $scratch 'junction-target') | Out-Null
     $junctionLinks.Add($junctionLink)
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath "lifecycle-test-$stamp/junction-site" -AllowedRoot $allowedRoot } 'Resolver rejects a junction as the wipe target'
+    Assert-Throws { Resolve-TangentWipeTarget -AllowedRoot $junctionRoot } 'Resolver rejects a junction planted at the state directory'
+
     $parentLink = Join-Path $scratch 'junction-parent'
     New-Item -ItemType Junction -Path $parentLink -Target (Join-Path $scratch 'junction-target') | Out-Null
     $junctionLinks.Add($parentLink)
-    Assert-Throws { Resolve-TangentWipeTarget -TargetPath "lifecycle-test-$stamp/junction-parent/inner" -AllowedRoot $allowedRoot } 'Resolver rejects a path crossing a junction ancestor'
+    Assert-Throws { Resolve-TangentWipeTarget -AllowedRoot $parentLink } 'Resolver rejects an allowed root that is itself a junction'
 
     # --- 4. Confirmation rules ------------------------------------------------------------
     Assert-That (Confirm-TangentWipe -TargetPath 'x' -Force) '-Force confirms without prompting'
@@ -78,36 +85,40 @@ try {
     Assert-That (-not (Confirm-TangentWipe -TargetPath 'x' -Prompt { param($message) 'no' })) 'A declined prompt cancels'
 
     # --- 5. Actual wipe against a disposable scratch tree ---------------------------------
-    $site = Join-Path $scratch 'site'
+    # The allowed root is the seam: production passes <repo>/.local/docker, the suite passes
+    # a scratch root, and the target under either is always `site`.
+    $wipeRoot = Join-Path $scratch 'wipe-root'
+    $site = Join-Path $wipeRoot 'site'
     New-ScratchSiteState -Directory $site
-    New-Item -ItemType Directory -Path (Join-Path $scratch 'sentinel') -Force | Out-Null
-    'sentinel' | Set-Content -LiteralPath (Join-Path $scratch 'sentinel/keep.txt')
+    New-Item -ItemType Directory -Path (Join-Path $wipeRoot 'sentinel') -Force | Out-Null
+    'sentinel' | Set-Content -LiteralPath (Join-Path $wipeRoot 'sentinel/keep.txt')
 
-    $whatIfResult = Invoke-TangentWipe -TargetPath $site -AllowedRoot $allowedRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -WhatIf
+    $whatIfResult = Invoke-TangentWipe -AllowedRoot $wipeRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -WhatIf
     Assert-That ($whatIfResult.status -eq 'whatif') 'WhatIf dry run reports the whatif status'
     Assert-That ((Test-Path -LiteralPath (Join-Path $site 'appsettings.json')) -and (Test-Path -LiteralPath (Join-Path $site 'tangent.sqlite'))) 'WhatIf preserves the state tree'
     Assert-That ($script:RecordedRuns.Count -eq 0) 'WhatIf issues no docker commands'
 
-    $cancelledResult = Invoke-TangentWipe -TargetPath $site -AllowedRoot $allowedRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Prompt { param($message) 'abort' }
+    $cancelledResult = Invoke-TangentWipe -AllowedRoot $wipeRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Prompt { param($message) 'abort' }
     Assert-That ($cancelledResult.status -eq 'cancelled') 'A declined confirmation cancels the wipe'
     Assert-That ((Test-Path -LiteralPath (Join-Path $site 'tangent.sqlite'))) 'A cancelled wipe preserves the state tree'
     Assert-That ($script:RecordedRuns.Count -eq 0) 'A cancelled wipe issues no docker commands'
 
-    $wipedResult = Invoke-TangentWipe -TargetPath $site -AllowedRoot $allowedRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Force
+    $wipedResult = Invoke-TangentWipe -AllowedRoot $wipeRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Force
     Assert-That ($wipedResult.status -eq 'wiped') 'A forced wipe reports the wiped status'
     foreach ($gone in @('appsettings.json', 'tangent.sqlite', 'tangent.sqlite-wal', 'oauth', 'data', 'koan.lock.json')) {
         Assert-That (-not (Test-Path -LiteralPath (Join-Path $site $gone))) "Wipe removed $gone"
     }
-    Assert-That ((Test-Path -LiteralPath (Join-Path $scratch 'sentinel/keep.txt'))) 'Wipe preserves the sibling sentinel'
+    Assert-That ((Test-Path -LiteralPath (Join-Path $wipeRoot 'sentinel/keep.txt'))) 'Wipe preserves the sibling sentinel'
     Assert-That ($script:RecordedRuns.Count -eq 2) 'Wipe issued exactly two docker commands'
     Assert-That ($script:RecordedRuns[0] -eq 'docker compose stop tangent') 'Wipe stops only the Compose tangent service'
     Assert-That ($script:RecordedRuns[1] -eq 'docker compose rm --force tangent') 'Wipe removes only the Compose tangent service'
 
-    Assert-Throws { Invoke-TangentWipe -TargetPath (Join-Path $outsideRoot 'site') -AllowedRoot $allowedRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Force } 'Wipe rejects a target outside the repository before any docker command'
-    Assert-Throws { Invoke-TangentWipe -TargetPath "lifecycle-test-$stamp/junction-site" -AllowedRoot $allowedRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Force } 'Wipe rejects a junction target before any docker command'
+    Assert-Throws { Invoke-TangentWipe -AllowedRoot $junctionRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Force } 'Wipe rejects a junction at the state directory before any docker command'
     Assert-That ($script:RecordedRuns.Count -eq 2) 'Rejected wipes issued no additional docker commands'
 
-    $absentResult = Invoke-TangentWipe -TargetPath (Join-Path $scratch 'never-existed') -AllowedRoot $allowedRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Force
+    $emptyRoot = Join-Path $scratch 'root-without-site'
+    New-Item -ItemType Directory -Path $emptyRoot -Force | Out-Null
+    $absentResult = Invoke-TangentWipe -AllowedRoot $emptyRoot -RepoRoot $repoRoot -CommandRunner $recordingRunner -Force
     Assert-That ($absentResult.status -eq 'absent') 'Wiping an absent target reports absent without failing'
     Assert-That ($script:RecordedRuns.Count -eq 4) 'An absent-target wipe still stopped and removed the tangent service'
 
@@ -125,9 +136,11 @@ try {
     if (-not [IO.Path]::GetFullPath($outsideRoot).StartsWith([IO.Path]::GetFullPath($opencodeTemp) + [IO.Path]::DirectorySeparatorChar)) { throw 'Unexpected scratch cleanup path.' }
     Remove-Item -LiteralPath $outsideRoot -Recurse -Force -ErrorAction SilentlyContinue
     if (-not $KeepScratch) {
-        # Dogfood the tested wipe to remove the scratch tree itself.
-        try { Invoke-TangentWipe -TargetPath $scratch -AllowedRoot $allowedRoot -RepoRoot $repoRoot -CommandRunner { param([string[]]$a) } -Force | Out-Null } catch { }
-        if (Test-Path -LiteralPath $scratch) { $safeScratch = Resolve-TangentWipeTarget -TargetPath $scratch -AllowedRoot $allowedRoot; Remove-Item -LiteralPath $safeScratch.absolutePath -Recurse -Force }
+        # The wipe now only ever deletes <allowed root>/site, so it can no longer remove the
+        # suite's own scratch tree. Deleting it directly, after checking it is where we put it.
+        if ((Test-Path -LiteralPath $scratch) -and [IO.Path]::GetFullPath($scratch).StartsWith([IO.Path]::GetFullPath($allowedRoot) + [IO.Path]::DirectorySeparatorChar)) {
+            Remove-Item -LiteralPath $scratch -Recurse -Force
+        }
     }
 }
 if ($script:FailedCount -gt 0) { exit 1 }
