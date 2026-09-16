@@ -13,7 +13,6 @@ use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext}
 
 const RESPONSE_LIMIT: u64 = 512 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
-const WAIT_TIMEOUT: Duration = Duration::from_secs(25);
 /// The reachability probe's whole budget: a loopback operator page answers in
 /// milliseconds, so anything slower is honestly treated as not running.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
@@ -46,10 +45,6 @@ impl ExperiencePort for UreqExperience {
 
     fn send(&self, context: &RequestContext, method: &str, path: &str, body: &Value) -> Result<Value, ExperienceError> {
         request(&self.agent, context, method, path, Some(body), READ_TIMEOUT)
-    }
-
-    fn wait(&self, context: &RequestContext, path: &str) -> Result<Value, ExperienceError> {
-        request(&self.agent, context, "GET", path, None, WAIT_TIMEOUT)
     }
 
     fn enroll(&self, origin: &str, path: &str, body: &Value) -> Result<Value, ExperienceError> {

@@ -17,13 +17,6 @@ pub struct Perspective {
 }
 
 impl Perspective {
-    pub fn from_identity(identity: &IdentityDto) -> Self {
-        Self {
-            participant_ref: identity.participant_ref.clone(),
-            did: identity.did.clone(),
-            display: identity.display_name.clone(),
-        }
-    }
 
     /// An author label with a `you` marker for the acting companion; canonical names of
     /// others are preserved verbatim.
@@ -137,9 +130,6 @@ impl Budget {
         self.lines.push(line.into());
     }
 
-    pub fn truncated(&self) -> bool {
-        self.truncated
-    }
 
     pub fn finish(mut self) -> String {
         if self.truncated {

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::attention::{AttentionRecord, AttentionState, ATTENTION_RECORD_LIMIT};
 use crate::domain::identity::{AtprotoSession, CallerId, CompanionEntry, Identity, LocalContext};
-use crate::domain::policy::{AttentionPolicy, PolicyLedger};
+use crate::domain::policy::AttentionPolicy;
 use crate::domain::writes::PendingWrite;
 
 const STATE_FILE: &str = "state.json";
@@ -34,7 +34,6 @@ pub struct ServerCard {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct StateFile {
-    version: u32,
     #[serde(default)]
     identities: Vec<Identity>,
     #[serde(default)]
@@ -74,8 +73,6 @@ struct StateFile {
     #[serde(default)]
     waiting_counts: HashMap<String, i64>,
     #[serde(default)]
-    ledgers: HashMap<String, PolicyLedger>,
-    #[serde(default)]
     policy: Option<AttentionPolicy>,
 }
 
@@ -84,44 +81,22 @@ pub struct StateStore {
     path: PathBuf,
     journal_path: PathBuf,
     state: StateFile,
-    dropped_enrollments: Vec<(String, String)>,
 }
 
 impl StateStore {
-    /// Loads (or initializes) state under the data directory. Enrollments recorded before
-    /// the identity model (empty `local_id`) are dropped here — the standing wipe rule
-    /// forbids migration code, and re-enrollment is the documented path. When any were
-    /// dropped, the cleaned state is saved once immediately, so the drop persists and the
-    /// `EnrollmentDropped` journal line fires on this launch only, not on every launch.
-    /// The caller reads them back with [`StateStore::take_dropped_enrollments`] to
-    /// publish the events once the event bus exists.
+    /// Loads (or initializes) state under the data directory.
     pub fn open(data_dir: &Path) -> Result<Self, String> {
         fs::create_dir_all(data_dir).map_err(|error| format!("cannot create data directory: {error}"))?;
         let path = data_dir.join(STATE_FILE);
         let journal_path = data_dir.join(JOURNAL_FILE);
-        let mut state = match fs::read(&path) {
+        let state = match fs::read(&path) {
             Ok(bytes) if !bytes.is_empty() => serde_json::from_slice(&bytes)
                 .map_err(|error| format!("state file is malformed: {error}"))?,
-            _ => StateFile { version: 1, ..Default::default() },
+            _ => StateFile::default(),
         };
-        let legacy: Vec<CompanionEntry> = state.companions.iter().filter(|entry| entry.local_id.is_empty()).cloned().collect();
-        let mut dropped = Vec::new();
-        for entry in legacy {
-            dropped.push((entry.companion_id.clone(), entry.name.clone()));
-            remove_companion_state(&mut state, &entry.companion_id);
-        }
-        let store = Self { path, journal_path, state, dropped_enrollments: dropped };
-        if !store.dropped_enrollments.is_empty() {
-            store.save()?;
-        }
-        Ok(store)
+        Ok(Self { path, journal_path, state })
     }
 
-    /// The `(companion_id, name)` pairs dropped at load, for the `EnrollmentDropped`
-    /// events; takes them.
-    pub fn take_dropped_enrollments(&mut self) -> Vec<(String, String)> {
-        std::mem::take(&mut self.dropped_enrollments)
-    }
 
     /// Atomic snapshot write: unique temp file, write, sync, rename.
     pub fn save(&self) -> Result<(), String> {
@@ -462,9 +437,6 @@ impl StateStore {
         self.state.revisions.insert(companion_id.to_string(), revision.to_string());
     }
 
-    pub fn ledger_mut(&mut self, companion_id: &str) -> &mut PolicyLedger {
-        self.state.ledgers.entry(companion_id.to_string()).or_default()
-    }
 
     // ----- pending-write journal -----
 
@@ -528,7 +500,6 @@ fn remove_companion_state(state: &mut StateFile, companion_id: &str) {
     state.attention.remove(companion_id);
     state.checkpoints.remove(companion_id);
     state.revisions.remove(companion_id);
-    state.ledgers.remove(companion_id);
     state.waiting_counts.remove(companion_id);
     state.contexts.retain(|context| context.companion_id != companion_id);
 }

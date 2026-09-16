@@ -3,7 +3,6 @@
 //! host never sees anything from it except through later tool responses. Failures back off
 //! exponentially with a cap; empty and unchanged checks are silent successes.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -20,49 +19,23 @@ pub fn backoff_seconds(failures: u32) -> u64 {
         .min(MAX_BACKOFF_SECONDS)
 }
 
-pub struct StopFlag(Arc<AtomicBool>);
-
-impl StopFlag {
-    pub fn new() -> Self {
-        Self(Arc::new(AtomicBool::new(false)))
-    }
-
-    pub fn stop(&self) {
-        self.0.store(true, Ordering::SeqCst);
-    }
-}
-
 /// Spawns one named checker thread per auto-check companion. The thread lives exactly as
 /// long as this process: a host-owned stdio server checks only while it runs.
-pub fn spawn_checkers(hub: Arc<ConnectorHub>, companions: Vec<String>, poll_seconds: u64) -> Vec<StopFlag> {
-    companions
-        .into_iter()
-        .map(|companion_id| {
-            let hub = hub.clone();
-            let stop = StopFlag::new();
-            let flag = stop.0.clone();
-            std::thread::Builder::new()
-                .name(format!("tangent-check-{companion_id}"))
-                .spawn(move || run_checker(hub, companion_id, poll_seconds, flag))
-                .expect("checker thread");
-            stop
-        })
-        .collect()
+pub fn spawn_checkers(hub: Arc<ConnectorHub>, companions: Vec<String>, poll_seconds: u64) {
+    for companion_id in companions {
+        let hub = hub.clone();
+        std::thread::Builder::new()
+            .name(format!("tangent-check-{companion_id}"))
+            .spawn(move || run_checker(hub, companion_id, poll_seconds))
+            .expect("checker thread");
+    }
 }
 
-fn run_checker(hub: Arc<ConnectorHub>, companion_id: String, poll_seconds: u64, stop: Arc<AtomicBool>) {
+fn run_checker(hub: Arc<ConnectorHub>, companion_id: String, poll_seconds: u64) {
     let mut failures: u32 = 0;
     loop {
-        if stop.load(Ordering::SeqCst) {
-            return;
-        }
         let sleep = if failures == 0 { poll_seconds } else { backoff_seconds(failures) };
-        for _ in 0..sleep {
-            if stop.load(Ordering::SeqCst) {
-                return;
-            }
-            std::thread::sleep(Duration::from_secs(1));
-        }
+        std::thread::sleep(Duration::from_secs(sleep));
         match hub.background_check(&companion_id) {
             Ok(_summary) => failures = 0,
             Err(reason) => {

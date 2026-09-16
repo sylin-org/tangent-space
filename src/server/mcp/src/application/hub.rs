@@ -86,17 +86,6 @@ pub struct AtprotoBinding {
 }
 
 impl ToolOutcome {
-    /// Terminal status to process exit code. Zero means the server confirmed the outcome;
-    /// pending and unknown outcomes never exit zero, so scripts do not replay effects.
-    pub fn exit_code(&self) -> i32 {
-        match self.status.as_str() {
-            "ok" if !self.is_error => 0,
-            "ok" => 3,
-            "pending" => 2,
-            "blocked" => 3,
-            _ => 4,
-        }
-    }
 }
 
 /// Everything an intake-scoped operation needs after the context binding resolves.
@@ -643,7 +632,7 @@ impl ConnectorHub {
         let client_id = session
             .client_id
             .clone()
-            .unwrap_or_else(|| atproto_oauth::CLIENT_ID.to_string());
+            .unwrap_or_else(|| atproto_oauth::bind_client_id());
         match self.oauth().refresh(authserver, refresh, key, &client_id) {
             Ok(tokens) => {
                 if tokens.sub != session.did {

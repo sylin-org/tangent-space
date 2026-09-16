@@ -10,9 +10,6 @@ use crate::domain::intake::IntakeChannel;
 pub enum DomainEvent {
     CompanionSelected { companion_id: String },
     ContextArrived { context_id: String, origin: String },
-    /// A persisted enrollment was dropped at load: it predates the identity model, so it
-    /// fails the identity join honestly. Re-enrollment is the documented path.
-    EnrollmentDropped { companion_id: String, name: String, reason: String },
     PollCompleted { companion_id: String, revision: String, waiting: i64, activity: i64 },
     PollFailed { companion_id: String, attempt: u32, reason: String },
     BackoffScheduled { companion_id: String, seconds: u64 },

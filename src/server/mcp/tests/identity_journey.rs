@@ -173,34 +173,6 @@ fn already_enrolled_is_an_honest_error_locally_and_from_the_server() {
 
 // ---------- legacy state ----------
 
-#[test]
-fn legacy_enrollments_are_dropped_once_and_the_drop_persists() {
-    let dir = std::env::temp_dir().join(format!("tangent-connector-identity-legacy-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    std::fs::write(
-        dir.join("state.json"),
-        r#"{ "version": 1, "companions": [ { "companion_id": "cmp_legacy01", "name": "old", "origin": "https://tangent.example", "did": "did:plc:old", "display_name": null, "handle": null, "enrolled_at": 1, "auto_check": false, "credential_source": "plaintext-dev" } ] }"#,
-    )
-    .expect("legacy state");
-
-    let mut store = StateStore::open(&dir).expect("open legacy state");
-    // The loader saves once after any drop, so the drop persists immediately.
-    assert!(store.companions().is_empty(), "the legacy enrollment fails the identity join honestly");
-    let on_disk = std::fs::read_to_string(dir.join("state.json")).expect("persisted state");
-    assert!(on_disk.contains("\"companions\": []"), "the cleaned state is saved at load: {on_disk}");
-    let dropped = store.take_dropped_enrollments();
-    assert_eq!(dropped.len(), 1);
-    assert_eq!((dropped[0].0.as_str(), dropped[0].1.as_str()), ("cmp_legacy01", "old"));
-    // Additive serde defaults: no identities and no operator page means empty, not
-    // malformed (the old client_rules field, when present, is simply ignored).
-    assert!(store.identities().is_empty());
-    assert_eq!(store.operator_page_url(), None);
-    // A second launch finds nothing left to drop — EnrollmentDropped journals once.
-    let mut again = StateStore::open(&dir).expect("reopen");
-    assert!(again.take_dropped_enrollments().is_empty());
-}
-
 // ---------- two origins, two sessions ----------
 
 #[test]

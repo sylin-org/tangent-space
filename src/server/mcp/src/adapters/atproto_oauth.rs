@@ -33,10 +33,6 @@ use sha2::{Digest, Sha256};
 
 use crate::domain::refs;
 
-/// The atproto local-client id of sessions bound before the granular-scope era: a
-/// literal origin, no port, no metadata document. A session's refresh must present
-/// the exact client_id it was authorized under, so this id stays for those sessions.
-pub const CLIENT_ID: &str = "http://localhost";
 /// The service-proof exchange lxm the bind's rpc permission covers — the same method
 /// the server contract pins (the hub's `EXCHANGE_LXM`).
 pub const EXCHANGE_LXM: &str = "local.tangent.mcp.exchange";

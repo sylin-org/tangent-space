@@ -21,11 +21,6 @@ impl CallerId {
     }
 }
 
-impl Default for CallerId {
-    fn default() -> Self {
-        Self("stdio".to_string())
-    }
-}
 
 /// One local identity: the persona the connector acts as. Minted locally (GUIDv7,
 /// immutable); binding it to an atproto DID is a later wave, so `bound_did` is normally

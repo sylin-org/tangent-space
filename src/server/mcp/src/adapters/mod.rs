@@ -5,7 +5,6 @@
 
 pub mod atproto_oauth;
 pub mod browser;
-pub mod delivery;
 pub mod diagnostics;
 pub mod experience;
 pub mod lockfile;
