@@ -26,6 +26,8 @@ The Linux Data Protection key ring is persisted without an additional XML key en
 - `Launch.bat`: creates a missing configuration, preserves an existing one byte-for-byte, and starts only the Tangent service. Add `-Build` to rebuild first.
 - `Wipe.bat`: prints the resolved state directory and requires typing `WIPE`. It stops and removes only the app container, then deletes `.local/docker/site`: configuration, SQLite and journals, OAuth state and Data Protection keys. `Wipe.bat -WhatIf` previews the operation; `-Force` skips the prompt for scripts. Backups are retained.
 
+- `full.bat`: wipe, build, launch and open the app, with no prompt anywhere. It is for serial deploy tests, where a first run is exercised over and over, so it takes **no backup** and destroys `.local/docker/site` outright. Use `Backup.bat` first if the install holds anything worth keeping, or the three scripts separately when you mean only one of them.
+
 After a wipe, run Build and Launch. A blank `OwnerDid` lets the first verified account claim ownership; the browser then offers the first-Tangent setup. Alternatively, set an explicit owner DID in `.local/docker/site/appsettings.json` before the first sign-in and restart the app. Once claimed, ownership is persisted in SQLite and cannot be transferred by changing configuration.
 
 Sign-in resolves identities through the public `https://plc.directory`. Missing or unresolvable identifiers return a sanitized retry page. On an unclaimed server with a blank `OwnerDid`, a verified sign-in opens owner confirmation; an explicit `OwnerDid` reserves it for that account.
