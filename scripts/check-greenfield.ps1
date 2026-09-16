@@ -11,7 +11,10 @@ $targets = 'src/server/web', 'tests', 'scripts', 'compose.yaml', 'Dockerfile' | 
 $rules = [ordered]@{
     'Inbound MCP transport' = '\bMcp[A-Z]\w*|\bTangentSpace\.Mcp\b'
     'Browser WebMCP'        = '(?i:\bwebmcp\b)'
-    'Spaces storage'        = '\bSpaces[A-Z]\w*|\bSpaceUri\b|\bSpaceState\b|\bWriteIntent\b|\bSourceNotification\w*|\bSourceDecision\b'
+    # Narrowed in R2.1 (N-038): every remaining finding is SourceDecision, and the broad
+    # patterns would have reported the product's own new word - a Space is what an operator
+    # runs - as the deleted atproto concept. R3.6 removes SourceDecision and this rule with it.
+    'Spaces storage'        = '\bSpaceUri\b|\bWriteIntent\b|\bSourceNotification\w*|\bSourceDecision\b'
     'Change classification' = '\bChangeClass\w*|Koan\.AI\.Connector\.Onnx'
     'Retired vocabulary'    = '(?i:\broom\w*|\bchannels?\w*|\bcompanion\w*)|\bTangentSite\b|\bTangentCommunity\b|\bEntity<Message>|\bMessage\.(Get|Query|Lifecycle|Project)\b'
     'Historical markers'    = '(?i:\blegacy\b|\bdeprecated\b|\bback-?compat\w*|\bformerly\b|\bsuperseded\b|\bcompatibility (path|shim)s?\b)'
