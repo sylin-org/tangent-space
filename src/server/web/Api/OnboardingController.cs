@@ -20,10 +20,11 @@ public sealed class OnboardingController(TangentServer hub) : ControllerBase
     {
         Response.Headers.CacheControl = "no-store";
         var participantId = ParticipationAccess.Require(User, ParticipationGrants.Manage);
-        try { return Ok(await hub.Tangents.CompleteOnboarding(participantId, request.Name, request.Description, request.Skip, ct)); }
+        try { return Ok(await hub.Tangents.CompleteOnboarding(participantId, request.Name, request.Description, request.Artwork, request.Skip, ct)); }
         catch (UnauthorizedAccessException) { return StatusCode(403); }
         catch (TangentRuleViolation ex) { return BadRequest(new { error = ex.Message }); }
     }
 }
 
-public sealed record FirstTangentRequest(string? Name = null, string? Description = null, bool Skip = false);
+public sealed record FirstTangentRequest(string? Name = null, string? Description = null, bool Skip = false,
+    string? Artwork = null);

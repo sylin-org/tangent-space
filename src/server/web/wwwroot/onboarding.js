@@ -43,9 +43,88 @@
     if (current?.onboarding === 'confirm_owner' && current.participant?.did === event.detail.did)
       card({ ...event.detail, handle: current.participant.handle });
   });
+  // Starting points, not templates: each one fills the two fields and leaves them editable.
+  const starters = [
+    { name: 'The Gateway', description: 'Open to anyone who finds their way here. Introductions, questions, and where to go next.' },
+    { name: 'Projects', description: 'What we are building, where each thing stands, and what it needs next.' },
+    { name: 'Reading Room', description: 'Links, long reads, and the things worth keeping.' },
+    { name: 'Small Hours', description: 'Half-formed thoughts, welcome as they are.' },
+    { name: 'The Lab', description: 'Experiments with people and companions, including the ones that do not work.' }
+  ];
+  // One cover from each mood before any mood repeats, so eight squares span the collection
+  // instead of showing its first page. The full picker, with uploads, URLs and all sixteen,
+  // lives in Tangent settings; this is the first-run taste of it.
+  function starterArtwork(catalogue, wanted) {
+    const moods = new Map();
+    for (const entry of catalogue) {
+      if (!moods.has(entry.group)) moods.set(entry.group, []);
+      moods.get(entry.group).push(entry);
+    }
+    const rows = [...moods.values()], picked = [];
+    for (let depth = 0; picked.length < wanted; depth += 1) {
+      if (!rows.some(entries => entries.length > depth)) break;
+      for (const entries of rows) {
+        if (picked.length === wanted) break;
+        if (entries[depth]) picked.push(entries[depth]);
+      }
+    }
+    return picked;
+  }
+  function choices() {
+    const row = $('first-tangent-presets');
+    if (row && !row.childElementCount) {
+      for (const starter of starters) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'choice'; button.textContent = starter.name;
+        button.title = starter.description;
+        button.onclick = () => {
+          $('first-tangent-name').value = starter.name;
+          $('first-tangent-description').value = starter.description;
+          preview();
+        };
+        row.append(button);
+      }
+      const clear = document.createElement('button');
+      clear.type = 'button'; clear.className = 'choice choice-clear'; clear.textContent = 'Clear';
+      clear.onclick = () => {
+        $('first-tangent-name').value = ''; $('first-tangent-description').value = '';
+        preview(); $('first-tangent-name').focus();
+      };
+      row.append(clear);
+    }
+    const art = $('first-tangent-art');
+    if (art && !art.childElementCount) {
+      const pick = value => { $('first-tangent-artwork').value = value; preview(); };
+      const none = document.createElement('button');
+      none.type = 'button'; none.className = 'art-choice art-none'; none.dataset.artwork = '';
+      none.title = 'No artwork'; none.setAttribute('aria-label', 'No artwork'); none.textContent = '✦';
+      none.onclick = () => pick('');
+      art.append(none);
+      for (const entry of starterArtwork(window.TangentArtworkPresets || [], 8)) {
+        const url = '/tangent-art/' + entry.slug + '.png';
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'art-choice'; button.dataset.artwork = url;
+        button.title = entry.name; button.setAttribute('aria-label', entry.name);
+        const image = document.createElement('img');
+        image.src = url; image.alt = ''; image.loading = 'lazy';
+        button.append(image);
+        button.onclick = () => pick(url);
+        art.append(button);
+      }
+    }
+  }
   function preview() {
     text('first-card-name', $('first-tangent-name').value.trim() || 'Your first Tangent');
     text('first-card-description', $('first-tangent-description').value.trim() || 'A place for the conversations that matter to you.');
+    const chosen = $('first-tangent-artwork')?.value || '';
+    const art = $('first-card-art'), face = $('first-card-face');
+    if (art && face) {
+      if (chosen && art.getAttribute('src') !== chosen) art.src = chosen;
+      art.hidden = !chosen;
+      face.classList.toggle('has-art', !!chosen);
+    }
+    for (const button of document.querySelectorAll('#first-tangent-art .art-choice'))
+      button.setAttribute('aria-pressed', String(button.dataset.artwork === chosen));
   }
   window.TangentOnboarding = {
     show(site) {
@@ -78,7 +157,7 @@
           .then(profile => { if (current.participant?.did === did && profile.did === did) card(profile); })
           .catch(() => { if (current.participant?.did === did) card({ ...site.participant, status: 'unavailable' }); });
       }
-      if (state === 'create_tangent') preview();
+      if (state === 'create_tangent') { choices(); preview(); }
       return true;
     }
   };
@@ -88,7 +167,7 @@
   }));
   $('first-tangent-form').addEventListener('input', preview);
   async function finish(skip) {
-    await send('/api/onboarding/tangent', { skip, name: $('first-tangent-name').value.trim(), description: $('first-tangent-description').value.trim() });
+    await send('/api/onboarding/tangent', { skip, name: $('first-tangent-name').value.trim(), description: $('first-tangent-description').value.trim(), artwork: $('first-tangent-artwork').value });
     try { sessionStorage.setItem('tangent-created', current.participant.participantRef); } catch (_) { }
     location.assign('/');
   }

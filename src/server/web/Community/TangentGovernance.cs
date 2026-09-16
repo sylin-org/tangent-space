@@ -161,7 +161,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
 
     // One durable transition; a lost response can be retried without creating another card.
     public async Task<TangentDescription> CompleteOnboarding(string actorId, string? name, string? description,
-        bool skip, CancellationToken ct)
+        string? artwork, bool skip, CancellationToken ct)
     {
         await gate.Enter(ct);
         try
@@ -177,7 +177,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             if (!home.SetupComplete)
             {
                 home.Change(actorId, skip ? "My Tangent" : name ?? "", skip ? "" : description,
-                    "Make room for the next thought.", "#f4b942", "", clock.GetUtcNow());
+                    "Make room for the next thought.", "#f4b942", skip ? "" : artwork, clock.GetUtcNow());
                 await home.Save(ct);
                 await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: home.Id, ct: ct);
             }

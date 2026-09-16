@@ -20,6 +20,22 @@
 .onboarding-layout .input:focus { border-color:#c89d50; box-shadow:0 0 0 3px #f4b9420c; outline:none; }
 .onboarding-layout textarea.input { min-height:96px; resize:vertical; }
 .onboarding-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin:8px 0 0; }
+/* First-run starting points and a taste of the cover collection. The full picker,
+   with uploads, URLs and every mood, lives in Tangent settings. */
+.onboarding-choices { display:grid; gap:9px; }
+.onboarding-choices .field-label { font-size:.82rem; font-weight:500; margin:0; }
+.choice-row { display:flex; flex-wrap:wrap; gap:8px; }
+.choice { border:1px solid #ffffff20; border-radius:999px; background:#100e1580; color:#cfc5d6; cursor:pointer; padding:7px 14px; font:500 .8rem var(--sans); transition:border-color .15s,color .15s,background .15s; }
+.choice:hover { border-color:#c89d50; color:#fff4dc; background:#f4b9420c; }
+.choice:focus-visible { outline:2px solid #c89d50; outline-offset:2px; }
+.choice-clear { color:#928897; border-style:dashed; }
+.art-row { display:flex; flex-wrap:wrap; gap:8px; }
+.art-choice { width:52px; height:52px; padding:0; overflow:hidden; border:1px solid #ffffff20; border-radius:9px; background:#100e1580; cursor:pointer; display:grid; place-items:center; transition:border-color .15s,box-shadow .15s; }
+.art-choice img { width:100%; height:100%; object-fit:cover; display:block; }
+.art-choice:hover { border-color:#c89d50; }
+.art-choice:focus-visible { outline:2px solid #c89d50; outline-offset:2px; }
+.art-choice[aria-pressed="true"] { border-color:#edb74a; box-shadow:0 0 0 2px #edb74a55; }
+.art-none { color:#8d8296; font-size:1.1rem; }
 .onboarding-layout .btn { min-height:46px; padding:11px 18px; font-size:.84rem; font-weight:600; border-radius:10px; }
 .onboarding-layout .btn-primary { background:#edb74a; border-color:#f4ca76; box-shadow:0 1px 0 #ffe9b540 inset,0 4px 12px #0002; }
 .onboarding-layout .btn-primary:hover { background:#f9cb68; }
@@ -37,6 +53,9 @@
 .onboarding-tcg .card-kicker { font:.6rem var(--mono); letter-spacing:.14em; color:#c7b389; }
 .card-edition { margin-left:auto; color:#b4996b; font-size:1rem; }
 .onboarding-tcg .card-face { min-height:130px; }
+.onboarding-tcg .card-art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:10px; }
+.onboarding-tcg .card-face.has-art .card-orbit,
+.onboarding-tcg .card-face.has-art .card-sigil { display:none; }
 .onboarding-tcg .card-sigil { width:62px; height:62px; font-size:2rem; background:#211b29; border-color:#ba955860; box-shadow:0 0 35px #edb74a12,0 0 0 7px #ffffff03; }
 .card-orbit { position:absolute; width:115px; height:115px; border:1px solid #e9c58a10; border-radius:50%; }
 .card-orbit::after { content:""; position:absolute; inset:-20px; border:1px dashed #e9c58a0c; border-radius:50%; }
