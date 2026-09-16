@@ -56,7 +56,7 @@ impl ExperiencePort for UreqExperience {
     }
 
     fn probe(&self, origin: &str) -> Result<(), ExperienceError> {
-        // The companion page identifies itself through its discovery document (C8).
+        // The companion page identifies itself through its discovery document.
         // Anything else answering on that port — another local service, or a stale
         // listener — is not the page, so it is unreachable as far as a sign-in pop is
         // concerned and no one is sent to it.
@@ -97,8 +97,8 @@ fn request(
     let url = format!("{}{}", context.origin, path);
     // RFC 9449 §7.1: a DPoP-bound token is presented under the DPoP auth scheme —
     // the resource server rejects bound tokens under Bearer (the reference PDS
-    // answers those with its misleading "Malformed token" 400). Plain credentials
-    // (enrollment sessions, app-password PDS sessions) stay Bearer.
+    // answers those with its misleading "Malformed token" 400). A credential with no
+    // DPoP key - an enrollment session - stays Bearer.
     let scheme = if context.dpop.is_some() { "DPoP" } else { "Bearer" };
     let mut request = agent.request(method, &url).timeout(timeout).set("Authorization", &format!("{} {}", scheme, context.credential));
     if let Some(proof) = &context.dpop {

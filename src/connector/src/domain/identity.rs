@@ -55,7 +55,7 @@ pub fn valid_handle(handle: &str) -> bool {
 pub struct CompanionEntry {
     /// Stable local handle for this enrollment, e.g. `cmp_lumen`; also its session key.
     pub companion_id: String,
-    /// The owning identity's `local_id`. Legacy entries without one are dropped at load.
+    /// The owning identity's `local_id`.
     #[serde(default)]
     pub local_id: String,
     /// Operator-chosen short name used for selection matching.

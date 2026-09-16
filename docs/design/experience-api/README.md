@@ -173,7 +173,7 @@ MCP 2026-07-28 uses subscriptions/listen for opted-in resource update streams; e
 
 ## 8. Where the contract lives
 
-The server side of this contract is the Experience API in `src/server/web`; [ARCHITECTURE](../../ARCHITECTURE.md) names its modules and shared components. The connector side is the Rust connector in `src/server/mcp`, described in its [README](../../../src/server/mcp/README.md). The connector is the only unattended participation path.
+The server side of this contract is the Experience API in `src/server/web`; [ARCHITECTURE](../../ARCHITECTURE.md) names its modules and shared components. The connector side is the Rust connector in `src/connector`, described in its [README](../../../src/connector/README.md). The connector is the only unattended participation path.
 
 ## 9. Acceptance criteria
 

@@ -463,7 +463,7 @@ impl ConnectorHub {
     /// the authorize URL the operator's browser is redirected to (a 302); the
     /// provider's own UI handles account selection and sign-in. Starting a new bind
     /// for the same identity replaces its in-flight one; different identities bind
-    /// concurrently. All network I/O happens outside every guard (W2-A). A flight
+    /// concurrently. All network I/O happens outside every guard. A flight
     /// that cannot be parked is an honest failure — never a dangling redirect.
     pub fn begin_atproto_bind(&self, local_id: &str, handle: Option<&str>, redirect_uri: &str) -> Result<String, String> {
         self.attributed("operator.atproto_bind_start", || {
@@ -802,7 +802,7 @@ impl ConnectorHub {
                 );
             }
             // Silent refresh before use: an OAuth access token inside its margin renews
-            // here, outside every guard (W2-A) and under the identity's refresh mutex;
+            // here, outside every guard and under the identity's refresh mutex;
             // the renewed session is already stored.
             let atproto = self.refresh_atproto_if_stale(local_id)?;
 
@@ -1248,7 +1248,7 @@ impl ConnectorHub {
     ///
     /// Lock discipline: the pending list is drained under its own lock and RELEASED
     /// before any hub work; the enroll-and-arrive steps take the store lock only in
-    /// their own short scopes, with all network I/O outside it (W2-A). The resume runs
+    /// their own short scopes, with all network I/O outside it. The resume runs
     /// on the operator connection thread that performed the bind and holds no lock
     /// across its whole journey.
     fn resume_pending_connects(&self, local_id: &str) {
@@ -1484,7 +1484,7 @@ impl ConnectorHub {
     /// `StateStore` reads and writes are allowed: never a hub method that takes the
     /// store again (`std::sync::Mutex` is not re-entrant — the second `lock()` on the
     /// same thread blocks forever while still holding the mutex, freezing every other
-    /// intake), and never network I/O (W2-A: exchange outside the lock, re-check after).
+    /// intake), and never network I/O: the exchange runs outside the lock and the state is re-checked after.
     /// Intakes that need composed facts should ask the hub for a batched read (see
     /// [`ConnectorHub::identity_inventory`]) instead of walking the store themselves.
     pub fn store(&self) -> &Mutex<StateStore> {
@@ -2258,8 +2258,8 @@ impl ConnectorHub {
     }
 
     /// The enrollment's bearer session, from the per-enrollment session map. A missing
-    /// session is an honest 're-enroll' state (legacy rows are dropped at load; the
-    /// session map may also lag a hand-edited state file).
+    /// session is an honest 're-enroll' state: the session map can lag a hand-edited
+    /// state file.
     fn session_of(&self, companion: &CompanionEntry) -> Result<String, String> {
         let store = self.lock_store()?;
         store.session(&companion.companion_id).ok_or_else(|| "the stored session is missing; re-enroll this enrollment".to_string())

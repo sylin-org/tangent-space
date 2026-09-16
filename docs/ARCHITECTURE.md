@@ -99,7 +99,7 @@ Outbound      Tangent client: one route table · atproto client: identity resolu
 
 ### Connector modules
 
-Each module is a folder of the connector crate, which moves from `src/server/mcp` to `src/connector` in R2.
+Each module is a folder of the connector crate, which is `src/connector`.
 
 | Module | Owns | Built from |
 |---|---|---|

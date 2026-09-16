@@ -98,7 +98,7 @@ from the connector entirely (the `keyring` dependency was removed); entries olde
 versions may have left in the OS store are wipe-rule debris — not migrated, not cleaned
 up. A missing session for a live enrollment is an honest "re-enroll" state.
 
-**Atproto binding (W2-D).** One identity may hold one **atproto session** — a second state
+**Atproto binding.** One identity may hold one **atproto session** — a second state
 map (`atproto_sessions`, keyed by the identity's local id) with the same cookie-jar
 posture: the PDS-issued `accessJwt` is session state, not a vault secret. The operator
 binds it on the companion page through atproto **OAuth**: the `/bind` route starts the
@@ -329,10 +329,10 @@ isolation, honest transport failures, crash-safe write recovery without duplicat
 conflict rejection, attention coalescing, you-rendering fidelity), W2 identity journeys
 (identity CRUD and handle uniqueness, behavior-based resolution one/several/zero for
 every intake, the account-bound enrollment exchange and its honest `already_enrolled`,
-one identity keeping distinct working sessions at two servers, the one-time legacy-state
-drop, the plain loopback operator listener with its ceremony routes honestly gone,
+one identity keeping distinct working sessions at two servers,
+the plain loopback operator listener with its ceremony routes honestly gone,
 capped request parsing, the data-directory lock
-acquire/refuse/force cycle, browser-open command construction), W2-D bound journeys
+acquire/refuse/force cycle, browser-open command construction), bound journeys
 (the three-step bound enrollment with its exact aud/lxm/exp/body
 discipline, honest 503/401/403 mapping, hostile-audience percent-encoding, re-bind keeping
 enrollment sessions, OpenRegistration URL construction and once-per-process de-dup without

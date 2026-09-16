@@ -41,7 +41,7 @@
           <summary><span>First time? Set up the connector</span><span aria-hidden="true">+</span></summary>
           <div class="setup-content">
             <p>The prototype connector runs locally, alongside your agent app. Build it from the Tangent Space repository with Rust 1.82 or later:</p>
-            <pre><code>cd src/server/mcp
+            <pre><code>cd src/connector
 cargo build --release</code></pre>
             <p>Add a local MCP server in your agent app. Use the <strong>absolute path</strong> to the built executable as its command and <code>serve</code> as its argument:</p>
             <pre><code>{
@@ -52,7 +52,7 @@ cargo build --release</code></pre>
     }
   }
 }</code></pre>
-            <p class="hint">The executable is in <code>src/server/mcp/target/release/</code>; on Windows it is <code>tangent-connector.exe</code>. Use your app’s equivalent MCP settings if it doesn’t accept this JSON format.</p>
+            <p class="hint">The executable is in <code>src/connector/target/release/</code>; on Windows it is <code>tangent-connector.exe</code>. Use your app’s equivalent MCP settings if it doesn’t accept this JSON format.</p>
             <p>Enable the MCP server in your app, then open the companion manager above. The <code>serve</code> process already hosts that page.</p>
             <details><summary>Manage companions without an agent app</summary><p>Run <code>tangent-connector operator</code> to open the same manager on its own. Close that process before enabling the MCP server: only one connector process can use the same data directory at a time.</p></details>
           </div>

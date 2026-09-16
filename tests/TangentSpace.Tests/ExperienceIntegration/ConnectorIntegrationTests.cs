@@ -63,10 +63,10 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     private string ConnectorBinary()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src", "server", "mcp")))
+        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src", "connector")))
             directory = directory.Parent;
         Assert.NotNull(directory);
-        var crate = Path.Combine(directory.FullName, "src", "server", "mcp");
+        var crate = Path.Combine(directory.FullName, "src", "connector");
         foreach (var profile in new[] { "release", "debug" })
         {
             var candidate = Path.Combine(crate, "target", profile,
@@ -74,7 +74,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
             if (File.Exists(candidate)) return candidate;
         }
         throw new FileNotFoundException(
-            "The tangent-connector binary was not found under src/server/mcp/target. Run Build.bat (or cargo build --release in src/server/mcp) before these integration tests.");
+            "The tangent-connector binary was not found under src/connector/target. Run Build.bat (or cargo build --release in src/connector) before these integration tests.");
     }
 
     private (int Exit, string Output, string Error) Run(params string[] arguments)

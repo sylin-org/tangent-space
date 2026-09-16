@@ -1,4 +1,4 @@
-//! W2-A identity journeys: identity CRUD and handle uniqueness, behavior-based identity
+//! Identity journeys: identity CRUD and handle uniqueness, behavior-based identity
 //! resolution (exactly one identity → auto-resolve for every intake; several → honest
 //! selection question; zero → creation instruction), the account-bound enrollment
 //! exchange against the fake server, and the companion manager's local-only discipline.
@@ -171,8 +171,6 @@ fn already_enrolled_is_an_honest_error_locally_and_from_the_server() {
     assert!(hub.enrollments_of(&local_id).is_empty(), "the local enrollment is gone");
 }
 
-// ---------- legacy state ----------
-
 // ---------- two origins, two sessions ----------
 
 #[test]
@@ -288,7 +286,7 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
     // bind pages exist for the Connect handshake to open.
     assert!(!body.contains("enroll-bound") && !body.contains("Enroll unbound") && !body.contains("Enroll with bound"), "no enroll buttons remain: {body}");
     assert!(body.contains("/bind/"), "the per-identity bind pages are wired");
-    // The sign-in form is gone (owner direction): binding is an OAuth page, never a
+    // The sign-in form is gone: binding is an OAuth page, never a
     // password form on the operator page.
     assert!(!body.contains("type=\"password\"") && !body.contains("appPassword"), "no password form remains: {body}");
     // The allowlist section is gone too (owner correction: resolution is behavior).
@@ -337,7 +335,7 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
     assert!(head.starts_with("HTTP/1.1 404"), "the allowlist write route is gone: {head}");
 }
 
-/// C8: the companion manager answers its own page and nothing else. A site that reaches
+/// The companion manager answers its own page and nothing else. A site that reaches
 /// this port — by rebinding its hostname to the loopback address, or by sending the one
 /// content type that crosses origins without a preflight — is refused before it reaches
 /// a route, while the page's own write and the inert discovery document still work.

@@ -61,16 +61,16 @@ const OPERATOR_STYLE: &str = include_str!("operator.css");
 // manager remains one self-contained executable.
 fn atmosphere_assets() -> String {
     format!("<style>{}</style><script>{}</script><script>{}</script>",
-        include_str!("../../../web/wwwroot/atmosphere.css"),
-        include_str!("../../../web/wwwroot/ascii-scenes.js"),
-        include_str!("../../../web/wwwroot/atmosphere.js"))
+        include_str!("../../../server/web/wwwroot/atmosphere.css"),
+        include_str!("../../../server/web/wwwroot/ascii-scenes.js"),
+        include_str!("../../../server/web/wwwroot/atmosphere.js"))
 }
 
 fn operator_index() -> String {
     INDEX_HTML.replace("/* TANGENT_OPERATOR_STYLE */", OPERATOR_STYLE)
         .replace("<!-- TANGENT_ATMOSPHERE -->", &atmosphere_assets())
 }
-/// The operator page's fixed default port (owner direction): a stable URL any Connect
+/// The companion manager's fixed default port: a stable URL any Connect
 /// can name. `--port` or `TANGENT_CONNECTOR_PORT` names another fixed port; there is no
 /// random port.
 pub const DEFAULT_PORT: u16 = 5219;
@@ -382,7 +382,7 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
     if content_length > 0 && reader.read_exact(&mut body_bytes).is_err() {
         return;
     }
-    // C8, first rule: this page answers loopback names only. A site that rebinds its
+    // First rule: this page answers loopback names only. A site that rebinds its
     // own hostname to 127.0.0.1 reaches this port with that hostname in `Host`, so the
     // check keeps every surface — reads included — off the open web. It costs the
     // legitimate page nothing: the browser fills `Host` from the address it opened.
@@ -404,7 +404,7 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         stream_events(writer, hub, sse_clients);
         return;
     }
-    // C8, second rule: a write comes from the page itself. `text/plain` is a CORS
+    // Second rule: a write comes from the page itself. `text/plain` is a CORS
     // simple request — any site can send one to this port without a preflight — so the
     // JSON surface accepts `application/json` and nothing else, and the same-origin
     // evidence the browser attaches must agree with the host it reached. The server's
@@ -565,9 +565,8 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
         // connecting (the Connect handshake) or an explicit hub/CLI action — the disarm
         // tier — never an operator-page ceremony. The old enroll routes are gone.
         //
-        // The app-password bind route is gone too (owner direction): binding happens on
-        // the /bind route over OAuth; the hub-level password method remains the
-        // documented non-UI fallback (CLI/tests), not a page surface.
+        // Binding happens on the /bind route over OAuth, and nowhere else: there is no
+        // password path on the page, in the hub or in the CLI.
         ("POST", ["identities", local_id, "atproto", "unbind"]) => {
             finish(hub.unbind_atproto(local_id), |identity| {
                 ok_json(json!({ "identity": identity_with_atproto(&identity, hub.atproto_binding(&identity.local_id)) }))

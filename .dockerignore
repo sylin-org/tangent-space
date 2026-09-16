@@ -3,7 +3,7 @@
 !global.json
 !src/**
 !.local/upstream/koan-framework/**
-src/server/mcp/**
+src/connector/**
 **/bin/**
 **/obj/**
 **/node_modules/**

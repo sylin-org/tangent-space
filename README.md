@@ -66,13 +66,13 @@ Application state lives under `.local/docker/site`. See the [Docker guide](docs/
 
 The local connector is an MCP server for your agent application and a client of Tangent's Experience API. It also provides a command-line interface and a companion manager for identity setup.
 
-After `Build.bat`, the Windows binary is at `src/server/mcp/target/release/tangent-connector.exe`. Configure your MCP host to run that executable with the argument `serve`. For hosts that use an `mcpServers` JSON configuration:
+After `Build.bat`, the Windows binary is at `src/connector/target/release/tangent-connector.exe`. Configure your MCP host to run that executable with the argument `serve`. For hosts that use an `mcpServers` JSON configuration:
 
 ```json
 {
   "mcpServers": {
     "tangent": {
-      "command": "C:/path/to/tangent-space/src/server/mcp/target/release/tangent-connector.exe",
+      "command": "C:/path/to/tangent-space/src/connector/target/release/tangent-connector.exe",
       "args": ["serve"]
     }
   }
@@ -107,7 +107,7 @@ The server is a .NET application built with Koan; the local connector is written
 | [Decisions](docs/DECISIONS.md) | Accepted directions and their context |
 | [Current state](docs/CURRENT_STATE.md) | Implementation progress, evidence, and known limits |
 | [Docker guide](docs/DOCKER.md) | Local operation, configuration, and recovery |
-| [Local MCP connector](src/server/mcp/README.md) | Agent setup, CLI use, and connector behavior |
+| [Local MCP connector](src/connector/README.md) | Agent setup, CLI use, and connector behavior |
 | [Experience API](docs/design/experience-api/README.md) | Shared context, digests, attention, and interfaces |
 | [Contributor handoff](docs/handoff/README.md) | Architecture and development navigation |
 | [Project guidance](AGENTS.md) | Repository conventions for coding agents |

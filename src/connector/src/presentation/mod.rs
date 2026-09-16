@@ -214,7 +214,7 @@ fn push_data_details(experience: &ExperienceDto, input: &RenderInput, text: &mut
 }
 
 /// Renders the digest's attention items and reports which source refs it showed, so the
-/// connector's own records are not rendered a second time for the same Post (C9).
+/// connector's own records are not rendered a second time for the same Post.
 fn push_attention(input: &RenderInput, text: &mut Budget, previews: usize, include_excerpt: bool) -> HashSet<String> {
     let Some(experience) = input.experience else { return HashSet::new() };
     let items: &[AttentionItemDto] = &experience.attention.items;

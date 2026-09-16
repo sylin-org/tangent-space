@@ -8,9 +8,9 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R2 — Rename to the product's words |
-| Current task | R2.5 — the connector's own glossary. R2.1 stays `waiting` on Leo for the relaunch |
-| Next action | **R2.5 — the connector glossary** (C6): `Companion`, `Account`, `Enrollment`, `Session`, `Context`, `Receipt`, the `manager` command; `room` → `topic`; the crate moves from `src/server/mcp` to `src/connector`; the greenfield check learns to scan the connector, with rules for plan-item codes and owner narration; comments lose their history; the README describes the current connector only. It is the last task in R2 before R2.6 wipes and verifies — and R2.6's wipe is the one R2.1 has been waiting on (N-044) |
-| Last checkpoint | 2026-09-16 · S-004 · R2.4 done and committed: the wire speaks `topics`, `topicKey`, `postSequence`. Greenfield 474; .NET 87/87, browser 7/7, connector 52/52 |
+| Current task | R2.5 — the connector's own glossary (`doing`), stage 2 of four. R2.1 stays `waiting` on Leo for the relaunch |
+| Next action | R2.5 stage 2: **`room` → `topic` in the connector**, then stage 3 (the glossary identifiers, which move the `state.json` shape and the .NET seeds together) and stage 4 (`Identity` → `Companion`, `operator` → `manager`). See In flight for what each stage owns and why stage 4 is the least mechanical |
+| Last checkpoint | 2026-09-16 · S-004 · R2.5 stage 1 committed: the crate is `src/connector` and the greenfield check scans it. Plan-item codes 0, owner narration 0, connector history 0. .NET 87/87, browser 7/7, connector 52/52, lifecycle 30/30 |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional) — 32 commits exist only on this machine; also the R2.1 relaunch (N-044) and the `probes/` question (N-047). N-035 is settled — D11 and D12, [ADR 0013](../../adr/0013-access-contract-and-role-model.md) |
 | Blockers | None for R2.2. R2.1's own relaunch verification waits on Leo's wipe timing (N-044); four entity renames have now stranded their tables |
@@ -201,6 +201,19 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R6.6 | Documentation cleanup: remove superseded handoffs, briefs, design prompts, research snapshots and evidence for removed capabilities; `check-greenfield.ps1 -Strict` passes | todo | Only living documents and decision records remain | |
 
 ## In flight
+
+**R2.5 — the connector glossary** (doing)
+
+Four stages, one commit each, so a failure is bisectable.
+
+- [x] Stage 1 — the crate is `src/connector`; the greenfield check scans it (`.rs` and `.md` added, `target/` excluded) and learned two rules, plan-item codes and owner narration, both now zero. Six historical markers went, four of them **stale rather than merely narrated**: they described a drop-at-load sweep and a password bind that R1.12 and R1.13 had deleted (N-055)
+- [ ] Stage 2 — `room` → `topic` in the connector
+- [ ] Stage 3 — the glossary's identifiers: `CompanionEntry`/`companion_id` → `Enrollment`/`enrollment_id`, `LocalContext` → `Context`, `PendingWrite` → `Receipt`, `AtprotoSession` → `AccountSession`. `companion_id` is **persisted in `state.json` and seeded by the .NET connector tests** (N-039), so the state shape and those seeds move together
+- [ ] Stage 4 — `Identity` → `Companion`, and the `operator` page and command → `manager`. The largest and the least mechanical: `identity` is also atproto's own word, and the glossary keeps **Operator** for the person who runs the connector while retiring it for the page
+- [ ] Verify: four suites, greenfield, and the README rewritten to describe the current connector only
+
+Check command: `cargo test --manifest-path src/connector/Cargo.toml`, `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, then `pwsh scripts/check-greenfield.ps1`.
+
 
 **R2.1 — apply the glossary** (doing)
 
@@ -479,6 +492,16 @@ Arrival is one page with four slots, not three page designs — so it degrades g
   The method that found both is worth keeping. Server and browser cannot disagree about a word that appears in neither, so for a *total* rename absence is the proof, and the greenfield check already measures it. What absence does not prove is that both sides chose the *same* new word — so each renamed field was read back on both sides, and the DOM ids the browser resolves were cross-checked against the ids the HTML declares (a script that lists every `$('id')` with no matching `id=` in the markup; it reports four pre-existing dynamically-created elements, and the renamed `topic-details` was not among them).
 
   Routes stayed behind on purpose. `/api/rooms`, `/api/tangents` and `ConversationController` are **deleted** by R4.2, not renamed, so touching them here would be work R4.2 throws away — the N-040 trap. The one exception was `POST {tangentKey}/channels`, which the literal audit caught: it has **no caller** in browser, connector or tests (topic creation goes through `/api/v1/tangents/{id}/topics`), so the reason the boundary exists did not apply and the word went.
+
+- **N-055** (R2.5) Pointing the greenfield check at the connector was worth more than the renames it will drive, because it found things no suite could. Three kinds.
+
+  **Comments describing capabilities that were already deleted.** Four of the connector's six historical markers were not narration but *stale fact*: `hub.rs` and `identity.rs` both said legacy rows "are dropped at load", and R1.13 removed that sweep; `atproto_oauth.rs` contrasted a scope-era session with "a legacy one", and R1.13 removed the pre-scope client id that made one possible; `operator.rs` said "the hub-level password method remains the documented non-UI fallback", and R1.12 deleted `bind_atproto` outright. A deletion task that removes the code but leaves the comment leaves a reader worse off than before, because the comment still reads as current.
+
+  **A label that outlived its action.** `operator.html` mapped `"operator.bind_atproto"` to "Account sign-in" in its attribution feed. Nothing has published that event since R1.12. Grepping each event name against its publishers found it in one pass, and is worth repeating whenever an action is deleted.
+
+  **A dangling section header.** `identity_journey.rs` still carried `// ---------- legacy state ----------` with nothing under it: R1.13 deleted the two tests it introduced and left the heading.
+
+  A fourth thing came from the check itself rather than the code. `companion` is **retired on the server and current in the connector** — ARCHITECTURE carries two glossaries and they disagree on that word by design. One pattern applied to both trees has to be wrong about one of them, so rules can now name the paths they do not govern, and `Server vocabulary` does not govern `src/connector`. The same shape will be needed again for any word the pair spells differently.
 
   Three smaller things the work turned up. `CompanionGovernance`'s class doc still described "the inbound MCP boundary", which R1.1 deleted — rewritten. `CarpaNet.Identity` was imported by the original file and used by none of it; each of the six files now carries only the usings the compiler proves it needs. And `TangentRole`'s comment mixed a real storage invariant with its own history — the invariant (`Member=0` and `Removed=1` are fixed) is kept, the history is gone. One `companion` remains in server C#: the problem code `"companion_unavailable"`, which the connector emits from `SelectCompanion` and `Arrive`. **R3.10 deletes both tools, and this entry should go with them.**
 

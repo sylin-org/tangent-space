@@ -87,7 +87,7 @@ function describeEvent(event) {
     case "connect_failed": return who + "Connect failed at " + event.origin + (event.identity ? " as " + event.identity : "") + ": " + event.code + ".";
     case "tool_completed": {
       if (!event.tool || !event.tool.startsWith("operator.")) return null;
-      const names = { "operator.bind_atproto": "Account sign-in", "operator.atproto_bind_start": "Account sign-in started", "operator.unbind_atproto": "Account disconnection" };
+      const names = { "operator.atproto_bind_start": "Account sign-in started", "operator.unbind_atproto": "Account disconnection" };
       return names[event.tool] ? names[event.tool] + (event.status === "ok" ? " completed." : ": " + event.status + ".") : null;
     }
     default: return null;

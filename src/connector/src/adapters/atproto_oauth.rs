@@ -78,7 +78,7 @@ pub struct AtprotoOauth {
     /// The public PLC directory origin (did:plc document resolution).
     plc_directory: String,
     /// The handle-resolution origin (the `com.atproto.identity.resolveHandle` XRPC —
-    /// createSession-equivalent server-side resolution, per the owner direction).
+    /// server-side handle resolution that needs no session).
     handle_resolver: String,
     /// The authorization server binds use when no `?handle=` discovery names one: the
     /// public default, or the operator's `TANGENT_CONNECTOR_AUTHSERVER` override.
@@ -238,8 +238,8 @@ impl AtprotoOauth {
     /// Silent refresh: a new access token (and rotated refresh token, when the server
     /// rotates) from the stored refresh token, DPoP-proved with the session's key.
     /// `client_id` is the id the session was authorized under — the authorization
-    /// server pins a grant to its exact client_id, so a scope-era session and a
-    /// legacy one must each present their own.
+    /// server pins a grant to its exact client_id, so a session must present the id
+    /// it was authorized under.
     pub fn refresh(
         &self,
         authserver: &str,
@@ -316,7 +316,7 @@ impl AtprotoOauth {
             }
             return Ok((handle.to_string(), None));
         }
-        // The resolver XRPC first (createSession-equivalent server-side resolution);
+        // The resolver XRPC first (server-side handle resolution, no session needed);
         // the DID well-known is the custom-domain fallback.
         let lookup = format!(
             "{}/xrpc/com.atproto.identity.resolveHandle?handle={}",

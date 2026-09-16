@@ -1,4 +1,4 @@
-// Edit-history viewer (W2-C): the closed disclosure under an edited post. Reads the post's
+// Edit-history viewer: the closed disclosure under an edited post. Reads the post's
 // recorded pre-edit snapshots from the changelog partition of the generic history surface and
 // renders each era verbatim from the snapshot payload — the server's text, facets and
 // timestamps; nothing is reconstructed or recomputed client-side. Plain JS.

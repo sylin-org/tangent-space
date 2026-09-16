@@ -1,6 +1,6 @@
 # Tangent Space server lifecycle engine. Two servers live under src/server:
 #   web       — the .NET/Koan Tangent web+experience server; runs as the Docker container.
-#   connector — the Rust local connector (src/server/mcp); a host-run binary, no container.
+#   connector — the Rust local connector (src/connector); a host-run binary, no container.
 # Every action applies to all servers where it is meaningful:
 # Wipe: stop/remove only the Compose tangent service, then clear one validated state
 #   directory under <repo>/.local/docker. Interactive use requires typing WIPE; -Force
@@ -157,13 +157,13 @@ function Invoke-TangentDockerBuild {
     Write-Output 'Built the Tangent image. Nothing was stopped or removed.'
 }
 
-# Build the connector (src/server/mcp): a release binary. Kept separate from the web image
+# Build the connector (src/connector): a release binary. Kept separate from the web image
 # build so lifecycle tests can drive the web path with mocks.
 function Invoke-ConnectorBuild {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RepoRoot, [scriptblock]$CommandRunner)
     $runner = if ($CommandRunner) { $CommandRunner } else { $script:DefaultTangentCommandRunner }
-    $connector = Join-Path $RepoRoot 'src/server/mcp'
+    $connector = Join-Path $RepoRoot 'src/connector'
     if (-not (Test-Path -LiteralPath (Join-Path $connector 'Cargo.toml'))) {
         throw "The connector sources are missing: $connector"
     }
@@ -201,7 +201,7 @@ if (-not ($TangentLifecycleSkipMain -or $global:TangentLifecycleSkipMain)) {
             & (Join-Path $repoRoot 'scripts/start-docker.ps1') @launchArguments
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'tangent-connector.exe' } else { 'tangent-connector' }
-            Write-Output "The connector is host-run, not containerized: agent hosts start it via 'tangent-connector serve' (see src/server/mcp/README.md). Expected binary after Build: $(Join-Path $repoRoot "src/server/mcp/target/release/$binary")"
+            Write-Output "The connector is host-run, not containerized: agent hosts start it via 'tangent-connector serve' (see src/connector/README.md). Expected binary after Build: $(Join-Path $repoRoot "src/connector/target/release/$binary")"
         }
     }
 }

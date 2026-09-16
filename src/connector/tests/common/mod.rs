@@ -506,7 +506,7 @@ fn respond(
             }
             // The localhost virtual client's requestable scopes live in its client_id
             // query parameter; the scoped form declares the bind scope set, the bare
-            // legacy origin declares the profile base only.
+            // bare origin declares the profile base only.
             let client_id = body.get("client_id").and_then(Value::as_str).unwrap_or_default().to_string();
             let declared: &[&str] = if client_id == scoped_client_id() {
                 &["atproto", "rpc:local.tangent.mcp.exchange?aud=*"]
