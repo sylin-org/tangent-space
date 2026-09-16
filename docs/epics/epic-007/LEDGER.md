@@ -8,11 +8,11 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.8 — verify R1 on a fresh install (`doing`) |
-| Next action | Continue the R1.8 walkthrough at W4, whose mention draft is typed, unsent, in the Open questions composer of Leo's Chrome; after R1.8's close-out, the connector tasks R1.11–R1.14 |
-| Last checkpoint | 2026-09-15 · S-002 · Leo accepted the connector realignment (R0.9, ADR 0012); commit "docs: accept the connector realignment"; the R1.8 walkthrough resumes at W4 |
+| Current task | R1.11 — harden the companion manager (`todo`) |
+| Next action | Start R1.11 (per C8): JSON-only writes; a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; page detection through `/api/discovery`; tests that inject the page address; no example keeping state outside the user profile. Then R1.12–R1.14 |
+| Last checkpoint | 2026-09-15 · S-003 · R1.8 done. W1–W10 all pass, and every check was re-verified at `f223a1b`: .NET 351/359 (exactly the 8 known failures), browser 129/129, connector 99/99, lifecycle 76/76, greenfield 1,884, server C# 11,333 |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
-| Waiting on | Leo: the sign-in steps of the R1 walkthrough (W9); push authorization (optional) |
+| Waiting on | Leo: the N-035 arrival proposal (shape and timing); push authorization (optional) |
 | Blockers | None (Docker Desktop's startup crash was cleared on 2026-09-15; see N-023) |
 
 ## Resume protocol
@@ -122,7 +122,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.5 | Per D2 and D9: move the enrollment proof audience and DID-key resolution (`SpacesVerifier`, `ResolvedAuthorKey`) into Identity; then delete Spaces storage — services, notifications, readiness, controllers, `SpaceCarVerifier`, `ConversationSync`, `WriteIntent`, Spaces branches, `RoomSpaceState`, the CBOR package (BouncyCastle stays: it verifies ES256K proofs), the fixture-network launch path and configuration (see N-014), Spaces probes and scripts, the Spaces status UI in `rooms.js`, the discovery document's `sourceWriteConsent`, Spaces tests, and Spaces passages in README, DOCKER and OPERATING (see N-015). `SourceDecision` goes in R3.6 | done | No Spaces types remain; the connector enrolls on a fresh install | `ac9cb7b`, `5ed4f29`, `99e89be`: no Spaces types remain (`SourceDecision` stays for R3.6); enrollment derives its audience on a fresh install (`EnrollmentTests`); .NET 345/357 (the 12 known), browser 125/125, connector 98/98, lifecycle 76/76; server C# 13,281 → 11,464; greenfield 2,473 → 1,926 |
 | R1.6 | Per D3: delete ONNX classification — `ChangeClassification`, `ChangeClass`, the Onnx project reference, `models/`, raw scores in `history.js`, its tests and configuration | done | Edit history works without scores | `29de598`: no classifier, `ChangeClass`, Onnx reference, model (23 MB) or `Koan:Ai:Onnx` configuration remain; edit history keeps its versions (`EditHistoryTests`); .NET 338/346, failures = the 8 remaining known (N-020); browser 125/125; lifecycle 76/76; greenfield classification 38 → 0, total 1,926 → 1,883; server C# 11,464 → 11,276 |
 | R1.7 | Per D8: delete `clients/participant`; rewrite the README's credential paragraph and any remaining participant-runner passages (OPERATING went in R1.5, N-015) | done | No references remain | `5170f1b`: `clients/` is gone and no living document refers to it (R0 had already rewritten the README's credential paragraph; the Experience API spec's migration map and Spaces-era clauses were replaced, N-022); historical references wait for R6.6 (N-011); browser 125/125; greenfield 1,883; no server or connector change |
-| R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | doing | Walkthrough passes; about 5,000 fewer lines | |
+| R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | done | Walkthrough passes; about 5,000 fewer lines | W1–W10 all pass on the fresh install (see [Walkthrough results](#walkthrough-results)); three fixes came out of it (`b7061dd` N-025, `efe0ecf` N-027, `deb70ab` N-029) and two standing rules (`efe0ecf` R1.9, `0c51fc4` R1.10). Re-verified at `f223a1b`: .NET 351/359 with exactly the 8 known failures, browser 129/129, connector 99/99, lifecycle 76/76, greenfield 1,884; server C# 16,830 → 11,333 (5,497 fewer). Findings for later slices: N-026, N-033, N-034, N-035 |
 | R1.9 | Per Leo (15 September): no dialogs. Replace the post-removal `confirm()`, the report `<dialog>`, the atmosphere `<dialog>` and the connector page's three `confirm()` calls with inline controls; guard against their return (N-027) | done | No dialog remains; the guards pass; the walkthrough uses the inline controls | Commit "refactor: replace every dialog with inline controls": `inline-confirm.js` confirms post removal in place, the report form and the atmosphere picker are in-page panels, the companion page confirms inline; `tests/no-dialogs.test.mjs` and `the_page_opens_no_dialog` guard it; browser 129/129, connector 99/99; the inline removal passed live in W3 |
 | R1.10 | Per Leo (15 September): no random ports. The connector refuses port 0; its hub opens pages only through an injected opener, silent unless the binary installs the platform browser; tests lose the shared no-browser guard and their random-looking fake addresses (N-028) | done | No product code picks a random port; no test opens a browser | Commit "fix: open pages only through the hub and drop random ports": `PageOpener` injected (silent by default, the platform browser only in `build_hub`); port 0 refused; the env guards and random-looking fake addresses gone; connector 99/99; .NET connector integration 3/3 on the release binary |
 | R1.11 | Per C8: harden the companion manager — JSON-only writes, a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; detect the page through `/api/discovery`; tests inject the page address; no example keeps state outside the user profile | todo | A cross-site `text/plain` POST and a foreign `Host` are refused; connector suite green | |
@@ -193,21 +193,17 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R1.8 — verify R1 on a fresh install** (doing)
+Nothing in flight. R1.11 is the next task; write its steps here when it starts.
+
+**Completed: R1.8 — verify R1 on a fresh install**
 
 - [x] Announce the wipe; back up `.local/docker/site` as the [Docker guide](../../DOCKER.md) describes and record the backup path here. Announced 2026-09-15; backup `.local/backups/docker-20260915-134736-993` (164 files with a hash manifest). After the claim fix (N-025) a second backup, `.local/backups/docker-20260915-141626-412`, preceded a second wipe
 - [x] Wipe, build (`Build.bat`), launch (`Launch.bat`); confirm `/health/ready`. The first build failed on a stale Dockerfile line (N-024). After the fix the image and connector built in 36 s, a fresh configuration was created and the app was healthy at 09:51. The startup log holds only the Data Protection key-encryptor warning (expected locally; see DOCKER) and the `HTTP_PORTS` override notice
 - [x] .NET, browser, lifecycle and connector suites; greenfield check. At `5170f1b`: .NET 338/346 (only the 8 known failures), browser 125/125, lifecycle 76/76, connector 98/98, greenfield 1,883
-- [ ] Walkthrough W1–W10 with Leo, who does every sign-in; record results under [Walkthrough results](#walkthrough-results). W1–W3 and W8 pass and W5 is in progress; paused at W4 for the connector assessment
-- [ ] Update metrics, CURRENT_STATE's top section and the session log; commit
+- [x] Walkthrough W1–W10 with Leo, who did every sign-in; results under [Walkthrough results](#walkthrough-results). All ten pass. W1, W3 and W5 each failed first and produced a fix (N-025, N-027, N-029); W2, W6, W9 and W10 recorded findings for later slices (N-026, N-034, N-035)
+- [x] Re-ran every check at `f223a1b`, after the walkthrough's fixes: .NET 351/359 with exactly the 8 [known failures](#known-baseline-failures), browser 129/129, connector 99/99, lifecycle 76/76, greenfield 1,884, server C# 11,333. Metrics, CURRENT_STATE's top section and the session log updated; committed
 
 Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, `node --test "tests/*.test.mjs"`, then `pwsh scripts/check-greenfield.ps1`.
-
-**Completed: R1.7 — delete `clients/participant`**
-
-- [x] Inventory: 10 tracked files and no untracked leftovers; no script, test glob, manifest or ignore file refers to it; R0 had already rewritten the README's credential paragraph; the one living document with references was the Experience API spec
-- [x] Deleted `clients/participant`; the spec's migration map became a pointer to where the contract lives, and its Spaces-era clauses went too (N-022)
-- [x] Browser 125/125, greenfield 1,883; no server or connector change; commit
 
 ## Known baseline failures
 
@@ -224,9 +220,9 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 
 ## Metrics
 
-| Measure | Baseline (`d682c26`) | Now (after R1.7) | Target |
+| Measure | Baseline (`d682c26`) | Now (R1.8) | Target |
 |---|---|---|---|
-| Server C# lines | 16,830 | 11,276 | about 11,000 |
+| Server C# lines | 16,830 | 11,333 | about 11,000 |
 | Authenticated API families | 5 | 3 (`/api/v1/experience`, `/api/v1/tangents`, legacy REST) | 1 |
 | Persisted entity types | 30 | 25 | about 20 |
 | Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 44 / 18 | 0 |
@@ -234,12 +230,12 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 | `bool authorized` parameters | 9 | 8 | 0 |
 | `EnsureHome` call sites | 17 | 0 | 0 |
 | `Mcp` folder lines | 3,697 | 358 (enrollment) | 0 |
-| Greenfield findings (lines): total | 4,132 | 1,883 | 0 |
+| Greenfield findings (lines): total | 4,132 | 1,884 | 0 |
 | — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 30 / 0 / 21 (`SourceDecision`, R3.6) / 0 | 0 |
-| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,824 / 8 / 0 | 0 |
-| .NET tests | 506 of 518 (12 known failures) | 338 of 346 (the 8 remaining known failures, N-020) | all pass |
-| Browser tests | 170 of 170 | 125 of 125 | all pass |
-| Connector tests | 98 of 98 | 99 of 99 (R1.10) | all pass |
+| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,825 / 8 / 0 | 0 |
+| .NET tests | 506 of 518 (12 known failures) | 351 of 359 (the 8 remaining known failures, N-020) | all pass |
+| Browser tests | 170 of 170 | 129 of 129 | all pass |
+| Connector tests | 98 of 98 | 99 of 99 | all pass |
 | Connector Rust lines (baseline at `deb70ab`) | 9,489 | 9,489 | about 8,300 |
 | Connector enrollment / account-binding paths | 3 / 2 | 3 / 2 | 1 / 1 |
 | Connector source without a working path | about 850 | about 850 | 0 |
@@ -256,13 +252,13 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 | W1 Fresh install, claim, first Tangent | pass on the second attempt: the first found N-025. Leo signed in; Claude claimed and named "Workshop" | | | | | |
 | W2 Topic created and made public | pass: Claude created "Open questions" and set "Anyone on the web"; the signed-out page answers 200 (N-026) | | | | | |
 | W3 Post, reply, edit, remove; edit history | pass after R1.9: Claude posted, replied, edited (history shows the original, without scores) and removed through the inline confirmation; the first removal attempt opened a native dialog (N-027) | | | | | |
-| W4 Participant and group mentions reach catch-up | | | | | | |
-| W5 Agent enrolls, reads, posts, gets attention | in progress: after N-029 the agent enrolled against Bluesky, joined Workshop once granted Member (N-030), read Open questions and posted (p7, p8); attention through `GetUpdates` follows W4 | | | | | |
-| W6 Report, case list, defer, escalate | | | | | | |
-| W7 Signed-out permalink with older/newer paging | | | | | | |
+| W4 Participant and group mentions reach catch-up | pass: Claude posted a participant mention (@ox-omega.bsky.social, rendered as a link) and a group-only mention (@members, rendered as a chip); both reached the agent's catch-up addressed to it. The digest labels both `direct_mention` (N-033) | | | | | |
+| W5 Agent enrolls, reads, posts, gets attention | pass: after N-029 the agent enrolled against Bluesky, joined Workshop once granted Member (N-030), read Open questions, posted (p7, p8 and 30 paging posts) and received both W4 mentions through `GetUpdates`. The expanded view listed the mention twice, as the connector assessment predicted (R1.13) | | | | | |
+| W6 Report, case list, defer, escalate | pass: Claude reported the agent's post through the inline report panel; the case appeared in "What needs care" as open, was deferred to the next day (preview, then apply) and escalated to the human Host (revision 3, `escalated`). UI notes in N-034 | | | | | |
+| W7 Signed-out permalink with older/newer paging | pass, over HTTP without cookies: the permalink of "Paging check 15" returned the public page (200, public-document headers) with posts 03–27, "← Older posts" (`?before=10`) and "Newer posts →" (`?after=34`); the newest page offers only older posts and the oldest page only newer ones | | | | | |
 | W8 Live post in another tab keeps a draft | pass: the agent's second post (p8) appeared live in Leo's open Topic, marked by the "1 new post" bar, while an unsent draft stayed in the composer | | | | | |
-| W9 Account switch re-renders | | | | | | |
-| W10 Container restart keeps state and sessions | | | | | | |
+| W9 Account switch re-renders | pass: Claude signed Leo out and Leo signed in as Lumen (@lumen-bubbles.bsky.social); the header and home page re-rendered for that account. The same visit exposed the arrival gaps in N-035 | | | | | |
+| W10 Container restart keeps state and sessions | pass: after `docker compose restart tangent` (ready in 7 s) Leo's page reloaded still signed in with every post and the escalated case; the agent's connector session answered `GetUpdates`; the signed-out Topic page served the newest posts; the log since the restart holds no errors | | | | | |
 
 ## Notes and discoveries
 
@@ -309,6 +305,9 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-030** (R1.8, W5) A newly enrolled participant sees no Tangent. The home Tangent is created "open to signed-in" (`TangentCommunity.Home`), but its access map inherits See = @Member, and a new participant holds no Member role until the owner grants it. The admission flag and the access map disagree — another instance of N-010's stacked permission models. R3.4's Access evaluator decides what "open to signed-in" means; the walkthrough grants the agent Member through the Roles UI.
 - **N-031** (R0.9) Leo accepted C1–C9 with the standing rules and the server's architecture concepts: a DDD monolith, clear separation of concerns and the fewest meaningful moving parts, simple but not simplistic. Two findings shape the connector tasks. The waiting `Connect` that finishes by itself once the operator signs in was Leo's own addendum, so R3.9 keeps it, inside the Connect use case and without its sweeper thread. `ExperiencePort` has one implementation, and the tests reach the same `ureq` client over TCP, so by rule 3 R3.9 makes the Tangent client concrete. Leo also asked to take greenfield realignments where they fit: the crate leaves `src/server/mcp` for `src/connector` in R2.5.
 - **N-032** (R0.9, environment) The walkthrough's connector state holds a lock from process 36356 (12 September), which no longer runs. CLI calls ignore it, but `serve` and `operator` refuse to start without `--force`. R3.7 removes the lockfile; until then, start the manager with `--force` if the walkthrough needs it.
+- **N-033** (R1.8, W4) The digest labels group mentions `direct_mention`, like participant mentions (`ExperienceDigest.cs` lines 146 and 157). The recipient sees the post addressed to them, so W4 passes, but no client can tell "you were named" from "your group was named", and the connector renders both as "asked you". R5.2's attention projection gives group mentions their own kind.
+- **N-034** (R1.8, W6; UI findings for R5) The defer preview states its time as a raw UTC timestamp ("2026-09-16T19:22:00.0000000+00:00") where the rest of the page shows local times. The case form's label wraps its Action list, so the list's accessible name reads out every option ("Action Defer and revisit Escalate to the human Host"). Two visible buttons are both named "Refresh".
+- **N-035** (R1.8, W9) Arrival fails for a signed-in participant who belongs nowhere. Lumen's home page said only "No Tangents are available to this account yet", and the public Topic "Open questions" answered "This conversation isn't available · Not Found" while the same URL served every post to a signed-out visitor (W7): signing in shows less than signing out. Causes: the Tangent directory lists only Tangents where the viewer holds a role, so discovery is fused with membership (N-030); signed-in page loads use the member API, which decides from role grants and ignores the Topic's public audience, while the public page serves only signed-out visitors; the browser offers no Join, although `PUT /api/v1/experience/tangents/{tangent}/membership` exists; the signed-out landing shows no public content. The mandates ask the opposite: arrival answers where am I, who am I here, who can see this, what can I do and how do I return; reading public discussion never requires joining; public landing pages show value before asking. Proposal, awaiting Leo's decision on shape and timing: R3.4's Access evaluator takes "signed-in reads whatever anyone reads", discovery independent of membership and "open to signed-in admits by joining" as acceptance tests; R4.2 builds the front door (the Host's welcome, catch-up for members, discoverable Tangents with Read, Join, Ask-to-join or invitation actions, public activity, next steps, an honest empty state for a private Host), pulling the arrival parts of EPIC-006 S09 and S12 forward; the walkthrough gains W11, in which a new participant arrives, reads without joining and joins.
 
 ## Findings to route
 
@@ -321,7 +320,7 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - Reviewed the server architecture at `d682c26`; wrote the assessment, EPIC-007 and this ledger; added a memory pointer to this file.
 - Nothing was built, tested, committed or deployed.
 
-### S-002 · 2026-09-15 · Claude (Opus 5) — in progress
+### S-002 · 2026-09-15 · Claude (Opus 5)
 
 - Leo accepted every recommendation and set two standing rules: cleanup of deprecated content is mandatory; code must read greenfield.
 - R0 (`ea55313`): branch and archive tag; ADR 0011, ARCHITECTURE and the greenfield check; EPIC-006 reconciled; README, AGENTS, DECISIONS and CURRENT_STATE updated. Baseline: .NET 506/518 with 12 known failures; browser 170/170; connector 98/98; greenfield 4,132.
@@ -340,7 +339,14 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - The derived proof audience became atproto-valid (`did:web:localhost%3A5220`, N-029, `deb70ab`); the agent enrolled, joined Workshop once granted Member (N-030) and posted; W8 passed.
 - Leo paused development for a connector assessment in the server assessment's form: [ASSESSMENT_2026-09-15-CONNECTOR](../../ASSESSMENT_2026-09-15-CONNECTOR.md). Connector suite 99/99; clippy 10 lints; no code changed.
 - R0.9: Leo accepted every connector recommendation (C1–C9); ADR 0012, ARCHITECTURE's connector section, EPIC-007 and this ledger carry them (N-031).
-- Next: W4–W7, W9 and W10; then R1.8's close-out and the connector tasks R1.11–R1.14.
+- Walkthrough completed: W4 and W5 (mentions reach the agent's catch-up, N-033), W6 (report, defer, escalate, N-034), W7 (signed-out paging), W9 (account switch, and the arrival gaps in N-035) and W10 (restart keeps state and sessions). The session was interrupted after the results were written but before R1.8's close-out.
+
+### S-003 · 2026-09-15 · Claude (Opus 5) — in progress
+
+- Resumed from an interruption: the working tree held W4–W7, W9, W10 and N-033–N-035 uncommitted, while Resume here still named W9 as the next action. Nothing was discarded.
+- Re-ran every check rather than trusting the written numbers, per the resume protocol: .NET 351/359 with exactly the 8 known failures, browser 129/129, connector 99/99, lifecycle 76/76, greenfield 1,884, server C# 11,333. Every metric in the table was confirmed, including the connector's 9,489 `src/` lines.
+- R1.8 closed: the walkthrough passes end to end and the server is 5,497 lines smaller than the baseline, against a target of about 5,000.
+- Next: R1.11–R1.14, the connector tasks. N-035's arrival proposal waits on Leo for shape and timing; it does not block them.
 
 ## Evidence index
 
