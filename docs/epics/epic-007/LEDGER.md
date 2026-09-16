@@ -9,10 +9,10 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
 | Current task | R1.14 — verify the connector and close R1 (`waiting` on Leo for W5) |
-| Next action | Start R1.13 (per C9): delete code without a caller — `adapters/delivery.rs`, the automatic-turn policy, `ExperiencePort::wait`, `ToolOutcome::exit_code`, `experience::shared`, `Perspective::from_identity`, `Budget::truncated`, `StopFlag`, `CallerId::default`, the legacy-enrollment drop, the pre-scope client id and `StateFile.version`. Then R1.14 closes R1 |
+| Next action | **Leo runs W5** on the rebuilt install: the agent enrolls against Bluesky, reads, posts and receives attention. Expect `forget` then `Connect` rather than a clean reconnect (N-029). That closes R1.14 and the slice. R2.1 is next and needs nobody: narrow the greenfield Spaces rule (N-038), then apply Space / Tangent / Topic / Post |
 | Last checkpoint | 2026-09-15 · S-003 · R1.15 done and committed: 656 tests → 191, and every suite is green for the first time in this epic. .NET 87/87, browser 7/7, connector 61/61, lifecycle 36/36 |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
-| Waiting on | Leo: push authorization (optional). N-035 is settled — D11 and D12, [ADR 0013](../../adr/0013-access-contract-and-role-model.md) |
+| Waiting on | Leo: **W5's Bluesky sign-in**, which is all that R1.14 and the slice still need; push authorization (optional). N-035 is settled — D11 and D12, [ADR 0013](../../adr/0013-access-contract-and-role-model.md) |
 | Blockers | None (Docker Desktop's startup crash was cleared on 2026-09-15; see N-023) |
 
 ## Resume protocol
@@ -132,7 +132,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.11 | Per C8: harden the companion manager — JSON-only writes, a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; detect the page through `/api/discovery`; tests inject the page address; no example keeps state outside the user profile | done | A cross-site `text/plain` POST and a foreign `Host` are refused; connector suite green | Two rules stated once at the connection: every request names a loopback `Host`, and every `/api/*` POST carries `application/json` with a matching `Origin` and — when sent — `Sec-Fetch-Site: same-origin`, mirroring `ParticipationController.Cookie`. `probe` identifies the page through `/api/discovery`; the default page candidate is injectable. Connector 100/100, .NET connector integration 3/3 on the release binary, greenfield 1,884, no new clippy lint |
 | R1.12 | Per C1: one enrollment path — delete the unbound tier (`enroll-unbound`, `enroll_unbound`, its payloads, wording, fake route and tests), the app-password binding (`bind_atproto`, `createSession`) and session import (`enroll --token-file`), with the server's `/api/participation/credentials` endpoints; tests seed connector state directly, and the .NET connector tests enroll through the bound exchange against the fake account server; README passages go with them | done | One enrollment path and one binding path remain; suites green | The account-bound exchange through the OAuth bind is the only way in. Gone: `enroll_unbound` and its CLI verb, `bind_atproto`, `enroll --token-file` with `read_token_file`, three dead error helpers, `EnrollResponseDto`/`CreateSessionDto`/`EnrollParticipantDto`, the fake's unbound route and registry, `ParticipationController` with its two request DTOs and `ParticipationCredentials.Enroll/List/Revoke`, and six tests of the removed paths. Connector 94/94, .NET 349/357 (the 8 known), connector `src/` 9,489 → 9,174, server C# 11,333 → 11,227, greenfield 1,890 (N-039) |
 | R1.13 | Per C9: delete code without a caller (`adapters/delivery.rs`, the automatic-turn policy, `ExperiencePort::wait`, `ToolOutcome::exit_code`, `experience::shared`, `Perspective::from_identity`, `Budget::truncated`, `StopFlag`, `CallerId::default`), the legacy-enrollment drop, the pre-scope client id and `StateFile.version`; render each attention item once | done | No listed identifier remains; suites green | Every item verified callerless before deletion. `experience::shared` was already gone; `StopFlag` was narrower than listed (`spawn_checkers` stays, its discarded return does not) and the automatic-turn policy far wider (N-041). Connector `src/` 9,174 → 8,816, 52/52; .NET 87/87 on a release binary; greenfield 1,496 |
-| R1.14 | Verify the connector: suites, greenfield check, and W5 again on the release binary | todo | W5 passes; metrics updated | |
+| R1.14 | Verify the connector: suites, greenfield check, and W5 again on the release binary | waiting | W5 passes; metrics updated | Rebuilt and relaunched on the current tree (the running image was 12 hours stale against a server changed an hour earlier); healthy at 5220 with no errors in the startup log. All four suites green: .NET 87/87, browser 7/7, connector 52/52, lifecycle 30/30; greenfield 1,496. Verified live without a sign-in: the discovery document serves the atproto-valid audience `did:web:localhost%3A5220` (N-029), `POST /api/participation/credentials` is 404 (R1.12), and the release binary's catalog answers. **W5 itself waits on Leo's Bluesky sign-in** |
 | R1.15 | The test audit (Leo, 15 September): the PoC carries too many tests for a moment of heavy mutation, and one coupled to a doomed API gets patched green rather than thought about. Delete the mechanism tier outright rather than freezing it | done | The suite holds only what survives the rewrite; every suite green | 42 files deleted (27 .NET, 12 browser, 3 connector journeys) and five lifecycle sections with them. **656 tests → 191**, and every suite is green for the first time in this epic — the eight permanently-red tests went with their files and the bug they marked is now [prose](#the-bug-the-known-failures-used-to-mark) that R3.4 owns. The 32 red-team safety properties are preserved as [SAFETY-PROPERTIES](SAFETY-PROPERTIES.md), which R5.1 and R5.2 must discharge. .NET 87/87, browser 7/7, connector 61/61, lifecycle 36/36 (N-040) |
 | R1.16 | `Wipe.bat` and `Invoke-TangentWipe` stop taking a target: one fixed path, `.local/docker/site`, and nothing else is deletable (N-040) | done | No wipe entry point accepts a path; the guards that can no longer fire are gone | `-Target` removed from the script and unreachable through `Wipe.bat`; `Resolve-TangentWipeTarget` takes only an allowed root and always resolves `<root>/site`. Five guards deleted as unreachable (traversal, outside-the-root, the root itself, the repository root, a nested target); four kept because a fixed path still meets them (N-042). `./Wipe.bat -WhatIf` still names the right target; `-Target C:/` is now a parameter error. Lifecycle 36 → 30, all green |
 
@@ -286,15 +286,15 @@ The originals, if the assertions are wanted: `git show 88f470f -- tests/TangentS
 | `bool authorized` parameters | 9 | 8 | 0 |
 | `EnsureHome` call sites | 17 | 0 | 0 |
 | `Mcp` folder lines | 3,697 | 358 (enrollment) | 0 |
-| Greenfield findings (lines): total | 4,132 | 1,890 | 0 |
+| Greenfield findings (lines): total | 4,132 | 1,496 | 0 |
 | — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 30 / 0 / 21 (`SourceDecision`, R3.6) / 0 | 0 |
 | — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,831 / 8 / 0 | 0 |
 | .NET tests | 506 of 518 (12 known failures) | **87 of 87** | all pass |
 | Browser tests | 170 of 170 | **7 of 7** | all pass |
-| Connector tests | 98 of 98 | **61 of 61** | all pass |
-| Connector Rust lines (baseline at `deb70ab`) | 9,489 | 9,174 | about 8,300 |
+| Connector tests | 98 of 98 | **52 of 52** | all pass |
+| Connector Rust lines (baseline at `deb70ab`) | 9,489 | 8,816 | about 8,300 |
 | Connector enrollment / account-binding paths | 3 / 2 | 1 / 1 | 1 / 1 |
-| Connector source without a working path | about 850 | about 850 | 0 |
+| Connector source without a working path | about 850 | 0 | 0 |
 | Mutexes in `ConnectorHub` | 10 | 10 | no hub |
 
 Recompute with the commands in note N-008 and the greenfield check.
