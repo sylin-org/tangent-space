@@ -8,12 +8,12 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R2 — Rename to the product's words |
-| Current task | R2.6 — wipe and verify (`waiting` on Leo). R2.1's relaunch waits on the same wipe |
-| Next action | **R2.6 — wipe and verify, and it needs Leo to say when.** The wipe destroys the walkthrough data, and it is the same wipe R2.1 has been waiting on since this morning: four entity renames have stranded their tables and the running install presents as unclaimed until then. The connector's own `state.json` also stops loading (N-056), so the operator re-enrols. Nothing else in R2 is outstanding |
-| Last checkpoint | 2026-09-16 · S-004 · **R2.5 done; R2 is complete but for R2.6's wipe.** Greenfield 1,496 → about 470 across the session. Connector 52/52, browser 7/7, .NET 87/87, lifecycle 30/30 |
+| Current task | R2.6 — wipe and verify (`waiting` on Leo for the walkthrough). The wipe itself is done |
+| Next action | **Walkthrough W1–W11 with Leo on the fresh install**, which closes R2.6 and R2. The install is unclaimed, so W1 starts at the claim; the connector needs `forget` then Connect (N-056). After that, R3 begins with R3.1's design note. Two things still owed: the `probes/` question (N-047) and push authorization |
+| Last checkpoint | 2026-09-16 · S-004 · **R2.6's wipe is done and the install is fresh and healthy.** Greenfield 1,496 → 507 across R2. All four suites green. Only the walkthrough remains |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional) — 32 commits exist only on this machine; also the R2.1 relaunch (N-044) and the `probes/` question (N-047). N-035 is settled — D11 and D12, [ADR 0013](../../adr/0013-access-contract-and-role-model.md) |
-| Blockers | None for R2.2. R2.1's own relaunch verification waits on Leo's wipe timing (N-044); four entity renames have now stranded their tables |
+| Blockers | None. The stranded tables are gone with the wipe, so N-044 is closed |
 
 ## Resume protocol
 
@@ -147,7 +147,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R2.3 | Move folders into the modules of [ARCHITECTURE](../../ARCHITECTURE.md#modules), including `Mcp/Authentication` into Identity | done | Ten folders, ten namespaces, all `Tangent.<Module>` | 181 files into Access, Activity, Api, Application, Community, Conversation, Identity, Infrastructure, Spaces, Stewardship, with the root namespace `Tangent` (D14). `Mcp/` is gone, which took the inbound-MCP rule 30 → 17. Greenfield 819 → **720**. .NET 87/87, browser 7/7; server, tests and all five probes build (N-052) |
 | R2.4 | Rename wire fields such as `channels` in the server, browser and connector together | done | The product's `channel` vocabulary is zero; server and browser moved together | `channels` → `topics`, `roomKey` → `topicKey`, `messageSequence` → `postSequence`, `lastMessageAt` → `lastPostAt`, the `Message*` activity kinds → `Post*`, `RoomChanged` → `TopicChanged`, `TopicListing.Rooms` → `Topics`, `RoleChangeResult.Community` → `Tangent`. The connector needed no change: it parses none of them. Two live defects found on the way (N-054). Greenfield 720 → **474**. .NET 87/87, browser 7/7, connector 52/52 |
 | R2.5 | Per C6: the connector glossary in code, CLI and tools (`Companion`, `Account`, `Enrollment`, `Session`, `Context`, `Receipt`, the `manager` command); `room` → `topic`; the crate moves to `src/connector`; the greenfield check scans the connector, with rules for plan-item codes and owner narration; comments lose their history; the README describes the current connector only | done | The connector's vocabulary is the glossary's; the check scans it and reports no plan codes, owner narration or history there | Four stages: `7780b45`, `b54dd25`, and stage 4. The README rewrite is handed to R6.6. **Greenfield rules are frozen from here** — widening them mid-task was manufacturing work (N-057) |
-| R2.6 | Wipe and verify | todo | Suites and walkthrough green | |
+| R2.6 | Wipe and verify | waiting | Suites green on the fresh install; the walkthrough needs Leo's sign-ins | Backup `.local/backups/docker-20260916-175319-423`; wiped, rebuilt, relaunched, healthy at 5220 with only the two expected warnings. .NET 87/87, browser 7/7, connector 52/52, lifecycle 30/30; greenfield 1,496 → **507**. **W1–W11 wait on Leo** |
 
 ### R3 — Build the shared components
 
@@ -202,36 +202,16 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R2.5 — the connector glossary** (doing)
+**R2.6 — wipe and verify** (waiting on Leo)
 
-Four stages, one commit each, so a failure is bisectable.
+The wipe is done and the install is fresh, so R2.1's stranded tables are resolved and the epic is no longer carrying them. What remains is the part Claude cannot do.
 
-- [x] Stage 1 — the crate is `src/connector`; the greenfield check scans it (`.rs` and `.md` added, `target/` excluded) and learned two rules, plan-item codes and owner narration, both now zero. Six historical markers went, four of them **stale rather than merely narrated**: they described a drop-at-load sweep and a password bind that R1.12 and R1.13 had deleted (N-055)
-- [x] Stage 2 and 3, committed together: both are mechanical and both were proved by the compiler and the four suites. `room` → `topic` is 11 lines, all locals and doc comments — no wire, no state
-- [x] Stage 3 — `CompanionEntry`/`companion_id` → `Enrollment`/`enrollment_id`, `LocalContext` → `Context`, `PendingWrite` → `Receipt`, `AtprotoSession` → `AccountSession`. The state shape, the companion manager's `enrollmentId` JSON and the .NET seeds moved together, and `Connector vocabulary` is 0. **An existing `state.json` stops loading** (N-056)
-- [x] Stage 4 — `Identity` → `Companion`, and the `operator` page, intake and command → `manager`. The glossary's **Operator** (the person) is kept. Two near-misses, both caught by the suites and both arguments against sweeping this material: the substring sweep silently rebound `store.remove_companion(enrollment_id)` to the *identity* remover, which compiles because both take `&str` and then does nothing; and it mangled `com.atproto.identity.resolveHandle` into an XRPC path that does not exist (N-057)
-- [x] Verify: connector 52/52, browser 7/7, .NET 87/87 on a freshly built release binary, lifecycle 30/30
-- [dropped] The connector README rewrite goes to **R6.6**, which already owns documentation cleanup
+- [x] Announce, back up (`.local/backups/docker-20260916-175319-423`), wipe, build, launch. Healthy at 5220; the startup log holds only the Data Protection key-encryptor warning and the `HTTP_PORTS` override notice
+- [x] Four suites and the greenfield check on the fresh install: .NET 87/87, browser 7/7, connector 52/52, lifecycle 30/30, greenfield **507**
+- [ ] **Walkthrough W1–W11 with Leo.** The install is unclaimed, so W1 starts from the claim. Every atproto sign-in is Leo's; Claude never enters credentials. The connector needs `forget` then Connect, because its `state.json` predates R2.5's field renames (N-056)
+- [ ] Metrics and CURRENT_STATE updated once the walkthrough passes
 
-Check command: `cargo test --manifest-path src/connector/Cargo.toml`, `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, then `pwsh scripts/check-greenfield.ps1`.
-
-
-**R2.1 — apply the glossary** (doing)
-
-Scale, measured before starting: `TangentSite` 69 occurrences in 20 files, `TangentCommunity` 74 in 17, `Message` 158 in 39, `Room` 684 in 87. Done in four stages, each built, tested and committed on its own, so a failure is bisectable rather than buried in one 900-site commit.
-
-- [x] Narrow the greenfield Spaces rule first (N-038), committed separately so the ordering is visible in history
-- [x] Stage 1 — `TangentSite` → `Space` with its family, the `site` locals and the prose. Three things the sweep got wrong and the checks caught: the namespace segment `TangentSpace.Site` was renamed too and collided with the type (reverted; R2.3 owns namespaces), a namespace-qualified `Site.TangentSite` became `Space.Space`, and the route `/api/site/participants/.../suspension` was moved although routes are wire and belong to R2.4 (reverted; `app.js` still calls `/api/site`). The configuration key moved to `Tangent:Space` in `appsettings.json`, `compose.yaml`, `TangentConstants` **and `scripts/local-configuration.ps1`**, which generates the state file and was missed on the first pass. .NET 87/87, browser 7/7, greenfield 1,496 → 1,444
-- [x] Stage 2 — `TangentCommunity` → `Tangent` across 17 C# files, with the `community` locals and prose. One collision, and the compiler caught it: `References` has a method `Tangent(string)` that issues a Tangent reference, so `Tangent.CheckKey` resolved to the method rather than the type (N-045); the one call site is qualified. Left deliberately, each with a precedent from stage 1: the reason code `community-membership-required` (it sits beside stage 1's untouched `site-unavailable` — reason codes are wire, R2.4), the serialized property `CompanionRoleResult.Community` (R2.4), the `Communities` namespace (R2.3) and every `wwwroot/` file — stage 1 touched none, and R1.15 deleted the UI suites that would catch a mistake there. Build warnings unchanged at 58, all pre-existing. .NET 87/87, browser 7/7, greenfield 1,444 → 1,385
-- [x] Stage 3 — `Message` → `Post`, with `MessageContent`, `MessagePage`, `MessageHistoryAccess`, `MessageHistoryController`, `MessageFacets` and `PostMessage`. `MessageFacets` had nowhere to land — `PostFacets` already existed, validating what `MessageFacets` derived — so the two became one `partial class PostFacets` across `PostFacet.cs` and `PostFacets.Derivation.cs`, the split-by-file convention this codebase already uses. `PostMessage` became `PostCreateRequest`, beside its siblings `PostChangeRequest` and `PostDeleteRequest`. N-045 arrived as predicted and larger: three methods named `Post` shadowed the new type, so `ConversationService.Post` is `CreatePost` (matching `ChangePost` and the `"CreatePost"` operation name the replay check already used) and `VersionedTangentsController.Post` is `ReadPost`. **The sweep introduced one real defect and the literal audit caught it** (N-046). Probes were in scope and nearly missed (N-047). .NET 87/87, browser 7/7, greenfield 1,385 → 1,366; server, tests and all five probes build
-- [x] Stage 4 — `Room` → `Topic`, the largest: 23 types, their files, the `room` locals and the prose. Done in two passes, because `Room.Topic` had to become `Description` **before** the type rename or the entity would have carried a `Topic.Topic`. The entity's field is `Description`; the DTOs keep the wire name `Topic` until R2.4 moves them together with `access.js`, which reads `resource.topic.topic`. `\bRoom\b` is now zero. N-046's literal audit earned its place a second time: it caught `Route("api/rooms/{roomKey}")` rewritten to `api/topics` — a live route the browser calls — and it was reverted (N-048)
-- [x] Verify (suites): .NET 87/87, browser 7/7, connector 52/52, lifecycle 30/30, greenfield 1,496 → **858** across the four stages; server, tests and all five probes build
-- [ ] Verify (relaunch): still owed, and it is the blocked item below
-- [ ] **Blocked on Leo:** renaming a persisted entity strands its rows (N-044). The running install now reads an empty `Space` table and presents as an unclaimed Space. R2.6's wipe is the sanctioned resolution, but it destroys the walkthrough data, so the timing is Leo's
-
-**Not** in this task: the `.local/docker/site` state directory keeps its name. It is an operational path, not a code name, and renaming it would strand the running install's data and the wipe that now hardcodes it. Folder and namespace moves are R2.3's, so a `Space` may sit in `TangentSpace.Site` until then.
-
-Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, `node --test "tests/*.test.mjs"`, then `pwsh scripts/check-greenfield.ps1`.
+Check command: `Invoke-WebRequest http://127.0.0.1:5220/health/ready`, then the four suites and `pwsh scripts/check-greenfield.ps1`.
 
 **Completed: R1.13 — delete code without a caller**
 
@@ -309,9 +289,9 @@ The originals, if the assertions are wanted: `git show 88f470f -- tests/TangentS
 
 ## Metrics
 
-| Measure | Baseline (`d682c26`) | Now (R1.8) | Target |
+| Measure | Baseline (`d682c26`) | Now (R2.6) | Target |
 |---|---|---|---|
-| Server C# lines | 16,830 | 11,227 | about 11,000 |
+| Server C# lines | 16,830 | 11,348 | about 11,000 |
 | Authenticated API families | 5 | 3 (`/api/v1/experience`, `/api/v1/tangents`, legacy REST) | 1 |
 | Persisted entity types | 30 | 25 | about 20 |
 | Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 44 / 18 | 0 |
@@ -319,13 +299,13 @@ The originals, if the assertions are wanted: `git show 88f470f -- tests/TangentS
 | `bool authorized` parameters | 9 | 8 | 0 |
 | `EnsureHome` call sites | 17 | 0 | 0 |
 | `Mcp` folder lines | 3,697 | 358 (enrollment) | 0 |
-| Greenfield findings (lines): total | 4,132 | 1,496 | 0 |
+| Greenfield findings (lines): total | 4,132 | **507** | 0 |
 | — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 30 / 0 / 21 (`SourceDecision`, R3.6) / 0 | 0 |
 | — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,831 / 8 / 0 | 0 |
 | .NET tests | 506 of 518 (12 known failures) | **87 of 87** | all pass |
 | Browser tests | 170 of 170 | **7 of 7** | all pass |
 | Connector tests | 98 of 98 | **52 of 52** | all pass |
-| Connector Rust lines (baseline at `deb70ab`) | 9,489 | 8,816 | about 8,300 |
+| Connector Rust lines (baseline at `deb70ab`) | 9,489 | 8,820 | about 8,300 |
 | Connector enrollment / account-binding paths | 3 / 2 | 1 / 1 | 1 / 1 |
 | Connector source without a working path | about 850 | 0 | 0 |
 | Mutexes in `ConnectorHub` | 10 | 10 | no hub |
@@ -515,6 +495,8 @@ Arrival is one page with four slots, not three page designs — so it degrades g
   **Do not widen a rule while executing against it.** R2.5 asked for rules for plan-item codes and owner narration. Writing them was the task; widening them twice mid-task — first for "owner correction" and "owner decision", then for `P4`-style codes — manufactured work that was never asked for, and each pass found more. The rules are frozen from here: a gap found later is a note, not an immediate sweep.
 
   The related judgement, recorded so it is not re-made by accident: most of stage 4 edits `hub.rs`, which **R3.9 dissolves into use cases**. Vocabulary was still worth moving, because the words carry forward into that port; a *structure* built there would not have been, which is exactly the call R2.2 made the other way (N-050).
+
+- **N-058** (R2.6) The `Connector vocabulary` rule now reports **9 false positives** and no real findings: stage 4 renamed `identityId` to `companionId`, which the rule still lists as retired from the days when it meant an enrollment. The code is right and the rule is stale. It is recorded rather than fixed, because N-057 froze the rules mid-epic and the first thing that happened afterwards was a temptation to widen one again. **R6.6 owns it**, together with the `-Strict` pass it blocks.
 
   Three smaller things the work turned up. `CompanionGovernance`'s class doc still described "the inbound MCP boundary", which R1.1 deleted — rewritten. `CarpaNet.Identity` was imported by the original file and used by none of it; each of the six files now carries only the usings the compiler proves it needs. And `TangentRole`'s comment mixed a real storage invariant with its own history — the invariant (`Member=0` and `Removed=1` are fixed) is kept, the history is gone. One `companion` remains in server C#: the problem code `"companion_unavailable"`, which the connector emits from `SelectCompanion` and `Arrive`. **R3.10 deletes both tools, and this entry should go with them.**
 
