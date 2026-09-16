@@ -10,7 +10,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current slice | R2 — Rename to the product's words |
 | Current task | R2.6 — wipe and verify (`waiting` on Leo for the walkthrough). The wipe itself is done |
 | Next action | **Walkthrough W1–W11 with Leo on the fresh install**, which closes R2.6 and R2. The install is unclaimed, so W1 starts at the claim; the connector needs `forget` then Connect (N-056). After that, R3 begins with R3.1's design note. Two things still owed: the `probes/` question (N-047) and push authorization |
-| Last checkpoint | 2026-09-16 · S-004 · **R2.6's wipe is done and the install is fresh and healthy.** Greenfield 1,496 → 507 across R2. All four suites green. Only the walkthrough remains |
+| Last checkpoint | 2026-09-16 · S-004 · R2.6's wipe is done and the install is fresh. The walkthrough found its first defect at the owner claim and it is fixed (N-059): first sign-in never subscribed to the profile announcement |
 | Durability | Commits at task checkpoints are authorized (D10). **Pushed to `origin/claude/epic-007-realignment` on 2026-09-16**, so the work no longer exists only on this machine |
 | Waiting on | Leo: the W1-W11 walkthrough on the fresh install, which closes R2.6. Nothing else |
 | Blockers | None. The stranded tables are gone with the wipe, so N-044 is closed |
@@ -495,6 +495,16 @@ Arrival is one page with four slots, not three page designs — so it degrades g
   **Do not widen a rule while executing against it.** R2.5 asked for rules for plan-item codes and owner narration. Writing them was the task; widening them twice mid-task — first for "owner correction" and "owner decision", then for `P4`-style codes — manufactured work that was never asked for, and each pass found more. The rules are frozen from here: a gap found later is a note, not an immediate sweep.
 
   The related judgement, recorded so it is not re-made by accident: most of stage 4 edits `hub.rs`, which **R3.9 dissolves into use cases**. Vocabulary was still worth moving, because the words carry forward into that port; a *structure* built there would not have been, which is exactly the call R2.2 made the other way (N-050).
+
+- **N-059** (R2.6 walkthrough) **First sign-in showed no profile: "Fetching your profile…" forever.** Leo hit it at the owner claim on the fresh install; a forced refresh filled the card in. Everything the server owes was already right — arrival writes the identity with the handle, commits, and schedules the capture (`Spaces/Arrival.cs`); `/me` answers a default carrying the handle; the SSE at `/api/profile-cache/events` even **replays current state on subscribe**, so there is no missed-event window. The break was that nothing ever subscribed.
+
+  `activity-coordinator.js`'s `setProfiles` returned `typeof SharedWorker === 'function'` when it had no session yet — telling `profile-live.js` *the coordinator will deliver this*. `profile-live` therefore opened no stream of its own. But the session is created by `rooms.js` on `tangent:welcome`, and **`app.js` returns before dispatching that on the onboarding route** (`if (window.TangentOnboarding?.show(site)) return;`). So on the one page that must wait for the announcement, the announcement channel was never opened. A reload worked only because the capture had finished by then and `/me` answered `loaded` outright, needing no announcement at all.
+
+  The comment stated its own assumption — "a profile selection can arrive before rooms has created its participant controller" — which is true on the app route and false on onboarding, where no controller is ever created. `setProfiles` now returns `false` with no session: the caller opens a direct stream and hands over on `tangent:live-ready`, which `profile-live` already implements (it closes the direct stream when `viaCoordinator` flips). The cost is one transient SSE; the alternative was a promise of delivery that could not be kept.
+
+  **Not reproduced after the fix, and it cannot be from here:** the bug needs a first sign-in with no captured profile, and this install now has one. It is verified by reading the handover, not by re-running it. The next wipe is where it gets proved, so W1 should watch the owner card. The wwwroot is baked into the image, so the fix needs `./Build.bat` and `./Launch.bat` to take effect.
+
+  Leo's framing is what located it: log in triggers capture, the read resolves on a default, and the SSE announces arrival. Three of those four were already built; the missing one was the subscription, and looking for *which step of that sequence was absent* found it faster than reading the rendering path did.
 
 - **N-058** (R2.6) The `Connector vocabulary` rule now reports **9 false positives** and no real findings: stage 4 renamed `identityId` to `companionId`, which the rule still lists as retired from the days when it meant an enrollment. The code is right and the rule is stale. It is recorded rather than fixed, because N-057 froze the rules mid-epic and the first thing that happened afterwards was a temptation to widen one again. **R6.6 owns it**, together with the `-Strict` pass it blocks.
 

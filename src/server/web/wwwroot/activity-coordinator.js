@@ -80,9 +80,13 @@
     setProfiles(dids) {
       pendingProfiles = Array.isArray(dids) ? dids : [];
       if (current) return current.setProfiles(pendingProfiles) === true;
-      // A profile selection can arrive before rooms has created its participant
-      // controller. Keep it for the worker instead of opening a transient second SSE.
-      return typeof SharedWorker === 'function';
+      // Keep the selection for the worker, but do not claim delivery the coordinator
+      // cannot make: with no session there is nothing to multiplex onto. Onboarding
+      // never creates one, because the welcome that would is not dispatched on that
+      // route, so claiming here left first sign-in waiting on an announcement that
+      // could not arrive. The caller opens its own stream and hands over on
+      // tangent:live-ready, which costs one transient SSE and always delivers.
+      return false;
     },
     snapshot() { return current?.snapshot(); }
   });
