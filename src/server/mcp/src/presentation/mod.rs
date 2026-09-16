@@ -2,6 +2,8 @@
 
 pub mod perspective;
 
+use std::collections::HashSet;
+
 use crate::application::contract::{ActionDto, AttentionItemDto, ExperienceDto};
 use crate::application::operations::ViewMode;
 use crate::domain::attention::AttentionRecord;
@@ -76,8 +78,8 @@ fn render_orientation(input: &RenderInput, budget: usize) -> String {
             if capabilities.stewardship { text.push("Scoped stewardship is available here; shown actions are the current remit.".to_string()); }
         }
     }
-    push_attention(input, &mut text, 3, true);
-    push_pending(input, &mut text);
+    let shown = push_attention(input, &mut text, 3, true);
+    push_pending(input, &mut text, &shown);
     push_actions(input, &mut text, MAX_ACTION_SUGGESTIONS);
     text.finish()
 }
@@ -101,7 +103,7 @@ fn render_compact(input: &RenderInput, budget: usize) -> String {
             text.push("Nothing is waiting for you.");
         }
     }
-    push_pending(input, &mut text);
+    push_pending(input, &mut text, &HashSet::new());
     push_actions(input, &mut text, 2);
     text.finish()
 }
@@ -129,8 +131,8 @@ fn render_expanded(input: &RenderInput) -> String {
             text.push("Reading this response does not acknowledge the Posts.".to_string());
         }
     }
-    push_attention(input, &mut text, 5, false);
-    push_pending(input, &mut text);
+    let shown = push_attention(input, &mut text, 5, false);
+    push_pending(input, &mut text, &shown);
     push_actions(input, &mut text, MAX_ACTION_SUGGESTIONS);
     text.finish()
 }
@@ -211,11 +213,13 @@ fn push_data_details(experience: &ExperienceDto, input: &RenderInput, text: &mut
     }
 }
 
-fn push_attention(input: &RenderInput, text: &mut Budget, previews: usize, include_excerpt: bool) {
-    let Some(experience) = input.experience else { return };
+/// Renders the digest's attention items and reports which source refs it showed, so the
+/// connector's own records are not rendered a second time for the same Post (C9).
+fn push_attention(input: &RenderInput, text: &mut Budget, previews: usize, include_excerpt: bool) -> HashSet<String> {
+    let Some(experience) = input.experience else { return HashSet::new() };
     let items: &[AttentionItemDto] = &experience.attention.items;
     if items.is_empty() {
-        return;
+        return HashSet::new();
     }
     text.push(perspective::waiting_line(&waiting_count(input), experience.attention.more));
     for item in items.iter().take(previews) {
@@ -230,19 +234,20 @@ fn push_attention(input: &RenderInput, text: &mut Budget, previews: usize, inclu
     if items.len() > previews {
         text.push(format!("…and {} more (GetUpdates with view=expanded).", items.len() - previews));
     }
+    items.iter().take(previews).map(|item| item.source_ref.clone()).collect()
 }
 
 /// The connector-owned pending-attention segment delivered with tool responses in
 /// tool-response-only mode. Resending this indicator never schedules a turn.
-fn push_pending(input: &RenderInput, text: &mut Budget) {
-    if input.pending.is_empty() || matches!(input.mode, ViewMode::Compact if input.pending.iter().all(|record| !record.is_directed())) {
+fn push_pending(input: &RenderInput, text: &mut Budget, already_shown: &HashSet<String>) {
+    let pending: Vec<_> = input.pending.iter().filter(|record| !already_shown.contains(&record.source_ref)).collect();
+    if pending.is_empty() || matches!(input.mode, ViewMode::Compact if pending.iter().all(|record| !record.is_directed())) {
         return;
     }
     if input.mode == ViewMode::Compact {
-        let directed = input.pending.iter().filter(|record| record.is_directed()).count();
+        let directed = pending.iter().filter(|record| record.is_directed()).count();
         if directed > 0 {
-            let actor = input
-                .pending
+            let actor = pending
                 .iter()
                 .find(|record| record.is_directed())
                 .and_then(|record| record.actor_name.clone())
@@ -251,7 +256,7 @@ fn push_pending(input: &RenderInput, text: &mut Budget) {
         }
         return;
     }
-    for record in input.pending.iter().take(5) {
+    for record in pending.iter().take(5) {
         let actor = record.actor_name.clone().unwrap_or_else(|| truncate_ref(&record.actor_ref));
         let actor_label = input.perspective.author_label(&record.actor_ref, &actor);
         let alias = (input.aliases)(&record.source_ref);
