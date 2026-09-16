@@ -193,7 +193,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-**R1.11 — harden the companion manager** (doing)
+**Completed: R1.11 — harden the companion manager**
 
 Per C8 and [ADR 0012](../../adr/0012-realigned-connector-architecture.md) §8: the companion manager is a hardened loopback page. Two rules, stated once at the connection and applied before routing:
 
