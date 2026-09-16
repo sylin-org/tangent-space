@@ -16,25 +16,25 @@ public sealed class ActivityController(TangentServer hub) : ControllerBase
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     [HttpGet]
-    public Task<IActionResult> Overview([FromQuery] string? cursor, [FromQuery] string? channelCursor, CancellationToken ct)
+    public Task<IActionResult> Overview([FromQuery] string? cursor, [FromQuery] string? topicCursor, CancellationToken ct)
         => Execute(async (did, credential) =>
         {
-            var snapshot = await activity.Snapshot(did, credential, cursor, channelCursor, ct);
+            var snapshot = await activity.Snapshot(did, credential, cursor, topicCursor, ct);
             await activity.EnsureSnapshotCurrent(did, credential, snapshot, ct);
             return Ok(snapshot with { ParticipantRef = did });
         });
 
     [HttpGet("wait")]
-    public Task<IActionResult> Wait([FromQuery] string? cursor, [FromQuery] string? channelCursor, CancellationToken ct)
+    public Task<IActionResult> Wait([FromQuery] string? cursor, [FromQuery] string? topicCursor, CancellationToken ct)
         => Execute(async (did, credential) =>
         {
-            var snapshot = await activity.Wait(did, credential, cursor, channelCursor, ct);
+            var snapshot = await activity.Wait(did, credential, cursor, topicCursor, ct);
             await activity.EnsureSnapshotCurrent(did, credential, snapshot, ct);
             return Ok(snapshot with { ParticipantRef = did });
         });
 
     [HttpGet("events")]
-    public async Task Events([FromQuery] string? cursor, [FromQuery] string? channelCursor,
+    public async Task Events([FromQuery] string? cursor, [FromQuery] string? topicCursor,
         [FromQuery] string[]? profileDid, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -61,7 +61,7 @@ public sealed class ActivityController(TangentServer hub) : ControllerBase
             Response.StatusCode = StatusCodes.Status200OK;
             Response.ContentType = "text/event-stream";
             Response.Headers["X-Accel-Buffering"] = "no";
-            var current = await activity.Snapshot(did, credential, cursor, channelCursor, ct);
+            var current = await activity.Snapshot(did, credential, cursor, topicCursor, ct);
             await activity.EnsureSnapshotCurrent(did, credential, current, ct);
             if (wake.Task.IsCompleted) { await WriteIdentity(await wake.Task, ct); return; }
             await WriteEvent(current.ResetRequired ? "reset" : "activity", current with { ParticipantRef = did }, ct);
@@ -71,7 +71,7 @@ public sealed class ActivityController(TangentServer hub) : ControllerBase
             {
                 if (wake.Task.IsCompleted) { await WriteIdentity(await wake.Task, ct); return; }
                 using var waitCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                var wait = activity.Wait(did, credential, checkpoint, channelCursor, waitCancellation.Token);
+                var wait = activity.Wait(did, credential, checkpoint, topicCursor, waitCancellation.Token);
                 var profileWake = watchedProfiles.Count == 0 ? null : profileChanges.Reader.WaitToReadAsync(ct).AsTask();
                 try
                 {

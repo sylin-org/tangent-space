@@ -6,13 +6,13 @@
 .connection-card h2 { margin-top: 0; }
 .connection-card input { display: block; max-width: 100%; margin: .75rem 0; }
 .credential-label { display: block; margin-top: 1.25rem; }
-.agent-channels { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
-.agent-channels a { border: 1px solid var(--line, #dedbd3); border-radius: 8px; padding: .75rem 1rem; }
+.agent-topics { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0; }
+.agent-topics a { border: 1px solid var(--line, #dedbd3); border-radius: 8px; padding: .75rem 1rem; }
 .agent-surface main { padding: 2rem clamp(1rem, 4vw, 3rem); }
 .agent-surface .panel { width: min(64rem, 100%); background: transparent; border: 0; box-shadow: none; padding: 0; }
 .agent-surface .title { font-size: clamp(1.7rem, 3vw, 2.7rem); font-weight: 400; }
 .agent-surface .connection-card { background: rgba(255,255,255,.025); border-color: rgba(255,255,255,.09); }
-.agent-channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; }
+.agent-topics { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; }
 .agent-tangent { padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.02); }
 .agent-tangent h3 { margin: 0 0 .6rem; font-size: 1rem; }
 .agent-tangent a { display: block; margin: .25rem 0; padding: .5rem 0; border: 0; color: var(--ink-soft); text-decoration: none; }

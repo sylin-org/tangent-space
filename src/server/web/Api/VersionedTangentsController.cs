@@ -18,8 +18,8 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
 {
     [AllowAnonymous]
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int channelPage = 1, CancellationToken ct = default)
-        => await Read(async actor => await hub.Tangents.List(actor, page, channelPage, ct));
+    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int topicPage = 1, CancellationToken ct = default)
+        => await Read(async actor => await hub.Tangents.List(actor, page, topicPage, ct));
 
     [AllowAnonymous]
     [HttpGet("{tangentId}")]
@@ -53,8 +53,8 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
 
     [TopicMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentId}/topics")]
-    public Task<IActionResult> CreateTopic(string tangentId, CreateTangentChannelRequest request, CancellationToken ct)
-        => Execute(actor => hub.Tangents.CreateChannel(actor, tangentId, request.Key, request.Title, request.Admission, request.Topic, ct), created: true);
+    public Task<IActionResult> CreateTopic(string tangentId, CreateTangentTopicRequest request, CancellationToken ct)
+        => Execute(actor => hub.Tangents.CreateTopic(actor, tangentId, request.Key, request.Title, request.Admission, request.Topic, ct), created: true);
 
     [TopicMutation]
     [HttpPatch("{tangentId}")]
@@ -143,9 +143,9 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
             using (EntityContext.NoCache())
                 post = await Post.Get(postId, ct);
             if (post is null) return NotFound();
-            var description = await hub.Topics.Describe(actor, post.RoomKey, ct);
+            var description = await hub.Topics.Describe(actor, post.TopicKey, ct);
             if (description is null || description.TangentKey != tangentId) return NotFound();
-            var window = await hub.Posts.ReadWindow(actor, post.RoomKey, null, postId, 25, ct);
+            var window = await hub.Posts.ReadWindow(actor, post.TopicKey, null, postId, 25, ct);
             return Ok(new { topic = description, window });
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }

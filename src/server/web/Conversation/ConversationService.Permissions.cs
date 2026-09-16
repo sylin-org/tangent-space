@@ -18,7 +18,7 @@ public sealed partial class ConversationService
     {
         RequireTopicCapability(policy, TopicCapability.Read, "This topic's current rules do not allow changing posts.");
         var current = await Post.Get(messageId, ct);
-        if (current is null || current.RoomKey != roomKey) throw new ArgumentException("Choose a post in this topic.");
+        if (current is null || current.TopicKey != roomKey) throw new ArgumentException("Choose a post in this topic.");
         return current;
     }
 

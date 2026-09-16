@@ -37,7 +37,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         return topics.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
         {
             var post = await Post.Get(messageId, token);
-            if (post is null || post.RoomKey != roomKey)
+            if (post is null || post.TopicKey != roomKey)
                 throw new ArgumentException("Choose a Post in this Topic.", nameof(messageId));
             Require(TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read),
                 "The current Topic rules do not allow reporting this Post.");
@@ -61,7 +61,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
                     ?? throw new ArgumentException("Choose a Post in this Topic.", nameof(messageId));
                 current = new ModerationCase
                 {
-                    Id = id, TangentKey = topic.TangentKey, RoomKey = roomKey,
+                    Id = id, TangentKey = topic.TangentKey, TopicKey = roomKey,
                     SubjectMessageId = messageId, SubjectParticipantId = post.AuthorParticipantId,
                     FirstReportedAt = now, UpdatedAt = now
                 };
@@ -95,9 +95,9 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         return topics.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
         {
             RequireSteward(policy);
-            var selected = (await ModerationCase.Query(item => item.RoomKey == roomKey,
+            var selected = (await ModerationCase.Query(item => item.TopicKey == roomKey,
                 queue.WithPagination(page, PageSize).WithCountStrategy(null), token)).ToList();
-            var hasNext = page < MaximumPage && selected.Count == PageSize && (await ModerationCase.Query(item => item.RoomKey == roomKey,
+            var hasNext = page < MaximumPage && selected.Count == PageSize && (await ModerationCase.Query(item => item.TopicKey == roomKey,
                 queue.WithPagination(page + 1, PageSize).WithCountStrategy(null), token)).Count > 0;
             var summaries = new List<ModerationCaseSummary>(selected.Count);
             foreach (var item in selected)
@@ -113,7 +113,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
     {
         ValidateProjection(testimonyOffset, testimonyLimit, decisionLimit);
         var seed = await Load(caseId, ct);
-        return await topics.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
+        return await topics.WithCurrentPolicy(actorId, seed.TopicKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var current = await ModerationCase.Get(caseId, token)
@@ -138,7 +138,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
     {
         CheckText(reason, nameof(reason), ModerationCase.MaximumDecisionReasonLength);
         var seed = await Load(caseId, ct);
-        return await topics.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
+        return await topics.WithCurrentPolicy(actorId, seed.TopicKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var current = await ModerationCase.Get(caseId, token) ?? throw Unavailable();
@@ -160,7 +160,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         CheckOperation(operationId);
         CheckText(reason, nameof(reason), ModerationCase.MaximumDecisionReasonLength);
         var seed = await Load(caseId, ct);
-        return await topics.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
+        return await topics.WithCurrentPolicy(actorId, seed.TopicKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var current = await ModerationCase.Get(caseId, token) ?? throw Unavailable();
@@ -214,10 +214,10 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
     }
 
     private ModerationCaseSummary Summary(ModerationCase item, Post? subject, TopicPolicy policy)
-        => new(refs.Case(item.TangentKey, item.RoomKey, item.Id), refs.Topic(item.TangentKey, item.RoomKey),
-            refs.Post(item.TangentKey, item.RoomKey, item.SubjectMessageId), item.State, item.Revision,
+        => new(refs.Case(item.TangentKey, item.TopicKey, item.Id), refs.Topic(item.TangentKey, item.TopicKey),
+            refs.Post(item.TangentKey, item.TopicKey, item.SubjectMessageId), item.State, item.Revision,
             subject is null ? "unavailable" : SubjectRevision(subject),
-            subject is not null && subject.RoomKey == item.RoomKey && !subject.Removed,
+            subject is not null && subject.TopicKey == item.TopicKey && !subject.Removed,
             item.Testimonies.Count, item.TestimonySaturated, item.DecisionSaturated,
             item.FirstReportedAt, item.UpdatedAt, item.NextReviewAt, item.EscalatedToParticipantId,
             StewardActions(policy, item));
@@ -272,11 +272,11 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
     private static async Task<Post?> SubjectOrNull(ModerationCase current, CancellationToken ct)
     {
         var post = await Post.Get(current.SubjectMessageId, ct);
-        return post?.RoomKey == current.RoomKey ? post : null;
+        return post?.TopicKey == current.TopicKey ? post : null;
     }
 
     private static string SubjectRevision(Post post)
-        => Hash(string.Join('\n', "moderation-subject", post.Id, post.RoomKey, post.SourceCid,
+        => Hash(string.Join('\n', "moderation-subject", post.Id, post.TopicKey, post.SourceCid,
             post.ChangeId ?? "", post.EditedAt?.ToString("O") ?? "", post.Removed.ToString(),
             post.RemovedAt?.ToString("O") ?? "", post.Content.CreatedAt.ToString("O"),
             post.Content.ReplyTo?.Uri ?? "", post.Content.ReplyTo?.Cid ?? "", post.Content.Text,

@@ -42,7 +42,7 @@ public sealed class TangentModule : KoanModule
         {
             var post = context.Current;
             if (string.IsNullOrWhiteSpace(Koan.Data.Core.EntityContext.Current?.Partition)
-                && !post.Removed && post.OfMessageId is null && post.Facets is null)
+                && !post.Removed && post.OfPostId is null && post.Facets is null)
                 post.Facets = await PostFacets.Effective(post.Content.Text, null, context.CancellationToken);
             return context.Proceed();
         });

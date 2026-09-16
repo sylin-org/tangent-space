@@ -42,7 +42,7 @@ public sealed partial class ConversationService
                 }
                 RequirePostChange(policy, post, delete);
                 if (previous is not null) return previous;
-                var created = new PostChange { Id = id, RoomKey = roomKey, MessageId = messageId, ActorParticipantId = participantId,
+                var created = new PostChange { Id = id, TopicKey = roomKey, MessageId = messageId, ActorParticipantId = participantId,
                     OperationId = operationId, Delete = delete, Text = text, Facets = facets, UpdatedAt = clock.GetUtcNow() };
                 await created.Save(token);
                 return created;
@@ -67,7 +67,7 @@ public sealed partial class ConversationService
                     await current.Save(token);
                     change.State = "moderated"; change.Detail = "post-removed-by-moderator"; change.UpdatedAt = clock.GetUtcNow();
                     var topic = await Topic.Get(roomKey, token);
-                    await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, participantId, current.AuthorParticipantId,
+                    await ActivityJournal.AppendInTransaction(ActivityKind.PostDeleted, roomKey, participantId, current.AuthorParticipantId,
                         topic?.TangentKey, current.Sequence, change.UpdatedAt, token);
                     await change.Save(token); return true;
                 }, ct);
@@ -102,7 +102,7 @@ public sealed partial class ConversationService
                 change.Detail = change.Delete ? "post-deleted" : "post-edited";
                 change.UpdatedAt = clock.GetUtcNow();
                 var topic = await Topic.Get(roomKey, token);
-                await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.MessageDeleted : ActivityKind.MessageEdited,
+                await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.PostDeleted : ActivityKind.PostEdited,
                     roomKey, participantId, current.AuthorParticipantId, topic?.TangentKey, current.Sequence, change.UpdatedAt, token);
                 await change.Save(token);
                 return true;
@@ -125,11 +125,11 @@ public sealed partial class ConversationService
         var snapshot = new Post
         {
             Id = Guid.CreateVersion7().ToString(),
-            RoomKey = live.RoomKey, AuthorParticipantId = live.AuthorParticipantId, SourceUri = live.SourceUri, SourceCid = live.SourceCid,
+            TopicKey = live.TopicKey, AuthorParticipantId = live.AuthorParticipantId, SourceUri = live.SourceUri, SourceCid = live.SourceCid,
             Sequence = live.Sequence, AcceptedAt = live.AcceptedAt, Content = live.Content, Removed = live.Removed,
             RemovedAt = live.RemovedAt, RemovedByParticipantId = live.RemovedByParticipantId, EditedAt = live.EditedAt,
             Permissions = live.Permissions, OperationId = live.OperationId, Facets = live.Facets,
-            OfMessageId = live.Id, PreviousChangeId = live.ChangeId,
+            OfPostId = live.Id, PreviousChangeId = live.ChangeId,
         };
         // The vendored framework copy exposes no partitioned insert (Entity.Insert arrives upstream
         // after its pin), so the write-once construction rests on the fresh GUIDv7 identity — this

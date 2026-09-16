@@ -15,11 +15,11 @@ public static class Restrictions
             : null;
     }
 
-    /// <summary>Combines scopes for one topic: a channel record never erases an inherited Tangent ban.</summary>
-    public static EffectiveRestriction? Combine(EffectiveRestriction? channel, EffectiveRestriction? tangent)
-        => tangent is { Banned: true } ? tangent : channel is { Banned: true } ? channel : channel ?? tangent;
+    /// <summary>Combines scopes for one topic: a topic record never erases an inherited Tangent ban.</summary>
+    public static EffectiveRestriction? Combine(EffectiveRestriction? topic, EffectiveRestriction? tangent)
+        => tangent is { Banned: true } ? tangent : topic is { Banned: true } ? topic : topic ?? tangent;
 
-    /// <summary>Restriction effective for a participant in one topic: the channel record combined with its Tangent's record.</summary>
+    /// <summary>Restriction effective for a participant in one topic: the topic record combined with its Tangent's record.</summary>
     public static async Task<EffectiveRestriction?> ForTopic(string did, string roomKey, string tangentKey, DateTimeOffset now, CancellationToken ct)
     {
         var roomScoped = Evaluate(await ScopedRestriction.Get(ScopedRestriction.Key(RestrictionScope.Topic, roomKey, did), ct), now);

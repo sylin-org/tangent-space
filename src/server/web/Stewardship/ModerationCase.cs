@@ -15,7 +15,7 @@ public sealed class ModerationCase : Entity<ModerationCase>
     public const int MaximumDecisionReasonLength = 280;
 
     public string TangentKey { get; set; } = "";
-    public string RoomKey { get; set; } = "";
+    public string TopicKey { get; set; } = "";
     public string SubjectMessageId { get; set; } = "";
     public string SubjectParticipantId { get; set; } = "";
     public string State { get; set; } = ModerationCaseStates.Open;

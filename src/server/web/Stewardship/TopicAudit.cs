@@ -6,7 +6,7 @@ namespace Tangent.Stewardship;
 public sealed class TopicAudit : Entity<TopicAudit>
 {
     public string ActorParticipantId { get; set; } = "";
-    public string RoomKey { get; set; } = "";
+    public string TopicKey { get; set; } = "";
     public string? TargetParticipantId { get; set; }
     public TopicAdministration Operation { get; set; }
     public TopicRole? RequestedRole { get; set; }

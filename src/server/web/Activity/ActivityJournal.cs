@@ -13,11 +13,11 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
 
     public long Sequence { get; set; }
     public ActivityKind Kind { get; set; }
-    public string RoomKey { get; set; } = "";
+    public string TopicKey { get; set; } = "";
     public string TangentKey { get; set; } = "home";
     public string? ActorParticipantId { get; set; }
     public string? TargetParticipantId { get; set; }
-    public long? MessageSequence { get; set; }
+    public long? PostSequence { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
 
     public static async Task<ActivityJournal> AppendInTransaction(ActivityKind kind, string roomKey,
@@ -31,11 +31,11 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
             Id = Guid.CreateVersion7().ToString("N"),
             Sequence = checked(head.LastSequence + 1),
             Kind = kind,
-            RoomKey = roomKey,
+            TopicKey = roomKey,
             TangentKey = string.IsNullOrWhiteSpace(tangentKey) ? "home" : tangentKey,
             ActorParticipantId = actorDid,
             TargetParticipantId = targetDid,
-            MessageSequence = messageSequence,
+            PostSequence = messageSequence,
             OccurredAt = occurredAt ?? DateTimeOffset.UtcNow
         };
         head.LastSequence = entry.Sequence;

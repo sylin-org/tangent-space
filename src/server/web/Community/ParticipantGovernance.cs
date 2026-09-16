@@ -23,7 +23,7 @@ public sealed partial class ParticipantGovernance(TimeProvider clock, PolicyGate
 {
     /// <summary>
     /// Read-only current-authority check for replay gates: an active, unrestricted steward at Tangent scope
-    /// (owner or Tangent administrator) or any current channel manager at topic scope. Never mutates or
+    /// (owner or Tangent administrator) or any current topic manager at topic scope. Never mutates or
     /// journals; scoped restrictions and suspension always answer false so saved private administration
     /// data is not replayed to a participant who just lost authority.
     /// </summary>
@@ -116,9 +116,9 @@ public sealed partial class ParticipantGovernance(TimeProvider clock, PolicyGate
     private async Task<(Topic Topic, TopicPolicy Policy)> TopicWithPolicy(string actorId, string roomKey, string? expectedTangentKey, CancellationToken ct)
     {
         var space = await Space.Get(TangentConstants.SpaceId, ct);
-        var topic = await Topic.Get(roomKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested channel does not exist.");
+        var topic = await Topic.Get(roomKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested topic does not exist.");
         if (expectedTangentKey is not null && topic.TangentKey != expectedTangentKey)
-            throw new TangentRuleViolation(TangentDenial.InvalidInput, "The channel does not belong to this Tangent.");
+            throw new TangentRuleViolation(TangentDenial.InvalidInput, "The topic does not belong to this Tangent.");
         var participant = await Participant.Get(actorId, ct);
         if (participant is null || participant.IsSuspended)
             throw new TangentRuleViolation(TangentDenial.Forbidden, "An active verified arrival is required.");

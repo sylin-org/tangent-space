@@ -16,7 +16,10 @@ $rules = [ordered]@{
     # runs - as the deleted atproto concept. R3.6 removes SourceDecision and this rule with it.
     'Spaces storage'        = '\bSpaceUri\b|\bWriteIntent\b|\bSourceNotification\w*|\bSourceDecision\b'
     'Change classification' = '\bChangeClass\w*|Koan\.AI\.Connector\.Onnx'
-    'Retired vocabulary'    = '(?i:\broom\w*|\bchannels?\w*|\bcompanion\w*)|\bTangentSite\b|\bTangentCommunity\b|\bEntity<Message>|\bMessage\.(Get|Query|Lifecycle|Project)\b'
+    # Narrowed in R2.4 (N-053): the product's channel vocabulary reached zero, and every remaining
+    # match was .NET's System.Threading.Channels, which is not ours to rename. The clause still
+    # catches a returning product channel; it no longer counts the BCL type as one.
+    'Retired vocabulary'    = '(?i:\broom\w*|(?<!Threading\.)\bchannels?\w*(?!\s*(<|\.Create))|\bcompanion\w*)|\bTangentSite\b|\bTangentCommunity\b|\bEntity<Message>|\bMessage\.(Get|Query|Lifecycle|Project)\b'
     'Historical markers'    = '(?i:\blegacy\b|\bdeprecated\b|\bback-?compat\w*|\bformerly\b|\bsuperseded\b|\bcompatibility (path|shim)s?\b)'
     'Bootstrap in reads'    = '\bEnsureHome\b'
 }

@@ -31,7 +31,7 @@ public sealed partial class ConversationService
             var selected = cursor is null ? new ConversationCursor(participantId, topic, fromStart ? 0 : position?.Sequence ?? 0, null, clock.GetUtcNow().AddDays(7)) : Decode(cursor, participantId, topic);
             var boundary = selected.Boundary ?? state.LastSequence;
             if (selected.After > boundary || boundary > state.LastSequence) throw new ArgumentException("The continuation no longer matches this conversation; restart the read.");
-            var candidates = await Post.Query(m => m.RoomKey == topic && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, token);
+            var candidates = await Post.Query(m => m.TopicKey == topic && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, token);
             var posts = new List<Post>();
             var bytes = 4096; // Envelope and protected continuations stay inside the overall 128 KiB budget.
             foreach (var post in candidates.Take(20))
@@ -68,7 +68,7 @@ public sealed partial class ConversationService
             var selected = Decode(cursor, participantId, topic);
             if (selected.Boundary is not null) throw new ArgumentException("Acknowledge a resume cursor returned with a page.");
             var position = await ReadPosition.Get(ReadPosition.Key(participantId, topic), token)
-                ?? new ReadPosition { Id = ReadPosition.Key(participantId, topic), ParticipantId = participantId, RoomKey = topic };
+                ?? new ReadPosition { Id = ReadPosition.Key(participantId, topic), ParticipantId = participantId, TopicKey = topic };
             var previous = position.Sequence;
             position.Sequence = Math.Max(previous, selected.After);
             position.AcknowledgedAt = clock.GetUtcNow();

@@ -164,7 +164,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         var companions = services.GetRequiredService<ParticipantGovernance>();
         await tangents.Create(OwnerParticipant, TangentKey, "Workshop", "Integration workshop", null, null, null,
             CancellationToken.None, TangentAdmission.Open);
-        await tangents.CreateChannel(OwnerParticipant, TangentKey, TopicKey, "Project Z", TopicAdmission.SignedIn,
+        await tangents.CreateTopic(OwnerParticipant, TangentKey, TopicKey, "Project Z", TopicAdmission.SignedIn,
             "Coordinate Project Z", CancellationToken.None);
         await companions.Join(AgentParticipant, TangentKey, null, CancellationToken.None);
 
@@ -200,7 +200,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         var decision = new SourceDecision
         {
             Id = SourceDecision.Key(roomKey, uri, cid),
-            RoomKey = roomKey, AuthorParticipantId = authorId, SourceUri = uri, SourceCid = cid,
+            TopicKey = roomKey, AuthorParticipantId = authorId, SourceUri = uri, SourceCid = cid,
             Accepted = true, Reason = "test-accepted", Sequence = sequence, DecidedAt = acceptedAt, Content = content,
         };
         var post = Post.Project(decision);

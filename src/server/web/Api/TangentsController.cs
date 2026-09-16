@@ -17,13 +17,13 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
 
     [AllowAnonymous]
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int channelPage = 1, CancellationToken ct = default)
+    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int topicPage = 1, CancellationToken ct = default)
     {
         Response.Headers.CacheControl = "no-store";
         try
         {
             var actor = ReadActor();
-            return Ok(await tangents.List(actor, page, channelPage, ct));
+            return Ok(await tangents.List(actor, page, topicPage, ct));
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         catch (TangentRuleViolation rejected) { return BadRequest(new { reason = rejected.Message }); }
@@ -49,9 +49,9 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
         => Execute(actor => tangents.SetAccess(actor, tangentKey, access, ct));
 
     [TopicMutation(ParticipationGrants.Post)]
-    [HttpPost("{tangentKey}/channels")]
-    public Task<IActionResult> CreateChannel(string tangentKey, CreateTangentChannelRequest request, CancellationToken ct)
-        => Execute(actor => tangents.CreateChannel(actor, tangentKey, request.Key, request.Title, request.Admission, request.Topic, ct));
+    [HttpPost("{tangentKey}/topics")]
+    public Task<IActionResult> CreateTopic(string tangentKey, CreateTangentTopicRequest request, CancellationToken ct)
+        => Execute(actor => tangents.CreateTopic(actor, tangentKey, request.Key, request.Title, request.Admission, request.Topic, ct));
 
     [TopicMutation]
     [HttpPut("{tangentKey}/members/{targetDid}")]

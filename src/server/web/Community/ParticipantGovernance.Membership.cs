@@ -102,10 +102,10 @@ public sealed partial class ParticipantGovernance
         finally { gate.Exit(); }
     }
 
-    /// <summary>Exact-scope role change. Channel scope delegates to the audited topic membership guards.</summary>
+    /// <summary>Exact-scope role change. Topic scope delegates to the audited topic membership guards.</summary>
     public async Task<RoleChangeResult> SetRole(string actorId, string tangentKey, string? roomKey, string targetIdentifier, ParticipantRole role, CancellationToken ct)
     {
-        if (!string.IsNullOrWhiteSpace(roomKey)) return new RoleChangeResult(null, await SetChannelRole(actorId, tangentKey, roomKey, targetIdentifier, role, ct));
+        if (!string.IsNullOrWhiteSpace(roomKey)) return new RoleChangeResult(null, await SetTopicRole(actorId, tangentKey, roomKey, targetIdentifier, role, ct));
         await gate.Enter(ct);
         try
         {
@@ -133,14 +133,14 @@ public sealed partial class ParticipantGovernance
         finally { gate.Exit(); }
     }
 
-    private async Task<TopicAdministrationResult> SetChannelRole(string actorId, string tangentKey, string roomKey, string targetIdentifier, ParticipantRole role, CancellationToken ct)
+    private async Task<TopicAdministrationResult> SetTopicRole(string actorId, string tangentKey, string roomKey, string targetIdentifier, ParticipantRole role, CancellationToken ct)
     {
-        // Scope is exact: the audited topic guards reject cross-scope changes; verify the channel belongs to the Tangent first.
+        // Scope is exact: the audited topic guards reject cross-scope changes; verify the topic belongs to the Tangent first.
         // This path runs before this service enters its own gate, so TopicGovernance can take it freely.
         var described = await topics.Describe(actorId, roomKey, ct);
-        if (described is null) throw new TangentRuleViolation(TangentDenial.NotFound, "The requested channel does not exist.");
+        if (described is null) throw new TangentRuleViolation(TangentDenial.NotFound, "The requested topic does not exist.");
         if (described.TangentKey != tangentKey)
-            throw new TangentRuleViolation(TangentDenial.InvalidInput, "The channel does not belong to this Tangent.");
+            throw new TangentRuleViolation(TangentDenial.InvalidInput, "The topic does not belong to this Tangent.");
         var mapped = role switch
         {
             ParticipantRole.Admin => TopicRole.Manager,

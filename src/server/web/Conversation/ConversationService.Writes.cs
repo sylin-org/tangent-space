@@ -29,7 +29,7 @@ public sealed partial class ConversationService
             await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
             {
                 RequireTopicCapability(policy, TopicCapability.Reply, "This topic's current rules do not allow posting.");
-                var existing = (await Post.Query(m => m.RoomKey == roomKey && m.AuthorParticipantId == participantId && m.OperationId == input.OperationId,
+                var existing = (await Post.Query(m => m.TopicKey == roomKey && m.AuthorParticipantId == participantId && m.OperationId == input.OperationId,
                     Window<Post>(nameof(Post.Sequence), 1, 1), token)).FirstOrDefault();
                 if (existing is { } found)
                 {
@@ -51,7 +51,7 @@ public sealed partial class ConversationService
                 var content = new PostContent(input.Text, clock.GetUtcNow(), input.ReplyTo);
                 var decision = new SourceDecision
                 {
-                    Id = SourceDecision.Key(roomKey, uri, cid), RoomKey = roomKey, AuthorParticipantId = participantId, SourceUri = uri, SourceCid = cid,
+                    Id = SourceDecision.Key(roomKey, uri, cid), TopicKey = roomKey, AuthorParticipantId = participantId, SourceUri = uri, SourceCid = cid,
                     Accepted = true, Reason = "accepted", DecidedAt = clock.GetUtcNow(),
                     PolicyRevision = policy.SelectedPolicyRevision, SpacePolicyRevision = policy.SpacePolicyRevision,
                     Content = content, Sequence = checked(++state.LastSequence),
@@ -63,7 +63,7 @@ public sealed partial class ConversationService
                 await projected.Save(token);
                 await state.Save(token);
                 var topic = await Topic.Get(roomKey, token);
-                await ActivityJournal.AppendInTransaction(ActivityKind.MessageAccepted, roomKey, participantId, null,
+                await ActivityJournal.AppendInTransaction(ActivityKind.PostAccepted, roomKey, participantId, null,
                     topic?.TangentKey, decision.Sequence, decision.DecidedAt, token);
                 result = projected;
                 return true;

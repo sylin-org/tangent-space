@@ -5,7 +5,7 @@ namespace Tangent.Conversation;
 
 public sealed class Post : Entity<Post>
 {
-    public string RoomKey { get; set; } = "";
+    public string TopicKey { get; set; } = "";
     public string AuthorParticipantId { get; set; } = "";
     public string SourceUri { get; set; } = "";
     public string SourceCid { get; set; } = "";
@@ -32,7 +32,7 @@ public sealed class Post : Entity<Post>
     public const string ChangelogPartition = "changelog";
 
     /// <summary>Snapshot rows only: the live row this pre-edit copy archives. Live rows carry null.</summary>
-    public string? OfMessageId { get; set; }
+    public string? OfPostId { get; set; }
 
     /// <summary>Snapshot rows only: the live row's ChangeId when this snapshot was minted, so
     /// snapshots chain oldest → newest. Null on the original's first snapshot; live rows carry null.</summary>
@@ -43,7 +43,7 @@ public sealed class Post : Entity<Post>
 
     public static Post Project(SourceDecision source) => new()
     {
-        Id = source.Id, RoomKey = source.RoomKey, AuthorParticipantId = source.AuthorParticipantId, SourceUri = source.SourceUri,
+        Id = source.Id, TopicKey = source.TopicKey, AuthorParticipantId = source.AuthorParticipantId, SourceUri = source.SourceUri,
         SourceCid = source.SourceCid, Sequence = source.Sequence, AcceptedAt = source.DecidedAt, Content = source.Content!
     };
 }

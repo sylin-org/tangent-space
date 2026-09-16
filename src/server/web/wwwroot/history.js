@@ -15,11 +15,11 @@
   }
 
   /// The fetch is always scoped to one post: the changelog set, a bounded page, and a single
-  /// ofMessageId equality clause in the framework's URL-encoded JSON filter DSL. The server's
+  /// ofPostId equality clause in the framework's URL-encoded JSON filter DSL. The server's
   /// per-row gate still applies, so a viewer without authority receives an honest empty array.
   function historyPath(messageId) {
     return '/api/history/messages?set=changelog&size=' + FETCH_SIZE
-      + '&filter=' + encodeURIComponent(JSON.stringify({ ofMessageId: messageId }));
+      + '&filter=' + encodeURIComponent(JSON.stringify({ ofPostId: messageId }));
   }
 
   async function readSnapshots(messageId) {

@@ -4,6 +4,6 @@ public sealed record TopicAdministrationResult(
     bool Accepted,
     TopicDenial? Denial,
     string Reason,
-    string RoomKey,
+    string TopicKey,
     long PolicyRevision,
     string AuditId);

@@ -14,7 +14,7 @@ public sealed class Topic : Entity<Topic>
     public string Description { get; set; } = "";
     public TopicAdmission Admission { get; set; }
     public TopicReadAudience ReadAudience { get; set; }
-    // A members-only channel admits the Tangent's own members without a separate topic invitation.
+    // A members-only topic admits the Tangent's own members without a separate topic invitation.
     public bool MembersOnly { get; set; }
     public bool AllowPostEditing { get; set; }
     public bool IsLocked { get; set; }
@@ -31,12 +31,12 @@ public sealed class Topic : Entity<Topic>
         return Validate(actorDid, key, title, admission, now, tangent);
     }
 
-    /// <summary>A tangent administrator creates a channel under delegated authority; the creator gains no ownership.</summary>
+    /// <summary>A tangent administrator creates a topic under delegated authority; the creator gains no ownership.</summary>
     internal static Topic CreateDelegated(Space? space, string actorDid, string key, string title, TopicAdmission admission,
         DateTimeOffset now, Tangent tangent)
     {
         if (space is null || !Participant.IsValidId(actorDid))
-            throw Forbidden("A delegated channel needs an established space and a verified participant.");
+            throw Forbidden("A delegated topic needs an established space and a verified participant.");
         return Validate(actorDid, key, title, admission, now, tangent);
     }
 
@@ -73,17 +73,17 @@ public sealed class Topic : Entity<Topic>
         var timedOut = restriction is { Banned: false } && !owner;
         var role = membership?.Role;
         var tangentRole = tangentMembership?.Role;
-        // A delegated Tangent administrator manages channels; a durable topic removal still overrides that authority.
+        // A delegated Tangent administrator manages topics; a durable topic removal still overrides that authority.
         var delegatedAdmin = signedIn && tangentAdmitted && !banned && tangentRole == TangentRole.Admin && role != TopicRole.Removed;
         var manager = signedIn && tangentAdmitted && !suspended && !banned && (role == TopicRole.Manager || delegatedAdmin || CreatorParticipantId == actorDid && role != TopicRole.Removed);
-        // Channel grants can widen a reader within an admitted Tangent. Parent admission/removal
-        // remains an upper bound; a channel role cannot restore access to a private or removed Tangent.
+        // Topic grants can widen a reader within an admitted Tangent. Parent admission/removal
+        // remains an upper bound; a topic role cannot restore access to a private or removed Tangent.
         var roleAdmitted = role is TopicRole.Manager or TopicRole.Member or TopicRole.Reader;
         var memberRecord = tangentRole is TangentRole.Member or TangentRole.Admin or TangentRole.Reader;
         var admitted = signedIn && tangentAdmitted && !suspended && !banned && classificationRead && (owner || roleAdmitted || delegatedAdmin
             || MembersOnly && role is null && memberRecord
             || !MembersOnly && role is null && Admission == TopicAdmission.SignedIn && tangentAdmitted);
-        // An explicit channel grant of member or manager widens a Tangent reader inside that channel only.
+        // An explicit topic grant of member or manager widens a Tangent reader inside that topic only.
         var tangentReader = !owner && tangentRole == TangentRole.Reader && role is not (TopicRole.Member or TopicRole.Manager);
         var reason = space is null ? "site-unavailable" : tangent is null ? "tangent-not-found"
             : !signedIn ? "sign-in-required" : suspended ? "suspended"
@@ -112,7 +112,7 @@ public sealed class Topic : Entity<Topic>
         {
             if (actorTangentMembership.ParticipantId != targetDid || tangent is null
                 || actorTangentMembership.TangentKey != TangentKey || !Enum.IsDefined(actorTangentMembership.Role))
-                throw new TopicRuleViolation(TopicDenial.MembershipMismatch, "The Tangent membership does not belong to this channel and participant.");
+                throw new TopicRuleViolation(TopicDenial.MembershipMismatch, "The Tangent membership does not belong to this topic and participant.");
             actorTangentMembership = null;
         }
         var policy = CurrentPolicy(space, actorDid, actorMembership, false, tangent, actorTangentMembership);
@@ -120,7 +120,7 @@ public sealed class Topic : Entity<Topic>
         if (!authorized && !policy.CanManage) throw Forbidden("Only the owner or a current topic manager can change topic membership.");
         if (!Participant.IsValidId(targetDid)) throw Invalid("A membership target must be a valid participant.");
         if (!Enum.IsDefined(role)) throw Invalid("Choose manager, member, reader, or removed.");
-        // The Tangent owner can never become a membership target; the creator of a delegated channel holds no ownership.
+        // The Tangent owner can never become a membership target; the creator of a delegated topic holds no ownership.
         if (tangent?.IsOwner(targetDid) == true)
             throw Forbidden("Topic membership cannot change or remove the owner.");
         if (!authorized && !policy.CanAppointManagers && role == TopicRole.Manager)
@@ -202,7 +202,7 @@ public sealed class Topic : Entity<Topic>
 
     private void CheckMembership(TopicMembership? membership, string? participantDid)
     {
-        if (membership is not null && (membership.RoomKey != Id || membership.ParticipantId != participantDid
+        if (membership is not null && (membership.TopicKey != Id || membership.ParticipantId != participantDid
             || membership.Id != TopicMembership.Key(Id, participantDid ?? "") || !Enum.IsDefined(membership.Role)))
             throw new TopicRuleViolation(TopicDenial.MembershipMismatch, "The membership does not belong to this topic and participant.");
     }
@@ -211,7 +211,7 @@ public sealed class Topic : Entity<Topic>
     {
         if (membership is not null && (tangent is null || membership.TangentKey != TangentKey || membership.ParticipantId != participantDid
             || membership.Id != TangentMembership.Key(TangentKey, participantDid ?? "") || !Enum.IsDefined(membership.Role)))
-            throw new TopicRuleViolation(TopicDenial.MembershipMismatch, "The Tangent membership does not belong to this channel and participant.");
+            throw new TopicRuleViolation(TopicDenial.MembershipMismatch, "The Tangent membership does not belong to this topic and participant.");
     }
 
     private static void RequireOwner(Space? space, Tangent? tangent, string actorDid)

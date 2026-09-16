@@ -64,12 +64,12 @@ public sealed partial class ExperienceService
         foreach (var post in scanned)
         {
             if (posts.Count >= ProfilePostLimit) break;
-            var description = await topics.Describe(viewer, post.RoomKey, ct);
+            var description = await topics.Describe(viewer, post.TopicKey, ct);
             if (description is null || !description.CanRead) continue;
             visibleMessages.Add(post);
             string? replyTo = null;
             posts.Add(new ExperiencePostDto(
-                refs.Post(description.TangentKey, post.RoomKey, post.Id), participantId,
+                refs.Post(description.TangentKey, post.TopicKey, post.Id), participantId,
                 profile.DisplayName ?? label ?? "Participant", post.Removed ? "" : post.Content.Text, replyTo,
                 refs.Origin + "/t/" + Uri.EscapeDataString(description.TangentKey) + "/" + Uri.EscapeDataString(post.Id),
                 Format(post.AcceptedAt), post.EditedAt is { } edited ? Format(edited) : null, post.Removed,

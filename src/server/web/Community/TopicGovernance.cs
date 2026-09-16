@@ -43,7 +43,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 var restriction = actorId is null ? null : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, now, ct);
                 var policy = await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
                     participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-                // A directory must not become an oracle for invitation-only channel names.
+                // A directory must not become an oracle for invitation-only topic names.
                 if (policy.CanRead || policy.CanManage) descriptions.Add(TopicDescription.From(topic, policy));
             }
             await EntityContext.Commit(ct);
@@ -60,7 +60,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
         }, ct);
 
     /// <summary>Bounded actor-filtered topic directory for one Tangent.</summary>
-    public async Task<TangentChannelDirectory> ListForTangent(string? actorId, string tangentKey, int page, CancellationToken ct)
+    public async Task<TangentTopicDirectory> ListForTangent(string? actorId, string tangentKey, int page, CancellationToken ct)
     {
         if (page is < 1 or > TopicConstants.MaximumPage)
             throw new TopicRuleViolation(TopicDenial.InvalidInput, "Choose a topic page between 1 and 10000.");
@@ -72,7 +72,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             var participant = actorId is null ? null : await Participant.Get(actorId, ct);
             var tangent = await Community.Tangent.Get(tangentKey, ct);
-            if (tangent is null || participant?.IsSuspended == true) return new TangentChannelDirectory([], page, null);
+            if (tangent is null || participant?.IsSuspended == true) return new TangentTopicDirectory([], page, null);
             var tangentMembership = actorId is null ? null : await TangentMembership.Get(TangentMembership.Key(tangentKey, actorId), ct);
             var topics = await Topic.QueryWithCount(topic => topic.TangentKey == tangentKey,
                 directoryQuery.WithPagination(page, TopicConstants.PageSize), ct);
@@ -87,7 +87,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 if (policy.CanRead || policy.CanManage) descriptions.Add(TopicDescription.From(topic, policy));
             }
             await EntityContext.Commit(ct);
-            return new TangentChannelDirectory(descriptions, page, topics.HasNextPage ? page + 1 : null);
+            return new TangentTopicDirectory(descriptions, page, topics.HasNextPage ? page + 1 : null);
         }
         finally { gate.Exit(); }
     }
@@ -315,12 +315,12 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 topic = change.Topic;
                 await topic.Save(ct);
                 if (change.Membership is not null) await change.Membership.Save(ct);
-                var kind = operation == TopicAdministration.SetMembership ? ActivityKind.MembershipChanged : ActivityKind.RoomChanged;
+                var kind = operation == TopicAdministration.SetMembership ? ActivityKind.MembershipChanged : ActivityKind.TopicChanged;
                 await ActivityJournal.AppendInTransaction(kind, topic.Id, actorId, change.Membership?.ParticipantId, topic.TangentKey, ct: ct);
             }
             var audit = new TopicAudit
             {
-                ActorParticipantId = actorId, RoomKey = roomKey, TargetParticipantId = targetId, Operation = operation,
+                ActorParticipantId = actorId, TopicKey = roomKey, TargetParticipantId = targetId, Operation = operation,
                 RequestedRole = requestedRole, RequestedReadAudience = requestedReadAudience,
                 PublishExistingHistory = publishExistingHistory, Accepted = denial is null, Denial = denial?.Denial,
                 Reason = denial?.Message ?? "Accepted.", SelectedPolicyRevision = topic?.PolicyRevision ?? 0,

@@ -84,7 +84,7 @@ body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padd
 .art-sample { display:inline-flex; align-items:center; gap:.45rem; padding:.25rem .5rem .25rem .25rem; color:var(--ink); border:1px solid var(--line); border-radius:7px; background:rgba(255,255,255,.025); font:.76rem var(--sans); cursor:pointer; }
 .art-sample img { width:1.8rem; height:1.8rem; border-radius:4px; image-rendering:pixelated; }
 
-/* Stable channel rail and flat, readable live column. */
+/* Stable topic rail and flat, readable live column. */
 .room-layout { display:grid; grid-template-columns:minmax(13.5rem,16rem) minmax(0,48rem); justify-content:start; gap:clamp(1.2rem,3vw,3rem); margin-top:.8rem; align-items:start; }
 .room-directory { position:sticky; top:1rem; min-width:0; padding:.8rem; border:1px solid var(--line); border-radius:13px; background:#17151d; box-shadow:0 18px 44px -34px #000; }
 .section-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.6rem; }
@@ -107,11 +107,11 @@ body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padd
 .topic { margin:0; color:var(--ink-soft); }
 .return-to-tangents { margin-left:auto; min-height:1.9rem; padding:.27rem .5rem; font-size:.74rem; }
 .room-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin:.65rem 0; }
-.channel-details { margin:.7rem 0 0; border:1px solid var(--line); border-radius:9px; background:var(--surface); }
-.channel-details > summary { padding:.42rem .6rem; color:var(--ink-soft); cursor:pointer; font:600 .78rem var(--sans); }
-.channel-details[open] > summary { color:var(--accent-strong); border-bottom:1px solid var(--line); }
-.channel-details-body { padding:.7rem .75rem .15rem; }
-.channel-details .note { margin-bottom:.7rem; }
+.topic-details { margin:.7rem 0 0; border:1px solid var(--line); border-radius:9px; background:var(--surface); }
+.topic-details > summary { padding:.42rem .6rem; color:var(--ink-soft); cursor:pointer; font:600 .78rem var(--sans); }
+.topic-details[open] > summary { color:var(--accent-strong); border-bottom:1px solid var(--line); }
+.topic-details-body { padding:.7rem .75rem .15rem; }
+.topic-details .note { margin-bottom:.7rem; }
 #room-admin.setup { margin:.6rem 0; padding:.6rem .75rem; border-radius:9px; background:var(--surface-soft); }
 #room-admin.setup > summary { color:var(--ink-soft); cursor:pointer; font-size:.8rem; }
 .topic-settings-section { display:grid; grid-template-columns:minmax(0,1fr); gap:.75rem; margin:.9rem 0 0; padding:1rem; border:1px solid var(--line); border-radius:9px; background:var(--surface); }
@@ -145,7 +145,7 @@ body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padd
 .compose-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem 1rem; }
 .read-state-note { margin:.7rem 0 0; }
 
-/* Selected-channel Tangents become readable 24px-face pills, never tiny labels. */
+/* Selected-topic Tangents become readable 24px-face pills, never tiny labels. */
 body.conversation-open #state-signed-in { display:flex; align-items:center; min-height:0; margin:0 0 .35rem; padding:.35rem .6rem; border-radius:9px; }
 body.conversation-open #state-signed-in .eyebrow,body.conversation-open #state-signed-in .title,body.conversation-open #state-signed-in .lede,body.conversation-open #state-signed-in .identity-actions { display:none; }
 body.conversation-open #state-signed-in .identity { display:block; margin:0; padding:0; border:0; background:transparent; }

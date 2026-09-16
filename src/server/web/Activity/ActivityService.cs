@@ -31,17 +31,17 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     public Task<ActivitySnapshot> Wait(string participantId, string? credentialId, string? cursor, CancellationToken ct)
         => Wait(participantId, credentialId, cursor, null, ct);
 
-    public async Task<ActivitySnapshot> Snapshot(string participantId, string? credentialId, string? cursor, string? channelCursor, CancellationToken ct)
+    public async Task<ActivitySnapshot> Snapshot(string participantId, string? credentialId, string? cursor, string? topicCursor, CancellationToken ct)
     {
         await EnsureParticipantActive(participantId, credentialId, ct);
         ActivityCursor? requested = Decode(cursor, participantId);
         var head = await ReadHead(ct);
         if (requested is null)
-            return await Bootstrap(participantId, head.LastSequence, resetRequired: cursor is not null, channelCursor, ct);
+            return await Bootstrap(participantId, head.LastSequence, resetRequired: cursor is not null, topicCursor, ct);
 
         var boundary = requested.Boundary ?? head.LastSequence;
         if (requested.After < 0 || requested.After > boundary || boundary > head.LastSequence)
-            return await Bootstrap(participantId, head.LastSequence, resetRequired: true, channelCursor, ct);
+            return await Bootstrap(participantId, head.LastSequence, resetRequired: true, topicCursor, ct);
 
         var entries = (await ActivityJournal.Query(value => value.Sequence > requested.After && value.Sequence <= boundary,
             JournalWindow, ct)).OrderBy(value => value.Sequence).Take(MaximumJournalScan + 1).ToArray();
@@ -57,19 +57,19 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         var nextState = new ActivityCursor(participantId, requested.Consumer, after, hasMore ? boundary : null, requested.ExpiresAt);
         // An unchanged opaque cursor is significant: Wait uses it to distinguish an idle timeout from a committed update.
         var checkpoint = ActivityPaging.Continue(cursor!, requested, nextState, Encode);
-        var channels = await Channels(participantId, channelCursor, ct);
-        return new ActivitySnapshot(checkpoint, events, hasMore ? checkpoint : null, hasMore, channels.ResetRequired,
-            channels.Values, channels.HasMore || channels.Incomplete, channels.NextCursor, channels.HasMore, channels.Incomplete);
+        var topics = await Topics(participantId, topicCursor, ct);
+        return new ActivitySnapshot(checkpoint, events, hasMore ? checkpoint : null, hasMore, topics.ResetRequired,
+            topics.Values, topics.HasMore || topics.Incomplete, topics.NextCursor, topics.HasMore, topics.Incomplete);
     }
 
-    public async Task<ActivitySnapshot> Wait(string participantId, string? credentialId, string? cursor, string? channelCursor, CancellationToken ct)
+    public async Task<ActivitySnapshot> Wait(string participantId, string? credentialId, string? cursor, string? topicCursor, CancellationToken ct)
     {
         // Capture before inspecting durable state. A commit between the snapshot and wait is therefore replayed.
         using var notification = ActivityJournal.Capture();
-        var first = await Snapshot(participantId, credentialId, cursor, channelCursor, ct);
+        var first = await Snapshot(participantId, credentialId, cursor, topicCursor, ct);
         if (first.ResetRequired || !string.Equals(first.Checkpoint, cursor, StringComparison.Ordinal)) return first;
         await notification.WaitAsync(TimeSpan.FromSeconds(15), ct);
-        return await Snapshot(participantId, credentialId, cursor, channelCursor, ct);
+        return await Snapshot(participantId, credentialId, cursor, topicCursor, ct);
     }
 
     public async Task EnsureParticipantActive(string participantId, string? credentialId, CancellationToken ct)
@@ -88,26 +88,26 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     public async Task EnsureSnapshotCurrent(string participantId, string? credentialId, ActivitySnapshot snapshot, CancellationToken ct)
     {
         await EnsureParticipantActive(participantId, credentialId, ct);
-        foreach (var channel in snapshot.Channels)
+        foreach (var topic in snapshot.Topics)
         {
-            var allowed = await governance.WithCurrentPolicy(participantId, channel.RoomKey, (policy, _) => Task.FromResult(policy.CanRead), ct);
+            var allowed = await governance.WithCurrentPolicy(participantId, topic.TopicKey, (policy, _) => Task.FromResult(policy.CanRead), ct);
             if (!allowed) throw new UnauthorizedAccessException("Activity access changed while the snapshot was being prepared.");
         }
         foreach (var activityEvent in snapshot.Events)
         {
             if (!Enum.TryParse<ActivityKind>(activityEvent.Kind, out var kind)
-                || !await CanReadEvent(participantId, new ActivityJournal { Kind = kind, RoomKey = activityEvent.RoomKey,
+                || !await CanReadEvent(participantId, new ActivityJournal { Kind = kind, TopicKey = activityEvent.TopicKey,
                     TangentKey = activityEvent.TangentKey, ActorParticipantId = activityEvent.ActorParticipantId }, ct))
                 throw new UnauthorizedAccessException("Activity access changed while the snapshot was being prepared.");
         }
     }
 
-    private async Task<ActivitySnapshot> Bootstrap(string participantId, long sequence, bool resetRequired, string? channelCursor, CancellationToken ct)
+    private async Task<ActivitySnapshot> Bootstrap(string participantId, long sequence, bool resetRequired, string? topicCursor, CancellationToken ct)
     {
         var checkpoint = Encode(new ActivityCursor(participantId, Guid.CreateVersion7().ToString("N"), sequence, null, clock.GetUtcNow().AddDays(7)));
-        var channels = await Channels(participantId, channelCursor, ct);
-        return new ActivitySnapshot(checkpoint, [], null, false, resetRequired || channels.ResetRequired,
-            channels.Values, channels.HasMore || channels.Incomplete, channels.NextCursor, channels.HasMore, channels.Incomplete);
+        var topics = await Topics(participantId, topicCursor, ct);
+        return new ActivitySnapshot(checkpoint, [], null, false, resetRequired || topics.ResetRequired,
+            topics.Values, topics.HasMore || topics.Incomplete, topics.NextCursor, topics.HasMore, topics.Incomplete);
     }
 
     private async Task<ActivityHead> ReadHead(CancellationToken ct)
@@ -116,29 +116,29 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         return await ActivityHead.Get(ActivityHead.Key, ct) ?? new ActivityHead { Id = ActivityHead.Key };
     }
 
-    private async Task<ChannelOverview> Channels(string participantId, string? cursor, CancellationToken ct)
+    private async Task<TopicOverview> Topics(string participantId, string? cursor, CancellationToken ct)
     {
-        var selected = DecodeChannel(cursor, participantId);
+        var selected = DecodeTopic(cursor, participantId);
         var reset = cursor is not null && selected is null;
-        selected ??= new ActivityChannelCursor(participantId, Guid.CreateVersion7().ToString("N"), 1, clock.GetUtcNow().AddDays(7));
-        var directory = await tangents.ListAuthorizedChannels(participantId, selected.Page, ct);
-        var channels = new List<ActivityChannel>(directory.Channels.Count);
-        foreach (var topic in directory.Channels)
+        selected ??= new ActivityTopicCursor(participantId, Guid.CreateVersion7().ToString("N"), 1, clock.GetUtcNow().AddDays(7));
+        var directory = await tangents.ListAuthorizedTopics(participantId, selected.Page, ct);
+        var topics = new List<ActivityTopic>(directory.Topics.Count);
+        foreach (var listed in directory.Topics)
         {
-            var channel = await Channel(participantId, topic.Key, ct);
-            if (channel is not null) channels.Add(channel);
+            var activity = await TopicActivity(participantId, listed.Key, ct);
+            if (activity is not null) topics.Add(activity);
         }
-        var next = directory.NextPage is null ? null : EncodeChannel(selected with { Page = directory.NextPage.Value });
-        // Default priority: channels with waiting direct replies, then channels the participant engaged with.
-        var ordered = channels
+        var next = directory.NextPage is null ? null : EncodeTopic(selected with { Page = directory.NextPage.Value });
+        // Default priority: topics with waiting direct replies, then topics the participant engaged with.
+        var ordered = topics
             .OrderBy(value => AttentionRules.PriorityTier(value.DirectReplies, value.ReadSequence))
             .ThenBy(value => value.TangentKey, StringComparer.Ordinal)
-            .ThenBy(value => value.RoomKey, StringComparer.Ordinal)
+            .ThenBy(value => value.TopicKey, StringComparer.Ordinal)
             .ToArray();
         return new(ordered, next, next is not null, reset, directory.ScanLimited);
     }
 
-    private Task<ActivityChannel?> Channel(string participantId, string roomKey, CancellationToken ct)
+    private Task<ActivityTopic?> TopicActivity(string participantId, string roomKey, CancellationToken ct)
         => governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
         {
             if (!policy.CanRead) return null;
@@ -147,12 +147,12 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
             // Null-safe: an absent watch record (the common case) simply means All.
             var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, roomKey), token),
                 await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, topic.TangentKey), token));
-            if (!AttentionRules.DeliversChannel(mode)) return null;
+            if (!AttentionRules.DeliversTopic(mode)) return null;
             var state = await TopicConversation.Get(roomKey, token) ?? new TopicConversation { Id = roomKey };
             var read = await ReadPosition.Get(ReadPosition.Key(participantId, roomKey), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
             // The window stays source-order; attention excludes the actor's own contributions.
-            var unreadWindow = await Post.Query(post => post.RoomKey == roomKey && post.Sequence > readSequence,
+            var unreadWindow = await Post.Query(post => post.TopicKey == roomKey && post.Sequence > readSequence,
                 MessagesWindow, token);
             var unread = unreadWindow.Where(post => AttentionRules.CountsForAttention(post, participantId)).ToArray();
             var unreadCount = Math.Min(unread.Length, MaximumUnread);
@@ -163,27 +163,27 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
                 var parent = await SourceDecision.Get(SourceDecision.Key(roomKey, reply.Uri, reply.Cid), token);
                 if (parent?.Accepted == true && parent.AuthorParticipantId == participantId) directReplies++;
             }
-            var last = state.LastSequence == 0 ? null : (await Post.Query(post => post.RoomKey == roomKey && post.Sequence == state.LastSequence,
+            var last = state.LastSequence == 0 ? null : (await Post.Query(post => post.TopicKey == roomKey && post.Sequence == state.LastSequence,
                 OneMessageWindow, token)).FirstOrDefault();
             var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
             // The window itself overflowed: any count derived from it may be clipped at the cap.
-            return new ActivityChannel(roomKey, topic.TangentKey, attention, unreadWindow.Count > MaximumUnread,
+            return new ActivityTopic(roomKey, topic.TangentKey, attention, unreadWindow.Count > MaximumUnread,
                 Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, last?.AcceptedAt);
         }, ct);
 
     /// <summary>Personal watch preference layered after the access check; never widens access.</summary>
     private async Task<bool> WatchesEvent(string participantId, ActivityJournal entry, CancellationToken ct)
     {
-        if (entry.Kind != ActivityKind.MessageAccepted || string.IsNullOrEmpty(entry.RoomKey)) return true;
-        var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, entry.RoomKey), ct),
+        if (entry.Kind != ActivityKind.PostAccepted || string.IsNullOrEmpty(entry.TopicKey)) return true;
+        var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, entry.TopicKey), ct),
             await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, entry.TangentKey), ct));
         if (!AttentionRules.DeliversEvent(mode, entry.Kind)) return false;
         if (mode != WatchMode.Replies) return true;
         // Replies mode delivers a post marker only when it answers this participant's accepted post.
-        var post = (await Post.Query(value => value.RoomKey == entry.RoomKey
-            && value.Sequence == (entry.MessageSequence ?? -1), OneMessageWindow, ct)).FirstOrDefault();
+        var post = (await Post.Query(value => value.TopicKey == entry.TopicKey
+            && value.Sequence == (entry.PostSequence ?? -1), OneMessageWindow, ct)).FirstOrDefault();
         var parent = post?.Content.ReplyTo is { } reply
-            ? await SourceDecision.Get(SourceDecision.Key(entry.RoomKey, reply.Uri, reply.Cid), ct) : null;
+            ? await SourceDecision.Get(SourceDecision.Key(entry.TopicKey, reply.Uri, reply.Cid), ct) : null;
         return AttentionRules.IsDirectReply(post, parent, participantId);
     }
 
@@ -191,9 +191,9 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     {
         // Individual read positions are personal. Never turn a topic marker into read-state disclosure.
         if (entry.Kind == ActivityKind.ReadAcknowledged && entry.ActorParticipantId != participantId) return false;
-        if (string.IsNullOrEmpty(entry.RoomKey))
+        if (string.IsNullOrEmpty(entry.TopicKey))
             return await tangents.CanAccess(participantId, entry.TangentKey, ct);
-        return await governance.WithCurrentPolicy(participantId, entry.RoomKey, (policy, _) => Task.FromResult(policy.CanRead), ct);
+        return await governance.WithCurrentPolicy(participantId, entry.TopicKey, (policy, _) => Task.FromResult(policy.CanRead), ct);
     }
 
     internal static ActivityEvent EventFor(string participantId, ActivityJournal entry)
@@ -202,8 +202,8 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         var privateTarget = entry.Kind is ActivityKind.MembershipChanged or ActivityKind.ParticipantChanged
             or ActivityKind.InvitationChanged or ActivityKind.RestrictionChanged;
         var target = privateTarget && entry.TargetParticipantId != participantId && entry.ActorParticipantId != participantId ? null : entry.TargetParticipantId;
-        return new(entry.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture), entry.Kind.ToString(), entry.RoomKey,
-            entry.TangentKey, entry.ActorParticipantId, target, entry.MessageSequence, entry.OccurredAt);
+        return new(entry.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture), entry.Kind.ToString(), entry.TopicKey,
+            entry.TangentKey, entry.ActorParticipantId, target, entry.PostSequence, entry.OccurredAt);
     }
 
     private string Encode(ActivityCursor cursor) => cursors.Protect(JsonSerializer.Serialize(cursor));
@@ -223,15 +223,15 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         }
     }
 
-    private string EncodeChannel(ActivityChannelCursor cursor) => cursors.Protect(JsonSerializer.Serialize(cursor));
+    private string EncodeTopic(ActivityTopicCursor cursor) => cursors.Protect(JsonSerializer.Serialize(cursor));
 
-    private ActivityChannelCursor? DecodeChannel(string? value, string participantId)
+    private ActivityTopicCursor? DecodeTopic(string? value, string participantId)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         try
         {
             if (value.Length > 4096) return null;
-            var cursor = JsonSerializer.Deserialize<ActivityChannelCursor>(cursors.Unprotect(value));
+            var cursor = JsonSerializer.Deserialize<ActivityTopicCursor>(cursors.Unprotect(value));
             return cursor is null || cursor.ParticipantId != participantId || cursor.Page is < 1 or > TangentGovernance.MaximumPage
                 || cursor.ExpiresAt <= clock.GetUtcNow() ? null : cursor;
         }
@@ -252,6 +252,6 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         };
     }
 
-    private sealed record ChannelOverview(IReadOnlyList<ActivityChannel> Values, string? NextCursor, bool HasMore, bool ResetRequired,
+    private sealed record TopicOverview(IReadOnlyList<ActivityTopic> Values, string? NextCursor, bool HasMore, bool ResetRequired,
         bool Incomplete);
 }

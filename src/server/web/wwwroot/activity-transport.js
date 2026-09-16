@@ -3,7 +3,7 @@
  * returns start({participant}), stop(), setVisible(bool), snapshot(). onSnapshot(value, context) must
  * await all acceptance-critical work; false/rejection/timeout leaves the checkpoint replayable. Its
  * context.signal aborts with the request, and context.isCurrent() fences late UI work. Checkpoint is
- * an opaque delivery cursor, never a read acknowledgement or a channel-directory cursor.
+ * an opaque delivery cursor, never a read acknowledgement or a topic-directory cursor.
  * stop/hidden retain only the same participant's checkpoint; participant/authority changes clear it.
  * Server /wait holds idle requests ~15s. Watchdog/poll limits are 45s; SSE rotates after 60s through a
  * fresh actor-stamped snapshot. A poll/live state means degraded but functioning polling, not SSE.
@@ -21,26 +21,26 @@
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   function validate(value) {
     if (!object(value) || !string(value.participantRef) || !value.participantRef || !cursor(value.checkpoint) || !Array.isArray(value.events) || value.events.length > 25
-      || !Array.isArray(value.channels) || value.channels.length > 100 || typeof value.hasMore !== 'boolean'
+      || !Array.isArray(value.topics) || value.topics.length > 100 || typeof value.hasMore !== 'boolean'
       || typeof value.resetRequired !== 'boolean' || !(value.nextCursor == null || cursor(value.nextCursor))
       || (value.hasMore && value.nextCursor !== value.checkpoint)
       || (!value.hasMore && value.nextCursor != null)
-      || !(value.nextChannelCursor == null || cursor(value.nextChannelCursor))) throw new Error('invalid-snapshot');
-    for (const name of ['channelsTruncated', 'channelsHasMore', 'channelsIncomplete'])
+      || !(value.nextTopicCursor == null || cursor(value.nextTopicCursor))) throw new Error('invalid-snapshot');
+    for (const name of ['topicsTruncated', 'topicsHasMore', 'topicsIncomplete'])
       if (value[name] !== undefined && typeof value[name] !== 'boolean') throw new Error('invalid-snapshot');
     for (const event of value.events) {
       if (!object(event) || !string(event.sequence, 80) || !event.sequence || !string(event.kind, 128) || !event.kind
-        || !string(event.roomKey, 1024) || !string(event.tangentKey, 1024) || !nullableString(event.actorParticipantId)
-        || !nullableString(event.targetParticipantId) || !(event.messageSequence == null || integer(event.messageSequence))
+        || !string(event.topicKey, 1024) || !string(event.tangentKey, 1024) || !nullableString(event.actorParticipantId)
+        || !nullableString(event.targetParticipantId) || !(event.postSequence == null || integer(event.postSequence))
         || !string(event.occurredAt, 80)) throw new Error('invalid-event');
     }
-    const rooms = new Set();
-    for (const channel of value.channels) {
-      if (!object(channel) || !string(channel.roomKey, 1024) || !channel.roomKey || rooms.has(channel.roomKey)
-        || !string(channel.tangentKey, 1024) || !integer(channel.unreadCount) || !integer(channel.directReplies)
-        || !integer(channel.lastSequence) || !integer(channel.readSequence) || typeof channel.unreadCountCapped !== 'boolean'
-        || !nullableString(channel.lastMessageAt)) throw new Error('invalid-channel');
-      rooms.add(channel.roomKey);
+    const seen = new Set();
+    for (const topic of value.topics) {
+      if (!object(topic) || !string(topic.topicKey, 1024) || !topic.topicKey || seen.has(topic.topicKey)
+        || !string(topic.tangentKey, 1024) || !integer(topic.unreadCount) || !integer(topic.directReplies)
+        || !integer(topic.lastSequence) || !integer(topic.readSequence) || typeof topic.unreadCountCapped !== 'boolean'
+        || !nullableString(topic.lastPostAt)) throw new Error('invalid-topic');
+      seen.add(topic.topicKey);
     }
     return value;
   }

@@ -53,11 +53,11 @@ public sealed class ExperienceDigest(
         var scanLimited = false;
         for (var page = 1; page <= 4; page++)
         {
-            TangentChannelDirectory directory;
+            TangentTopicDirectory directory;
             using (EntityContext.NoCache())
-                directory = await tangents.ListAuthorizedChannels(did, page, ct);
+                directory = await tangents.ListAuthorizedTopics(did, page, ct);
             if (directory.ScanLimited) scanLimited = true;
-            foreach (var topic in directory.Channels)
+            foreach (var topic in directory.Topics)
             {
                 if (roomsScanned >= MaximumTopics) { overflow = true; break; }
                 roomsScanned++;
@@ -111,13 +111,13 @@ public sealed class ExperienceDigest(
             var mode = AttentionRules.Effective(
                 await WatchSetting.Get(WatchSetting.Key(did, topic.Key), token),
                 await TangentWatchSetting.Get(TangentWatchSetting.Key(did, stored.TangentKey), token));
-            if (!AttentionRules.DeliversChannel(mode)) return false;
+            if (!AttentionRules.DeliversTopic(mode)) return false;
             var state = await TopicConversation.Get(topic.Key, token) ?? new TopicConversation { Id = topic.Key };
             var read = await ReadPosition.Get(ReadPosition.Key(did, topic.Key), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
             var recipientDid = await hub.Directory.AtprotoDidOf(did, token);
             var unread = (await Post.Query(
-                post => post.RoomKey == topic.Key && post.Sequence > readSequence, UnreadWindow, token))
+                post => post.TopicKey == topic.Key && post.Sequence > readSequence, UnreadWindow, token))
                 .OrderBy(post => post.Sequence).ToList();
             var handles = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var (author, label) in await hub.Directory.LabelsFor(

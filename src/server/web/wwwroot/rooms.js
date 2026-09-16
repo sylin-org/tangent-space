@@ -135,7 +135,7 @@
   }
   function listRooms(listing, append = false) {
     if (!append) $('room-list').replaceChildren();
-    for (const entry of listing.rooms || listing.channels || []) {
+    for (const entry of listing.topics || []) {
       const activity = activityFor(entry.key);
       const button = element('a', 'room-link', ''); button.href = topicUrl(entry.tangentKey || activeTangentKey, entry.key); button.dataset.key = entry.key;
       const state = entry.admission === 'InvitationOnly' ? 'By invitation' : 'Open to signed-in participants';
@@ -157,7 +157,7 @@
       const key = activeTangentKey;
       const listing = (await request(tangentPath(key) + '/topics' + (append && nextRoomPage ? '?page=' + encodeURIComponent(nextRoomPage) : ''), undefined, 'GET', context?.signal)).data;
       if (identity !== identityEpoch || site !== owner || key !== activeTangentKey || (context && !context.isCurrent())) return;
-      routeTopics = { ...listing, channels: append ? [...(routeTopics?.channels || []), ...(listing.channels || [])] : listing.channels || [] };
+      routeTopics = { ...listing, topics: append ? [...(routeTopics?.topics || []), ...(listing.topics || [])] : listing.topics || [] };
       listRooms(routeTopics);
     } else {
       const listing = (await request('/api/rooms', undefined, 'GET', context?.signal)).data;
@@ -214,10 +214,10 @@
   }
   function selectTangent(tangent, preferredRoom) {
     activeTangentKey = tangent.key;
-    const channels = Array.isArray(tangent.channels) ? tangent.channels : [];
+    const topics = Array.isArray(tangent.topics) ? tangent.topics : [];
     const key = preferredRoom;
     document.querySelectorAll('.tangent-card').forEach(card => card.setAttribute('aria-current', String(card.dataset.key === tangent.key)));
-    listRooms({ rooms: channels });
+    listRooms({ topics });
     text('rooms-heading', route().kind === 'topics' ? 'Conversations' : tangent.name || 'Topics');
     show('community-settings', !!(site?.tangents?.canCreate || site?.participant?.isOwner || tangent.canManage || tangent.isOwner || tangent.canCreateTopic === true));
     show('site-setup', site?.participant?.isOwner === true || tangent.canCreateTopic === true || can(tangent, 'createTopic'));
@@ -227,7 +227,7 @@
     if (!tangent.isOwner && field('tangent-member-form', 'role').value === 'Admin') field('tangent-member-form', 'role').value = 'Member';
     openTangentEditor(tangent);
     if (key) action(null, () => choose(key));
-    else { rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; document.body.classList.remove('conversation-open'); show('room-content', false); show('choose-room', true); text('choose-room', channels.length ? 'Choose a topic to join the conversation.' : 'No topics here yet. Start one when you are ready.'); }
+    else { rememberDraft(); epoch++; resetMessages(); room = null; reply = undefined; document.body.classList.remove('conversation-open'); show('room-content', false); show('choose-room', true); text('choose-room', topics.length ? 'Choose a topic to join the conversation.' : 'No topics here yet. Start one when you are ready.'); }
     updateHero();
   }
   function renderTangents() {
@@ -239,9 +239,9 @@
       const wrap = element('div', 'tangent-card-wrap');
       const card = element('a', 'tangent-card sylin-card', ''); card.href = tangentUrl(tangent.key); card.dataset.key = tangent.key;
       card.style.setProperty('--tangent-accent', safeAccent(tangent.accent)); cardArtwork(card, tangent);
-      const channels = Array.isArray(tangent.channels) ? tangent.channels : [];
-      const total = channels.reduce((sum, channel) => sum + (activityFor(channel.key).unreadCount || 0), 0);
-      const cap = total > 50 || channels.some(channel => activityFor(channel.key).unreadCountCapped === true) ? '50+' : String(total);
+      const topics = Array.isArray(tangent.topics) ? tangent.topics : [];
+      const total = topics.reduce((sum, topic) => sum + (activityFor(topic.key).unreadCount || 0), 0);
+      const cap = total > 50 || topics.some(topic => activityFor(topic.key).unreadCountCapped === true) ? '50+' : String(total);
       card.append(...cardContents(tangent, total, cap));
       wrap.append(card);
       if (tangent.canManage || tangent.isOwner || can(tangent, 'manageTangent')) {
@@ -261,8 +261,8 @@
     renderCreatePreview();
     tangentNextPage = site?.tangents?.nextPage;
     show('more-tangents', !!tangentNextPage);
-    const incomplete = site?.tangents?.directoryIncomplete || site?.tangents?.channelsIncomplete;
-    text('directory-note', !incomplete ? '' : site?.tangents?.directoryIncomplete ? 'The directory is bounded while the server checks what this account can see. Load more or narrow to a Tangent.' : 'Some channel lists are bounded. Open a Tangent to continue browsing its channels.');
+    const incomplete = site?.tangents?.directoryIncomplete || site?.tangents?.topicsIncomplete;
+    text('directory-note', !incomplete ? '' : site?.tangents?.directoryIncomplete ? 'The directory is bounded while the server checks what this account can see. Load more or narrow to a Tangent.' : 'Some topic lists are bounded. Open a Tangent to continue browsing its topics.');
     show('directory-note', !!incomplete);
     renderCatchUp();
   }
@@ -282,7 +282,7 @@
   function renderCatchUp() {
     const section = $('catch-up'), list = $('catch-up-list');
     if (!section || !list) return;
-    const entries = currentTangents().flatMap(tangent => (tangent.channels || []).map(topic => ({ tangent, topic, activity: activityFor(topic.key) })))
+    const entries = currentTangents().flatMap(tangent => (tangent.topics || []).map(topic => ({ tangent, topic, activity: activityFor(topic.key) })))
       .filter(entry => entry.activity.unreadCount > 0 || entry.activity.directReplies > 0)
       .sort((a, b) => (b.activity.directReplies || 0) - (a.activity.directReplies || 0) || (b.activity.unreadCount || 0) - (a.activity.unreadCount || 0));
     section.hidden = route().kind !== 'home' || !site?.participant || !entries.length;
@@ -323,7 +323,7 @@
     if (!page || !Array.isArray(page.tangents)) throw new Error('More Tangents could not be loaded.');
     const known = new Set(currentTangents().map(tangent => tangent.key));
     site.tangents.tangents.push(...page.tangents.filter(tangent => !known.has(tangent.key)));
-    site.tangents.nextPage = page.nextPage; site.tangents.directoryIncomplete = !!page.directoryIncomplete; site.tangents.channelsIncomplete = !!page.channelsIncomplete;
+    site.tangents.nextPage = page.nextPage; site.tangents.directoryIncomplete = !!page.directoryIncomplete; site.tangents.topicsIncomplete = !!page.topicsIncomplete;
     renderTangents();
   }
   function resetMessages() { historyRevision++; rendered.clear(); visibleMessages.clear(); newPosts.clear(); updateNewPosts(); $('messages').replaceChildren(); nextCursor = resumeCursor = undefined; show('more-messages', false); show('acknowledge', false); show('read-checkpoint', false); text('history-note', ''); }
@@ -343,7 +343,7 @@
   function revokeSelectedRoom(code = 403) {
     const key = room?.key; if (!key) return;
     rememberDraft();
-    for (const tangent of currentTangents()) tangent.channels = (tangent.channels || []).filter(channel => channel.key !== key);
+    for (const tangent of currentTangents()) tangent.topics = (tangent.topics || []).filter(topic => topic.key !== key);
     unavailableRoute(code);
   }
   function updateReadAudience() {
@@ -393,7 +393,7 @@
     const topicSettings = $('topic-settings-form');
     if (topicSettings) { topicSettings.elements.namedItem('allowPostEditing').checked = room.allowPostEditing === true; topicSettings.elements.namedItem('isLocked').checked = room.isLocked === true; show('topic-settings-form', room.canManage || can(room, 'manageTopic')); }
     show('message-form', room.canWrite);
-    $('channel-details').open = !room.canRead;
+    $('topic-details').open = !room.canRead;
     field('topic-form', 'topic').value = room.topic || '';
     field('admission-form', 'admission').value = room.admission;
     show('admission-form', room.canAppointManagers); show('manager-choice', room.canAppointManagers);
@@ -644,23 +644,23 @@
   async function renderActivity(snapshot, context) {
     if (!context.isCurrent() || context.participant !== site?.participant?.participantRef) return false;
     const previousSequence = room ? activityFor(room.key).lastSequence : undefined;
-    const signature = JSON.stringify({ channels: snapshot.channels, truncated: snapshot.channelsTruncated, reset: snapshot.resetRequired });
+    const signature = JSON.stringify({ topics: snapshot.topics, truncated: snapshot.topicsTruncated, reset: snapshot.resetRequired });
     const changed = signature !== activitySignature; activitySignature = signature;
     activityByRoom.clear();
-    for (const channel of Array.isArray(snapshot.channels) ? snapshot.channels : []) {
-      if (typeof channel.roomKey === 'string') activityByRoom.set(channel.roomKey, channel);
+    for (const topic of Array.isArray(snapshot.topics) ? snapshot.topics : []) {
+      if (typeof topic.topicKey === 'string') activityByRoom.set(topic.topicKey, topic);
     }
     const selectedTangent = tangentByKey.get(room?.tangentKey || activeTangentKey);
-    activityOverviewNote = snapshot.channelsIncomplete ? 'This overview is incomplete because the directory reached its current scan limit.' : snapshot.channelsTruncated ? 'This overview shows up to 100 visible topics.' : selectedTangent?.channelsIncomplete ? 'This Tangent’s topic directory is incomplete.' : selectedTangent?.nextChannelsPage ? 'This Tangent has more visible topics to load.' : snapshot.resetRequired ? 'Earlier activity markers have been reset.' : '';
+    activityOverviewNote = snapshot.topicsIncomplete ? 'This overview is incomplete because the directory reached its current scan limit.' : snapshot.topicsTruncated ? 'This overview shows up to 100 visible topics.' : selectedTangent?.topicsIncomplete ? 'This Tangent’s topic directory is incomplete.' : selectedTangent?.nextTopicsPage ? 'This Tangent has more visible topics to load.' : snapshot.resetRequired ? 'Earlier activity markers have been reset.' : '';
     if (changed) {
       renderTangents();
-      const activeChannels = currentTangents().flatMap(tangent => tangent.channels || []);
+      const activeTopics = currentTangents().flatMap(tangent => tangent.topics || []);
       const scope = room?.tangentKey || activeTangentKey;
-      listRooms(routeTopics || { rooms: activeChannels.filter(channel => !scope || channel.tangentKey === scope) || [] });
+      listRooms(routeTopics || { topics: activeTopics.filter(topic => !scope || topic.tangentKey === scope) || [] });
       if (room) document.querySelectorAll('.room-link').forEach(button => button.setAttribute('aria-current', String(button.dataset.key === room.key)));
     }
     const selected = room ? activityByRoom.get(room.key) : undefined;
-    const elsewhere = currentTangents().flatMap(tangent => (tangent.channels || []).map(topic => ({ tangent, topic, activity: activityFor(topic.key) })))
+    const elsewhere = currentTangents().flatMap(tangent => (tangent.topics || []).map(topic => ({ tangent, topic, activity: activityFor(topic.key) })))
       .filter(entry => entry.topic.key !== room?.key && (entry.activity.unreadCount > 0 || entry.activity.directReplies > 0))
       .sort((a, b) => (b.activity.directReplies || 0) - (a.activity.directReplies || 0));
     show('conversation-elsewhere', elsewhere.length > 0);
@@ -672,7 +672,7 @@
       link.href = topicUrl(tangent.key, topic.key); $('elsewhere-links').append(link);
     }
     if (elsewhere.length > 3) { const link = element('a', '', 'See all Tangents →'); link.href = '/tangents/'; $('elsewhere-links').append(link); }
-    // Watch/mute policy also removes channels from activity. Absence is not an ACL result.
+    // Watch/mute policy also removes topics from activity. Absence is not an ACL result.
     if (room?.canRead && !selected && (changed || snapshot.resetRequired)) {
       const selectedRoom = room, version = epoch;
       try {
@@ -685,8 +685,8 @@
         else throw error;
       }
     }
-    const shouldRefresh = room && (snapshot.resetRequired || (Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room.key)) || selected?.lastSequence !== previousSequence);
-    const messageEvent = Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.roomKey === room?.key && ['MessageChanged', 'MessageEdited', 'MessageDeleted', 'PostChanged', 'PostDeleted'].includes(event.kind));
+    const shouldRefresh = room && (snapshot.resetRequired || (Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.topicKey === room.key)) || selected?.lastSequence !== previousSequence);
+    const messageEvent = Array.isArray(snapshot.events) && snapshot.events.some(event => event && event.topicKey === room?.key && ['PostEdited', 'PostDeleted'].includes(event.kind));
     try {
       if ((messageEvent || snapshot.resetRequired || activityNeedsRefresh || route().kind === 'post' && shouldRefresh) && room?.canRead) {
         const refreshed = await refreshOpenHistory(false, context);

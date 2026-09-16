@@ -63,13 +63,13 @@
   }
 
   async function open(textarea, prefix) {
-    const roomKey = window.TangentRooms?.currentRoomKey?.();
-    if (!roomKey) return close();
+    const topicKey = window.TangentRooms?.currentRoomKey?.();
+    if (!topicKey) return close();
     const version = ++lookupVersion;
     let list;
-    try { list = await window.TangentRooms.mentionables(roomKey, prefix); }
+    try { list = await window.TangentRooms.mentionables(topicKey, prefix); }
     catch (_) { if (version === lookupVersion) close(); return; }
-    if (version !== lookupVersion || roomKey !== window.TangentRooms?.currentRoomKey?.() || document.activeElement !== textarea) return;
+    if (version !== lookupVersion || topicKey !== window.TangentRooms?.currentRoomKey?.() || document.activeElement !== textarea) return;
     targets = list || [];
     if (!targets.length) return close();
     composing = true; activeIndex = 0;
@@ -147,10 +147,10 @@
     textarea.value = beforeKeep + insert + ' ' + after;
     const caret = start + 1;
     textarea.setSelectionRange(caret, caret);
-    const roomKey = window.TangentRooms?.currentRoomKey?.();
-    if (roomKey) {
+    const topicKey = window.TangentRooms?.currentRoomKey?.();
+    if (topicKey) {
       const byteStart = byteLength(textarea.value.slice(0, tokenStart));
-      facetsOf(roomKey).push({
+      facetsOf(topicKey).push({
         kind: entry.kind === 'group' ? 'group' : 'mention',
         start: byteStart,
         end: byteStart + byteLength(insert),
@@ -171,21 +171,21 @@
   /// Drop facets whose range no longer matches their recorded label (edits shift ranges;
   /// a degraded mention simply becomes plain text the server parser may still resolve).
   function sizeFacets(textarea) {
-    const roomKey = window.TangentRooms?.currentRoomKey?.();
-    if (!roomKey) return;
-    const list = facetsOf(roomKey);
+    const topicKey = window.TangentRooms?.currentRoomKey?.();
+    if (!topicKey) return;
+    const list = facetsOf(topicKey);
     const kept = [];
     for (const facet of list) {
       const from = charIndexAtByte(textarea.value, facet.start);
       const to = charIndexAtByte(textarea.value, facet.end);
       if (textarea.value.slice(from, to) === '@' + facet.label) kept.push(facet);
     }
-    draftFacets.set(roomKey, kept);
+    draftFacets.set(topicKey, kept);
   }
 
   /// The wire package for the current draft: validated facets only.
-  function wireFacets(roomKey, text) {
-    return facetsOf(roomKey || '').filter(facet => {
+  function wireFacets(topicKey, text) {
+    return facetsOf(topicKey || '').filter(facet => {
       const from = charIndexAtByte(text, facet.start);
       const to = charIndexAtByte(text, facet.end);
       return text.slice(from, to) === '@' + facet.label;
@@ -195,21 +195,21 @@
     }));
   }
 
-  function clearFacets(roomKey) { draftFacets.delete(roomKey); }
+  function clearFacets(topicKey) { draftFacets.delete(topicKey); }
   function clearAll() { draftFacets.clear(); targets = []; targetRoom = null; close(); }
 
   /// Insert a reply mention for a known author (Discord dynamics: reply carries the @).
   function replyMention(authorValue, handle) {
     const textarea = $('message-text');
-    const roomKey = window.TangentRooms?.currentRoomKey?.();
-    if (!textarea || !roomKey || !handle) return;
+    const topicKey = window.TangentRooms?.currentRoomKey?.();
+    if (!textarea || !topicKey || !handle) return;
     const insert = '@' + handle + ' ';
     const byteStart = 0;
     if (textarea.value.startsWith(insert)) return;
-    for (const facet of facetsOf(roomKey)) { facet.start += byteLength(insert); facet.end += byteLength(insert); }
+    for (const facet of facetsOf(topicKey)) { facet.start += byteLength(insert); facet.end += byteLength(insert); }
     textarea.value = insert + textarea.value;
     textarea.setSelectionRange(insert.length, insert.length);
-    facetsOf(roomKey).push({ kind: 'mention', start: byteStart, end: byteStart + byteLength(insert.trim()), did: authorValue, label: handle });
+    facetsOf(topicKey).push({ kind: 'mention', start: byteStart, end: byteStart + byteLength(insert.trim()), did: authorValue, label: handle });
     window.TangentRooms?.size();
     sizeFacets(textarea);
   }

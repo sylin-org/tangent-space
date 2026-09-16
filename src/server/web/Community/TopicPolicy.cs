@@ -2,7 +2,7 @@ namespace Tangent.Community;
 
 /// <summary>A current decision, not a durable grant. Acceptance must execute inside the coordinator callback.</summary>
 public sealed record TopicPolicy(
-    string RoomKey,
+    string TopicKey,
     string? ActorParticipantId,
     long SelectedPolicyRevision,
     long SpacePolicyRevision,

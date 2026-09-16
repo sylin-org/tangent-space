@@ -58,7 +58,7 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         var did = ParticipationAccess.Require(User, ParticipationGrants.Read);
         using var fresh = Koan.Data.Core.EntityContext.NoCache();
         var post = await Post.Get(messageId, ct);
-        if (post is null || post.RoomKey != roomKey) throw new ArgumentException("Choose a post in this Topic.");
+        if (post is null || post.TopicKey != roomKey) throw new ArgumentException("Choose a post in this Topic.");
         ParticipationAccess.Require(User, post.AuthorParticipantId == did ? ParticipationGrants.Post : ParticipationGrants.Manage);
         return did;
     }

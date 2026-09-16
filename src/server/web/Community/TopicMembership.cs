@@ -6,7 +6,7 @@ namespace Tangent.Community;
 
 public sealed class TopicMembership : Entity<TopicMembership>
 {
-    public string RoomKey { get; set; } = "";
+    public string TopicKey { get; set; } = "";
     public string ParticipantId { get; set; } = "";
     public TopicRole Role { get; set; }
     public string ChangedByParticipantId { get; set; } = "";
@@ -19,7 +19,7 @@ public sealed class TopicMembership : Entity<TopicMembership>
     internal static TopicMembership Assign(Topic topic, string participantDid, TopicRole role, string actorDid, DateTimeOffset now)
         => new()
         {
-            Id = Key(topic.Id, participantDid), RoomKey = topic.Id, ParticipantId = participantDid, Role = role,
+            Id = Key(topic.Id, participantDid), TopicKey = topic.Id, ParticipantId = participantDid, Role = role,
             ChangedByParticipantId = actorDid, ChangedAt = now, PolicyRevision = topic.PolicyRevision
         };
 }

@@ -17,7 +17,7 @@ namespace Tangent.Conversation;
 /// author (AuthorParticipantId == viewer) or to a viewer holding a moderation-capable role for that
 /// snapshot's topic. Per-row control lives in the predicate, so a moderation-removed post's
 /// snapshots stay author+moderator visible while everyone else gets the framework's honest
-/// empty/404. The predicate is ANDed with a structural snapshot-only term (OfMessageId set),
+/// empty/404. The predicate is ANDed with a structural snapshot-only term (OfPostId set),
 /// so no row other than a changelog snapshot can ever match this surface even if a future
 /// partition selection slips; the controller separately pins ?set=changelog. Writes are denied
 /// row-wise too: the changelog is write-once history mutated only by domain code.
@@ -49,8 +49,8 @@ public sealed class PostHistoryAccess : EntityAccess<Post>
                     return q.Where(row => false);
             }
             var moderatorTopics = ModeratorTopics(viewer);
-            return q.Where(row => row.OfMessageId != null
-                && (row.AuthorParticipantId == viewer || moderatorTopics.Contains(row.RoomKey)));
+            return q.Where(row => row.OfPostId != null
+                && (row.AuthorParticipantId == viewer || moderatorTopics.Contains(row.TopicKey)));
         }
         // No row may ever be updated or removed through the generic surface; a create contributes
         // no Where (an unstamped create constraint is a boot-probed footgun).
@@ -59,7 +59,7 @@ public sealed class PostHistoryAccess : EntityAccess<Post>
 
     /// <summary>The topics where the viewer durably holds moderation authority, mirroring
     /// Topic.CurrentPolicy's owner/manager clauses: space or Tangent ownership, topic manager,
-    /// delegated Tangent administrator, or channel creator — subject to topic admission: a viewer
+    /// delegated Tangent administrator, or topic creator — subject to topic admission: a viewer
     /// durably Removed from the parent Tangent loses the tier, and an active durable
     /// Banned restriction removes it for non-owners. Time-scoped timeouts are enforced on
     /// management actions in the domain layer and remain deliberately ignored by this read
@@ -76,7 +76,7 @@ public sealed class PostHistoryAccess : EntityAccess<Post>
             var roles = new Dictionary<string, TopicRole>(StringComparer.Ordinal);
             foreach (var membership in Block<IReadOnlyList<TopicMembership>>()
                 .Invoke(TopicMembership.Query(membership => membership.ParticipantId == participantId, CancellationToken.None)))
-                roles[membership.RoomKey] = membership.Role;
+                roles[membership.TopicKey] = membership.Role;
             var tangentMemberships = new Dictionary<string, TangentMembership>(StringComparer.Ordinal);
             var admin = new HashSet<string>(StringComparer.Ordinal);
             foreach (var membership in Block<IReadOnlyList<TangentMembership>>()

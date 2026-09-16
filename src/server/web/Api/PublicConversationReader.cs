@@ -39,8 +39,8 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         {
             using var fresh = EntityContext.NoCache();
             var anchor = await Post.Get(postId, ct);
-            if (anchor is null || anchor.OfMessageId is not null || anchor.Sequence <= 0) return null;
-            var topic = await ResolveTopicUnderGate(tangentId, anchor.RoomKey, ct);
+            if (anchor is null || anchor.OfPostId is not null || anchor.Sequence <= 0) return null;
+            var topic = await ResolveTopicUnderGate(tangentId, anchor.TopicKey, ct);
             if (topic is null) return null;
             var window = await ReadPostsUnderGate(topic, before: null, after: null, postId, limit, ct, anchor);
             return window is not null && window.Posts.Any(post => post.Id == postId) ? new(postId, window) : null;
@@ -57,15 +57,15 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         if (around is not null)
         {
             var anchor = knownAnchor ?? await Post.Get(around, ct);
-            if (anchor is null || anchor.RoomKey != topic.Key || anchor.OfMessageId is not null || anchor.Sequence <= 0)
+            if (anchor is null || anchor.TopicKey != topic.Key || anchor.OfPostId is not null || anchor.Sequence <= 0)
                 return null;
             var beforeCount = limit / 2;
             var afterCount = limit - beforeCount - 1;
             var preceding = beforeCount == 0 ? [] : await Post.Query(
-                post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence < anchor.Sequence,
+                post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence < anchor.Sequence,
                 MessageQuery(beforeCount, descending: true), ct);
             var following = afterCount == 0 ? [] : await Post.Query(
-                post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence > anchor.Sequence,
+                post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence > anchor.Sequence,
                 MessageQuery(afterCount, descending: false), ct);
             candidates = preceding.OrderBy(post => post.Sequence).Append(anchor)
                 .Concat(following.OrderBy(post => post.Sequence)).ToArray();
@@ -75,10 +75,10 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
             var descending = before is not null || after is null;
             var query = MessageQuery(limit + 1, descending);
             candidates = before is { } older
-                ? await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence < older, query, ct)
+                ? await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence < older, query, ct)
                 : after is { } newer
-                    ? await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence > newer, query, ct)
-                    : await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null, query, ct);
+                    ? await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence > newer, query, ct)
+                    : await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null, query, ct);
             candidates = candidates.Take(limit).ToArray();
         }
 
@@ -111,10 +111,10 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         {
             var first = selected[0].Sequence;
             var last = selected[^1].Sequence;
-            if ((await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence < first,
+            if ((await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence < first,
                     MessageQuery(1, descending: true), ct)).Count > 0)
                 olderBefore = first;
-            if ((await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence > last,
+            if ((await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence > last,
                     MessageQuery(1, descending: false), ct)).Count > 0)
                 newerAfter = last;
         }

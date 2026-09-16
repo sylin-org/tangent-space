@@ -51,7 +51,7 @@ public sealed partial class ExperienceService
         {
             members = await TangentMembership.Query(value => value.TangentKey == tangentRow.Id, ct);
             foreach (var membership in members) candidates.Add(membership.ParticipantId);
-            var authors = await Post.Query(post => post.RoomKey == topicKey, RecentAuthors(), ct);
+            var authors = await Post.Query(post => post.TopicKey == topicKey, RecentAuthors(), ct);
             foreach (var post in authors) candidates.Add(post.AuthorParticipantId);
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             if (space is { OwnerParticipantId.Length: > 0 }) candidates.Add(space.OwnerParticipantId);

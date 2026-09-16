@@ -49,9 +49,9 @@ public sealed partial class ParticipantGovernance
                 {
                     scope = RestrictionScope.Topic;
                     scopeKey = roomKey;
-                    topic = await Topic.Get(roomKey, ct) ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The requested channel does not exist.");
+                    topic = await Topic.Get(roomKey, ct) ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The requested topic does not exist.");
                     if (topic.TangentKey != tangentKey)
-                        throw new TopicRuleViolation(TopicDenial.InvalidInput, "The channel does not belong to this Tangent.");
+                        throw new TopicRuleViolation(TopicDenial.InvalidInput, "The topic does not belong to this Tangent.");
                     selectedRevision = topic.PolicyRevision;
                     var membership = await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
                     var tangentMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
@@ -59,7 +59,7 @@ public sealed partial class ParticipantGovernance
                     var policy = topic.CurrentPolicy(space, actorId, membership, actor.IsSuspended, tangent, tangentMembership,
                         actor.Classification, restriction);
                     if (!policy.CanManage)
-                        throw new TopicRuleViolation(TopicDenial.Forbidden, "Only a channel manager or the Tangent stewards can restrict here.");
+                        throw new TopicRuleViolation(TopicDenial.Forbidden, "Only a topic manager or the Tangent stewards can restrict here.");
                 }
                 else if (!(tangent.IsOwner(actorId) || await IsServerOwner(actorId, ct)) && actorMembership?.Role != TangentRole.Admin)
                     throw new TopicRuleViolation(TopicDenial.Forbidden, "Only the Tangent owner or a Tangent administrator can restrict at this scope.");
@@ -69,7 +69,7 @@ public sealed partial class ParticipantGovernance
                     tangentKey: tangent.Id, ct: ct);
                 audit = new TopicAudit
                 {
-                    ActorParticipantId = actorId, RoomKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
+                    ActorParticipantId = actorId, TopicKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
                     Accepted = true, Reason = stored.Reason, SelectedPolicyRevision = selectedRevision,
                     SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
                 };
@@ -82,7 +82,7 @@ public sealed partial class ParticipantGovernance
             catch (TopicRuleViolation rejected) { denial = rejected; }
             audit = new TopicAudit
             {
-                ActorParticipantId = actorId, RoomKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
+                ActorParticipantId = actorId, TopicKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
                 Accepted = false, Denial = denial!.Denial, Reason = denial.Message,
                 SelectedPolicyRevision = selectedRevision, SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
             };
@@ -124,7 +124,7 @@ public sealed partial class ParticipantGovernance
                 {
                     var (_, policy) = await TopicWithPolicy(actorId, scopeKey, tangentKey, ct);
                     if (!policy.CanManage)
-                        throw new TangentRuleViolation(TangentDenial.Forbidden, "Only channel managers can inspect channel restrictions.");
+                        throw new TangentRuleViolation(TangentDenial.Forbidden, "Only topic managers can inspect topic restrictions.");
                 }
             }
             await EntityContext.Commit(ct);

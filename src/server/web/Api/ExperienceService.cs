@@ -106,10 +106,10 @@ public sealed partial class ExperienceService(
         var decoded = DecodeDirectoryCursor(cursor, "experience:topics:" + tangentKey, participantId);
         var page = decoded?.Page ?? 1;
         var offset = InnerOffset(decoded);
-        TangentChannelDirectory listing;
+        TangentTopicDirectory listing;
         using (EntityContext.NoCache())
             listing = await topics.ListForTangent(participantId, tangentKey, page, ct);
-        var visible = listing.Channels.Skip(offset).ToList();
+        var visible = listing.Topics.Skip(offset).ToList();
         var slice = visible.Take(DirectoryLimit).ToList();
         string? continuation = null;
         if (visible.Count > DirectoryLimit)
@@ -276,7 +276,7 @@ public sealed partial class ExperienceService(
                 throw new RequestArgumentException("replyTo", "Reply to a Post in this Topic.");
             using var fresh = EntityContext.NoCache();
             var anchor = await Post.Get(target.PostId, ct);
-            if (anchor is null || anchor.RoomKey != topicKey)
+            if (anchor is null || anchor.TopicKey != topicKey)
                 throw new RequestArgumentException("replyTo", "Reply to a Post in this Topic.");
             replySource = new SourceReference(anchor.SourceUri, anchor.SourceCid);
         }
@@ -337,7 +337,7 @@ public sealed partial class ExperienceService(
             string? throughRef = null;
             using (EntityContext.NoCache())
             {
-                var through = (await Post.Query(post => post.RoomKey == topicKey && post.Sequence == sequence, One(), ct))
+                var through = (await Post.Query(post => post.TopicKey == topicKey && post.Sequence == sequence, One(), ct))
                     .FirstOrDefault();
                 if (through is not null) throughRef = refs.Post(tangentKey, topicKey, through.Id);
             }
@@ -511,10 +511,10 @@ public sealed partial class ExperienceService(
                 ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
             // ADR 0007: the projection row is the receipt.
             var projected = (await Post.Query(m => m.AuthorParticipantId == participantId && m.OperationId == operationId, One(), ct)).FirstOrDefault();
-            if (projected is not null && await Topic.Get(projected.RoomKey, ct) is { } rowTopic)
+            if (projected is not null && await Topic.Get(projected.TopicKey, ct) is { } rowTopic)
             {
                 state = projected.Removed ? "rejected" : "completed";
-                resultRef = refs.Post(rowTopic.TangentKey, projected.RoomKey, projected.Id);
+                resultRef = refs.Post(rowTopic.TangentKey, projected.TopicKey, projected.Id);
             }
         }
         if (record.Operation == "JoinTangent" && state == "pending")
@@ -729,7 +729,7 @@ public sealed partial class ExperienceService(
         },
         tangent.MembershipRole != TangentRole.Removed && RoleOf(tangent) == "visitor"
             && tangent.Admission is TangentAdmission.Open or TangentAdmission.Approval,
-        tangent.Channels.Any(channel => channel.CanRead), tangent.Channels.Any(channel => channel.CanWrite));
+        tangent.Topics.Any(topic => topic.CanRead), tangent.Topics.Any(topic => topic.CanWrite));
 
     internal ExperienceTopicDto TopicDto(string tangentKey, TopicDescription topic)
         => new(refs.Topic(tangentKey, topic.Key), ExperienceDigest.Preview(topic.Title, 80),

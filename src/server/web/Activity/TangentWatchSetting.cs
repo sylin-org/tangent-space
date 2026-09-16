@@ -4,7 +4,7 @@ using Koan.Data.Core.Model;
 
 namespace Tangent.Activity;
 
-/// <summary>Per participant and Tangent default; a channel's explicit WatchSetting overrides it. Never affects access.</summary>
+/// <summary>Per participant and Tangent default; a topic's explicit WatchSetting overrides it. Never affects access.</summary>
 public sealed class TangentWatchSetting : Entity<TangentWatchSetting>
 {
     public string ParticipantId { get; set; } = "";
@@ -13,7 +13,7 @@ public sealed class TangentWatchSetting : Entity<TangentWatchSetting>
     public string ChangedByParticipantId { get; set; } = "";
     public DateTimeOffset ChangedAt { get; set; }
 
-    // Namespaced so a Tangent default can never collide with a same-named channel's watch setting.
+    // Namespaced so a Tangent default can never collide with a same-named topic's watch setting.
     public static string Key(string participantDid, string tangentKey)
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("tangent-watch\n" + participantDid + "\n" + tangentKey)));
 

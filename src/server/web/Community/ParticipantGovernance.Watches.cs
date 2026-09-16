@@ -19,7 +19,7 @@ public sealed partial class ParticipantGovernance
             using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
             var (topic, policy) = await TopicWithPolicy(actorId, roomKey, null, ct);
             if (!policy.CanRead)
-                throw new TangentRuleViolation(TangentDenial.Forbidden, "Watch state needs read access to the channel.");
+                throw new TangentRuleViolation(TangentDenial.Forbidden, "Watch state needs read access to the topic.");
             var setting = WatchSetting.Choose(actorId, roomKey, mode, actorId, clock.GetUtcNow());
             await setting.Save(ct);
             await CommandCommit.Report(new WatchResult(roomKey, setting.Mode), ct);
@@ -29,7 +29,7 @@ public sealed partial class ParticipantGovernance
         finally { gate.Exit(); }
     }
 
-    /// <summary>Personal Tangent-wide default; each channel's explicit watch preference still overrides it.</summary>
+    /// <summary>Personal Tangent-wide default; each topic's explicit watch preference still overrides it.</summary>
     public async Task<WatchResult> SetTangentWatch(string actorId, string tangentKey, WatchMode mode, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tangentKey);

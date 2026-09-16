@@ -24,7 +24,7 @@ public sealed record ChangeTangentRequest(
     [property: JsonProperty] string? Artwork);
 
 [JsonObject(MissingMemberHandling = MissingMemberHandling.Error)]
-public sealed record CreateTangentChannelRequest(
+public sealed record CreateTangentTopicRequest(
     [property: JsonProperty(Required = Required.Always)] string Key,
     [property: JsonProperty(Required = Required.Always)] string Title,
     [property: JsonProperty(Required = Required.Always)] TopicAdmission Admission,

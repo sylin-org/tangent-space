@@ -7,7 +7,7 @@ namespace Tangent.Conversation;
 /// <summary>Durable first acceptance decision and retained source content; the projection can be rebuilt from this ledger.</summary>
 public sealed class SourceDecision : Entity<SourceDecision>
 {
-    public string RoomKey { get; set; } = "";
+    public string TopicKey { get; set; } = "";
     public string AuthorParticipantId { get; set; } = "";
     public string SourceUri { get; set; } = "";
     public string SourceCid { get; set; } = "";
