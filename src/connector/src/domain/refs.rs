@@ -1,5 +1,5 @@
 //! Server reference handling. References are qualified, opaque strings returned by a server
-//! (`origin::tangentKey`, `origin::tangentKey::roomKey`, `...::messageId`); the connector never
+//! (`origin::tangentKey`, `origin::tangentKey::topicKey`, `...::postId`); the connector never
 //! invents them and never routes a reference to a different origin.
 
 /// Splits a qualified reference into its origin and segments. Returns `None` for anything a
@@ -22,13 +22,13 @@ pub fn tangent_key<'a>(origin: &str, reference: &'a str) -> Option<&'a str> {
     (parts.len() == 1 && valid_key(parts[0])).then(|| parts[0])
 }
 
-/// `origin::tangent::room` → (tangent key, room key).
+/// `origin::tangent::topic` → (tangent key, topic key).
 pub fn topic_keys<'a>(origin: &str, reference: &'a str) -> Option<(&'a str, &'a str)> {
     let parts = split(origin, reference)?;
     (parts.len() == 2 && valid_key(parts[0]) && valid_key(parts[1])).then(|| (parts[0], parts[1]))
 }
 
-/// `origin::tangent::room::message` → (tangent, room, message).
+/// `origin::tangent::topic::post` → (tangent, topic, post).
 pub fn post_keys<'a>(origin: &str, reference: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
     let parts = split(origin, reference)?;
     (parts.len() == 3 && valid_key(parts[0]) && valid_key(parts[1]) && valid_opaque(parts[2]))

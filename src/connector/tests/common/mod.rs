@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 use tangent_connector::application::hub::ConnectorHub;
-use tangent_connector::domain::identity::{AtprotoSession, CallerId, CompanionEntry};
+use tangent_connector::domain::identity::{AccountSession, CallerId, Enrollment};
 
 #[allow(dead_code)]
 pub const LUMEN_CREDENTIAL: &str = "ts_lumen_test_credential_000000000000000000";
@@ -1423,7 +1423,7 @@ pub fn seed_atproto_session(hub: &ConnectorHub, local_id: &str, handle: &str, di
     store.upsert_identity(identity).expect("bind the identity");
     store.set_atproto_session(
         local_id,
-        AtprotoSession {
+        AccountSession {
             did: did.to_string(),
             handle: handle.trim_start_matches('@').to_string(),
             access_jwt: format!("sat_seeded_{}", did.replace(':', "_")),
@@ -1449,11 +1449,11 @@ pub fn seed_enrolled_state(home: &std::path::Path, handle: &str, origin: &str, t
     let store = tangent_connector::adapters::store::StateStore::open(home).expect("state store");
     let hub = ConnectorHub::new(port, store, events, CallerId("cli".into()));
     let identity = hub.create_identity(handle, None).expect("identity");
-    let companion_id = format!("cmp_seeded_{handle}");
+    let enrollment_id = format!("cmp_seeded_{handle}");
     {
         let mut store = hub.store().lock().expect("state lock");
-        store.upsert_companion(CompanionEntry {
-            companion_id: companion_id.clone(),
+        store.upsert_companion(Enrollment {
+            enrollment_id: enrollment_id.clone(),
             local_id: identity.local_id.clone(),
             name: handle.to_string(),
             origin: origin.to_string(),
@@ -1464,8 +1464,8 @@ pub fn seed_enrolled_state(home: &std::path::Path, handle: &str, origin: &str, t
             enrolled_at: 1_757_000_000_000,
             auto_check: true,
         });
-        store.set_session(&companion_id, token);
+        store.set_session(&enrollment_id, token);
         store.save().expect("save seeded state");
     }
-    companion_id
+    enrollment_id
 }

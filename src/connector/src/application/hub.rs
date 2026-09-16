@@ -20,10 +20,10 @@ use crate::application::contract::{self, ExperienceDto};
 use crate::application::operations::{decode, Operation, ViewMode};
 use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext};
 use crate::domain::events::DomainEvent;
-use crate::domain::identity::{valid_handle, AtprotoSession, CallerId, CompanionEntry, Identity, LocalContext};
+use crate::domain::identity::{valid_handle, AccountSession, CallerId, Enrollment, Identity, Context};
 use crate::domain::intake::IntakeChannel;
 use crate::domain::refs;
-use crate::domain::writes::PendingWrite;
+use crate::domain::writes::Receipt;
 use crate::domain::{attention::AttentionState, now_millis};
 use crate::presentation::perspective::Perspective;
 use crate::presentation::{render, RenderInput};
@@ -68,7 +68,7 @@ pub struct ToolOutcome {
 
 /// Read-only per-enrollment attention/pending-write snapshot for the operator page.
 pub struct EnrollmentStatus {
-    pub companion_id: String,
+    pub enrollment_id: String,
     pub identity_local_id: String,
     pub origin: String,
     pub waiting: i64,
@@ -91,7 +91,7 @@ impl ToolOutcome {
 /// Everything an intake-scoped operation needs after the context binding resolves.
 pub struct CallFrame {
     pub request: RequestContext,
-    pub companion: CompanionEntry,
+    pub companion: Enrollment,
     pub context_id: String,
 }
 
@@ -323,7 +323,7 @@ impl ConnectorHub {
     /// reference and origin against the server's own identity response, and record the
     /// binding. Import never broadens the session's grants. When `identity` names no
     /// existing identity, a fresh one is minted with `name` as its handle.
-    pub fn enroll(&self, name: &str, origin: &str, session: &str, auto_check: bool) -> Result<CompanionEntry, String> {
+    pub fn enroll(&self, name: &str, origin: &str, session: &str, auto_check: bool) -> Result<Enrollment, String> {
         self.enroll_as(name, None, origin, session, auto_check)
     }
 
@@ -335,7 +335,7 @@ impl ConnectorHub {
         origin: &str,
         session: &str,
         auto_check: bool,
-    ) -> Result<CompanionEntry, String> {
+    ) -> Result<Enrollment, String> {
         let canonical = refs::acceptable_origin(origin)
             .ok_or_else(|| "Use one HTTPS server origin, or explicit loopback HTTP for development".to_string())?;
         let context = RequestContext {
@@ -383,14 +383,14 @@ impl ConnectorHub {
         if let Some(existing) = store.enrollment_at(&bound_identity.local_id, &canonical) {
             return Err(format!(
                 "identity '{}' already holds an enrollment at {canonical} ({}); forget it first if you mean to replace it",
-                bound_identity.handle, existing.companion_id
+                bound_identity.handle, existing.enrollment_id
             ));
         }
         // The imported session is stored per enrollment, keyed by its fresh companion id:
         // one identity at two servers keeps two distinct sessions.
-        let companion_id = format!("cmp_{}", crate::adapters::store::short_uuid());
-        let entry = CompanionEntry {
-            companion_id,
+        let enrollment_id = format!("cmp_{}", crate::adapters::store::short_uuid());
+        let entry = Enrollment {
+            enrollment_id,
             local_id: bound_identity.local_id.clone(),
             name: name.to_string(),
             origin: canonical,
@@ -402,20 +402,20 @@ impl ConnectorHub {
             auto_check,
         };
         store.upsert_companion(entry.clone());
-        store.set_session(&entry.companion_id, session);
+        store.set_session(&entry.enrollment_id, session);
         store.save()?;
         drop(store);
-        self.events.publish(DomainEvent::CompanionSelected { companion_id: entry.companion_id.clone() });
+        self.events.publish(DomainEvent::CompanionSelected { enrollment_id: entry.enrollment_id.clone() });
         Ok(entry)
     }
 
     /// Removes one enrollment and its stored session. Enrollment state (attention,
     /// checkpoints, contexts) cascades; the server side is untouched.
-    pub fn forget_enrollment(&self, companion_id: &str) -> Result<(), String> {
+    pub fn forget_enrollment(&self, enrollment_id: &str) -> Result<(), String> {
         self.attributed("operator.forget_enrollment", || {
             let mut store = self.lock_store()?;
-            store.companion(companion_id).ok_or_else(|| "no enrollment matches that id".to_string())?;
-            store.remove_companion(companion_id);
+            store.companion(enrollment_id).ok_or_else(|| "no enrollment matches that id".to_string())?;
+            store.remove_companion(enrollment_id);
             store.save()?;
             Ok(())
         })
@@ -427,7 +427,7 @@ impl ConnectorHub {
     /// identity's `bound_did`. The write tail of the OAuth bind, so enrollments and
     /// reads see one consistent shape. Existing enrollments keep their own Tangent
     /// sessions.
-    fn store_atproto_session(&self, local_id: &str, session: AtprotoSession) -> Result<Identity, String> {
+    fn store_atproto_session(&self, local_id: &str, session: AccountSession) -> Result<Identity, String> {
         let mut store = self.lock_store()?;
         let mut updated = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
         updated.bound_did = Some(session.did.clone());
@@ -556,7 +556,7 @@ impl ConnectorHub {
             let local_id = flight.local_id.clone();
             self.store_atproto_session(
                 &local_id,
-                AtprotoSession {
+                AccountSession {
                     did: tokens.sub.clone(),
                     handle: handle.clone(),
                     access_jwt: tokens.access_token,
@@ -607,7 +607,7 @@ impl ConnectorHub {
     /// rotation keeps the rotated tokens in the live store (R5): the call proceeds on
     /// them and the next save persists them, rather than bricking on the stale disk
     /// copy. A failed refresh is the honest expired-session error.
-    fn refresh_atproto_if_stale(&self, local_id: &str) -> Result<AtprotoSession, String> {
+    fn refresh_atproto_if_stale(&self, local_id: &str) -> Result<AccountSession, String> {
         // Serialization first; the session is re-read under the lock so a concurrent
         // refresh's result is seen instead of duplicated.
         let serializer = self.refresh_lock_of(local_id);
@@ -727,7 +727,7 @@ impl ConnectorHub {
     /// the retried proof embeds it. A second challenge, or any other refusal, maps
     /// through [`service_auth_error`]. App-password sessions carry no key: plain
     /// Bearer, no proof, no retry.
-    fn pds_service_auth(&self, atproto: &AtprotoSession, auth_path: &str) -> Result<Value, String> {
+    fn pds_service_auth(&self, atproto: &AccountSession, auth_path: &str) -> Result<Value, String> {
         let Some(key) = atproto.dpop_key.as_deref() else {
             let context = RequestContext {
                 origin: atproto.pds.clone(),
@@ -767,7 +767,7 @@ impl ConnectorHub {
     /// exchange the proof at `/mcp/token` for a Tangent session stored per enrollment.
     /// The proof JWT is ephemeral (created and consumed here); the audience comes from
     /// the server, never hardcoded; the token never renders, logs or journals.
-    pub fn enroll_bound(&self, local_id: &str, origin: &str) -> Result<CompanionEntry, String> {
+    pub fn enroll_bound(&self, local_id: &str, origin: &str) -> Result<Enrollment, String> {
         self.attributed("operator.enroll_bound", || {
             let canonical = refs::acceptable_origin(origin)
                 .ok_or_else(|| "Use one HTTPS server origin, or explicit loopback HTTP for development".to_string())?;
@@ -858,15 +858,15 @@ impl ConnectorHub {
             if let Some(existing) = store.enrollment_at(local_id, &canonical) {
                 return Err(format!(
                     "already_enrolled: identity '{}' gained an enrollment at {canonical} during the exchange ({}); use it, or forget it first to re-enroll",
-                    identity.handle, existing.companion_id
+                    identity.handle, existing.enrollment_id
                 ));
             }
             // The Tangent session is stored per enrollment, keyed by its fresh companion
             // id — one identity at two servers keeps two distinct sessions, and the
             // identity-level atproto session is a third, separate thing.
-            let companion_id = format!("cmp_{}", crate::adapters::store::short_uuid());
-            let entry = CompanionEntry {
-                companion_id,
+            let enrollment_id = format!("cmp_{}", crate::adapters::store::short_uuid());
+            let entry = Enrollment {
+                enrollment_id,
                 local_id: identity.local_id.clone(),
                 name: identity.handle.clone(),
                 origin: canonical,
@@ -878,10 +878,10 @@ impl ConnectorHub {
                 auto_check: true,
             };
             store.upsert_companion(entry.clone());
-            store.set_session(&entry.companion_id, &exchanged.token);
+            store.set_session(&entry.enrollment_id, &exchanged.token);
             store.save()?;
             drop(store);
-            self.events.publish(DomainEvent::CompanionSelected { companion_id: entry.companion_id.clone() });
+            self.events.publish(DomainEvent::CompanionSelected { enrollment_id: entry.enrollment_id.clone() });
             Ok(entry)
         })
     }
@@ -1090,10 +1090,10 @@ impl ConnectorHub {
         {
             let store = self.lock_store()?;
             if let Some(entry) = store.enrollment_at(&identity.local_id, canonical) {
-                if store.has_session(&entry.companion_id) {
-                    ready = Some(entry.companion_id);
+                if store.has_session(&entry.enrollment_id) {
+                    ready = Some(entry.enrollment_id);
                 } else {
-                    forget = Some(entry.companion_id);
+                    forget = Some(entry.enrollment_id);
                 }
             }
         }
@@ -1109,7 +1109,7 @@ impl ConnectorHub {
             identity: identity.handle.clone(),
             initiator: initiator.to_string(),
         });
-        Ok(entry.companion_id)
+        Ok(entry.enrollment_id)
     }
 
     /// Enroll-if-needed then arrive, publishing the handshake's live tail events and
@@ -1120,8 +1120,8 @@ impl ConnectorHub {
     /// pops the sign-in page again (just-in-time re-bind).
     fn connect_finish(&self, identity: &Identity, canonical: &str, initiator: &str) -> ToolOutcome {
         match self.connect_enroll(identity, canonical, initiator) {
-            Ok(companion_id) => {
-                let mut outcome = self.arrive(&companion_id, canonical);
+            Ok(enrollment_id) => {
+                let mut outcome = self.arrive(&enrollment_id, canonical);
                 if outcome.is_error {
                     self.connect_failed(canonical, &identity.handle, &problem_code_of(&outcome), initiator);
                 } else {
@@ -1354,7 +1354,7 @@ impl ConnectorHub {
                 ));
             }
             for entry in &enrollments {
-                store.remove_companion(&entry.companion_id);
+                store.remove_companion(&entry.enrollment_id);
             }
             store.remove_identity(local_id);
             store.save()?;
@@ -1372,15 +1372,15 @@ impl ConnectorHub {
         store.identity(local_id)
     }
 
-    pub fn enrollments_of(&self, local_id: &str) -> Vec<CompanionEntry> {
+    pub fn enrollments_of(&self, local_id: &str) -> Vec<Enrollment> {
         let store = self.lock_store().expect("state lock");
         store.companions_of(local_id)
     }
 
     /// Every enrollment, oldest first, with its session availability (never the token).
-    pub fn enrollment_inventory(&self) -> Vec<(CompanionEntry, bool)> {
+    pub fn enrollment_inventory(&self) -> Vec<(Enrollment, bool)> {
         let store = self.lock_store().expect("state lock");
-        store.companions().iter().map(|entry| (entry.clone(), store.has_session(&entry.companion_id))).collect()
+        store.companions().iter().map(|entry| (entry.clone(), store.has_session(&entry.enrollment_id))).collect()
     }
 
     /// Read-only attention/pending-write state per enrollment, for the operator page.
@@ -1391,16 +1391,16 @@ impl ConnectorHub {
             .companions()
             .iter()
             .map(|entry| EnrollmentStatus {
-                companion_id: entry.companion_id.clone(),
+                enrollment_id: entry.enrollment_id.clone(),
                 identity_local_id: entry.local_id.clone(),
                 origin: entry.origin.clone(),
-                waiting: store.waiting_count(&entry.companion_id),
+                waiting: store.waiting_count(&entry.enrollment_id),
                 pending_attention: store
-                    .attention_records(&entry.companion_id)
+                    .attention_records(&entry.enrollment_id)
                     .iter()
                     .filter(|record| record.state != AttentionState::Delivered)
                     .count(),
-                unresolved_writes: unsettled.iter().filter(|write| write.companion_id == entry.companion_id).count(),
+                unresolved_writes: unsettled.iter().filter(|write| write.enrollment_id == entry.enrollment_id).count(),
             })
             .collect()
     }
@@ -1543,7 +1543,7 @@ impl ConnectorHub {
             Operation::SelectCompanion { moniker } => self.select_companion(moniker.as_deref()),
             Operation::OpenRegistration => self.open_registration(),
             Operation::Connect { server_url, identity } => self.connect(&server_url, identity.as_deref(), initiator),
-            Operation::Arrive { companion_id, server_url } => self.arrive(&companion_id, &server_url),
+            Operation::Arrive { enrollment_id, server_url } => self.arrive(&enrollment_id, &server_url),
             Operation::ListTangents { context_id, cursor } => {
                 self.with_context("ListTangents", &context_id, ViewMode::Compact, |frame| {
                     let path = match &cursor {
@@ -1567,10 +1567,10 @@ impl ConnectorHub {
             }
             Operation::ReadTopic { context_id, topic_ref, cursor, around_post_ref, view, limit } => {
                 self.with_context("ReadTopic", &context_id, view, |frame| {
-                    let Some((_tangent, room)) = refs::topic_keys(&frame.request.origin, &topic_ref) else {
+                    let Some((_tangent, topic)) = refs::topic_keys(&frame.request.origin, &topic_ref) else {
                         return Err(invalid_ref("Topic"));
                     };
-                    let mut path = format!("/api/v1/experience/topics/{room}");
+                    let mut path = format!("/api/v1/experience/topics/{topic}");
                     let mut query = Vec::new();
                     if let Some(value) = &cursor {
                         query.push(format!("cursor={}", encode(value)));
@@ -1590,14 +1590,14 @@ impl ConnectorHub {
             }
             Operation::CreatePost { context_id, topic_ref, request_id, text, reply_to, view } => {
                 self.with_context("CreatePost", &context_id, view, |frame| {
-                    let Some((_tangent, room)) = refs::topic_keys(&frame.request.origin, &topic_ref) else {
+                    let Some((_tangent, topic)) = refs::topic_keys(&frame.request.origin, &topic_ref) else {
                         return Err(invalid_ref("Topic"));
                     };
                     let mut body = json!({ "requestId": request_id, "text": text });
                     if let Some(reference) = &reply_to {
                         body["replyTo"] = json!(reference);
                     }
-                    self.journaled_send(frame, "CreatePost", &topic_ref, &request_id, Route::TopicPosts(room.to_string()), &body)
+                    self.journaled_send(frame, "CreatePost", &topic_ref, &request_id, Route::TopicPosts(topic.to_string()), &body)
                 })
             }
             Operation::GetUpdates { context_id, view, cursor, scope_ref } => {
@@ -1605,12 +1605,12 @@ impl ConnectorHub {
             }
             Operation::MarkRead { context_id, topic_ref, read_cursor, request_id, view } => {
                 self.with_context("MarkRead", &context_id, view, |frame| {
-                    let Some((_tangent, room)) = refs::topic_keys(&frame.request.origin, &topic_ref) else {
+                    let Some((_tangent, topic)) = refs::topic_keys(&frame.request.origin, &topic_ref) else {
                         return Err(invalid_ref("Topic"));
                     };
                     let request_id = request_id.unwrap_or_else(|| format!("mark-{}", crate::adapters::store::short_uuid()));
                     let body = json!({ "requestId": request_id, "readCursor": read_cursor });
-                    self.journaled_send(frame, "MarkRead", &topic_ref, &request_id, Route::TopicReadPosition(room.to_string()), &body)
+                    self.journaled_send(frame, "MarkRead", &topic_ref, &request_id, Route::TopicReadPosition(topic.to_string()), &body)
                 })
             }
             Operation::JoinTangent { context_id, tangent_ref, request_id, invite_ref, view } => {
@@ -1753,7 +1753,7 @@ impl ConnectorHub {
                     "Identity '{}' is enrolled at {} servers. Select one explicitly with its companion id: {}",
                     identity.handle,
                     enrollments.len(),
-                    enrollments.iter().map(|entry| format!("{} ({})", entry.companion_id, entry.origin)).collect::<Vec<_>>().join(", ")
+                    enrollments.iter().map(|entry| format!("{} ({})", entry.enrollment_id, entry.origin)).collect::<Vec<_>>().join(", ")
                 ), None),
         }
     }
@@ -1803,10 +1803,10 @@ impl ConnectorHub {
         }
     }
 
-    fn arrive(&self, companion_id: &str, server_url: &str) -> ToolOutcome {
+    fn arrive(&self, enrollment_id: &str, server_url: &str) -> ToolOutcome {
         let (companion, canonical_check) = {
             let store = self.lock_store().expect("state lock");
-            (store.companion(companion_id), refs::acceptable_origin(server_url))
+            (store.companion(enrollment_id), refs::acceptable_origin(server_url))
         };
         let Some(companion) = companion else {
             return self.problem_outcome("Arrive", "companion_unavailable",
@@ -1835,7 +1835,7 @@ impl ConnectorHub {
         let bound = {
             let mut store = self.lock_store().expect("state lock");
             let bound = store.bind_context(&self.caller, &companion, now_millis());
-            self.sync_attention(&mut store, &companion.companion_id, &parsed);
+            self.sync_attention(&mut store, &companion.enrollment_id, &parsed);
             let _ = store.save();
             bound
         };
@@ -1852,7 +1852,7 @@ impl ConnectorHub {
         let Some(context_binding) = binding else {
             return self.context_expired("GetUpdates");
         };
-        let Some(companion) = self.companion_of(&context_binding.companion_id) else {
+        let Some(companion) = self.companion_of(&context_binding.enrollment_id) else {
             return self.context_expired("GetUpdates");
         };
         let session = match self.session_of(&companion) {
@@ -1866,7 +1866,7 @@ impl ConnectorHub {
             Some(value) => query.push(format!("pageCursor={}", encode(value))),
             None => {
                 let store = self.lock_store().expect("state lock");
-                if let Some(checkpoint) = store.checkpoint(&companion.companion_id) {
+                if let Some(checkpoint) = store.checkpoint(&companion.enrollment_id) {
                     query.push(format!("checkpoint={}", encode(&checkpoint)));
                 }
             }
@@ -1889,13 +1889,13 @@ impl ConnectorHub {
         };
         let unchanged = {
             let mut store = self.lock_store().expect("state lock");
-            let previous = store.revision(&companion.companion_id);
+            let previous = store.revision(&companion.enrollment_id);
             let unchanged = previous.as_deref() == Some(parsed.attention.revision.as_str());
-            self.sync_attention(&mut store, &companion.companion_id, &parsed);
+            self.sync_attention(&mut store, &companion.enrollment_id, &parsed);
             // The recovery checkpoint always names the page start, not a page continuation.
             if parsed.continuation.activity_checkpoint.is_some() && cursor.is_none() {
                 if let Some(checkpoint) = &parsed.continuation.activity_checkpoint {
-                    store.set_checkpoint(&companion.companion_id, checkpoint);
+                    store.set_checkpoint(&companion.enrollment_id, checkpoint);
                 }
             }
             let _ = store.save();
@@ -1920,10 +1920,10 @@ impl ConnectorHub {
         let Some(context_binding) = binding else {
             return self.context_expired(tool);
         };
-        let Some(companion) = self.companion_of(&context_binding.companion_id) else {
+        let Some(companion) = self.companion_of(&context_binding.enrollment_id) else {
             return self.context_expired(tool);
         };
-        if !context_binding.belongs_to(&self.caller, &companion.companion_id) || context_binding.origin != companion.origin {
+        if !context_binding.belongs_to(&self.caller, &companion.enrollment_id) || context_binding.origin != companion.origin {
             return self.context_expired(tool);
         }
         let session = match self.session_of(&companion) {
@@ -1950,9 +1950,9 @@ impl ConnectorHub {
         };
         let unchanged = {
             let mut store = self.lock_store().expect("state lock");
-            let previous = store.revision(&companion.companion_id);
+            let previous = store.revision(&companion.enrollment_id);
             let unchanged = previous.as_deref() == Some(parsed.attention.revision.as_str());
-            self.sync_attention(&mut store, &companion.companion_id, &parsed);
+            self.sync_attention(&mut store, &companion.enrollment_id, &parsed);
             let _ = store.save();
             unchanged
         };
@@ -1970,10 +1970,10 @@ impl ConnectorHub {
         route: Route,
         body: &Value,
     ) -> Result<Value, ExperienceError> {
-        let write = PendingWrite {
+        let write = Receipt {
             request_id: request_id.to_string(),
             context_id: frame.context_id.clone(),
-            companion_id: frame.companion.companion_id.clone(),
+            enrollment_id: frame.companion.enrollment_id.clone(),
             origin: frame.request.origin.clone(),
             operation: operation.to_string(),
             target_ref: target_ref.to_string(),
@@ -2045,8 +2045,8 @@ impl ConnectorHub {
     fn finish(
         &self,
         tool: &str,
-        companion: &CompanionEntry,
-        binding: Option<&LocalContext>,
+        companion: &Enrollment,
+        binding: Option<&Context>,
         view: ViewMode,
         raw: Value,
         parsed: ExperienceDto,
@@ -2063,7 +2063,7 @@ impl ConnectorHub {
             };
             let mut canonical_refs = Vec::new();
             collect_refs(&parsed, &mut canonical_refs);
-            let pending = store.attention_records(&companion.companion_id);
+            let pending = store.attention_records(&companion.enrollment_id);
             for record in &pending {
                 canonical_refs.push(record.source_ref.clone());
             }
@@ -2087,7 +2087,7 @@ impl ConnectorHub {
                 perspective: &perspective,
                 aliases: &lookup,
                 pending: &pending_undelivered,
-                waiting_known: Some(store.waiting_count(&companion.companion_id)),
+                waiting_known: Some(store.waiting_count(&companion.enrollment_id)),
                 unchanged,
             };
             let mut text = render(&input);
@@ -2101,13 +2101,13 @@ impl ConnectorHub {
             // Delivery for tool-response-only hosts happens now: these previews are in the
             // response. Persist the delivery before returning.
             let delivered: Vec<String> = pending_undelivered.iter().map(|record| record.id.clone()).take(5).collect();
-            store.mark_attention_delivered(&companion.companion_id, &delivered);
+            store.mark_attention_delivered(&companion.enrollment_id, &delivered);
             let _ = store.save();
             (text, delivered, unresolved)
         };
         if !delivered_ids.is_empty() {
             self.events.publish(DomainEvent::AttentionDelivered {
-                companion_id: companion.companion_id.clone(),
+                enrollment_id: companion.enrollment_id.clone(),
                 item_count: delivered_ids.len(),
                 delivery_mode: DELIVERY_MODE.into(),
             });
@@ -2133,7 +2133,7 @@ impl ConnectorHub {
                 "experience": raw,
                 "problem": null,
                 "connector": {
-                    "companionId": companion.companion_id,
+                    "enrollmentId": companion.enrollment_id,
                     "contextId": context_id,
                     "view": view.as_str(),
                     "deliveryMode": DELIVERY_MODE,
@@ -2148,15 +2148,15 @@ impl ConnectorHub {
 
     /// One ordinary background check: fetch the digest, persist state, publish events. Runs no
     /// model, invokes no host; delivery remains a separate policy decision.
-    pub fn background_check(&self, companion_id: &str) -> Result<String, String> {
-        let Some(companion) = self.companion_of(companion_id) else {
+    pub fn background_check(&self, enrollment_id: &str) -> Result<String, String> {
+        let Some(companion) = self.companion_of(enrollment_id) else {
             return Err("unknown companion".to_string());
         };
         let session = self.session_of(&companion)?;
         let request = RequestContext { origin: companion.origin.clone(), credential: session, participant_ref: companion.participant_ref.clone(), dpop: None };
         let checkpoint = {
             let store = self.lock_store().map_err(|_| "state lock poisoned")?;
-            store.checkpoint(&companion.companion_id)
+            store.checkpoint(&companion.enrollment_id)
         };
         let path = match checkpoint {
             Some(value) => format!("/api/v1/experience/updates?checkpoint={}", encode(&value)),
@@ -2166,9 +2166,9 @@ impl ConnectorHub {
         let parsed = contract::parse(&raw).map_err(|error| error.to_string())?;
         let summary = {
             let mut store = self.lock_store().map_err(|_| "state lock poisoned")?;
-            self.sync_attention(&mut store, &companion.companion_id, &parsed);
+            self.sync_attention(&mut store, &companion.enrollment_id, &parsed);
             if let Some(checkpoint) = &parsed.continuation.activity_checkpoint {
-                store.set_checkpoint(&companion.companion_id, checkpoint);
+                store.set_checkpoint(&companion.enrollment_id, checkpoint);
             }
             store.save()?;
             format!(
@@ -2179,7 +2179,7 @@ impl ConnectorHub {
             )
         };
         self.events.publish(DomainEvent::PollCompleted {
-            companion_id: companion.companion_id.clone(),
+            enrollment_id: companion.enrollment_id.clone(),
             revision: parsed.attention.revision.clone(),
             waiting: parsed.attention.waiting_count.value.unwrap_or(0),
             activity: parsed.attention.new_activity_count.value.unwrap_or(0),
@@ -2191,7 +2191,7 @@ impl ConnectorHub {
         };
         for write in unsettled
             .iter()
-            .filter(|write| write.companion_id.is_empty() || write.companion_id == companion.companion_id)
+            .filter(|write| write.enrollment_id.is_empty() || write.enrollment_id == companion.enrollment_id)
             .take(10)
         {
             if let Ok(raw) = self.port.get(&request, &format!("/api/v1/experience/operations/{}", encode(&write.request_id))) {
@@ -2216,11 +2216,11 @@ impl ConnectorHub {
 
     // ---------- attention synchronization ----------
 
-    fn sync_attention(&self, store: &mut StateStore, companion_id: &str, parsed: &ExperienceDto) {
+    fn sync_attention(&self, store: &mut StateStore, enrollment_id: &str, parsed: &ExperienceDto) {
         let now = now_millis();
-        let (fresh, coalesced) = store.upsert_attention(companion_id, &parsed.attention.items, &parsed.attention.revision, now);
+        let (fresh, coalesced) = store.upsert_attention(enrollment_id, &parsed.attention.items, &parsed.attention.revision, now);
         if let Some(waiting) = parsed.attention.waiting_count.value {
-            store.set_waiting_count(companion_id, waiting);
+            store.set_waiting_count(enrollment_id, waiting);
         }
         let complete = !parsed.attention.more
             && parsed
@@ -2239,11 +2239,11 @@ impl ConnectorHub {
                             .count() as i64
                 })
                 .unwrap_or(false);
-        store.resync_attention(companion_id, &parsed.attention.items, parsed.attention.waiting_count.value, complete);
-        store.set_revision(companion_id, &parsed.attention.revision);
+        store.resync_attention(enrollment_id, &parsed.attention.items, parsed.attention.waiting_count.value, complete);
+        store.set_revision(enrollment_id, &parsed.attention.revision);
         if !fresh.is_empty() {
             self.events.publish(DomainEvent::AttentionObserved {
-                companion_id: companion_id.to_string(),
+                enrollment_id: enrollment_id.to_string(),
                 new_items: fresh,
                 coalesced,
             });
@@ -2252,17 +2252,17 @@ impl ConnectorHub {
 
     // ---------- helpers ----------
 
-    fn companion_of(&self, companion_id: &str) -> Option<CompanionEntry> {
+    fn companion_of(&self, enrollment_id: &str) -> Option<Enrollment> {
         let store = self.lock_store().ok()?;
-        store.companion(companion_id)
+        store.companion(enrollment_id)
     }
 
     /// The enrollment's bearer session, from the per-enrollment session map. A missing
     /// session is an honest 're-enroll' state: the session map can lag a hand-edited
     /// state file.
-    fn session_of(&self, companion: &CompanionEntry) -> Result<String, String> {
+    fn session_of(&self, companion: &Enrollment) -> Result<String, String> {
         let store = self.lock_store()?;
-        store.session(&companion.companion_id).ok_or_else(|| "the stored session is missing; re-enroll this enrollment".to_string())
+        store.session(&companion.enrollment_id).ok_or_else(|| "the stored session is missing; re-enroll this enrollment".to_string())
     }
 
     /// Takes the store lock. Leaf-lock discipline applies for the whole guard scope:
@@ -2280,8 +2280,8 @@ impl ConnectorHub {
     fn transport_problem(
         &self,
         tool: &str,
-        companion: &CompanionEntry,
-        binding: Option<&LocalContext>,
+        companion: &Enrollment,
+        binding: Option<&Context>,
         error: &ExperienceError,
     ) -> ToolOutcome {
         let (code, message) = match error {
@@ -2298,7 +2298,7 @@ impl ConnectorHub {
         tool: &str,
         code: &str,
         message: &str,
-        companion: Option<(&CompanionEntry, Option<&LocalContext>)>,
+        companion: Option<(&Enrollment, Option<&Context>)>,
     ) -> ToolOutcome {
         let mut text = String::new();
         if let Some((companion, _)) = &companion {
@@ -2306,10 +2306,10 @@ impl ConnectorHub {
             text.push_str(&format!("You: {name}\n"));
         }
         text.push_str(&format!("Blocked [{code}]: {message}"));
-        let (companion_id, context_id) = companion
+        let (enrollment_id, context_id) = companion
             .map(|(entry, binding)| {
                 (
-                    Some(entry.companion_id.clone()),
+                    Some(entry.enrollment_id.clone()),
                     binding.map(|binding| binding.context_id.clone()),
                 )
             })
@@ -2322,7 +2322,7 @@ impl ConnectorHub {
                 "experience": null,
                 "problem": { "code": code, "message": message, "operation": tool },
                 "connector": {
-                    "companionId": companion_id,
+                    "enrollmentId": enrollment_id,
                     "contextId": context_id,
                     "view": "compact",
                     "deliveryMode": DELIVERY_MODE,
@@ -2345,8 +2345,8 @@ enum Route {
 impl Route {
     fn build(self) -> (&'static str, String) {
         match self {
-            Self::TopicPosts(room) => ("POST", format!("/api/v1/experience/topics/{room}/posts")),
-            Self::TopicReadPosition(room) => ("POST", format!("/api/v1/experience/topics/{room}/read-position")),
+            Self::TopicPosts(topic) => ("POST", format!("/api/v1/experience/topics/{topic}/posts")),
+            Self::TopicReadPosition(topic) => ("POST", format!("/api/v1/experience/topics/{topic}/read-position")),
             Self::Membership(tangent) => ("PUT", format!("/api/v1/experience/tangents/{tangent}/membership")),
             Self::Leave(tangent, request_id) => {
                 ("DELETE", format!("/api/v1/experience/tangents/{tangent}/membership?requestId={}", encode(&request_id)))
@@ -2365,7 +2365,7 @@ fn invalid_ref(kind: &str) -> ExperienceError {
 }
 
 /// The ok outcome of a resolved selection: one enrollment, one server to arrive at.
-fn selected_outcome(companion: &CompanionEntry) -> ToolOutcome {
+fn selected_outcome(companion: &Enrollment) -> ToolOutcome {
     let text = format!(
         "Selected {}. Continue with Arrive using this server: {}.",
         companion.display_name.clone().unwrap_or_else(|| companion.name.clone()),
@@ -2379,7 +2379,7 @@ fn selected_outcome(companion: &CompanionEntry) -> ToolOutcome {
             "experience": null,
             "problem": null,
             "connector": {
-                "companionId": companion.companion_id,
+                "enrollmentId": companion.enrollment_id,
                 "identityId": companion.local_id,
                 "contextId": null,
                 "serverUrl": companion.origin,

@@ -147,12 +147,12 @@ fn the_stdio_edge_negotiates_and_serves_the_fourteen_tools() {
     }));
     let selected = peer.receive();
     assert_eq!(selected["result"]["isError"], json!(false));
-    let companion = selected["result"]["structuredContent"]["connector"]["companionId"].as_str().expect("companion id").to_string();
+    let companion = selected["result"]["structuredContent"]["connector"]["enrollmentId"].as_str().expect("companion id").to_string();
     let server_url = selected["result"]["structuredContent"]["connector"]["serverUrl"].as_str().expect("server url").to_string();
 
     peer.send(&json!({
         "jsonrpc": "2.0", "id": 6, "method": "tools/call",
-        "params": { "name": "Arrive", "arguments": { "companionId": companion, "serverUrl": server_url } }
+        "params": { "name": "Arrive", "arguments": { "enrollmentId": companion, "serverUrl": server_url } }
     }));
     let arrival = peer.receive();
     assert_eq!(arrival["result"]["isError"], json!(false));
@@ -206,9 +206,9 @@ fn authorized_scope_emits_tool_list_changed_after_the_result() {
     peer.send(&json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": { "name": "SelectCompanion", "arguments": { "moniker": "steward" } } }));
     let selected = peer.receive();
-    let companion = selected["result"]["structuredContent"]["connector"]["companionId"].as_str().unwrap().to_string();
+    let companion = selected["result"]["structuredContent"]["connector"]["enrollmentId"].as_str().unwrap().to_string();
     peer.send(&json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call",
-        "params": { "name": "Arrive", "arguments": { "companionId": companion, "serverUrl": server.origin() } } }));
+        "params": { "name": "Arrive", "arguments": { "enrollmentId": companion, "serverUrl": server.origin() } } }));
     let arrival = peer.receive();
     let context = arrival["result"]["structuredContent"]["connector"]["contextId"].as_str().unwrap().to_string();
     peer.send(&json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call",

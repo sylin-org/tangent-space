@@ -143,7 +143,7 @@ fn serve(rest: &[String]) -> i32 {
             .expect("operator server thread");
         let (auto, poll_seconds) = {
             let store = hub.store().lock().expect("state lock");
-            let auto = store.companions().iter().filter(|entry| entry.auto_check).map(|entry| entry.companion_id.clone()).collect();
+            let auto = store.companions().iter().filter(|entry| entry.auto_check).map(|entry| entry.enrollment_id.clone()).collect();
             let poll_seconds = store.policy().poll_seconds;
             (auto, poll_seconds)
         };
@@ -346,7 +346,7 @@ fn companions(rest: &[String]) -> i32 {
         .iter()
         .map(|entry| {
             json!({
-                "companionId": entry.companion_id,
+                "enrollmentId": entry.enrollment_id,
                 "identityId": entry.local_id,
                 "name": entry.name,
                 "participantRef": entry.participant_ref,
@@ -403,8 +403,8 @@ fn check(rest: &[String]) -> i32 {
         store
             .companions()
             .iter()
-            .filter(|entry| name.as_deref().is_none_or(|value| entry.matches(value) || entry.companion_id == value))
-            .map(|entry| (entry.companion_id.clone(), entry.name.clone()))
+            .filter(|entry| name.as_deref().is_none_or(|value| entry.matches(value) || entry.enrollment_id == value))
+            .map(|entry| (entry.enrollment_id.clone(), entry.name.clone()))
             .collect()
     };
     if targets.is_empty() {
@@ -412,8 +412,8 @@ fn check(rest: &[String]) -> i32 {
         return EXIT_USAGE;
     }
     let mut worst = EXIT_OK;
-    for (companion_id, name) in targets {
-        match hub.background_check(&companion_id) {
+    for (enrollment_id, name) in targets {
+        match hub.background_check(&enrollment_id) {
             Ok(summary) => println!("{name}: {summary}"),
             Err(error) => {
                 eprintln!("{name}: {error}");
@@ -453,7 +453,7 @@ fn forget(rest: &[String]) -> i32 {
         eprintln!("no companion matches '{name}'");
         return EXIT_USAGE;
     };
-    store.remove_companion(&entry.companion_id);
+    store.remove_companion(&entry.enrollment_id);
     let result = store.save();
     drop(store);
     match result {

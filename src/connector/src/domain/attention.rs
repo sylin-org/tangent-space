@@ -20,7 +20,7 @@ pub enum AttentionState {
 pub struct AttentionRecord {
     /// The server item reference (stable per source post), the deduplication identity.
     pub id: String,
-    pub companion_id: String,
+    pub enrollment_id: String,
     pub kind: String,
     pub actor_ref: String,
     pub actor_name: Option<String>,

@@ -240,7 +240,7 @@ function renderEnrollments(enrollments) {
       const forget = element("button", "quiet danger", "Forget connection for " + name); forget.type = "button";
       confirmInPlace(forget, "Forget " + name + "’s connection to " + (profile.name || origin) + "? It will need to connect again to return. Existing posts are not deleted.", "Forget", async () => {
         forget.disabled = true;
-        const result = await call("/api/enrollments/" + enrollment.companionId + "/forget", {method:"POST", body:"{}"});
+        const result = await call("/api/enrollments/" + enrollment.enrollmentId + "/forget", {method:"POST", body:"{}"});
         result.status === "ok" ? note("Connection forgotten.") : note(problem(result), true); await refresh();
       });
       connection.append(forget); details.append(connection);

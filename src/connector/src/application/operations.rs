@@ -19,7 +19,7 @@ pub enum Operation {
     /// bound when needed, arrive. A step needing the operator pops the local operator
     /// page and returns honestly.
     Connect { server_url: String, identity: Option<String> },
-    Arrive { companion_id: String, server_url: String },
+    Arrive { enrollment_id: String, server_url: String },
     ListTangents { context_id: String, cursor: Option<String> },
     ListTopics { context_id: String, tangent_ref: String, cursor: Option<String> },
     ReadTopic {
@@ -154,7 +154,7 @@ pub fn decode(tool: &str, arguments: &Value) -> Result<Operation, String> {
             Ok(Operation::OpenRegistration)
         }
         "Connect" => Ok(Operation::Connect { server_url: string("serverUrl")?, identity: optional("identity")? }),
-        "Arrive" => Ok(Operation::Arrive { companion_id: string("companionId")?, server_url: string("serverUrl")? }),
+        "Arrive" => Ok(Operation::Arrive { enrollment_id: string("enrollmentId")?, server_url: string("serverUrl")? }),
         "ListTangents" => Ok(Operation::ListTangents { context_id: string("contextId")?, cursor: optional("cursor")? }),
         "ListTopics" => Ok(Operation::ListTopics {
             context_id: string("contextId")?,

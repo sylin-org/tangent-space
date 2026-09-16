@@ -68,7 +68,7 @@ The connector holds 1..N local **identities** (`domain/identity.rs`): a connecto
 GUIDv7 `localId` (immutable, never formatted as a DID), a unique handle (2..253 chars), an
 optional display name, and — once the operator binds an atproto account — the account's
 DID as `bound_did` plus the identity's atproto session (see below). An **enrollment** (the
-`CompanionEntry` of v0) is the session + server binding for one identity at one origin;
+`Enrollment` of v0) is the session + server binding for one identity at one origin;
 selection (`SelectCompanion`) resolves an identity first, then one of its enrollments.
 Enrollments recorded before the identity model are dropped at load with an
 `EnrollmentDropped` event — under the standing wipe rule there is no migration code;

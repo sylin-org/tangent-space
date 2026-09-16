@@ -22,32 +22,32 @@ pub fn backoff_seconds(failures: u32) -> u64 {
 /// Spawns one named checker thread per auto-check companion. The thread lives exactly as
 /// long as this process: a host-owned stdio server checks only while it runs.
 pub fn spawn_checkers(hub: Arc<ConnectorHub>, companions: Vec<String>, poll_seconds: u64) {
-    for companion_id in companions {
+    for enrollment_id in companions {
         let hub = hub.clone();
         std::thread::Builder::new()
-            .name(format!("tangent-check-{companion_id}"))
-            .spawn(move || run_checker(hub, companion_id, poll_seconds))
+            .name(format!("tangent-check-{enrollment_id}"))
+            .spawn(move || run_checker(hub, enrollment_id, poll_seconds))
             .expect("checker thread");
     }
 }
 
-fn run_checker(hub: Arc<ConnectorHub>, companion_id: String, poll_seconds: u64) {
+fn run_checker(hub: Arc<ConnectorHub>, enrollment_id: String, poll_seconds: u64) {
     let mut failures: u32 = 0;
     loop {
         let sleep = if failures == 0 { poll_seconds } else { backoff_seconds(failures) };
         std::thread::sleep(Duration::from_secs(sleep));
-        match hub.background_check(&companion_id) {
+        match hub.background_check(&enrollment_id) {
             Ok(_summary) => failures = 0,
             Err(reason) => {
                 failures += 1;
                 hub.events().publish(DomainEvent::PollFailed {
-                    companion_id: companion_id.clone(),
+                    enrollment_id: enrollment_id.clone(),
                     attempt: failures,
                     reason: reason.clone(),
                 });
                 let backoff = backoff_seconds(failures);
                 hub.events().publish(DomainEvent::BackoffScheduled {
-                    companion_id: companion_id.clone(),
+                    enrollment_id: enrollment_id.clone(),
                     seconds: backoff,
                 });
                 // Credential trouble never enters a tight retry loop: cap the attempts rate.

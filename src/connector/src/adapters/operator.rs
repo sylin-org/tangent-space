@@ -572,8 +572,8 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
                 ok_json(json!({ "identity": identity_with_atproto(&identity, hub.atproto_binding(&identity.local_id)) }))
             })
         }
-        ("POST", ["enrollments", companion_id, "forget"]) => {
-            finish(hub.forget_enrollment(companion_id), |_| ok_json(json!({ "forgotten": companion_id })))
+        ("POST", ["enrollments", enrollment_id, "forget"]) => {
+            finish(hub.forget_enrollment(enrollment_id), |_| ok_json(json!({ "forgotten": enrollment_id })))
         }
         ("GET", ["server-cards"]) => ApiResponse(200, ok_json(json!({ "servers": hub.refresh_server_cards() })), None),
         ("GET", ["status"]) => {
@@ -582,7 +582,7 @@ fn route(hub: &ConnectorHub, method: &str, target: &str, body: &RequestBody, roo
                 .into_iter()
                 .map(|status| {
                     json!({
-                        "companionId": status.companion_id,
+                        "enrollmentId": status.enrollment_id,
                         "identityId": status.identity_local_id,
                         "origin": status.origin,
                         "waiting": status.waiting,
@@ -840,9 +840,9 @@ fn identity_with_atproto(
 }
 
 /// Session STATUS only: whether the enrollment holds one — never the token value.
-fn enrollment_json(entry: &crate::domain::identity::CompanionEntry, available: bool) -> Value {
+fn enrollment_json(entry: &crate::domain::identity::Enrollment, available: bool) -> Value {
     json!({
-        "companionId": entry.companion_id,
+        "enrollmentId": entry.enrollment_id,
         "identityId": entry.local_id,
         "origin": entry.origin,
         "participantRef": entry.participant_ref,

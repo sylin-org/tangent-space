@@ -8,7 +8,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R2 — Rename to the product's words |
-| Current task | R2.5 — the connector's own glossary (`doing`), stage 2 of four. R2.1 stays `waiting` on Leo for the relaunch |
+| Current task | R2.5 — the connector's own glossary (`doing`), stage 4 of four. R2.1 stays `waiting` on Leo for the relaunch |
 | Next action | R2.5 stage 2: **`room` → `topic` in the connector**, then stage 3 (the glossary identifiers, which move the `state.json` shape and the .NET seeds together) and stage 4 (`Identity` → `Companion`, `operator` → `manager`). See In flight for what each stage owns and why stage 4 is the least mechanical |
 | Last checkpoint | 2026-09-16 · S-004 · R2.5 stage 1 committed: the crate is `src/connector` and the greenfield check scans it. Plan-item codes 0, owner narration 0, connector history 0. .NET 87/87, browser 7/7, connector 52/52, lifecycle 30/30 |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
@@ -207,8 +207,8 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 Four stages, one commit each, so a failure is bisectable.
 
 - [x] Stage 1 — the crate is `src/connector`; the greenfield check scans it (`.rs` and `.md` added, `target/` excluded) and learned two rules, plan-item codes and owner narration, both now zero. Six historical markers went, four of them **stale rather than merely narrated**: they described a drop-at-load sweep and a password bind that R1.12 and R1.13 had deleted (N-055)
-- [ ] Stage 2 — `room` → `topic` in the connector
-- [ ] Stage 3 — the glossary's identifiers: `CompanionEntry`/`companion_id` → `Enrollment`/`enrollment_id`, `LocalContext` → `Context`, `PendingWrite` → `Receipt`, `AtprotoSession` → `AccountSession`. `companion_id` is **persisted in `state.json` and seeded by the .NET connector tests** (N-039), so the state shape and those seeds move together
+- [x] Stage 2 and 3, committed together: both are mechanical and both were proved by the compiler and the four suites. `room` → `topic` is 11 lines, all locals and doc comments — no wire, no state
+- [x] Stage 3 — `CompanionEntry`/`companion_id` → `Enrollment`/`enrollment_id`, `LocalContext` → `Context`, `PendingWrite` → `Receipt`, `AtprotoSession` → `AccountSession`. The state shape, the companion manager's `enrollmentId` JSON and the .NET seeds moved together, and `Connector vocabulary` is 0. **An existing `state.json` stops loading** (N-056)
 - [ ] Stage 4 — `Identity` → `Companion`, and the `operator` page and command → `manager`. The largest and the least mechanical: `identity` is also atproto's own word, and the glossary keeps **Operator** for the person who runs the connector while retiring it for the page
 - [ ] Verify: four suites, greenfield, and the README rewritten to describe the current connector only
 
@@ -502,6 +502,10 @@ Arrival is one page with four slots, not three page designs — so it degrades g
   **A dangling section header.** `identity_journey.rs` still carried `// ---------- legacy state ----------` with nothing under it: R1.13 deleted the two tests it introduced and left the heading.
 
   A fourth thing came from the check itself rather than the code. `companion` is **retired on the server and current in the connector** — ARCHITECTURE carries two glossaries and they disagree on that word by design. One pattern applied to both trees has to be wrong about one of them, so rules can now name the paths they do not govern, and `Server vocabulary` does not govern `src/connector`. The same shape will be needed again for any word the pair spells differently.
+
+- **N-056** (R2.5) Renaming `companion_id` to `enrollment_id` changes the **connector's own persisted state**, and that state is not covered by the wipe. `Wipe.bat` deletes `.local/docker/site`; the connector keeps `state.json` in the operator's user profile, so an operator carrying a bound companion across this commit finds it will not load. The failure is clean rather than destructive — `Store::open` answers `state file is malformed: …` and stops, having written nothing — and the resolution is the one N-029 already documented for a server wipe: `forget`, then Connect enrolls afresh. R2.6's wipe forces exactly that anyway, so the cost is paid once and at a moment the plan already schedules. Recording it because it is the one rename in this epic whose consequence lands outside the repository, on a real machine's profile directory, where no wipe or test reaches it.
+
+  Worth noting for R3.7, which rewrites the store: the state file has no version field — R1.13 deleted `StateFile.version` as written-once-never-read. That was correct then, and it is why this rename can only announce itself as malformed rather than as out of date.
 
   Three smaller things the work turned up. `CompanionGovernance`'s class doc still described "the inbound MCP boundary", which R1.1 deleted — rewritten. `CarpaNet.Identity` was imported by the original file and used by none of it; each of the six files now carries only the usings the compiler proves it needs. And `TangentRole`'s comment mixed a real storage invariant with its own history — the invariant (`Member=0` and `Removed=1` are fixed) is kept, the history is gone. One `companion` remains in server C#: the problem code `"companion_unavailable"`, which the connector emits from `SelectCompanion` and `Arrive`. **R3.10 deletes both tools, and this entry should go with them.**
 

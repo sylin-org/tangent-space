@@ -10,9 +10,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::attention::{AttentionRecord, AttentionState, ATTENTION_RECORD_LIMIT};
-use crate::domain::identity::{AtprotoSession, CallerId, CompanionEntry, Identity, LocalContext};
+use crate::domain::identity::{AccountSession, CallerId, Enrollment, Identity, Context};
 use crate::domain::policy::AttentionPolicy;
-use crate::domain::writes::PendingWrite;
+use crate::domain::writes::Receipt;
 
 const STATE_FILE: &str = "state.json";
 const JOURNAL_FILE: &str = "pending-writes.jsonl";
@@ -46,7 +46,7 @@ struct StateFile {
     #[serde(default)]
     operator_page_url: Option<String>,
     #[serde(default)]
-    companions: Vec<CompanionEntry>,
+    companions: Vec<Enrollment>,
     /// Bearer sessions per enrollment, keyed by companion id. Sessions live in
     /// user-profile state BY DESIGN (owner decision): a `ts_…` token is a
     /// cookie-equivalent session id, same exposure class as a browser cookie jar —
@@ -57,9 +57,9 @@ struct StateFile {
     /// posture as `sessions` (owner decision): the PDS `accessJwt` is a session token,
     /// not a vault secret.
     #[serde(default)]
-    atproto_sessions: HashMap<String, AtprotoSession>,
+    atproto_sessions: HashMap<String, AccountSession>,
     #[serde(default)]
-    contexts: Vec<LocalContext>,
+    contexts: Vec<Context>,
     #[serde(default)]
     aliases: HashMap<String, BTreeMap<String, String>>,
     #[serde(default)]
@@ -116,29 +116,29 @@ impl StateStore {
 
     /// The bearer session of one enrollment. The token is handed only to the port layer;
     /// it never renders, logs or journals.
-    pub fn session(&self, companion_id: &str) -> Option<String> {
-        self.state.sessions.get(companion_id).cloned()
+    pub fn session(&self, enrollment_id: &str) -> Option<String> {
+        self.state.sessions.get(enrollment_id).cloned()
     }
 
-    pub fn set_session(&mut self, companion_id: &str, token: &str) {
-        self.state.sessions.insert(companion_id.to_string(), token.to_string());
+    pub fn set_session(&mut self, enrollment_id: &str, token: &str) {
+        self.state.sessions.insert(enrollment_id.to_string(), token.to_string());
     }
 
     /// Whether an enrollment holds a session (status reporting only).
-    pub fn has_session(&self, companion_id: &str) -> bool {
-        self.state.sessions.contains_key(companion_id)
+    pub fn has_session(&self, enrollment_id: &str) -> bool {
+        self.state.sessions.contains_key(enrollment_id)
     }
 
     // ----- atproto sessions (per identity) -----
 
     /// The atproto session one identity holds. The token is handed only to the port layer;
     /// it never renders, logs or journals.
-    pub fn atproto_session(&self, local_id: &str) -> Option<AtprotoSession> {
+    pub fn atproto_session(&self, local_id: &str) -> Option<AccountSession> {
         self.state.atproto_sessions.get(local_id).cloned()
     }
 
     /// Stores (or replaces — re-bind) the identity's atproto session.
-    pub fn set_atproto_session(&mut self, local_id: &str, session: AtprotoSession) {
+    pub fn set_atproto_session(&mut self, local_id: &str, session: AccountSession) {
         self.state.atproto_sessions.insert(local_id.to_string(), session);
     }
 
@@ -225,24 +225,24 @@ impl StateStore {
 
     // ----- companions (enrollments) -----
 
-    pub fn companions(&self) -> &[CompanionEntry] {
+    pub fn companions(&self) -> &[Enrollment] {
         &self.state.companions
     }
 
-    pub fn companion(&self, companion_id: &str) -> Option<CompanionEntry> {
-        self.state.companions.iter().find(|entry| entry.companion_id == companion_id).cloned()
+    pub fn companion(&self, enrollment_id: &str) -> Option<Enrollment> {
+        self.state.companions.iter().find(|entry| entry.enrollment_id == enrollment_id).cloned()
     }
 
-    pub fn find_companion(&self, moniker: &str) -> Option<CompanionEntry> {
+    pub fn find_companion(&self, moniker: &str) -> Option<Enrollment> {
         self.state.companions.iter().find(|entry| entry.matches(moniker)).cloned()
     }
 
-    pub fn companions_of(&self, local_id: &str) -> Vec<CompanionEntry> {
+    pub fn companions_of(&self, local_id: &str) -> Vec<Enrollment> {
         self.state.companions.iter().filter(|entry| entry.local_id == local_id).cloned().collect()
     }
 
     /// The enrollment of one identity at one canonical origin.
-    pub fn enrollment_at(&self, local_id: &str, origin: &str) -> Option<CompanionEntry> {
+    pub fn enrollment_at(&self, local_id: &str, origin: &str) -> Option<Enrollment> {
         self.state
             .companions
             .iter()
@@ -250,36 +250,36 @@ impl StateStore {
             .cloned()
     }
 
-    pub fn upsert_companion(&mut self, entry: CompanionEntry) {
-        match self.state.companions.iter_mut().find(|existing| existing.companion_id == entry.companion_id) {
+    pub fn upsert_companion(&mut self, entry: Enrollment) {
+        match self.state.companions.iter_mut().find(|existing| existing.enrollment_id == entry.enrollment_id) {
             Some(existing) => *existing = entry,
             None => self.state.companions.push(entry),
         }
     }
 
-    pub fn remove_companion(&mut self, companion_id: &str) {
-        remove_companion_state(&mut self.state, companion_id);
+    pub fn remove_companion(&mut self, enrollment_id: &str) {
+        remove_companion_state(&mut self.state, enrollment_id);
     }
 
     // ----- contexts -----
 
-    pub fn context(&self, context_id: &str) -> Option<LocalContext> {
+    pub fn context(&self, context_id: &str) -> Option<Context> {
         self.state.contexts.iter().find(|context| context.context_id == context_id).cloned()
     }
 
     /// Reuses the live context for this caller/companion/origin binding, or issues a new one.
     /// A context never rebinds: mismatched companions or origins get distinct ids.
-    pub fn bind_context(&mut self, caller: &CallerId, companion: &CompanionEntry, now: i64) -> LocalContext {
+    pub fn bind_context(&mut self, caller: &CallerId, companion: &Enrollment, now: i64) -> Context {
         if let Some(existing) = self.state.contexts.iter_mut().find(|context| {
-            context.belongs_to(caller, &companion.companion_id) && context.origin == companion.origin
+            context.belongs_to(caller, &companion.enrollment_id) && context.origin == companion.origin
         }) {
             existing.last_used_at = now;
             return existing.clone();
         }
-        let context = LocalContext {
+        let context = Context {
             context_id: format!("ctx_{}", short_uuid()),
             caller: caller.clone(),
-            companion_id: companion.companion_id.clone(),
+            enrollment_id: companion.enrollment_id.clone(),
             origin: companion.origin.clone(),
             participant_ref: companion.participant_ref.clone(),
             created_at: now,
@@ -317,20 +317,20 @@ impl StateStore {
 
     // ----- attention -----
 
-    pub fn attention_records(&self, companion_id: &str) -> Vec<AttentionRecord> {
-        self.state.attention.get(companion_id).cloned().unwrap_or_default()
+    pub fn attention_records(&self, enrollment_id: &str) -> Vec<AttentionRecord> {
+        self.state.attention.get(enrollment_id).cloned().unwrap_or_default()
     }
 
     /// Upserts digest occurrences, coalescing by stable item identity. Returns how many
     /// occurrences matched an existing record (coalesced) and how many were genuinely new.
     pub fn upsert_attention(
         &mut self,
-        companion_id: &str,
+        enrollment_id: &str,
         items: &[crate::application::contract::AttentionItemDto],
         revision: &str,
         now: i64,
     ) -> (Vec<String>, usize) {
-        let records = self.state.attention.entry(companion_id.to_string()).or_default();
+        let records = self.state.attention.entry(enrollment_id.to_string()).or_default();
         let mut fresh = Vec::new();
         let mut coalesced = 0;
         for item in items {
@@ -343,7 +343,7 @@ impl StateStore {
                     fresh.push(item.reference.clone());
                     records.push(AttentionRecord {
                         id: item.reference.clone(),
-                        companion_id: companion_id.to_string(),
+                        enrollment_id: enrollment_id.to_string(),
                         kind: item.kind.clone(),
                         actor_ref: item.actor_ref.clone(),
                         actor_name: item.actor_name.clone(),
@@ -374,7 +374,7 @@ impl StateStore {
     /// Disappearance from a partial page never withdraws anything.
     pub fn resync_attention(
         &mut self,
-        companion_id: &str,
+        enrollment_id: &str,
         items: &[crate::application::contract::AttentionItemDto],
         waiting_count: Option<i64>,
         page_complete: bool,
@@ -391,7 +391,7 @@ impl StateStore {
         if directed.len() as i64 != expected {
             return 0;
         }
-        let records = self.state.attention.entry(companion_id.to_string()).or_default();
+        let records = self.state.attention.entry(enrollment_id.to_string()).or_default();
         let before = records.len();
         records.retain(|record| {
             !matches!(record.relationship.as_deref(), Some("addressed_to_you") | Some("replies_to_you"))
@@ -400,8 +400,8 @@ impl StateStore {
         before - records.len()
     }
 
-    pub fn mark_attention_delivered(&mut self, companion_id: &str, ids: &[String]) {
-        if let Some(records) = self.state.attention.get_mut(companion_id) {
+    pub fn mark_attention_delivered(&mut self, enrollment_id: &str, ids: &[String]) {
+        if let Some(records) = self.state.attention.get_mut(enrollment_id) {
             for record in records.iter_mut() {
                 if ids.contains(&record.id) {
                     record.state = AttentionState::Delivered;
@@ -410,43 +410,43 @@ impl StateStore {
         }
     }
 
-    pub fn set_waiting_count(&mut self, companion_id: &str, waiting: i64) {
-        self.state.waiting_counts.insert(companion_id.to_string(), waiting);
+    pub fn set_waiting_count(&mut self, enrollment_id: &str, waiting: i64) {
+        self.state.waiting_counts.insert(enrollment_id.to_string(), waiting);
     }
 
-    pub fn waiting_count(&self, companion_id: &str) -> i64 {
-        self.state.waiting_counts.get(companion_id).copied().unwrap_or(0)
+    pub fn waiting_count(&self, enrollment_id: &str) -> i64 {
+        self.state.waiting_counts.get(enrollment_id).copied().unwrap_or(0)
     }
 
     // ----- checkpoints and ledgers -----
 
-    pub fn checkpoint(&self, companion_id: &str) -> Option<String> {
-        self.state.checkpoints.get(companion_id).cloned()
+    pub fn checkpoint(&self, enrollment_id: &str) -> Option<String> {
+        self.state.checkpoints.get(enrollment_id).cloned()
     }
 
-    pub fn set_checkpoint(&mut self, companion_id: &str, checkpoint: &str) {
-        self.state.checkpoints.insert(companion_id.to_string(), checkpoint.to_string());
+    pub fn set_checkpoint(&mut self, enrollment_id: &str, checkpoint: &str) {
+        self.state.checkpoints.insert(enrollment_id.to_string(), checkpoint.to_string());
     }
 
     /// The digest revision last observed for this companion.
-    pub fn revision(&self, companion_id: &str) -> Option<String> {
-        self.state.revisions.get(companion_id).cloned()
+    pub fn revision(&self, enrollment_id: &str) -> Option<String> {
+        self.state.revisions.get(enrollment_id).cloned()
     }
 
-    pub fn set_revision(&mut self, companion_id: &str, revision: &str) {
-        self.state.revisions.insert(companion_id.to_string(), revision.to_string());
+    pub fn set_revision(&mut self, enrollment_id: &str, revision: &str) {
+        self.state.revisions.insert(enrollment_id.to_string(), revision.to_string());
     }
 
 
     // ----- pending-write journal -----
 
     /// Appends a registration event before the mutation is sent.
-    pub fn journal_register(&self, write: &PendingWrite) -> Result<(), String> {
+    pub fn journal_register(&self, write: &Receipt) -> Result<(), String> {
         append_journal(&self.journal_path, &serde_json::json!({
             "event": "registered",
             "requestId": write.request_id,
             "contextId": write.context_id,
-            "companionId": write.companion_id,
+            "enrollmentId": write.enrollment_id,
             "origin": write.origin,
             "operation": write.operation,
             "targetRef": write.target_ref,
@@ -463,9 +463,9 @@ impl StateStore {
     }
 
     /// Replays the journal, returning writes whose outcome is not yet reconciled.
-    pub fn unsettled_writes(&self) -> Vec<PendingWrite> {
+    pub fn unsettled_writes(&self) -> Vec<Receipt> {
         let Ok(content) = fs::read_to_string(&self.journal_path) else { return Vec::new() };
-        let mut writes: HashMap<String, PendingWrite> = HashMap::new();
+        let mut writes: HashMap<String, Receipt> = HashMap::new();
         for line in content.lines() {
             if line.len() as u64 > JOURNAL_LINE_LIMIT {
                 break;
@@ -474,7 +474,7 @@ impl StateStore {
             let request_id = event.get("requestId").and_then(|value| value.as_str()).unwrap_or_default().to_string();
             match event.get("event").and_then(|value| value.as_str()) {
                 Some("registered") => {
-                    if let Ok(mut write) = serde_json::from_value::<PendingWrite>(event.clone()) {
+                    if let Ok(mut write) = serde_json::from_value::<Receipt>(event.clone()) {
                         write.settled = false;
                         writes.insert(request_id, write);
                     }
@@ -494,14 +494,14 @@ impl StateStore {
 
 /// Cascades every piece of derived state that belongs to one enrollment — including its
 /// session.
-fn remove_companion_state(state: &mut StateFile, companion_id: &str) {
-    state.companions.retain(|entry| entry.companion_id != companion_id);
-    state.sessions.remove(companion_id);
-    state.attention.remove(companion_id);
-    state.checkpoints.remove(companion_id);
-    state.revisions.remove(companion_id);
-    state.waiting_counts.remove(companion_id);
-    state.contexts.retain(|context| context.companion_id != companion_id);
+fn remove_companion_state(state: &mut StateFile, enrollment_id: &str) {
+    state.companions.retain(|entry| entry.enrollment_id != enrollment_id);
+    state.sessions.remove(enrollment_id);
+    state.attention.remove(enrollment_id);
+    state.checkpoints.remove(enrollment_id);
+    state.revisions.remove(enrollment_id);
+    state.waiting_counts.remove(enrollment_id);
+    state.contexts.retain(|context| context.enrollment_id != enrollment_id);
 }
 
 fn truncate(value: &str, limit: usize) -> String {

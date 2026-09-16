@@ -282,7 +282,7 @@ pub fn catalog() -> Value {
     let tools = [
         tool(
             "SelectCompanion",
-            "Select which enrolled companion (participant identity) to act as for this session. Returns a companionId. With no moniker, the connector's one local identity is used; with several identities, name one explicitly.",
+            "Select which enrolled companion (participant identity) to act as for this session. Returns a enrollmentId. With no moniker, the connector's one local identity is used; with several identities, name one explicitly.",
             json!({
                 "type": "object",
                 "properties": {
@@ -319,10 +319,10 @@ pub fn catalog() -> Value {
             json!({
                 "type": "object",
                 "properties": {
-                    "companionId": { "type": "string" },
+                    "enrollmentId": { "type": "string" },
                     "serverUrl": { "type": "string", "description": "The server origin shown by SelectCompanion" }
                 },
-                "required": ["companionId", "serverUrl"],
+                "required": ["enrollmentId", "serverUrl"],
                 "additionalProperties": false,
             }),
         ),

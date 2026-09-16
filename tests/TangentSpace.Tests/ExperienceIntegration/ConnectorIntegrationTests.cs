@@ -36,7 +36,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     private async Task SeedEnrollment()
     {
         var localId = Guid.CreateVersion7().ToString("n");
-        var companionId = "cmp_" + Guid.CreateVersion7().ToString("n")[..16];
+        var enrollmentId = "cmp_" + Guid.CreateVersion7().ToString("n")[..16];
         // The connector's state file is snake_case on the wire, matching its Rust structs.
         var state = new
         {
@@ -49,12 +49,12 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
             {
                 new
                 {
-                    companion_id = companionId, local_id = localId, name = "agent", origin = app.Origin,
+                    enrollment_id = enrollmentId, local_id = localId, name = "agent", origin = app.Origin,
                     participant_ref = ExperienceWebApp.AgentDid, did = ExperienceWebApp.AgentDid,
                     display_name = (string?)null, handle = "agent", enrolled_at = 1757000000000L, auto_check = true,
                 },
             },
-            sessions = new Dictionary<string, string> { [companionId] = app.AgentToken },
+            sessions = new Dictionary<string, string> { [enrollmentId] = app.AgentToken },
         };
         await File.WriteAllTextAsync(Path.Combine(home, "state.json"),
             JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
@@ -119,8 +119,8 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         // And it is a working session: the real server answers arrival on it, naming the
         // identity the server itself resolved rather than anything the connector supplied.
         var selected = Call("SelectCompanion", "{\"moniker\":\"agent\"}");
-        var companion = selected.GetProperty("connector").GetProperty("companionId").GetString()!;
-        var arrived = Call("Arrive", JsonSerializer.Serialize(new { companionId = companion, serverUrl = app.Origin }));
+        var companion = selected.GetProperty("connector").GetProperty("enrollmentId").GetString()!;
+        var arrived = Call("Arrive", JsonSerializer.Serialize(new { enrollmentId = companion, serverUrl = app.Origin }));
         Assert.Equal("orientation", arrived.GetProperty("connector").GetProperty("view").GetString());
         Assert.Contains(ExperienceWebApp.AgentDid, arrived.ToString());
     }
@@ -129,8 +129,8 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     public void The_cli_intake_reads_you_rendered_attention_and_resynchronizes_reads()
     {
         var selected = Call("SelectCompanion", "{\"moniker\":\"agent\"}");
-        var companion = selected.GetProperty("connector").GetProperty("companionId").GetString()!;
-        var arrived = Call("Arrive", JsonSerializer.Serialize(new { companionId = companion, serverUrl = app.Origin }));
+        var companion = selected.GetProperty("connector").GetProperty("enrollmentId").GetString()!;
+        var arrived = Call("Arrive", JsonSerializer.Serialize(new { enrollmentId = companion, serverUrl = app.Origin }));
         var connectorLayer = arrived.GetProperty("connector");
         Assert.Equal("orientation", connectorLayer.GetProperty("view").GetString());
         Assert.Equal("tool_response_only", connectorLayer.GetProperty("deliveryMode").GetString());
@@ -180,8 +180,8 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
 
         var selected = peer.Call("tools/call", new { name = "SelectCompanion", arguments = new { moniker = "agent" } });
         var companion = selected.GetProperty("result").GetProperty("structuredContent").GetProperty("connector")
-            .GetProperty("companionId").GetString()!;
-        var arrival = peer.Call("tools/call", new { name = "Arrive", arguments = new { companionId = companion, serverUrl = app.Origin } });
+            .GetProperty("enrollmentId").GetString()!;
+        var arrival = peer.Call("tools/call", new { name = "Arrive", arguments = new { enrollmentId = companion, serverUrl = app.Origin } });
         var arrivalText = arrival.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
         Assert.Contains("you are participating as", arrivalText);
         Assert.Contains("asked you", arrivalText);

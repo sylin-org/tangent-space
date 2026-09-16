@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PendingWrite {
+pub struct Receipt {
     pub request_id: String,
     pub context_id: String,
-    pub companion_id: String,
+    pub enrollment_id: String,
     pub origin: String,
     pub operation: String,
     pub target_ref: String,

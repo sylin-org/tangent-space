@@ -52,9 +52,9 @@ pub fn valid_handle(handle: &str) -> bool {
 /// enrollment time against the server's own identity response. The bearer session itself lives in the store's per-enrollment
 /// session map — deliberately NOT on this struct, so cloned entries never carry it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompanionEntry {
+pub struct Enrollment {
     /// Stable local handle for this enrollment, e.g. `cmp_lumen`; also its session key.
-    pub companion_id: String,
+    pub enrollment_id: String,
     /// The owning identity's `local_id`.
     #[serde(default)]
     pub local_id: String,
@@ -76,7 +76,7 @@ pub struct CompanionEntry {
     pub auto_check: bool,
 }
 
-impl CompanionEntry {
+impl Enrollment {
     /// Moniker matching mirrors the server's companion selection: exact participant
     /// reference or DID, exact handle (case-insensitive, one optional leading @), or the
     /// local name. Never a display-name guess.
@@ -85,7 +85,7 @@ impl CompanionEntry {
         if trimmed.is_empty() || trimmed.len() > 253 {
             return false;
         }
-        if trimmed == self.name || trimmed == self.companion_id || trimmed == self.participant_ref {
+        if trimmed == self.name || trimmed == self.enrollment_id || trimmed == self.participant_ref {
             return true;
         }
         if let Some(did) = &self.did {
@@ -105,7 +105,7 @@ impl CompanionEntry {
 /// reach the PDS again, and the refresh token and DPoP key that let the connector renew
 /// it silently. Session state, never a vault secret.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct AtprotoSession {
+pub struct AccountSession {
     /// The bound account's DID (`did:plc:…`); mirrors the identity's `bound_did`.
     pub did: String,
     /// The handle the PDS confirmed (canonical form, no leading `@`).
@@ -136,10 +136,10 @@ pub struct AtprotoSession {
 /// Redacted by hand (R7): a derived Debug would print the access token, refresh token
 /// and DPoP key into any debug log. Only routing facts render; the secrets are named,
 /// never shown.
-impl std::fmt::Debug for AtprotoSession {
+impl std::fmt::Debug for AccountSession {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("AtprotoSession")
+            .debug_struct("AccountSession")
             .field("did", &self.did)
             .field("handle", &self.handle)
             .field("access_jwt", &"[redacted]")
@@ -156,11 +156,11 @@ impl std::fmt::Debug for AtprotoSession {
 /// A participation context: caller + enrollment + canonical origin + credential binding.
 /// The acting identity rides the enrollment; it is never chosen here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LocalContext {
+pub struct Context {
     /// Stable local handle, e.g. `ctx_9f01ab`.
     pub context_id: String,
     pub caller: CallerId,
-    pub companion_id: String,
+    pub enrollment_id: String,
     pub origin: String,
     /// The enrollment's participant reference at enrollment time (presentation only).
     #[serde(default)]
@@ -169,9 +169,9 @@ pub struct LocalContext {
     pub last_used_at: i64,
 }
 
-impl LocalContext {
+impl Context {
     /// A context is usable only for the exact caller and enrollment it was issued to.
-    pub fn belongs_to(&self, caller: &CallerId, companion_id: &str) -> bool {
-        &self.caller == caller && self.companion_id == companion_id
+    pub fn belongs_to(&self, caller: &CallerId, enrollment_id: &str) -> bool {
+        &self.caller == caller && self.enrollment_id == enrollment_id
     }
 }

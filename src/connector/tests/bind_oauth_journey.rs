@@ -155,7 +155,7 @@ fn the_bind_route_starts_the_flow_immediately_and_binds_the_authenticated_accoun
     let enrollments = hub.enrollments_of(&identity.local_id);
     assert_eq!(enrollments.len(), 1, "the resume enrolled exactly once");
     assert_eq!(enrollments[0].did.as_deref(), Some("did:plc:lumen"));
-    assert!(hub.store().lock().unwrap().has_session(&enrollments[0].companion_id));
+    assert!(hub.store().lock().unwrap().has_session(&enrollments[0].enrollment_id));
 
     // The binding IS the token's subject (R1/R3): no pre-declared DID existed to
     // mismatch, and the authenticated account — not the decoy — is what got bound.

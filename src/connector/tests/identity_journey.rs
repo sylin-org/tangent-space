@@ -53,7 +53,7 @@ fn enrolled(hub: &ConnectorHub, server: &FakeServer, handle: &str) -> (String, S
     server.add_account(&account, "unused", &did);
     let local_id = common::seed_bound_identity(hub, &account, &did, server.origin());
     let entry = hub.enroll_bound(&local_id, server.origin()).expect("bound enrollment");
-    (local_id, entry.companion_id)
+    (local_id, entry.enrollment_id)
 }
 
 // ---------- identity CRUD ----------
@@ -87,7 +87,7 @@ fn identity_crud_enforces_handle_uniqueness() {
 fn delete_refuses_while_enrollments_exist_and_cascades_when_confirmed() {
     let server = FakeServer::start();
     let hub = workspace("cascade", CallerId("cli".into()));
-    let (local_id, companion_id) = enrolled(&hub, &server, "lumen");
+    let (local_id, enrollment_id) = enrolled(&hub, &server, "lumen");
 
     let refused = hub.delete_identity(&local_id, false).expect_err("must refuse");
     assert!(refused.contains("enrollment"), "error was: {refused}");
@@ -95,7 +95,7 @@ fn delete_refuses_while_enrollments_exist_and_cascades_when_confirmed() {
     hub.delete_identity(&local_id, true).expect("cascade delete");
     assert!(hub.identity(&local_id).is_none());
     assert!(hub.enrollments_of(&local_id).is_empty());
-    assert!(hub.store().lock().unwrap().companion(&companion_id).is_none(), "the enrollment cascades");
+    assert!(hub.store().lock().unwrap().companion(&enrollment_id).is_none(), "the enrollment cascades");
 }
 
 // ---------- behavior-based resolution (every intake alike) ----------
@@ -104,14 +104,14 @@ fn delete_refuses_while_enrollments_exist_and_cascades_when_confirmed() {
 fn the_one_identity_resolves_automatically_for_every_intake() {
     let server = FakeServer::start();
     let hub = workspace("one-identity", CallerId("cli".into()));
-    let (local_id, companion_id) = enrolled(&hub, &server, "lumen");
+    let (local_id, enrollment_id) = enrolled(&hub, &server, "lumen");
 
     // The CLI intake resolves exactly like the MCP intake: no moniker, one identity.
     let outcome = hub.invoke(IntakeChannel::Cli, "SelectCompanion", &json!({}));
     assert!(!outcome.is_error, "text: {}", outcome.text);
     assert_eq!(
-        outcome.structured.pointer("/connector/companionId").and_then(Value::as_str),
-        Some(companion_id.as_str())
+        outcome.structured.pointer("/connector/enrollmentId").and_then(Value::as_str),
+        Some(enrollment_id.as_str())
     );
     // An explicit moniker still works alongside the automatic resolution.
     let by_moniker = hub.invoke(IntakeChannel::Mcp, "SelectCompanion", &json!({ "moniker": "lumen" }));
@@ -166,8 +166,8 @@ fn already_enrolled_is_an_honest_error_locally_and_from_the_server() {
 
     // Server-side guard: forgetting locally leaves the server's mapping, which reports
     // already_enrolled without a new credential.
-    let companion_id = hub.enrollments_of(&local_id)[0].companion_id.clone();
-    hub.forget_enrollment(&companion_id).expect("forget");
+    let enrollment_id = hub.enrollments_of(&local_id)[0].enrollment_id.clone();
+    hub.forget_enrollment(&enrollment_id).expect("forget");
     assert!(hub.enrollments_of(&local_id).is_empty(), "the local enrollment is gone");
 }
 
@@ -190,20 +190,20 @@ fn one_identity_at_two_servers_keeps_distinct_working_sessions() {
     // session map, not where the account is hosted.
     common::seed_atproto_session(&hub, &local_id, "jeff.bsky.example", "did:plc:jeff", server_b.origin());
     let at_b = hub.enroll_bound(&local_id, server_b.origin()).expect("enroll at b");
-    assert_ne!(at_a.companion_id, at_b.companion_id, "each enrollment is its own session key");
+    assert_ne!(at_a.enrollment_id, at_b.enrollment_id, "each enrollment is its own session key");
     let (token_a, token_b) = {
         let store = hub.store().lock().unwrap();
         (
-            store.session(&at_a.companion_id).expect("a session at a"),
-            store.session(&at_b.companion_id).expect("a session at b"),
+            store.session(&at_a.enrollment_id).expect("a session at a"),
+            store.session(&at_b.enrollment_id).expect("a session at b"),
         )
     };
     assert_ne!(token_a, token_b, "each origin issued its own session");
     {
         // The session map holds one distinct entry per enrollment.
         let store = hub.store().lock().unwrap();
-        assert_eq!(store.session(&at_a.companion_id).as_deref(), Some(token_a.as_str()));
-        assert_eq!(store.session(&at_b.companion_id).as_deref(), Some(token_b.as_str()));
+        assert_eq!(store.session(&at_a.enrollment_id).as_deref(), Some(token_a.as_str()));
+        assert_eq!(store.session(&at_b.enrollment_id).as_deref(), Some(token_b.as_str()));
     }
 
     // Both enrollments hold distinct working sessions: arrival at each origin uses that
@@ -212,7 +212,7 @@ fn one_identity_at_two_servers_keeps_distinct_working_sessions() {
         let outcome = hub.invoke(
             IntakeChannel::Cli,
             "Arrive",
-            &json!({ "companionId": entry.companion_id, "serverUrl": server.origin() }),
+            &json!({ "enrollmentId": entry.enrollment_id, "serverUrl": server.origin() }),
         );
         assert!(!outcome.is_error, "arrival failed: {}", outcome.text);
         let seen = server
@@ -226,23 +226,23 @@ fn one_identity_at_two_servers_keeps_distinct_working_sessions() {
 
     // Forgetting one enrollment removes exactly its session; the other stays intact and
     // working.
-    hub.forget_enrollment(&at_a.companion_id).expect("forget a");
+    hub.forget_enrollment(&at_a.enrollment_id).expect("forget a");
     let inventory = hub.enrollment_inventory();
-    assert!(inventory.iter().all(|(entry, _)| entry.companion_id != at_a.companion_id));
+    assert!(inventory.iter().all(|(entry, _)| entry.enrollment_id != at_a.enrollment_id));
     let (_, available) = inventory
         .iter()
-        .find(|(entry, _)| entry.companion_id == at_b.companion_id)
+        .find(|(entry, _)| entry.enrollment_id == at_b.enrollment_id)
         .expect("enrollment b remains");
     assert!(available, "b's session is intact under its own key");
     {
         let store = hub.store().lock().unwrap();
-        assert_eq!(store.session(&at_b.companion_id).as_deref(), Some(token_b.as_str()), "b's session value survives");
-        assert_eq!(store.session(&at_a.companion_id), None, "a's session is gone with its enrollment");
+        assert_eq!(store.session(&at_b.enrollment_id).as_deref(), Some(token_b.as_str()), "b's session value survives");
+        assert_eq!(store.session(&at_a.enrollment_id), None, "a's session is gone with its enrollment");
     }
     let again = hub.invoke(
         IntakeChannel::Cli,
         "Arrive",
-        &json!({ "companionId": at_b.companion_id, "serverUrl": server_b.origin() }),
+        &json!({ "enrollmentId": at_b.enrollment_id, "serverUrl": server_b.origin() }),
     );
     assert!(!again.is_error, "b still participates after forgetting a: {}", again.text);
 }
