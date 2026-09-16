@@ -368,7 +368,9 @@ fn a_pageless_connect_pops_the_recorded_reachable_page_at_the_bind_anchor() {
 }
 
 /// A recorded page that no longer answers (an unclean shutdown left it behind) gets the
-/// honest start-operator instruction instead of a dead tab.
+/// honest start-operator instruction instead of a dead tab. Both candidates the hub
+/// tries — the record and the fallback — are injected as the same dead port, so the
+/// test says the same thing on a machine that happens to be running the real page.
 #[test]
 fn an_unreachable_recorded_page_gets_the_honest_start_operator_instruction() {
     let server = FakeServer::start();
@@ -379,7 +381,9 @@ fn an_unreachable_recorded_page_gets_the_honest_start_operator_instruction() {
     };
     let dir = std::env::temp_dir().join(format!("tangent-connector-connect-deadpage-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let hub = Arc::new(workspace_at(&dir, CallerId("cli".into())));
+    let hub = Arc::new(
+        workspace_at(&dir, CallerId("cli".into())).with_default_page(&format!("http://127.0.0.1:{dead_port}/")),
+    );
     let identity = hub.create_identity("ox_omega", None).expect("identity");
     {
         let mut store = hub.store().lock().unwrap();
@@ -762,7 +766,7 @@ fn a_pending_connect_never_freezes_the_page_or_operator_mutations() {
     let created = http_round_trip_bounded(
         &mut creating,
         &format!(
-            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
             payload.len()
         ),
         Duration::from_secs(5),

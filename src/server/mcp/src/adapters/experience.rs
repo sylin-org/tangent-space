@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+use crate::adapters::operator::CONNECTOR_PRODUCT;
 use crate::application::ports::{ExperienceError, ExperiencePort, RequestContext};
 
 const RESPONSE_LIMIT: u64 = 512 * 1024;
@@ -60,12 +61,22 @@ impl ExperiencePort for UreqExperience {
     }
 
     fn probe(&self, origin: &str) -> Result<(), ExperienceError> {
-        let outcome = self.agent.request("GET", &format!("{origin}/")).timeout(PROBE_TIMEOUT).call();
-        match outcome {
-            // Any answer — including an HTTP error status — proves the page is running;
-            // the body is deliberately unread. Only a transport failure is unreachable.
-            Ok(_) | Err(ureq::Error::Status(_, _)) => Ok(()),
-            Err(ureq::Error::Transport(_)) => Err(ExperienceError::Unreachable),
+        // The companion page identifies itself through its discovery document (C8).
+        // Anything else answering on that port — another local service, or a stale
+        // listener — is not the page, so it is unreachable as far as a sign-in pop is
+        // concerned and no one is sent to it.
+        let outcome = self
+            .agent
+            .request("GET", &format!("{origin}/api/discovery"))
+            .timeout(PROBE_TIMEOUT)
+            .call();
+        let document = match outcome {
+            Ok(response) => parse_response(response).map_err(|_| ExperienceError::Unreachable)?,
+            Err(_) => return Err(ExperienceError::Unreachable),
+        };
+        match document.get("product").and_then(Value::as_str) {
+            Some(CONNECTOR_PRODUCT) => Ok(()),
+            _ => Err(ExperienceError::Unreachable),
         }
     }
 

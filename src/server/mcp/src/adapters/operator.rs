@@ -3,7 +3,7 @@
 //! another fixed port). Hand-rolled minimal HTTP/1.1 in the house
 //! style — request line, headers and a Content-Length body under an 8 KiB header cap
 //! and a 1 MiB body cap, GET/POST only, `Connection: close`, a 30 s read timeout,
-//! JSON-only `/api/*` bodies (form-encoded bodies are refused on every surface). The
+//! JSON-only `/api/*` bodies (any other encoding is refused on every surface). The
 //! one deliberately cross-origin route is `GET/OPTIONS /api/discovery`: it discloses
 //! only the connector product/version and this loopback origin, so a Tangent page can
 //! decide whether to offer its local operator page without exposing identities or
@@ -16,12 +16,16 @@
 //! provider's authorize page, whose own UI handles account selection and sign-in. The
 //! provider's loopback redirect (root path only, per the public local-client profile)
 //! lands on `/` with code+state+iss and renders the result page. No state-changing
-//! `/bind` POST route exists, so none needs a loopback Origin/Referer check (R4); a
-//! cross-origin GET only ever starts a flow the operator sees at the provider.
-//! Structural local-only guarantees (loopback bind, method/caps discipline) carry the
-//! trust: the operator is the trust root and a local process can read state.json
-//! directly anyway, so the page carries no interactive token (owner correction). Nothing
-//! but the startup banner is ever printed to stdout.
+//! `/bind` POST route exists at all; a cross-origin GET only ever starts a flow the
+//! operator sees at the provider. Two rules keep the rest of the surface local: every
+//! request must name a loopback `Host`, which refuses a rebound public hostname before
+//! it reaches a route, and every `/api/*` POST must carry `application/json` with an
+//! `Origin` matching that host and, when the browser sends one, `Sec-Fetch-Site:
+//! same-origin` — so a `text/plain` write from another site, which crosses origins
+//! without a preflight, is refused. Those rules and the structural guarantees (loopback
+//! bind, method/caps discipline) carry the trust: the operator is the trust root and a
+//! local process can read state.json directly anyway, so the page carries no
+//! interactive token. Nothing but the startup banner is ever printed to stdout.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -72,6 +76,11 @@ fn operator_index() -> String {
 pub const DEFAULT_PORT: u16 = 5219;
 /// The deterministic page URL that goes with [`DEFAULT_PORT`].
 pub const DEFAULT_PAGE_URL: &str = "http://127.0.0.1:5219/";
+
+/// How the companion page names itself in its discovery document. A probe matches this
+/// before treating a listener as the page, so an unrelated local service on the same
+/// port is never mistaken for it.
+pub const CONNECTOR_PRODUCT: &str = "tangent-space-connector";
 /// The one bind provider this connector serves today.
 const BIND_PROVIDER_ATPROTO: &str = "atproto";
 
@@ -326,6 +335,9 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
     }
     let mut content_length: usize = 0;
     let mut content_type = String::new();
+    let mut host = String::new();
+    let mut origin = String::new();
+    let mut fetch_site = String::new();
     let mut budget = HEADER_LIMIT;
     loop {
         let mut header = String::new();
@@ -350,6 +362,17 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         if let Some(value) = lowered.strip_prefix("content-type:") {
             content_type = value.trim().to_string();
         }
+        // The three headers the write guard reads. Hosts, schemes and the fetch
+        // metadata are all case-insensitive, so the lowercased view compares directly.
+        if let Some(value) = lowered.strip_prefix("host:") {
+            host = value.trim().to_string();
+        }
+        if let Some(value) = lowered.strip_prefix("origin:") {
+            origin = value.trim().to_string();
+        }
+        if let Some(value) = lowered.strip_prefix("sec-fetch-site:") {
+            fetch_site = value.trim().to_string();
+        }
     }
     if content_length > BODY_LIMIT {
         let _ = respond(&mut writer, 413, problem_json("body_too_large", "body exceeds 1 MiB"), None);
@@ -357,6 +380,14 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
     }
     let mut body_bytes = vec![0u8; content_length];
     if content_length > 0 && reader.read_exact(&mut body_bytes).is_err() {
+        return;
+    }
+    // C8, first rule: this page answers loopback names only. A site that rebinds its
+    // own hostname to 127.0.0.1 reaches this port with that hostname in `Host`, so the
+    // check keeps every surface — reads included — off the open web. It costs the
+    // legitimate page nothing: the browser fills `Host` from the address it opened.
+    if !is_loopback_host(&host) {
+        let _ = respond(&mut writer, 403, problem_json("forbidden_host", "this page answers loopback hosts only"), None);
         return;
     }
     // Cross-origin discovery is intentionally tiny and inert. It proves only that a
@@ -373,24 +404,55 @@ fn serve_connection(stream: TcpStream, hub: Arc<ConnectorHub>, sse_clients: Arc<
         stream_events(writer, hub, sse_clients);
         return;
     }
-    // JSON for the /api/* surface; a form-encoded body anywhere classifies as a form
-    // and is refused by the routes (no form surface remains — the bind route's handle
-    // field left with the interstitial).
-    let body = if content_type.starts_with("application/x-www-form-urlencoded") {
-        RequestBody::Form
-    } else {
+    // C8, second rule: a write comes from the page itself. `text/plain` is a CORS
+    // simple request — any site can send one to this port without a preflight — so the
+    // JSON surface accepts `application/json` and nothing else, and the same-origin
+    // evidence the browser attaches must agree with the host it reached. The server's
+    // credential endpoint applies these same three checks, so both sides read alike.
+    // `Sec-Fetch-Site` is absent on older browsers and on non-browser callers; when it
+    // is present it must say the request never left the page.
+    if method == "POST"
+        && request_path.starts_with("/api/")
+        && (!is_json(&content_type) || origin != format!("http://{host}") || (!fetch_site.is_empty() && fetch_site != "same-origin"))
+    {
+        let _ = respond(&mut writer, 403, problem_json("cross_site_write", "writes come from the companion page itself"), None);
+        return;
+    }
+    // Bodies are JSON or nothing. No form surface remains anywhere — the bind route is
+    // a navigation — so any other encoding classifies as neither and the routes refuse
+    // it explicitly, rather than through a misleading JSON parse error.
+    let body = if content_length == 0 || is_json(&content_type) {
         RequestBody::Json(serde_json::from_slice(&body_bytes).unwrap_or(Value::Null))
+    } else {
+        RequestBody::Other
     };
     let response = route(&hub, &method, &target, &body, &root_url);
     let _ = respond(&mut writer, response.0, response.1, response.2.as_deref());
 }
 
-/// A request body in either of the two encodings these surfaces classify: JSON (the
-/// /api/* surface) or form-encoded (a distinct classification, so every route's
-/// refusal is explicit rather than a misleading JSON parse error).
+/// A request body as these surfaces classify it: JSON (the /api/* surface, and an
+/// empty body) or anything else, kept distinct so every route's refusal is explicit
+/// rather than a misleading JSON parse error.
 enum RequestBody {
     Json(Value),
-    Form,
+    Other,
+}
+
+/// The loopback names this page answers on, with or without a port. The port is not
+/// the rule — reaching us by a loopback name is, and a rebound public hostname never
+/// is one.
+fn is_loopback_host(host: &str) -> bool {
+    let name = match host.strip_prefix('[').and_then(|rest| rest.find(']')) {
+        // An IPv6 literal keeps its brackets; only the `:port` after them splits off.
+        Some(end) => &host[..end + 2],
+        None => host.split(':').next().unwrap_or_default(),
+    };
+    matches!(name, "127.0.0.1" | "localhost" | "[::1]")
+}
+
+/// JSON, whatever parameters follow it (`application/json; charset=utf-8`).
+fn is_json(content_type: &str) -> bool {
+    content_type.split(';').next().map(str::trim) == Some("application/json")
 }
 
 /// The SSE feed (owner addendum): the one deliberate exception to this server's
@@ -832,7 +894,7 @@ fn respond_discovery(writer: &mut impl Write, preflight: bool, operator_origin: 
         Vec::new()
     } else {
         serde_json::to_vec(&json!({
-            "product": "tangent-space-connector",
+            "product": CONNECTOR_PRODUCT,
             "discoveryVersion": 1,
             "operatorOrigin": operator_origin,
         }))

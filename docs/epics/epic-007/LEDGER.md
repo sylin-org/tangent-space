@@ -8,9 +8,9 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.11 — harden the companion manager (`todo`) |
-| Next action | Start R1.11 (per C8): JSON-only writes; a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; page detection through `/api/discovery`; tests that inject the page address; no example keeping state outside the user profile. Then R1.12–R1.14 |
-| Last checkpoint | 2026-09-15 · S-003 · R1.8 done. W1–W10 all pass, and every check was re-verified at `f223a1b`: .NET 351/359 (exactly the 8 known failures), browser 129/129, connector 99/99, lifecycle 76/76, greenfield 1,884, server C# 11,333 |
+| Current task | R1.12 — one enrollment path (`todo`) |
+| Next action | Start R1.12 (per C1): delete the unbound tier (`enroll-unbound`, `enroll_unbound`, its payloads, wording, fake route and tests), the app-password binding (`bind_atproto`, `createSession`) and session import (`enroll --token-file`), with the server's `/api/participation/credentials` endpoints; tests seed connector state directly and the .NET connector tests enroll through the bound exchange against the fake account server; the README passages go with them. Then R1.13–R1.14 |
+| Last checkpoint | 2026-09-15 · S-003 · R1.11 done and committed: the companion manager refuses foreign hosts and cross-site writes, and identifies itself through `/api/discovery`. Connector 100/100, .NET connector integration 3/3 on the release binary, greenfield 1,884 |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: the N-035 arrival proposal (shape and timing); push authorization (optional) |
 | Blockers | None (Docker Desktop's startup crash was cleared on 2026-09-15; see N-023) |
@@ -125,7 +125,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.8 | Back up, wipe, build, launch; run the suites and the greenfield check; walkthrough with Leo; update metrics | done | Walkthrough passes; about 5,000 fewer lines | W1–W10 all pass on the fresh install (see [Walkthrough results](#walkthrough-results)); three fixes came out of it (`b7061dd` N-025, `efe0ecf` N-027, `deb70ab` N-029) and two standing rules (`efe0ecf` R1.9, `0c51fc4` R1.10). Re-verified at `f223a1b`: .NET 351/359 with exactly the 8 known failures, browser 129/129, connector 99/99, lifecycle 76/76, greenfield 1,884; server C# 16,830 → 11,333 (5,497 fewer). Findings for later slices: N-026, N-033, N-034, N-035 |
 | R1.9 | Per Leo (15 September): no dialogs. Replace the post-removal `confirm()`, the report `<dialog>`, the atmosphere `<dialog>` and the connector page's three `confirm()` calls with inline controls; guard against their return (N-027) | done | No dialog remains; the guards pass; the walkthrough uses the inline controls | Commit "refactor: replace every dialog with inline controls": `inline-confirm.js` confirms post removal in place, the report form and the atmosphere picker are in-page panels, the companion page confirms inline; `tests/no-dialogs.test.mjs` and `the_page_opens_no_dialog` guard it; browser 129/129, connector 99/99; the inline removal passed live in W3 |
 | R1.10 | Per Leo (15 September): no random ports. The connector refuses port 0; its hub opens pages only through an injected opener, silent unless the binary installs the platform browser; tests lose the shared no-browser guard and their random-looking fake addresses (N-028) | done | No product code picks a random port; no test opens a browser | Commit "fix: open pages only through the hub and drop random ports": `PageOpener` injected (silent by default, the platform browser only in `build_hub`); port 0 refused; the env guards and random-looking fake addresses gone; connector 99/99; .NET connector integration 3/3 on the release binary |
-| R1.11 | Per C8: harden the companion manager — JSON-only writes, a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; detect the page through `/api/discovery`; tests inject the page address; no example keeps state outside the user profile | todo | A cross-site `text/plain` POST and a foreign `Host` are refused; connector suite green | |
+| R1.11 | Per C8: harden the companion manager — JSON-only writes, a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; detect the page through `/api/discovery`; tests inject the page address; no example keeps state outside the user profile | done | A cross-site `text/plain` POST and a foreign `Host` are refused; connector suite green | Two rules stated once at the connection: every request names a loopback `Host`, and every `/api/*` POST carries `application/json` with a matching `Origin` and — when sent — `Sec-Fetch-Site: same-origin`, mirroring `ParticipationController.Cookie`. `probe` identifies the page through `/api/discovery`; the default page candidate is injectable. Connector 100/100, .NET connector integration 3/3 on the release binary, greenfield 1,884, no new clippy lint |
 | R1.12 | Per C1: one enrollment path — delete the unbound tier (`enroll-unbound`, `enroll_unbound`, its payloads, wording, fake route and tests), the app-password binding (`bind_atproto`, `createSession`) and session import (`enroll --token-file`), with the server's `/api/participation/credentials` endpoints; tests seed connector state directly, and the .NET connector tests enroll through the bound exchange against the fake account server; README passages go with them | todo | One enrollment path and one binding path remain; suites green | |
 | R1.13 | Per C9: delete code without a caller (`adapters/delivery.rs`, the automatic-turn policy, `ExperiencePort::wait`, `ToolOutcome::exit_code`, `experience::shared`, `Perspective::from_identity`, `Budget::truncated`, `StopFlag`, `CallerId::default`), the legacy-enrollment drop, the pre-scope client id and `StateFile.version`; render each attention item once | todo | No listed identifier remains; suites green | |
 | R1.14 | Verify the connector: suites, greenfield check, and W5 again on the release binary | todo | W5 passes; metrics updated | |
@@ -193,7 +193,23 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
-Nothing in flight. R1.11 is the next task; write its steps here when it starts.
+**R1.11 — harden the companion manager** (doing)
+
+Per C8 and [ADR 0012](../../adr/0012-realigned-connector-architecture.md) §8: the companion manager is a hardened loopback page. Two rules, stated once at the connection and applied before routing:
+
+- Every request must name a loopback `Host` (`127.0.0.1`, `localhost` or `[::1]`, with any port or none). This is the DNS-rebinding defence, and it covers reads as well as writes.
+- Every `POST` to `/api/*` must carry `Content-Type: application/json`, an `Origin` equal to `http://{Host}`, and — when the browser sends one — `Sec-Fetch-Site: same-origin`. This mirrors the server's credential endpoint (`ParticipationController.Cookie`), so both sides read the same way.
+
+`html_routes` keeps no POST surface at all, so its 404 stays the refusal there.
+
+- [x] `operator.rs`: reads `Host`, `Origin` and `Sec-Fetch-Site` in the header loop; refuses a non-loopback host and a cross-site write before routing; a body classifies as JSON only on `application/json`, so a `text/plain` POST no longer parses as JSON. `RequestBody::Form` became `Other`: the rule is now "JSON or nothing", not "anything but a form"
+- [x] `experience.rs`: `probe` asks `/api/discovery` and requires the connector's own `product`, instead of counting any HTTP response as the page. The marker is one shared constant, `CONNECTOR_PRODUCT`
+- [x] `hub.rs`: the default page candidate is injectable (`with_default_page`, following R1.10's `with_pages`)
+- [x] Tests: the operator journeys send the page's `Origin` and `Sec-Fetch-Site`; `the_companion_manager_refuses_foreign_hosts_and_cross_site_writes` covers a rebound `Host` on a read, a cross-site `text/plain` write, a foreign `Origin`, a cross-site `Sec-Fetch-Site` and a write with no origin, and proves the page's own write and cross-origin discovery still work; the dead-page test injects its own dead default
+- [x] README: the MCP configuration example drops the override, so state stays in the user profile by default, and says what the override must not be (N-036)
+- [x] Connector 100/100 (the new case), .NET connector integration 3/3 on a freshly built release binary (N-037), greenfield 1,884 unchanged, no new clippy lint
+
+Check command: `cargo test --manifest-path src/server/mcp/Cargo.toml`, then `pwsh scripts/check-greenfield.ps1`.
 
 **Completed: R1.8 — verify R1 on a fresh install**
 
@@ -235,7 +251,7 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 | — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,825 / 8 / 0 | 0 |
 | .NET tests | 506 of 518 (12 known failures) | 351 of 359 (the 8 remaining known failures, N-020) | all pass |
 | Browser tests | 170 of 170 | 129 of 129 | all pass |
-| Connector tests | 98 of 98 | 99 of 99 | all pass |
+| Connector tests | 98 of 98 | 100 of 100 | all pass |
 | Connector Rust lines (baseline at `deb70ab`) | 9,489 | 9,489 | about 8,300 |
 | Connector enrollment / account-binding paths | 3 / 2 | 3 / 2 | 1 / 1 |
 | Connector source without a working path | about 850 | about 850 | 0 |
@@ -309,6 +325,9 @@ Steps are defined in [EPIC-007](../EPIC-007.md#common-acceptance-walkthrough). R
 - **N-034** (R1.8, W6; UI findings for R5) The defer preview states its time as a raw UTC timestamp ("2026-09-16T19:22:00.0000000+00:00") where the rest of the page shows local times. The case form's label wraps its Action list, so the list's accessible name reads out every option ("Action Defer and revisit Escalate to the human Host"). Two visible buttons are both named "Refresh".
 - **N-035** (R1.8, W9) Arrival fails for a signed-in participant who belongs nowhere. Lumen's home page said only "No Tangents are available to this account yet", and the public Topic "Open questions" answered "This conversation isn't available · Not Found" while the same URL served every post to a signed-out visitor (W7): signing in shows less than signing out. Causes: the Tangent directory lists only Tangents where the viewer holds a role, so discovery is fused with membership (N-030); signed-in page loads use the member API, which decides from role grants and ignores the Topic's public audience, while the public page serves only signed-out visitors; the browser offers no Join, although `PUT /api/v1/experience/tangents/{tangent}/membership` exists; the signed-out landing shows no public content. The mandates ask the opposite: arrival answers where am I, who am I here, who can see this, what can I do and how do I return; reading public discussion never requires joining; public landing pages show value before asking. Proposal, awaiting Leo's decision on shape and timing: R3.4's Access evaluator takes "signed-in reads whatever anyone reads", discovery independent of membership and "open to signed-in admits by joining" as acceptance tests; R4.2 builds the front door (the Host's welcome, catch-up for members, discoverable Tangents with Read, Join, Ask-to-join or invitation actions, public activity, next steps, an honest empty state for a private Host), pulling the arrival parts of EPIC-006 S09 and S12 forward; the walkthrough gains W11, in which a new participant arrives, reads without joining and joins.
 
+- **N-036** (R1.11) Requiring `Origin` on `/api/*` writes costs the page nothing — a browser attaches it to every POST — but it does bind the surface to browsers: any future non-browser caller must send the page's own origin, as the connector's tests now do. That is the intended shape. The companion manager is the page's API, not a local IPC channel; the CLI and MCP intakes reach the same hub directly. The state directory keeps its own separate weakness: `state.json` holds bearer sessions, OAuth refresh tokens and DPoP private keys in plain text, and `store.rs` narrows directory permissions only where the platform offers them, so on Windows the protection is the user profile's own ACL. The README now says so; narrowing a Windows directory itself was not part of C8.
+- **N-037** (R1.11, environment) `ConnectorIntegrationTests` prefers `target/release` over `target/debug`, so a debug-only `cargo build` leaves the .NET connector tests exercising a stale binary — they passed here against 11:27 code before the release build was made. Any task that changes the connector must run `cargo build --release` before them, as `Build.bat` does.
+
 ## Findings to route
 
 None yet. Record Koan defects here with the framework revision, a reproducer, expected and observed behavior, severity and consumer impact, then ask Leo to route them.
@@ -346,7 +365,8 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - Resumed from an interruption: the working tree held W4–W7, W9, W10 and N-033–N-035 uncommitted, while Resume here still named W9 as the next action. Nothing was discarded.
 - Re-ran every check rather than trusting the written numbers, per the resume protocol: .NET 351/359 with exactly the 8 known failures, browser 129/129, connector 99/99, lifecycle 76/76, greenfield 1,884, server C# 11,333. Every metric in the table was confirmed, including the connector's 9,489 `src/` lines.
 - R1.8 closed: the walkthrough passes end to end and the server is 5,497 lines smaller than the baseline, against a target of about 5,000.
-- Next: R1.11–R1.14, the connector tasks. N-035's arrival proposal waits on Leo for shape and timing; it does not block them.
+- R1.11: the companion manager refuses foreign hosts and cross-site writes, and identifies itself through `/api/discovery` instead of being taken on trust. Connector 100/100; .NET connector integration 3/3 on the release binary (N-037); greenfield 1,884.
+- Next: R1.12–R1.14. N-035's arrival proposal waits on Leo for shape and timing; it does not block them.
 
 ## Evidence index
 

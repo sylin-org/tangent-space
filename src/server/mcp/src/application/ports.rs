@@ -54,10 +54,10 @@ pub trait ExperiencePort: Send + Sync {
     fn server_profile(&self, _origin: &str) -> Result<Value, ExperienceError> {
         Err(ExperienceError::Unreachable)
     }
-    /// One cheap reachability probe: a short-timeout GET whose body is discarded; any
-    /// HTTP answer counts as reachable, only a transport failure does not. Used by
-    /// Connect's waiting branch to decide whether a recorded operator page is alive
-    /// before popping it.
+    /// One cheap probe for the companion page: a short-timeout GET of its discovery
+    /// document, which must name the connector product. Anything else answering there —
+    /// an unrelated local service, a stale listener — is not the page. Used by Connect's
+    /// waiting branch to decide whether a recorded page is alive before popping it.
     fn probe(&self, origin: &str) -> Result<(), ExperienceError>;
     /// POST the bound service-proof exchange (`/mcp/token`): the bearer is the
     /// short-lived proof JWT. Distinct error surface: 503/401/403 bodies carry

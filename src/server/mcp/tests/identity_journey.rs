@@ -387,7 +387,7 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
     let (head, body) = http_round_trip(
         &mut via_post,
         &format!(
-            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
             payload.len()
         ),
     );
@@ -400,7 +400,7 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
     let mut enroll_attempt = TcpStream::connect(address).expect("connect");
     let (head, _) = http_round_trip(
         &mut enroll_attempt,
-        "POST /api/identities/00000000000000000000000000000000/enroll HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+        "POST /api/identities/00000000000000000000000000000000/enroll HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
     );
     assert!(head.starts_with("HTTP/1.1 404"), "the enroll route is gone: {head}");
     let mut allowlist_read = TcpStream::connect(address).expect("connect");
@@ -412,7 +412,85 @@ fn the_operator_api_answers_plainly_and_the_ceremony_routes_are_gone() {
     let mut allowlist_write = TcpStream::connect(address).expect("connect");
     let (head, _) = http_round_trip(
         &mut allowlist_write,
-        "POST /api/allowlist HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+        "POST /api/allowlist HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
     );
     assert!(head.starts_with("HTTP/1.1 404"), "the allowlist write route is gone: {head}");
+}
+
+/// C8: the companion manager answers its own page and nothing else. A site that reaches
+/// this port — by rebinding its hostname to the loopback address, or by sending the one
+/// content type that crosses origins without a preflight — is refused before it reaches
+/// a route, while the page's own write and the inert discovery document still work.
+#[test]
+fn the_companion_manager_refuses_foreign_hosts_and_cross_site_writes() {
+    let hub = workspace("operator-hardened", CallerId("operator".into()));
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let address = listener.local_addr().unwrap();
+    {
+        let hub = hub.clone();
+        let serving = listener.try_clone().expect("clone listener");
+        std::thread::Builder::new()
+            .name("operator-hardened-under-test".into())
+            .spawn(move || tangent_connector::adapters::operator::serve(serving, hub))
+            .expect("server thread");
+    }
+    let payload = json!({ "handle": "intruder" }).to_string();
+    let write = |headers: &str| {
+        format!(
+            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\n{headers}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            payload.len()
+        )
+    };
+
+    // A rebound hostname reaches the loopback socket, but the browser names the
+    // attacker's host — so even a read is refused.
+    let mut rebound = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(
+        &mut rebound,
+        "GET /api/identities HTTP/1.1\r\nHost: rebound.example\r\nConnection: close\r\n\r\n",
+    );
+    assert!(head.starts_with("HTTP/1.1 403"), "a foreign host is refused, reads included: {head}");
+
+    // `text/plain` is a CORS simple request: no preflight stands between a website and
+    // this port, so the JSON surface refuses the content type itself.
+    let mut plain = TcpStream::connect(address).expect("connect");
+    let (head, body) = http_round_trip(
+        &mut plain,
+        &format!(
+            "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://attacker.example\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+            payload.len()
+        ),
+    );
+    assert!(head.starts_with("HTTP/1.1 403"), "a cross-site text/plain write is refused: {head}");
+    assert!(body.contains("cross_site_write"), "the refusal names itself: {body}");
+
+    // Each piece of same-origin evidence stands on its own.
+    let mut foreign_origin = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(&mut foreign_origin, &write("Origin: http://attacker.example\r\n"));
+    assert!(head.starts_with("HTTP/1.1 403"), "a foreign origin is refused: {head}");
+    let mut foreign_site = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(&mut foreign_site, &write("Origin: http://127.0.0.1\r\nSec-Fetch-Site: cross-site\r\n"));
+    assert!(head.starts_with("HTTP/1.1 403"), "a cross-site fetch is refused: {head}");
+    let mut anonymous = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(&mut anonymous, &write(""));
+    assert!(head.starts_with("HTTP/1.1 403"), "a write with no origin is refused: {head}");
+
+    assert!(hub.identities().is_empty(), "no refused write reached the hub");
+
+    // The page's own write still works.
+    let mut page = TcpStream::connect(address).expect("connect");
+    let (head, _) = http_round_trip(&mut page, &write("Origin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\n"));
+    assert!(head.starts_with("HTTP/1.1 200"), "the page's own write is served: {head}");
+    assert_eq!(hub.identities().len(), 1, "exactly one identity was created");
+
+    // Discovery stays readable across origins: it is the inert document another process
+    // reads to recognise this page, and it discloses nothing else.
+    let mut discovery = TcpStream::connect(address).expect("connect");
+    let (head, body) = http_round_trip(
+        &mut discovery,
+        "GET /api/discovery HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: https://tangent.example\r\nConnection: close\r\n\r\n",
+    );
+    assert!(head.starts_with("HTTP/1.1 200"), "discovery still answers: {head}");
+    assert!(body.contains("tangent-space-connector"), "discovery names the product: {body}");
+    assert!(!body.contains("intruder"), "discovery discloses no identity: {body}");
 }

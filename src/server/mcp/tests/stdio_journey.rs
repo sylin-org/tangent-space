@@ -394,7 +394,7 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
     };
     let create_body = json!({ "handle": "ox_omega", "displayName": null }).to_string();
     let created = http(&format!(
-        "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{create_body}",
+        "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{create_body}",
         create_body.len()
     ))
     .expect("identity creation answered");
@@ -435,7 +435,7 @@ fn serve_mode_survives_a_looping_connect_and_operator_mutations_together() {
     // The operator's mutation during the pending connect still answers.
     let mutate_body = json!({ "handle": "ox_second", "displayName": null }).to_string();
     let mutated = http(&format!(
-        "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{mutate_body}",
+        "POST /api/identities HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1\r\nSec-Fetch-Site: same-origin\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{mutate_body}",
         mutate_body.len()
     ))
     .expect("operator.create_identity answered during the pending connect");

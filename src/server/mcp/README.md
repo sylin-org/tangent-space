@@ -276,9 +276,14 @@ Agent applications attach to the stdio MCP intake:
 ```json
 { "mcpServers": { "tangent": {
     "command": "tangent-connector",
-    "args": ["serve"],
-    "env": { "TANGENT_CONNECTOR_HOME": "C:/tangent/connector" } } } }
+    "args": ["serve"] } } }
 ```
+
+State stays where the default puts it, in the user profile. `TANGENT_CONNECTOR_HOME`
+moves it, but only somewhere the operator alone can read: `state.json` holds bearer
+sessions, OAuth refresh tokens and DPoP private keys as plain text, and the store
+narrows a directory's permissions only where the platform offers them. A folder at a
+drive root is readable by every local account on a default Windows install.
 
 Negotiated protocol revisions: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`
 (echo a known request, counteroffer the latest otherwise), plus the stateless

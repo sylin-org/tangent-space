@@ -136,6 +136,7 @@ pub struct ConnectorHub {
     /// How pages reach a browser: nothing by default; the binary installs the platform
     /// browser with [`ConnectorHub::with_pages`].
     pages: PageOpener,
+    default_page: String,
     /// Waiting-for-operator connects (A3), shared with the one age-out sweeper.
     pending_connects: Arc<Mutex<Vec<PendingConnect>>>,
     /// The atproto OAuth client (the `/bind` flow's outbound spoke). Replaceable before
@@ -171,6 +172,7 @@ impl ConnectorHub {
             pending_bind: Mutex::new(None),
             opened_pages: Mutex::new(HashSet::new()),
             pages: browser::silent(),
+            default_page: DEFAULT_PAGE_URL.to_string(),
             pending_connects: Arc::new(Mutex::new(Vec::new())),
             atproto_oauth: Arc::new(Mutex::new(Arc::new(AtprotoOauth::new()))),
             bind_flights: Mutex::new(Vec::new()),
@@ -185,6 +187,14 @@ impl ConnectorHub {
     /// Gives the hub a way to open pages; the binary passes [`browser::system`].
     pub fn with_pages(mut self, pages: PageOpener) -> Self {
         self.pages = pages;
+        self
+    }
+
+    /// Names the page address to fall back on when no record survives, so a test can
+    /// point that last probe somewhere it knows is dead instead of depending on
+    /// whether this machine happens to be running the real page.
+    pub fn with_default_page(mut self, url: &str) -> Self {
+        self.default_page = url.to_string();
         self
     }
 
@@ -1182,7 +1192,7 @@ impl ConnectorHub {
             let store = self.lock_store().ok()?;
             store.operator_page_url()
         };
-        for candidate in recorded.into_iter().chain([DEFAULT_PAGE_URL.to_string()]) {
+        for candidate in recorded.into_iter().chain([self.default_page.clone()]) {
             if let Some(origin) = page_origin(&candidate) {
                 if self.port.probe(&origin).is_ok() {
                     return Some((candidate, false));
