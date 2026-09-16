@@ -67,7 +67,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<TopicGovernance>();
         services.AddSingleton<Rooms.Web.PublicConversationReader>();
         services.AddSingleton<TangentGovernance>();
-        services.AddSingleton<CompanionGovernance>();
+        services.AddSingleton<ParticipantGovernance>();
         services.AddParticipation();
         services.AddTangentMcpAuthentication();
         services.AddSingleton<References>();

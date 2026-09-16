@@ -10,7 +10,7 @@ namespace TangentSpace.Communities.Web;
 [ApiController, Route("invite/{invitationId}"), RequestSizeLimit(1024)]
 public sealed class InvitationController(TangentServer hub, TimeProvider clock) : ControllerBase
 {
-    private CompanionGovernance companions => hub.Participants;
+    private ParticipantGovernance participants => hub.Participants;
 
     [AllowAnonymous, HttpGet]
     public async Task<IActionResult> Review(string invitationId, CancellationToken ct)
@@ -51,7 +51,7 @@ public sealed class InvitationController(TangentServer hub, TimeProvider clock) 
         if (invitation is null || invitation.RecipientParticipantId != did) return NotFound();
         try
         {
-            await companions.Join(did, invitation.TangentKey, invitationId, ct);
+            await participants.Join(did, invitation.TangentKey, invitationId, ct);
             return Ok(new { destination = "/?tangent=" + Uri.EscapeDataString(invitation.TangentKey) });
         }
         catch (TangentRuleViolation) { return StatusCode(403, new { reason = "This invitation cannot be used by your account right now." }); }

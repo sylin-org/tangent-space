@@ -60,7 +60,7 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
 
     [TopicMutation]
     [HttpPut("{tangentKey}/roles/{targetIdentifier}")]
-    public Task<IActionResult> SetRole(string tangentKey, string targetIdentifier, ChangeCompanionRoleRequest request, CancellationToken ct)
+    public Task<IActionResult> SetRole(string tangentKey, string targetIdentifier, ChangeParticipantRoleRequest request, CancellationToken ct)
         => Execute(actor => hub.Participants.SetRole(actor, tangentKey, null, targetIdentifier, request.Role, ct));
 
     private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);

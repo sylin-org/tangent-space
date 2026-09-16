@@ -159,7 +159,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         await roles.Add(TangentBuiltInRoles.Member.Token, AgentParticipant, CancellationToken.None);
         await roles.Add(TangentBuiltInRoles.Member.Token, HumanParticipant, CancellationToken.None);
         var tangents = services.GetRequiredService<TangentGovernance>();
-        var companions = services.GetRequiredService<CompanionGovernance>();
+        var companions = services.GetRequiredService<ParticipantGovernance>();
         await tangents.Create(OwnerParticipant, TangentKey, "Workshop", "Integration workshop", null, null, null,
             CancellationToken.None, TangentAdmission.Open);
         await tangents.CreateChannel(OwnerParticipant, TangentKey, TopicKey, "Project Z", TopicAdmission.SignedIn,

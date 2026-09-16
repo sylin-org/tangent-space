@@ -80,7 +80,7 @@ public sealed partial class ExperienceService
         {
             foreach (var tangent in roles.Where(role => role.Scope == "tangent").Take(5))
             {
-                var canAppoint = await companions.CanAdminister(viewer, tangent.Key, null, ct);
+                var canAppoint = await participants.CanAdminister(viewer, tangent.Key, null, ct);
                 var context = canAppoint ? await tangents.Describe(viewer, tangent.Key, ct) : null;
                 var protectedTarget = context?.OwnerParticipantId == participantId || roles.Any(role => role.Scope == "server" && role.Role == "owner");
                 if (canAppoint && !self && !protectedTarget && (tangent.Role != "admin" || context?.IsOwner == true))

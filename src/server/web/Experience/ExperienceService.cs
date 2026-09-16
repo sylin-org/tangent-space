@@ -25,7 +25,7 @@ public sealed partial class ExperienceService(
 {
     private TangentGovernance tangents => hub.Tangents;
     private TopicGovernance topics => hub.Topics;
-    private CompanionGovernance companions => hub.Participants;
+    private ParticipantGovernance participants => hub.Participants;
     private ConversationService conversation => hub.Posts;
     private ActivityService activity => hub.Activity;
     private ServerGovernance server => hub.Space;
@@ -385,14 +385,14 @@ public sealed partial class ExperienceService(
                 return await Replay("join", principal, identity, registration.Record, participantId, credential, ct);
             receipts.CompleteWithDomain(registration.Record, raw =>
             {
-                var joined = (CompanionJoinResult)raw!;
-                var pending = joined.Outcome == CompanionJoinOutcome.PendingApproval;
+                var joined = (JoinResult)raw!;
+                var pending = joined.Outcome == JoinOutcome.PendingApproval;
                 return (pending ? "pending" : "completed", pending ? null : refs.Tangent(tangentKey), "{}");
             });
-            CompanionJoinResult join;
+            JoinResult join;
             try
             {
-                join = await companions.Join(participantId, tangentKey, invitationId, ct);
+                join = await participants.Join(participantId, tangentKey, invitationId, ct);
             }
             catch (TangentRuleViolation denied) when (denied.Denial == TangentDenial.Forbidden)
             {
@@ -402,7 +402,7 @@ public sealed partial class ExperienceService(
             }
             var key = requestId;
             var place = await TangentPlaceOf(principal, participantId, tangentKey, ct);
-            if (join.Outcome == CompanionJoinOutcome.PendingApproval)
+            if (join.Outcome == JoinOutcome.PendingApproval)
             {
                 await receipts.Complete(registration.Record, "pending", null, null, ct);
                 return await Assemble("join", ExperienceStatus.Pending, identity, place,
@@ -418,7 +418,7 @@ public sealed partial class ExperienceService(
             await receipts.Complete(registration.Record, "completed", refs.Tangent(tangentKey), "{}", ct);
             return await Assemble("join", ExperienceStatus.Ok, identity, place,
                 new ExperienceResult(new ExperienceMembershipData(membership,
-                    join.Outcome == CompanionJoinOutcome.AlreadyMember ? "You already belong to this Tangent." : "Welcome to your Tangent."),
+                    join.Outcome == JoinOutcome.AlreadyMember ? "You already belong to this Tangent." : "Welcome to your Tangent."),
                     new ExperienceReceipt(key, "completed", refs.Tangent(tangentKey), null), null),
                 (await digest.Page(participantId, credential, null, tangentKey, null, 3, ct)).Attention, Empty(),
                 [new(ExperienceActionNames.ListTopics, refs.Tangent(tangentKey), null, "Browse Topics")], null, null, participantId, credential, ct);
@@ -438,7 +438,7 @@ public sealed partial class ExperienceService(
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("leave", principal, identity, registration.Record, participantId, credential, ct);
             receipts.CompleteWithDomain(registration.Record, _ => ("completed", null, "{}"));
-            await companions.Leave(participantId, tangentKey, ct);
+            await participants.Leave(participantId, tangentKey, ct);
             await receipts.Complete(registration.Record, "completed", null, "{}", ct);
             return await Assemble("leave", ExperienceStatus.Ok, identity,
                 new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), null, await TangentName(tangentKey, ct), "visitor",
@@ -470,8 +470,8 @@ public sealed partial class ExperienceService(
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("set_watch", principal, identity, registration.Record, participantId, credential, ct);
             receipts.CompleteWithDomain(registration.Record, _ => ("completed", null, "{}"));
-            if (roomKey is { } watchedTopic) await companions.SetWatch(participantId, watchedTopic, parsed, ct);
-            else await companions.SetTangentWatch(participantId, tangentKey, parsed, ct);
+            if (roomKey is { } watchedTopic) await participants.SetWatch(participantId, watchedTopic, parsed, ct);
+            else await participants.SetTangentWatch(participantId, tangentKey, parsed, ct);
             await receipts.Complete(registration.Record, "completed", null, "{}", ct);
             return await Assemble("set_watch", ExperienceStatus.Ok, identity,
                 roomKey is null ? await TangentPlaceOf(principal, participantId, tangentKey, ct)

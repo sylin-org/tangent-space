@@ -299,7 +299,7 @@ public sealed class EnrollmentTests
         const string target = "did:plc:mcptestinviteaaaaaaaaaa";
         await fixture.Exchange.Exchange(Bearer(fixture.Keys, owner), null, CancellationToken.None);
         var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
-        var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
+        var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.ParticipantGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Application.OperationReceipts>();
         var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
@@ -311,7 +311,7 @@ public sealed class EnrollmentTests
                 new Dictionary<string, string?> { ["target"] = target }, CancellationToken.None);
             requests.CompleteWithDomain(registered.Record, raw => ("completed", null,
                 ((TangentSpace.Communities.TangentInvitationResult)raw!).InvitationId));
-            await companions.Invite(ownerId, "atomic-invites", target, TangentSpace.Communities.CompanionRole.Member, CancellationToken.None);
+            await companions.Invite(ownerId, "atomic-invites", target, TangentSpace.Communities.ParticipantRole.Member, CancellationToken.None);
             throw new IOException("Simulated lost response after commit");
         }, CancellationToken.None));
         var receipt = await requests.Find("runtime", ownerId, "invite-once", CancellationToken.None);
@@ -335,7 +335,7 @@ public sealed class EnrollmentTests
         const string owner = "did:plc:mcptestowneraaaaaaaaaaa";
         await fixture.Exchange.Exchange(Bearer(fixture.Keys, owner), null, CancellationToken.None);
         var tangents = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.TangentGovernance>();
-        var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.CompanionGovernance>();
+        var companions = fixture.Host.Services.GetRequiredService<TangentSpace.Communities.ParticipantGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<TangentSpace.Application.OperationReceipts>();
         var server = fixture.Host.Services.GetRequiredService<TangentSpace.Site.ServerGovernance>();
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
@@ -346,7 +346,7 @@ public sealed class EnrollmentTests
             var registered = await requests.Register("runtime", rollbackOwner, "failed-invite", "InviteParticipant", "atomic-rollback",
                 new Dictionary<string, string?>(), CancellationToken.None);
             requests.CompleteWithDomain(registered.Record, _ => throw new IOException("Simulated receipt failure"));
-            await companions.Invite(rollbackOwner, "atomic-rollback", "did:plc:mcptestinviteaaaaaaaaaa", TangentSpace.Communities.CompanionRole.Member, CancellationToken.None);
+            await companions.Invite(rollbackOwner, "atomic-rollback", "did:plc:mcptestinviteaaaaaaaaaa", TangentSpace.Communities.ParticipantRole.Member, CancellationToken.None);
             return 0;
         }, CancellationToken.None));
         using (EntityContext.NoCache())
