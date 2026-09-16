@@ -101,12 +101,10 @@ up. A missing session for a live enrollment is an honest "re-enroll" state.
 **Atproto binding (W2-D).** One identity may hold one **atproto session** — a second state
 map (`atproto_sessions`, keyed by the identity's local id) with the same cookie-jar
 posture: the PDS-issued `accessJwt` is session state, not a vault secret. The operator
-binds it on the operator page with an atproto **app password** (never the account's main
-password); the connector exchanges it for the session via
-`POST {pds}/xrpc/com.atproto.server.createSession` and records `{did, handle,
-access_jwt, pds, obtained_at}`, setting the identity's `bound_did`. The app password
-itself exists in memory for exactly that one request — it is never written to state,
-stdout, logs or the journal. The PDS defaults to `https://bsky.social` (the public
+binds it on the companion page through atproto **OAuth**: the `/bind` route starts the
+flow, the provider's own UI handles account selection and sign-in, and the callback
+records `{did, handle, access_jwt, refresh_jwt, pds, dpop_key, obtained_at}`, setting the
+identity's `bound_did`. No password ever reaches the connector. The PDS defaults to `https://bsky.social` (the public
 default; the DID document's `#atproto_pds` serviceEndpoint replaces it when reported),
 and an explicit origin covers other PDSs. Re-binding replaces the session — the
 documented path when the PDS session expires — and unbinding clears it plus the
@@ -122,7 +120,7 @@ that session id IS the context handle later calls carry. With no atproto binding
 handshake pops the operator page at that identity's sign-in anchor — this process's own
 page, or the page URL the running long-running process recorded in state (probed for
 reachability first) — and returns honestly ("operator action needed — page opened…;
-connect again") — never a silent unbound fallback. The popped connect also finishes by
+connect again"). The popped connect also finishes by
 itself: when the operator completes the sign-in on the page, the connector resumes the
 pending handshake service-side (enrollment + arrival, no model involved); if the operator
 abandons it, the pending connect ages out after ten minutes with an honest feed event.
@@ -190,17 +188,16 @@ The page's sections:
   honestly beyond that. The feed never carries a password, proof or session value.
 - **Identities** — create/update/delete (handle uniqueness enforced; delete refuses while
   enrollments exist unless a confirmed cascade forgets them and their sessions). The
-  **Atmosphere handle** column is the binding surface: unbound identities show "not
-  registered" with an inline **Sign In** button (routes to the sign-in form for that
-  identity via its `#bind-{localId}` anchor); bound ones show the atproto handle with an
+  **Atmosphere handle** column is the binding surface: identities with no bound account
+  show "not registered" with an inline **Sign In** button (routes to the `/bind` route for
+  that identity via its `#bind-{localId}` anchor); bound ones show the atproto handle with an
   inline **Log Out** button (= unbind: clears the binding, leaves server enrollment
   sessions untouched).
-- **Atmosphere sign-in** — the per-identity form the anchors open (identity preselected,
-  focus on the handle field): atproto handle + app password, optional PDS origin.
+- **Atmosphere sign-in** — the `/bind` route the anchors open: it starts the atproto
+  OAuth flow immediately, and the provider's own UI takes the sign-in from there.
 - **Servers/enrollments** — a read-only status view (origin, participant reference,
-  session stored/missing, auto-check) plus Forget. **The page never enrolls** — no enroll
-  buttons of either tier; enrollment lives in the Connect handshake, and the unbound
-  disarm tier stays reachable from the hub/CLI only.
+  session stored/missing, auto-check) plus Forget. **The page never enrolls** — enrollment
+  lives in the Connect handshake.
 - **Status** — read-only attention/pending-write state per enrollment, reusing hub state.
 
 ## Setup
@@ -211,7 +208,7 @@ cargo build --release           # Rust 1.82+
 
 Three enrollment paths:
 
-1. **Connect — the on-the-fly handshake (primary)** — the model calls
+**Connect — the one enrollment path** — the model calls
    `Connect { serverUrl, identity? }` (or the operator runs the same call through the
    CLI) and the connector does everything: identity resolution (explicit argument, or
    the one local identity), discovery, bound enrollment when needed, arrival — the
@@ -230,32 +227,10 @@ Three enrollment paths:
    audience configured"; 401 → the proof was rejected (invalid or replayed); 403 → the
    participant is suspended there; a rejected PDS session → re-bind (the handshake pops
    the page just-in-time). With no binding the handshake pops Sign In (its own page, or
-   the recorded reachable one) and returns honestly — never a silent unbound fallback;
+   the recorded reachable one) and returns honestly;
    the popped connect auto-resumes when the operator signs in inside a page-hosting
    process, a later CLI `call Connect` completes it by itself, and abandoned waits age
    out honestly after ten minutes.
-
-2. **Unbound enrollment (secondary, local posture — the disarm tier)** — the W2-contract
-   exchange without a DID proof, reachable from the hub and the CLI only
-   (`tangent-connector enroll-unbound --identity I --server URL`): the connector POSTs
-   `{origin}/api/v1/experience/identities/enroll` (no Authorization header;
-   `client.localId` is the connector's guid-v7), stores the returned session in connector
-   state, and records the enrollment with the server's participant view.
-   `already_enrolled` is an honest error (use the existing enrollment or forget it
-   first); `unbound_enrollment_disabled` likewise.
-
-3. **Manual import** — an operator-approved import of an existing session token, verified
-   against the server's own identity response (keyed on `participantRef`; the DID is
-   optional since W2):
-
-```
-tangent-connector enroll --name lumen --server https://tangent.example \
-    --token-file session-token.txt [--identity lumen]
-```
-
-The token file is raw `ts_…` text or `{"token": "..."}` JSON; it is input only — delete it
-after import. Without `--identity`, an identity whose handle matches `--name` is reused or
-minted. Import never broadens a session's grants.
 
 Durable state lives in `TANGENT_CONNECTOR_HOME` or `~/.tangent-connector`:
 `state.json` (identities, enrollments, **sessions** (per enrollment), **atproto
@@ -329,7 +304,6 @@ tangent-connector call Connect '{"serverUrl":"https://tangent.example"}'
                                                             # the command line, too
 tangent-connector catalog [--json]
 tangent-connector operator | identities | companions | check | forget
-tangent-connector enroll-unbound --identity I --server URL # the disarm tier, CLI-only
 ```
 
 `check` runs one ordinary background digest check — ordinary code, never a model call.
@@ -354,13 +328,12 @@ truthfulness, plus hub journeys against a scripted fake experience server (ident
 isolation, honest transport failures, crash-safe write recovery without duplicates,
 conflict rejection, attention coalescing, you-rendering fidelity), W2 identity journeys
 (identity CRUD and handle uniqueness, behavior-based resolution one/several/zero for
-every intake, the unbound enrollment exchange ok/`already_enrolled`/`unbound_enrollment_disabled`,
+every intake, the account-bound enrollment exchange and its honest `already_enrolled`,
 one identity keeping distinct working sessions at two servers, the one-time legacy-state
 drop, the plain loopback operator listener with its ceremony routes honestly gone,
 capped request parsing, the data-directory lock
 acquire/refuse/force cycle, browser-open command construction), W2-D bound journeys
-(atproto binding and re-bind against a fake PDS, the app password never reaching state or
-the diagnostics journal, the three-step bound enrollment with its exact aud/lxm/exp/body
+(the three-step bound enrollment with its exact aud/lxm/exp/body
 discipline, honest 503/401/403 mapping, hostile-audience percent-encoding, re-bind keeping
 enrollment sessions, OpenRegistration URL construction and once-per-process de-dup without
 opening a browser), the Connect realignment journeys (single-identity auto-resolution
@@ -385,9 +358,8 @@ JSON-RPC stdout. The fake server mirrors the discovery document, the PDS endpoin
 
 - One identity + one server end to end per session path (the state model isolates more;
   untested live).
-- Atproto acquisition is app-password `createSession` (works against public Bluesky
-  today; cookie-jar semantics); atproto OAuth-native acquisition is the recorded target,
-  not yet implemented. PLC-directory resolution is unused: the public default PDS plus
+- Atproto acquisition is OAuth through the `/bind` route (cookie-jar semantics).
+  PLC-directory resolution is unused: the public default PDS plus
   the DID document's `#atproto_pds` endpoint (or an explicit origin) covers the known
   cases.
 - The tray is Windows-only; on other platforms the operator page runs without it (serve

@@ -551,9 +551,12 @@ public sealed class EnrollmentTests
         Assert.NotNull(principal);
         Assert.Equal(did, principal!.FindFirst(AtprotoClaimTypes.Did)!.Value);
         Assert.Contains(principal.Claims, claim => claim.Type == ParticipationConstants.GrantClaim && claim.Value == ParticipationGrants.Post);
-        var cookie = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(AtprotoClaimTypes.Did, did), new Claim(ParticipationConstants.ParticipantClaim, await Pid(did))], "atproto"));
-        Assert.True(await credentials.Revoke(cookie, issued.Issued.Credential.Id, CancellationToken.None));
+        // Revoking the session stops it authenticating, immediately and without a cache.
+        var participantId = await Pid(did);
+        var stored = await ParticipantCredential.Get(issued.Issued.Credential.Id, CancellationToken.None);
+        Assert.NotNull(stored);
+        stored!.Revoke(participantId, DateTimeOffset.UtcNow);
+        await stored.Save(CancellationToken.None);
         Assert.Null(await credentials.Authenticate(issued.Issued.Token, CancellationToken.None));
     }
 

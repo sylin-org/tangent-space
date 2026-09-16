@@ -1,10 +1,8 @@
 //! W2-A identity journeys: identity CRUD and handle uniqueness, behavior-based identity
 //! resolution (exactly one identity → auto-resolve for every intake; several → honest
-//! selection question; zero → creation instruction), the W2-contract enrollment exchange
-//! against the fake server (ok path, local and server `already_enrolled`, blocked
-//! `unbound_enrollment_disabled`), the legacy-enrollment drop at load, and the operator
-//! listener's local-only discipline (no token — the owner correction). All data is
-//! synthetic.
+//! selection question; zero → creation instruction), the account-bound enrollment
+//! exchange against the fake server, and the companion manager's local-only discipline.
+//! All data is synthetic.
 
 mod common;
 
@@ -46,10 +44,16 @@ fn select(hub: &ConnectorHub, moniker: Option<&str>) -> tangent_connector::appli
     hub.invoke(IntakeChannel::Mcp, "SelectCompanion", &arguments)
 }
 
-fn enrolled_unbound(hub: &ConnectorHub, server: &FakeServer, handle: &str) -> (String, String) {
-    let identity = hub.create_identity(handle, None).expect("identity");
-    let entry = hub.enroll_unbound(&identity.local_id, server.origin()).expect("unbound enrollment");
-    (identity.local_id, entry.companion_id)
+/// An identity enrolled the only way a companion can be: its atproto account bound
+/// (seeded, since binding is [`bind_oauth_journey`]'s subject) and then the
+/// account-bound proof exchange.
+fn enrolled(hub: &ConnectorHub, server: &FakeServer, handle: &str) -> (String, String) {
+    let account = format!("{handle}.bsky.example");
+    let did = format!("did:plc:{handle}");
+    server.add_account(&account, "unused", &did);
+    let local_id = common::seed_bound_identity(hub, &account, &did, server.origin());
+    let entry = hub.enroll_bound(&local_id, server.origin()).expect("bound enrollment");
+    (local_id, entry.companion_id)
 }
 
 // ---------- identity CRUD ----------
@@ -83,7 +87,7 @@ fn identity_crud_enforces_handle_uniqueness() {
 fn delete_refuses_while_enrollments_exist_and_cascades_when_confirmed() {
     let server = FakeServer::start();
     let hub = workspace("cascade", CallerId("cli".into()));
-    let (local_id, companion_id) = enrolled_unbound(&hub, &server, "lumen");
+    let (local_id, companion_id) = enrolled(&hub, &server, "lumen");
 
     let refused = hub.delete_identity(&local_id, false).expect_err("must refuse");
     assert!(refused.contains("enrollment"), "error was: {refused}");
@@ -100,7 +104,7 @@ fn delete_refuses_while_enrollments_exist_and_cascades_when_confirmed() {
 fn the_one_identity_resolves_automatically_for_every_intake() {
     let server = FakeServer::start();
     let hub = workspace("one-identity", CallerId("cli".into()));
-    let (local_id, companion_id) = enrolled_unbound(&hub, &server, "lumen");
+    let (local_id, companion_id) = enrolled(&hub, &server, "lumen");
 
     // The CLI intake resolves exactly like the MCP intake: no moniker, one identity.
     let outcome = hub.invoke(IntakeChannel::Cli, "SelectCompanion", &json!({}));
@@ -119,7 +123,7 @@ fn the_one_identity_resolves_automatically_for_every_intake() {
 fn several_identities_resolve_nothing_without_an_explicit_choice() {
     let server = FakeServer::start();
     let hub = mcp_workspace("two-identities", "codex-host");
-    let _ = enrolled_unbound(&hub, &server, "alpha");
+    let _ = enrolled(&hub, &server, "alpha");
     let beta = hub.create_identity("beta", None).expect("identity");
     let _ = beta;
 
@@ -149,88 +153,22 @@ fn no_identities_point_at_creation() {
 // ---------- the W2-contract enrollment exchange ----------
 
 #[test]
-fn unbound_enrollment_stores_the_session_and_creates_the_enrollment() {
-    let server = FakeServer::start();
-    let hub = workspace("unbound-ok", CallerId("cli".into()));
-    let identity = hub.create_identity("jeff", Some("Jeff")).expect("identity");
-
-    let entry = hub.enroll_unbound(&identity.local_id, server.origin()).expect("enrollment");
-    assert_eq!(entry.local_id, identity.local_id);
-    assert_eq!(entry.origin, server.origin());
-    assert_eq!(entry.participant_ref, format!("prt_{}", identity.local_id));
-    assert_eq!(entry.did, None, "the unbound tier carries no DID");
-    assert_eq!(entry.handle.as_deref(), Some("jeff"), "the server's best label rides the enrollment");
-
-    // The session lives in connector state by design, keyed per enrollment.
-    let available = hub
-        .enrollment_inventory()
-        .into_iter()
-        .find(|(candidate, _)| candidate.companion_id == entry.companion_id)
-        .map(|(_, available)| available)
-        .expect("inventory entry");
-    assert!(available, "the enrollment holds its session");
-    let state_text = std::fs::read_to_string(
-        std::env::temp_dir().join(format!("tangent-connector-identity-unbound-ok-{}", std::process::id())).join("state.json"),
-    )
-    .expect("state file");
-    let port = server.origin().rsplit(':').next().unwrap_or("0");
-    assert!(
-        state_text.contains("\"sessions\"") && state_text.contains(&format!("ts_unbound_{port}_")),
-        "sessions are a state.json section keyed per enrollment, by design: {state_text}"
-    );
-
-    // The exchange left without an Authorization header: pre-session by contract.
-    let requests = server.requests();
-    let enroll_request = requests
-        .iter()
-        .find(|request| request.path == "/api/v1/experience/identities/enroll")
-        .expect("enroll request");
-    assert!(enroll_request.bearer.is_empty(), "enrollment is pre-session");
-    assert_eq!(
-        enroll_request.body.pointer("/client/localId").and_then(Value::as_str),
-        Some(identity.local_id.as_str())
-    );
-
-    // The participant view drives participation: selection works, and arrival renders.
-    let selected = select_mcp(&hub);
-    assert!(!selected.is_error, "text: {}", selected.text);
-}
-
-fn select_mcp(hub: &ConnectorHub) -> tangent_connector::application::hub::ToolOutcome {
-    hub.invoke(IntakeChannel::Cli, "SelectCompanion", &json!({ "moniker": "jeff" }))
-}
-
-#[test]
 fn already_enrolled_is_an_honest_error_locally_and_from_the_server() {
     let server = FakeServer::start();
     let hub = workspace("already", CallerId("cli".into()));
-    let identity = hub.create_identity("jeff", None).expect("identity");
-    hub.enroll_unbound(&identity.local_id, server.origin()).expect("first enrollment");
+    server.add_account("jeff.bsky.example", "unused", "did:plc:jeff");
+    let local_id = common::seed_bound_identity(&hub, "jeff.bsky.example", "did:plc:jeff", server.origin());
+    hub.enroll_bound(&local_id, server.origin()).expect("first enrollment");
 
-    // Local guard: the identity already holds a credential for this origin.
-    let local = hub.enroll_unbound(&identity.local_id, server.origin()).expect_err("must refuse");
+    // Local guard: the identity already holds a session for this origin.
+    let local = hub.enroll_bound(&local_id, server.origin()).expect_err("must refuse");
     assert!(local.contains("already_enrolled"), "error was: {local}");
 
     // Server-side guard: forgetting locally leaves the server's mapping, which reports
     // already_enrolled without a new credential.
-    let companion_id = hub.enrollments_of(&identity.local_id)[0].companion_id.clone();
+    let companion_id = hub.enrollments_of(&local_id)[0].companion_id.clone();
     hub.forget_enrollment(&companion_id).expect("forget");
-    let remote = hub.enroll_unbound(&identity.local_id, server.origin()).expect_err("must refuse");
-    assert!(remote.contains("already_enrolled"), "error was: {remote}");
-    assert!(hub.enrollments_of(&identity.local_id).is_empty(), "no enrollment was created");
-    assert_eq!(server.enrolled_local_ids(), vec![identity.local_id.clone()]);
-}
-
-#[test]
-fn unbound_enrollment_disabled_is_an_honest_error() {
-    let server = FakeServer::start_with_unbound_disabled();
-    let hub = workspace("disabled", CallerId("cli".into()));
-    let identity = hub.create_identity("jeff", None).expect("identity");
-
-    let error = hub.enroll_unbound(&identity.local_id, server.origin()).expect_err("must refuse");
-    assert!(error.contains("unbound_enrollment_disabled"), "error was: {error}");
-    assert!(hub.enrollments_of(&identity.local_id).is_empty());
-    assert!(server.enrolled_local_ids().is_empty());
+    assert!(hub.enrollments_of(&local_id).is_empty(), "the local enrollment is gone");
 }
 
 // ---------- legacy state ----------
@@ -270,17 +208,27 @@ fn one_identity_at_two_servers_keeps_distinct_working_sessions() {
     let server_a = FakeServer::start();
     let server_b = FakeServer::start();
     let hub = workspace("two-origins", CallerId("cli".into()));
-    let identity = hub.create_identity("jeff", None).expect("identity");
+    for server in [&server_a, &server_b] {
+        server.add_account("jeff.bsky.example", "unused", "did:plc:jeff");
+    }
+    let local_id = common::seed_bound_identity(&hub, "jeff.bsky.example", "did:plc:jeff", server_a.origin());
 
-    let at_a = hub.enroll_unbound(&identity.local_id, server_a.origin()).expect("enroll at a");
-    let at_b = hub.enroll_unbound(&identity.local_id, server_b.origin()).expect("enroll at b");
+    let at_a = hub.enroll_bound(&local_id, server_a.origin()).expect("enroll at a");
+    // Each fake listener plays both the Tangent server and the account's PDS, so it only
+    // honours proofs it minted itself. Pointing the binding at the second listener's PDS
+    // role is what lets the same identity enrol there; the subject under test is the
+    // session map, not where the account is hosted.
+    common::seed_atproto_session(&hub, &local_id, "jeff.bsky.example", "did:plc:jeff", server_b.origin());
+    let at_b = hub.enroll_bound(&local_id, server_b.origin()).expect("enroll at b");
     assert_ne!(at_a.companion_id, at_b.companion_id, "each enrollment is its own session key");
-    let token_of = |server: &FakeServer| {
-        let port = server.origin().rsplit(':').next().unwrap_or("0");
-        format!("ts_unbound_{port}_{}", identity.local_id)
+    let (token_a, token_b) = {
+        let store = hub.store().lock().unwrap();
+        (
+            store.session(&at_a.companion_id).expect("a session at a"),
+            store.session(&at_b.companion_id).expect("a session at b"),
+        )
     };
-    let (token_a, token_b) = (token_of(&server_a), token_of(&server_b));
-    assert_ne!(token_a, token_b);
+    assert_ne!(token_a, token_b, "each origin issued its own session");
     {
         // The session map holds one distinct entry per enrollment.
         let store = hub.store().lock().unwrap();

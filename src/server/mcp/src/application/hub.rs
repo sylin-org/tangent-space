@@ -420,94 +420,6 @@ impl ConnectorHub {
         Ok(entry)
     }
 
-    /// Unbound enrollment per the frozen W2 contract: ask the server to enroll this
-    /// identity, store the returned session in connector state, and create the
-    /// enrollment. The token never renders, logs or journals.
-    pub fn enroll_unbound(&self, local_id: &str, origin: &str) -> Result<CompanionEntry, String> {
-        self.attributed("operator.enroll_unbound", || {
-            let canonical = refs::acceptable_origin(origin)
-                .ok_or_else(|| "Use one HTTPS server origin, or explicit loopback HTTP for development".to_string())?;
-            let (identity, already) = {
-                let store = self.lock_store()?;
-                let identity = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
-                let already = store.enrollment_at(local_id, &canonical).is_some();
-                (identity, already)
-            };
-            if already {
-                return Err(
-                    "already_enrolled: this identity already holds a session for that server. Use the existing enrollment, or forget it first to re-enroll."
-                        .to_string(),
-                );
-            }
-            let mut body = json!({
-                "client": { "localId": identity.local_id, "handle": identity.handle },
-                "serverRef": { "label": "tangent-connector" },
-            });
-            if let Some(display) = &identity.display_name {
-                body["client"]["displayName"] = json!(display);
-            }
-            let raw = self
-                .port
-                .enroll(&canonical, "/api/v1/experience/identities/enroll", &body)
-                .map_err(|error| enroll_transport_error(&error))?;
-            let response: contract::EnrollResponseDto =
-                serde_json::from_value(raw).map_err(|error| format!("malformed enrollment response: {error}"))?;
-            match response.status.as_str() {
-                "ok" => {
-                    let participant = response
-                        .participant
-                        .ok_or_else(|| "the server confirmed enrollment without a participant".to_string())?;
-                    if participant.participant_ref.is_empty() {
-                        return Err("the server did not confirm a participant reference".to_string());
-                    }
-                    let granted = response
-                        .credential
-                        .ok_or_else(|| "the server confirmed enrollment without a session".to_string())?;
-                    if granted.token.is_empty() {
-                        return Err("the server returned an empty session".to_string());
-                    }
-                    let mut store = self.lock_store()?;
-                    // Re-check under the write lock: a concurrent intake may have enrolled
-                    // this (identity, origin) while the exchange was in flight. The new
-                    // session is then discarded — the state save below is the only write,
-                    // so nothing needs rolling back — and the honest answer is
-                    // already_enrolled with the existing enrollment intact.
-                    if let Some(existing) = store.enrollment_at(local_id, &canonical) {
-                        return Err(format!(
-                            "already_enrolled: identity '{}' gained an enrollment at {canonical} during the exchange ({}); use it, or forget it first to re-enroll",
-                            identity.handle, existing.companion_id
-                        ));
-                    }
-                    // Session storage is keyed by the per-enrollment companion id: two
-                    // servers, two distinct sessions (never one overwriting the other).
-                    let companion_id = format!("cmp_{}", crate::adapters::store::short_uuid());
-                    let entry = CompanionEntry {
-                        companion_id,
-                        local_id: identity.local_id.clone(),
-                        name: identity.handle.clone(),
-                        origin: canonical,
-                        participant_ref: participant.participant_ref,
-                        did: participant.did,
-                        display_name: identity.display_name.clone().or(participant.best_label.clone()),
-                        handle: participant.best_label,
-                        enrolled_at: now_millis(),
-                        auto_check: true,
-                    };
-                    store.upsert_companion(entry.clone());
-                    store.set_session(&entry.companion_id, &granted.token);
-                    store.save()?;
-                    drop(store);
-                    self.events.publish(DomainEvent::CompanionSelected { companion_id: entry.companion_id.clone() });
-                    Ok(entry)
-                }
-                _ => {
-                    let problem = response.problem.unwrap_or_default();
-                    Err(enroll_blocked_error(&problem.code, &problem.message))
-                }
-            }
-        })
-    }
-
     /// Removes one enrollment and its stored session. Enrollment state (attention,
     /// checkpoints, contexts) cascades; the server side is untouched.
     pub fn forget_enrollment(&self, companion_id: &str) -> Result<(), String> {
@@ -522,82 +434,10 @@ impl ConnectorHub {
 
     // ---------- atproto binding (operator surface) ----------
 
-    /// Binds one identity to an atproto account: the operator supplies a handle and an
-    /// app password, the connector exchanges them for a PDS session (`createSession`)
-    /// and records it in connector state (cookie-jar posture) with the identity's
-    /// `bound_did`. The app password exists in memory for exactly this one request —
-    /// it is never persisted, logged or echoed. Binding again replaces the session
-    /// (the documented re-bind path on expiry); existing enrollments keep their own
-    /// Tangent sessions untouched. A successful bind also clears any pending sign-in
-    /// routing (R3) and resumes every waiting-for-operator connect for this identity
-    /// (A3) — the handshake finishes connector-side, no model involved.
-    pub fn bind_atproto(
-        &self,
-        local_id: &str,
-        handle: &str,
-        app_password: &str,
-        pds: Option<&str>,
-    ) -> Result<Identity, String> {
-        let outcome = self.attributed("operator.bind_atproto", || {
-            let supplied = handle.trim().trim_start_matches('@');
-            if supplied.is_empty() || supplied.chars().count() > 253 || supplied.chars().any(|c| c.is_whitespace()) {
-                return Err("invalid_handle: an atproto handle is 1-253 characters without whitespace".to_string());
-            }
-            if app_password.is_empty() || app_password.len() > 1024 {
-                return Err("invalid_password: an app password is 1-1024 bytes".to_string());
-            }
-            let pds_origin = refs::acceptable_origin(pds.unwrap_or(DEFAULT_PDS)).ok_or_else(|| {
-                "invalid_pds: the PDS origin must be HTTPS, or explicit loopback HTTP for development".to_string()
-            })?;
-            {
-                let store = self.lock_store()?;
-                store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
-            }
-            // The one and only journey of the app password: the createSession body. It
-            // leaves scope when this closure returns.
-            let body = json!({ "identifier": supplied, "password": app_password });
-            let raw = self
-                .port
-                .enroll(&pds_origin, "/xrpc/com.atproto.server.createSession", &body)
-                .map_err(|error| pds_signin_error(&error))?;
-            let session: contract::CreateSessionDto = serde_json::from_value(raw)
-                .map_err(|error| format!("malformed createSession response: {error}"))?;
-            if session.did.is_empty() || !session.did.starts_with("did:") {
-                return Err("the PDS confirmed the sign-in without a usable DID".to_string());
-            }
-            if session.access_jwt.is_empty() {
-                return Err("the PDS confirmed the sign-in without a session".to_string());
-            }
-            // The DID document names the authoritative PDS; when it does not (or is not
-            // an acceptable origin), the endpoint we just used stands.
-            let authoritative = session.pds_endpoint().and_then(refs::acceptable_origin).unwrap_or(pds_origin);
-            let updated = self.store_atproto_session(
-                local_id,
-                AtprotoSession {
-                    did: session.did,
-                    handle: session.handle.trim().trim_start_matches('@').to_string(),
-                    access_jwt: session.access_jwt,
-                    refresh_jwt: None,
-                    pds: authoritative,
-                    authserver: None,
-                    client_id: None,
-                    dpop_key: None,
-                    obtained_at: now_millis(),
-                },
-            )?;
-            Ok(updated)
-        });
-        if outcome.is_ok() {
-            self.clear_pending_bind(local_id);
-            self.resume_pending_connects(local_id);
-        }
-        outcome
-    }
-
     /// Stores (or replaces) one identity's atproto session and mirrors the DID onto the
-    /// identity's `bound_did`. The shared write tail of both binding paths — the
-    /// app-password fallback and the OAuth `/bind` flow — so enrollments and reads see
-    /// one consistent shape. Existing enrollments keep their own Tangent sessions.
+    /// identity's `bound_did`. The write tail of the OAuth bind, so enrollments and
+    /// reads see one consistent shape. Existing enrollments keep their own Tangent
+    /// sessions.
     fn store_atproto_session(&self, local_id: &str, session: AtprotoSession) -> Result<Identity, String> {
         let mut store = self.lock_store()?;
         let mut updated = store.identity(local_id).ok_or_else(|| "no local identity matches that id".to_string())?;
@@ -668,11 +508,12 @@ impl ConnectorHub {
     /// on the `?handle=` discovery path a differing `sub` is the honest
     /// account_mismatch refusal. The PDS and canonical handle come from the bound
     /// DID's document when the flight parked none. The session — refresh token and
-    /// DPoP key included, cookie-jar posture — is stored, and the waiting-connect hook
-    /// runs on success, exactly like the app-password path.
+    /// DPoP key included, cookie-jar posture — is stored, any pending sign-in routing
+    /// is cleared, and every waiting-for-operator connect for this identity resumes:
+    /// the handshake finishes connector-side, with no model involved.
     pub fn complete_atproto_bind(&self, state: &str, code: &str, issuer: Option<&str>, redirect_uri: &str) -> Result<String, String> {
         let mut bound_local: Option<String> = None;
-        let outcome = self.attributed("operator.bind_atproto", || {
+        let outcome = self.attributed("operator.bind_account", || {
             // The issuer comes first (RFC 9207): without `iss` the callback does not
             // even name which authorization server answered, so nothing else is
             // trustworthy enough to try.
@@ -776,8 +617,7 @@ impl ConnectorHub {
     /// is used as-is (the PDS refuses it honestly if stale). A store failure AFTER a
     /// rotation keeps the rotated tokens in the live store (R5): the call proceeds on
     /// them and the next save persists them, rather than bricking on the stale disk
-    /// copy. A failed refresh is the honest expired-session error — never a silent
-    /// unbound fallback.
+    /// copy. A failed refresh is the honest expired-session error.
     fn refresh_atproto_if_stale(&self, local_id: &str) -> Result<AtprotoSession, String> {
         // Serialization first; the session is re-read under the lock so a concurrent
         // refresh's result is seen instead of duplicated.
@@ -877,7 +717,7 @@ impl ConnectorHub {
         let discovery: contract::DiscoveryDto = serde_json::from_value(raw)
             .map_err(|error| format!("malformed discovery document: {error}"))?;
         let proof_spec = discovery.service_proof.ok_or_else(|| {
-            "no_service_proof: this server offers no service-proof enrollment; use the unbound enrollment path".to_string()
+            "no_service_proof: this server offers no service-proof enrollment, which is the only way a companion enrolls".to_string()
         })?;
         if proof_spec.method != EXCHANGE_LXM {
             return Err(format!(
@@ -1065,8 +905,8 @@ impl ConnectorHub {
     /// argument (exact match), or exactly one local identity, for every intake alike;
     /// (b) discovery against the operator-supplied origin; (c) with no usable atproto
     /// binding the handshake pops the operator page (this process's own, or a recorded
-    /// reachable one) at that identity's sign-in anchor and returns honestly — NEVER a
-    /// silent unbound fallback; (d) with a binding, enrollment runs only when no usable
+    /// reachable one) at that identity's sign-in anchor and returns honestly; (d) with
+    /// a binding, enrollment runs only when no usable
     /// enrollment/session exists for the origin, and the handshake exits through
     /// `Arrive`'s orientation view led by the "You are … — session …" line (P2).
     /// `SelectCompanion` + `Arrive` stay the explicit path.
@@ -2561,17 +2401,6 @@ fn selected_outcome(companion: &CompanionEntry) -> ToolOutcome {
     }
 }
 
-fn enroll_transport_error(error: &ExperienceError) -> String {
-    match error {
-        ExperienceError::Unreachable => "the server could not be reached".to_string(),
-        ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => {
-            "the enrollment endpoint rejected the request".to_string()
-        }
-        ExperienceError::Application { code, message } => format!("{code}: {message}"),
-        ExperienceError::Transport(detail) => detail.clone(),
-    }
-}
-
 /// Presentation fields are bounded and cannot change a connection's destination.
 fn project_server_card(origin: &str, raw: &Value, refreshed_at: i64) -> Option<ServerCard> {
     fn field(raw: &Value, name: &str, limit: usize) -> String {
@@ -2667,16 +2496,6 @@ fn problem_code_of(outcome: &ToolOutcome) -> String {
         .to_string()
 }
 
-/// Honest operator wording when the PDS refuses the app-password sign-in.
-fn pds_signin_error(error: &ExperienceError) -> String {
-    match error {
-        ExperienceError::Unreachable => "the PDS could not be reached; check the PDS origin and the network".to_string(),
-        ExperienceError::Unauthorized | ExperienceError::DpopChallenge { .. } => "the PDS rejected the handle or app password".to_string(),
-        ExperienceError::Application { code, message } => format!("the PDS refused the sign-in ({code}): {message}"),
-        ExperienceError::Transport(detail) => detail.clone(),
-    }
-}
-
 /// Honest operator wording for a refused discovery document. The 503 family on this
 /// surface all means one thing: the server has no proof audience configured.
 fn discovery_error(error: &ExperienceError) -> String {
@@ -2739,22 +2558,6 @@ fn exchange_error(error: &ExperienceError) -> String {
             other => format!("the server blocked the exchange ({other}): {message}"),
         },
         ExperienceError::Transport(detail) => detail.clone(),
-    }
-}
-
-/// Honest operator-facing wording for the contract's blocked enrollment codes.
-fn enroll_blocked_error(code: &str, message: &str) -> String {
-    match code {
-        "already_enrolled" => format!(
-            "already_enrolled: the server reports this client identity is already enrolled there and returned no new session ({message}). Use the existing enrollment, or forget it first to re-enroll."
-        ),
-        "unbound_enrollment_disabled" => format!(
-            "unbound_enrollment_disabled: that server has unbound enrollment switched off ({message})."
-        ),
-        "invalid_handle" => format!("invalid_handle: the server rejected this identity's handle ({message})."),
-        "suspended_participant" => format!("suspended_participant: the server declined to re-enroll this identity ({message})."),
-        "request_conflict" => format!("request_conflict: this identity already maps to a different participant there ({message})."),
-        other => format!("the server blocked enrollment ({other}): {message}"),
     }
 }
 

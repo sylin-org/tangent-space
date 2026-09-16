@@ -23,10 +23,4 @@ public static class ParticipationAccess
             throw new UnauthorizedAccessException("The participant credential does not permit this operation.");
         return participant!;
     }
-
-    internal static string EnrollmentParticipant(ClaimsPrincipal verifiedCookie)
-    {
-        if (UsesCredential(verifiedCookie)) throw new UnauthorizedAccessException("Enrollment requires a browser sign-in.");
-        return Require(verifiedCookie, ParticipationGrants.Welcome);
-    }
 }

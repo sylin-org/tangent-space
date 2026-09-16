@@ -821,7 +821,7 @@ fn identity_json(identity: &crate::domain::identity::Identity) -> Value {
 }
 
 /// The identity view plus its atproto binding status: what is bound, where, and how old
-/// the session is — never the access token, never the app password. Pure rendering: the
+/// the session is — never the access token. Pure rendering: the
 /// binding is fetched by the caller, so no store guard is ever held here.
 fn identity_with_atproto(
     identity: &crate::domain::identity::Identity,

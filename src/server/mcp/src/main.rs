@@ -5,7 +5,6 @@
 //! model-facing catalog.
 
 use std::io::{BufRead, Write};
-use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 
@@ -44,8 +43,6 @@ fn run(arguments: &[String]) -> i32 {
         "operator" => operator::operator(rest),
         "call" => call(rest),
         "catalog" => catalog(rest),
-        "enroll" => enroll(rest),
-        "enroll-unbound" => enroll_unbound(rest),
         "identities" => identities(rest),
         "companions" => companions(rest),
         "check" => check(rest),
@@ -77,11 +74,6 @@ fn usage() {
          call <tool> [json] [--view V]  invoke one participation tool through the same hub\n\
          call --stdin [--json]          read `<tool> <json>` lines from standard input\n\
          catalog [--json]               list the tool catalog\n\
-         enroll --name N --server URL --token-file P [--identity I] [--no-auto-check]\n\
-                                        manual import of an existing session token\n\
-         enroll-unbound --identity I --server URL\n\
-                                        unbound enrollment (the local-posture disarm\n\
-                                        tier; no DID proof — deliberate CLI-only path)
          identities [--json]            list local identities\n\
          companions [--json]            list enrollments (companions)\n\
          check [--name N]               run one background digest check (no model)\n\
@@ -291,138 +283,6 @@ fn catalog(rest: &[String]) -> i32 {
 }
 
 // ---------- setup and stewardship ----------
-
-/// Reads an operator-supplied session token file: raw `ts_…` token or `{"token": "..."}`
-/// JSON. The file is input, never storage — the session is kept in connector state.
-fn read_token_file(path: &std::path::Path) -> Result<String, String> {
-    let raw = tangent_connector::adapters::store::read_bounded(path, 16 * 1024)?;
-    let trimmed = raw.trim();
-    if trimmed.starts_with('{') {
-        let parsed: Value = serde_json::from_str(trimmed)
-            .map_err(|_| "token file is not valid enrollment JSON".to_string())?;
-        return parsed.get("token").and_then(|value| value.as_str()).map(str::to_string)
-            .filter(|token| !token.is_empty())
-            .ok_or_else(|| "token JSON has no token field".to_string());
-    }
-    if trimmed.len() < 8 {
-        return Err("token file does not contain a usable session token".to_string());
-    }
-    Ok(trimmed.to_string())
-}
-
-fn enroll(rest: &[String]) -> i32 {
-    let mut name = None;
-    let mut server = None;
-    let mut token_file = None;
-    let mut identity = None;
-    let mut auto_check = true;
-    let mut remaining = rest.iter();
-    while let Some(argument) = remaining.next() {
-        match argument.as_str() {
-            "--name" => name = remaining.next().cloned(),
-            "--server" => server = remaining.next().cloned(),
-            "--token-file" => token_file = remaining.next().map(PathBuf::from),
-            "--identity" => identity = remaining.next().cloned(),
-            "--no-auto-check" => auto_check = false,
-            other => {
-                eprintln!("unknown enroll option {other}");
-                return EXIT_USAGE;
-            }
-        }
-    }
-    let (Some(name), Some(server), Some(token_file)) = (name, server, token_file) else {
-        eprintln!("enroll requires --name, --server and --token-file");
-        return EXIT_USAGE;
-    };
-    let token = match read_token_file(&token_file) {
-        Ok(token) => token,
-        Err(error) => {
-            eprintln!("{error}");
-            return EXIT_USAGE;
-        }
-    };
-    let hub = match build_hub(CallerId("cli".into()), data_directory()) {
-        Ok(hub) => hub,
-        Err(error) => {
-            eprintln!("cannot open connector state: {error}");
-            return EXIT_FAILED;
-        }
-    };
-    match hub.enroll_as(&name, identity.as_deref(), &server, &token, auto_check) {
-        Ok(entry) => {
-            let identity_label = identity.as_deref().unwrap_or(&entry.name).to_string();
-            println!(
-                "Enrolled {} as identity {} ({}) on {} — manual enrollment of an imported session.\n\
-                 companionId: {} (session kept in connector state)",
-                entry.name,
-                identity_label,
-                entry.did.as_deref().unwrap_or(&entry.participant_ref),
-                entry.origin,
-                entry.companion_id
-            );
-            println!("Delete the imported token file if it is no longer needed.");
-            EXIT_OK
-        }
-        Err(error) => {
-            eprintln!("enrollment failed: {error}");
-            EXIT_FAILED
-        }
-    }
-}
-
-/// Unbound enrollment from the CLI — the disarm tier (R2): the page no longer enrolls,
-/// so this verb and the hub method are the deliberate remaining paths for the
-/// local-posture setting of the same handshake.
-fn enroll_unbound(rest: &[String]) -> i32 {
-    let mut identity = None;
-    let mut server = None;
-    let mut remaining = rest.iter();
-    while let Some(argument) = remaining.next() {
-        match argument.as_str() {
-            "--identity" => identity = remaining.next().cloned(),
-            "--server" => server = remaining.next().cloned(),
-            other => {
-                eprintln!("unknown enroll-unbound option {other}");
-                return EXIT_USAGE;
-            }
-        }
-    }
-    let (Some(identity), Some(server)) = (identity, server) else {
-        eprintln!("enroll-unbound requires --identity and --server");
-        return EXIT_USAGE;
-    };
-    let hub = match build_hub(CallerId("cli".into()), data_directory()) {
-        Ok(hub) => hub,
-        Err(error) => {
-            eprintln!("cannot open connector state: {error}");
-            return EXIT_FAILED;
-        }
-    };
-    let local_id = {
-        let store = hub.store().lock().expect("state lock");
-        store.identity_by_moniker(&identity).map(|found| found.local_id)
-    };
-    let Some(local_id) = local_id else {
-        eprintln!("no local identity matches '{identity}'; create one first (operator page or identities command)");
-        return EXIT_USAGE;
-    };
-    match hub.enroll_unbound(&local_id, &server) {
-        Ok(entry) => {
-            println!(
-                "Enrolled identity {identity} unbound at {} — participant {}, session kept in connector state.\n\
-                 companionId: {} (no DID proof; the server's local-posture tier)",
-                entry.origin,
-                entry.participant_ref,
-                entry.companion_id
-            );
-            EXIT_OK
-        }
-        Err(error) => {
-            eprintln!("unbound enrollment failed: {error}");
-            EXIT_FAILED
-        }
-    }
-}
 
 fn identities(rest: &[String]) -> i32 {
     let json = rest.iter().any(|argument| argument == "--json");

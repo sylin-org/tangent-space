@@ -2,7 +2,7 @@
 //! identity by behavior (an explicit identity argument, or exactly one local identity,
 //! for every intake alike), discovers the server, pops the operator page (this
 //! process's own, or a recorded reachable one from state) at the per-identity sign-in
-//! anchor when no atproto binding exists (never a silent unbound fallback), enrolls
+//! anchor when no atproto binding exists, enrolls
 //! bound only when no usable enrollment/session exists, and exits through arrival led
 //! by the "You are … — session …" line (P2). The owner addendum adds the auto-resume: a
 //! waiting connect finishes by itself when the operator signs in on the page, narrated
@@ -54,8 +54,7 @@ fn bound_workspace(label: &str, server: &FakeServer) -> (Arc<ConnectorHub>, Stri
     server.add_account("ox_omega.bsky.example", "app-pass-1", "did:plc:ox");
     let hub = mcp_workspace(label, "codex-host");
     let identity = hub.create_identity("ox_omega", None).expect("identity");
-    hub.bind_atproto(&identity.local_id, "ox_omega.bsky.example", "app-pass-1", Some(server.origin()))
-        .expect("binding");
+    common::seed_atproto_session(&hub, &identity.local_id, "ox_omega.bsky.example", "did:plc:ox", server.origin());
     (hub, identity.local_id)
 }
 
@@ -172,9 +171,7 @@ fn cli_shaped_connects_complete_statelessly_after_the_operator_signs_in() {
     // The operator signs in through the serve-run page (modeled here by another
     // process's hub over the same state): the binding lands in state.json.
     let serving = workspace_at(&dir, CallerId("mcp:someone-else".into()));
-    serving
-        .bind_atproto(&identity.local_id, "ox_omega.bsky.example", "app-pass-3", Some(server.origin()))
-        .expect("operator sign-in");
+    common::seed_atproto_session(&serving, &identity.local_id, "ox_omega.bsky.example", "did:plc:ox", server.origin());
 
     // CLI process #2: a fresh one-shot re-runs discovery and the binding check, then
     // enrolls, arrives and announces identity + session — all by itself.
@@ -222,8 +219,7 @@ fn several_identities_require_an_explicit_choice_and_the_argument_resolves() {
     let hub = mcp_workspace("choice", "codex-host");
     let alpha = hub.create_identity("alpha", None).expect("identity");
     let _beta = hub.create_identity("beta", None).expect("identity");
-    hub.bind_atproto(&alpha.local_id, "alpha.bsky.example", "app-pass-a", Some(server.origin()))
-        .expect("binding");
+    common::seed_atproto_session(&hub, &alpha.local_id, "alpha.bsky.example", "did:plc:alpha", server.origin());
     hub.set_operator_page_url("http://127.0.0.1:5218/");
 
     // No argument: the honest question lists both handles.

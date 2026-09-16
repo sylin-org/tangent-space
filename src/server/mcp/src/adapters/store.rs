@@ -56,7 +56,7 @@ struct StateFile {
     sessions: HashMap<String, String>,
     /// Atproto sessions per identity, keyed by the identity's local id. Same cookie-jar
     /// posture as `sessions` (owner decision): the PDS `accessJwt` is a session token,
-    /// not a vault secret. The app password that produced a session is never stored.
+    /// not a vault secret.
     #[serde(default)]
     atproto_sessions: HashMap<String, AtprotoSession>,
     #[serde(default)]

@@ -6,13 +6,15 @@
 //! directory, the PDS's protected-resource metadata, and a fake authorization server (PAR +
 //! authorize redirect + token/refresh with real DPoP-proof validation).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
+use tangent_connector::application::hub::ConnectorHub;
+use tangent_connector::domain::identity::{AtprotoSession, CallerId, CompanionEntry};
 
 #[allow(dead_code)]
 pub const LUMEN_CREDENTIAL: &str = "ts_lumen_test_credential_000000000000000000";
@@ -159,17 +161,14 @@ fn scoped_client_id() -> String {
     tangent_connector::adapters::atproto_oauth::bind_client_id()
 }
 
-/// A scripted experience API. Responses are synthetic; the post registry gives the
-/// crash-retry scenario its statefulness, and the enrollment registry implements the W2
-/// contract's unbound-enrollment exchange (idempotent per client localId). The same
-/// listener also plays the bound-exchange roles: the Tangent server's discovery document
-/// and `/mcp/token`, and the account's PDS (`createSession` / `getServiceAuth`).
+/// A scripted experience API. Responses are synthetic and the post registry gives the
+/// crash-retry scenario its statefulness. The same listener also plays the bound-exchange
+/// roles: the Tangent server's discovery document and `/mcp/token`, and the account's PDS
+/// (`getServiceAuth`).
 #[allow(dead_code)]
 pub struct FakeServer {
     pub requests: Arc<Mutex<Vec<Received>>>,
     posts: Arc<Mutex<HashMap<String, u32>>>,
-    enrollments: Arc<Mutex<HashSet<String>>>,
-    unbound_disabled: bool,
     bound: BoundScript,
     oauth: OauthScript,
     origin: String,
@@ -177,34 +176,25 @@ pub struct FakeServer {
 
 impl FakeServer {
     pub fn start() -> Self {
-        Self::start_with(false, BoundMode::Ready)
-    }
-
-    /// A server with the unbound-enrollment setting switched off.
-    #[allow(dead_code)]
-    pub fn start_with_unbound_disabled() -> Self {
-        Self::start_with(true, BoundMode::Ready)
+        Self::start_with(BoundMode::Ready)
     }
 
     /// A server whose bound-exchange surface is in the given mode.
     #[allow(dead_code)]
     pub fn start_bound_with(mode: BoundMode) -> Self {
-        Self::start_with(false, mode)
+        Self::start_with(mode)
     }
 
-    fn start_with(unbound_disabled: bool, bound_mode: BoundMode) -> Self {
+    fn start_with(bound_mode: BoundMode) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let url = origin(&listener);
         let requests = Arc::new(Mutex::new(Vec::new()));
         let posts = Arc::new(Mutex::new(HashMap::new()));
-        let enrollments = Arc::new(Mutex::new(HashSet::new()));
         let bound = BoundScript::new(bound_mode);
         let oauth = OauthScript::new();
         let server = Self {
             requests: requests.clone(),
             posts: posts.clone(),
-            enrollments: enrollments.clone(),
-            unbound_disabled,
             bound: bound.clone(),
             oauth: oauth.clone(),
             origin: url.clone(),
@@ -216,12 +206,11 @@ impl FakeServer {
                     let Ok(stream) = stream else { break };
                     let requests = requests.clone();
                     let posts = posts.clone();
-                    let enrollments = enrollments.clone();
                     let bound = bound.clone();
                     let oauth = oauth.clone();
                     let origin = url.clone();
                     std::thread::spawn(move || {
-                        serve_connection(stream, requests, posts, enrollments, unbound_disabled, bound, oauth, origin)
+                        serve_connection(stream, requests, posts, bound, oauth, origin)
                     });
                 }
             })
@@ -272,19 +261,12 @@ impl FakeServer {
         self.posts.lock().unwrap().get(request_id).copied().unwrap_or(0)
     }
 
-    /// The client localIds the enrollment endpoint currently knows.
-    #[allow(dead_code)]
-    pub fn enrolled_local_ids(&self) -> Vec<String> {
-        self.enrollments.lock().unwrap().iter().cloned().collect()
-    }
 }
 
 fn serve_connection(
     stream: TcpStream,
     requests: Arc<Mutex<Vec<Received>>>,
     posts: Arc<Mutex<HashMap<String, u32>>>,
-    enrollments: Arc<Mutex<HashSet<String>>>,
-    unbound_disabled: bool,
     bound: BoundScript,
     oauth: OauthScript,
     origin: String,
@@ -362,7 +344,7 @@ fn serve_connection(
             continue;
         }
         let extras = RequestExtras { dpop, dpop_nonce };
-        match respond(&method, &path, &body, &bearer, &posts, &enrollments, unbound_disabled, &bound, &oauth, &origin, &extras) {
+        match respond(&method, &path, &body, &bearer, &posts, &bound, &oauth, &origin, &extras) {
             Script::Body(status, payload) => {
                 let text = serde_json::to_string(&payload).unwrap().replace("ORIGIN", &origin);
                 let reason = match status {
@@ -431,8 +413,6 @@ fn respond(
     body: &Value,
     bearer: &str,
     posts: &Arc<Mutex<HashMap<String, u32>>>,
-    enrollments: &Arc<Mutex<HashSet<String>>>,
-    unbound_disabled: bool,
     bound: &BoundScript,
     oauth: &OauthScript,
     origin: &str,
@@ -746,7 +726,7 @@ fn respond(
         ("GET", "/xrpc/com.atproto.server.getServiceAuth") => {
             let scheme = bearer.split(' ').next().unwrap_or_default();
             let token = bearer.strip_prefix("Bearer ").or_else(|| bearer.strip_prefix("DPoP ")).unwrap_or_default();
-            // App-password sessions are sat_-prefixed; OAuth sessions are JWT-shaped.
+            // Seeded sessions are sat_-prefixed; a real OAuth bind's are JWT-shaped.
             let is_session = token.starts_with("sat_") || (token.split('.').count() == 3 && token.starts_with("ey"));
             if !is_session {
                 return Script::Body(401, json!({ "error": "InvalidToken", "message": "authentication required" }));
@@ -884,37 +864,6 @@ fn respond(
         ("GET", "/api/v1/experience/updates") if bearer.ends_with(SILENT_STEWARD_CREDENTIAL)
             => Script::Body(200, updates_without_capabilities()),
         ("GET", "/api/v1/experience/updates") => Script::Body(200, updates()),
-        // The W2-contract enrollment exchange: pre-credential POST, every outcome HTTP 200.
-        // Tokens are unique per server (port) so two-origin tests can tell bearers apart.
-        ("POST", "/api/v1/experience/identities/enroll") => {
-            let local_id = body.pointer("/client/localId").and_then(Value::as_str).unwrap_or_default().to_string();
-            let requested_handle = body.pointer("/client/handle").and_then(Value::as_str).unwrap_or("anonymous").to_string();
-            let port = origin.rsplit(':').next().unwrap_or("0");
-            if unbound_disabled {
-                return Script::Body(200, json!({
-                    "status": "blocked",
-                    "problem": { "code": "unbound_enrollment_disabled", "message": "this server does not accept unbound enrollment" }
-                }));
-            }
-            if enrollments.lock().unwrap().contains(&local_id) {
-                return Script::Body(200, json!({
-                    "status": "blocked",
-                    "problem": { "code": "already_enrolled", "message": "this client identity is already enrolled here" },
-                    "participant": enroll_participant(&local_id, &requested_handle)
-                }));
-            }
-            enrollments.lock().unwrap().insert(local_id.clone());
-            Script::Body(200, json!({
-                "status": "ok",
-                "participant": enroll_participant(&local_id, &requested_handle),
-                "credential": {
-                    "token": format!("ts_unbound_{port}_{local_id}"),
-                    "name": "connector",
-                    "expiresAt": null,
-                    "grants": ["welcome", "read", "post"]
-                }
-            }))
-        }
         ("POST", "/api/v1/experience/topics/lounge/posts") => {
             let request_id = body.get("requestId").and_then(Value::as_str).unwrap_or_default().to_string();
             let mut registry = posts.lock().unwrap();
@@ -973,18 +922,6 @@ fn envelope(operation: &str, status: &str, data: Value) -> Value {
 
 /// The enrollment endpoint's participant view for one client localId. The connector-client
 /// identity echoes the connector's local id, scoped to this server relationship.
-fn enroll_participant(local_id: &str, handle: &str) -> Value {
-    json!({
-        "participantRef": format!("prt_{local_id}"),
-        "identities": [
-            { "kind": "internal", "value": format!("tangent:local:prt_{local_id}") },
-            { "kind": "connector-client", "value": local_id }
-        ],
-        "bestLabel": handle,
-        "did": null
-    })
-}
-
 fn mention_item() -> Value {
     json!({
         "ref": "att:lounge:m40",
@@ -1462,4 +1399,73 @@ fn percent_decode(value: &str) -> String {
         }
     }
     String::from_utf8_lossy(&out).to_string()
+}
+
+/// Seeds the state the OAuth bind leaves behind, without driving the flow: an identity
+/// whose atproto account is bound. Tests that are not *about* binding start here, so
+/// only [`bind_oauth_journey`] exercises the handshake itself.
+#[allow(dead_code)]
+pub fn seed_bound_identity(hub: &ConnectorHub, handle: &str, did: &str, pds: &str) -> String {
+    let identity = hub
+        .create_identity(handle.split('.').next().unwrap_or("user"), None)
+        .expect("identity");
+    seed_atproto_session(hub, &identity.local_id, handle, did, pds);
+    identity.local_id
+}
+
+/// Seeds (or replaces) one identity's bound atproto session — the write tail of the
+/// bind, as the OAuth flow would have left it.
+#[allow(dead_code)]
+pub fn seed_atproto_session(hub: &ConnectorHub, local_id: &str, handle: &str, did: &str, pds: &str) {
+    let mut store = hub.store().lock().expect("state lock");
+    let mut identity = store.identity(local_id).expect("identity exists");
+    identity.bound_did = Some(did.to_string());
+    store.upsert_identity(identity).expect("bind the identity");
+    store.set_atproto_session(
+        local_id,
+        AtprotoSession {
+            did: did.to_string(),
+            handle: handle.trim_start_matches('@').to_string(),
+            access_jwt: format!("sat_seeded_{}", did.replace(':', "_")),
+            refresh_jwt: Some(format!("pds_refresh_{did}")),
+            pds: pds.to_string(),
+            authserver: Some(pds.to_string()),
+            client_id: None,
+            dpop_key: None,
+            obtained_at: 1_757_000_000_000,
+        },
+    );
+    store.save().expect("save seeded binding");
+}
+
+/// Seeds a state directory with one enrolled identity and its Tangent session — the
+/// state a bound enrollment leaves behind — for tests that then spawn the binary over
+/// that directory instead of driving the handshake in process.
+#[allow(dead_code)]
+pub fn seed_enrolled_state(home: &std::path::Path, handle: &str, origin: &str, token: &str) -> String {
+    let events = Arc::new(tangent_connector::application::bus::EventBus::new());
+    let port: Arc<dyn tangent_connector::application::ports::ExperiencePort> =
+        Arc::new(tangent_connector::adapters::experience::UreqExperience::new());
+    let store = tangent_connector::adapters::store::StateStore::open(home).expect("state store");
+    let hub = ConnectorHub::new(port, store, events, CallerId("cli".into()));
+    let identity = hub.create_identity(handle, None).expect("identity");
+    let companion_id = format!("cmp_seeded_{handle}");
+    {
+        let mut store = hub.store().lock().expect("state lock");
+        store.upsert_companion(CompanionEntry {
+            companion_id: companion_id.clone(),
+            local_id: identity.local_id.clone(),
+            name: handle.to_string(),
+            origin: origin.to_string(),
+            participant_ref: format!("prt_seeded_{handle}"),
+            did: Some(format!("did:plc:{handle}")),
+            display_name: None,
+            handle: Some(format!("{handle}.bsky.example")),
+            enrolled_at: 1_757_000_000_000,
+            auto_check: true,
+        });
+        store.set_session(&companion_id, token);
+        store.save().expect("save seeded state");
+    }
+    companion_id
 }

@@ -31,20 +31,9 @@ fn workspace(label: &str) -> (Arc<ConnectorHub>, std::path::PathBuf) {
     (Arc::new(ConnectorHub::new(port, store, events, CallerId("cli".into()))), dir)
 }
 
-/// A workspace built through `build_hub`, so the diagnostics journal runs.
-fn journaled_workspace(label: &str) -> (Arc<ConnectorHub>, std::path::PathBuf) {
-    let dir = std::env::temp_dir().join(format!("tangent-connector-bound-{}-{}", label, std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    let hub = tangent_connector::build_hub(CallerId("cli".into()), dir.clone()).expect("hub");
-    (hub, dir)
-}
-
 fn bound_identity(hub: &ConnectorHub, server: &FakeServer, handle: &str, password: &str, did: &str) -> String {
     server.add_account(handle, password, did);
-    let identity = hub.create_identity(handle.split('.').next().unwrap_or("user"), None).expect("identity");
-    hub.bind_atproto(&identity.local_id, handle, password, Some(server.origin())).expect("binding");
-    identity.local_id
+    common::seed_bound_identity(hub, handle, did, server.origin())
 }
 
 fn query_of(path: &str) -> Vec<(String, String)> {
@@ -62,77 +51,6 @@ fn param(path: &str, name: &str) -> Option<String> {
 
 // ---------- binding ----------
 
-#[test]
-fn binding_stores_an_atproto_session_and_sets_the_bound_did() {
-    let server = FakeServer::start();
-    let (hub, _dir) = workspace("bind");
-    server.add_account("lumen.bsky.example", "app-pass-1234", "did:plc:fake1");
-    let identity = hub.create_identity("lumen", None).expect("identity");
-
-    let bound = hub.bind_atproto(&identity.local_id, "@lumen.bsky.example", "app-pass-1234", Some(server.origin())).expect("binding");
-    assert_eq!(bound.bound_did.as_deref(), Some("did:plc:fake1"));
-
-    let status = hub.atproto_binding(&identity.local_id).expect("binding status");
-    assert_eq!(status.did, "did:plc:fake1");
-    assert_eq!(status.handle, "lumen.bsky.example");
-    assert_eq!(status.pds, server.origin(), "the didDoc's serviceEndpoint is the authoritative PDS");
-    assert!(status.obtained_at > 0);
-
-    // The session lives in connector state by design (cookie-jar posture), keyed per identity.
-    let state_text = std::fs::read_to_string(_dir.join("state.json")).expect("state file");
-    assert!(state_text.contains("atproto_sessions"), "the dedicated state map exists: {state_text}");
-    assert!(state_text.contains("sat_"), "the PDS session token is state, by design");
-
-    // createSession saw exactly the identifier and password, once.
-    let requests = server.requests();
-    let sign_ins: Vec<_> = requests.iter().filter(|request| request.path.contains("createSession")).collect();
-    assert_eq!(sign_ins.len(), 1);
-    assert_eq!(sign_ins[0].body.get("identifier").and_then(Value::as_str), Some("lumen.bsky.example"));
-    assert_eq!(sign_ins[0].body.get("password").and_then(Value::as_str), Some("app-pass-1234"));
-    assert!(sign_ins[0].bearer.is_empty(), "createSession carries no Authorization header");
-}
-
-#[test]
-fn the_app_password_never_reaches_state_or_the_diagnostics_journal() {
-    let server = FakeServer::start();
-    let (hub, dir) = journaled_workspace("password");
-    server.add_account("keeper.bsky.example", "secret-app-pass-42", "did:plc:keeper");
-    let identity = hub.create_identity("keeper", None).expect("identity");
-    hub.bind_atproto(&identity.local_id, "keeper.bsky.example", "secret-app-pass-42", Some(server.origin())).expect("binding");
-
-    let state_text = std::fs::read_to_string(dir.join("state.json")).expect("state file");
-    assert!(!state_text.contains("secret-app-pass-42"), "the app password is never state: {state_text}");
-    // The diagnostics journal needs a beat to flush the attributed events.
-    for _ in 0..20 {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        if dir.join("connector.log").exists() {
-            break;
-        }
-    }
-    let journal = std::fs::read_to_string(dir.join("connector.log")).unwrap_or_default();
-    assert!(journal.contains("bind_atproto"), "the binding action is journaled: {journal}");
-    assert!(!journal.contains("secret-app-pass-42"), "the app password is never journaled");
-    assert!(!journal.contains("sat_"), "the PDS session token is never journaled either");
-}
-
-#[test]
-fn a_wrong_password_or_unusable_pds_is_an_honest_error() {
-    let server = FakeServer::start();
-    let (hub, _dir) = workspace("bad-bind");
-    server.add_account("real.bsky.example", "right-pass", "did:plc:real");
-    let identity = hub.create_identity("real", None).expect("identity");
-
-    let wrong = hub.bind_atproto(&identity.local_id, "real.bsky.example", "wrong-pass", Some(server.origin())).expect_err("must refuse");
-    assert!(wrong.contains("rejected the handle or app password"), "error was: {wrong}");
-    assert!(hub.identity(&identity.local_id).unwrap().bound_did.is_none(), "nothing was bound");
-
-    let missing = hub.bind_atproto(&identity.local_id, "ghost.bsky.example", "right-pass", Some(server.origin())).expect_err("must refuse");
-    assert!(missing.contains("rejected the handle or app password"), "error was: {missing}");
-
-    let remote_http = hub.bind_atproto(&identity.local_id, "real.bsky.example", "right-pass", Some("http://attacker.example")).expect_err("must refuse");
-    assert!(remote_http.contains("invalid_pds"), "plain HTTP off loopback is refused: {remote_http}");
-}
-
 // ---------- the bound enrollment recipe ----------
 
 #[test]
@@ -148,7 +66,6 @@ fn bound_enrollment_runs_the_three_steps_and_stores_the_session_per_enrollment()
     assert!(entry.participant_ref.starts_with("prt_bound_"), "participant ref from the credential view");
     assert_eq!(entry.handle.as_deref(), Some("lumen.bsky.example"));
 
-    let port = server.origin().rsplit(':').next().unwrap_or("0");
     // Step discipline: discovery (anonymous), getServiceAuth (PDS bearer, aud/lxm/exp),
     // /mcp/token (proof bearer, exact body).
     let requests = server.requests();
@@ -158,7 +75,8 @@ fn bound_enrollment_runs_the_three_steps_and_stores_the_session_per_enrollment()
         .iter()
         .find(|request| request.path.starts_with("/xrpc/com.atproto.server.getServiceAuth"))
         .expect("service-auth request");
-    assert_eq!(auth.bearer, format!("Bearer sat_{port}_lumen.bsky.example"), "the PDS session mints the proof");
+    let pds_session = { hub.store().lock().unwrap().atproto_session(&local_id).expect("bound session").access_jwt };
+    assert_eq!(auth.bearer, format!("Bearer {pds_session}"), "the identity's own PDS session mints the proof");
     assert_eq!(param(&auth.path, "aud").as_deref(), Some(AUDIENCE.replace(':', "%3A").as_str()), "the audience comes from discovery (percent-encoded for the query), never hardcoded");
     assert_eq!(param(&auth.path, "lxm").as_deref(), Some("local.tangent.mcp.exchange"));
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
@@ -250,24 +168,6 @@ fn the_exchange_failures_map_to_honest_operator_errors() {
 }
 
 #[test]
-fn an_expired_pds_session_demands_a_rebind_and_rebinding_recovers() {
-    let server = FakeServer::start();
-    let (hub, _dir) = workspace("expired");
-    server.add_expiring_account("wanderer.bsky.example", "pass-4", "did:plc:wanderer");
-    let identity = hub.create_identity("wanderer", None).expect("identity");
-    hub.bind_atproto(&identity.local_id, "wanderer.bsky.example", "pass-4", Some(server.origin())).expect("binding");
-
-    let error = hub.enroll_bound(&identity.local_id, server.origin()).expect_err("must refuse");
-    assert!(error.contains("atproto_session_expired") && error.contains("Re-bind"), "error was: {error}");
-
-    // Re-bind replaces the session and the enrollment then succeeds.
-    server.add_account("wanderer.bsky.example", "pass-5", "did:plc:wanderer");
-    hub.bind_atproto(&identity.local_id, "wanderer.bsky.example", "pass-5", Some(server.origin())).expect("re-bind");
-    let entry = hub.enroll_bound(&identity.local_id, server.origin()).expect("bound enrollment after re-bind");
-    assert_eq!(entry.did.as_deref(), Some("did:plc:wanderer"));
-}
-
-#[test]
 fn rebinding_keeps_existing_enrollment_sessions_and_unbind_clears_only_the_binding() {
     let server = FakeServer::start();
     let (hub, _dir) = workspace("rebind");
@@ -275,19 +175,20 @@ fn rebinding_keeps_existing_enrollment_sessions_and_unbind_clears_only_the_bindi
     server.add_account("second.bsky.example", "pass-b", "did:plc:second");
     let identity = hub.create_identity("dual", None).expect("identity");
 
-    hub.bind_atproto(&identity.local_id, "first.bsky.example", "pass-a", Some(server.origin())).expect("bind one");
+    common::seed_atproto_session(&hub, &identity.local_id, "first.bsky.example", "did:plc:first", server.origin());
     let entry = hub.enroll_bound(&identity.local_id, server.origin()).expect("enrollment");
     let tangent_session = { hub.store().lock().unwrap().session(&entry.companion_id).expect("tangent session") };
 
     // Re-bind to the other account: the atproto session is replaced, the identity's
     // bound DID follows, and the enrollment keeps its own Tangent session.
-    hub.bind_atproto(&identity.local_id, "second.bsky.example", "pass-b", Some(server.origin())).expect("re-bind");
+    common::seed_atproto_session(&hub, &identity.local_id, "second.bsky.example", "did:plc:second", server.origin());
     assert_eq!(hub.identity(&identity.local_id).unwrap().bound_did.as_deref(), Some("did:plc:second"));
     {
         let store = hub.store().lock().unwrap();
         let atproto = store.atproto_session(&identity.local_id).expect("replaced session");
         assert_eq!(atproto.did, "did:plc:second");
         assert!(atproto.access_jwt.contains("second"), "the PDS session itself was replaced");
+        assert_eq!(atproto.handle, "second.bsky.example", "the bound handle followed");
         assert_eq!(store.session(&entry.companion_id).as_deref(), Some(tangent_session.as_str()), "the enrollment's Tangent session is untouched");
     }
     let arrived = hub.invoke(

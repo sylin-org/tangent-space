@@ -38,7 +38,7 @@ pub struct Identity {
     /// connector. Used for moniker selection.
     pub handle: String,
     pub display_name: Option<String>,
-    /// The atproto DID once a binding is verified; `None` in the unbound tier.
+    /// The atproto DID once a binding is verified; `None` until the account is bound.
     #[serde(default)]
     pub bound_did: Option<String>,
     pub created_at: i64,
@@ -52,10 +52,9 @@ pub fn valid_handle(handle: &str) -> bool {
         && !handle.chars().any(|c| c.is_whitespace() || c == ':')
 }
 
-/// One enrollment: the session + server binding for one identity at one origin. Manual
-/// import of an existing session token, or an unbound enrollment performed against the
-/// server's enrollment endpoint. Verified at enrollment time against the server's own
-/// identity response. The bearer session itself lives in the store's per-enrollment
+/// One enrollment: the session + server binding for one identity at one origin, made
+/// by the account-bound proof exchange — the only way a companion enrolls. Verified at
+/// enrollment time against the server's own identity response. The bearer session itself lives in the store's per-enrollment
 /// session map — deliberately NOT on this struct, so cloned entries never carry it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompanionEntry {
@@ -105,14 +104,11 @@ impl CompanionEntry {
     }
 }
 
-/// The atproto session one identity holds after the operator binds an account — via
-/// atproto OAuth (the `/bind` route) or an app password (the hub-level fallback): the
-/// PDS-issued bearer (`accessJwt`, cookie-jar posture — same exposure class as the
-/// per-enrollment sessions) plus where to reach the PDS again. The app password itself
-/// is NEVER part of this record: it exists in memory for the one `createSession`
-/// request. OAuth sessions additionally carry their refresh token and DPoP key so the
-/// connector can silently renew them — the same cookie-jar session state, never a vault
-/// secret.
+/// The atproto session one identity holds after the operator binds an account through
+/// atproto OAuth (the `/bind` route): the PDS-issued bearer (`accessJwt`, cookie-jar
+/// posture — the same exposure class as the per-enrollment sessions) plus where to
+/// reach the PDS again, and the refresh token and DPoP key that let the connector renew
+/// it silently. Session state, never a vault secret.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AtprotoSession {
     /// The bound account's DID (`did:plc:…`); mirrors the identity's `bound_did`.
@@ -121,7 +117,7 @@ pub struct AtprotoSession {
     pub handle: String,
     /// The PDS access token used for `getServiceAuth`. Session state, not a vault secret.
     pub access_jwt: String,
-    /// The OAuth refresh token (`/bind` sessions only; `None` for app-password ones).
+    /// The OAuth refresh token.
     #[serde(default)]
     pub refresh_jwt: Option<String>,
     /// Canonical PDS origin for follow-up service-auth requests.
@@ -134,8 +130,8 @@ pub struct AtprotoSession {
     /// refresh under the bare localhost origin). Routing state, not a secret.
     #[serde(default)]
     pub client_id: Option<String>,
-    /// The session's DPoP ES256 private key, base64url SEC1 bytes (`/bind` sessions
-    /// only) — required material for the refresh request.
+    /// The session's DPoP ES256 private key, base64url SEC1 bytes — required material
+    /// for the refresh request.
     #[serde(default)]
     pub dpop_key: Option<String>,
     /// Epoch milliseconds of the sign-in that produced this session.

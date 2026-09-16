@@ -14,21 +14,50 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
 {
     private ExperienceWebApp app = null!;
     private string home = null!;
-    private string credentialFile = null!;
 
     public async ValueTask InitializeAsync()
     {
         app = await ExperienceWebApp.StartAsync();
         home = Path.Combine(Path.GetTempPath(), "TangentSpace-Connector", Guid.CreateVersion7().ToString("n"));
         Directory.CreateDirectory(home);
-        credentialFile = Path.Combine(home, "credential.txt");
-        await File.WriteAllTextAsync(credentialFile, app.AgentToken + "\n");
+        await SeedEnrollment();
     }
 
     public async ValueTask DisposeAsync()
     {
         await app.DisposeAsync();
         try { Directory.Delete(home, recursive: true); } catch (IOException) { }
+    }
+
+    /// <summary>Seeds the connector's durable state with one enrolled identity and its
+    /// session — the state the account-bound exchange leaves behind. The exchange itself is
+    /// the connector suite's and <c>EnrollmentTests</c>' subject; these tests are about the
+    /// two intakes speaking to the real server over a real session.</summary>
+    private async Task SeedEnrollment()
+    {
+        var localId = Guid.CreateVersion7().ToString("n");
+        var companionId = "cmp_" + Guid.CreateVersion7().ToString("n")[..16];
+        // The connector's state file is snake_case on the wire, matching its Rust structs.
+        var state = new
+        {
+            version = 1,
+            identities = new[]
+            {
+                new { local_id = localId, handle = "agent", display_name = (string?)null, bound_did = ExperienceWebApp.AgentDid, created_at = 1757000000000L },
+            },
+            companions = new[]
+            {
+                new
+                {
+                    companion_id = companionId, local_id = localId, name = "agent", origin = app.Origin,
+                    participant_ref = ExperienceWebApp.AgentDid, did = ExperienceWebApp.AgentDid,
+                    display_name = (string?)null, handle = "agent", enrolled_at = 1757000000000L, auto_check = true,
+                },
+            },
+            sessions = new Dictionary<string, string> { [companionId] = app.AgentToken },
+        };
+        await File.WriteAllTextAsync(Path.Combine(home, "state.json"),
+            JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private string ConnectorBinary()
@@ -82,22 +111,23 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public void Enrollment_verifies_the_real_identity_and_stores_the_session_in_state()
+    public void The_stored_session_is_accepted_by_the_real_server_and_names_the_real_identity()
     {
-        var (exit, output, error) = Run("enroll", "--name", "agent", "--server", app.Origin,
-            "--token-file", credentialFile);
-        Assert.True(exit == 0, $"enrollment failed: {error}{output}");
-        Assert.Contains("manual enrollment", output);
-        Assert.Contains(ExperienceWebApp.AgentDid, output);
         // Sessions are cookie-jar state by design: stored per enrollment in state.json.
         var state = File.ReadAllText(Path.Combine(home, "state.json"));
         Assert.Contains(app.AgentToken, state);
+        // And it is a working session: the real server answers arrival on it, naming the
+        // identity the server itself resolved rather than anything the connector supplied.
+        var selected = Call("SelectCompanion", "{\"moniker\":\"agent\"}");
+        var companion = selected.GetProperty("connector").GetProperty("companionId").GetString()!;
+        var arrived = Call("Arrive", JsonSerializer.Serialize(new { companionId = companion, serverUrl = app.Origin }));
+        Assert.Equal("orientation", arrived.GetProperty("connector").GetProperty("view").GetString());
+        Assert.Contains(ExperienceWebApp.AgentDid, arrived.ToString());
     }
 
     [Fact]
     public void The_cli_intake_reads_you_rendered_attention_and_resynchronizes_reads()
     {
-        Run("enroll", "--name", "agent", "--server", app.Origin, "--token-file", credentialFile);
         var selected = Call("SelectCompanion", "{\"moniker\":\"agent\"}");
         var companion = selected.GetProperty("connector").GetProperty("companionId").GetString()!;
         var arrived = Call("Arrive", JsonSerializer.Serialize(new { companionId = companion, serverUrl = app.Origin }));
@@ -136,7 +166,6 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     [Fact]
     public void The_stdio_mcp_intake_negotiates_and_serves_the_full_flow()
     {
-        Run("enroll", "--name", "agent", "--server", app.Origin, "--token-file", credentialFile);
         using var peer = ConnectorPeer.Start(ConnectorBinary(), home);
         var initialize = peer.Call("initialize", new
         {

@@ -8,9 +8,9 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R1 — Subtract |
-| Current task | R1.12 — one enrollment path (`todo`) |
-| Next action | Start R1.12 (per C1): delete the unbound tier (`enroll-unbound`, `enroll_unbound`, its payloads, wording, fake route and tests), the app-password binding (`bind_atproto`, `createSession`) and session import (`enroll --token-file`), with the server's `/api/participation/credentials` endpoints; tests seed connector state directly and the .NET connector tests enroll through the bound exchange against the fake account server; the README passages go with them. Then R1.13–R1.14 |
-| Last checkpoint | 2026-09-15 · S-003 · R1.11 done and committed: the companion manager refuses foreign hosts and cross-site writes, and identifies itself through `/api/discovery`. Connector 100/100, .NET connector integration 3/3 on the release binary, greenfield 1,884 |
+| Current task | R1.13 — delete code without a caller (`todo`) |
+| Next action | R1.15 — the test audit (Leo, 15 September): classify every test as rule, contract or mechanism and delete the third tier before R2's renames carry it forward. Then R1.13 and R1.14 close R1 |
+| Last checkpoint | 2026-09-15 · S-003 · R1.12 done and committed: one enrollment path and one binding path remain. Connector 94/94, .NET 349/357 (the 8 known), connector `src/` 9,174, server C# 11,227, greenfield 1,890 |
 | Durability | Commits at task checkpoints are authorized (D10). Push is not yet authorized, so work exists only on this machine until Leo allows a push |
 | Waiting on | Leo: push authorization (optional). N-035 is settled — D11 and D12, [ADR 0013](../../adr/0013-access-contract-and-role-model.md) |
 | Blockers | None (Docker Desktop's startup crash was cleared on 2026-09-15; see N-023) |
@@ -129,7 +129,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R1.9 | Per Leo (15 September): no dialogs. Replace the post-removal `confirm()`, the report `<dialog>`, the atmosphere `<dialog>` and the connector page's three `confirm()` calls with inline controls; guard against their return (N-027) | done | No dialog remains; the guards pass; the walkthrough uses the inline controls | Commit "refactor: replace every dialog with inline controls": `inline-confirm.js` confirms post removal in place, the report form and the atmosphere picker are in-page panels, the companion page confirms inline; `tests/no-dialogs.test.mjs` and `the_page_opens_no_dialog` guard it; browser 129/129, connector 99/99; the inline removal passed live in W3 |
 | R1.10 | Per Leo (15 September): no random ports. The connector refuses port 0; its hub opens pages only through an injected opener, silent unless the binary installs the platform browser; tests lose the shared no-browser guard and their random-looking fake addresses (N-028) | done | No product code picks a random port; no test opens a browser | Commit "fix: open pages only through the hub and drop random ports": `PageOpener` injected (silent by default, the platform browser only in `build_hub`); port 0 refused; the env guards and random-looking fake addresses gone; connector 99/99; .NET connector integration 3/3 on the release binary |
 | R1.11 | Per C8: harden the companion manager — JSON-only writes, a loopback `Host`, same-origin `Origin` and `Sec-Fetch-Site`; detect the page through `/api/discovery`; tests inject the page address; no example keeps state outside the user profile | done | A cross-site `text/plain` POST and a foreign `Host` are refused; connector suite green | Two rules stated once at the connection: every request names a loopback `Host`, and every `/api/*` POST carries `application/json` with a matching `Origin` and — when sent — `Sec-Fetch-Site: same-origin`, mirroring `ParticipationController.Cookie`. `probe` identifies the page through `/api/discovery`; the default page candidate is injectable. Connector 100/100, .NET connector integration 3/3 on the release binary, greenfield 1,884, no new clippy lint |
-| R1.12 | Per C1: one enrollment path — delete the unbound tier (`enroll-unbound`, `enroll_unbound`, its payloads, wording, fake route and tests), the app-password binding (`bind_atproto`, `createSession`) and session import (`enroll --token-file`), with the server's `/api/participation/credentials` endpoints; tests seed connector state directly, and the .NET connector tests enroll through the bound exchange against the fake account server; README passages go with them | todo | One enrollment path and one binding path remain; suites green | |
+| R1.12 | Per C1: one enrollment path — delete the unbound tier (`enroll-unbound`, `enroll_unbound`, its payloads, wording, fake route and tests), the app-password binding (`bind_atproto`, `createSession`) and session import (`enroll --token-file`), with the server's `/api/participation/credentials` endpoints; tests seed connector state directly, and the .NET connector tests enroll through the bound exchange against the fake account server; README passages go with them | done | One enrollment path and one binding path remain; suites green | The account-bound exchange through the OAuth bind is the only way in. Gone: `enroll_unbound` and its CLI verb, `bind_atproto`, `enroll --token-file` with `read_token_file`, three dead error helpers, `EnrollResponseDto`/`CreateSessionDto`/`EnrollParticipantDto`, the fake's unbound route and registry, `ParticipationController` with its two request DTOs and `ParticipationCredentials.Enroll/List/Revoke`, and six tests of the removed paths. Connector 94/94, .NET 349/357 (the 8 known), connector `src/` 9,489 → 9,174, server C# 11,333 → 11,227, greenfield 1,890 (N-039) |
 | R1.13 | Per C9: delete code without a caller (`adapters/delivery.rs`, the automatic-turn policy, `ExperiencePort::wait`, `ToolOutcome::exit_code`, `experience::shared`, `Perspective::from_identity`, `Budget::truncated`, `StopFlag`, `CallerId::default`), the legacy-enrollment drop, the pre-scope client id and `StateFile.version`; render each attention item once | todo | No listed identifier remains; suites green | |
 | R1.14 | Verify the connector: suites, greenfield check, and W5 again on the release binary | todo | W5 passes; metrics updated | |
 
@@ -197,6 +197,25 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
+**Completed: R1.12 — one enrollment path**
+
+Per C1 and [ADR 0012](../../adr/0012-realigned-connector-architecture.md) §1. Inventory taken first, because two of the names look deletable and are not:
+
+- `ParticipantCredential` **stays** — it is the session the bound exchange issues (`ServiceProofExchange`), and `ActivityService` and `ExperienceDigest` read it. The glossary renames it `Session` in R2.
+- `ParticipationCredentials` **stays in part** — `Authenticate` and `Principal` back the bearer handler. Only `Enroll`, `List` and `Revoke` go with the controller.
+- `CredentialInfo` and `CredentialIssued` **stay** — the bound exchange returns them.
+- `CredentialEnrollmentRequest`, `CredentialRevocationRequest` and `ParticipationController` have no other caller and go.
+
+- [x] Server: deleted `ParticipationController`, the two request DTOs, `ParticipationCredentials.Enroll/List/Revoke` and `ParticipationAccess.EnrollmentParticipant` if it is left without a caller; trim `ParticipationTests` to what survives
+- [x] Connector: deleted the unbound tier (`enroll_unbound`, `enroll-unbound`, its payloads and wording) across `hub.rs`, `identity.rs` and `main.rs`
+- [x] Connector: deleted the app-password binding (`bind_atproto`, `createSession`) across `atproto_oauth.rs`, `contract.rs`, `hub.rs`, `identity.rs` and `operator.rs`; the OAuth bind is the only binding path
+- [x] Connector: deleted session import (`enroll --token-file`) from `main.rs`
+- [x] Tests: the connector journeys seed state directly instead of enrolling unbound; the fake's unbound route goes; the .NET connector tests enroll through the bound exchange against the fake account server
+- [x] README and the wording that names the removed paths
+- [x] Connector 94/94, .NET 349/357 (failures must equal the 8 known), greenfield check; commit
+
+Check command: `cargo test --manifest-path src/server/mcp/Cargo.toml`, `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, then `pwsh scripts/check-greenfield.ps1`.
+
 **Completed: R1.11 — harden the companion manager**
 
 Per C8 and [ADR 0012](../../adr/0012-realigned-connector-architecture.md) §8: the companion manager is a hardened loopback page. Two rules, stated once at the connection and applied before routing:
@@ -242,7 +261,7 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 
 | Measure | Baseline (`d682c26`) | Now (R1.8) | Target |
 |---|---|---|---|
-| Server C# lines | 16,830 | 11,333 | about 11,000 |
+| Server C# lines | 16,830 | 11,227 | about 11,000 |
 | Authenticated API families | 5 | 3 (`/api/v1/experience`, `/api/v1/tangents`, legacy REST) | 1 |
 | Persisted entity types | 30 | 25 | about 20 |
 | Global lock entries, direct / via `WithCurrentPolicy` | 49 / 31 | 44 / 18 | 0 |
@@ -250,14 +269,14 @@ At `d682c26` the .NET suite passes 506 of 518. These 12 tests fail before any EP
 | `bool authorized` parameters | 9 | 8 | 0 |
 | `EnsureHome` call sites | 17 | 0 | 0 |
 | `Mcp` folder lines | 3,697 | 358 (enrollment) | 0 |
-| Greenfield findings (lines): total | 4,132 | 1,884 | 0 |
+| Greenfield findings (lines): total | 4,132 | 1,890 | 0 |
 | — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 30 / 0 / 21 (`SourceDecision`, R3.6) / 0 | 0 |
-| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,825 / 8 / 0 | 0 |
-| .NET tests | 506 of 518 (12 known failures) | 351 of 359 (the 8 remaining known failures, N-020) | all pass |
+| — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,831 / 8 / 0 | 0 |
+| .NET tests | 506 of 518 (12 known failures) | 349 of 357 (the 8 remaining known failures, N-020) | all pass |
 | Browser tests | 170 of 170 | 129 of 129 | all pass |
-| Connector tests | 98 of 98 | 100 of 100 | all pass |
-| Connector Rust lines (baseline at `deb70ab`) | 9,489 | 9,489 | about 8,300 |
-| Connector enrollment / account-binding paths | 3 / 2 | 3 / 2 | 1 / 1 |
+| Connector tests | 98 of 98 | 94 of 94 | all pass |
+| Connector Rust lines (baseline at `deb70ab`) | 9,489 | 9,174 | about 8,300 |
+| Connector enrollment / account-binding paths | 3 / 2 | 1 / 1 | 1 / 1 |
 | Connector source without a working path | about 850 | about 850 | 0 |
 | Mutexes in `ConnectorHub` | 10 | 10 | no hub |
 
@@ -342,6 +361,8 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 
 - **N-038** (R2.1, naming) Naming the server concept **Space** collides with the deleted atproto Spaces storage in exactly two places, both in the greenfield check: `\bSpaces[A-Z]\w*` would flag any plural identifier such as `SpacesController`, and `\bSpaceState\b` is banned outright — a plausible name for a Space's own state. Every remaining finding under that rule is `SourceDecision` (21 lines, removed in R3.6), so the rule can be narrowed to `\bSourceDecision\b` with no loss the moment R2.1 starts, and deleted entirely after R3.6. Do the narrowing before the rename, or the check will report the new vocabulary as the old one. The rule set already encodes the rest of this rename — `TangentSite`, `TangentCommunity`, `room*` and `Message` are listed as retired vocabulary — so R2.1 gains a destination word, not scope.
 
+- **N-039** (R1.12) Two consequences worth recording rather than hiding. First, greenfield rose 1,884 → 1,890: the .NET connector tests now seed the connector's state file, whose wire fields are `companion_id`/`companionId`, which the retired-vocabulary rule counts. The wording is the connector's own and clears when R2.5 renames its glossary; the alternative was leaving those tests driving a deleted CLI verb. Second, the connector journeys seed a `sat_`-shaped PDS session, because minting an OAuth-shaped one needs `atproto_oauth`'s private key encoder — so the seeded shape is one the product can no longer produce. `bind_oauth_journey` still drives the real flow end to end, and R6.1 reconciles the fake with the real server. When it does, `AtprotoSession.dpop_key` and `refresh_jwt` can stop being optional: only the OAuth bind creates sessions now.
+
 ## Findings to route
 
 None yet. Record Koan defects here with the framework revision, a reproducer, expected and observed behavior, severity and consumer impact, then ask Leo to route them.
@@ -381,7 +402,9 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R1.8 closed: the walkthrough passes end to end and the server is 5,497 lines smaller than the baseline, against a target of about 5,000.
 - R1.11: the companion manager refuses foreign hosts and cross-site writes, and identifies itself through `/api/discovery` instead of being taken on trust. Connector 100/100; .NET connector integration 3/3 on the release binary (N-037); greenfield 1,884.
 - Leo settled the access contract and the role model in conversation: D11, D12 and [ADR 0013](../../adr/0013-access-contract-and-role-model.md), with N-035's arrival model, R3.4's widened scope, the new R4.7 and walkthrough step W11. A first version of this design was lost with an interrupted chat before it reached the repository; that is why it is written down before any of it is built.
-- Next: R1.12–R1.14.
+- R1.12: one enrollment path. The unbound tier, the app-password binding and session import are gone from the connector, together with the server's person-scoped credential endpoints; six tests of the removed paths went with them, and the rest seed state instead of driving a deleted verb. Connector 94/94; .NET 349/357 with only the 8 known; connector `src/` 9,489 → 9,174; server C# 11,333 → 11,227 (N-039).
+- Leo, after R1.12: the PoC is saddled with unreasonable tests. The evidence agrees — every defect this slice found (N-025, N-027, N-029, N-030, N-035) came from the walkthrough, never from the suites, while R1.12's ~300 deleted product lines cost a session of test rework. R1.15 audits them (N-040).
+- Next: R1.15, then R1.13–R1.14.
 
 ## Evidence index
 

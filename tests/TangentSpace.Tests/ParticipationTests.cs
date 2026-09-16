@@ -56,30 +56,6 @@ public sealed class ParticipationTests
         => Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(ParticipantId, "runner", lifetime, ["read"], Now));
 
     [Fact]
-    public void Enrollment_is_bound_to_authenticated_claims_and_rejects_submitted_DID()
-    {
-        Assert.Equal(ParticipantId, ParticipationAccess.EnrollmentParticipant(Cookie()));
-        Assert.Throws<UnauthorizedAccessException>(() => ParticipationAccess.EnrollmentParticipant(
-            new ClaimsPrincipal(new ClaimsIdentity([new Claim(ParticipationConstants.ParticipantClaim, OtherParticipant)]))));
-        var hostile = "{\"name\":\"runner\",\"lifetimeDays\":7,\"participant\":\"" + OtherParticipant + "\"}";
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<CredentialEnrollmentRequest>(hostile));
-        Assert.Throws<Newtonsoft.Json.JsonSerializationException>(() => Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialEnrollmentRequest>(hostile));
-        var (credential, _) = Issue();
-        Assert.Throws<UnauthorizedAccessException>(() => ParticipationAccess.EnrollmentParticipant(ParticipationCredentials.Principal(credential)));
-    }
-
-    [Fact]
-    public void Mvc_enrollment_defaults_and_unknown_revocation_fields_are_explicit()
-    {
-        var enrollment = Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialEnrollmentRequest>("{\"name\":\"runner\"}")!;
-        Assert.Equal("runner", enrollment.Name);
-        Assert.Equal(7, enrollment.LifetimeDays);
-        Assert.Null(enrollment.Grants);
-        Assert.Throws<Newtonsoft.Json.JsonSerializationException>(() => Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialRevocationRequest>("{\"participant\":\"" + OtherParticipant + "\"}"));
-        Assert.NotNull(Newtonsoft.Json.JsonConvert.DeserializeObject<CredentialRevocationRequest>("{}"));
-    }
-
-    [Fact]
     public void Credential_identity_carries_the_participant_claim_and_narrow_grants()
     {
         var (credential, _) = ParticipantCredential.Issue(ParticipantId, "reader", 1, [ParticipationGrants.Read], Now);

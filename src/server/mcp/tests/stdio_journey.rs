@@ -1,5 +1,5 @@
-//! A real end-to-end stdio journey: enroll through the CLI intake, then drive the compiled
-//! binary's MCP edge over its actual stdio transport — initialize negotiation, tools/list,
+//! A real end-to-end stdio journey: seed an enrolled identity in state, then drive the
+//! compiled binary's MCP edge over its actual stdio transport — initialize negotiation, tools/list,
 //! tools/call, ping — against the scripted fake experience server. All data is synthetic.
 
 mod common;
@@ -98,21 +98,9 @@ fn the_stdio_edge_negotiates_and_serves_the_fourteen_tools() {
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).expect("temp dir");
 
-    // The CLI intake performs setup: manual enrollment of the synthetic session token.
-    let token_file = home.join("session-token.txt");
-    std::fs::write(&token_file, LUMEN_CREDENTIAL).expect("token file");
-    let enroll = Command::new(env!("CARGO_BIN_EXE_tangent-connector"))
-        .args(["enroll", "--name", "lumen", "--server", server.origin(), "--token-file"])
-        .arg(&token_file)
-        .env("TANGENT_CONNECTOR_HOME", &home)
-        .output()
-        .expect("run enroll");
-    assert!(
-        enroll.status.success(),
-        "enrollment failed: {}",
-        String::from_utf8_lossy(&enroll.stderr)
-    );
-    assert!(String::from_utf8_lossy(&enroll.stdout).contains("manual enrollment"));
+    // Setup is the state a bound enrollment leaves; the handshake itself is
+    // bound_journey's subject, and this test is about the stdio edge.
+    common::seed_enrolled_state(&home, "lumen", server.origin(), LUMEN_CREDENTIAL);
 
     // The MCP intake: the real stdio transport.
     let mut peer = Peer::spawn(&["serve"], &home);
@@ -207,12 +195,7 @@ fn authorized_scope_emits_tool_list_changed_after_the_result() {
     let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
     let home = std::env::temp_dir().join(format!("tangent-connector-steward-{}-{unique}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
-    let token_file = home.join("session-token.txt");
-    std::fs::write(&token_file, STEWARD_CREDENTIAL).unwrap();
-    let enroll = Command::new(env!("CARGO_BIN_EXE_tangent-connector"))
-        .args(["enroll", "--name", "steward", "--server", server.origin(), "--token-file"])
-        .arg(&token_file).env("TANGENT_CONNECTOR_HOME", &home).output().unwrap();
-    assert!(enroll.status.success(), "{}", String::from_utf8_lossy(&enroll.stderr));
+    common::seed_enrolled_state(&home, "steward", server.origin(), STEWARD_CREDENTIAL);
     let mut peer = Peer::spawn(&["serve"], &home);
     peer.send(&json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize",
         "params": { "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": { "name": "steward-test" } } }));

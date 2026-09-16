@@ -133,35 +133,6 @@ pub struct ProblemDto {
     pub message: String,
 }
 
-/// The W2 enrollment exchange: `POST {origin}/api/v1/experience/identities/enroll`, no
-/// Authorization header (pre-credential). Every outcome is HTTP 200 with a status.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EnrollResponseDto {
-    #[serde(default)]
-    pub status: String,
-    #[serde(default)]
-    pub participant: Option<EnrollParticipantDto>,
-    #[serde(default)]
-    pub credential: Option<EnrollCredentialDto>,
-    #[serde(default)]
-    pub problem: Option<ProblemDto>,
-}
-
-/// The server's view of the enrolled participant.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EnrollParticipantDto {
-    #[serde(default)]
-    pub participant_ref: String,
-    #[serde(default)]
-    pub identities: Vec<IdentityKindDto>,
-    #[serde(default)]
-    pub best_label: Option<String>,
-    #[serde(default)]
-    pub did: Option<String>,
-}
-
 /// The one-time scoped credential. The token crosses custody directly; it is never
 /// rendered, journaled or echoed.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -222,34 +193,6 @@ pub struct ServiceProofDto {
     pub audience: String,
     #[serde(default)]
     pub method: String,
-}
-
-/// The PDS `createSession` response, as far as the connector reads it: the account's
-/// DID and handle, the access token (custody crosses directly), and the DID document
-/// naming the authoritative PDS endpoint.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateSessionDto {
-    #[serde(default)]
-    pub did: String,
-    #[serde(default)]
-    pub handle: String,
-    #[serde(default)]
-    pub access_jwt: String,
-    #[serde(default)]
-    pub did_doc: Option<Value>,
-}
-
-impl CreateSessionDto {
-    /// The authoritative PDS origin from the DID document's `#atproto_pds` service
-    /// entry, when present.
-    pub fn pds_endpoint(&self) -> Option<&str> {
-        let services = self.did_doc.as_ref()?.get("service")?.as_array()?;
-        services
-            .iter()
-            .find(|service| service.get("id").and_then(Value::as_str) == Some("#atproto_pds"))
-            .and_then(|service| service.get("serviceEndpoint").and_then(Value::as_str))
-    }
 }
 
 /// The PDS `getServiceAuth` response: the short-lived proof JWT.
