@@ -50,7 +50,7 @@ Each module is a folder under `src/server/web` and a namespace `TangentSpace.<Mo
 
 | Product word | Code name | Replaces |
 |---|---|---|
-| Host | `TangentHost` (avoids `Microsoft.Extensions.Hosting.Host`) | `TangentSite`, "site" |
+| Space | `Space` | `TangentSite`, `TangentHost`, "site", "server", "Host" |
 | Tangent | `Tangent` | `TangentCommunity` |
 | Topic | `Topic`; its description text is `Topic.Description` | `Room`, "channel", `Room.Topic` |
 | Post | `Post` | `Message` |
@@ -63,6 +63,8 @@ Each module is a folder under `src/server/web` and a namespace `TangentSpace.<Mo
 | Audit record | `AuditRecord` | `RoomAudit` |
 | Invitation · join request | `Invitation` · `JoinRequest` | `TangentInvitation` · `TangentJoinRequest` |
 | Moderation case | `ModerationCase` | — |
+
+**Space, Tangent, Topic, Post** are the product's four nouns, in that order of containment: a Space is a Tangent Space, and it is what an operator runs. `Space` needs no prefix — the `TangentHost` spelling only ever existed to dodge `Microsoft.Extensions.Hosting.Host`, and that collision goes with the word. "Host" survives in this codebase only as the HTTP header the companion manager checks, which is not a product word and is not renamed.
 
 The connector's own words are in the [connector glossary](#connector-glossary).
 

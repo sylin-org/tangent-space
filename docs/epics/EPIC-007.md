@@ -134,6 +134,7 @@ Every slice is accepted with the existing suites plus this walkthrough on a fres
 8. A new post appears live in another tab without losing a draft.
 9. Switch accounts in the browser; the page re-renders as the new account.
 10. Restart the container; state and sessions survive.
+11. A new participant arrives knowing nobody: the server card greets them, they read a public Topic without joining, they self-enrol into an offered role and watch the Tangents it opens appear, and where nothing admits them they ask to join and the owner sees the application.
 
 ## Targets (estimates)
 
