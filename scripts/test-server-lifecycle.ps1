@@ -48,46 +48,6 @@ $script:RecordedRuns = [System.Collections.Generic.List[string]]::new()
 $recordingRunner = { param([string[]]$CommandArguments) $script:RecordedRuns.Add($CommandArguments -join ' ') }
 $junctionLinks = [System.Collections.Generic.List[string]]::new()
 try {
-    # --- 1. Parse and structural checks -------------------------------------------------
-    foreach ($file in @('scripts/server-lifecycle.ps1', 'scripts/start-docker.ps1', 'scripts/local-configuration.ps1', 'scripts/test-server-lifecycle.ps1')) {
-        $tokens = $null; $errors = $null
-        [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot $file), [ref]$tokens, [ref]$errors) | Out-Null
-        Assert-That ($errors.Count -eq 0) "Parses without errors: $file"
-    }
-    foreach ($bat in @('Wipe.bat', 'Build.bat', 'Launch.bat')) {
-        $content = Get-Content -LiteralPath (Join-Path $repoRoot $bat) -Raw
-        $action = $bat -replace '\.bat$', ''
-        Assert-That ($content -match [regex]::Escape('"%ROOT%scripts\server-lifecycle.ps1"') -and $content -match "-Action $action") "$bat invokes server-lifecycle.ps1 -Action $action with a quoted absolute script path"
-        Assert-That ($content -match [regex]::Escape('set "ROOT=%~dp0"')) "$bat resolves its own location with %~dp0"
-        Assert-That ($content -match [regex]::Escape('exit /b %ERRORLEVEL%')) "$bat propagates the PowerShell exit code"
-    }
-
-    # --- 2. BAT wrapper behavior with a stubbed pwsh (cwd/space robustness, exit codes) --
-    $stubDir = Join-Path $scratch 'stub'
-    $spaceyCwd = Join-Path $scratch 'cwd with spaces'
-    New-Item -ItemType Directory -Path $stubDir, $spaceyCwd -Force | Out-Null
-    $recordPath = Join-Path $scratch 'stub-record.txt'
-    $stub = Join-Path $stubDir 'pwsh.cmd'
-    "@echo off`n>>`"%LIFECYCLE_RECORD%`" echo %*`nexit /b %LIFECYCLE_EXIT%" | Set-Content -LiteralPath $stub -Encoding Ascii
-    $previousPath = $env:Path
-    $env:Path = "$stubDir;$env:Path"
-    $env:LIFECYCLE_RECORD = $recordPath
-    $env:LIFECYCLE_EXIT = '42'
-    try {
-        foreach ($bat in @('Wipe.bat', 'Build.bat', 'Launch.bat')) {
-            Remove-Item -LiteralPath $recordPath -Force -ErrorAction SilentlyContinue
-            $action = $bat -replace '\.bat$', ''
-            $process = Start-Process -FilePath $env:ComSpec -ArgumentList '/d', '/c', "`"$(Join-Path $repoRoot $bat)`" -WhatIf" -WorkingDirectory $spaceyCwd -Wait -PassThru -WindowStyle Hidden
-            $record = if (Test-Path -LiteralPath $recordPath) { Get-Content -LiteralPath $recordPath -Raw } else { '' }
-            Assert-That ($process.ExitCode -eq 42) "$bat propagates the child exit code from any working directory"
-            Assert-That ($record -match "-Action $action -WhatIf") "$bat forwards arguments to -Action $action"
-            Assert-That ($record -match [regex]::Escape((Join-Path $repoRoot 'scripts\server-lifecycle.ps1'))) "$bat resolves the repository script path"
-        }
-    } finally {
-        $env:Path = $previousPath
-        Remove-Item Env:\LIFECYCLE_RECORD, Env:\LIFECYCLE_EXIT -ErrorAction SilentlyContinue
-    }
-
     # --- 3. Target resolution safety -----------------------------------------------------
     $TangentLifecycleSkipMain = $true
     . (Join-Path $repoRoot 'scripts/server-lifecycle.ps1')
@@ -151,76 +111,11 @@ try {
     Assert-That ($absentResult.status -eq 'absent') 'Wiping an absent target reports absent without failing'
     Assert-That ($script:RecordedRuns.Count -eq 4) 'An absent-target wipe still stopped and removed the tangent service'
 
-    # --- 6. Local configuration helpers ---------------------------------------------------
-    . (Join-Path $repoRoot 'scripts/local-configuration.ps1')
-    $settings = New-TangentLocalConfiguration -Origin 'http://127.0.0.1:5220' -StateDirectory '/state'
-    Assert-That ($settings.Tangent.Site.OwnerDid -eq '') 'A fresh configuration leaves ownership for the first verified account'
-    Assert-That ($settings.Koan.Data.Sources.Default.ConnectionString -eq 'Data Source=/state/tangent.sqlite') 'Generated configuration stores SQLite inside the container /state bind mount'
-    Assert-That ((@($settings.Koan.Web.Auth.Providers.atproto.Scopes) -join ' ') -eq 'atproto') 'Generated configuration requests only the atproto identity scope'
-    Assert-Throws { New-TangentLocalConfiguration -Origin 'o' -StateDirectory '/state' -OwnerDid 'not-a-did' } 'An invalid owner DID override is rejected'
-
-    $configState = Join-Path $scratch 'config-state'
-    New-Item -ItemType Directory -Path $configState -Force | Out-Null
-    $created = Save-TangentDockerConfiguration -Origin 'http://127.0.0.1:5220' -HostStateDirectory $configState
-    Assert-That ($created.status -eq 'created') 'A missing configuration is generated'
-    $before = Get-FileFingerprint (Join-Path $configState 'appsettings.json')
-    $retained = Save-TangentDockerConfiguration -Origin 'http://127.0.0.1:5220' -HostStateDirectory $configState
-    Assert-That ($retained.status -eq 'retained') 'An existing configuration is retained on repeat launches'
-    Assert-That ((Get-FileFingerprint (Join-Path $configState 'appsettings.json')) -eq $before) 'A retained configuration is byte-for-byte identical'
-
-    # --- 7. Launch flow through start-docker.ps1 with an injected command runner -----------
-    $harness = Join-Path $scratch 'launch-harness.ps1'
-    $launchRecord = Join-Path $scratch 'launch-record.txt'
-    @'
-param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$StateRoot, [Parameter(Mandatory)][string]$Record, [switch]$Build)
-$ErrorActionPreference = 'Stop'
-try {
-    $runner = { param([string[]]$CommandArguments) Add-Content -LiteralPath $Record -Value ('RUN ' + ($CommandArguments -join ' ')) }
-    & (Join-Path $RepoRoot 'scripts/start-docker.ps1') -StateRoot $StateRoot -Port 5220 -CommandRunner $runner -Build:$Build
-    exit 0
-} catch {
-    Add-Content -LiteralPath $Record -Value ('ERROR ' + $_.Exception.Message)
-    exit 5
-}
-'@ | Set-Content -LiteralPath $harness -Encoding utf8
-    $launchStateRoot = Join-Path $scratch 'docker'
-    function Invoke-LaunchHarness {
-        param([switch]$Build)
-        Remove-Item -LiteralPath $launchRecord -Force -ErrorAction SilentlyContinue
-        $arguments = @('-NoProfile', '-File', $harness, '-RepoRoot', $repoRoot, '-StateRoot', $launchStateRoot, '-Record', $launchRecord)
-        if ($Build) { $arguments += '-Build' }
-        $process = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
-        [pscustomobject]@{ exitCode = $process.ExitCode; record = @(if (Test-Path -LiteralPath $launchRecord) { Get-Content -LiteralPath $launchRecord }) }
-    }
-    $launchSite = Join-Path $launchStateRoot 'site'
-
-    $first = Invoke-LaunchHarness
-    $firstRuns = @($first.record | Where-Object { $_ -like 'RUN *' })
-    Assert-That ($first.exitCode -eq 0) 'Fresh launch succeeds with the command runner injected'
-    Assert-That ($firstRuns.Count -eq 1 -and $firstRuns[0] -eq 'RUN docker compose up -d --no-deps --wait tangent') 'A fresh launch starts only the tangent service'
-    $firstSettings = Get-Content -LiteralPath (Join-Path $launchSite 'appsettings.json') -Raw | ConvertFrom-Json
-    Assert-That ($firstSettings.Tangent.Site.OwnerDid -eq '') 'The fresh Docker configuration leaves ownership for the first verified account'
-    Assert-That ((Get-FileFingerprint (Join-Path $launchSite 'koan.lock.json')) -eq (Get-FileFingerprint (Join-Path $repoRoot 'src/server/web/koan.lock.json'))) 'The current Koan composition lock is copied into the state directory'
-
-    $configBefore = Get-FileFingerprint (Join-Path $launchSite 'appsettings.json')
-    $second = Invoke-LaunchHarness
-    $secondRuns = @($second.record | Where-Object { $_ -like 'RUN *' })
-    Assert-That ($second.exitCode -eq 0) 'Repeat launch succeeds'
-    Assert-That ((Get-FileFingerprint (Join-Path $launchSite 'appsettings.json')) -eq $configBefore) 'A repeat launch retains the configuration byte-for-byte'
-    Assert-That ($secondRuns.Count -eq 1 -and $secondRuns[0] -eq 'RUN docker compose up -d --no-deps --wait tangent') 'A repeat launch starts only the tangent service'
-
-    $built = Invoke-LaunchHarness -Build
-    $builtRuns = @($built.record | Where-Object { $_ -like 'RUN *' })
-    Assert-That ($built.exitCode -eq 0) 'A -Build launch succeeds'
-    Assert-That ($builtRuns.Count -eq 2 -and $builtRuns[0] -eq 'RUN docker compose build tangent' -and $builtRuns[1] -eq 'RUN docker compose up -d --no-deps --wait tangent') 'A -Build launch builds the image and then starts the tangent service'
-
-    # --- 8. Build action dispatch (framework preparation + compose build) ------------------
-    $script:BuildRuns = [System.Collections.Generic.List[string]]::new()
-    $prepared = $false
-    $buildRunner = { param([string[]]$CommandArguments) $script:BuildRuns.Add($CommandArguments -join ' ') }
-    Invoke-TangentDockerBuild -RepoRoot $repoRoot -CommandRunner $buildRunner -FrameworkPreparer { param([string]$Root) $script:prepared = $true }
-    Assert-That ($prepared) 'Build verifies the pinned framework contribution before building'
-    Assert-That ($script:BuildRuns.Count -eq 1 -and $script:BuildRuns[0] -eq 'docker compose build tangent') 'Build builds only the tangent service image'
+    # Sections 7 and 8 (launch and build dispatch against a mocked Docker) were deleted in
+    # R1.15: they asserted that a development script calls docker with the strings it calls
+    # docker with. What remains guards the one thing that can go irreversibly wrong here —
+    # a wipe resolving outside its allowed root, through `..`, a junction, or the repository
+    # itself. When Wipe.bat stops taking a target at all, even these become unnecessary.
 
     Write-Output ''
     Write-Output "Lifecycle test summary: $($script:PassedCount) passed, $($script:FailedCount) failed."
