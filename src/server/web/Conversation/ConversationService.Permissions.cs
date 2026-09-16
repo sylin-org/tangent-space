@@ -13,15 +13,15 @@ public sealed partial class ConversationService
 
     /// <summary>Call inside the current-policy callback so both authority and the row are fresh.
     /// Keep read authorization ahead of lookup, including when recovering a terminal receipt.</summary>
-    private static async Task<Message> ReadPostForChange(RoomPolicy policy, string roomKey, string messageId, CancellationToken ct)
+    private static async Task<Post> ReadPostForChange(RoomPolicy policy, string roomKey, string messageId, CancellationToken ct)
     {
         RequireTopicCapability(policy, TopicCapability.Read, "This room's current rules do not allow changing posts.");
-        var current = await Message.Get(messageId, ct);
-        if (current is null || current.RoomKey != roomKey) throw new ArgumentException("Choose a message in this room.");
+        var current = await Post.Get(messageId, ct);
+        if (current is null || current.RoomKey != roomKey) throw new ArgumentException("Choose a post in this room.");
         return current;
     }
 
-    private static void RequirePostChange(RoomPolicy policy, Message current, bool delete)
+    private static void RequirePostChange(RoomPolicy policy, Post current, bool delete)
     {
         var own = string.Equals(current.AuthorParticipantId, policy.ActorParticipantId, StringComparison.Ordinal);
         var capability = !delete ? TopicCapability.EditOwnPost

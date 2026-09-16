@@ -30,12 +30,12 @@ public sealed class TangentModule : KoanModule
     public override void Register(IServiceCollection services)
     {
         TangentOwnerRoleGuard.Register();
-        Message.Lifecycle.BeforeUpsert(async context =>
+        Post.Lifecycle.BeforeUpsert(async context =>
         {
-            var message = context.Current;
+            var post = context.Current;
             if (string.IsNullOrWhiteSpace(Koan.Data.Core.EntityContext.Current?.Partition)
-                && !message.Removed && message.OfMessageId is null && message.Facets is null)
-                message.Facets = await MessageFacets.Effective(message.Content.Text, null, context.CancellationToken);
+                && !post.Removed && post.OfMessageId is null && post.Facets is null)
+                post.Facets = await PostFacets.Effective(post.Content.Text, null, context.CancellationToken);
             return context.Proceed();
         });
         services.AddOptions<SpaceOptions>().BindConfiguration(TangentConstants.SpaceConfiguration)

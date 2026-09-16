@@ -162,7 +162,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         finally { gate.Exit(); }
     }
 
-    /// <summary>Creates a bound invitation. Issuing never joins anyone, never sends a message, and delivery stays out of scope.
+    /// <summary>Creates a bound invitation. Issuing never joins anyone, never sends a post, and delivery stays out of scope.
     /// The target arrives as an external identifier resolved to its current holder here.</summary>
     public async Task<TangentInvitationResult> Invite(string actorId, string tangentKey, string targetIdentifier, CompanionRole role, CancellationToken ct)
     {

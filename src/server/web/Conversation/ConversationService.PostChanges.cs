@@ -13,11 +13,11 @@ public sealed partial class ConversationService
         bool delete, string operationId, CancellationToken ct, IReadOnlyList<PostFacet>? facets = null)
     {
         if (string.IsNullOrWhiteSpace(messageId) || string.IsNullOrWhiteSpace(operationId))
-            throw new ArgumentException("A message ID and operation ID are required.");
+            throw new ArgumentException("A post ID and operation ID are required.");
         if (!delete)
         {
             if (text is null) throw new ArgumentException("Text is required for an edit.");
-            MessageContent.CheckText(text);
+            PostContent.CheckText(text);
             PostFacets.Check(text, facets);
         }
         else if (facets is { Count: > 0 }) throw new ArgumentException("A removal cannot carry facets.");
@@ -26,7 +26,7 @@ public sealed partial class ConversationService
         {
             var change = await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
             {
-                var message = await ReadPostForChange(policy, roomKey, messageId, token);
+                var post = await ReadPostForChange(policy, roomKey, messageId, token);
                 var id = PostChange.Key(participantId, roomKey, messageId, operationId);
                 var previous = await PostChange.Get(id, token);
                 if (previous is not null)
@@ -39,7 +39,7 @@ public sealed partial class ConversationService
                     if (Canonical(previous.Facets) != Canonical(facets)) throw new WriteConflict();
                     if (previous.State is "accepted" or "deleted" or "moderated") return previous;
                 }
-                RequirePostChange(policy, message, delete);
+                RequirePostChange(policy, post, delete);
                 if (previous is not null) return previous;
                 var created = new PostChange { Id = id, RoomKey = roomKey, MessageId = messageId, ActorParticipantId = participantId,
                     OperationId = operationId, Delete = delete, Text = text, Facets = facets, UpdatedAt = clock.GetUtcNow() };
@@ -50,16 +50,16 @@ public sealed partial class ConversationService
             // mint a second snapshot.
             if (change.State is "accepted" or "moderated" or "deleted") return new(change.State, messageId, change.Detail);
 
-            var message = await governance.WithCurrentPolicy(participantId, roomKey,
+            var post = await governance.WithCurrentPolicy(participantId, roomKey,
                 (policy, token) => ReadPostForChange(policy, roomKey, messageId, token), ct);
-            if (change.Delete && message.AuthorParticipantId != participantId)
+            if (change.Delete && post.AuthorParticipantId != participantId)
             {
                 await governance.WithCurrentPolicy(participantId, roomKey, async (currentPolicy, token) =>
                 {
                     var current = await ReadPostForChange(currentPolicy, roomKey, messageId, token);
                     RequirePostChange(currentPolicy, current, delete: true);
                     await SnapshotChange(current, token);
-                    current.Removed = true; current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.Removed = true; current.Content = new PostContent("", current.Content.CreatedAt, current.Content.ReplyTo);
                     current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
                     // The words are gone; their byte ranges are meaningless on a removed row.
                     current.Facets = null;
@@ -82,7 +82,7 @@ public sealed partial class ConversationService
                 {
                     await SnapshotChange(current, token);
                     current.Removed = true;
-                    current.Content = new MessageContent("", current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.Content = new PostContent("", current.Content.CreatedAt, current.Content.ReplyTo);
                     current.RemovedAt = clock.GetUtcNow();
                     current.RemovedByParticipantId = participantId;
                     current.Facets = null;
@@ -92,7 +92,7 @@ public sealed partial class ConversationService
                     // D2a: provided facets ride the new version; absent facets re-detect
                     // deterministically. The pre-edit structure rides its snapshot.
                     await SnapshotChange(current, token);
-                    current.Content = new MessageContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.Content = new PostContent(change.Text!, current.Content.CreatedAt, current.Content.ReplyTo);
                     current.EditedAt = clock.GetUtcNow();
                     current.Facets = change.Facets;
                 }
@@ -119,9 +119,9 @@ public sealed partial class ConversationService
     /// used identity. Must run inside the caller's governance transaction so the snapshot, the live
     /// mutation, the PostChange record and the activity journal commit together or not at all — a
     /// failure between the snapshot write and the live save rolls the transaction back.</summary>
-    private static async Task SnapshotChange(Message live, CancellationToken token)
+    private static async Task SnapshotChange(Post live, CancellationToken token)
     {
-        var snapshot = new Message
+        var snapshot = new Post
         {
             Id = Guid.CreateVersion7().ToString(),
             RoomKey = live.RoomKey, AuthorParticipantId = live.AuthorParticipantId, SourceUri = live.SourceUri, SourceCid = live.SourceCid,
@@ -133,10 +133,10 @@ public sealed partial class ConversationService
         // The vendored framework copy exposes no partitioned insert (Entity.Insert arrives upstream
         // after its pin), so the write-once construction rests on the fresh GUIDv7 identity — this
         // method is the only writer into the changelog partition — plus an absence guard under the
-        // upsert verb. Swap to Message.Insert(snapshot, ChangelogPartition, token) when the pin moves.
-        if (await Message.Get(snapshot.Id, Message.ChangelogPartition, token) is not null)
+        // upsert verb. Swap to Post.Insert(snapshot, ChangelogPartition, token) when the pin moves.
+        if (await Post.Get(snapshot.Id, Post.ChangelogPartition, token) is not null)
             throw new InvalidDataException("The changelog snapshot identity already exists.");
-        await snapshot.Save(Message.ChangelogPartition, token);
+        await snapshot.Save(Post.ChangelogPartition, token);
         live.ChangeId = snapshot.Id;
     }
 

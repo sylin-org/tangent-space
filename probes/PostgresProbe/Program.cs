@@ -52,7 +52,7 @@ var partial = new Dictionary<string, object?> { ["schema"] = schemaName, ["endpo
 try
 {
 using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10)); var ct = timeout.Token;
-var sourcePaths = new[] { "src/server/web/Conversation/Message.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs",
+var sourcePaths = new[] { "src/server/web/Conversation/Post.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs",
     ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/NpgsqlRepository.cs", ".local/upstream/koan-framework/src/Koan.Data.Relational.Npgsql/Runtime/NpgsqlDialect.cs",
     ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs", ".local/upstream/koan-framework/src/Connectors/Data/Postgres/PostgresAdapterFactory.cs" };
 Dictionary<string, string> Hashes() => sourcePaths.ToDictionary(path => path, path => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(repo, path)))));
@@ -73,7 +73,7 @@ async Task CheckBudget()
 }
 if (Convert.ToInt64(await Scalar($"SELECT count(*) FROM pg_namespace WHERE nspname='{schemaName}'")) != 0) throw new InvalidOperationException("Fresh schema unexpectedly exists.");
 await Execute("CREATE SCHEMA " + Q(schemaName));
-stage = "building unstarted host and provisioning Message schema";
+stage = "building unstarted host and provisioning Post schema";
 var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { ContentRootPath = root, EnvironmentName = "Testing", Args = [] });
 builder.Configuration.Sources.Clear();
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> {
@@ -85,8 +85,8 @@ builder.Logging.ClearProviders(); builder.Services.AddKoan();
 using var host = builder.Build(); // Deliberately no Start/Run.
 AppHost.Current = host.Services; TestHooks.ResetDataConfigs();
 var dataService = host.Services.GetRequiredService<IDataService>();
-var repository = dataService.GetRepository<Message, string>();
-var selectedAdapter = dataService.GetScopeDiagnostics<Message, string>().AdapterName;
+var repository = dataService.GetRepository<Post, string>();
+var selectedAdapter = dataService.GetScopeDiagnostics<Post, string>().AdapterName;
 if (!selectedAdapter.Contains("NpgsqlRepository", StringComparison.Ordinal)) throw new InvalidOperationException("Unexpected provider selected: " + selectedAdapter);
 var caps = DataCaps.Describe(repository, repository.GetType().Name);
 var capabilities = new { linq = caps.Has(DataCaps.Query.Linq), boundedPaging = caps.Has(DataCaps.Query.ProviderBoundedPaging), atomicBatch = caps.Has(DataCaps.Write.AtomicBatch), bulkUpsert = caps.Has(DataCaps.Write.BulkUpsert) };
@@ -97,7 +97,7 @@ await using (var cmd = new NpgsqlCommand("SELECT tablename FROM pg_tables WHERE 
 {
     cmd.Parameters.AddWithValue("schema", schemaName); var tables = new List<string>();
     await using var reader = await cmd.ExecuteReaderAsync(ct); while (await reader.ReadAsync(ct)) tables.Add(reader.GetString(0));
-    if (tables.Count != 1) throw new InvalidOperationException("Expected one Message table; got " + string.Join(',', tables));
+    if (tables.Count != 1) throw new InvalidOperationException("Expected one Post table; got " + string.Join(',', tables));
     table = tables[0];
 }
 var qualified = Q(schemaName) + "." + Q(table);
@@ -108,7 +108,7 @@ await using (var cmd = new NpgsqlCommand("SELECT column_name,data_type FROM info
     await using var reader = await cmd.ExecuteReaderAsync(ct);
     while (await reader.ReadAsync(ct)) { var name = reader.GetString(0); var type = reader.GetString(1); columnInfo.Add(new { name, type }); if (type == "jsonb") jsonColumn = name; else if (name.Equals("Id", StringComparison.OrdinalIgnoreCase)) idColumn = name; }
 }
-if (columnInfo.Count != 2 || idColumn.Length == 0 || jsonColumn.Length == 0) throw new InvalidOperationException("Unrecognized Message storage shape.");
+if (columnInfo.Count != 2 || idColumn.Length == 0 || jsonColumn.Length == 0) throw new InvalidOperationException("Unrecognized Post storage shape.");
 var template = JsonNode.Parse((string)(await Scalar($"SELECT {Q(jsonColumn)}::text FROM {qualified} LIMIT 1"))!)!.AsObject();
 var jsonCase = template.ContainsKey("RoomKey") ? "pascal" : template.ContainsKey("roomKey") ? "camel" : throw new InvalidOperationException("RoomKey not found in actual JSON.");
 string Field(string value) => jsonCase == "camel" ? char.ToLowerInvariant(value[0]) + value[1..] : value;
@@ -119,16 +119,16 @@ async Task<List<object>> Indexes()
     await using var reader = await cmd.ExecuteReaderAsync(ct); while (await reader.ReadAsync(ct)) found.Add(new { name = reader.GetString(0), sql = reader.GetString(1) }); return found;
 }
 var originalIndexes = await Indexes();
-partial["table"] = table; partial["columns"] = columnInfo; partial["originalIndexes"] = originalIndexes; stage = "Message CRUD qualification";
+partial["table"] = table; partial["columns"] = columnInfo; partial["originalIndexes"] = originalIndexes; stage = "Post CRUD qualification";
 // Small CRUD qualification through the actual entity facade, independent of native fixture seeding.
 using (EntityContext.NoCache())
 {
     var item = Checks.Make("crud", 1); await item.Save(ct);
-    var read = await Message.Get(item.Id, ct) ?? throw new InvalidDataException("CRUD insert missing.");
+    var read = await Post.Get(item.Id, ct) ?? throw new InvalidDataException("CRUD insert missing.");
     if (read.Content.Text != item.Content.Text || read.RoomKey != item.RoomKey) throw new InvalidDataException("CRUD roundtrip mismatch.");
     read.Content = read.Content with { Text = "Updated synthetic content" }; await read.Save(ct);
-    if ((await Message.Get(item.Id, ct))?.Content.Text != "Updated synthetic content") throw new InvalidDataException("CRUD update mismatch.");
-    if (!await Message.Remove(item.Id, ct) || await Message.Get(item.Id, ct) is not null) throw new InvalidDataException("CRUD delete mismatch.");
+    if ((await Post.Get(item.Id, ct))?.Content.Text != "Updated synthetic content") throw new InvalidDataException("CRUD update mismatch.");
+    if (!await Post.Remove(item.Id, ct) || await Post.Get(item.Id, ct) is not null) throw new InvalidDataException("CRUD delete mismatch.");
 }
 partial["crudPassed"] = true;
 async Task<List<object>> Explain(SqlTrace.Statement[] statements, long edge, long upper)
@@ -155,19 +155,19 @@ async Task<object> Measure(int hotCount, string phase)
     foreach (var (label, edge, descending) in new[] { ("beginning", 0L, false), ("middle-after", hotCount / 2L, false), ("tail-after", hotCount - 21L, false), ("middle-before", hotCount / 2L, true) })
     foreach (var mode in new[] { "materialized-query", "first-stream-page" })
     {
-        var member = typeof(Message).GetProperty(nameof(Message.Sequence))!;
-        var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Message), [member], typeof(long), false, -1), descending)] };
+        var member = typeof(Post).GetProperty(nameof(Post.Sequence))!;
+        var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Post), [member], typeof(long), false, -1), descending)] };
         var room = Checks.Room("hot"); long upper = hotCount;
-        Expression<Func<Message, bool>> predicate = descending ? m => m.RoomKey == room && m.Sequence < edge && m.Sequence <= upper : m => m.RoomKey == room && m.Sequence > edge && m.Sequence <= upper;
+        Expression<Func<Post, bool>> predicate = descending ? m => m.RoomKey == room && m.Sequence < edge && m.Sequence <= upper : m => m.RoomKey == room && m.Sequence > edge && m.Sequence <= upper;
         var times = new List<double>(); SqlTrace.Statement[] sample = [];
         for (var iteration = 0; iteration < 7; iteration++)
         {
             stage = $"{phase}: {hotCount} {label} {mode} iteration {iteration}";
-            await CheckBudget(); trace.Begin(); var timer = Stopwatch.StartNew(); IReadOnlyList<Message> rows;
+            await CheckBudget(); trace.Begin(); var timer = Stopwatch.StartNew(); IReadOnlyList<Post> rows;
             using (EntityContext.NoCache())
             {
-                if (mode == "materialized-query") rows = await Message.Query(predicate, query, ct);
-                else { var first = new List<Message>(); await foreach (var item in Message.QueryStream(predicate, descending ? "-Sequence" : "Sequence", 21, ct)) { first.Add(item); if (first.Count == 21) break; } rows = first; }
+                if (mode == "materialized-query") rows = await Post.Query(predicate, query, ct);
+                else { var first = new List<Post>(); await foreach (var item in Post.QueryStream(predicate, descending ? "-Sequence" : "Sequence", 21, ct)) { first.Add(item); if (first.Count == 21) break; } rows = first; }
             }
             timer.Stop(); var captured = trace.End(); Checks.Validate(rows, edge, descending);
             if (!captured.Any(item => item.Sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))) throw new InvalidDataException("Actual SQL capture did not record the query.");
@@ -180,7 +180,7 @@ async Task<object> Measure(int hotCount, string phase)
         Console.WriteLine($"{phase} hot={hotCount} {label} {mode}: p50={Checks.Rank(times, .5):F2}ms countStatements={sample.Count(item => item.Sql.Contains("COUNT(", StringComparison.OrdinalIgnoreCase))}");
     }
     trace.Begin(); var countTimer = Stopwatch.StartNew(); long exact;
-    using (EntityContext.NoCache()) exact = await Message.Count.Exact(ct);
+    using (EntityContext.NoCache()) exact = await Post.Count.Exact(ct);
     countTimer.Stop(); var countSql = trace.End();
     if (exact != hotCount + 2 * (hotCount / 10)) throw new InvalidDataException("Exact count differs from the synthetic multi-room fixture.");
     return new { phase, hotPosts = hotCount, distractorPostsPerTopic = hotCount / 10, totalPosts = exact, cases,
@@ -229,7 +229,7 @@ foreach (var key in new[] { "server_version", "fsync", "synchronous_commit", "fu
 var endingHashes = Hashes();
 if (sourceHashes.Any(entry => endingHashes[entry.Key] != entry.Value)) throw new InvalidOperationException("Source changed during the measured run.");
 process.Refresh();
-var report = new { scope = "Actual Tangent Message/Koan PostgreSQL adapter health and query microexperiment, not production admission or domain throughput", started, finished = DateTimeOffset.UtcNow,
+var report = new { scope = "Actual Tangent Post/Koan PostgreSQL adapter health and query microexperiment, not production admission or domain throughput", started, finished = DateTimeOffset.UtcNow,
     root, schemaName, table, columns = columnInfo, selectedRepository = repository.GetType().FullName, selectedAdapter, capabilities, crudPassed = true,
     endpoint = "127.0.0.1:25432", database = "postgres", credentials = "public synthetic lab fixture only; not copied from user state", hostStarted = false,
     runtime = RuntimeInformation.FrameworkDescription, os = RuntimeInformation.OSDescription, koanAssembly = typeof(Data<,>).Assembly.FullName, npgsqlAssembly = typeof(NpgsqlConnection).Assembly.FullName,
@@ -257,11 +257,11 @@ internal static class Checks
 {
     internal static string Room(string lane) => "epic005-" + lane + "-topic";
     internal static string Id(string lane, long sequence) => "epic005-" + lane + "-" + sequence.ToString("D10");
-    internal static Message Make(string lane, long sequence) => new() { Id = Id(lane, sequence), RoomKey = Room(lane), AuthorParticipantId = "synthetic-01", Sequence = sequence,
-        AcceptedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), Content = new MessageContent("Synthetic @member #scale post " + sequence + " — café 日本語", new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), null),
+    internal static Post Make(string lane, long sequence) => new() { Id = Id(lane, sequence), RoomKey = Room(lane), AuthorParticipantId = "synthetic-01", Sequence = sequence,
+        AcceptedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), Content = new PostContent("Synthetic @member #scale post " + sequence + " — café 日本語", new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), null),
         SourceUri = "at://synthetic.invalid/local.tangent.message/" + lane + "-" + sequence, SourceCid = "synthetic-cid-" + sequence, Facets = [] };
     internal static double Rank(IReadOnlyList<double> sorted, double p) => sorted[(int)Math.Ceiling(p * sorted.Count) - 1];
-    internal static void Validate(IReadOnlyList<Message> rows, long edge, bool descending)
+    internal static void Validate(IReadOnlyList<Post> rows, long edge, bool descending)
     {
         if (rows.Count != 21 || rows.Select(row => row.Id).Distinct().Count() != 21) throw new InvalidDataException("Bad window count/identity.");
         for (var index = 0; index < rows.Count; index++) { var sequence = descending ? edge - index - 1 : edge + index + 1; if (rows[index].Sequence != sequence || rows[index].RoomKey != Room("hot") || rows[index].Id != Id("hot", sequence)) throw new InvalidDataException("Wrong room, order, sequence, or ID in window."); }

@@ -46,7 +46,7 @@ public sealed record PostFacet
 /// <summary>Validation for client-supplied facets: kinds must be known, each kind carries
 /// exactly its own identity field, ranges must be valid ascending UTF-8 byte offsets inside
 /// the verbatim text, and ranges must not overlap (renderers replace single spans).</summary>
-public static class PostFacets
+public static partial class PostFacets
 {
     public static IReadOnlyList<PostFacet>? Check(string text, IReadOnlyList<PostFacet>? facets)
     {

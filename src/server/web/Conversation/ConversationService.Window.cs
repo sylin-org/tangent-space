@@ -25,7 +25,7 @@ public sealed partial class ConversationService
             var state = await RoomConversation.Get(topicKey, token) ?? new RoomConversation { Id = topicKey };
             var boundary = state.LastSequence;
             var position = "unread";
-            var rows = new List<Message>();
+            var rows = new List<Post>();
             var anchorIndex = 0;
 
             if (cursor is not null)
@@ -36,21 +36,21 @@ public sealed partial class ConversationService
                 boundary = selected.Boundary;
                 position = "page";
                 var candidates = selected.Older
-                    ? await Message.Query(m => m.RoomKey == topicKey && m.Sequence < selected.Edge && m.Sequence <= boundary,
+                    ? await Post.Query(m => m.RoomKey == topicKey && m.Sequence < selected.Edge && m.Sequence <= boundary,
                         SequenceQuery(limit, true), token)
-                    : await Message.Query(m => m.RoomKey == topicKey && m.Sequence > selected.Edge && m.Sequence <= boundary,
+                    : await Post.Query(m => m.RoomKey == topicKey && m.Sequence > selected.Edge && m.Sequence <= boundary,
                         SequenceQuery(limit), token);
                 rows = candidates.OrderBy(m => m.Sequence).ToList();
                 anchorIndex = selected.Older ? Math.Max(0, rows.Count - 1) : 0;
             }
             else if (anchorPostId is not null)
             {
-                var anchor = await Message.Get(anchorPostId, token);
+                var anchor = await Post.Get(anchorPostId, token);
                 if (anchor is null || anchor.RoomKey != topicKey || anchor.Sequence > boundary)
                     throw new ArgumentException("Choose an accessible Post in this Topic.");
-                var before = await Message.Query(m => m.RoomKey == topicKey && m.Sequence < anchor.Sequence,
+                var before = await Post.Query(m => m.RoomKey == topicKey && m.Sequence < anchor.Sequence,
                     SequenceQuery(limit, true), token);
-                var after = await Message.Query(m => m.RoomKey == topicKey && m.Sequence > anchor.Sequence && m.Sequence <= boundary,
+                var after = await Post.Query(m => m.RoomKey == topicKey && m.Sequence > anchor.Sequence && m.Sequence <= boundary,
                     SequenceQuery(limit), token);
                 rows = before.OrderBy(m => m.Sequence).Append(anchor).Concat(after.OrderBy(m => m.Sequence)).ToList();
                 anchorIndex = before.Count;
@@ -60,11 +60,11 @@ public sealed partial class ConversationService
             {
                 var read = await ReadPosition.Get(ReadPosition.Key(participantId, topicKey), token);
                 var after = Math.Min(read?.Sequence ?? 0, boundary);
-                rows = (await Message.Query(m => m.RoomKey == topicKey && m.Sequence > after && m.Sequence <= boundary,
+                rows = (await Post.Query(m => m.RoomKey == topicKey && m.Sequence > after && m.Sequence <= boundary,
                     SequenceQuery(limit), token)).ToList();
                 if (rows.Count == 0)
                 {
-                    rows = (await Message.Query(m => m.RoomKey == topicKey && m.Sequence <= boundary,
+                    rows = (await Post.Query(m => m.RoomKey == topicKey && m.Sequence <= boundary,
                         SequenceQuery(limit, true), token)).OrderBy(m => m.Sequence).ToList();
                     anchorIndex = Math.Max(0, rows.Count - 1);
                     position = "latest";
@@ -78,9 +78,9 @@ public sealed partial class ConversationService
             {
                 var first = posts[0].Sequence;
                 var last = posts[^1].Sequence;
-                var hasOlder = (await Message.Query(m => m.RoomKey == topicKey && m.Sequence < first,
+                var hasOlder = (await Post.Query(m => m.RoomKey == topicKey && m.Sequence < first,
                     SequenceQuery(1, true), token)).Count > 0;
-                var hasNewer = (await Message.Query(m => m.RoomKey == topicKey && m.Sequence > last && m.Sequence <= boundary,
+                var hasNewer = (await Post.Query(m => m.RoomKey == topicKey && m.Sequence > last && m.Sequence <= boundary,
                     SequenceQuery(1), token)).Count > 0;
                 var expiry = clock.GetUtcNow().AddDays(7);
                 if (hasOlder) older = EncodeWindowCursor(new(participantId, topicKey, boundary, first, true, expiry));
@@ -97,9 +97,9 @@ public sealed partial class ConversationService
 
     private static QueryDefinition SequenceQuery(int size, bool descending = false)
     {
-        var member = typeof(Message).GetProperty(nameof(Message.Sequence))!;
+        var member = typeof(Post).GetProperty(nameof(Post.Sequence))!;
         return new QueryDefinition { Page = 1, PageSize = size,
-            Sort = [new SortSpec(new MemberPath(typeof(Message), [member], typeof(long), false, -1), descending)] };
+            Sort = [new SortSpec(new MemberPath(typeof(Post), [member], typeof(long), false, -1), descending)] };
     }
 
     private string EncodeWindowCursor(WindowCursor value) => windowCursors.Protect(JsonSerializer.Serialize(value));

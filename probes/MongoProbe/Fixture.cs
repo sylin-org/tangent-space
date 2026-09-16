@@ -5,7 +5,7 @@ internal static class Fixture
     internal static readonly DateTimeOffset Epoch = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     internal static string Id(string room, long sequence) => "mongo-" + room + "-" + sequence.ToString("D10");
     internal static string Text(long sequence) => sequence % 97 == 0 ? new string('x', 3900) : "Synthetic @member #scale " + sequence + " — café 日本語";
-    internal static Message Make(string room, long sequence) => new()
+    internal static Post Make(string room, long sequence) => new()
     {
         Id = Id(room, sequence), RoomKey = room, Sequence = sequence,
         AuthorParticipantId = "synthetic-" + (sequence % 32).ToString("D2"),
@@ -13,7 +13,7 @@ internal static class Fixture
         AcceptedAt = Epoch.AddSeconds(sequence), Content = new(Text(sequence), Epoch.AddSeconds(sequence), null),
         Removed = sequence % 101 == 0, EditedAt = sequence % 53 == 0 ? Epoch.AddDays(2) : null, Facets = []
     };
-    internal static void Validate(IReadOnlyList<Message> rows, string room, long edge, bool descending)
+    internal static void Validate(IReadOnlyList<Post> rows, string room, long edge, bool descending)
     {
         if (rows.Count != 21 || rows.Select(row => row.Id).Distinct().Count() != 21)
             throw new InvalidDataException("Wrong row count or duplicate identities.");

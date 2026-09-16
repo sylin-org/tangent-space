@@ -9,7 +9,7 @@ public static class WindowPlanner
     // Reserve space for references, handles and the three protected continuation strings.
     private const int EnvelopeReserve = 4096;
 
-    public static IReadOnlyList<Message> Select(IReadOnlyList<Message> ordered, int anchorIndex, int limit,
+    public static IReadOnlyList<Post> Select(IReadOnlyList<Post> ordered, int anchorIndex, int limit,
         int resultBudget = ResultBudget)
     {
         if (limit is < 1 or > 25) throw new ArgumentOutOfRangeException(nameof(limit));
@@ -44,7 +44,7 @@ public static class WindowPlanner
         return ordered.Skip(left).Take(right - left + 1).ToArray();
     }
 
-    private static int Size(Message post)
+    private static int Size(Post post)
         // The stored row is a conservative bound on the smaller wire representation.
         => JsonSerializer.SerializeToUtf8Bytes(post).Length + 512;
 }

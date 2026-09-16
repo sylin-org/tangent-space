@@ -53,23 +53,23 @@ public sealed partial class ExperienceService
         }
 
         var posts = new List<ExperiencePostDto>();
-        var visibleMessages = new List<Message>();
-        IReadOnlyList<Message> scanned;
+        var visibleMessages = new List<Post>();
+        IReadOnlyList<Post> scanned;
         using (EntityContext.NoCache())
-            scanned = await Message.Query(message => message.AuthorParticipantId == participantId, RecentPosts(), ct);
-        foreach (var message in scanned)
+            scanned = await Post.Query(post => post.AuthorParticipantId == participantId, RecentPosts(), ct);
+        foreach (var post in scanned)
         {
             if (posts.Count >= ProfilePostLimit) break;
-            var description = await rooms.Describe(viewer, message.RoomKey, ct);
+            var description = await rooms.Describe(viewer, post.RoomKey, ct);
             if (description is null || !description.CanRead) continue;
-            visibleMessages.Add(message);
+            visibleMessages.Add(post);
             string? replyTo = null;
             posts.Add(new ExperiencePostDto(
-                refs.Post(description.TangentKey, message.RoomKey, message.Id), participantId,
-                profile.DisplayName ?? label ?? "Participant", message.Removed ? "" : message.Content.Text, replyTo,
-                refs.Origin + "/t/" + Uri.EscapeDataString(description.TangentKey) + "/" + Uri.EscapeDataString(message.Id),
-                Format(message.AcceptedAt), message.EditedAt is { } edited ? Format(edited) : null, message.Removed,
-                message.Facets));
+                refs.Post(description.TangentKey, post.RoomKey, post.Id), participantId,
+                profile.DisplayName ?? label ?? "Participant", post.Removed ? "" : post.Content.Text, replyTo,
+                refs.Origin + "/t/" + Uri.EscapeDataString(description.TangentKey) + "/" + Uri.EscapeDataString(post.Id),
+                Format(post.AcceptedAt), post.EditedAt is { } edited ? Format(edited) : null, post.Removed,
+                post.Facets));
         }
 
         // Permitted operational actions for this viewer, computed from real authority.
@@ -102,11 +102,11 @@ public sealed partial class ExperienceService
 
     internal static QueryDefinition RecentPosts()
     {
-        var member = typeof(Message).GetProperty(nameof(Message.AcceptedAt))!;
+        var member = typeof(Post).GetProperty(nameof(Post.AcceptedAt))!;
         return new QueryDefinition
         {
             Page = 1, PageSize = 200,
-            Sort = [new SortSpec(new MemberPath(typeof(Message), [member], member.PropertyType, false, -1), true)],
+            Sort = [new SortSpec(new MemberPath(typeof(Post), [member], member.PropertyType, false, -1), true)],
         };
     }
 }

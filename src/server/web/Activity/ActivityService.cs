@@ -21,8 +21,8 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
     private const int MaximumUnread = 100;
     private readonly IDataProtector cursors = protection.CreateProtector("Tangent.Activity.Cursor.v1");
     private static readonly QueryDefinition JournalWindow = Window<ActivityJournal>(nameof(ActivityJournal.Sequence), MaximumJournalScan + 1);
-    private static readonly QueryDefinition MessagesWindow = Window<Message>(nameof(Message.Sequence), MaximumUnread + 1, descending: true);
-    private static readonly QueryDefinition OneMessageWindow = Window<Message>(nameof(Message.Sequence), 1, descending: true);
+    private static readonly QueryDefinition MessagesWindow = Window<Post>(nameof(Post.Sequence), MaximumUnread + 1, descending: true);
+    private static readonly QueryDefinition OneMessageWindow = Window<Post>(nameof(Post.Sequence), 1, descending: true);
 
     public Task<ActivitySnapshot> Snapshot(string participantId, string? credentialId, string? cursor, CancellationToken ct)
         => Snapshot(participantId, credentialId, cursor, null, ct);
@@ -151,18 +151,18 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
             var read = await ReadPosition.Get(ReadPosition.Key(participantId, roomKey), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
             // The window stays source-order; attention excludes the actor's own contributions.
-            var unreadWindow = await Message.Query(message => message.RoomKey == roomKey && message.Sequence > readSequence,
+            var unreadWindow = await Post.Query(post => post.RoomKey == roomKey && post.Sequence > readSequence,
                 MessagesWindow, token);
-            var unread = unreadWindow.Where(message => AttentionRules.CountsForAttention(message, participantId)).ToArray();
+            var unread = unreadWindow.Where(post => AttentionRules.CountsForAttention(post, participantId)).ToArray();
             var unreadCount = Math.Min(unread.Length, MaximumUnread);
             var directReplies = 0;
-            foreach (var message in unread.Take(MaximumUnread))
+            foreach (var post in unread.Take(MaximumUnread))
             {
-                if (message.Content.ReplyTo is not { } reply) continue;
+                if (post.Content.ReplyTo is not { } reply) continue;
                 var parent = await SourceDecision.Get(SourceDecision.Key(roomKey, reply.Uri, reply.Cid), token);
                 if (parent?.Accepted == true && parent.AuthorParticipantId == participantId) directReplies++;
             }
-            var last = state.LastSequence == 0 ? null : (await Message.Query(message => message.RoomKey == roomKey && message.Sequence == state.LastSequence,
+            var last = state.LastSequence == 0 ? null : (await Post.Query(post => post.RoomKey == roomKey && post.Sequence == state.LastSequence,
                 OneMessageWindow, token)).FirstOrDefault();
             var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
             // The window itself overflowed: any count derived from it may be clipped at the cap.
@@ -178,12 +178,12 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
             await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, entry.TangentKey), ct));
         if (!AttentionRules.DeliversEvent(mode, entry.Kind)) return false;
         if (mode != WatchMode.Replies) return true;
-        // Replies mode delivers a message marker only when it answers this participant's accepted message.
-        var message = (await Message.Query(value => value.RoomKey == entry.RoomKey
+        // Replies mode delivers a post marker only when it answers this participant's accepted post.
+        var post = (await Post.Query(value => value.RoomKey == entry.RoomKey
             && value.Sequence == (entry.MessageSequence ?? -1), OneMessageWindow, ct)).FirstOrDefault();
-        var parent = message?.Content.ReplyTo is { } reply
+        var parent = post?.Content.ReplyTo is { } reply
             ? await SourceDecision.Get(SourceDecision.Key(entry.RoomKey, reply.Uri, reply.Cid), ct) : null;
-        return AttentionRules.IsDirectReply(message, parent, participantId);
+        return AttentionRules.IsDirectReply(post, parent, participantId);
     }
 
     private async Task<bool> CanReadEvent(string participantId, ActivityJournal entry, CancellationToken ct)

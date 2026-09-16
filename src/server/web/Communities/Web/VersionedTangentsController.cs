@@ -130,7 +130,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
 
     [AllowAnonymous]
     [HttpGet("{tangentId}/posts/{postId}")]
-    public async Task<IActionResult> Post(string tangentId, string postId, CancellationToken ct)
+    public async Task<IActionResult> ReadPost(string tangentId, string postId, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         try
@@ -138,13 +138,13 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
             var actor = ReadActor();
             if (actor is null) return Unauthorized();
             // Resolve only the anchor key, then let the Topic policy and window enforce access.
-            Message? message;
+            Post? post;
             using (EntityContext.NoCache())
-                message = await Message.Get(postId, ct);
-            if (message is null) return NotFound();
-            var description = await hub.Topics.Describe(actor, message.RoomKey, ct);
+                post = await Post.Get(postId, ct);
+            if (post is null) return NotFound();
+            var description = await hub.Topics.Describe(actor, post.RoomKey, ct);
             if (description is null || description.TangentKey != tangentId) return NotFound();
-            var window = await hub.Posts.ReadWindow(actor, message.RoomKey, null, postId, 25, ct);
+            var window = await hub.Posts.ReadWindow(actor, post.RoomKey, null, postId, 25, ct);
             return Ok(new { topic = description, window });
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }

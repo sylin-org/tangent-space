@@ -121,9 +121,9 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     }
 
     /// <summary>Seeds participants, one open Tangent with one Topic, agent membership, and
-    /// three accepted source messages: the agent's own question, Leo's direct reply to it,
+    /// three accepted source posts: the agent's own question, Leo's direct reply to it,
     /// and Leo's fresh post mentioning the agent. Accepted history is a SourceDecision plus
-    /// its Message projection and the room's sequence, exactly like the acceptance path.</summary>
+    /// its Post projection and the room's sequence, exactly like the acceptance path.</summary>
     private static async Task<(string Token, string CredentialId, string OwnerToken, string OwnerParticipant, string AgentParticipant, string HumanParticipant)> SeedAsync(IServiceProvider services)
     {
         var clock = services.GetRequiredService<TimeProvider>();
@@ -191,7 +191,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     private static async Task<SourceReference> Accept(string roomKey, string authorDid, string recordKey, long sequence,
         DateTimeOffset acceptedAt, string text, SourceReference? replyTo)
     {
-        var content = new MessageContent(text, acceptedAt, replyTo);
+        var content = new PostContent(text, acceptedAt, replyTo);
         var uri = $"at://{authorDid}/space/local.tangent.room/op-{sequence}/{recordKey}";
         var authorId = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(authorDid)))!.ParticipantId;
         var cid = "bafyrei" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(uri)))[..52].ToLowerInvariant();
@@ -201,11 +201,11 @@ public sealed class ExperienceWebApp : IAsyncDisposable
             RoomKey = roomKey, AuthorParticipantId = authorId, SourceUri = uri, SourceCid = cid,
             Accepted = true, Reason = "test-accepted", Sequence = sequence, DecidedAt = acceptedAt, Content = content,
         };
-        var message = Message.Project(decision);
-        message.Id = "m-" + recordKey;
+        var post = Post.Project(decision);
+        post.Id = "m-" + recordKey;
         using var context = EntityContext.NoCache();
         await decision.Save();
-        await message.Save();
+        await post.Save();
         var conversation = await RoomConversation.Get(roomKey) ?? new RoomConversation { Id = roomKey };
         conversation.LastSequence = Math.Max(conversation.LastSequence, sequence);
         await conversation.Save();

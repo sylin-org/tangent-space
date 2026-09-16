@@ -18,11 +18,11 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         });
 
     [HttpPost("messages"), ConversationMutation, RequestSizeLimit(16384)]
-    public Task<IActionResult> Post(string roomKey, PostMessage message, CancellationToken ct)
+    public Task<IActionResult> CreatePost(string roomKey, PostCreateRequest input, CancellationToken ct)
         => Execute(async () =>
         {
             var did = ParticipationAccess.Require(User, ParticipationGrants.Post);
-            var post = await conversation.Post(did, roomKey, message, ct);
+            var post = await conversation.CreatePost(did, roomKey, input, ct);
             return Ok(new { post.OperationId, State = "accepted", post.SourceUri, post.SourceCid });
         });
 
@@ -57,7 +57,7 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
     {
         var did = ParticipationAccess.Require(User, ParticipationGrants.Read);
         using var fresh = Koan.Data.Core.EntityContext.NoCache();
-        var post = await Message.Get(messageId, ct);
+        var post = await Post.Get(messageId, ct);
         if (post is null || post.RoomKey != roomKey) throw new ArgumentException("Choose a post in this Topic.");
         ParticipationAccess.Require(User, post.AuthorParticipantId == did ? ParticipationGrants.Post : ParticipationGrants.Manage);
         return did;

@@ -69,12 +69,12 @@ TestHooks.ResetDataConfigs();
 SQLitePCL.Batteries_V2.Init();
 using var trace = new NativeTrace(database);
 var seedTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-Message Make(long sequence) => new()
+Post Make(long sequence) => new()
 {
     Id = "epic005-" + sequence.ToString("D10"), RoomKey = "epic005-hot-topic",
     AuthorParticipantId = "synthetic-" + (sequence % 32).ToString("D2"), Sequence = sequence,
     AcceptedAt = seedTime.AddSeconds(sequence),
-    Content = new MessageContent(sequence % 97 == 0 ? new string('x', 3900) : "Synthetic @member #scale post " + sequence + " — café 日本語", seedTime.AddSeconds(sequence),
+    Content = new PostContent(sequence % 97 == 0 ? new string('x', 3900) : "Synthetic @member #scale post " + sequence + " — café 日本語", seedTime.AddSeconds(sequence),
         sequence > 1 && sequence % 7 == 0 ? new SourceReference("at://synthetic.invalid/local.tangent.message/" + (sequence - 1), "synthetic-cid") : null),
     SourceUri = "at://synthetic.invalid/local.tangent.message/" + sequence,
     SourceCid = "synthetic-cid-" + sequence,
@@ -93,10 +93,10 @@ await using (var command = seedConnection.CreateCommand())
     while (await reader.ReadAsync(ct))
     {
         var name = reader.GetString(0); schema.Add(new { name, sql = reader.GetString(1) });
-        if (name.EndsWith(".Message", StringComparison.Ordinal) || name == "Message") table = name;
+        if (name.EndsWith(".Post", StringComparison.Ordinal) || name == "Post") table = name;
     }
 }
-if (table.Length == 0) throw new InvalidOperationException("Expected actual Message table was not found: " + JsonSerializer.Serialize(schema));
+if (table.Length == 0) throw new InvalidOperationException("Expected actual Post table was not found: " + JsonSerializer.Serialize(schema));
 static string Quote(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
 var columns = new List<string>(); var template = new List<object>();
 await using (var command = seedConnection.CreateCommand())
@@ -107,7 +107,7 @@ await using (var command = seedConnection.CreateCommand())
 }
 var idColumn = template.FindIndex(v => v is string value && value == Make(1).Id);
 var jsonColumn = template.FindIndex(v => v is string value && value.StartsWith('{') && value.Contains("epic005-hot-topic"));
-if (idColumn < 0 || jsonColumn < 0) throw new InvalidOperationException("Unrecognized Message storage shape.");
+if (idColumn < 0 || jsonColumn < 0) throw new InvalidOperationException("Unrecognized Post storage shape.");
 var jsonOptions = new JsonSerializerOptions();
 // Preserve framework's actual JSON property casing from the provisioned row.
 var original = JsonNode.Parse((string)template[jsonColumn])!.AsObject();
@@ -144,17 +144,17 @@ foreach (var total in new[] { 10_000, 100_000 })
     var count = (long)total;
     foreach (var (label, edge, descending) in new[] { ("beginning", 0L, false), ("middle-after", count / 2, false), ("tail-after", count - 21, false), ("middle-before", count / 2, true) })
     {
-        var member = typeof(Message).GetProperty(nameof(Message.Sequence))!;
-        var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Message), [member], typeof(long), false, -1), descending)] };
-        Expression<Func<Message, bool>> predicate = descending
+        var member = typeof(Post).GetProperty(nameof(Post.Sequence))!;
+        var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Post), [member], typeof(long), false, -1), descending)] };
+        Expression<Func<Post, bool>> predicate = descending
             ? m => m.RoomKey == "epic005-hot-topic" && m.Sequence < edge && m.Sequence <= count
             : m => m.RoomKey == "epic005-hot-topic" && m.Sequence > edge && m.Sequence <= count;
         var times = new List<double>(); var samples = new List<object>();
         for (var iteration = 0; iteration < 7; iteration++)
         {
             CheckBudget(); trace.Begin(); var watch = Stopwatch.StartNew();
-            IReadOnlyList<Message> rows;
-            using (EntityContext.NoCache()) rows = await Message.Query(predicate, query, ct);
+            IReadOnlyList<Post> rows;
+            using (EntityContext.NoCache()) rows = await Post.Query(predicate, query, ct);
             watch.Stop(); var statements = trace.End();
             ProbeChecks.ValidateWindow(rows, edge, descending);
             if (iteration > 0) times.Add(watch.Elapsed.TotalMilliseconds);
@@ -190,7 +190,7 @@ foreach (var pragma in new[] { "journal_mode", "synchronous", "page_size", "cach
 var transactionFailure = await TransactionProbe.Run(seedConnection, table, columns[idColumn], Make, ct);
 var sourcePaths = new[]
 {
-    "src/server/web/Conversation/Message.cs", "src/server/web/Conversation/ConversationService.History.cs",
+    "src/server/web/Conversation/Post.cs", "src/server/web/Conversation/ConversationService.History.cs",
     "src/server/web/Conversation/ConversationService.McpWindow.cs",
     ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs",
     ".local/upstream/koan-framework/src/Connectors/Data/Sqlite/Runtime/SqliteRepository.cs",
@@ -199,18 +199,18 @@ var sourcePaths = new[]
 var sourceHashes = sourcePaths.ToDictionary(path => path, path => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(repo, path)))));
 var result = new
 {
-    scope = "Actual Message.Query/Koan/SQLite read micro-query; not full API, domain writes, SSE, transactions or browser proof",
+    scope = "Actual Post.Query/Koan/SQLite read micro-query; not full API, domain writes, SSE, transactions or browser proof",
     started, finished = DateTimeOffset.UtcNow, root, database, deterministicSeed = "epic005-sqlite-v1",
     processCpuAffinity = OperatingSystem.IsWindows() ? process.ProcessorAffinity.ToString() : "not-set",
     runtime = RuntimeInformation.FrameworkDescription, os = RuntimeInformation.OSDescription,
     machine = Environment.MachineName, sqliteVersion = SQLitePCL.raw.sqlite3_libversion().utf8_to_string(),
-    koanAssembly = typeof(Data<,>).Assembly.FullName, appAssembly = typeof(Message).Assembly.FullName,
+    koanAssembly = typeof(Data<,>).Assembly.FullName, appAssembly = typeof(Post).Assembly.FullName,
     hostStarted = false, portsOpened = Array.Empty<int>(), credentialsLoaded = false,
     processPeakWorkingSetBytes = process.PeakWorkingSet64, processCpuSeconds = process.TotalProcessorTime.TotalSeconds,
     elapsedSeconds = budget.Elapsed.TotalSeconds, settings, schema, indexes, tiers, transactionFailure, sourceHashes,
     percentileConvention = "nearest rank: sorted[ceil(p * n) - 1]; 6 warm serial samples, p95 equals max",
     traceErrors = trace.Errors,
-    limitations = new[] { "Six serial warm samples: max is reported as nearest-rank p95; this is not a load-test percentile.", "No OS cache flush or cold-disk claim.", "Direct bulk seed bypasses acceptance, Message lifecycle and real transactions; one Message.Save provisions the schema.", "No index added, no count/query tuning applied; default count behavior is captured as-is.", "100k ceiling for first baseline; million-post/provider/saturation proofs remain pending." }
+    limitations = new[] { "Six serial warm samples: max is reported as nearest-rank p95; this is not a load-test percentile.", "No OS cache flush or cold-disk claim.", "Direct bulk seed bypasses acceptance, Post lifecycle and real transactions; one Post.Save provisions the schema.", "No index added, no count/query tuning applied; default count behavior is captured as-is.", "100k ceiling for first baseline; million-post/provider/saturation proofs remain pending." }
 };
 var report = Path.Combine(root, "result.json");
 await File.WriteAllTextAsync(report, JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }), ct);

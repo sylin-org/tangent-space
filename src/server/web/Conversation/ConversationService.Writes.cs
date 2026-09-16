@@ -11,9 +11,9 @@ public sealed partial class ConversationService
     /// creates the durable decision, its projection and the sequence in one transaction; a
     /// re-delivery of the same package returns the same row unchanged; the same key with different
     /// content is a conflict. The returned projection is the receipt.</summary>
-    public async Task<Message> Post(string participantId, string roomKey, PostMessage input, CancellationToken ct)
+    public async Task<Post> CreatePost(string participantId, string roomKey, PostCreateRequest input, CancellationToken ct)
     {
-        MessageContent.CheckText(input.Text);
+        PostContent.CheckText(input.Text);
         if (string.IsNullOrWhiteSpace(input.OperationId) || input.OperationId.Length > 128
             || input.OperationId.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '-' and not '_'))
             throw new ArgumentException("Use an operation ID of 1–128 letters, digits, hyphens or underscores.");
@@ -23,17 +23,17 @@ public sealed partial class ConversationService
         {
             var uri = $"local://{roomKey}/{input.OperationId}";
             var cid = "local-" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(uri)))[..24];
-            Message? result = null;
+            Post? result = null;
             var conflict = false;
             await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
             {
                 RequireTopicCapability(policy, TopicCapability.Reply, "This room's current rules do not allow posting.");
-                var existing = (await Message.Query(m => m.RoomKey == roomKey && m.AuthorParticipantId == participantId && m.OperationId == input.OperationId,
-                    Window<Message>(nameof(Message.Sequence), 1, 1), token)).FirstOrDefault();
+                var existing = (await Post.Query(m => m.RoomKey == roomKey && m.AuthorParticipantId == participantId && m.OperationId == input.OperationId,
+                    Window<Post>(nameof(Post.Sequence), 1, 1), token)).FirstOrDefault();
                 if (existing is { } found)
                 {
                     if (found.Removed || found.Content.Text != input.Text || found.Content.ReplyTo != input.ReplyTo
-                        || Canonical(found.Facets) != Canonical(await MessageFacets.Effective(input.Text, facets, token)))
+                        || Canonical(found.Facets) != Canonical(await PostFacets.Effective(input.Text, facets, token)))
                     {
                         conflict = true;
                         return true;
@@ -44,10 +44,10 @@ public sealed partial class ConversationService
                 if (input.ReplyTo is { } reply)
                 {
                     var target = await SourceDecision.Get(SourceDecision.Key(roomKey, reply.Uri, reply.Cid), token);
-                    if (target?.Accepted != true) throw new ArgumentException("Reply to an accepted message in this room.");
+                    if (target?.Accepted != true) throw new ArgumentException("Reply to an accepted post in this room.");
                 }
                 var state = await RoomConversation.Get(roomKey, token) ?? new RoomConversation { Id = roomKey };
-                var content = new MessageContent(input.Text, clock.GetUtcNow(), input.ReplyTo);
+                var content = new PostContent(input.Text, clock.GetUtcNow(), input.ReplyTo);
                 var decision = new SourceDecision
                 {
                     Id = SourceDecision.Key(roomKey, uri, cid), RoomKey = roomKey, AuthorParticipantId = participantId, SourceUri = uri, SourceCid = cid,
@@ -56,7 +56,7 @@ public sealed partial class ConversationService
                     Content = content, Sequence = checked(++state.LastSequence),
                 };
                 await decision.Save(token);
-                var projected = Message.Project(decision);
+                var projected = Post.Project(decision);
                 projected.OperationId = input.OperationId;
                 projected.Facets = facets;
                 await projected.Save(token);

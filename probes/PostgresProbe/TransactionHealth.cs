@@ -13,8 +13,8 @@ internal static class TransactionHealth
         static string Q(string value) => '"' + value.Replace("\"", "\"\"") + '"';
         var schema = table.Split('.')[0];
         await using (var command = new NpgsqlCommand($"CREATE FUNCTION {schema}.epic005_fail_second() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.{Q(idColumn)} IN ('epic005-atomic-second','epic005-deferred-second') THEN RAISE EXCEPTION 'epic005 injected second-write failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER epic005_fail_second BEFORE INSERT OR UPDATE ON {table} FOR EACH ROW EXECUTE FUNCTION {schema}.epic005_fail_second()", native)) await command.ExecuteNonQueryAsync(ct);
-        Message Item(string id, long sequence) { var item = Checks.Make("transaction", sequence); item.Id = id; return item; }
-        var success = Message.Batch(); success.Add(Item("epic005-batch-ok-first", 200001)).Add(Item("epic005-batch-ok-second", 200002));
+        Post Item(string id, long sequence) { var item = Checks.Make("transaction", sequence); item.Id = id; return item; }
+        var success = Post.Batch(); success.Add(Item("epic005-batch-ok-first", 200001)).Add(Item("epic005-batch-ok-second", 200002));
         BatchResult receipt; using (EntityContext.NoCache()) receipt = await success.Save(new BatchOptions(RequireAtomic: true, MaxItems: 3), ct);
         if (receipt.Atomicity != BatchAtomicity.Atomic || receipt.Added != 2) throw new InvalidDataException("Atomic batch returned a non-atomic/incorrect receipt.");
         async Task<string[]> Persisted(string prefix)
@@ -25,7 +25,7 @@ internal static class TransactionHealth
         }
         var successfulIds = await Persisted("epic005-batch-ok-"); if (successfulIds.Length != 2) throw new InvalidDataException("Atomic success rows not durable.");
         string? atomicError = null;
-        try { using var scope = EntityContext.NoCache(); var failure = Message.Batch(); failure.Add(Item("epic005-atomic-first", 200011)).Add(Item("epic005-atomic-second", 200012)).Add(Item("epic005-atomic-third", 200013)); await failure.Save(new BatchOptions(RequireAtomic: true, MaxItems: 3), ct); }
+        try { using var scope = EntityContext.NoCache(); var failure = Post.Batch(); failure.Add(Item("epic005-atomic-first", 200011)).Add(Item("epic005-atomic-second", 200012)).Add(Item("epic005-atomic-third", 200013)); await failure.Save(new BatchOptions(RequireAtomic: true, MaxItems: 3), ct); }
         catch (Exception error) { if (!IsInjected(error)) throw new InvalidDataException("Atomic batch failed for a reason other than the injected second write.", error); atomicError = error.GetType().Name + ": " + error.Message; }
         var atomicIds = await Persisted("epic005-atomic-");
         if (atomicError is null || atomicIds.Length != 0) throw new InvalidDataException("Native same-entity batch failed rollback qualification.");
@@ -41,6 +41,6 @@ internal static class TransactionHealth
         var deferredIds = await Persisted("epic005-deferred-");
         if (!deferredIds.SequenceEqual(["epic005-deferred-first"])) throw new InvalidDataException("Deferred coordinator's durable failure result changed; investigate before reporting the expected partial-commit baseline.");
         return new { nativeSameEntityBatch = new { executionCapability = success.ExecutionCapabilities.ToString(), atomicity = receipt.Atomicity.ToString(), successIds = successfulIds, failure = atomicError, rowsAfterFailure = atomicIds, rollbackPassed = atomicIds.Length == 0 },
-            ambientCoordinator = new { scope = "Three same-entity Message.Save calls in application's named deferred coordinator, second SQL write rejected; independent connection inspects durable state. This is not a cross-entity domain acceptance test.", failure = deferredError, rowsAfterFailure = deferredIds, partialCommitObserved = deferredIds.SequenceEqual(["epic005-deferred-first"]) } };
+            ambientCoordinator = new { scope = "Three same-entity Post.Save calls in application's named deferred coordinator, second SQL write rejected; independent connection inspects durable state. This is not a cross-entity domain acceptance test.", failure = deferredError, rowsAfterFailure = deferredIds, partialCommitObserved = deferredIds.SequenceEqual(["epic005-deferred-first"]) } };
     }
 }

@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace TangentSpace.Experience;
 
 /// <summary>Canonical experience response contract (v1). Application objects, not JSON-RPC
-/// messages; camelCase on the wire through <see cref="Json"/>. Counts that cannot be
+/// posts; camelCase on the wire through <see cref="Json"/>. Counts that cannot be
 /// determined are null, never zero.</summary>
 public sealed record ExperienceResponse(
     string ExperienceVersion, string Operation, string Status,

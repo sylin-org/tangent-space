@@ -4,16 +4,16 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace TangentSpace.Conversation;
 
-/// <summary>The Message history surface (D3): the app's first generic entity read mount, serving
+/// <summary>The Post history surface (D3): the app's first generic entity read mount, serving
 /// only the changelog partition and only reads. A read is honored only when it explicitly selects
 /// <c>?set=changelog</c> — the default partition and every other set are denied here — and every
 /// mutating action is denied outright because the changelog is write-once history mutated only by
 /// domain code (ConversationService.ChangePost). Row visibility is not this controller's concern:
-/// the <see cref="MessageHistoryAccess"/> realization gates each snapshot to its author or a
+/// the <see cref="PostHistoryAccess"/> realization gates each snapshot to its author or a
 /// moderation-capable viewer. POST /query is deliberately not served; the collection GET carries
 /// the same JSON filter DSL, and an extra body-driven set path is one more thing to get wrong.</summary>
 [ApiController, Authorize, Route("api/history/messages")]
-public sealed class MessageHistoryController : EntityController<Message, string>
+public sealed class PostHistoryController : EntityController<Post, string>
 {
     private IActionResult Denied(string reason) => StatusCode(403, new { reason });
 
@@ -37,7 +37,7 @@ public sealed class MessageHistoryController : EntityController<Message, string>
         => Task.FromResult(Denied("The history surface serves recorded snapshots only."));
 
     [HttpPost("")]
-    public override Task<IActionResult> Upsert(Message model, CancellationToken ct)
+    public override Task<IActionResult> Upsert(Post model, CancellationToken ct)
         => Task.FromResult(Denied("The changelog is append-only history and accepts no writes."));
 
     [HttpPut("{id}")]
@@ -45,7 +45,7 @@ public sealed class MessageHistoryController : EntityController<Message, string>
         => Task.FromResult(Denied("The changelog is append-only history and accepts no writes."));
 
     [HttpPost("bulk")]
-    public override Task<IActionResult> UpsertMany(IEnumerable<Message> models, CancellationToken ct)
+    public override Task<IActionResult> UpsertMany(IEnumerable<Post> models, CancellationToken ct)
         => Task.FromResult(Denied("The changelog is append-only history and accepts no writes."));
 
     [HttpDelete("{id}")]
@@ -74,7 +74,7 @@ public sealed class MessageHistoryController : EntityController<Message, string>
         // ?set= is framework-read (EntityContext.With(partition:)) — this check only pins the one
         // partition this surface may ever touch; multi-valued or absent sets never match exactly.
         var set = Request.Query["set"].ToString();
-        return string.Equals(set, Message.ChangelogPartition, StringComparison.Ordinal)
+        return string.Equals(set, Post.ChangelogPartition, StringComparison.Ordinal)
             ? await read()
             : Denied("The history surface serves the changelog set only.");
     }

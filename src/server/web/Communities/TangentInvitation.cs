@@ -3,7 +3,7 @@ using Koan.Data.Core.Model;
 namespace TangentSpace.Communities;
 
 /// <summary>
-/// A DID- and Tangent-bound invitation. Issuing never joins anyone and never delivers an external message;
+/// A DID- and Tangent-bound invitation. Issuing never joins anyone and never delivers an external post;
 /// redemption happens only through Join with the bound recipient's own credential.
 /// </summary>
 public sealed class TangentInvitation : Entity<TangentInvitation>

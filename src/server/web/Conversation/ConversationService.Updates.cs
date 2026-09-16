@@ -4,7 +4,7 @@ public sealed partial class ConversationService
 {
     private readonly ConversationUpdates updates = new();
 
-    public async Task<MessagePage> WaitForUpdates(string did, string room, string cursor, CancellationToken ct)
+    public async Task<PostPage> WaitForUpdates(string did, string room, string cursor, CancellationToken ct)
     {
         // Denied and unknown rooms never allocate notification state.
         await ReadPolicy(did, room, ct);

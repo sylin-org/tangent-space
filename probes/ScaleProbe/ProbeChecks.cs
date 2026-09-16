@@ -8,7 +8,7 @@ internal static class ProbeChecks
         return sorted[(int)Math.Ceiling(percentile * sorted.Count) - 1];
     }
 
-    internal static void ValidateWindow(IReadOnlyList<Message> rows, long edge, bool descending)
+    internal static void ValidateWindow(IReadOnlyList<Post> rows, long edge, bool descending)
     {
         if (rows.Count != 21 || rows.Select(row => row.Id).Distinct().Count() != 21)
             throw new InvalidDataException("Window row count or identity uniqueness failed.");
@@ -24,7 +24,7 @@ internal static class ProbeChecks
     {
         if (NearestRank([1, 2, 3, 4, 5, 6], .5) != 3 || NearestRank([1, 2, 3, 4, 5, 6], .95) != 6)
             throw new Exception("Nearest-rank percentile self-test failed.");
-        var rows = Enumerable.Range(1, 21).Select(sequence => new Message { Id = "epic005-" + sequence.ToString("D10"), RoomKey = "epic005-hot-topic", Sequence = sequence }).ToArray();
+        var rows = Enumerable.Range(1, 21).Select(sequence => new Post { Id = "epic005-" + sequence.ToString("D10"), RoomKey = "epic005-hot-topic", Sequence = sequence }).ToArray();
         ValidateWindow(rows, 0, false);
         ValidateWindow(rows.Reverse().ToArray(), 22, true);
         rows[20].Sequence = 1;

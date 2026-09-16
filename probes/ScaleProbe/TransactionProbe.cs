@@ -5,7 +5,7 @@ using TangentSpace.Conversation;
 internal static class TransactionProbe
 {
     internal static async Task<object> Run(SqliteConnection connection, string table, string idColumn,
-        Func<long, Message> make, CancellationToken ct)
+        Func<long, Post> make, CancellationToken ct)
     {
         static string Q(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
         await using (var trigger = connection.CreateCommand())
@@ -41,7 +41,7 @@ internal static class TransactionProbe
         Console.WriteLine("Deferred failure persisted: " + string.Join(", ", persisted));
         return new
         {
-            scope = "Three Message.Save calls in the application's named EntityContext.Transaction primitive; SQL trigger fails second; independent post-scope connection inspects durable state. Not full acceptance/API or process-crash proof.",
+            scope = "Three Post.Save calls in the application's named EntityContext.Transaction primitive; SQL trigger fails second; independent post-scope connection inspects durable state. Not full acceptance/API or process-crash proof.",
             transactionName = "tangent-room-policy-operation", queuedIds = ids, failure = error,
             persistedIds = persisted, partialCommitObserved = persisted.SequenceEqual([ids[0]])
         };

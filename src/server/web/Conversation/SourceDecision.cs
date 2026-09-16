@@ -17,7 +17,7 @@ public sealed class SourceDecision : Entity<SourceDecision>
     public long SpacePolicyRevision { get; set; }
     public DateTimeOffset DecidedAt { get; set; }
     public long Sequence { get; set; }
-    public MessageContent? Content { get; set; }
+    public PostContent? Content { get; set; }
     public static string Key(string room, string uri, string cid) => Hash(room + "\n" + uri + "\n" + cid);
     internal static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }

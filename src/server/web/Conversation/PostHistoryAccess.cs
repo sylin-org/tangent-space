@@ -10,7 +10,7 @@ using TangentSpace.Site;
 
 namespace TangentSpace.Conversation;
 
-/// <summary>D4b read gate for Message rows on the generic entity surface (the gposingway
+/// <summary>D4b read gate for Post rows on the generic entity surface (the gposingway
 /// governed-read pattern on the WEB-0068 rail): a changelog snapshot is visible only to its
 /// author (AuthorParticipantId == viewer) or to a viewer holding a moderation-capable role for that
 /// snapshot's room. Per-row control lives in the predicate, so a moderation-removed post's
@@ -31,9 +31,9 @@ namespace TangentSpace.Conversation;
 /// call — once per request, never per row. (The partition-pinning Where overload is not used:
 /// this pinned framework copy's SQLite adapter does not declare SupportsSameIdIn, so a
 /// counterpart filter would refuse to execute.)</summary>
-public sealed class MessageHistoryAccess : EntityAccess<Message>
+public sealed class PostHistoryAccess : EntityAccess<Post>
 {
-    public override IAccessFilter<Message> Constrain(IAccessFilter<Message> q, AccessAction action)
+    public override IAccessFilter<Post> Constrain(IAccessFilter<Post> q, AccessAction action)
     {
         if (action == AccessAction.Read)
         {

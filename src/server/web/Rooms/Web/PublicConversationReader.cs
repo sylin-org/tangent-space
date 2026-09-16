@@ -36,7 +36,7 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         try
         {
             using var fresh = EntityContext.NoCache();
-            var anchor = await Message.Get(postId, ct);
+            var anchor = await Post.Get(postId, ct);
             if (anchor is null || anchor.OfMessageId is not null || anchor.Sequence <= 0) return null;
             var topic = await ResolveTopicUnderGate(tangentId, anchor.RoomKey, ct);
             if (topic is null) return null;
@@ -47,59 +47,59 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
     }
 
     internal async Task<PublicPostWindow?> ReadPostsUnderGate(PublicTopicDescription topic, long? before, long? after,
-        string? around, int limit, CancellationToken ct, Message? knownAnchor = null)
+        string? around, int limit, CancellationToken ct, Post? knownAnchor = null)
     {
         ValidateWindow(before, after, around, limit);
         using var fresh = EntityContext.NoCache();
-        IReadOnlyList<Message> candidates;
+        IReadOnlyList<Post> candidates;
         if (around is not null)
         {
-            var anchor = knownAnchor ?? await Message.Get(around, ct);
+            var anchor = knownAnchor ?? await Post.Get(around, ct);
             if (anchor is null || anchor.RoomKey != topic.Key || anchor.OfMessageId is not null || anchor.Sequence <= 0)
                 return null;
             var beforeCount = limit / 2;
             var afterCount = limit - beforeCount - 1;
-            var preceding = beforeCount == 0 ? [] : await Message.Query(
-                message => message.RoomKey == topic.Key && message.OfMessageId == null && message.Sequence < anchor.Sequence,
+            var preceding = beforeCount == 0 ? [] : await Post.Query(
+                post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence < anchor.Sequence,
                 MessageQuery(beforeCount, descending: true), ct);
-            var following = afterCount == 0 ? [] : await Message.Query(
-                message => message.RoomKey == topic.Key && message.OfMessageId == null && message.Sequence > anchor.Sequence,
+            var following = afterCount == 0 ? [] : await Post.Query(
+                post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence > anchor.Sequence,
                 MessageQuery(afterCount, descending: false), ct);
-            candidates = preceding.OrderBy(message => message.Sequence).Append(anchor)
-                .Concat(following.OrderBy(message => message.Sequence)).ToArray();
+            candidates = preceding.OrderBy(post => post.Sequence).Append(anchor)
+                .Concat(following.OrderBy(post => post.Sequence)).ToArray();
         }
         else
         {
             var descending = before is not null || after is null;
             var query = MessageQuery(limit + 1, descending);
             candidates = before is { } older
-                ? await Message.Query(message => message.RoomKey == topic.Key && message.OfMessageId == null && message.Sequence < older, query, ct)
+                ? await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence < older, query, ct)
                 : after is { } newer
-                    ? await Message.Query(message => message.RoomKey == topic.Key && message.OfMessageId == null && message.Sequence > newer, query, ct)
-                    : await Message.Query(message => message.RoomKey == topic.Key && message.OfMessageId == null, query, ct);
+                    ? await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence > newer, query, ct)
+                    : await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null, query, ct);
             candidates = candidates.Take(limit).ToArray();
         }
 
         var traversal = candidates.Take(limit).ToArray();
-        var authors = traversal.Select(message => message.AuthorParticipantId).Distinct(StringComparer.Ordinal).ToArray();
+        var authors = traversal.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal).ToArray();
         var labels = await directory.LabelsFor(authors, ct, resolveMissing: false);
         var refs = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var author in authors) refs[author] = await directory.PerennialValue(author, ct);
 
         var selected = new List<(long Sequence, PublicPostDescription Post)>(traversal.Length);
         var bytes = EnvelopeReserve + JsonSerializer.SerializeToUtf8Bytes(topic).Length;
-        foreach (var message in traversal)
+        foreach (var post in traversal)
         {
-            var authorRef = refs[message.AuthorParticipantId];
-            var label = labels.GetValueOrDefault(message.AuthorParticipantId, authorRef);
-            var post = new PublicPostDescription(message.Id, new(authorRef, label),
-                message.Removed ? null : message.Content.Text, message.Content.CreatedAt, message.AcceptedAt,
-                message.EditedAt, message.Removed,
-                $"/t/{Uri.EscapeDataString(topic.TangentKey)}/{Uri.EscapeDataString(message.Id)}");
-            var size = JsonSerializer.SerializeToUtf8Bytes(post).Length;
+            var authorRef = refs[post.AuthorParticipantId];
+            var label = labels.GetValueOrDefault(post.AuthorParticipantId, authorRef);
+            var rendered = new PublicPostDescription(post.Id, new(authorRef, label),
+                post.Removed ? null : post.Content.Text, post.Content.CreatedAt, post.AcceptedAt,
+                post.EditedAt, post.Removed,
+                $"/t/{Uri.EscapeDataString(topic.TangentKey)}/{Uri.EscapeDataString(post.Id)}");
+            var size = JsonSerializer.SerializeToUtf8Bytes(rendered).Length;
             if (bytes + size > ResultBudget) break;
             bytes += size;
-            selected.Add((message.Sequence, post));
+            selected.Add((post.Sequence, rendered));
         }
         selected.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));
 
@@ -109,10 +109,10 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         {
             var first = selected[0].Sequence;
             var last = selected[^1].Sequence;
-            if ((await Message.Query(message => message.RoomKey == topic.Key && message.OfMessageId == null && message.Sequence < first,
+            if ((await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence < first,
                     MessageQuery(1, descending: true), ct)).Count > 0)
                 olderBefore = first;
-            if ((await Message.Query(message => message.RoomKey == topic.Key && message.OfMessageId == null && message.Sequence > last,
+            if ((await Post.Query(post => post.RoomKey == topic.Key && post.OfMessageId == null && post.Sequence > last,
                     MessageQuery(1, descending: false), ct)).Count > 0)
                 newerAfter = last;
         }
@@ -137,9 +137,9 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
 
     private static QueryDefinition MessageQuery(int size, bool descending)
     {
-        var sequence = typeof(Message).GetProperty(nameof(Message.Sequence))!;
+        var sequence = typeof(Post).GetProperty(nameof(Post.Sequence))!;
         return new QueryDefinition { Page = 1, PageSize = size,
-            Sort = [new SortSpec(new MemberPath(typeof(Message), [sequence], typeof(long), false, -1), descending)] };
+            Sort = [new SortSpec(new MemberPath(typeof(Post), [sequence], typeof(long), false, -1), descending)] };
     }
 }
 

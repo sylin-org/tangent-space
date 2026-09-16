@@ -260,7 +260,7 @@ public sealed partial class ExperienceService(
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
                 participantId: participantId, credential: credential, ct: ct);
         var tangentKey = stored.TangentKey;
-        MessageContent.CheckText(text);
+        PostContent.CheckText(text);
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         if (!TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) throw new UnauthorizedAccessException();
         SourceReference? replySource = null;
@@ -272,7 +272,7 @@ public sealed partial class ExperienceService(
                 || reference != refs.Post(target.TangentKey, target.TopicKey, target.PostId))
                 throw new RequestArgumentException("replyTo", "Reply to a Post in this Topic.");
             using var fresh = EntityContext.NoCache();
-            var anchor = await Message.Get(target.PostId, ct);
+            var anchor = await Post.Get(target.PostId, ct);
             if (anchor is null || anchor.RoomKey != topicKey)
                 throw new RequestArgumentException("replyTo", "Reply to a Post in this Topic.");
             replySource = new SourceReference(anchor.SourceUri, anchor.SourceCid);
@@ -287,7 +287,7 @@ public sealed partial class ExperienceService(
                 return await Replay("create_post", principal, identity, registration.Record, participantId, credential, ct);
             var operationId = registration.Record.NamespacedOperationId
                 ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
-            var post = await conversation.Post(participantId, topicKey, new PostMessage(operationId, text, replySource, facets), ct);
+            var post = await conversation.CreatePost(participantId, topicKey, new PostCreateRequest(operationId, text, replySource, facets), ct);
             var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
             var postRef = refs.Post(tangentKey, topicKey, post.Id);
             var data = new ExperiencePostData(postRef, new ExperienceSource(post.SourceUri, post.SourceCid),
@@ -334,7 +334,7 @@ public sealed partial class ExperienceService(
             string? throughRef = null;
             using (EntityContext.NoCache())
             {
-                var through = (await Message.Query(message => message.RoomKey == topicKey && message.Sequence == sequence, One(), ct))
+                var through = (await Post.Query(post => post.RoomKey == topicKey && post.Sequence == sequence, One(), ct))
                     .FirstOrDefault();
                 if (through is not null) throughRef = refs.Post(tangentKey, topicKey, through.Id);
             }
@@ -507,7 +507,7 @@ public sealed partial class ExperienceService(
             var operationId = record.NamespacedOperationId
                 ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
             // ADR 0007: the projection row is the receipt.
-            var projected = (await Message.Query(m => m.AuthorParticipantId == participantId && m.OperationId == operationId, One(), ct)).FirstOrDefault();
+            var projected = (await Post.Query(m => m.AuthorParticipantId == participantId && m.OperationId == operationId, One(), ct)).FirstOrDefault();
             if (projected is not null && await Room.Get(projected.RoomKey, ct) is { } rowRoom)
             {
                 state = projected.Removed ? "rejected" : "completed";
@@ -735,20 +735,20 @@ public sealed partial class ExperienceService(
     private List<ExperiencePostDto> Posts(string tangentKey, string topicKey, TopicWindow window)
     {
         var posts = new List<ExperiencePostDto>(window.Messages.Count);
-        foreach (var message in window.Messages)
+        foreach (var post in window.Messages)
         {
             string? replyTo = null;
-            if (message.Content.ReplyTo is { } parent)
+            if (post.Content.ReplyTo is { } parent)
             {
                 var projection = (from m in window.Messages where m.SourceUri == parent.Uri select m).FirstOrDefault();
                 if (projection is not null) replyTo = refs.Post(tangentKey, topicKey, projection.Id);
             }
-            posts.Add(new ExperiencePostDto(refs.Post(tangentKey, topicKey, message.Id), message.AuthorParticipantId,
-                window.AuthorHandles.GetValueOrDefault(message.AuthorParticipantId, message.AuthorParticipantId),
-                message.Removed ? "" : message.Content.Text, replyTo,
-                refs.Origin + "/tangents/" + tangentKey + "/posts/" + message.Id + "/",
-                Format(message.AcceptedAt), message.EditedAt is { } edited ? Format(edited) : null, message.Removed,
-                message.Facets));
+            posts.Add(new ExperiencePostDto(refs.Post(tangentKey, topicKey, post.Id), post.AuthorParticipantId,
+                window.AuthorHandles.GetValueOrDefault(post.AuthorParticipantId, post.AuthorParticipantId),
+                post.Removed ? "" : post.Content.Text, replyTo,
+                refs.Origin + "/tangents/" + tangentKey + "/posts/" + post.Id + "/",
+                Format(post.AcceptedAt), post.EditedAt is { } edited ? Format(edited) : null, post.Removed,
+                post.Facets));
         }
         return posts;
     }
@@ -769,9 +769,9 @@ public sealed partial class ExperienceService(
 
     internal static QueryDefinition One()
     {
-        var member = typeof(Message).GetProperty(nameof(Message.Id))!;
+        var member = typeof(Post).GetProperty(nameof(Post.Id))!;
         return new QueryDefinition { Page = 1, PageSize = 1,
-            Sort = [new SortSpec(new MemberPath(typeof(Message), [member], member.PropertyType, false, -1), false)] };
+            Sort = [new SortSpec(new MemberPath(typeof(Post), [member], member.PropertyType, false, -1), false)] };
     }
 
     private ListCursor? DecodeDirectoryCursor(string? value, string scope, string participantId)

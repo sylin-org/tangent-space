@@ -34,25 +34,25 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
         CheckText(statement, nameof(statement), ModerationCase.MaximumStatementLength);
         return rooms.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
         {
-            var message = await Message.Get(messageId, token);
-            if (message is null || message.RoomKey != roomKey)
+            var post = await Post.Get(messageId, token);
+            if (post is null || post.RoomKey != roomKey)
                 throw new ArgumentException("Choose a Post in this Topic.", nameof(messageId));
             Require(TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read),
                 "The current Topic rules do not allow reporting this Post.");
             var now = clock.GetUtcNow();
             var id = ModerationCase.Key(roomKey, messageId);
             var current = await ModerationCase.Get(id, token);
-            var subjectRevision = SubjectRevision(message);
+            var subjectRevision = SubjectRevision(post);
             var replay = current?.Testimonies.FirstOrDefault(item => item.OperationId == operationId);
             if (replay is not null)
             {
                 if (replay.ReporterParticipantId != actorId || replay.ReasonCode != reasonCode
                     || replay.Statement != statement.Trim())
                     throw new ModerationCaseConflictException("That operation already identifies a different report.");
-                return new ModerationReportResult(Summary(current!, message, policy), AlreadyReported: false, Accepted: true);
+                return new ModerationReportResult(Summary(current!, post, policy), AlreadyReported: false, Accepted: true);
             }
             Require(TopicPermissionEvaluator.EvaluatePost(policy, TopicCapability.ReportPost,
-                message.AuthorParticipantId, message.Removed), "The current Topic rules do not allow reporting this Post.");
+                post.AuthorParticipantId, post.Removed), "The current Topic rules do not allow reporting this Post.");
             if (current is null)
             {
                 var room = await Room.Get(roomKey, token)
@@ -60,14 +60,14 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
                 current = new ModerationCase
                 {
                     Id = id, TangentKey = room.TangentKey, RoomKey = roomKey,
-                    SubjectMessageId = messageId, SubjectParticipantId = message.AuthorParticipantId,
+                    SubjectMessageId = messageId, SubjectParticipantId = post.AuthorParticipantId,
                     FirstReportedAt = now, UpdatedAt = now
                 };
             }
             if (current.Testimonies.Any(item => item.ReporterParticipantId == actorId))
-                return new ModerationReportResult(Summary(current, message, policy), AlreadyReported: true, Accepted: false);
+                return new ModerationReportResult(Summary(current, post, policy), AlreadyReported: true, Accepted: false);
             if (current.Testimonies.Count >= ModerationCase.MaximumTestimonies)
-                return new ModerationReportResult(Summary(current, message, policy), AlreadyReported: false, Accepted: false);
+                return new ModerationReportResult(Summary(current, post, policy), AlreadyReported: false, Accepted: false);
             var testimony = new ModerationTestimony(
                 Hash($"testimony\n{id}\n{actorId}\n{operationId}"), actorId, operationId,
                 reasonCode, statement.Trim(), subjectRevision, now);
@@ -82,7 +82,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
             }
             current.UpdatedAt = now;
             await current.Save(token);
-            return new ModerationReportResult(Summary(current, message, policy), AlreadyReported: false, Accepted: true);
+            return new ModerationReportResult(Summary(current, post, policy), AlreadyReported: false, Accepted: true);
         }, ct);
     }
 
@@ -196,7 +196,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
     }
 
     private async Task<ModerationCaseView> ReadWithin(ModerationCase current, RoomPolicy policy,
-        CancellationToken ct, Message? subject = null)
+        CancellationToken ct, Post? subject = null)
     {
         subject ??= await SubjectOrNull(current, ct);
         var decisions = current.Decisions.TakeLast(MaximumDecisionPage)
@@ -211,7 +211,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
             decisions, current.Decisions.Count > decisions.Count);
     }
 
-    private ModerationCaseSummary Summary(ModerationCase item, Message? subject, RoomPolicy policy)
+    private ModerationCaseSummary Summary(ModerationCase item, Post? subject, RoomPolicy policy)
         => new(refs.Case(item.TangentKey, item.RoomKey, item.Id), refs.Topic(item.TangentKey, item.RoomKey),
             refs.Post(item.TangentKey, item.RoomKey, item.SubjectMessageId), item.State, item.Revision,
             subject is null ? "unavailable" : SubjectRevision(subject),
@@ -259,26 +259,26 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
         return until;
     }
 
-    private static async Task<Message> CurrentSubject(ModerationCase current, string expectedRevision, CancellationToken ct)
+    private static async Task<Post> CurrentSubject(ModerationCase current, string expectedRevision, CancellationToken ct)
     {
-        var message = await SubjectOrNull(current, ct);
-        if (message is null || message.Removed || SubjectRevision(message) != expectedRevision)
+        var post = await SubjectOrNull(current, ct);
+        if (post is null || post.Removed || SubjectRevision(post) != expectedRevision)
             throw new ModerationCaseConflictException("The reported Post changed or became unavailable. Read the case again before deciding.");
-        return message;
+        return post;
     }
 
-    private static async Task<Message?> SubjectOrNull(ModerationCase current, CancellationToken ct)
+    private static async Task<Post?> SubjectOrNull(ModerationCase current, CancellationToken ct)
     {
-        var message = await Message.Get(current.SubjectMessageId, ct);
-        return message?.RoomKey == current.RoomKey ? message : null;
+        var post = await Post.Get(current.SubjectMessageId, ct);
+        return post?.RoomKey == current.RoomKey ? post : null;
     }
 
-    private static string SubjectRevision(Message message)
-        => Hash(string.Join('\n', "moderation-subject", message.Id, message.RoomKey, message.SourceCid,
-            message.ChangeId ?? "", message.EditedAt?.ToString("O") ?? "", message.Removed.ToString(),
-            message.RemovedAt?.ToString("O") ?? "", message.Content.CreatedAt.ToString("O"),
-            message.Content.ReplyTo?.Uri ?? "", message.Content.ReplyTo?.Cid ?? "", message.Content.Text,
-            string.Join('|', message.Facets?.Select(facet => facet.Canonical()) ?? [])));
+    private static string SubjectRevision(Post post)
+        => Hash(string.Join('\n', "moderation-subject", post.Id, post.RoomKey, post.SourceCid,
+            post.ChangeId ?? "", post.EditedAt?.ToString("O") ?? "", post.Removed.ToString(),
+            post.RemovedAt?.ToString("O") ?? "", post.Content.CreatedAt.ToString("O"),
+            post.Content.ReplyTo?.Uri ?? "", post.Content.ReplyTo?.Cid ?? "", post.Content.Text,
+            string.Join('|', post.Facets?.Select(facet => facet.Canonical()) ?? [])));
 
     private static string Hash(string value)
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

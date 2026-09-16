@@ -4,9 +4,9 @@ using TangentSpace.Participants;
 
 namespace TangentSpace.Conversation;
 
-/// <summary>One facet derivation shared by Message persistence and replay comparison. It reads
+/// <summary>One facet derivation shared by Post persistence and replay comparison. It reads
 /// only stored identities; no provider calls or writes.</summary>
-public static partial class MessageFacets
+public static partial class PostFacets
 {
     public static async Task<IReadOnlyList<PostFacet>> Effective(string text, IReadOnlyList<PostFacet>? provided, CancellationToken ct)
     {

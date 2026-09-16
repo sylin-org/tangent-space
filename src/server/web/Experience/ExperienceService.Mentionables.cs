@@ -47,8 +47,8 @@ public sealed partial class ExperienceService
         {
             members = await TangentMembership.Query(value => value.TangentKey == tangentRow.Id, ct);
             foreach (var membership in members) candidates.Add(membership.ParticipantId);
-            var authors = await Message.Query(message => message.RoomKey == topicKey, RecentAuthors(), ct);
-            foreach (var message in authors) candidates.Add(message.AuthorParticipantId);
+            var authors = await Post.Query(post => post.RoomKey == topicKey, RecentAuthors(), ct);
+            foreach (var post in authors) candidates.Add(post.AuthorParticipantId);
             var space = await Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, ct);
             if (space is { OwnerParticipantId.Length: > 0 }) candidates.Add(space.OwnerParticipantId);
         }
@@ -126,11 +126,11 @@ public sealed partial class ExperienceService
 
     internal static QueryDefinition RecentAuthors()
     {
-        var member = typeof(Message).GetProperty(nameof(Message.Sequence))!;
+        var member = typeof(Post).GetProperty(nameof(Post.Sequence))!;
         return new QueryDefinition
         {
             Page = 1, PageSize = 100,
-            Sort = [new SortSpec(new MemberPath(typeof(Message), [member], member.PropertyType, false, -1), true)],
+            Sort = [new SortSpec(new MemberPath(typeof(Post), [member], member.PropertyType, false, -1), true)],
         };
     }
 }

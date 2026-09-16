@@ -59,11 +59,11 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 builder.Logging.ClearProviders(); builder.Services.AddKoan();
 using var host = builder.Build(); // No Start/Run: no application listeners or hosted/network workers.
 AppHost.Current = host.Services; TestHooks.ResetDataConfigs();
-var sourceFiles = new[] { "src/server/web/Conversation/Message.cs", "src/server/web/Conversation/ConversationService.History.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/RepositoryFacade.cs", ".local/upstream/koan-framework/src/Connectors/Data/Mongo/MongoRepository.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs" };
+var sourceFiles = new[] { "src/server/web/Conversation/Post.cs", "src/server/web/Conversation/ConversationService.History.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/Data.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/RepositoryFacade.cs", ".local/upstream/koan-framework/src/Connectors/Data/Mongo/MongoRepository.cs", ".local/upstream/koan-framework/src/Koan.Data.Core/Transactions/TransactionCoordinator.cs" };
 var sourceHashes = sourceFiles.ToDictionary(path => path, path => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(repo, path)))));
 var phases = new List<object>(); var outcomes = new Dictionary<string, object?>();
 var failures = new List<string>();
-const string collectionName = "TangentSpace.Conversation.Message";
+const string collectionName = "TangentSpace.Conversation.Post";
 var collection = database.GetCollection<BsonDocument>(collectionName);
 var profiler = new Profiler(database, collectionName);
 async Task Guard()
@@ -79,8 +79,8 @@ try
     using (EntityContext.NoCache()) await Fixture.Make("hot", 1).Save(ct);
     cold.Stop(); outcomes["firstFacadeSaveMs"] = cold.Elapsed.TotalMilliseconds;
     var template = await collection.Find(new BsonDocument("_id", Fixture.Id("hot", 1))).FirstOrDefaultAsync(ct)
-        ?? throw new InvalidDataException("Actual Koan Message storage was not found in the isolated database.");
-    if (!template.Contains("roomKey") || !template.Contains("sequence")) throw new InvalidDataException("Unexpected Mongo Message schema.");
+        ?? throw new InvalidDataException("Actual Koan Post storage was not found in the isolated database.");
+    if (!template.Contains("roomKey") || !template.Contains("sequence")) throw new InvalidDataException("Unexpected Mongo Post schema.");
     outcomes["actualTemplate"] = Profiler.Json(template);
     outcomes["crud"] = await Admission.Crud(ct);
     outcomes["atomicRequirement"] = await Admission.Atomic(collection, profiler, ct);
@@ -109,18 +109,18 @@ try
         foreach (var (label, room, edge, descending) in new[] { ("beginning", "hot", 0L, false), ("middle-after", "hot", posts / 2L, false), ("tail-after", "hot", posts - 21L, false), ("middle-before", "hot", posts / 2L, true), ("noise-room", "noise-a", posts / 20L, false) })
         {
             await Guard();
-            var member = typeof(Message).GetProperty(nameof(Message.Sequence))!;
+            var member = typeof(Post).GetProperty(nameof(Post.Sequence))!;
             var boundary = room == "hot" ? posts : posts / 10;
-            Expression<Func<Message, bool>> predicate = descending
+            Expression<Func<Post, bool>> predicate = descending
                 ? m => m.RoomKey == room && m.Sequence < edge && m.Sequence <= boundary
                 : m => m.RoomKey == room && m.Sequence > edge && m.Sequence <= boundary;
-            var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Message), [member], typeof(long), false, -1), descending)] };
+            var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Post), [member], typeof(long), false, -1), descending)] };
             var warm = new List<double>(); double firstMs = 0; object[] recorded = [];
             for (var iteration = 0; iteration < 7; iteration++)
             {
                 var before = await profiler.Begin(ct); var watch = Stopwatch.StartNew();
-                IReadOnlyList<Message> rows;
-                using (EntityContext.NoCache()) rows = await Message.Query(predicate, query, ct);
+                IReadOnlyList<Post> rows;
+                using (EntityContext.NoCache()) rows = await Post.Query(predicate, query, ct);
                 watch.Stop(); var commands = await profiler.End(before, explain: iteration == 1, ct);
                 Profiler.AssertReadTrace(commands, expectCount: true);
                 Fixture.Validate(rows, room, edge, descending);
@@ -132,11 +132,11 @@ try
         }
         // Existing stream seam: consume one provider-sized page then dispose. Not a full-history stream test.
         var streamEdge = posts / 2L;
-        Expression<Func<Message, bool>> streamPredicate = m => m.RoomKey == "hot" && m.Sequence > streamEdge && m.Sequence <= posts;
-        var streamQuery = new QueryDefinition { Filter = LinqFilterCompiler.Compile(streamPredicate), Sort = [new SortSpec(new MemberPath(typeof(Message), [typeof(Message).GetProperty(nameof(Message.Sequence))!], typeof(long), false, -1), false)] };
-        var streamBefore = await profiler.Begin(ct); var streamed = new List<Message>();
+        Expression<Func<Post, bool>> streamPredicate = m => m.RoomKey == "hot" && m.Sequence > streamEdge && m.Sequence <= posts;
+        var streamQuery = new QueryDefinition { Filter = LinqFilterCompiler.Compile(streamPredicate), Sort = [new SortSpec(new MemberPath(typeof(Post), [typeof(Post).GetProperty(nameof(Post.Sequence))!], typeof(long), false, -1), false)] };
+        var streamBefore = await profiler.Begin(ct); var streamed = new List<Post>();
         using (EntityContext.NoCache())
-            await foreach (var row in Message.QueryStream(streamQuery, 21, ct)) { streamed.Add(row); if (streamed.Count == 21) break; }
+            await foreach (var row in Post.QueryStream(streamQuery, 21, ct)) { streamed.Add(row); if (streamed.Count == 21) break; }
         var streamCommands = await profiler.End(streamBefore, explain: true, ct); Fixture.Validate(streamed, "hot", streamEdge, false);
         Profiler.AssertReadTrace(streamCommands, expectCount: false);
         using var indexes = await collection.Indexes.ListAsync(ct);
@@ -160,7 +160,7 @@ finally
     process.Refresh();
     var report = new
     {
-        scope = "Actual Tangent Message / pinned Koan Mongo CRUD + read microqueries and capability/fault experiments; no app API, source acceptance, live activity, browser or provider winner claim",
+        scope = "Actual Tangent Post / pinned Koan Mongo CRUD + read microqueries and capability/fault experiments; no app API, source acceptance, live activity, browser or provider winner claim",
         started, finished = DateTimeOffset.UtcNow, root, databaseName, fixedEndpoint = "127.0.0.1:27119", replicaSet = "rs0", directConnection = true,
         databaseVersion = serverBuild.GetValue("version", "unknown").AsString, mongoDriver = typeof(MongoClient).Assembly.FullName,
         runtime = RuntimeInformation.FrameworkDescription, os = RuntimeInformation.OSDescription, postsInHotRoom = posts,

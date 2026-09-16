@@ -27,11 +27,11 @@ public sealed partial class ConversationService(RoomGovernance governance, TimeP
     /// Authors resolve by participant id, facet targets by their perennial value; both live in
     /// one map because the two key spaces never collide.</summary>
     internal async Task<IReadOnlyDictionary<string, ParticipantResolution>?> ResolveParticipants(
-        IReadOnlyList<Message> messages, CancellationToken ct)
+        IReadOnlyList<Post> posts, CancellationToken ct)
     {
-        var authors = messages.Select(message => message.AuthorParticipantId)
+        var authors = posts.Select(post => post.AuthorParticipantId)
             .Distinct(StringComparer.Ordinal).Take(32).ToList();
-        var targets = messages.Where(message => message.Facets is not null).SelectMany(message => message.Facets!)
+        var targets = posts.Where(post => post.Facets is not null).SelectMany(post => post.Facets!)
             .Where(facet => facet.Kind == PostFacet.Mention && facet.Did is not null).Select(facet => facet.Did!)
             .Distinct(StringComparer.Ordinal).Take(32).ToList();
         if (authors.Count == 0 && targets.Count == 0) return null;

@@ -14,7 +14,7 @@ using TangentSpace.Rooms;
 
 namespace TangentSpace.Experience;
 
-/// <summary>Assembles the bounded per-participant attention digest from current message
+/// <summary>Assembles the bounded per-participant attention digest from current post
 /// projections under current policy. Derived state: edits and deletes withdraw their items,
 /// re-ingestion never mints a fresh request, and explicit read acknowledgements resynchronize
 /// by removing items from later digests. Directed attention (mentions, direct replies) is kept
@@ -27,7 +27,7 @@ public sealed class ExperienceDigest(
     public const int MaximumUnread = 100;
     private const int MaximumDirectedCount = 50;
     private const int MaximumActivityCount = 100;
-    private static readonly QueryDefinition UnreadWindow = Window<Message>(nameof(Message.Sequence), MaximumUnread + 1, descending: true);
+    private static readonly QueryDefinition UnreadWindow = Window<Post>(nameof(Post.Sequence), MaximumUnread + 1, descending: true);
 
     private readonly IDataProtector cursorProtector = protection.CreateProtector("Tangent.Experience.DigestCursor.v1");
 
@@ -113,37 +113,37 @@ public sealed class ExperienceDigest(
             var read = await ReadPosition.Get(ReadPosition.Key(did, room.Key), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
             var recipientDid = await hub.Directory.AtprotoDidOf(did, token);
-            var unread = (await Message.Query(
-                message => message.RoomKey == room.Key && message.Sequence > readSequence, UnreadWindow, token))
-                .OrderBy(message => message.Sequence).ToList();
+            var unread = (await Post.Query(
+                post => post.RoomKey == room.Key && post.Sequence > readSequence, UnreadWindow, token))
+                .OrderBy(post => post.Sequence).ToList();
             var handles = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var (author, label) in await hub.Directory.LabelsFor(
-                     unread.Select(message => message.AuthorParticipantId).Distinct(StringComparer.Ordinal), token))
+                     unread.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal), token))
                 handles[author] = label;
             var addressedPosts = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var message in unread)
+            foreach (var post in unread)
             {
-                if (message.Removed || message.AuthorParticipantId == did) continue;
-                var authorHandle = handles.GetValueOrDefault(message.AuthorParticipantId);
-                // Direct replies answer this participant's accepted message.
-                if (message.Content.ReplyTo is { } parent)
+                if (post.Removed || post.AuthorParticipantId == did) continue;
+                var authorHandle = handles.GetValueOrDefault(post.AuthorParticipantId);
+                // Direct replies answer this participant's accepted post.
+                if (post.Content.ReplyTo is { } parent)
                 {
                     var decision = await SourceDecision.Get(SourceDecision.Key(room.Key, parent.Uri, parent.Cid), token);
-                    if (AttentionRules.IsDirectReply(message, decision, did))
+                    if (AttentionRules.IsDirectReply(post, decision, did))
                     {
-                        addressedPosts.Add(message.Id);
-                        directed.Add(Item(did, room, stored.TangentKey, message, "direct_reply", "replies_to_you", authorHandle));
+                        addressedPosts.Add(post.Id);
+                        directed.Add(Item(did, room, stored.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
                         continue;
                     }
                 }
                 // Mentions are facets (ADR 0008): minted by the picker or detected when the post is saved,
                 // they carry the perennial identity value (atproto DID or internal DID) and need no prose resolution.
-                var facets = message.Facets ?? [];
+                var facets = post.Facets ?? [];
                 if (facets.Any(facet => recipientDid is not null && facet.References(recipientDid)
                         || facet.References(ParticipantIdentity.InternalValue(did))))
                 {
-                    addressedPosts.Add(message.Id);
-                    directed.Add(Item(did, room, stored.TangentKey, message, "direct_mention", "addressed_to_you", authorHandle));
+                    addressedPosts.Add(post.Id);
+                    directed.Add(Item(did, room, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                     continue;
                 }
                 // Group mentions expand to current holders of the scoped roles: the group is
@@ -151,14 +151,14 @@ public sealed class ExperienceDigest(
                 var groups = facets.Where(facet => facet.Kind == Conversation.PostFacet.Group)
                     .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                if (groups.Count > 0 && message.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, token))
+                if (groups.Count > 0 && post.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, token))
                 {
-                    addressedPosts.Add(message.Id);
-                    directed.Add(Item(did, room, stored.TangentKey, message, "direct_mention", "addressed_to_you", authorHandle));
+                    addressedPosts.Add(post.Id);
+                    directed.Add(Item(did, room, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                     continue;
                 }
                 if (mode != WatchMode.Replies)
-                    watched.Add(Item(did, room, stored.TangentKey, message, "watched_activity", null, authorHandle));
+                    watched.Add(Item(did, room, stored.TangentKey, post, "watched_activity", null, authorHandle));
             }
             return true;
         }, ct);
@@ -183,13 +183,13 @@ public sealed class ExperienceDigest(
 
     private static string RefKey(ExperienceAttentionItem item) => item.Ref;
 
-    private ExperienceAttentionItem Item(string did, RoomDescription room, string tangentKey, Message message,
+    private ExperienceAttentionItem Item(string did, RoomDescription room, string tangentKey, Post post,
         string kind, string? relationship, string? authorHandle)
-        => new("att:" + room.Key + ":" + message.Id, kind, message.AuthorParticipantId,
+        => new("att:" + room.Key + ":" + post.Id, kind, post.AuthorParticipantId,
             string.IsNullOrEmpty(authorHandle) ? null : authorHandle, did,
-            refs.Topic(tangentKey, room.Key), refs.Post(tangentKey, room.Key, message.Id),
-            relationship, Preview(message.Content.Text, 160),
-            message.SourceCid ?? "seq:" + message.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            refs.Topic(tangentKey, room.Key), refs.Post(tangentKey, room.Key, post.Id),
+            relationship, Preview(post.Content.Text, 160),
+            post.SourceCid ?? "seq:" + post.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "pending");
 
     internal static string Preview(string value, int limit)

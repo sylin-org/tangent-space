@@ -4,7 +4,7 @@ namespace TangentSpace.Activity;
 internal static class AttentionRules
 {
     /// <summary>The actor's own contributions never count as unread attention.</summary>
-    public static bool CountsForAttention(Conversation.Message message, string did) => message.AuthorParticipantId != did;
+    public static bool CountsForAttention(Conversation.Post post, string did) => post.AuthorParticipantId != did;
 
     /// <summary>Null-safe mode resolution: an absent or malformed stored setting means All.</summary>
     public static WatchMode Effective(WatchSetting? channel, TangentWatchSetting? tangent = null)
@@ -18,7 +18,7 @@ internal static class AttentionRules
         return WatchMode.All;
     }
 
-    /// <summary>A watched-out channel disappears from overviews and its message markers are not delivered.</summary>
+    /// <summary>A watched-out channel disappears from overviews and its post markers are not delivered.</summary>
     public static bool DeliversChannel(WatchMode mode) => mode != WatchMode.None;
 
     public static bool DeliversEvent(WatchMode mode, ActivityKind kind) => kind != ActivityKind.MessageAccepted || mode != WatchMode.None;
@@ -30,9 +30,9 @@ internal static class AttentionRules
     /// <summary>Default priority: own direct replies first, then channels the participant engaged with.</summary>
     public static int PriorityTier(int directReplies, long readSequence) => directReplies > 0 ? 0 : readSequence > 0 ? 1 : 2;
 
-    /// <summary>Whether a delivered message marker is itself a reply to the actor's accepted message.
-    /// The actor's own reply never counts: own messages are not attention.</summary>
-    public static bool IsDirectReply(Conversation.Message? message, Conversation.SourceDecision? parent, string did)
-        => message?.Content.ReplyTo is not null && message.AuthorParticipantId != did
+    /// <summary>Whether a delivered post marker is itself a reply to the actor's accepted post.
+    /// The actor's own reply never counts: own posts are not attention.</summary>
+    public static bool IsDirectReply(Conversation.Post? post, Conversation.SourceDecision? parent, string did)
+        => post?.Content.ReplyTo is not null && post.AuthorParticipantId != did
             && parent?.Accepted == true && parent.AuthorParticipantId == did;
 }

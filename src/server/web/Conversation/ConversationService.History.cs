@@ -16,10 +16,10 @@ public sealed partial class ConversationService
     private static readonly QueryDefinition HistoryWindow = new()
     {
         Page = 1, PageSize = 21,
-        Sort = [new SortSpec(new MemberPath(typeof(Message), [typeof(Message).GetProperty(nameof(Message.Sequence))!], typeof(long), false, -1), false)]
+        Sort = [new SortSpec(new MemberPath(typeof(Post), [typeof(Post).GetProperty(nameof(Post.Sequence))!], typeof(long), false, -1), false)]
     };
 
-    public Task<MessagePage> History(string participantId, string room, string? cursor, CancellationToken ct, bool fromStart = false)
+    public Task<PostPage> History(string participantId, string room, string? cursor, CancellationToken ct, bool fromStart = false)
         => governance.WithCurrentPolicy(participantId, room, async (policy, token) =>
         {
             if (!policy.CanRead) throw new UnauthorizedAccessException("This room's current rules do not allow reading.");
@@ -29,24 +29,24 @@ public sealed partial class ConversationService
             var selected = cursor is null ? new ConversationCursor(participantId, room, fromStart ? 0 : position?.Sequence ?? 0, null, clock.GetUtcNow().AddDays(7)) : Decode(cursor, participantId, room);
             var boundary = selected.Boundary ?? state.LastSequence;
             if (selected.After > boundary || boundary > state.LastSequence) throw new ArgumentException("The continuation no longer matches this conversation; restart the read.");
-            var candidates = await Message.Query(m => m.RoomKey == room && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, token);
-            var messages = new List<Message>();
+            var candidates = await Post.Query(m => m.RoomKey == room && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, token);
+            var posts = new List<Post>();
             var bytes = 4096; // Envelope and protected continuations stay inside the overall 128 KiB budget.
-            foreach (var message in candidates.Take(20))
+            foreach (var post in candidates.Take(20))
             {
-                message.Permissions = Permissions.Post(policy, message.AuthorParticipantId, message.Removed);
-                var size = JsonSerializer.SerializeToUtf8Bytes(message).Length;
+                post.Permissions = Permissions.Post(policy, post.AuthorParticipantId, post.Removed);
+                var size = JsonSerializer.SerializeToUtf8Bytes(post).Length;
                 if (bytes + size > 128 * 1024) break;
-                messages.Add(message); bytes += size;
+                posts.Add(post); bytes += size;
             }
-            var after = messages.Count == 0 ? selected.After : messages[^1].Sequence;
-            var more = candidates.Count > messages.Count;
+            var after = posts.Count == 0 ? selected.After : posts[^1].Sequence;
+            var more = candidates.Count > posts.Count;
             var expiry = clock.GetUtcNow().AddDays(7);
             var next = more ? Encode(new(participantId, room, after, boundary, expiry)) : null;
             var resume = Encode(new(participantId, room, more ? after : boundary, null, expiry));
             var handles = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var (author, label) in (await directory.LabelsFor(
-                     messages.Select(message => message.AuthorParticipantId).Distinct(StringComparer.Ordinal).Take(20), token))
+                     posts.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal).Take(20), token))
                      .Where(pair => pair.Value is { Length: > 0 and <= 253 }))
             {
                 var handleBytes = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, string> { [author] = label }).Length;
@@ -54,8 +54,8 @@ public sealed partial class ConversationService
                 handles[author] = label;
                 bytes += handleBytes;
             }
-            return new MessagePage(messages, next, resume, boundary, handles,
-                await ResolveParticipants(messages, token));
+            return new PostPage(posts, next, resume, boundary, handles,
+                await ResolveParticipants(posts, token));
         }, ct);
 
     public async Task<long> Acknowledge(string participantId, string room, string cursor, CancellationToken ct)

@@ -11,16 +11,16 @@ internal static class Admission
     {
         var message = Fixture.Make("crud", 17);
         using (EntityContext.NoCache()) await message.Save(ct);
-        Message loaded;
-        using (EntityContext.NoCache()) loaded = await Message.Get(message.Id, ct) ?? throw new InvalidDataException("CRUD create not visible.");
+        Post loaded;
+        using (EntityContext.NoCache()) loaded = await Post.Get(message.Id, ct) ?? throw new InvalidDataException("CRUD create not visible.");
         if (loaded.Content != message.Content || loaded.Sequence != message.Sequence) throw new InvalidDataException("CRUD Unicode/date roundtrip failed.");
         loaded.Content = loaded.Content with { Text = "Edited café 日本語" }; loaded.EditedAt = Fixture.Epoch.AddDays(2); loaded.Removed = true;
         using (EntityContext.NoCache()) await loaded.Save(ct);
         using (EntityContext.NoCache())
         {
-            var updated = await Message.Get(message.Id, ct);
+            var updated = await Post.Get(message.Id, ct);
             if (updated?.Content.Text != loaded.Content.Text || !updated.Removed || updated.EditedAt != loaded.EditedAt) throw new InvalidDataException("CRUD update failed.");
-            if (!await Message.Remove(message.Id, ct) || await Message.Get(message.Id, ct) is not null) throw new InvalidDataException("CRUD delete failed.");
+            if (!await Post.Remove(message.Id, ct) || await Post.Get(message.Id, ct) is not null) throw new InvalidDataException("CRUD delete failed.");
         }
         return new { create = true, read = true, unicodeAndDateRoundtrip = true, editAndTombstone = true, delete = true };
     }
@@ -35,7 +35,7 @@ internal static class Admission
         try
         {
             using var fresh = EntityContext.NoCache();
-            await Message.Batch().Add(added).Update(existing.Id, m => { invoked = true; m.Content = m.Content with { Text = "Must not run" }; }).Delete(deleted.Id)
+            await Post.Batch().Add(added).Update(existing.Id, m => { invoked = true; m.Content = m.Content with { Text = "Must not run" }; }).Delete(deleted.Id)
                 .Save(new BatchOptions(RequireAtomic: true, MaxItems: 3), ct);
         }
         catch (NotSupportedException rejected) when (rejected.Message is "This MongoDB batch has not proved transaction support for its selected topology; atomic execution is unavailable."
@@ -45,7 +45,7 @@ internal static class Admission
         var after = await collection.Find(filter).Sort(new BsonDocument("_id", 1)).ToListAsync(ct);
         var unchanged = before.Select(v => v.ToJson()).SequenceEqual(after.Select(v => v.ToJson()));
         if (error is null || invoked || !unchanged || commands.Length != 0) throw new InvalidDataException("RequireAtomic failed to reject before lifecycle reads or mutation.");
-        return new { rejected = true, error, mutationCallbackInvoked = invoked, documentsUnchanged = unchanged, observedCommands = commands, batchCapabilities = Message.Batch().ExecutionCapabilities.ToString() };
+        return new { rejected = true, error, mutationCallbackInvoked = invoked, documentsUnchanged = unchanged, observedCommands = commands, batchCapabilities = Post.Batch().ExecutionCapabilities.ToString() };
     }
     internal static async Task<object> Deferred(IMongoDatabase database, IMongoCollection<BsonDocument> messages, CancellationToken ct)
     {
@@ -86,6 +86,6 @@ internal static class Admission
             throw new InvalidDataException($"Deferred fault result inconclusive or unexpected: failure={failure}; first={firstPresent}; head={headPresent}; third={thirdPresent}.");
         return new { failure, providerValidationFailure, firstMessageDurable = firstPresent, rejectedHeadDurable = headPresent, thirdMessageDurable = thirdPresent,
             partialCommitObserved = firstPresent && !headPresent && !thirdPresent,
-            scope = "Actual Message → ActivityHead → Message saves in EntityContext deferred scope; external driver observes durable state. No native transaction invoked and no complete acceptance/restart proof." };
+            scope = "Actual Post → ActivityHead → Post saves in EntityContext deferred scope; external driver observes durable state. No native transaction invoked and no complete acceptance/restart proof." };
     }
 }
