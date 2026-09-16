@@ -27,7 +27,7 @@ public sealed partial class ConversationService
             var conflict = false;
             await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
             {
-                RequireTopicCapability(policy, TopicCapability.Reply, "This room's current rules do not allow posting.");
+                RequireTopicCapability(policy, TopicCapability.Reply, "This topic's current rules do not allow posting.");
                 var existing = (await Post.Query(m => m.RoomKey == roomKey && m.AuthorParticipantId == participantId && m.OperationId == input.OperationId,
                     Window<Post>(nameof(Post.Sequence), 1, 1), token)).FirstOrDefault();
                 if (existing is { } found)
@@ -44,9 +44,9 @@ public sealed partial class ConversationService
                 if (input.ReplyTo is { } reply)
                 {
                     var target = await SourceDecision.Get(SourceDecision.Key(roomKey, reply.Uri, reply.Cid), token);
-                    if (target?.Accepted != true) throw new ArgumentException("Reply to an accepted post in this room.");
+                    if (target?.Accepted != true) throw new ArgumentException("Reply to an accepted post in this topic.");
                 }
-                var state = await RoomConversation.Get(roomKey, token) ?? new RoomConversation { Id = roomKey };
+                var state = await TopicConversation.Get(roomKey, token) ?? new TopicConversation { Id = roomKey };
                 var content = new PostContent(input.Text, clock.GetUtcNow(), input.ReplyTo);
                 var decision = new SourceDecision
                 {
@@ -61,9 +61,9 @@ public sealed partial class ConversationService
                 projected.Facets = facets;
                 await projected.Save(token);
                 await state.Save(token);
-                var room = await Room.Get(roomKey, token);
+                var topic = await Topic.Get(roomKey, token);
                 await ActivityJournal.AppendInTransaction(ActivityKind.MessageAccepted, roomKey, participantId, null,
-                    room?.TangentKey, decision.Sequence, decision.DecidedAt, token);
+                    topic?.TangentKey, decision.Sequence, decision.DecidedAt, token);
                 result = projected;
                 return true;
             }, ct);

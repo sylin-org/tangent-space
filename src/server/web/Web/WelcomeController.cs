@@ -15,7 +15,7 @@ namespace TangentSpace.Web;
 [ApiController]
 public sealed class WelcomeController(IOptions<SpaceOptions> options, TangentServer hub) : ControllerBase
 {
-    private RoomGovernance rooms => hub.Topics;
+    private TopicGovernance topics => hub.Topics;
     private ServerGovernance server => hub.Space;
 
     [AllowAnonymous]
@@ -43,6 +43,6 @@ public sealed class WelcomeController(IOptions<SpaceOptions> options, TangentSer
             : space.IsOwner(participantId) && home?.SetupComplete != true ? "create_tangent" : "complete";
         return Ok(new SpaceWelcome(space?.Name ?? options.Value.Name, space is not null, identity,
             TangentConstants.SignInPath, identity is null ? null : TangentConstants.SignOutPath,
-            await rooms.List(participantId, 1, ct), settings, onboarding));
+            await topics.List(participantId, 1, ct), settings, onboarding));
     }
 }

@@ -20,7 +20,7 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
         return Ok(await governance.Read(participantId, ct));
     }
 
-    [HttpPatch("/api/server"), TangentSpace.Rooms.Web.RoomMutation]
+    [HttpPatch("/api/server"), TangentSpace.Rooms.Web.TopicMutation]
     public async Task<IActionResult> Patch([FromBody] ServerSettingsPatch patch, CancellationToken ct)
     {
         try { return Ok(await governance.Update(ParticipationAccess.Require(User, ParticipationGrants.Welcome), patch, ct)); }
@@ -28,7 +28,7 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpPost("/api/server/claim"), TangentSpace.Rooms.Web.RoomMutation]
+    [HttpPost("/api/server/claim"), TangentSpace.Rooms.Web.TopicMutation]
     public async Task<IActionResult> Claim([FromBody] ClaimRequest request, CancellationToken ct)
     {
         var participantId = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
@@ -45,7 +45,7 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpPut("/api/server/access"), TangentSpace.Rooms.Web.RoomMutation]
+    [HttpPut("/api/server/access"), TangentSpace.Rooms.Web.TopicMutation]
     public async Task<IActionResult> SetAccess([FromBody] AccessMap access, CancellationToken ct)
     {
         try { return Ok(await governance.SetAccess(ParticipationAccess.Require(User, ParticipationGrants.Welcome), access, ct)); }

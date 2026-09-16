@@ -61,7 +61,7 @@ internal static class Admission
         string? failure = null; var providerValidationFailure = false;
         try
         {
-            using var fresh = EntityContext.NoCache(); using var scope = EntityContext.Transaction("tangent-room-policy-operation");
+            using var fresh = EntityContext.NoCache(); using var scope = EntityContext.Transaction("tangent-topic-policy-operation");
             await first.Save(ct);
             await new ActivityHead { Id = "mongo-deferred-rejected-head", LastSequence = 999, UpdatedAt = Fixture.Epoch }.Save(ct);
             await third.Save(ct); await EntityContext.Commit(ct);

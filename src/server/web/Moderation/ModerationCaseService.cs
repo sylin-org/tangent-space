@@ -14,7 +14,7 @@ namespace TangentSpace.Moderation;
 
 /// <summary>First accountable case path: report, bounded steward read, defer, or escalate.
 /// It deliberately cannot conceal content or sanction a participant.</summary>
-public sealed class ModerationCaseService(RoomGovernance rooms, References refs, TimeProvider clock)
+public sealed class ModerationCaseService(TopicGovernance topics, References refs, TimeProvider clock)
 {
     public const int PageSize = 10;
     public const int MaximumPage = 10_000;
@@ -32,7 +32,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
         CheckOperation(operationId);
         CheckReasonCode(reasonCode);
         CheckText(statement, nameof(statement), ModerationCase.MaximumStatementLength);
-        return rooms.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
+        return topics.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
         {
             var post = await Post.Get(messageId, token);
             if (post is null || post.RoomKey != roomKey)
@@ -55,11 +55,11 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
                 post.AuthorParticipantId, post.Removed), "The current Topic rules do not allow reporting this Post.");
             if (current is null)
             {
-                var room = await Room.Get(roomKey, token)
+                var topic = await Topic.Get(roomKey, token)
                     ?? throw new ArgumentException("Choose a Post in this Topic.", nameof(messageId));
                 current = new ModerationCase
                 {
-                    Id = id, TangentKey = room.TangentKey, RoomKey = roomKey,
+                    Id = id, TangentKey = topic.TangentKey, RoomKey = roomKey,
                     SubjectMessageId = messageId, SubjectParticipantId = post.AuthorParticipantId,
                     FirstReportedAt = now, UpdatedAt = now
                 };
@@ -90,7 +90,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
     {
         if (page is < 1 or > MaximumPage)
             throw new ArgumentException("Choose a case page between 1 and 10000.", nameof(page));
-        return rooms.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
+        return topics.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var selected = (await ModerationCase.Query(item => item.RoomKey == roomKey,
@@ -111,7 +111,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
     {
         ValidateProjection(testimonyOffset, testimonyLimit, decisionLimit);
         var seed = await Load(caseId, ct);
-        return await rooms.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
+        return await topics.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var current = await ModerationCase.Get(caseId, token)
@@ -136,7 +136,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
     {
         CheckText(reason, nameof(reason), ModerationCase.MaximumDecisionReasonLength);
         var seed = await Load(caseId, ct);
-        return await rooms.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
+        return await topics.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var current = await ModerationCase.Get(caseId, token) ?? throw Unavailable();
@@ -158,7 +158,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
         CheckOperation(operationId);
         CheckText(reason, nameof(reason), ModerationCase.MaximumDecisionReasonLength);
         var seed = await Load(caseId, ct);
-        return await rooms.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
+        return await topics.WithCurrentPolicy(actorId, seed.RoomKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var current = await ModerationCase.Get(caseId, token) ?? throw Unavailable();
@@ -195,7 +195,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
         }, ct);
     }
 
-    private async Task<ModerationCaseView> ReadWithin(ModerationCase current, RoomPolicy policy,
+    private async Task<ModerationCaseView> ReadWithin(ModerationCase current, TopicPolicy policy,
         CancellationToken ct, Post? subject = null)
     {
         subject ??= await SubjectOrNull(current, ct);
@@ -211,7 +211,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
             decisions, current.Decisions.Count > decisions.Count);
     }
 
-    private ModerationCaseSummary Summary(ModerationCase item, Post? subject, RoomPolicy policy)
+    private ModerationCaseSummary Summary(ModerationCase item, Post? subject, TopicPolicy policy)
         => new(refs.Case(item.TangentKey, item.RoomKey, item.Id), refs.Topic(item.TangentKey, item.RoomKey),
             refs.Post(item.TangentKey, item.RoomKey, item.SubjectMessageId), item.State, item.Revision,
             subject is null ? "unavailable" : SubjectRevision(subject),
@@ -220,7 +220,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
             item.FirstReportedAt, item.UpdatedAt, item.NextReviewAt, item.EscalatedToParticipantId,
             StewardActions(policy, item));
 
-    private static IReadOnlyList<string> StewardActions(RoomPolicy policy, ModerationCase item)
+    private static IReadOnlyList<string> StewardActions(TopicPolicy policy, ModerationCase item)
     {
         if (!TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
             || !TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed) return [];
@@ -229,7 +229,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
             : ["read_moderation_case", "preview_moderation_action", "apply_moderation_action"];
     }
 
-    private static void RequireSteward(RoomPolicy policy)
+    private static void RequireSteward(TopicPolicy policy)
     {
         Require(TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read),
             "The current Topic rules do not allow reading this moderation case.");

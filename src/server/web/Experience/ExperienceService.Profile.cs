@@ -60,7 +60,7 @@ public sealed partial class ExperienceService
         foreach (var post in scanned)
         {
             if (posts.Count >= ProfilePostLimit) break;
-            var description = await rooms.Describe(viewer, post.RoomKey, ct);
+            var description = await topics.Describe(viewer, post.RoomKey, ct);
             if (description is null || !description.CanRead) continue;
             visibleMessages.Add(post);
             string? replyTo = null;

@@ -20,10 +20,10 @@ namespace TangentSpace.Experience;
 /// by removing items from later digests. Directed attention (mentions, direct replies) is kept
 /// distinct from mere watched-topic activity.</summary>
 public sealed class ExperienceDigest(
-    TangentGovernance tangents, RoomGovernance governance, TimeProvider clock,
+    TangentGovernance tangents, TopicGovernance governance, TimeProvider clock,
     IDataProtectionProvider protection, References refs, TangentServer hub)
 {
-    public const int MaximumRooms = 100;
+    public const int MaximumTopics = 100;
     public const int MaximumUnread = 100;
     private const int MaximumDirectedCount = 50;
     private const int MaximumActivityCount = 100;
@@ -34,12 +34,12 @@ public sealed class ExperienceDigest(
     public sealed record Digest(
         ExperienceAttention Attention, IReadOnlyList<ExperienceAction> FollowUps);
 
-    public sealed record DigestCursor(string ParticipantId, string? ScopeTangent, string? ScopeRoom, int Offset, DateTimeOffset ExpiresAt);
+    public sealed record DigestCursor(string ParticipantId, string? ScopeTangent, string? ScopeTopic, int Offset, DateTimeOffset ExpiresAt);
 
     /// <summary>Computes one digest page for the participant. The checkpoint is the offset-zero
     /// cursor for recovery; the page cursor continues this page sequence only.</summary>
     public async Task<Digest> Page(string did, string? credentialId, DigestCursor? cursor, string? scopeTangent,
-        string? scopeRoom, int limit, CancellationToken ct)
+        string? scopeTopic, int limit, CancellationToken ct)
     {
         await EnsureActive(did, credentialId, ct);
         var offset = cursor?.Offset ?? 0;
@@ -54,13 +54,13 @@ public sealed class ExperienceDigest(
             using (EntityContext.NoCache())
                 directory = await tangents.ListAuthorizedChannels(did, page, ct);
             if (directory.ScanLimited) scanLimited = true;
-            foreach (var room in directory.Channels)
+            foreach (var topic in directory.Channels)
             {
-                if (roomsScanned >= MaximumRooms) { overflow = true; break; }
+                if (roomsScanned >= MaximumTopics) { overflow = true; break; }
                 roomsScanned++;
-                if (scopeTangent is not null && room.TangentKey != scopeTangent) continue;
-                if (scopeRoom is not null && room.Key != scopeRoom) continue;
-                await CollectRoom(did, room, directed, watched, ct);
+                if (scopeTangent is not null && topic.TangentKey != scopeTangent) continue;
+                if (scopeTopic is not null && topic.Key != scopeTopic) continue;
+                await CollectTopic(did, topic, directed, watched, ct);
             }
             if (directory.NextPage is null || overflow) break;
         }
@@ -96,25 +96,25 @@ public sealed class ExperienceDigest(
             throw new UnauthorizedAccessException("This participant credential is expired or revoked.");
     }
 
-    private async Task CollectRoom(string did, RoomDescription room, List<ExperienceAttentionItem> directed,
+    private async Task CollectTopic(string did, TopicDescription topic, List<ExperienceAttentionItem> directed,
         List<ExperienceAttentionItem> watched, CancellationToken ct)
     {
-        await governance.WithCurrentPolicy(did, room.Key, async (policy, token) =>
+        await governance.WithCurrentPolicy(did, topic.Key, async (policy, token) =>
         {
             if (!policy.CanRead) return false;
             using var fresh = EntityContext.NoCache();
-            var stored = await Room.Get(room.Key, token);
+            var stored = await Topic.Get(topic.Key, token);
             if (stored is null) return false;
             var mode = AttentionRules.Effective(
-                await WatchSetting.Get(WatchSetting.Key(did, room.Key), token),
+                await WatchSetting.Get(WatchSetting.Key(did, topic.Key), token),
                 await TangentWatchSetting.Get(TangentWatchSetting.Key(did, stored.TangentKey), token));
             if (!AttentionRules.DeliversChannel(mode)) return false;
-            var state = await RoomConversation.Get(room.Key, token) ?? new RoomConversation { Id = room.Key };
-            var read = await ReadPosition.Get(ReadPosition.Key(did, room.Key), token);
+            var state = await TopicConversation.Get(topic.Key, token) ?? new TopicConversation { Id = topic.Key };
+            var read = await ReadPosition.Get(ReadPosition.Key(did, topic.Key), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
             var recipientDid = await hub.Directory.AtprotoDidOf(did, token);
             var unread = (await Post.Query(
-                post => post.RoomKey == room.Key && post.Sequence > readSequence, UnreadWindow, token))
+                post => post.RoomKey == topic.Key && post.Sequence > readSequence, UnreadWindow, token))
                 .OrderBy(post => post.Sequence).ToList();
             var handles = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var (author, label) in await hub.Directory.LabelsFor(
@@ -128,11 +128,11 @@ public sealed class ExperienceDigest(
                 // Direct replies answer this participant's accepted post.
                 if (post.Content.ReplyTo is { } parent)
                 {
-                    var decision = await SourceDecision.Get(SourceDecision.Key(room.Key, parent.Uri, parent.Cid), token);
+                    var decision = await SourceDecision.Get(SourceDecision.Key(topic.Key, parent.Uri, parent.Cid), token);
                     if (AttentionRules.IsDirectReply(post, decision, did))
                     {
                         addressedPosts.Add(post.Id);
-                        directed.Add(Item(did, room, stored.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
+                        directed.Add(Item(did, topic, stored.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
                         continue;
                     }
                 }
@@ -143,7 +143,7 @@ public sealed class ExperienceDigest(
                         || facet.References(ParticipantIdentity.InternalValue(did))))
                 {
                     addressedPosts.Add(post.Id);
-                    directed.Add(Item(did, room, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                    directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                     continue;
                 }
                 // Group mentions expand to current holders of the scoped roles: the group is
@@ -154,11 +154,11 @@ public sealed class ExperienceDigest(
                 if (groups.Count > 0 && post.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, token))
                 {
                     addressedPosts.Add(post.Id);
-                    directed.Add(Item(did, room, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                    directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                     continue;
                 }
                 if (mode != WatchMode.Replies)
-                    watched.Add(Item(did, room, stored.TangentKey, post, "watched_activity", null, authorHandle));
+                    watched.Add(Item(did, topic, stored.TangentKey, post, "watched_activity", null, authorHandle));
             }
             return true;
         }, ct);
@@ -183,11 +183,11 @@ public sealed class ExperienceDigest(
 
     private static string RefKey(ExperienceAttentionItem item) => item.Ref;
 
-    private ExperienceAttentionItem Item(string did, RoomDescription room, string tangentKey, Post post,
+    private ExperienceAttentionItem Item(string did, TopicDescription topic, string tangentKey, Post post,
         string kind, string? relationship, string? authorHandle)
-        => new("att:" + room.Key + ":" + post.Id, kind, post.AuthorParticipantId,
+        => new("att:" + topic.Key + ":" + post.Id, kind, post.AuthorParticipantId,
             string.IsNullOrEmpty(authorHandle) ? null : authorHandle, did,
-            refs.Topic(tangentKey, room.Key), refs.Post(tangentKey, room.Key, post.Id),
+            refs.Topic(tangentKey, topic.Key), refs.Post(tangentKey, topic.Key, post.Id),
             relationship, Preview(post.Content.Text, 160),
             post.SourceCid ?? "seq:" + post.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "pending");
@@ -206,7 +206,7 @@ public sealed class ExperienceDigest(
 
     public string Encode(DigestCursor cursor) => cursorProtector.Protect(JsonSerializer.Serialize(cursor));
 
-    public DigestCursor? Decode(string? value, string participantId, string? scopeTangent, string? scopeRoom)
+    public DigestCursor? Decode(string? value, string participantId, string? scopeTangent, string? scopeTopic)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         try
@@ -215,7 +215,7 @@ public sealed class ExperienceDigest(
             var cursor = JsonSerializer.Deserialize<DigestCursor>(cursorProtector.Unprotect(value));
             return cursor is null || cursor.ParticipantId != participantId || cursor.Offset < 0 || cursor.Offset > 100_000
                 || cursor.ExpiresAt <= clock.GetUtcNow()
-                || cursor.ScopeTangent != scopeTangent || cursor.ScopeRoom != scopeRoom ? null : cursor;
+                || cursor.ScopeTangent != scopeTangent || cursor.ScopeTopic != scopeTopic ? null : cursor;
         }
         catch (Exception error) when (error is CryptographicException or JsonException or ArgumentException)
         {

@@ -12,7 +12,7 @@ namespace TangentSpace;
 /// No current actor, request, entity session or transaction is retained here.</summary>
 public sealed class TangentServer(
     ServerGovernance space, TangentGovernance tangents, CompanionGovernance participants,
-    RoomGovernance topics, ConversationService posts, ActivityService activity,
+    TopicGovernance topics, ConversationService posts, ActivityService activity,
     TangentSpace.Participants.ParticipantProfiles profiles,
     TangentSpace.Participants.ParticipantDirectory directory, LiveSessions live)
 {
@@ -20,7 +20,7 @@ public sealed class TangentServer(
     public ServerGovernance Space { get; } = space;
     public TangentGovernance Tangents { get; } = tangents;
     public CompanionGovernance Participants { get; } = participants;
-    public RoomGovernance Topics { get; } = topics;
+    public TopicGovernance Topics { get; } = topics;
     public ConversationService Posts { get; } = posts;
     public ActivityService Activity { get; } = activity;
     public TangentSpace.Participants.ParticipantDirectory Directory { get; } = directory;

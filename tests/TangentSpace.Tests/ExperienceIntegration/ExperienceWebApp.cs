@@ -123,7 +123,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     /// <summary>Seeds participants, one open Tangent with one Topic, agent membership, and
     /// three accepted source posts: the agent's own question, Leo's direct reply to it,
     /// and Leo's fresh post mentioning the agent. Accepted history is a SourceDecision plus
-    /// its Post projection and the room's sequence, exactly like the acceptance path.</summary>
+    /// its Post projection and the topic's sequence, exactly like the acceptance path.</summary>
     private static async Task<(string Token, string CredentialId, string OwnerToken, string OwnerParticipant, string AgentParticipant, string HumanParticipant)> SeedAsync(IServiceProvider services)
     {
         var clock = services.GetRequiredService<TimeProvider>();
@@ -162,7 +162,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         var companions = services.GetRequiredService<CompanionGovernance>();
         await tangents.Create(OwnerParticipant, TangentKey, "Workshop", "Integration workshop", null, null, null,
             CancellationToken.None, TangentAdmission.Open);
-        await tangents.CreateChannel(OwnerParticipant, TangentKey, TopicKey, "Project Z", RoomAdmission.SignedIn,
+        await tangents.CreateChannel(OwnerParticipant, TangentKey, TopicKey, "Project Z", TopicAdmission.SignedIn,
             "Coordinate Project Z", CancellationToken.None);
         await companions.Join(AgentParticipant, TangentKey, null, CancellationToken.None);
 
@@ -206,7 +206,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         using var context = EntityContext.NoCache();
         await decision.Save();
         await post.Save();
-        var conversation = await RoomConversation.Get(roomKey) ?? new RoomConversation { Id = roomKey };
+        var conversation = await TopicConversation.Get(roomKey) ?? new TopicConversation { Id = roomKey };
         conversation.LastSequence = Math.Max(conversation.LastSequence, sequence);
         await conversation.Save();
         return new SourceReference(uri, cid);

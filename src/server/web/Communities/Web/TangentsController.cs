@@ -29,12 +29,12 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
         catch (TangentRuleViolation rejected) { return BadRequest(new { reason = rejected.Message }); }
     }
 
-    [RoomMutation(ParticipationGrants.Post)]
+    [TopicMutation(ParticipationGrants.Post)]
     [HttpPost]
     public Task<IActionResult> Create(CreateTangentRequest request, CancellationToken ct)
         => Execute(actor => tangents.Create(actor, request.Key, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct), created: true);
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPatch("{tangentKey}")]
     public Task<IActionResult> Change(string tangentKey, ChangeTangentRequest request, CancellationToken ct)
         => Execute(actor => tangents.Change(actor, tangentKey, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct));
@@ -43,22 +43,22 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
     public Task<IActionResult> GetAccess(string tangentKey, CancellationToken ct)
         => Execute(actor => tangents.GetAccess(actor, tangentKey, ct));
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPut("{tangentKey}/access")]
     public Task<IActionResult> SetAccess(string tangentKey, AccessMap access, CancellationToken ct)
         => Execute(actor => tangents.SetAccess(actor, tangentKey, access, ct));
 
-    [RoomMutation(ParticipationGrants.Post)]
+    [TopicMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentKey}/channels")]
     public Task<IActionResult> CreateChannel(string tangentKey, CreateTangentChannelRequest request, CancellationToken ct)
         => Execute(actor => tangents.CreateChannel(actor, tangentKey, request.Key, request.Title, request.Admission, request.Topic, ct));
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPut("{tangentKey}/members/{targetDid}")]
     public Task<IActionResult> SetMembership(string tangentKey, string targetDid, ChangeTangentMembershipRequest request, CancellationToken ct)
         => Execute(actor => tangents.SetMembership(actor, tangentKey, targetDid, request.Role, ct));
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPut("{tangentKey}/roles/{targetIdentifier}")]
     public Task<IActionResult> SetRole(string tangentKey, string targetIdentifier, ChangeCompanionRoleRequest request, CancellationToken ct)
         => Execute(actor => hub.Participants.SetRole(actor, tangentKey, null, targetIdentifier, request.Role, ct));
@@ -87,11 +87,11 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
             TangentDenial.AlreadyExists => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest
         }, new { reason = denied.Message, denial = denied.Denial }); }
-        catch (RoomRuleViolation denied) { return StatusCode(denied.Denial switch
+        catch (TopicRuleViolation denied) { return StatusCode(denied.Denial switch
         {
-            RoomDenial.Forbidden => StatusCodes.Status403Forbidden,
-            RoomDenial.NotFound => StatusCodes.Status404NotFound,
-            RoomDenial.AlreadyExists => StatusCodes.Status409Conflict,
+            TopicDenial.Forbidden => StatusCodes.Status403Forbidden,
+            TopicDenial.NotFound => StatusCodes.Status404NotFound,
+            TopicDenial.AlreadyExists => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status400BadRequest
         }, new { reason = denied.Message, denial = denied.Denial }); }
     }

@@ -27,15 +27,15 @@ public sealed class ScopedRestriction : Entity<ScopedRestriction>
         DateTimeOffset? until, string reason, string actorDid, DateTimeOffset now)
     {
         if (kind != RestrictionKind.Timeout && until is not null)
-            throw new RoomRuleViolation(RoomDenial.InvalidInput, "Only a timeout carries an expiry.");
+            throw new TopicRuleViolation(TopicDenial.InvalidInput, "Only a timeout carries an expiry.");
         if (kind == RestrictionKind.Timeout && until is not { } expiry)
-            throw new RoomRuleViolation(RoomDenial.InvalidInput, "A timeout needs an explicit future expiry.");
+            throw new TopicRuleViolation(TopicDenial.InvalidInput, "A timeout needs an explicit future expiry.");
         if (until is { } moment && moment <= now)
-            throw new RoomRuleViolation(RoomDenial.InvalidInput, "Choose a timeout expiry in the future.");
+            throw new TopicRuleViolation(TopicDenial.InvalidInput, "Choose a timeout expiry in the future.");
         if (kind == RestrictionKind.None && string.IsNullOrWhiteSpace(reason))
-            throw new RoomRuleViolation(RoomDenial.InvalidInput, "Give a reason for lifting the restriction.");
+            throw new TopicRuleViolation(TopicDenial.InvalidInput, "Give a reason for lifting the restriction.");
         if (string.IsNullOrWhiteSpace(reason) || reason.Length > MaximumReasonLength)
-            throw new RoomRuleViolation(RoomDenial.InvalidInput, "A restriction reason must contain 1–280 characters.");
+            throw new TopicRuleViolation(TopicDenial.InvalidInput, "A restriction reason must contain 1–280 characters.");
         return new ScopedRestriction
         {
             Id = Key(scope, scopeKey, targetDid), Scope = scope, ScopeKey = scopeKey, ParticipantId = targetDid,

@@ -14,9 +14,9 @@ namespace TangentSpace.Communities;
 /// Companion participation operations for the inbound MCP boundary: self join/leave, bound invitations,
 /// manual admission, scoped roles, participation policy, scoped restrictions and personal watch state.
 /// Every mutation runs under the host policy gate with the durable journal; access enforcement itself stays
-/// central in Room.CurrentPolicy so browser HTTP and MCP observe exactly the same decisions.
+/// central in Topic.CurrentPolicy so browser HTTP and MCP observe exactly the same decisions.
 /// </summary>
-public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, RoomGovernance rooms,
+public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, TopicGovernance topics,
     TangentSpace.Participants.ParticipantDirectory directory)
 {
     public const int MaximumAdministrationList = 100;
@@ -25,7 +25,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
 
     /// <summary>
     /// Read-only current-authority check for replay gates: an active, unrestricted steward at Tangent scope
-    /// (owner or Tangent administrator) or any current channel manager at room scope. Never mutates or
+    /// (owner or Tangent administrator) or any current channel manager at topic scope. Never mutates or
     /// journals; scoped restrictions and suspension always answer false so saved private administration
     /// data is not replayed to a participant who just lost authority.
     /// </summary>
@@ -38,20 +38,20 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
             var now = clock.GetUtcNow();
             var participant = await Participant.Get(actorId, ct);
             if (participant is null || participant.IsSuspended) { await EntityContext.Commit(ct); return false; }
             if (!string.IsNullOrWhiteSpace(roomKey))
             {
                 var space = await Space.Get(TangentConstants.SpaceId, ct);
-                var room = await Room.Get(roomKey, ct);
-                if (room is null || room.TangentKey != tangentKey) { await EntityContext.Commit(ct); return false; }
-                var membership = await RoomMembership.Get(RoomMembership.Key(room.Id, actorId), ct);
+                var topic = await Topic.Get(roomKey, ct);
+                if (topic is null || topic.TangentKey != tangentKey) { await EntityContext.Commit(ct); return false; }
+                var membership = await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
                 var tangent = await Tangent.Get(tangentKey, ct);
                 var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-                var restriction = await Restrictions.ForRoom(actorId, room.Id, tangentKey, now, ct);
-                var policy = room.CurrentPolicy(space, actorId, membership, participant.IsSuspended, tangent, tangentMembership,
+                var restriction = await Restrictions.ForTopic(actorId, topic.Id, tangentKey, now, ct);
+                var policy = topic.CurrentPolicy(space, actorId, membership, participant.IsSuspended, tangent, tangentMembership,
                     participant.Classification, restriction);
                 await EntityContext.Commit(ct);
                 return policy.CanManage;
@@ -76,7 +76,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var (tangent, membership, participant) = await LoadTangentContext(actorId, tangentKey, ct);
             var invitation = await ResolveInvitation(invitationId, actorId, tangentKey, now, ct);
@@ -143,7 +143,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var (tangent, membership, participant) = await LoadTangentContext(actorId, tangentKey, ct);
             if ((tangent.IsOwner(actorId) || await IsServerOwner(actorId, ct)))
@@ -170,7 +170,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
             var target = await RequireTarget(tangent, targetIdentifier, actorId, ct);
@@ -197,7 +197,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var invitation = await TangentInvitation.Get(invitationId, ct)
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested invitation does not exist.");
@@ -220,7 +220,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
             var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
             await RequireSteward(tangent, actorId, actorMembership, "inspect invitations", ct);
             await RequireUnrestricted(actorId, tangentKey, clock.GetUtcNow(), ct);
@@ -239,7 +239,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
             var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
             await RequireSteward(tangent, actorId, actorMembership, "inspect admission requests", ct);
             await RequireUnrestricted(actorId, tangentKey, clock.GetUtcNow(), ct);
@@ -261,7 +261,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var request = await TangentJoinRequest.Get(requestId, ct)
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested admission request does not exist.");
@@ -293,7 +293,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         finally { gate.Exit(); }
     }
 
-    /// <summary>Exact-scope role change. Channel scope delegates to the audited room membership guards.</summary>
+    /// <summary>Exact-scope role change. Channel scope delegates to the audited topic membership guards.</summary>
     public async Task<CompanionRoleResult> SetRole(string actorId, string tangentKey, string? roomKey, string targetIdentifier, CompanionRole role, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(roomKey)) return new CompanionRoleResult(null, await SetChannelRole(actorId, tangentKey, roomKey, targetIdentifier, role, ct));
@@ -301,7 +301,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
             var target = await RequireTarget(tangent, targetIdentifier, actorId, ct);
@@ -332,7 +332,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var (tangent, _, _) = await LoadTangentContext(actorId, tangentKey, ct);
             tangent.ChangeParticipationPolicy(actorId, admission, preset, undeclared, clock.GetUtcNow());
             await tangent.Save(ct);
@@ -355,7 +355,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             var tangent = await Tangent.Get(tangentKey, ct)
@@ -366,46 +366,46 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
             var targetId = (await directory.ByIdentifier(targetIdentifier, ct))?.Participant.Id
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The participant must first establish a verified arrival.");
             var actorMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-            RoomRuleViolation? denial = null;
+            TopicRuleViolation? denial = null;
             var scope = RestrictionScope.Tangent;
             var scopeKey = tangentKey;
             long selectedRevision = tangent.PolicyRevision;
-            Room? room = null;
-            RoomAudit? audit = null;
+            Topic? topic = null;
+            TopicAudit? audit = null;
             try
             {
-                if (actor.IsSuspended) throw new RoomRuleViolation(RoomDenial.Forbidden, "A suspended participant cannot moderate.");
-                // A restricted moderator cannot impose restrictions; the room path enforces this through CanManage.
+                if (actor.IsSuspended) throw new TopicRuleViolation(TopicDenial.Forbidden, "A suspended participant cannot moderate.");
+                // A restricted moderator cannot impose restrictions; the topic path enforces this through CanManage.
                 if (string.IsNullOrWhiteSpace(roomKey))
                     await RequireUnrestricted(actorId, tangentKey, now, ct);
                 // Higher authority is protected: never the space owner, the Tangent owner, or the acting moderator.
                 if (targetId == actorId || space?.IsOwner(targetId) == true || tangent.IsOwner(targetId))
-                    throw new RoomRuleViolation(RoomDenial.Forbidden, "Restrictions cannot target the owner or a higher authority.");
+                    throw new TopicRuleViolation(TopicDenial.Forbidden, "Restrictions cannot target the owner or a higher authority.");
                 if (!string.IsNullOrWhiteSpace(roomKey))
                 {
-                    scope = RestrictionScope.Room;
+                    scope = RestrictionScope.Topic;
                     scopeKey = roomKey;
-                    room = await Room.Get(roomKey, ct) ?? throw new RoomRuleViolation(RoomDenial.NotFound, "The requested channel does not exist.");
-                    if (room.TangentKey != tangentKey)
-                        throw new RoomRuleViolation(RoomDenial.InvalidInput, "The channel does not belong to this Tangent.");
-                    selectedRevision = room.PolicyRevision;
-                    var membership = await RoomMembership.Get(RoomMembership.Key(room.Id, actorId), ct);
+                    topic = await Topic.Get(roomKey, ct) ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The requested channel does not exist.");
+                    if (topic.TangentKey != tangentKey)
+                        throw new TopicRuleViolation(TopicDenial.InvalidInput, "The channel does not belong to this Tangent.");
+                    selectedRevision = topic.PolicyRevision;
+                    var membership = await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
                     var tangentMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-                    var restriction = await Restrictions.ForRoom(actorId, room.Id, tangentKey, now, ct);
-                    var policy = room.CurrentPolicy(space, actorId, membership, actor.IsSuspended, tangent, tangentMembership,
+                    var restriction = await Restrictions.ForTopic(actorId, topic.Id, tangentKey, now, ct);
+                    var policy = topic.CurrentPolicy(space, actorId, membership, actor.IsSuspended, tangent, tangentMembership,
                         actor.Classification, restriction);
                     if (!policy.CanManage)
-                        throw new RoomRuleViolation(RoomDenial.Forbidden, "Only a channel manager or the Tangent stewards can restrict here.");
+                        throw new TopicRuleViolation(TopicDenial.Forbidden, "Only a channel manager or the Tangent stewards can restrict here.");
                 }
                 else if (!(tangent.IsOwner(actorId) || await IsServerOwner(actorId, ct)) && actorMembership?.Role != TangentRole.Admin)
-                    throw new RoomRuleViolation(RoomDenial.Forbidden, "Only the Tangent owner or a Tangent administrator can restrict at this scope.");
+                    throw new TopicRuleViolation(TopicDenial.Forbidden, "Only the Tangent owner or a Tangent administrator can restrict at this scope.");
                 var stored = ScopedRestriction.Impose(scope, scopeKey, targetId, kind, until, reason, actorId, now);
                 await stored.Save(ct);
                 await ActivityJournal.AppendInTransaction(ActivityKind.RestrictionChanged, roomKey ?? "", actorId, targetId,
                     tangentKey: tangent.Id, ct: ct);
-                audit = new RoomAudit
+                audit = new TopicAudit
                 {
-                    ActorParticipantId = actorId, RoomKey = roomKey ?? "", TargetParticipantId = targetId, Operation = RoomAdministration.SetRestriction,
+                    ActorParticipantId = actorId, RoomKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
                     Accepted = true, Reason = stored.Reason, SelectedPolicyRevision = selectedRevision,
                     SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
                 };
@@ -415,10 +415,10 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
                 ActivityJournal.SignalAfterCommit();
                 return new RestrictionResult(scope, scopeKey, targetId, stored.Kind, stored.Until, stored.Reason, audit.Id);
             }
-            catch (RoomRuleViolation rejected) { denial = rejected; }
-            audit = new RoomAudit
+            catch (TopicRuleViolation rejected) { denial = rejected; }
+            audit = new TopicAudit
             {
-                ActorParticipantId = actorId, RoomKey = roomKey ?? "", TargetParticipantId = targetId, Operation = RoomAdministration.SetRestriction,
+                ActorParticipantId = actorId, RoomKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
                 Accepted = false, Denial = denial!.Denial, Reason = denial.Message,
                 SelectedPolicyRevision = selectedRevision, SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
             };
@@ -426,10 +426,10 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
             await EntityContext.Commit(ct);
             throw new TangentRuleViolation(denial.Denial switch
             {
-                RoomDenial.NotFound => TangentDenial.NotFound,
-                RoomDenial.InvalidInput => TangentDenial.InvalidInput,
-                RoomDenial.AlreadyExists => TangentDenial.AlreadyExists,
-                RoomDenial.MembershipMismatch => TangentDenial.MembershipMismatch,
+                TopicDenial.NotFound => TangentDenial.NotFound,
+                TopicDenial.InvalidInput => TangentDenial.InvalidInput,
+                TopicDenial.AlreadyExists => TangentDenial.AlreadyExists,
+                TopicDenial.MembershipMismatch => TangentDenial.MembershipMismatch,
                 _ => TangentDenial.Forbidden
             }, denial.Message);
         }
@@ -443,9 +443,9 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
-            var scope = string.IsNullOrWhiteSpace(roomKey) ? RestrictionScope.Tangent : RestrictionScope.Room;
-            var scopeKey = scope == RestrictionScope.Room ? roomKey! : tangentKey;
+            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
+            var scope = string.IsNullOrWhiteSpace(roomKey) ? RestrictionScope.Tangent : RestrictionScope.Topic;
+            var scopeKey = scope == RestrictionScope.Topic ? roomKey! : tangentKey;
             var targetId = (await directory.ByIdentifier(targetIdentifier, ct))?.Participant.Id;
             var stored = targetId is null ? null : await ScopedRestriction.Get(ScopedRestriction.Key(scope, scopeKey, targetId), ct);
             if (stored is null) { await EntityContext.Commit(ct); return null; }
@@ -458,7 +458,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
                 }
                 else
                 {
-                    var (_, policy) = await RoomWithPolicy(actorId, scopeKey, tangentKey, ct);
+                    var (_, policy) = await TopicWithPolicy(actorId, scopeKey, tangentKey, ct);
                     if (!policy.CanManage)
                         throw new TangentRuleViolation(TangentDenial.Forbidden, "Only channel managers can inspect channel restrictions.");
                 }
@@ -476,8 +476,8 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
-            var (room, policy) = await RoomWithPolicy(actorId, roomKey, null, ct);
+            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
+            var (topic, policy) = await TopicWithPolicy(actorId, roomKey, null, ct);
             if (!policy.CanRead)
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "Watch state needs read access to the channel.");
             var setting = WatchSetting.Choose(actorId, roomKey, mode, actorId, clock.GetUtcNow());
@@ -497,7 +497,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AcceptanceTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
             // A Tangent default is a preference, not an access change: no policy check, just an active arrival.
             var participant = await Participant.Get(actorId, ct);
             if (participant is null || participant.IsSuspended)
@@ -520,7 +520,7 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             if (space?.IsOwner(actorId) != true)
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the space owner records classification declarations in this prototype.");
@@ -540,34 +540,34 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         finally { gate.Exit(); }
     }
 
-    private async Task<RoomAdministrationResult> SetChannelRole(string actorId, string tangentKey, string roomKey, string targetIdentifier, CompanionRole role, CancellationToken ct)
+    private async Task<TopicAdministrationResult> SetChannelRole(string actorId, string tangentKey, string roomKey, string targetIdentifier, CompanionRole role, CancellationToken ct)
     {
-        // Scope is exact: the audited room guards reject cross-scope changes; verify the channel belongs to the Tangent first.
-        // This path runs before this service enters its own gate, so RoomGovernance can take it freely.
-        var described = await rooms.Describe(actorId, roomKey, ct);
+        // Scope is exact: the audited topic guards reject cross-scope changes; verify the channel belongs to the Tangent first.
+        // This path runs before this service enters its own gate, so TopicGovernance can take it freely.
+        var described = await topics.Describe(actorId, roomKey, ct);
         if (described is null) throw new TangentRuleViolation(TangentDenial.NotFound, "The requested channel does not exist.");
         if (described.TangentKey != tangentKey)
             throw new TangentRuleViolation(TangentDenial.InvalidInput, "The channel does not belong to this Tangent.");
         var mapped = role switch
         {
-            CompanionRole.Admin => RoomRole.Manager,
-            CompanionRole.Member => RoomRole.Member,
-            _ => RoomRole.Reader
+            CompanionRole.Admin => TopicRole.Manager,
+            CompanionRole.Member => TopicRole.Member,
+            _ => TopicRole.Reader
         };
         try
         {
-            var result = await rooms.SetMembership(actorId, roomKey, targetIdentifier, mapped, ct);
-            if (!result.Accepted) throw new RoomRuleViolation(result.Denial ?? RoomDenial.Forbidden, result.Reason);
+            var result = await topics.SetMembership(actorId, roomKey, targetIdentifier, mapped, ct);
+            if (!result.Accepted) throw new TopicRuleViolation(result.Denial ?? TopicDenial.Forbidden, result.Reason);
             return result;
         }
-        catch (RoomRuleViolation rejected)
+        catch (TopicRuleViolation rejected)
         {
             throw new TangentRuleViolation(rejected.Denial switch
             {
-                RoomDenial.NotFound => TangentDenial.NotFound,
-                RoomDenial.InvalidInput => TangentDenial.InvalidInput,
-                RoomDenial.AlreadyExists => TangentDenial.AlreadyExists,
-                RoomDenial.MembershipMismatch => TangentDenial.MembershipMismatch,
+                TopicDenial.NotFound => TangentDenial.NotFound,
+                TopicDenial.InvalidInput => TangentDenial.InvalidInput,
+                TopicDenial.AlreadyExists => TangentDenial.AlreadyExists,
+                TopicDenial.MembershipMismatch => TangentDenial.MembershipMismatch,
                 _ => TangentDenial.Forbidden
             }, rejected.Message);
         }
@@ -638,22 +638,22 @@ public sealed class CompanionGovernance(TimeProvider clock, PolicyGate gate, Roo
         return invitation;
     }
 
-    private async Task<(Room Room, RoomPolicy Policy)> RoomWithPolicy(string actorId, string roomKey, string? expectedTangentKey, CancellationToken ct)
+    private async Task<(Topic Topic, TopicPolicy Policy)> TopicWithPolicy(string actorId, string roomKey, string? expectedTangentKey, CancellationToken ct)
     {
         var space = await Space.Get(TangentConstants.SpaceId, ct);
-        var room = await Room.Get(roomKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested channel does not exist.");
-        if (expectedTangentKey is not null && room.TangentKey != expectedTangentKey)
+        var topic = await Topic.Get(roomKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested channel does not exist.");
+        if (expectedTangentKey is not null && topic.TangentKey != expectedTangentKey)
             throw new TangentRuleViolation(TangentDenial.InvalidInput, "The channel does not belong to this Tangent.");
         var participant = await Participant.Get(actorId, ct);
         if (participant is null || participant.IsSuspended)
             throw new TangentRuleViolation(TangentDenial.Forbidden, "An active verified arrival is required.");
-        var membership = await RoomMembership.Get(RoomMembership.Key(room.Id, actorId), ct);
-        var tangent = await Tangent.Get(room.TangentKey, ct);
+        var membership = await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
+        var tangent = await Tangent.Get(topic.TangentKey, ct);
         var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-        var restriction = await Restrictions.ForRoom(actorId, room.Id, room.TangentKey, clock.GetUtcNow(), ct);
-        var policy = room.CurrentPolicy(space, actorId, membership, participant.IsSuspended, tangent, tangentMembership,
+        var restriction = await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, clock.GetUtcNow(), ct);
+        var policy = topic.CurrentPolicy(space, actorId, membership, participant.IsSuspended, tangent, tangentMembership,
             participant.Classification, restriction);
-        return (room, policy);
+        return (topic, policy);
     }
 
     private static TangentRole RoleOf(CompanionRole role) => role switch

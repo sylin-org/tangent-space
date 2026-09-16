@@ -130,9 +130,9 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
     private static async Task<PublicTopicDescription?> ResolveTopicUnderGate(string tangentId, string topicId, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var room = await Room.Get(topicId, ct);
-        if (room is null || room.TangentKey != tangentId || !PublicTopicAccess.IsPublic(room)) return null;
-        return await Tangent.Get(tangentId, ct) is null ? null : PublicTopicDescription.From(room);
+        var topic = await Topic.Get(topicId, ct);
+        if (topic is null || topic.TangentKey != tangentId || !PublicTopicAccess.IsPublic(topic)) return null;
+        return await Tangent.Get(tangentId, ct) is null ? null : PublicTopicDescription.From(topic);
     }
 
     private static QueryDefinition MessageQuery(int size, bool descending)

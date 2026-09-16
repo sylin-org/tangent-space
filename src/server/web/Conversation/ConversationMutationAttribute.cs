@@ -14,7 +14,7 @@ public sealed class ConversationMutationAttribute : Attribute, IAuthorizationFil
         if (!string.Equals(request.ContentType?.Split(';', 2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase))
             context.Result = new StatusCodeResult(415);
         else if (!ParticipationAccess.UsesCredential(context.HttpContext.User)
-            && (request.Headers.Origin.Count != 1 || !RoomMutationAttribute.IsSameOrigin(request.Headers.Origin[0], request.Scheme, request.Host.Value ?? "")))
+            && (request.Headers.Origin.Count != 1 || !TopicMutationAttribute.IsSameOrigin(request.Headers.Origin[0], request.Scheme, request.Host.Value ?? "")))
             context.Result = new StatusCodeResult(403);
     }
 }

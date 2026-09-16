@@ -32,7 +32,7 @@ internal static class TransactionHealth
         string? deferredError = null;
         try
         {
-            using var scope = EntityContext.NoCache(); using var transaction = EntityContext.Transaction("tangent-room-policy-operation");
+            using var scope = EntityContext.NoCache(); using var transaction = EntityContext.Transaction("tangent-topic-policy-operation");
             foreach (var (id, sequence) in new[] { ("epic005-deferred-first", 200021L), ("epic005-deferred-second", 200022L), ("epic005-deferred-third", 200023L) }) await Item(id, sequence).Save(ct);
             await EntityContext.Commit(ct);
         }

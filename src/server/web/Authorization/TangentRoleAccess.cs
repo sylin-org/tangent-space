@@ -23,15 +23,15 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         return Koan.Identity.Roles.Role.CanDo(criteria, bag);
     }
 
-    public async Task<RoomPolicy> ProjectTopic(Room room, Tangent? tangent, RoomPolicy selected,
+    public async Task<TopicPolicy> ProjectTopic(Topic topic, Tangent? tangent, TopicPolicy selected,
         bool suspended, EffectiveRestriction? restriction, ParticipantClassification classification,
         CancellationToken ct = default)
     {
         var bag = await Bag(selected.ActorParticipantId, ct);
-        var effective = (room.Access ?? AccessMap.TopicDefaults())
+        var effective = (topic.Access ?? AccessMap.TopicDefaults())
             .ResolveTopic(tangent?.Access ?? AccessMap.TangentDefaults());
         var ownsResource = selected.IsOwner
-            || string.Equals(room.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
+            || string.Equals(topic.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
         var siteUnavailable = selected.SpacePolicyRevision <= 0;
         var missingParent = tangent is null;
         var banned = restriction is { Banned: true } && !ownsResource;
@@ -39,7 +39,7 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
         var read = !siteUnavailable && !suspended && !missingParent && !banned && rights.Read
             && (ownsResource || CanDo(effective.See, bag));
-        var write = read && !timedOut && !room.IsLocked && rights.Write
+        var write = read && !timedOut && !topic.IsLocked && rights.Write
             && (ownsResource || CanDo(effective.Post, bag));
         var manage = !siteUnavailable && !suspended && !missingParent && !banned && !timedOut
             && (ownsResource || CanDo(effective.Manage, bag));

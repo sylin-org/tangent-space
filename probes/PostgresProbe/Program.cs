@@ -137,7 +137,7 @@ async Task<List<object>> Explain(SqlTrace.Statement[] statements, long edge, lon
     foreach (var statement in statements.Where(item => item.Sql.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)))
     {
         await using var cmd = new NpgsqlCommand("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + statement.Sql, native);
-        var values = new object[] { Checks.Room("hot"), edge, upper };
+        var values = new object[] { Checks.Topic("hot"), edge, upper };
         if (statement.Sql.Contains("$1")) { foreach (var value in values) cmd.Parameters.Add(new NpgsqlParameter { Value = value }); }
         else for (var index = 0; index < values.Length; index++) cmd.Parameters.AddWithValue("p" + index, values[index]);
         var plan = await cmd.ExecuteScalarAsync(ct);
@@ -157,8 +157,8 @@ async Task<object> Measure(int hotCount, string phase)
     {
         var member = typeof(Post).GetProperty(nameof(Post.Sequence))!;
         var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Post), [member], typeof(long), false, -1), descending)] };
-        var room = Checks.Room("hot"); long upper = hotCount;
-        Expression<Func<Post, bool>> predicate = descending ? m => m.RoomKey == room && m.Sequence < edge && m.Sequence <= upper : m => m.RoomKey == room && m.Sequence > edge && m.Sequence <= upper;
+        var topic = Checks.Topic("hot"); long upper = hotCount;
+        Expression<Func<Post, bool>> predicate = descending ? m => m.RoomKey == topic && m.Sequence < edge && m.Sequence <= upper : m => m.RoomKey == topic && m.Sequence > edge && m.Sequence <= upper;
         var times = new List<double>(); SqlTrace.Statement[] sample = [];
         for (var iteration = 0; iteration < 7; iteration++)
         {
@@ -182,7 +182,7 @@ async Task<object> Measure(int hotCount, string phase)
     trace.Begin(); var countTimer = Stopwatch.StartNew(); long exact;
     using (EntityContext.NoCache()) exact = await Post.Count.Exact(ct);
     countTimer.Stop(); var countSql = trace.End();
-    if (exact != hotCount + 2 * (hotCount / 10)) throw new InvalidDataException("Exact count differs from the synthetic multi-room fixture.");
+    if (exact != hotCount + 2 * (hotCount / 10)) throw new InvalidDataException("Exact count differs from the synthetic multi-topic fixture.");
     return new { phase, hotPosts = hotCount, distractorPostsPerTopic = hotCount / 10, totalPosts = exact, cases,
         explicitExactCount = new { value = exact, elapsedMs = countTimer.Elapsed.TotalMilliseconds, statements = countSql },
         databaseBytes = Convert.ToInt64(await Scalar("SELECT pg_database_size(current_database())")), workingSetBytes = process.WorkingSet64 };
@@ -202,7 +202,7 @@ foreach (var hotCount in new[] { 10_000, 100_000 })
             ct.ThrowIfCancellationRequested(); process.Refresh();
             if (sequence % 1000 == 0 && process.WorkingSet64 > 1536L * 1024 * 1024) throw new InvalidOperationException("Client working-set budget exceeded during seed.");
             var document = (JsonObject)template.DeepClone();
-            document[Field("RoomKey")] = Checks.Room(lane); document[Field("Sequence")] = sequence;
+            document[Field("RoomKey")] = Checks.Topic(lane); document[Field("Sequence")] = sequence;
             document[Field("AuthorParticipantId")] = "synthetic-" + (sequence % 32).ToString("D2");
             document[Field("SourceUri")] = "at://synthetic.invalid/local.tangent.message/" + lane + "-" + sequence;
             document[Field("SourceCid")] = "synthetic-cid-" + sequence;
@@ -255,22 +255,22 @@ catch (Exception failure)
 
 internal static class Checks
 {
-    internal static string Room(string lane) => "epic005-" + lane + "-topic";
+    internal static string Topic(string lane) => "epic005-" + lane + "-topic";
     internal static string Id(string lane, long sequence) => "epic005-" + lane + "-" + sequence.ToString("D10");
-    internal static Post Make(string lane, long sequence) => new() { Id = Id(lane, sequence), RoomKey = Room(lane), AuthorParticipantId = "synthetic-01", Sequence = sequence,
+    internal static Post Make(string lane, long sequence) => new() { Id = Id(lane, sequence), RoomKey = Topic(lane), AuthorParticipantId = "synthetic-01", Sequence = sequence,
         AcceptedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), Content = new PostContent("Synthetic @member #scale post " + sequence + " — café 日本語", new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), null),
         SourceUri = "at://synthetic.invalid/local.tangent.message/" + lane + "-" + sequence, SourceCid = "synthetic-cid-" + sequence, Facets = [] };
     internal static double Rank(IReadOnlyList<double> sorted, double p) => sorted[(int)Math.Ceiling(p * sorted.Count) - 1];
     internal static void Validate(IReadOnlyList<Post> rows, long edge, bool descending)
     {
         if (rows.Count != 21 || rows.Select(row => row.Id).Distinct().Count() != 21) throw new InvalidDataException("Bad window count/identity.");
-        for (var index = 0; index < rows.Count; index++) { var sequence = descending ? edge - index - 1 : edge + index + 1; if (rows[index].Sequence != sequence || rows[index].RoomKey != Room("hot") || rows[index].Id != Id("hot", sequence)) throw new InvalidDataException("Wrong room, order, sequence, or ID in window."); }
+        for (var index = 0; index < rows.Count; index++) { var sequence = descending ? edge - index - 1 : edge + index + 1; if (rows[index].Sequence != sequence || rows[index].RoomKey != Topic("hot") || rows[index].Id != Id("hot", sequence)) throw new InvalidDataException("Wrong topic, order, sequence, or ID in window."); }
     }
     internal static void SelfTest()
     {
         var rows = Enumerable.Range(1, 21).Select(sequence => Make("hot", sequence)).ToArray(); Validate(rows, 0, false); Validate(rows.Reverse().ToArray(), 22, true);
         if (Rank([1, 2, 3, 4, 5, 6], .5) != 3 || Rank([1, 2, 3, 4, 5, 6], .95) != 6) throw new Exception("Percentile self-check failed.");
-        rows[^1].RoomKey = Room("side-a"); try { Validate(rows, 0, false); } catch (InvalidDataException) { return; } throw new Exception("Scope corruption self-check failed.");
+        rows[^1].RoomKey = Topic("side-a"); try { Validate(rows, 0, false); } catch (InvalidDataException) { return; } throw new Exception("Scope corruption self-check failed.");
     }
 }
 

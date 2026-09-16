@@ -4,11 +4,11 @@ using Koan.Data.Core.Model;
 
 namespace TangentSpace.Rooms;
 
-public sealed class RoomMembership : Entity<RoomMembership>
+public sealed class TopicMembership : Entity<TopicMembership>
 {
     public string RoomKey { get; set; } = "";
     public string ParticipantId { get; set; } = "";
-    public RoomRole Role { get; set; }
+    public TopicRole Role { get; set; }
     public string ChangedByParticipantId { get; set; } = "";
     public DateTimeOffset ChangedAt { get; set; }
     public long PolicyRevision { get; set; }
@@ -16,10 +16,10 @@ public sealed class RoomMembership : Entity<RoomMembership>
     public static string Key(string roomKey, string participantDid)
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(roomKey + "\n" + participantDid)));
 
-    internal static RoomMembership Assign(Room room, string participantDid, RoomRole role, string actorDid, DateTimeOffset now)
+    internal static TopicMembership Assign(Topic topic, string participantDid, TopicRole role, string actorDid, DateTimeOffset now)
         => new()
         {
-            Id = Key(room.Id, participantDid), RoomKey = room.Id, ParticipantId = participantDid, Role = role,
-            ChangedByParticipantId = actorDid, ChangedAt = now, PolicyRevision = room.PolicyRevision
+            Id = Key(topic.Id, participantDid), RoomKey = topic.Id, ParticipantId = participantDid, Role = role,
+            ChangedByParticipantId = actorDid, ChangedAt = now, PolicyRevision = topic.PolicyRevision
         };
 }

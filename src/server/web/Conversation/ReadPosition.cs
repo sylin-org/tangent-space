@@ -8,5 +8,5 @@ public sealed class ReadPosition : Entity<ReadPosition>
     public string RoomKey { get; set; } = "";
     public long Sequence { get; set; }
     public DateTimeOffset AcknowledgedAt { get; set; }
-    public static string Key(string did, string room) => SourceDecision.Hash(did + "\n" + room);
+    public static string Key(string did, string topic) => SourceDecision.Hash(did + "\n" + topic);
 }

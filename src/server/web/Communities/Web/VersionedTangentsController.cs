@@ -44,18 +44,18 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         catch (UnauthorizedAccessException) { return Unauthorized(); }
     }
 
-    [RoomMutation(ParticipationGrants.Post)]
+    [TopicMutation(ParticipationGrants.Post)]
     [HttpPost]
     public Task<IActionResult> Create(CreateTangentRequest request, CancellationToken ct)
         => Execute(actor => hub.Tangents.Create(actor, request.Key, request.Name, request.Description, request.Motto,
             request.Accent, request.Artwork, ct), created: true);
 
-    [RoomMutation(ParticipationGrants.Post)]
+    [TopicMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentId}/topics")]
     public Task<IActionResult> CreateTopic(string tangentId, CreateTangentChannelRequest request, CancellationToken ct)
         => Execute(actor => hub.Tangents.CreateChannel(actor, tangentId, request.Key, request.Title, request.Admission, request.Topic, ct), created: true);
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPatch("{tangentId}")]
     public Task<IActionResult> Change(string tangentId, ChangeTangentRequest request, CancellationToken ct)
         => Execute(actor => hub.Tangents.Change(actor, tangentId, request.Name, request.Description, request.Motto,
@@ -65,7 +65,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
     public Task<IActionResult> GetAccess(string tangentId, CancellationToken ct)
         => Execute(actor => hub.Tangents.GetAccess(actor, tangentId, ct));
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPut("{tangentId}/access")]
     public Task<IActionResult> SetAccess(string tangentId, AccessMap access, CancellationToken ct)
         => Execute(actor => hub.Tangents.SetAccess(actor, tangentId, access, ct));
@@ -75,10 +75,10 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
     {
         try { return Ok(await hub.Topics.GetAccess(Actor(), topicId, tangentId, ct)); }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPut("{tangentId}/topics/{topicId}/access")]
     public async Task<IActionResult> SetTopicAccess(string tangentId, string topicId, AccessMap access, CancellationToken ct)
     {
@@ -92,13 +92,13 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
                 : Outcome(result);
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPatch("{tangentId}/topics/{topicId}/settings")]
     [HttpPatch("{tangentId}/topics/{topicId}")]
-    public async Task<IActionResult> ChangeTopic(string tangentId, string topicId, ChangeRoomSettingsRequest request, CancellationToken ct)
+    public async Task<IActionResult> ChangeTopic(string tangentId, string topicId, ChangeTopicSettingsRequest request, CancellationToken ct)
     {
         try
         {
@@ -108,13 +108,13 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
             return Outcome(await hub.Topics.SetSettings(actor, topicId, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
-    [RoomMutation]
+    [TopicMutation]
     [HttpPatch("{tangentId}/topics/{topicId}/read-audience")]
     public async Task<IActionResult> ChangeTopicReadAudience(string tangentId, string topicId,
-        ChangeRoomReadAudienceRequest request, CancellationToken ct)
+        ChangeTopicReadAudienceRequest request, CancellationToken ct)
     {
         try
         {
@@ -125,7 +125,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
                 request.PublishExistingHistory, ct));
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
     [AllowAnonymous]
@@ -150,7 +150,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         catch (ArgumentException rejected) { return BadRequest(new { reason = rejected.Message }); }
         catch (TangentRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
-        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
     private async Task<IActionResult> Read<T>(Func<string?, Task<T>> operation)
@@ -164,7 +164,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         catch (TangentRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
-        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
     private async Task<IActionResult> Execute<T>(Func<string, Task<T>> operation, bool created = false)
@@ -176,7 +176,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
             return created ? StatusCode(StatusCodes.Status201Created, await operation(actor)) : Ok(await operation(actor));
         }
         catch (TangentRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
-        catch (RoomRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
     }
 
     private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);
@@ -194,13 +194,13 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         TangentDenial.Forbidden => 403, TangentDenial.NotFound => 404, TangentDenial.AlreadyExists => 409, _ => 400
     };
 
-    private static int Status(RoomDenial denial) => denial switch
+    private static int Status(TopicDenial denial) => denial switch
     {
-        RoomDenial.Forbidden => 403, RoomDenial.NotFound => 404, RoomDenial.AlreadyExists => 409, _ => 400
+        TopicDenial.Forbidden => 403, TopicDenial.NotFound => 404, TopicDenial.AlreadyExists => 409, _ => 400
     };
 
-    private static IActionResult Outcome(RoomAdministrationResult result)
+    private static IActionResult Outcome(TopicAdministrationResult result)
         => result.Accepted ? new OkObjectResult(result) : new ObjectResult(result) { StatusCode = Status(result.Denial) };
 
-    private static int Status(RoomDenial? denial) => denial is { } value ? Status(value) : 400;
+    private static int Status(TopicDenial? denial) => denial is { } value ? Status(value) : 400;
 }

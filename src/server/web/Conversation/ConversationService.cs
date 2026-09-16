@@ -7,16 +7,16 @@ using TangentSpace.Rooms;
 
 namespace TangentSpace.Conversation;
 
-public sealed partial class ConversationService(RoomGovernance governance, TimeProvider clock, IDataProtectionProvider protection,
+public sealed partial class ConversationService(TopicGovernance governance, TimeProvider clock, IDataProtectionProvider protection,
     TangentSpace.Participants.ParticipantDirectory directory, ParticipantProfiles profiles) : IDisposable
 {
     private readonly SemaphoreSlim writes = new(1, 1);
     private readonly IDataProtector cursors = protection.CreateProtector("Tangent.Conversation.Cursor.v1");
 
-    public Task<RoomPolicy> ReadPolicy(string did, string room, CancellationToken ct)
-        => governance.WithCurrentPolicy(did, room, (policy, _) =>
+    public Task<TopicPolicy> ReadPolicy(string did, string topic, CancellationToken ct)
+        => governance.WithCurrentPolicy(did, topic, (policy, _) =>
         {
-            if (!policy.CanRead) throw new UnauthorizedAccessException("This room's current rules do not allow reading.");
+            if (!policy.CanRead) throw new UnauthorizedAccessException("This topic's current rules do not allow reading.");
             return Task.FromResult(policy);
         }, ct);
 

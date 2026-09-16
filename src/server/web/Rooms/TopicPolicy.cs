@@ -1,13 +1,13 @@
 namespace TangentSpace.Rooms;
 
 /// <summary>A current decision, not a durable grant. Acceptance must execute inside the coordinator callback.</summary>
-public sealed record RoomPolicy(
+public sealed record TopicPolicy(
     string RoomKey,
     string? ActorParticipantId,
     long SelectedPolicyRevision,
     long SpacePolicyRevision,
-    RoomAdmission Admission,
-    RoomRole? Role,
+    TopicAdmission Admission,
+    TopicRole? Role,
     bool IsOwner,
     bool CanRead,
     bool CanWrite,

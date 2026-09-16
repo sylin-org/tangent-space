@@ -24,7 +24,7 @@ public sealed partial class ExperienceService(
     ModerationCaseService moderation)
 {
     private TangentGovernance tangents => hub.Tangents;
-    private RoomGovernance rooms => hub.Topics;
+    private TopicGovernance topics => hub.Topics;
     private CompanionGovernance companions => hub.Participants;
     private ConversationService conversation => hub.Posts;
     private ActivityService activity => hub.Activity;
@@ -45,10 +45,10 @@ public sealed partial class ExperienceService(
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
         await activity.EnsureParticipantActive(participantId, credential, ct);
-        var (scopeTangent, scopeRoom) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
+        var (scopeTangent, scopeTopic) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
         var identity = await IdentityOf(participantId, ct);
         var space = await SiteLabel(ct);
-        var page = await digest.Page(participantId, credential, null, scopeTangent, scopeRoom, 3, ct);
+        var page = await digest.Page(participantId, credential, null, scopeTangent, scopeTopic, 3, ct);
         var (directory, continuation, _) = await TangentPage(participantId, 1, 0, DirectoryLimit, ct);
         var orientation = new ExperienceOrientation(
             $"{space} is a shared conversation space for people and agents.",
@@ -105,7 +105,7 @@ public sealed partial class ExperienceService(
         var offset = InnerOffset(decoded);
         TangentChannelDirectory listing;
         using (EntityContext.NoCache())
-            listing = await rooms.ListForTangent(participantId, tangentKey, page, ct);
+            listing = await topics.ListForTangent(participantId, tangentKey, page, ct);
         var visible = listing.Channels.Skip(offset).ToList();
         var slice = visible.Take(DirectoryLimit).ToList();
         string? continuation = null;
@@ -113,13 +113,13 @@ public sealed partial class ExperienceService(
             continuation = refs.EncodeListCursor("experience:topics:" + tangentKey, participantId, page, (offset + DirectoryLimit).ToString());
         else if (listing.NextPage is { } next)
             continuation = refs.EncodeListCursor("experience:topics:" + tangentKey, participantId, next, "0");
-        var topics = slice.Select(room => TopicDto(tangentKey, room)).ToList();
-        var actions = topics.Count > 0
-            ? new List<ExperienceAction> { new(ExperienceActionNames.ReadTopic, topics[0].TopicRef, null, $"Read {topics[0].Title}") }
+        var listed = slice.Select(topic => TopicDto(tangentKey, topic)).ToList();
+        var actions = listed.Count > 0
+            ? new List<ExperienceAction> { new(ExperienceActionNames.ReadTopic, listed[0].TopicRef, null, $"Read {listed[0].Title}") }
             : new List<ExperienceAction>();
         return await Assemble("list_topics", ExperienceStatus.Ok, identity,
             TangentPlace(principal, selected),
-            new ExperienceResult(new ExperienceTopicsData(topics, continuation), null, null),
+            new ExperienceResult(new ExperienceTopicsData(listed, continuation), null, null),
             (await digest.Page(participantId, credential, null, tangentKey, null, 3, ct)).Attention,
             new ExperienceContinuation(null, null, null, null, null, continuation), actions, null, null, participantId, credential, ct);
     }
@@ -133,9 +133,9 @@ public sealed partial class ExperienceService(
         var credential = CredentialOf(principal);
         await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
-        Rooms.Room? stored;
+        Rooms.Topic? stored;
         using (EntityContext.NoCache())
-            stored = await Room.Get(topicKey, ct);
+            stored = await Topic.Get(topicKey, ct);
         if (stored is null)
             return Problem("read_topic", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
@@ -179,7 +179,7 @@ public sealed partial class ExperienceService(
         if (stewardship)
             actions.Add(new(ExperienceActionNames.ListModerationCases, refs.Topic(tangentKey, topicKey), null, "Review this Topic's moderation cases"));
         return await Assemble("read_topic", ExperienceStatus.Ok, identity, place,
-            new ExperienceResult(new ExperienceTopicData(stored.Title, ExperienceDigest.Preview(stored.Topic, 480),
+            new ExperienceResult(new ExperienceTopicData(stored.Title, ExperienceDigest.Preview(stored.Description, 480),
                 posts, window.Position, window.Resolved is null ? null
                     : window.Resolved.ToDictionary(pair => pair.Key, pair => new ExperienceResolution(
                         pair.Value.Handle, pair.Value.DisplayName, pair.Value.Classification,
@@ -188,7 +188,7 @@ public sealed partial class ExperienceService(
             new ExperienceContinuation(null, null, window.OlderCursor, window.NewerCursor, window.ReadCursor, null),
             actions,
             new ExperienceOrientation(null, [],
-                $"{stored.Title}: {ExperienceDigest.Preview(stored.Topic, 240)}"),
+                $"{stored.Title}: {ExperienceDigest.Preview(stored.Description, 240)}"),
             new ExperienceCapabilities(Attention: true, Coordination: false, Stewardship: stewardship),
             participantId, credential, ct);
     }
@@ -200,17 +200,17 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        var (scopeTangent, scopeRoom) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
+        var (scopeTangent, scopeTopic) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
         var identity = await IdentityOf(participantId, ct);
-        var decoded = digest.Decode(pageCursor ?? checkpoint, participantId, scopeTangent, scopeRoom);
+        var decoded = digest.Decode(pageCursor ?? checkpoint, participantId, scopeTangent, scopeTopic);
         if (pageCursor is not null && decoded is null && checkpoint is null)
             return Problem("get_updates", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.CursorExpired, "This digest cursor expired or no longer matches. Restart from the checkpoint."),
                 participantId: participantId, credential: credential, ct: ct);
-        var page = await digest.Page(participantId, credential, decoded, scopeTangent, scopeRoom, limit, ct);
-        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeRoom, 0, clock.GetUtcNow().AddDays(7)));
+        var page = await digest.Page(participantId, credential, decoded, scopeTangent, scopeTopic, limit, ct);
+        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeTopic, 0, clock.GetUtcNow().AddDays(7)));
         var continuationCursor = page.Attention.More
-            ? digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeRoom, (decoded?.Offset ?? 0) + limit, clock.GetUtcNow().AddDays(7)))
+            ? digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeTopic, (decoded?.Offset ?? 0) + limit, clock.GetUtcNow().AddDays(7)))
             : null;
         var actions = page.FollowUps.Take(3).ToList();
         return await Assemble("get_updates", ExperienceStatus.Ok, identity,
@@ -225,17 +225,17 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        var (scopeTangent, scopeRoom) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
+        var (scopeTangent, scopeTopic) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
         var identity = await IdentityOf(participantId, ct);
         // Capture before inspecting state so a commit between snapshot and wait is replayed.
         using var notification = ActivityJournal.Capture();
-        var current = await digest.Page(participantId, credential, digest.Decode(checkpoint, participantId, scopeTangent, scopeRoom), scopeTangent, scopeRoom, DefaultDigestLimit, ct);
+        var current = await digest.Page(participantId, credential, digest.Decode(checkpoint, participantId, scopeTangent, scopeTopic), scopeTangent, scopeTopic, DefaultDigestLimit, ct);
         if (sinceRevision is { Length: > 0 } && string.Equals(current.Attention.Revision, sinceRevision, StringComparison.Ordinal))
         {
             await notification.WaitAsync(TimeSpan.FromSeconds(15), ct);
-            current = await digest.Page(participantId, credential, null, scopeTangent, scopeRoom, DefaultDigestLimit, ct);
+            current = await digest.Page(participantId, credential, null, scopeTangent, scopeTopic, DefaultDigestLimit, ct);
         }
-        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeRoom, 0, clock.GetUtcNow().AddDays(7)));
+        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeTopic, 0, clock.GetUtcNow().AddDays(7)));
         return await Assemble("wait", ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(new ExperienceUpdatesData(scopeRef ?? refs.ServerRef), null, null),
@@ -252,9 +252,9 @@ public sealed partial class ExperienceService(
         var credential = CredentialOf(principal);
         await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
-        Rooms.Room? stored;
+        Rooms.Topic? stored;
         using (EntityContext.NoCache())
-            stored = await Room.Get(topicKey, ct);
+            stored = await Topic.Get(topicKey, ct);
         if (stored is null)
             return Problem("create_post", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
@@ -307,9 +307,9 @@ public sealed partial class ExperienceService(
         var credential = CredentialOf(principal);
         await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
-        Rooms.Room? stored;
+        Rooms.Topic? stored;
         using (EntityContext.NoCache())
-            stored = await Room.Get(topicKey, ct);
+            stored = await Topic.Get(topicKey, ct);
         if (stored is null)
             return Problem("read_position", identity, ServerPlace(principal, await SiteLabel(ct)),
                 ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Topic is not visible to your account."),
@@ -470,7 +470,7 @@ public sealed partial class ExperienceService(
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("set_watch", principal, identity, registration.Record, participantId, credential, ct);
             receipts.CompleteWithDomain(registration.Record, _ => ("completed", null, "{}"));
-            if (roomKey is { } watchedRoom) await companions.SetWatch(participantId, watchedRoom, parsed, ct);
+            if (roomKey is { } watchedTopic) await companions.SetWatch(participantId, watchedTopic, parsed, ct);
             else await companions.SetTangentWatch(participantId, tangentKey, parsed, ct);
             await receipts.Complete(registration.Record, "completed", null, "{}", ct);
             return await Assemble("set_watch", ExperienceStatus.Ok, identity,
@@ -508,10 +508,10 @@ public sealed partial class ExperienceService(
                 ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
             // ADR 0007: the projection row is the receipt.
             var projected = (await Post.Query(m => m.AuthorParticipantId == participantId && m.OperationId == operationId, One(), ct)).FirstOrDefault();
-            if (projected is not null && await Room.Get(projected.RoomKey, ct) is { } rowRoom)
+            if (projected is not null && await Topic.Get(projected.RoomKey, ct) is { } rowTopic)
             {
                 state = projected.Removed ? "rejected" : "completed";
-                resultRef = refs.Post(rowRoom.TangentKey, projected.RoomKey, projected.Id);
+                resultRef = refs.Post(rowTopic.TangentKey, projected.RoomKey, projected.Id);
             }
         }
         if (record.Operation == "JoinTangent" && state == "pending")
@@ -616,7 +616,7 @@ public sealed partial class ExperienceService(
     {
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         using var fresh = EntityContext.NoCache();
-        var room = await Room.Get(topicKey, ct);
+        var topic = await Topic.Get(topicKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead,
             ExperienceActionNames.SetWatch, ExperienceActionNames.ReportPost };
         if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
@@ -624,7 +624,7 @@ public sealed partial class ExperienceService(
             && TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed)
             allowed.Add(ExperienceActionNames.ListModerationCases);
         return new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Topic(tangentKey, topicKey),
-            $"{await TangentName(tangentKey, ct)} / {room?.Title ?? topicKey}", await RoleOf(participantId, tangentKey, ct), allowed);
+            $"{await TangentName(tangentKey, ct)} / {topic?.Title ?? topicKey}", await RoleOf(participantId, tangentKey, ct), allowed);
     }
 
     internal static string RoleOf(TangentDescription tangent) => tangent.IsOwner ? "owner"
@@ -687,18 +687,18 @@ public sealed partial class ExperienceService(
             if (refs.ParsePost(reference) is { } post) scope = (post.TangentKey, post.TopicKey);
             if (scope is { } topic)
             {
-                var description = await rooms.Describe(participantId, topic.Topic, ct);
+                var description = await topics.Describe(participantId, topic.Topic, ct);
                 return description?.TangentKey == topic.Tangent && description.CanRead;
             }
             if (refs.ParseCase(reference) is { } moderationCase)
             {
-                var description = await rooms.Describe(participantId, moderationCase.TopicKey, ct);
+                var description = await topics.Describe(participantId, moderationCase.TopicKey, ct);
                 return description?.TangentKey == moderationCase.TangentKey && description.CanRead;
             }
             if (refs.ParseTangent(reference) is { } tangent) return await tangents.CanAccess(participantId, tangent, ct);
             return false;
         }
-        catch (Exception error) when (error is UnauthorizedAccessException or RoomRuleViolation or TangentRuleViolation)
+        catch (Exception error) when (error is UnauthorizedAccessException or TopicRuleViolation or TangentRuleViolation)
         { return false; }
     }
 
@@ -728,9 +728,9 @@ public sealed partial class ExperienceService(
             && tangent.Admission is TangentAdmission.Open or TangentAdmission.Approval,
         tangent.Channels.Any(channel => channel.CanRead), tangent.Channels.Any(channel => channel.CanWrite));
 
-    internal ExperienceTopicDto TopicDto(string tangentKey, RoomDescription room)
-        => new(refs.Topic(tangentKey, room.Key), ExperienceDigest.Preview(room.Title, 80),
-            ExperienceDigest.Preview(room.Topic, 240), room.CanRead, room.CanWrite, room.IsLocked, room.AllowPostEditing);
+    internal ExperienceTopicDto TopicDto(string tangentKey, TopicDescription topic)
+        => new(refs.Topic(tangentKey, topic.Key), ExperienceDigest.Preview(topic.Title, 80),
+            ExperienceDigest.Preview(topic.Topic, 240), topic.CanRead, topic.CanWrite, topic.IsLocked, topic.AllowPostEditing);
 
     private List<ExperiencePostDto> Posts(string tangentKey, string topicKey, TopicWindow window)
     {

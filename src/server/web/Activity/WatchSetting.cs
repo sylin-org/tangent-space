@@ -16,7 +16,7 @@ public sealed class WatchSetting : Entity<WatchSetting>
     public DateTimeOffset ChangedAt { get; set; }
 
     // Namespaced so channel watch state can never collide with read positions or Tangent-wide defaults,
-    // even when a room and a Tangent share the same key.
+    // even when a topic and a Tangent share the same key.
     public static string Key(string participantDid, string roomKey)
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("watch\n" + participantDid + "\n" + roomKey)));
 

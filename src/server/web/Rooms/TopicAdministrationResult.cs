@@ -1,8 +1,8 @@
 namespace TangentSpace.Rooms;
 
-public sealed record RoomAdministrationResult(
+public sealed record TopicAdministrationResult(
     bool Accepted,
-    RoomDenial? Denial,
+    TopicDenial? Denial,
     string Reason,
     string RoomKey,
     long PolicyRevision,

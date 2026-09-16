@@ -7,7 +7,7 @@ namespace TangentSpace.Rooms.Web;
 
 /// <summary>Cookie mutations require same origin; bearer mutations require an explicit transport grant and the domain still checks scope.</summary>
 [AttributeUsage(AttributeTargets.Method)]
-public sealed class RoomMutationAttribute(string grant = ParticipationGrants.Manage) : Attribute, IAuthorizationFilter
+public sealed class TopicMutationAttribute(string grant = ParticipationGrants.Manage) : Attribute, IAuthorizationFilter
 {
     public void OnAuthorization(AuthorizationFilterContext context)
     {

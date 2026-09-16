@@ -22,11 +22,11 @@ public sealed partial class ExperienceService
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
         var identity = await IdentityOf(participantId, ct);
-        Rooms.Room? stored;
+        Rooms.Topic? stored;
         Tangent? tangentRow;
         using (EntityContext.NoCache())
         {
-            stored = await Room.Get(topicKey, ct);
+            stored = await Topic.Get(topicKey, ct);
             tangentRow = stored is null ? null : await Tangent.Get(stored.TangentKey, ct);
         }
         if (stored is null || tangentRow is null)

@@ -18,7 +18,7 @@ public sealed record TangentJoinRequestSummary(string RequestId, string TangentK
 
 public sealed record TangentJoinRequestDecision(string RequestId, bool Accepted, TangentMembershipResult? Membership);
 
-public sealed record CompanionRoleResult(TangentMembershipResult? Community, RoomAdministrationResult? Channel);
+public sealed record CompanionRoleResult(TangentMembershipResult? Community, TopicAdministrationResult? Channel);
 
 public sealed record TangentPolicyResult(string TangentKey, TangentAdmission Admission, ParticipationPreset Preset,
     UndeclaredAccess Undeclared, long PolicyRevision);

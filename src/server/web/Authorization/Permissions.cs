@@ -8,7 +8,7 @@ public static class Permissions
     public static PermissionView Server(bool owner, bool canCreateTangent = false) => new(owner ? "owner" : "participant", "server",
         owner ? new[] { "read", "manageServer", "createTangent" } : canCreateTangent ? new[] { "read", "createTangent" } : new[] { "read" },
         new Dictionary<string, string>());
-    public static PermissionView Topic(RoomPolicy policy)
+    public static PermissionView Topic(TopicPolicy policy)
     {
         var actions = new List<string>();
         Add(TopicCapability.Read, "read");
@@ -27,7 +27,7 @@ public static class Permissions
         }
     }
 
-    public static PermissionView Post(RoomPolicy policy, string authorDid, bool removed)
+    public static PermissionView Post(TopicPolicy policy, string authorDid, bool removed)
     {
         var actions = new List<string>();
         Add(TopicCapability.Read, "read");
@@ -43,8 +43,8 @@ public static class Permissions
         }
     }
 
-    private static string Role(RoomPolicy p) => p.IsOwner ? "owner" : p.CanManage ? "moderator" : p.Role?.ToString().ToLowerInvariant() ?? (p.CanWrite ? "participant" : p.CanRead ? "reader" : "visitor");
-    private static IReadOnlyDictionary<string, string> Restrictions(RoomPolicy p) => new Dictionary<string, string>
+    private static string Role(TopicPolicy p) => p.IsOwner ? "owner" : p.CanManage ? "moderator" : p.Role?.ToString().ToLowerInvariant() ?? (p.CanWrite ? "participant" : p.CanRead ? "reader" : "visitor");
+    private static IReadOnlyDictionary<string, string> Restrictions(TopicPolicy p) => new Dictionary<string, string>
     {
         ["locked"] = p.Locked ? "true" : "false",
         ["editingAllowed"] = p.EditingAllowed ? "true" : "false",

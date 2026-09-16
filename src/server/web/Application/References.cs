@@ -115,8 +115,8 @@ public sealed class References(IOptions<SpaceOptions> options, IDataProtectionPr
 
     private static bool IsTopicKey(string key)
     {
-        try { Room.CheckKey(key); return true; }
-        catch (RoomRuleViolation) { return false; }
+        try { Rooms.Topic.CheckKey(key); return true; }
+        catch (TopicRuleViolation) { return false; }
     }
 }
 

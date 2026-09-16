@@ -13,11 +13,11 @@ using TangentSpace.Rooms;
 namespace TangentSpace.Activity;
 
 /// <summary>Builds bounded, current-policy participant activity snapshots from the durable journal.</summary>
-public sealed class ActivityService(RoomGovernance governance, TangentGovernance tangents, TimeProvider clock, IDataProtectionProvider protection)
+public sealed class ActivityService(TopicGovernance governance, TangentGovernance tangents, TimeProvider clock, IDataProtectionProvider protection)
 {
     private const int MaximumJournalScan = 100;
     private const int MaximumEvents = 25;
-    private const int MaximumRooms = 100;
+    private const int MaximumTopics = 100;
     private const int MaximumUnread = 100;
     private readonly IDataProtector cursors = protection.CreateProtector("Tangent.Activity.Cursor.v1");
     private static readonly QueryDefinition JournalWindow = Window<ActivityJournal>(nameof(ActivityJournal.Sequence), MaximumJournalScan + 1);
@@ -122,9 +122,9 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
         selected ??= new ActivityChannelCursor(participantId, Guid.CreateVersion7().ToString("N"), 1, clock.GetUtcNow().AddDays(7));
         var directory = await tangents.ListAuthorizedChannels(participantId, selected.Page, ct);
         var channels = new List<ActivityChannel>(directory.Channels.Count);
-        foreach (var room in directory.Channels)
+        foreach (var topic in directory.Channels)
         {
-            var channel = await Channel(participantId, room.Key, ct);
+            var channel = await Channel(participantId, topic.Key, ct);
             if (channel is not null) channels.Add(channel);
         }
         var next = directory.NextPage is null ? null : EncodeChannel(selected with { Page = directory.NextPage.Value });
@@ -141,13 +141,13 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
         => governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
         {
             if (!policy.CanRead) return null;
-            var room = await Room.Get(roomKey, token);
-            if (room is null) return null;
+            var topic = await Topic.Get(roomKey, token);
+            if (topic is null) return null;
             // Null-safe: an absent watch record (the common case) simply means All.
             var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, roomKey), token),
-                await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, room.TangentKey), token));
+                await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, topic.TangentKey), token));
             if (!AttentionRules.DeliversChannel(mode)) return null;
-            var state = await RoomConversation.Get(roomKey, token) ?? new RoomConversation { Id = roomKey };
+            var state = await TopicConversation.Get(roomKey, token) ?? new TopicConversation { Id = roomKey };
             var read = await ReadPosition.Get(ReadPosition.Key(participantId, roomKey), token);
             var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
             // The window stays source-order; attention excludes the actor's own contributions.
@@ -166,7 +166,7 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
                 OneMessageWindow, token)).FirstOrDefault();
             var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
             // The window itself overflowed: any count derived from it may be clipped at the cap.
-            return new ActivityChannel(roomKey, room.TangentKey, attention, unreadWindow.Count > MaximumUnread,
+            return new ActivityChannel(roomKey, topic.TangentKey, attention, unreadWindow.Count > MaximumUnread,
                 Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, last?.AcceptedAt);
         }, ct);
 
@@ -188,7 +188,7 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
 
     private async Task<bool> CanReadEvent(string participantId, ActivityJournal entry, CancellationToken ct)
     {
-        // Individual read positions are personal. Never turn a room marker into read-state disclosure.
+        // Individual read positions are personal. Never turn a topic marker into read-state disclosure.
         if (entry.Kind == ActivityKind.ReadAcknowledged && entry.ActorParticipantId != participantId) return false;
         if (string.IsNullOrEmpty(entry.RoomKey))
             return await tangents.CanAccess(participantId, entry.TangentKey, ct);
@@ -197,7 +197,7 @@ public sealed class ActivityService(RoomGovernance governance, TangentGovernance
 
     internal static ActivityEvent EventFor(string participantId, ActivityJournal entry)
     {
-        // Membership, moderation and participant targets are administration metadata, not room conversation data.
+        // Membership, moderation and participant targets are administration metadata, not topic conversation data.
         var privateTarget = entry.Kind is ActivityKind.MembershipChanged or ActivityKind.ParticipantChanged
             or ActivityKind.InvitationChanged or ActivityKind.RestrictionChanged;
         var target = privateTarget && entry.TargetParticipantId != participantId && entry.ActorParticipantId != participantId ? null : entry.TargetParticipantId;

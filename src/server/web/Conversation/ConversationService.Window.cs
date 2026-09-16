@@ -22,7 +22,7 @@ public sealed partial class ConversationService
             if (limit is < 1 or > 25) throw new ArgumentException("Choose a window of 1 to 25 posts.");
             if (cursor is not null && anchorPostId is not null)
                 throw new ArgumentException("Choose a history cursor or an anchor post, not both.");
-            var state = await RoomConversation.Get(topicKey, token) ?? new RoomConversation { Id = topicKey };
+            var state = await TopicConversation.Get(topicKey, token) ?? new TopicConversation { Id = topicKey };
             var boundary = state.LastSequence;
             var position = "unread";
             var rows = new List<Post>();

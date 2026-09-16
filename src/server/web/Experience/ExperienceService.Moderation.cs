@@ -58,7 +58,7 @@ public sealed partial class ExperienceService
         var result = await moderation.List(participantId, topicKey, page, ct);
         var tangentKey = result.Cases.FirstOrDefault()?.TopicRef is { } topicRef
             && refs.ParseTopic(topicRef) is { } parsed ? parsed.TangentKey
-            : (await rooms.Describe(participantId, topicKey, ct))?.TangentKey
+            : (await topics.Describe(participantId, topicKey, ct))?.TangentKey
                 ?? throw new UnauthorizedAccessException();
         var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
         var actions = result.Cases.Take(3)

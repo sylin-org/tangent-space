@@ -49,7 +49,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             var participant = await Participant.Get(actorId, ct);
             if (!HumanHostAccountability.CanClaim(participant))
@@ -103,7 +103,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct)
                 ?? throw new InvalidOperationException("The server has not been claimed.");
             var participant = await Participant.Get(actorId, ct);
@@ -157,7 +157,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var space = await Space.Get(TangentConstants.SpaceId, ct)
                 ?? throw new InvalidOperationException("The server has not been claimed.");
             var participant = await Participant.Get(actorId, ct);
@@ -194,7 +194,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(RoomConstants.AdministrationTransaction);
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var participant = await Participant.Get(actorId, ct) ?? throw new InvalidOperationException("Participant not found.");
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             if (participant.IsSuspended) throw new UnauthorizedAccessException("A suspended participant cannot change its classification.");

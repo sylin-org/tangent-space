@@ -85,13 +85,13 @@ try
     outcomes["crud"] = await Admission.Crud(ct);
     outcomes["atomicRequirement"] = await Admission.Atomic(collection, profiler, ct);
     var seed = Stopwatch.StartNew();
-    foreach (var (room, count) in new[] { ("hot", posts), ("noise-a", posts / 10), ("noise-b", posts / 10) })
+    foreach (var (topic, count) in new[] { ("hot", posts), ("noise-a", posts / 10), ("noise-b", posts / 10) })
     {
         var batch = new List<BsonDocument>(1000);
-        for (var n = room == "hot" ? 2 : 1; n <= count; n++)
+        for (var n = topic == "hot" ? 2 : 1; n <= count; n++)
         {
             var doc = template.DeepClone().AsBsonDocument;
-            doc["_id"] = Fixture.Id(room, n); doc["roomKey"] = room; doc["sequence"] = new BsonInt64(n);
+            doc["_id"] = Fixture.Id(topic, n); doc["roomKey"] = topic; doc["sequence"] = new BsonInt64(n);
             doc["authorParticipantId"] = "synthetic-" + (n % 32).ToString("D2");
             doc["content"]["text"] = Fixture.Text(n); doc["removed"] = n % 101 == 0;
             doc["editedAt"] = n % 53 == 0 ? new BsonDateTime(Fixture.Epoch.AddDays(2).UtcDateTime) : BsonNull.Value;
@@ -106,14 +106,14 @@ try
         if (indexed)
             await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "roomKey", 1 }, { "sequence", 1 }, { "_id", 1 } }, new CreateIndexOptions { Name = "epic005_room_sequence_id" }), cancellationToken: ct);
         var cases = new List<object>();
-        foreach (var (label, room, edge, descending) in new[] { ("beginning", "hot", 0L, false), ("middle-after", "hot", posts / 2L, false), ("tail-after", "hot", posts - 21L, false), ("middle-before", "hot", posts / 2L, true), ("noise-room", "noise-a", posts / 20L, false) })
+        foreach (var (label, topic, edge, descending) in new[] { ("beginning", "hot", 0L, false), ("middle-after", "hot", posts / 2L, false), ("tail-after", "hot", posts - 21L, false), ("middle-before", "hot", posts / 2L, true), ("noise-room", "noise-a", posts / 20L, false) })
         {
             await Guard();
             var member = typeof(Post).GetProperty(nameof(Post.Sequence))!;
-            var boundary = room == "hot" ? posts : posts / 10;
+            var boundary = topic == "hot" ? posts : posts / 10;
             Expression<Func<Post, bool>> predicate = descending
-                ? m => m.RoomKey == room && m.Sequence < edge && m.Sequence <= boundary
-                : m => m.RoomKey == room && m.Sequence > edge && m.Sequence <= boundary;
+                ? m => m.RoomKey == topic && m.Sequence < edge && m.Sequence <= boundary
+                : m => m.RoomKey == topic && m.Sequence > edge && m.Sequence <= boundary;
             var query = new QueryDefinition { Page = 1, PageSize = 21, Sort = [new SortSpec(new MemberPath(typeof(Post), [member], typeof(long), false, -1), descending)] };
             var warm = new List<double>(); double firstMs = 0; object[] recorded = [];
             for (var iteration = 0; iteration < 7; iteration++)
@@ -123,11 +123,11 @@ try
                 using (EntityContext.NoCache()) rows = await Post.Query(predicate, query, ct);
                 watch.Stop(); var commands = await profiler.End(before, explain: iteration == 1, ct);
                 Profiler.AssertReadTrace(commands, expectCount: true);
-                Fixture.Validate(rows, room, edge, descending);
+                Fixture.Validate(rows, topic, edge, descending);
                 if (iteration == 0) firstMs = watch.Elapsed.TotalMilliseconds; else warm.Add(watch.Elapsed.TotalMilliseconds);
                 if (iteration == 1) recorded = commands;
             }
-            warm.Sort(); cases.Add(new { label, room, edge, descending, firstShapeCallMs = firstMs, p50Ms = Fixture.Rank(warm, .5), p95Ms = Fixture.Rank(warm, .95), warmMs = warm, representativeCommands = recorded });
+            warm.Sort(); cases.Add(new { label, topic, edge, descending, firstShapeCallMs = firstMs, p50Ms = Fixture.Rank(warm, .5), p95Ms = Fixture.Rank(warm, .95), warmMs = warm, representativeCommands = recorded });
             Console.WriteLine($"Mongo {posts} indexed={indexed} {label}: first={firstMs:F2} p50={Fixture.Rank(warm, .5):F2}ms");
         }
         // Existing stream seam: consume one provider-sized page then dispose. Not a full-history stream test.
@@ -163,7 +163,7 @@ finally
         scope = "Actual Tangent Post / pinned Koan Mongo CRUD + read microqueries and capability/fault experiments; no app API, source acceptance, live activity, browser or provider winner claim",
         started, finished = DateTimeOffset.UtcNow, root, databaseName, fixedEndpoint = "127.0.0.1:27119", replicaSet = "rs0", directConnection = true,
         databaseVersion = serverBuild.GetValue("version", "unknown").AsString, mongoDriver = typeof(MongoClient).Assembly.FullName,
-        runtime = RuntimeInformation.FrameworkDescription, os = RuntimeInformation.OSDescription, postsInHotRoom = posts,
+        runtime = RuntimeInformation.FrameworkDescription, os = RuntimeInformation.OSDescription, postsInHotTopic = posts,
         sourceHashes, hostStarted = false, applicationPortsOpened = Array.Empty<int>(), credentialsLoaded = false,
         cpuAffinity = OperatingSystem.IsWindows() ? process.ProcessorAffinity.ToString() : "not set", peakWorkingSetBytes = process.PeakWorkingSet64,
         elapsedSeconds = timer.Elapsed.TotalSeconds, cpuSeconds = process.TotalProcessorTime.TotalSeconds,

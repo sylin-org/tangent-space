@@ -18,6 +18,6 @@ public sealed class SourceDecision : Entity<SourceDecision>
     public DateTimeOffset DecidedAt { get; set; }
     public long Sequence { get; set; }
     public PostContent? Content { get; set; }
-    public static string Key(string room, string uri, string cid) => Hash(room + "\n" + uri + "\n" + cid);
+    public static string Key(string topic, string uri, string cid) => Hash(topic + "\n" + uri + "\n" + cid);
     internal static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }

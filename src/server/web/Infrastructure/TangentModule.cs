@@ -64,7 +64,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<TangentSpace.Participants.ParticipantProfiles>();
         services.AddHostedService<TangentSpace.Participants.ProfileCapture>();
         services.AddSingleton<ServerGovernance>();
-        services.AddSingleton<RoomGovernance>();
+        services.AddSingleton<TopicGovernance>();
         services.AddSingleton<Rooms.Web.PublicConversationReader>();
         services.AddSingleton<TangentGovernance>();
         services.AddSingleton<CompanionGovernance>();

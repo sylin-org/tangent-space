@@ -4,33 +4,33 @@ namespace TangentSpace.Conversation;
 public sealed class ConversationUpdates
 {
     private readonly object gate = new();
-    private readonly Dictionary<string, Signal> rooms = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Signal> topics = new(StringComparer.Ordinal);
 
-    public Subscription Capture(string room)
+    public Subscription Capture(string topic)
     {
-        ArgumentException.ThrowIfNullOrEmpty(room);
+        ArgumentException.ThrowIfNullOrEmpty(topic);
         lock (gate)
         {
-            if (!rooms.TryGetValue(room, out var signal)) rooms.Add(room, signal = new Signal());
+            if (!topics.TryGetValue(topic, out var signal)) topics.Add(topic, signal = new Signal());
             signal.Subscribers++;
-            return new Subscription(signal.Changed.Task, () => Release(room, signal));
+            return new Subscription(signal.Changed.Task, () => Release(topic, signal));
         }
     }
 
-    public void Pulse(string room)
+    public void Pulse(string topic)
     {
         Signal? signal;
-        lock (gate) rooms.Remove(room, out signal);
+        lock (gate) topics.Remove(topic, out signal);
         // New subscribers capture a new generation; previously captured tasks retain this pulse.
         signal?.Changed.TrySetResult();
     }
 
-    private void Release(string room, Signal signal)
+    private void Release(string topic, Signal signal)
     {
         lock (gate)
         {
-            if (rooms.TryGetValue(room, out var current) && ReferenceEquals(current, signal)
-                && --signal.Subscribers == 0) rooms.Remove(room);
+            if (topics.TryGetValue(topic, out var current) && ReferenceEquals(current, signal)
+                && --signal.Subscribers == 0) topics.Remove(topic);
         }
     }
 

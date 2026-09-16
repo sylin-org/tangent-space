@@ -7,7 +7,7 @@ public static class ParticipationAccess
 {
     public static bool UsesCredential(ClaimsPrincipal principal) => principal.HasClaim(claim => claim.Type == ParticipationConstants.CredentialClaim);
 
-    /// <summary>Credential grants limit transport operations; room policy must still be checked afterward.
+    /// <summary>Credential grants limit transport operations; topic policy must still be checked afterward.
     /// The universal gate is the participant claim — every principal carries it. Holding an atproto
     /// identity is NOT a prerequisite for participation; atproto-specific flows keep their own inline
     /// DID checks with flow-specific honest outcomes: source writes and edits throw

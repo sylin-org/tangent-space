@@ -65,9 +65,9 @@ public sealed partial class ConversationService
                     current.Facets = null;
                     await current.Save(token);
                     change.State = "moderated"; change.Detail = "post-removed-by-moderator"; change.UpdatedAt = clock.GetUtcNow();
-                    var room = await Room.Get(roomKey, token);
+                    var topic = await Topic.Get(roomKey, token);
                     await ActivityJournal.AppendInTransaction(ActivityKind.MessageDeleted, roomKey, participantId, current.AuthorParticipantId,
-                        room?.TangentKey, current.Sequence, change.UpdatedAt, token);
+                        topic?.TangentKey, current.Sequence, change.UpdatedAt, token);
                     await change.Save(token); return true;
                 }, ct);
                 updates.Pulse(roomKey); ActivityJournal.SignalAfterCommit();
@@ -100,9 +100,9 @@ public sealed partial class ConversationService
                 change.State = change.Delete ? "deleted" : "accepted";
                 change.Detail = change.Delete ? "post-deleted" : "post-edited";
                 change.UpdatedAt = clock.GetUtcNow();
-                var room = await Room.Get(roomKey, token);
+                var topic = await Topic.Get(roomKey, token);
                 await ActivityJournal.AppendInTransaction(change.Delete ? ActivityKind.MessageDeleted : ActivityKind.MessageEdited,
-                    roomKey, participantId, current.AuthorParticipantId, room?.TangentKey, current.Sequence, change.UpdatedAt, token);
+                    roomKey, participantId, current.AuthorParticipantId, topic?.TangentKey, current.Sequence, change.UpdatedAt, token);
                 await change.Save(token);
                 return true;
             }, ct);

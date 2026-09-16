@@ -1,6 +1,6 @@
 namespace TangentSpace.Activity;
 
-// Journal entries are delivery markers. Conversation content is always read through its own room-history API.
+// Journal entries are delivery markers. Conversation content is always read through its own topic-history API.
 public enum ActivityKind
 {
     MessageAccepted,

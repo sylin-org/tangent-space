@@ -9,7 +9,7 @@ public sealed class ParticipantSelfController(TangentServer hub) : ControllerBas
 {
     private ServerGovernance server => hub.Space;
 
-    [HttpPatch("/api/participants/me"), RoomMutation(ParticipationGrants.Read)]
+    [HttpPatch("/api/participants/me"), TopicMutation(ParticipationGrants.Read)]
     public async Task<IActionResult> Declare(ParticipantDeclaration request, CancellationToken ct)
     {
         try { return Ok(await server.Declare(ParticipationAccess.Require(User, ParticipationGrants.Welcome), request.Classification, ct)); }

@@ -16,7 +16,7 @@ public sealed class OnboardingController(TangentServer hub) : ControllerBase
         return Ok(await hub.Profiles.Read(ParticipationAccess.Require(User, ParticipationGrants.Read), ct));
     }
 
-    [HttpPost("/api/onboarding/tangent"), RoomMutation]
+    [HttpPost("/api/onboarding/tangent"), TopicMutation]
     public async Task<IActionResult> Finish(FirstTangentRequest request, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";

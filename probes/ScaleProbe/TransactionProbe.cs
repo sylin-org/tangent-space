@@ -18,7 +18,7 @@ internal static class TransactionProbe
         try
         {
             using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction("tangent-room-policy-operation");
+            using var transaction = EntityContext.Transaction("tangent-topic-policy-operation");
             for (var i = 0; i < ids.Length; i++)
             {
                 var message = make(200_001 + i); message.Id = ids[i]; message.RoomKey = "epic005-transaction-failure";
@@ -42,7 +42,7 @@ internal static class TransactionProbe
         return new
         {
             scope = "Three Post.Save calls in the application's named EntityContext.Transaction primitive; SQL trigger fails second; independent post-scope connection inspects durable state. Not full acceptance/API or process-crash proof.",
-            transactionName = "tangent-room-policy-operation", queuedIds = ids, failure = error,
+            transactionName = "tangent-topic-policy-operation", queuedIds = ids, failure = error,
             persistedIds = persisted, partialCommitObserved = persisted.SequenceEqual([ids[0]])
         };
     }

@@ -11,18 +11,18 @@ namespace TangentSpace.Rooms.Web;
 
 /// <summary>An unlisted direct-read mount. Koan constrains the row; this controller only narrows its route and projection.</summary>
 [ApiController, AllowAnonymous, Route("api/v1/public/tangents/{tangentId}/topics")]
-public sealed class PublicTopicsController(PublicConversationReader reader, PolicyGate policyGate) : EntityController<Room, string>
+public sealed class PublicTopicsController(PublicConversationReader reader, PolicyGate policyGate) : EntityController<Topic, string>
 {
     protected override QueryOptions BuildOptions()
     {
         var options = base.BuildOptions();
         var tangentKey = RouteData.Values["tangentId"]?.ToString() ?? "";
-        options.AddPredicate<Room>(room => room.TangentKey == tangentKey);
+        options.AddPredicate<Topic>(topic => topic.TangentKey == tangentKey);
         return options;
     }
 
     protected override ObjectResult PrepareResponse(object? content)
-        => base.PrepareResponse(content is Room room ? PublicTopicDescription.From(room) : content);
+        => base.PrepareResponse(content is Topic topic ? PublicTopicDescription.From(topic) : content);
 
     [HttpGet("{id}")]
     public override async Task<IActionResult> GetById(string id, CancellationToken ct)
@@ -67,13 +67,13 @@ public sealed class PublicTopicsController(PublicConversationReader reader, Poli
     public override Task<IActionResult> GetNew(CancellationToken ct) => Task.FromResult(HiddenNotFound());
 
     [HttpPost("")]
-    public override Task<IActionResult> Upsert(Room model, CancellationToken ct) => ReadOnly();
+    public override Task<IActionResult> Upsert(Topic model, CancellationToken ct) => ReadOnly();
 
     [HttpPut("{id}")]
     public override Task<IActionResult> Put(string id, CancellationToken ct) => ReadOnly();
 
     [HttpPost("bulk")]
-    public override Task<IActionResult> UpsertMany(IEnumerable<Room> models, CancellationToken ct) => ReadOnly();
+    public override Task<IActionResult> UpsertMany(IEnumerable<Topic> models, CancellationToken ct) => ReadOnly();
 
     [HttpDelete("{id}")]
     public override Task<IActionResult> Delete(string id, CancellationToken ct) => ReadOnly();

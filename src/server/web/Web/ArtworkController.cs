@@ -13,7 +13,7 @@ public sealed class ArtworkController(TangentServer hub, IWebHostEnvironment env
     private const int MaxBytes = 5 * 1024 * 1024;
     private string DirectoryPath => Path.Combine(environment.ContentRootPath, "artwork");
 
-    [HttpPost("/api/artwork"), RoomMutation, RequestSizeLimit(7 * 1024 * 1024)]
+    [HttpPost("/api/artwork"), TopicMutation, RequestSizeLimit(7 * 1024 * 1024)]
     public async Task<IActionResult> Upload([FromBody] ArtworkUpload upload, CancellationToken ct)
     {
         try
