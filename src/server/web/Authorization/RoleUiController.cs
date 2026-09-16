@@ -89,7 +89,7 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
         string actor;
         try { actor = ParticipationAccess.Require(User, ParticipationGrants.Manage); }
         catch (UnauthorizedAccessException) { return false; }
-        var site = await TangentSite.Get(TangentConstants.SiteId, ct);
-        return site?.IsOwner(actor) == true;
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        return space?.IsOwner(actor) == true;
     }
 }

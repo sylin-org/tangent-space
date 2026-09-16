@@ -7,7 +7,7 @@ function New-TangentLocalConfiguration {
     $clientId = 'http://localhost?redirect_uri=' + [Uri]::EscapeDataString("$Origin/auth/atproto/callback") + '&scope=' + [Uri]::EscapeDataString(($scopes -join ' '))
     return [ordered]@{
         Logging = @{ LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning' } }
-        Tangent = @{ Site = @{ Name = 'Tangent Space'; OwnerDid = $OwnerDid } }
+        Tangent = @{ Space = @{ Name = 'Tangent Space'; OwnerDid = $OwnerDid } }
         Koan = @{
             Identity = @{ Posture = 'Closed'; SeedDevUsers = $false }
             Security = @{ Trust = @{ DevIdentity = @{ Enabled = $false } } }

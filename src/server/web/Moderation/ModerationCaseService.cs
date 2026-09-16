@@ -187,7 +187,7 @@ public sealed class ModerationCaseService(RoomGovernance rooms, References refs,
             current.State = action == ModerationActions.Defer ? ModerationCaseStates.Deferred : ModerationCaseStates.Escalated;
             current.NextReviewAt = until;
             if (action == ModerationActions.Escalate)
-                current.EscalatedToParticipantId = (await TangentSite.Get(TangentConstants.SiteId, token))?.OwnerParticipantId
+                current.EscalatedToParticipantId = (await Space.Get(TangentConstants.SpaceId, token))?.OwnerParticipantId
                     ?? throw new InvalidOperationException("The accountable Host owner is unavailable.");
             current.UpdatedAt = now;
             await current.Save(token);

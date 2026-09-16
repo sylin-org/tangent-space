@@ -15,6 +15,6 @@ public sealed class RoomAudit : Entity<RoomAudit>
     public RoomDenial? Denial { get; set; }
     public string Reason { get; set; } = "";
     public long SelectedPolicyRevision { get; set; }
-    public long SitePolicyRevision { get; set; }
+    public long SpacePolicyRevision { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
 }

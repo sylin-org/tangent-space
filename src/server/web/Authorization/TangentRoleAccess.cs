@@ -32,7 +32,7 @@ public sealed class TangentRoleAccess(RoleCollection roles)
             .ResolveTopic(tangent?.Access ?? AccessMap.TangentDefaults());
         var ownsResource = selected.IsOwner
             || string.Equals(room.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
-        var siteUnavailable = selected.SitePolicyRevision <= 0;
+        var siteUnavailable = selected.SpacePolicyRevision <= 0;
         var missingParent = tangent is null;
         var banned = restriction is { Banned: true } && !ownsResource;
         var timedOut = restriction is { Banned: false } && !ownsResource;
@@ -56,7 +56,7 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         };
     }
 
-    public async Task Seed(TangentSite? site, CancellationToken ct = default)
+    public async Task Seed(Space? space, CancellationToken ct = default)
     {
         foreach (var seed in TangentBuiltInRoles.Defaults)
         {
@@ -65,8 +65,8 @@ public sealed class TangentRoleAccess(RoleCollection roles)
                 await roles.Define(seed.Token, seed.Name, seed.Permissions, Metadata(seed), ct);
         }
 
-        if (site is not null && Participant.IsValidId(site.OwnerParticipantId))
-            await EnsureOwner(site.OwnerParticipantId, ct);
+        if (space is not null && Participant.IsValidId(space.OwnerParticipantId))
+            await EnsureOwner(space.OwnerParticipantId, ct);
     }
 
     public async Task EnsureOwner(string participantId, CancellationToken ct = default)
@@ -91,7 +91,7 @@ public sealed class TangentRoleAccess(RoleCollection roles)
 }
 
 /// <summary>
-/// The Owner role is a stored projection of the Host: its only member is the site's
+/// The Owner role is a stored projection of the Host: its only member is the space's
 /// accountable human owner and its definition is the built-in one. Koan role bags cannot take
 /// application-derived tokens, so the projection is stored, and this is its rule. A change that
 /// keeps to it passes whoever makes it (the owner's own claim, startup's repair); every other
@@ -137,7 +137,7 @@ public static class TangentOwnerRoleGuard
     private static async Task<string?> SiteOwner(CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        return (await TangentSite.Get(TangentConstants.SiteId, ct))?.OwnerParticipantId;
+        return (await Space.Get(TangentConstants.SpaceId, ct))?.OwnerParticipantId;
     }
 
     private static RoleChangeDecision Refused()

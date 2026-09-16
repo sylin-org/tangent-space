@@ -11,13 +11,13 @@ namespace TangentSpace;
 /// permission checks, commits and notifications remain in those services.
 /// No current actor, request, entity session or transaction is retained here.</summary>
 public sealed class TangentServer(
-    ServerGovernance site, TangentGovernance tangents, CompanionGovernance participants,
+    ServerGovernance space, TangentGovernance tangents, CompanionGovernance participants,
     RoomGovernance topics, ConversationService posts, ActivityService activity,
     TangentSpace.Participants.ParticipantProfiles profiles,
     TangentSpace.Participants.ParticipantDirectory directory, LiveSessions live)
 {
     public TangentSpace.Participants.ParticipantProfiles Profiles { get; } = profiles;
-    public ServerGovernance Site { get; } = site;
+    public ServerGovernance Space { get; } = space;
     public TangentGovernance Tangents { get; } = tangents;
     public CompanionGovernance Participants { get; } = participants;
     public RoomGovernance Topics { get; } = topics;

@@ -10,14 +10,14 @@ namespace TangentSpace.Identity;
 /// derives did:web:localhost with its port; a hostname on its default port derives did:web of that
 /// host; an IP literal or any other port derives nothing and needs a configured audience. Tangent
 /// verifies its proofs itself, so the did:web never needs to resolve.</summary>
-public sealed partial class ProofAudience(IOptions<EnrollmentOptions> enrollment, IOptions<SiteOptions> site)
+public sealed partial class ProofAudience(IOptions<EnrollmentOptions> enrollment, IOptions<SpaceOptions> space)
 {
-    public string? Value => From(enrollment.Value.ProofAudience, site.Value.PublicOrigin);
+    public string? Value => From(enrollment.Value.ProofAudience, space.Value.PublicOrigin);
 
     public static string? From(string? configured, string? publicOrigin)
     {
         if (!string.IsNullOrWhiteSpace(configured)) return configured.Trim();
-        if (!SiteOptions.IsCanonicalOrigin(publicOrigin, out var origin)) return null;
+        if (!SpaceOptions.IsCanonicalOrigin(publicOrigin, out var origin)) return null;
         var uri = new Uri(origin);
         if (uri.IsLoopback) return "did:web:localhost" + (uri.IsDefaultPort ? "" : "%3A" + uri.Port);
         if (uri.HostNameType != UriHostNameType.Dns || !uri.IsDefaultPort) return null;

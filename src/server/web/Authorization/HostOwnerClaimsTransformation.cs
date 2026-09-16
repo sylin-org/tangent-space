@@ -15,8 +15,8 @@ public sealed class HostOwnerClaimsTransformation : IClaimsTransformation
         if (principal.Identity?.IsAuthenticated != true || principal.IsInRole(IdentityRoles.Operator)) return principal;
         var participantId = principal.FindFirst(ParticipationConstants.ParticipantClaim)?.Value;
         if (!TangentSpace.Participants.Participant.IsValidId(participantId)) return principal;
-        var site = await TangentSite.Get(TangentConstants.SiteId);
-        if (site?.IsOwner(participantId) != true) return principal;
+        var space = await Space.Get(TangentConstants.SpaceId);
+        if (space?.IsOwner(participantId) != true) return principal;
         var identity = principal.Identities.FirstOrDefault(value => value.IsAuthenticated);
         identity?.AddClaim(new Claim(identity.RoleClaimType, IdentityRoles.Operator));
         return principal;

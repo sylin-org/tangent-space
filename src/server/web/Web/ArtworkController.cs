@@ -19,7 +19,7 @@ public sealed class ArtworkController(TangentServer hub, IWebHostEnvironment env
         try
         {
             var actor = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
-            var server = await hub.Site.Read(actor, ct);
+            var server = await hub.Space.Read(actor, ct);
             var allowed = upload.Scope switch
             {
                 "server" => server.CanManage,

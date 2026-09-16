@@ -5,7 +5,7 @@ public sealed record RoomPolicy(
     string RoomKey,
     string? ActorParticipantId,
     long SelectedPolicyRevision,
-    long SitePolicyRevision,
+    long SpacePolicyRevision,
     RoomAdmission Admission,
     RoomRole? Role,
     bool IsOwner,

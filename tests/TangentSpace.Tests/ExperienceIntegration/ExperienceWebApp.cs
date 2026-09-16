@@ -75,12 +75,12 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         });
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Tangent:Site:Name"] = "Experience Integration Site",
-            ["Tangent:Site:OwnerDid"] = OwnerDid,
-            ["Tangent:Site:PublicOrigin"] = origin,
+            ["Tangent:Space:Name"] = "Experience Integration Space",
+            ["Tangent:Space:OwnerDid"] = OwnerDid,
+            ["Tangent:Space:PublicOrigin"] = origin,
             ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
-            ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={Path.Combine(root, "site.sqlite")}",
-            ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={Path.Combine(root, "site.sqlite")}",
+            ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={Path.Combine(root, "space.sqlite")}",
+            ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={Path.Combine(root, "space.sqlite")}",
         });
         builder.Services.AddKoan();
         // The test host's entry assembly is this test project; add the application's

@@ -38,15 +38,15 @@ public sealed class TangentModule : KoanModule
                 message.Facets = await MessageFacets.Effective(message.Content.Text, null, context.CancellationToken);
             return context.Proceed();
         });
-        services.AddOptions<SiteOptions>().BindConfiguration(TangentConstants.SiteConfiguration)
-            .Validate(o => !string.IsNullOrWhiteSpace(o.Name) && o.Name.Length <= 120, "Set Tangent:Site:Name to a name of 1–120 characters.")
-            .Validate(o => string.IsNullOrWhiteSpace(o.OwnerDid) || IdentityResolver.IsValidDid(o.OwnerDid), "Tangent:Site:OwnerDid must be blank for first-login ownership, or a valid AT DID.")
-            .Validate(o => string.IsNullOrWhiteSpace(o.PublicOrigin) || SiteOptions.IsCanonicalOrigin(o.PublicOrigin, out _),
-                "Tangent:Site:PublicOrigin must be a canonical absolute origin like https://tangent.example.")
+        services.AddOptions<SpaceOptions>().BindConfiguration(TangentConstants.SpaceConfiguration)
+            .Validate(o => !string.IsNullOrWhiteSpace(o.Name) && o.Name.Length <= 120, "Set Tangent:Space:Name to a name of 1–120 characters.")
+            .Validate(o => string.IsNullOrWhiteSpace(o.OwnerDid) || IdentityResolver.IsValidDid(o.OwnerDid), "Tangent:Space:OwnerDid must be blank for first-login ownership, or a valid AT DID.")
+            .Validate(o => string.IsNullOrWhiteSpace(o.PublicOrigin) || SpaceOptions.IsCanonicalOrigin(o.PublicOrigin, out _),
+                "Tangent:Space:PublicOrigin must be a canonical absolute origin like https://tangent.example.")
             .ValidateOnStart();
         services.AddOptions<TangentSpace.Identity.EnrollmentOptions>().BindConfiguration(TangentSpace.Identity.EnrollmentOptions.Configuration)
             .Validate(o => string.IsNullOrWhiteSpace(o.ProofAudience) || TangentSpace.Identity.ProofAudience.IsAtprotoAudience(o.ProofAudience),
-                "Tangent:Enrollment:ProofAudience must be blank, to derive it from Tangent:Site:PublicOrigin, or an atproto audience: a did:plc, or a did:web of a hostname with a port only for localhost.")
+                "Tangent:Enrollment:ProofAudience must be blank, to derive it from Tangent:Space:PublicOrigin, or an atproto audience: a did:plc, or a did:web of a hostname with a port only for localhost.")
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
@@ -89,7 +89,7 @@ public sealed class TangentModule : KoanModule
     {
         await services.GetRequiredService<Arrival>().CheckConfiguration(ct);
         await services.GetRequiredService<TangentRoleAccess>().Seed(
-            await TangentSite.Get(TangentConstants.SiteId, ct), ct);
+            await Space.Get(TangentConstants.SpaceId, ct), ct);
     }
 
     public override void Report(ProvenanceModuleWriter module, IConfiguration cfg, IHostEnvironment env)

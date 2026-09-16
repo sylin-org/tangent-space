@@ -9,7 +9,7 @@ namespace TangentSpace.Tests;
 public sealed class ReferencesTests
 {
     private static References Create(string origin = "https://tangent.example")
-        => new(Options.Create(new SiteOptions { PublicOrigin = origin }), new EphemeralDataProtectionProvider());
+        => new(Options.Create(new SpaceOptions { PublicOrigin = origin }), new EphemeralDataProtectionProvider());
 
     [Theory]
     [InlineData("https://evil.example::home::lounge")]

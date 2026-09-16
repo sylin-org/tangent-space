@@ -170,8 +170,8 @@ public sealed class ExperienceDigest(
     {
         using var fresh = EntityContext.NoCache();
         var membership = await TangentMembership.Get(TangentMembership.Key(tangentKey, participantId), ct);
-        var site = await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
-        var owner = site?.IsOwner(participantId) == true;
+        var space = await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, ct);
+        var owner = space?.IsOwner(participantId) == true;
         var admin = owner || membership?.Role == TangentRole.Admin;
         if (admin && groups.Any(group => group is "admins" or "moderators")) return true;
         if (membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader && groups.Contains("members")) return true;

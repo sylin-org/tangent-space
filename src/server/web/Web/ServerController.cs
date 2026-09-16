@@ -10,7 +10,7 @@ namespace TangentSpace.Web;
 [ApiController]
 public sealed class ServerController(TangentServer hub) : ControllerBase
 {
-    private ServerGovernance governance => hub.Site;
+    private ServerGovernance governance => hub.Space;
 
     [AllowAnonymous, HttpGet("/api/server")]
     public async Task<IActionResult> Get(CancellationToken ct)

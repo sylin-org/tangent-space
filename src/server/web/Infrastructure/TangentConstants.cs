@@ -2,8 +2,8 @@ namespace TangentSpace.Infrastructure;
 
 internal static class TangentConstants
 {
-    public const string SiteId = "site";
-    public const string SiteConfiguration = "Tangent:Site";
+    public const string SpaceId = "site";
+    public const string SpaceConfiguration = "Tangent:Space";
     public const string ArrivalTransaction = "tangent-arrival";
     public const string WelcomeRoute = "api/site";
     public const string AtprotoProvider = "atproto";

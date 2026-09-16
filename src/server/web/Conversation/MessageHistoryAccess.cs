@@ -56,7 +56,7 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
     }
 
     /// <summary>The rooms where the viewer durably holds moderation authority, mirroring
-    /// Room.CurrentPolicy's owner/manager clauses: site or Tangent ownership, room manager,
+    /// Room.CurrentPolicy's owner/manager clauses: space or Tangent ownership, room manager,
     /// delegated Tangent administrator, or channel creator — subject to room admission: a viewer
     /// durably Removed from the parent Tangent community loses the tier, and an active durable
     /// Banned restriction removes it for non-owners. Time-scoped timeouts are enforced on
@@ -69,8 +69,8 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
         var rooms = new HashSet<string>(StringComparer.Ordinal);
         using (EntityContext.NoCache())
         {
-            var site = Block<TangentSite?>().Invoke(TangentSite.Get(TangentConstants.SiteId, CancellationToken.None));
-            var siteOwner = site?.IsOwner(participantId) == true;
+            var space = Block<Space?>().Invoke(Space.Get(TangentConstants.SpaceId, CancellationToken.None));
+            var siteOwner = space?.IsOwner(participantId) == true;
             var roles = new Dictionary<string, RoomRole>(StringComparer.Ordinal);
             foreach (var membership in Block<IReadOnlyList<RoomMembership>>()
                 .Invoke(RoomMembership.Query(membership => membership.ParticipantId == participantId, CancellationToken.None)))
@@ -92,7 +92,7 @@ public sealed class MessageHistoryAccess : EntityAccess<Message>
             void Admit(Room room) => candidates[room.Id] = room;
             if (siteOwner)
             {
-                // The site owner manages every room; the room universe is this site's bounded directory.
+                // The space owner manages every room; the room universe is this space's bounded directory.
                 foreach (var room in Block<IReadOnlyList<Room>>().Invoke(Room.All(CancellationToken.None))) Admit(room);
             }
             else

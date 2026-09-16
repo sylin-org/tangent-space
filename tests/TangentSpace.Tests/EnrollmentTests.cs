@@ -153,7 +153,7 @@ public sealed class EnrollmentTests
 
     private static ProofAudience ProofAudienceFor(string origin, string configured = "")
         => new(Options.Create(new EnrollmentOptions { ProofAudience = configured }),
-            Options.Create(new TangentSpace.Site.SiteOptions { PublicOrigin = origin }));
+            Options.Create(new TangentSpace.Site.SpaceOptions { PublicOrigin = origin }));
 
     private static ServiceProofAuthentication Verifier(ProofKeys keys, string origin = Origin, long? now = null)
         => new(new FakeKeySource(keys), ProofAudienceFor(origin),
@@ -360,7 +360,7 @@ public sealed class EnrollmentTests
     public async Task Explicit_owner_claim_after_arrival_is_once_only_and_survives_restart()
     {
         // ADR 0003: arrival establishes identity only; ownership is an explicit human
-        // declaration. The first claim takes a blank site, later claims are refused, and
+        // declaration. The first claim takes a blank space, later claims are refused, and
         // the choice survives a restart.
         const string first = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
         const string second = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
@@ -377,7 +377,7 @@ public sealed class EnrollmentTests
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 server.Claim(secondId, second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
-                Assert.Equal(await Pid(first), (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerParticipantId);
+                Assert.Equal(await Pid(first), (await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
         }
         await using (var fixture = await HostFixture.StartAsync(database, ownerDid: ""))
         {
@@ -389,7 +389,7 @@ public sealed class EnrollmentTests
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 server.Claim(returningId, second, humanDeclaration: true, CancellationToken.None));
             using (EntityContext.NoCache())
-                Assert.Equal(await Pid(first), (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerParticipantId);
+                Assert.Equal(await Pid(first), (await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
         }
     }
 
@@ -434,9 +434,9 @@ public sealed class EnrollmentTests
         Assert.Single(claims.Where(won => won));
         using (EntityContext.NoCache())
         {
-            var site = await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None);
+            var space = await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None);
             var holders = await Task.WhenAll(dids.Select(did => Pid(did, CancellationToken.None)));
-            Assert.Contains(site!.OwnerParticipantId, holders);
+            Assert.Contains(space!.OwnerParticipantId, holders);
             foreach (var holder in holders) Assert.NotNull(await Participant.Get(holder, CancellationToken.None));
         }
     }
@@ -445,7 +445,7 @@ public sealed class EnrollmentTests
     public async Task Explicit_owner_keeps_first_visitor_from_claiming_a_fresh_site()
     {
         // A configured OwnerParticipantId reserves the claim: a visitor's explicit declaration is
-        // refused and the site stays unestablished until the configured account claims it.
+        // refused and the space stays unestablished until the configured account claims it.
         const string owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
         await using var fixture = await HostFixture.StartAsync(ownerDid: owner);
         var arrival = fixture.Host.Services.GetRequiredService<TangentSpace.Site.Arrival>();
@@ -455,11 +455,11 @@ public sealed class EnrollmentTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             server.Claim(visitorId, "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", humanDeclaration: true, CancellationToken.None));
         using (EntityContext.NoCache())
-            Assert.Null(await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None));
+            Assert.Null(await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None));
         await arrival.Enter(owner, null, CancellationToken.None);
         await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
         using (EntityContext.NoCache())
-            Assert.Equal(await Pid(owner), (await TangentSpace.Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, CancellationToken.None))!.OwnerParticipantId);
+            Assert.Equal(await Pid(owner), (await TangentSpace.Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
     }
 
     private sealed class HostFixture : IAsyncDisposable
@@ -477,9 +477,9 @@ public sealed class EnrollmentTests
             var host = await KoanIntegrationHost.Configure()
                 .WithSettings(new Dictionary<string, string?>
                 {
-                    ["Tangent:Site:Name"] = "Enrollment Test Site",
-                    ["Tangent:Site:OwnerDid"] = ownerDid,
-                    ["Tangent:Site:PublicOrigin"] = Origin,
+                    ["Tangent:Space:Name"] = "Enrollment Test Space",
+                    ["Tangent:Space:OwnerDid"] = ownerDid,
+                    ["Tangent:Space:PublicOrigin"] = Origin,
                     ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
                     ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={database}",
                     ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={database}"
@@ -730,8 +730,8 @@ public sealed class EnrollmentTests
     [Fact]
     public void Discovery_pins_the_configured_origin_audience_and_profile()
     {
-        var site = new TangentSpace.Site.SiteOptions { PublicOrigin = Origin };
-        var controller = Discovery(ProofAudienceFor(Origin), site,
+        var space = new TangentSpace.Site.SpaceOptions { PublicOrigin = Origin };
+        var controller = Discovery(ProofAudienceFor(Origin), space,
             new DefaultHttpContext { Request = { Headers = { Host = "evil.example" } } });
         var ok = Assert.IsType<OkObjectResult>(controller.Discover());
         var body = JsonSerializer.Serialize(ok.Value);
@@ -744,13 +744,13 @@ public sealed class EnrollmentTests
         Assert.Contains(McpAuthenticationConstants.ProtocolVersion, body);
         Assert.DoesNotContain("evil.example", body);
         Assert.Contains("independently verifies current authority", body);
-        var overridden = Assert.IsType<OkObjectResult>(Discovery(ProofAudienceFor(Origin, OtherService), site).Discover());
+        var overridden = Assert.IsType<OkObjectResult>(Discovery(ProofAudienceFor(Origin, OtherService), space).Discover());
         Assert.Contains(OtherService, JsonSerializer.Serialize(overridden.Value));
         Assert.Equal(StatusCodes.Status503ServiceUnavailable,
-            ((ObjectResult)Discovery(ProofAudienceFor(""), new TangentSpace.Site.SiteOptions()).Discover()).StatusCode);
+            ((ObjectResult)Discovery(ProofAudienceFor(""), new TangentSpace.Site.SpaceOptions()).Discover()).StatusCode);
         foreach (var invalid in new[] { "", "   ", "ftp://example.com", "http://user:pass@127.0.0.1:5220", "http://127.0.0.1:5220/evil", "http://127.0.0.1:5220?x=1" })
             Assert.Equal(StatusCodes.Status503ServiceUnavailable, ((ObjectResult)Discovery(ProofAudienceFor(invalid, Audience),
-                new TangentSpace.Site.SiteOptions { PublicOrigin = invalid }).Discover()).StatusCode);
+                new TangentSpace.Site.SpaceOptions { PublicOrigin = invalid }).Discover()).StatusCode);
     }
 
     [Theory]
@@ -777,6 +777,6 @@ public sealed class EnrollmentTests
     public void Only_atproto_audiences_are_accepted(string value, bool accepted)
         => Assert.Equal(accepted, ProofAudience.IsAtprotoAudience(value));
 
-    private static TangentMcpDiscoveryController Discovery(ProofAudience audience, TangentSpace.Site.SiteOptions site, HttpContext? context = null)
-        => new(audience, Options.Create(site)) { ControllerContext = new ControllerContext { HttpContext = context ?? new DefaultHttpContext() } };
+    private static TangentMcpDiscoveryController Discovery(ProofAudience audience, TangentSpace.Site.SpaceOptions space, HttpContext? context = null)
+        => new(audience, Options.Create(space)) { ControllerContext = new ControllerContext { HttpContext = context ?? new DefaultHttpContext() } };
 }

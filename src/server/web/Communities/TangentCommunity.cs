@@ -29,11 +29,11 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     public DateTimeOffset UpdatedAt { get; set; }
     public long PolicyRevision { get; set; }
 
-    public static TangentCommunity Create(TangentSite? site, string actorDid, string key, string name, string? description,
+    public static TangentCommunity Create(Space? space, string actorDid, string key, string name, string? description,
         string? motto, string? accent, string? artwork, DateTimeOffset now)
     {
-        if (site is null || !site.IsOwner(actorDid) || !Participant.IsValidId(actorDid))
-            throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the persisted site owner can create a Tangent.");
+        if (space is null || !space.IsOwner(actorDid) || !Participant.IsValidId(actorDid))
+            throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the persisted space owner can create a Tangent.");
         CheckKey(key); CheckCard(name, description, motto, accent, artwork);
         return new TangentCommunity
         {
@@ -42,10 +42,10 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
         };
     }
 
-    internal static TangentCommunity CreateForAuthorizedActor(TangentSite site, string actorDid, string ownerDid, string key,
+    internal static TangentCommunity CreateForAuthorizedActor(Space space, string actorDid, string ownerDid, string key,
         string name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)
     {
-        if (!site.IsOwner(ownerDid) || !Participant.IsValidId(actorDid))
+        if (!space.IsOwner(ownerDid) || !Participant.IsValidId(actorDid))
             throw new TangentRuleViolation(TangentDenial.Forbidden, "The server owner must authorize Tangent creation.");
         CheckKey(key); CheckCard(name, description, motto, accent, artwork);
         return new TangentCommunity { Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto),
@@ -54,10 +54,10 @@ public sealed class TangentCommunity : Entity<TangentCommunity>
     }
 
     /// <summary>The first Tangent, established with the Host and named by its owner during onboarding.</summary>
-    internal static TangentCommunity Home(TangentSite site) => new()
+    internal static TangentCommunity Home(Space space) => new()
     {
-        Id = HomeKey, Name = site.Name, OwnerParticipantId = site.OwnerParticipantId, OpenToSignedIn = true,
-        CreatedAt = site.EstablishedAt, UpdatedAt = site.EstablishedAt, PolicyRevision = 1
+        Id = HomeKey, Name = space.Name, OwnerParticipantId = space.OwnerParticipantId, OpenToSignedIn = true,
+        CreatedAt = space.EstablishedAt, UpdatedAt = space.EstablishedAt, PolicyRevision = 1
     };
 
     public void Change(string actorDid, string? name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)

@@ -28,7 +28,7 @@ public sealed partial class ExperienceService(
     private CompanionGovernance companions => hub.Participants;
     private ConversationService conversation => hub.Posts;
     private ActivityService activity => hub.Activity;
-    private ServerGovernance server => hub.Site;
+    private ServerGovernance server => hub.Space;
 
     public const int DefaultDigestLimit = 5;
     public const int MaximumDigestLimit = 25;
@@ -47,11 +47,11 @@ public sealed partial class ExperienceService(
         await activity.EnsureParticipantActive(participantId, credential, ct);
         var (scopeTangent, scopeRoom) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
         var identity = await IdentityOf(participantId, ct);
-        var site = await SiteLabel(ct);
+        var space = await SiteLabel(ct);
         var page = await digest.Page(participantId, credential, null, scopeTangent, scopeRoom, 3, ct);
         var (directory, continuation, _) = await TangentPage(participantId, 1, 0, DirectoryLimit, ct);
         var orientation = new ExperienceOrientation(
-            $"{site} is a shared conversation space for people and agents.",
+            $"{space} is a shared conversation space for people and agents.",
             [],
             page.Attention.WaitingCount.Value is > 0
                 ? $"{page.Attention.WaitingCount.Value} request(s) are waiting for you; {page.Attention.NewActivityCount.Value ?? 0} new posts in watched Topics."
@@ -61,7 +61,7 @@ public sealed partial class ExperienceService(
         if (actions.Count == 0 && directory.Count > 0)
             actions.Add(new(ExperienceActionNames.ListTopics, directory[0].TangentRef, null, $"Browse Topics in {directory[0].Name}"));
         return await Assemble("arrive", ExperienceStatus.Ok, identity,
-            ServerPlace(principal, site),
+            ServerPlace(principal, space),
             new ExperienceResult(new ExperienceArrivalData(directory, continuation), null, null),
             page.Attention, new ExperienceContinuation(null, null, null, null, null, null),
             actions, orientation,
@@ -650,8 +650,8 @@ public sealed partial class ExperienceService(
     internal async Task<string> SiteLabel(CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
-        var site = await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
-        return site?.Name.Length > 0 ? site.Name : "This Tangent server";
+        var space = await Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, ct);
+        return space?.Name.Length > 0 ? space.Name : "This Tangent server";
     }
 
     private async Task<(string? Tangent, string? Topic)> ScopeOf(ClaimsPrincipal principal, string participantId, string credential,

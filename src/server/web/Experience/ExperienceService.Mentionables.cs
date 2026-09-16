@@ -40,7 +40,7 @@ public sealed partial class ExperienceService
         if (needle.Length > 64) needle = needle[..64];
 
         // Candidate participants: Tangent members, the authors of this Topic's recent
-        // history, and the site owner — the people a mention here can plausibly mean.
+        // history, and the space owner — the people a mention here can plausibly mean.
         var candidates = new HashSet<string>(StringComparer.Ordinal);
         IReadOnlyList<TangentMembership> members;
         using (EntityContext.NoCache())
@@ -49,8 +49,8 @@ public sealed partial class ExperienceService
             foreach (var membership in members) candidates.Add(membership.ParticipantId);
             var authors = await Message.Query(message => message.RoomKey == topicKey, RecentAuthors(), ct);
             foreach (var message in authors) candidates.Add(message.AuthorParticipantId);
-            var site = await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
-            if (site is { OwnerParticipantId.Length: > 0 }) candidates.Add(site.OwnerParticipantId);
+            var space = await Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, ct);
+            if (space is { OwnerParticipantId.Length: > 0 }) candidates.Add(space.OwnerParticipantId);
         }
         candidates.Remove(participantId);
 
@@ -59,7 +59,7 @@ public sealed partial class ExperienceService
             StringComparer.Ordinal);
         using (EntityContext.NoCache())
         {
-            if ((await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct)) is { } siteRow)
+            if ((await Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, ct)) is { } siteRow)
                 badges[siteRow.OwnerParticipantId] = "owner";
         }
 

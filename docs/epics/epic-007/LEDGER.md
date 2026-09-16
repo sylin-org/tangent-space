@@ -200,6 +200,22 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
+**R2.1 — apply the glossary** (doing)
+
+Scale, measured before starting: `TangentSite` 69 occurrences in 20 files, `TangentCommunity` 74 in 17, `Message` 158 in 39, `Room` 684 in 87. Done in four stages, each built, tested and committed on its own, so a failure is bisectable rather than buried in one 900-site commit.
+
+- [x] Narrow the greenfield Spaces rule first (N-038), committed separately so the ordering is visible in history
+- [x] Stage 1 — `TangentSite` → `Space` with its family, the `site` locals and the prose. Three things the sweep got wrong and the checks caught: the namespace segment `TangentSpace.Site` was renamed too and collided with the type (reverted; R2.3 owns namespaces), a namespace-qualified `Site.TangentSite` became `Space.Space`, and the route `/api/site/participants/.../suspension` was moved although routes are wire and belong to R2.4 (reverted; `app.js` still calls `/api/site`). The configuration key moved to `Tangent:Space` in `appsettings.json`, `compose.yaml`, `TangentConstants` **and `scripts/local-configuration.ps1`**, which generates the state file and was missed on the first pass. .NET 87/87, browser 7/7, greenfield 1,496 → 1,444
+- [ ] Stage 2 — `TangentCommunity` → `Tangent`
+- [ ] Stage 3 — `Message` → `Post`
+- [ ] Stage 4 — `Room` → `Topic`, the largest; `Room.Topic` (the description text) becomes `Topic.Description`, per the glossary
+- [ ] Verify: four suites, greenfield, and a relaunch (the configuration key change needs one)
+- [ ] **Blocked on Leo:** renaming a persisted entity strands its rows (N-044). The running install now reads an empty `Space` table and presents as an unclaimed Space. R2.6's wipe is the sanctioned resolution, but it destroys the walkthrough data, so the timing is Leo's
+
+**Not** in this task: the `.local/docker/site` state directory keeps its name. It is an operational path, not a code name, and renaming it would strand the running install's data and the wipe that now hardcodes it. Folder and namespace moves are R2.3's, so a `Space` may sit in `TangentSpace.Site` until then.
+
+Check command: `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`, `node --test "tests/*.test.mjs"`, then `pwsh scripts/check-greenfield.ps1`.
+
 **Completed: R1.13 — delete code without a caller**
 
 Per C9. Every item verified to have no caller before deletion; two turned out to be narrower than the list implies, and one is already gone:
@@ -401,6 +417,8 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **N-042** (R1.16) Removing the target parameter did not remove the need for every guard, and the tension is worth stating: **a wipe with a hardcoded path cannot be exercised by a test at all**, which is why the parameter existed in the first place. The answer was to move the seam rather than delete it. `AllowedRoot` stays injectable — production passes `<repo>/.local/docker`, the suite passes a scratch root — and the target under either is always `site`. That removes the arbitrary-path surface while keeping the wipe testable, and it splits the guards cleanly. Unreachable now, and deleted: traversal out of the root, a target outside it, the allowed root itself, the repository root, a nested target. Still reachable, and kept: a junction planted at the state directory, an allowed root that is itself a junction, a filesystem root as the allowed root, and a plain file where the directory belongs — a recursive delete would still follow a reparse point out of the tree. Lifecycle 36 → 30.
 
 - **N-043** (R1.14) R1.13 was marked done having delivered only its deletions: C9's clause **"each attention item is rendered once" was never addressed**, and W5's re-run is what caught it. `push_attention` renders the digest's items and `push_pending` renders the connector's own records of the same Posts, and neither consulted the other — so whenever both were populated the same Post appeared twice, exactly as the assessment described and as the first W5 observed. `push_attention` now returns the source refs it rendered and `push_pending` skips them. Honest limit: the current state did not reproduce the duplicate before the change, so the fix is correct by construction rather than proven by a before-and-after. A second, separate defect is still open and is **server-side**: the expanded view ends with "Read leo.sylin.org's request; Read leo.sylin.org's request" — two actions for two different Posts carrying identical labels, so nothing downstream can tell them apart. The labels come from the server's action list, not the connector's rendering; R5.2's attention projection is the natural owner.
+
+- **N-044** (R2.1) **Koan names tables by the fully-qualified entity type**, so renaming a persisted entity strands its rows rather than moving them. After stage 1 the database holds both `TangentSpace.Site.TangentSite`, with the real data, and a freshly created, empty `TangentSpace.Site.Space` that the app now reads — so the install presents as an unclaimed Space while its rows sit intact one table away. This is not a defect to patch: the standing wipe rule forbids migration code, and R2.6's wipe is the planned resolution. Two consequences worth stating. First, the remaining stages rename `TangentCommunity`, `Message` and `Room` — every one a persisted entity — so each will strand more tables, and nothing between here and R2.6 should be judged by what the running app shows. Second, this has already happened in this repository: `TangentSpace.Activity.WatchSetting` and `TangentSpace.Activity.TangentWatchSetting` both exist, the residue of an earlier rename. Backup before the stage-1 relaunch: `.local/backups/docker-20260916-051128-748`.
 
 ## Findings to route
 

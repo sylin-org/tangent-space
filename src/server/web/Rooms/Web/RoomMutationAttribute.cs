@@ -28,7 +28,7 @@ public sealed class RoomMutationAttribute(string grant = ParticipationGrants.Man
         if (context.HttpContext.User.Identity?.IsAuthenticated != true
             || string.IsNullOrWhiteSpace(context.HttpContext.User.FindFirst(ParticipationConstants.ParticipantClaim)?.Value))
         {
-            context.Result = Failure(401, "Sign in with your account before administering the site.");
+            context.Result = Failure(401, "Sign in with your account before administering the space.");
             return;
         }
         if (!string.Equals(request.ContentType?.Split(';', 2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase))
@@ -38,7 +38,7 @@ public sealed class RoomMutationAttribute(string grant = ParticipationGrants.Man
         }
         var origins = request.Headers.Origin;
         if (origins.Count != 1 || !IsSameOrigin(origins[0], request.Scheme, request.Host.Value))
-            context.Result = Failure(403, "Administrative requests must come from this site's origin.");
+            context.Result = Failure(403, "Administrative requests must come from this space's origin.");
     }
 
     public static bool IsSameOrigin(string? origin, string scheme, string? host)

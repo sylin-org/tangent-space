@@ -14,7 +14,7 @@ public sealed class SourceDecision : Entity<SourceDecision>
     public bool Accepted { get; set; }
     public string Reason { get; set; } = "";
     public long PolicyRevision { get; set; }
-    public long SitePolicyRevision { get; set; }
+    public long SpacePolicyRevision { get; set; }
     public DateTimeOffset DecidedAt { get; set; }
     public long Sequence { get; set; }
     public MessageContent? Content { get; set; }

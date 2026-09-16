@@ -52,7 +52,7 @@ public sealed partial class ConversationService
                 {
                     Id = SourceDecision.Key(roomKey, uri, cid), RoomKey = roomKey, AuthorParticipantId = participantId, SourceUri = uri, SourceCid = cid,
                     Accepted = true, Reason = "accepted", DecidedAt = clock.GetUtcNow(),
-                    PolicyRevision = policy.SelectedPolicyRevision, SitePolicyRevision = policy.SitePolicyRevision,
+                    PolicyRevision = policy.SelectedPolicyRevision, SpacePolicyRevision = policy.SpacePolicyRevision,
                     Content = content, Sequence = checked(++state.LastSequence),
                 };
                 await decision.Save(token);

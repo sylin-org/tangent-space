@@ -40,8 +40,8 @@ public sealed partial class ExperienceService
         var profile = await hub.Profiles.Read(participantId, ct);
         using (EntityContext.NoCache())
         {
-            var site = await Site.TangentSite.Get(TangentSpace.Infrastructure.TangentConstants.SiteId, ct);
-            if (site?.IsOwner(participantId) == true) roles.Add(new("server", "", "This server", "owner"));
+            var space = await Site.Space.Get(TangentSpace.Infrastructure.TangentConstants.SpaceId, ct);
+            if (space?.IsOwner(participantId) == true) roles.Add(new("server", "", "This server", "owner"));
             foreach (var membership in await TangentMembership.Query(value => value.ParticipantId == participantId, ct))
             {
                 var tangent = await tangents.Describe(viewer, membership.TangentKey, ct);

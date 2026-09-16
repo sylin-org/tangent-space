@@ -10,7 +10,7 @@ namespace TangentSpace.Mcp.Authentication;
 /// <summary>Public discovery for service-proof enrollment: the configured canonical public origin and the
 /// proof audience and method the connector must request.</summary>
 [ApiController, AllowAnonymous, Route(McpAuthenticationConstants.DiscoveryRoute)]
-public sealed class TangentMcpDiscoveryController(ProofAudience proofAudience, IOptions<SiteOptions> site) : ControllerBase
+public sealed class TangentMcpDiscoveryController(ProofAudience proofAudience, IOptions<SpaceOptions> space) : ControllerBase
 {
     [HttpGet]
     public IActionResult Discover()
@@ -18,8 +18,8 @@ public sealed class TangentMcpDiscoveryController(ProofAudience proofAudience, I
         Response.Headers.CacheControl = "no-store";
         if (proofAudience.Value is not { } audience)
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "exchange_unconfigured" });
-        // The canonical origin comes from configuration (Tangent:Site:PublicOrigin), never from the request Host.
-        if (!SiteOptions.IsCanonicalOrigin(site.Value.PublicOrigin, out var origin))
+        // The canonical origin comes from configuration (Tangent:Space:PublicOrigin), never from the request Host.
+        if (!SpaceOptions.IsCanonicalOrigin(space.Value.PublicOrigin, out var origin))
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "public_origin_unconfigured" });
         return Ok(new
         {

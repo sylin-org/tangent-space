@@ -7,7 +7,7 @@ namespace TangentSpace.Participants.Web;
 [ApiController, Authorize]
 public sealed class ParticipantSelfController(TangentServer hub) : ControllerBase
 {
-    private ServerGovernance server => hub.Site;
+    private ServerGovernance server => hub.Space;
 
     [HttpPatch("/api/participants/me"), RoomMutation(ParticipationGrants.Read)]
     public async Task<IActionResult> Declare(ParticipantDeclaration request, CancellationToken ct)

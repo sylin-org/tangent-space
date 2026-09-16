@@ -13,7 +13,7 @@ namespace TangentSpace.Application;
 /// cases, bound to the configured public origin. A reference minted by another server is rejected
 /// before any data is disclosed; nothing here routes over the network.
 /// </summary>
-public sealed class References(IOptions<SiteOptions> options, IDataProtectionProvider protection)
+public sealed class References(IOptions<SpaceOptions> options, IDataProtectionProvider protection)
 {
     public const string InvitePrefix = "i_";
     public const string CasePrefix = "case_";
@@ -21,10 +21,10 @@ public sealed class References(IOptions<SiteOptions> options, IDataProtectionPro
     private readonly string origin = ConfiguredOrigin(options.Value);
     private readonly IDataProtector listCursors = protection.CreateProtector("Tangent.References.ListCursor.v1");
 
-    public static string ConfiguredOrigin(SiteOptions options)
-        => SiteOptions.IsCanonicalOrigin(options.PublicOrigin, out var origin)
+    public static string ConfiguredOrigin(SpaceOptions options)
+        => SpaceOptions.IsCanonicalOrigin(options.PublicOrigin, out var origin)
             ? origin
-            : throw new InvalidOperationException("Set Tangent:Site:PublicOrigin to a canonical absolute origin like https://tangent.example.");
+            : throw new InvalidOperationException("Set Tangent:Space:PublicOrigin to a canonical absolute origin like https://tangent.example.");
 
     public string Origin => origin;
     public string ServerRef => origin;
