@@ -11,7 +11,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current task | R2.6 — wipe and verify (`waiting` on Leo for the walkthrough). The wipe itself is done |
 | Next action | **Walkthrough W1–W11 with Leo on the fresh install**, which closes R2.6 and R2. The install is unclaimed, so W1 starts at the claim — which is now the first-Tangent press itself (D16), not a screen before it; the connector needs `forget` then Connect (N-056). After that, R3 begins with R3.1's design note. Two things still owed: the `probes/` question (N-047) and push authorization |
 | Last checkpoint | 2026-09-17 · S-005 · The first-run flow is what Leo asked for: starting points and cover art on the first Tangent, and the owner confirmation screen removed outright (D16, N-060). Suites green; verified on a `full.bat` install |
-| Durability | Commits at task checkpoints are authorized (D10). **Pushed to `origin/claude/epic-007-realignment` on 2026-09-16**, so the work no longer exists only on this machine |
+| Durability | Commits at task checkpoints are authorized (D10). **Pushed to `origin/claude/epic-007-realignment` through `f212237` on 2026-09-17**, so the work no longer exists only on this machine |
 | Waiting on | Leo: the W1-W11 walkthrough on the fresh install, which closes R2.6. Nothing else |
 | Blockers | None. The stranded tables are gone with the wipe, so N-044 is closed |
 
@@ -577,7 +577,7 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - The walkthrough found its first defect immediately: first sign-in showed "Fetching your profile…" forever. Leo named the shape of the fix before I did — capture on sign-in, answer `/me` from a default, let SSE announce the real profile — and the server already did all three. Nothing subscribed (N-059). Proved by reproduction, which needed `full.bat`.
 - `full.bat`, at Leo's request: one prompt-free wipe → build → launch → open, no backup, for serial deploy tests.
 - The first Tangent became a page worth arriving on: five starting points, a Clear, and eight cover squares spanning the collection one mood at a time.
-- **D16, and the lesson in it.** Leo: the confirmation screen is unnecessary; then, when I had only stopped routing to it — "fully remove the interstitial, don't just abandon it. Greenfield app, too early to start accumulating tech debt." Removing it properly took an endpoint, a record, a parameter, a guard, a handler, a listener, 18 CSS rules and an orphaned using — and then two lines of copy still promising the screen, which no compiler was ever going to find (N-060).
+- **D16 (`f212237`), and the lesson in it.** Leo: the confirmation screen is unnecessary; then, when I had only stopped routing to it — "fully remove the interstitial, don't just abandon it. Greenfield app, too early to start accumulating tech debt." Removing it properly took an endpoint, a record, a parameter, a guard, a handler, a listener, 18 CSS rules and an orphaned using — and then two lines of copy still promising the screen, which no compiler was ever going to find (N-060).
 - Every suite green throughout: .NET 87/87, node 7/7.
 - Next: the W1–W11 walkthrough with Leo on the fresh install, which closes R2.6 and R2. W11 is expected to fail until R4.7 builds the arrival model.
 
