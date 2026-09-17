@@ -43,9 +43,11 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
 
     /// <summary>Ownership claim. Establishment is the atproto gate: the verified sign-in DID must
     /// satisfy the configured pin, and its holder becomes the space owner participant.</summary>
-    public async Task<ServerSettings> Claim(string actorId, string? verifiedAtprotoDid, bool humanDeclaration, CancellationToken ct)
+    /// <summary>Establishes the Space and its accountable human owner. The declaring act is the
+    /// caller's: naming the first Tangent. Accountability itself is enforced below, by
+    /// RequireDeclaration, not by a flag the caller passes.</summary>
+    public async Task<ServerSettings> Claim(string actorId, string? verifiedAtprotoDid, CancellationToken ct)
     {
-        if (!humanDeclaration) throw new InvalidOperationException("A humanDeclaration is required.");
         ServerSettings result;
         await gate.Enter(ct);
         try

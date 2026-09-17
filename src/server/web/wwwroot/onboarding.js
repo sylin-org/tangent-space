@@ -19,30 +19,6 @@
     catch (error) { text('onboarding-error', error.message); $('onboarding-error').focus(); }
     finally { buttons.forEach(button => button.disabled = false); }
   }
-  function card(profile) {
-    $('owner-confirmation').dataset.profileDid = profile.did || '';
-    const name = profile.displayName?.trim();
-    text('owner-greeting', name ? `Welcome, ${name}!` : 'Welcome!');
-    text('owner-display-name', name || (profile.handle ? '@' + profile.handle : 'Your Atmosphere account'));
-    text('owner-handle', profile.handle ? '@' + profile.handle : profile.did);
-    text('owner-bio', profile.description);
-    $('owner-bio').hidden = !profile.description;
-    text('owner-did', profile.did);
-    const avatar = $('owner-avatar');
-    avatar.hidden = true;
-    $('owner-avatar-fallback').hidden = false;
-    if (profile.avatar) {
-      avatar.onload = () => { avatar.hidden = false; $('owner-avatar-fallback').hidden = true; };
-      avatar.onerror = () => { avatar.hidden = true; $('owner-avatar-fallback').hidden = false; };
-      avatar.src = profile.avatar;
-    }
-    text('owner-profile-status', profile.status === 'loading' ? 'Fetching your profile…'
-      : profile.status === 'unavailable' ? 'Your account is connected. Its profile details aren’t available right now.' : '');
-  }
-  window.addEventListener('tangent:profile', event => {
-    if (current?.onboarding === 'confirm_owner' && current.participant?.did === event.detail.did)
-      card({ ...event.detail, handle: current.participant.handle });
-  });
   // Starting points, not templates: each one fills the two fields and leaves them editable.
   const starters = [
     { name: 'The Gateway', description: 'Open to anyone who finds their way here. Introductions, questions, and where to go next.' },
@@ -139,32 +115,19 @@
       if (state === 'sign_in') {
         text('anonymous-title', 'Welcome to your own Tangents.');
         text('anonymous-copy', 'A home for your people, your companions, and the conversations you want to keep.');
-        text('note-unestablished', 'Sign in with your Atmosphere account. You’ll confirm this server’s owner next.');
+        text('note-unestablished', 'Sign in with your Atmosphere account. You’ll name your first Tangent next.');
         text('sign-in-button', 'Log in with Bluesky');
-        text('sign-in-hint', 'Choose your account on Bluesky. You’ll confirm it here before becoming the owner.');
+        text('sign-in-hint', 'Choose your account on Bluesky. That account becomes this server’s owner.');
         return true;
       }
       $('state-signed-in').hidden = true;
       $('onboarding').hidden = false;
-      $('owner-confirmation').hidden = state !== 'confirm_owner';
       $('first-tangent').hidden = state !== 'create_tangent';
       $('owner-waiting').hidden = state !== 'waiting_owner';
-      if (state === 'confirm_owner') {
-        card({ ...site.participant, status: 'loading' });
-        const did = site.participant.did;
-        fetch('/api/participants/me/profile', { credentials: 'same-origin', cache: 'no-store' })
-          .then(response => { if (!response.ok) throw new Error(); return response.json(); })
-          .then(profile => { if (current.participant?.did === did && profile.did === did) card(profile); })
-          .catch(() => { if (current.participant?.did === did) card({ ...site.participant, status: 'unavailable' }); });
-      }
       if (state === 'create_tangent') { choices(); preview(); }
       return true;
     }
   };
-  $('confirm-owner').addEventListener('click', () => perform(async () => {
-    await send('/api/server/claim', { humanDeclaration: true });
-    location.assign('/onboarding/');
-  }));
   $('first-tangent-form').addEventListener('input', preview);
   async function finish(skip) {
     await send('/api/onboarding/tangent', { skip, name: $('first-tangent-name').value.trim(), description: $('first-tangent-description').value.trim(), artwork: $('first-tangent-artwork').value });

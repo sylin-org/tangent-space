@@ -9,8 +9,8 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R2 — Rename to the product's words |
 | Current task | R2.6 — wipe and verify (`waiting` on Leo for the walkthrough). The wipe itself is done |
-| Next action | **Walkthrough W1–W11 with Leo on the fresh install**, which closes R2.6 and R2. The install is unclaimed, so W1 starts at the claim; the connector needs `forget` then Connect (N-056). After that, R3 begins with R3.1's design note. Two things still owed: the `probes/` question (N-047) and push authorization |
-| Last checkpoint | 2026-09-16 · S-004 · R2.6's wipe is done and the install is fresh. The walkthrough found its first defect at the owner claim and it is fixed (N-059): first sign-in never subscribed to the profile announcement |
+| Next action | **Walkthrough W1–W11 with Leo on the fresh install**, which closes R2.6 and R2. The install is unclaimed, so W1 starts at the claim — which is now the first-Tangent press itself (D16), not a screen before it; the connector needs `forget` then Connect (N-056). After that, R3 begins with R3.1's design note. Two things still owed: the `probes/` question (N-047) and push authorization |
+| Last checkpoint | 2026-09-17 · S-005 · The first-run flow is what Leo asked for: starting points and cover art on the first Tangent, and the owner confirmation screen removed outright (D16, N-060). Suites green; verified on a `full.bat` install |
 | Durability | Commits at task checkpoints are authorized (D10). **Pushed to `origin/claude/epic-007-realignment` on 2026-09-16**, so the work no longer exists only on this machine |
 | Waiting on | Leo: the W1-W11 walkthrough on the fresh install, which closes R2.6. Nothing else |
 | Blockers | None. The stranded tables are gone with the wipe, so N-044 is closed |
@@ -98,6 +98,7 @@ Accepted by Leo on 2026-09-15 ("Accept all recommendations"). Details in [EPIC-0
 | D13 | The product's nouns | **Space, Tangent, Topic, Post.** A Space is a Tangent Space — what an operator runs. `Space` replaces the planned `TangentHost`, and R2.1 applies it (N-038) | accepted 2026-09-15 |
 | D14 | The root namespace | **`Tangent`**, with one module per segment: `Tangent.Spaces`, `Tangent.Community`, `Tangent.Conversation`, `Tangent.Identity`, `Tangent.Access`, `Tangent.Activity`, `Tangent.Stewardship`, `Tangent.Api`, `Tangent.Application`, `Tangent.Infrastructure`. This replaces ARCHITECTURE's `Hosting` module with `Spaces`, resolving that row's conflict with D13 by removing the word rather than ruling on it. PascalCase product root, matching Sylin's own Koan (`Koan.Data.Core`), not reverse-DNS. The assembly stays `TangentSpace` (N-051) | accepted 2026-09-16 |
 | D15 | Protocol identifiers | Lowercase reverse-DNS under **`org.sylin.tangent.`** — atproto NSIDs, the enrollment exchange method and the OAuth consent scope that travels with it. `local.` was a placeholder for a lexicon backed by no domain. **R6.2 applies it**, which is the task already obliged to replace `local.tangent.mcp.exchange` because its own rule is no `mcp` names on either side | accepted 2026-09-16 |
+| D16 | The owner's declaring act | **Naming the first Tangent is the claim.** The confirmation screen between sign-in and the first Tangent is removed, not disabled: its endpoint, its request record, its markup, its handler and its CSS are gone, and the always-true `humanDeclaration` flag it existed to pass goes with it. The step it fed carries the ownership sentence and Switch account, so the declaration and the escape survive the screen. Supersession noted on [ADR 0003](../../adr/0003-owner-onboarding.md) | accepted 2026-09-17 |
 
 ## Task board
 
@@ -208,7 +209,7 @@ The wipe is done and the install is fresh, so R2.1's stranded tables are resolve
 
 - [x] Announce, back up (`.local/backups/docker-20260916-175319-423`), wipe, build, launch. Healthy at 5220; the startup log holds only the Data Protection key-encryptor warning and the `HTTP_PORTS` override notice
 - [x] Four suites and the greenfield check on the fresh install: .NET 87/87, browser 7/7, connector 52/52, lifecycle 30/30, greenfield **507**
-- [ ] **Walkthrough W1–W11 with Leo.** The install is unclaimed, so W1 starts from the claim. Every atproto sign-in is Leo's; Claude never enters credentials. The connector needs `forget` then Connect, because its `state.json` predates R2.5's field renames (N-056)
+- [ ] **Walkthrough W1–W11 with Leo.** The install is unclaimed, so W1 starts from the claim, which is now the first-Tangent press itself (D16). Every atproto sign-in is Leo's; Claude never enters credentials. The connector needs `forget` then Connect, because its `state.json` predates R2.5's field renames (N-056)
 - [ ] Metrics and CURRENT_STATE updated once the walkthrough passes
 
 Check command: `Invoke-WebRequest http://127.0.0.1:5220/health/ready`, then the four suites and `pwsh scripts/check-greenfield.ps1`.
@@ -506,6 +507,8 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 
   Leo's framing is what located it: log in triggers capture, the read resolves on a default, and the SSE announces arrival. Three of those four were already built; the missing one was the subscription, and looking for *which step of that sequence was absent* found it faster than reading the rendering path did.
 
+- **N-060** (R2.6 walkthrough) **The confirmation screen is gone, and so is everything that only existed for it.** Leo: it is unnecessary — after a first sign-in, accept the user and move to the first Tangent; then, "fully remove the interstitial, don't just abandon it. Greenfield app, too early to start accumulating tech debt." Removed: `POST /api/server/claim` (404 now, not 401 — gone, not guarded), `ClaimRequest`, the `#owner-confirmation` markup, its click handler, its `tangent:profile` listener, its `card()` builder, 18 dead CSS rules, an orphaned `using`, and `ServerGovernance.Claim`'s `humanDeclaration` parameter with its unreachable guard — the flag had one caller passing one value, and the accountability it named is enforced by `RequireDeclaration` regardless. The welcome answers `create_tangent` where it answered `confirm_owner`, and `OnboardingController.Finish` claims a claimable Space as part of the same press. Two traces outlived the code and were found by reading the copy, not the compiler: the sign-in step still promised "You’ll confirm this server’s owner next" in both its static markup and its JavaScript. **Removal is not done when it compiles; it is done when nothing still says the removed thing is coming.** ADR 0003 carries the supersession; CURRENT_STATE's dated section and the EPICS handoff still describe the two-step flow and stay with R6.6 per N-011, which is what those documents are for. Separately, the nav avatar stayed blank through onboarding: it decorated off `tangent:welcome`, which that route never dispatches, so `pages.js` now wires the mark from the same profile stream as the handle beside it. `dotnet test` 87/87; `node --test` 7/7; verified on a `full.bat` install.
+
 - **N-058** (R2.6) The `Connector vocabulary` rule now reports **9 false positives** and no real findings: stage 4 renamed `identityId` to `companionId`, which the rule still lists as retired from the days when it meant an enrollment. The code is right and the rule is stale. It is recorded rather than fixed, because N-057 froze the rules mid-epic and the first thing that happened afterwards was a temptation to widen one again. **R6.6 owns it**, together with the `-Strict` pass it blocks.
 
   Three smaller things the work turned up. `CompanionGovernance`'s class doc still described "the inbound MCP boundary", which R1.1 deleted — rewritten. `CarpaNet.Identity` was imported by the original file and used by none of it; each of the six files now carries only the usings the compiler proves it needs. And `TangentRole`'s comment mixed a real storage invariant with its own history — the invariant (`Member=0` and `Removed=1` are fixed) is kept, the history is gone. One `companion` remains in server C#: the problem code `"companion_unavailable"`, which the connector emits from `SelectCompanion` and `Arrive`. **R3.10 deletes both tools, and this entry should go with them.**
@@ -567,6 +570,16 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - R2.3 (`fc133d1`): 181 files into ten `Tangent.<Module>` namespaces; `Mcp/` gone. The predicted collision behaved; four unpredicted ones did not, and the costliest would have been silent — `SetApplicationName(nameof(TangentSpace))` scopes every Data Protection payload, so the rename would have signed out every participant as a side effect of moving folders (N-052).
 - Greenfield across the session: **1,496 → 720**. Every suite green throughout.
 - Next: R2.4, the wire — and the first task that must change the browser, where R1.15 left no suite to catch a mistake.
+
+### S-005 · 2026-09-17 · Claude (Opus 5)
+
+- R2.4, R2.5 and R2.6 landed; the wipe cleared the stranded tables (N-044) and the install is fresh and healthy.
+- The walkthrough found its first defect immediately: first sign-in showed "Fetching your profile…" forever. Leo named the shape of the fix before I did — capture on sign-in, answer `/me` from a default, let SSE announce the real profile — and the server already did all three. Nothing subscribed (N-059). Proved by reproduction, which needed `full.bat`.
+- `full.bat`, at Leo's request: one prompt-free wipe → build → launch → open, no backup, for serial deploy tests.
+- The first Tangent became a page worth arriving on: five starting points, a Clear, and eight cover squares spanning the collection one mood at a time.
+- **D16, and the lesson in it.** Leo: the confirmation screen is unnecessary; then, when I had only stopped routing to it — "fully remove the interstitial, don't just abandon it. Greenfield app, too early to start accumulating tech debt." Removing it properly took an endpoint, a record, a parameter, a guard, a handler, a listener, 18 CSS rules and an orphaned using — and then two lines of copy still promising the screen, which no compiler was ever going to find (N-060).
+- Every suite green throughout: .NET 87/87, node 7/7.
+- Next: the W1–W11 walkthrough with Leo on the fresh install, which closes R2.6 and R2. W11 is expected to fail until R4.7 builds the arrival model.
 
 ## Evidence index
 

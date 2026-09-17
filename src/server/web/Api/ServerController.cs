@@ -1,4 +1,3 @@
-using Koan.Web.Auth.Connector.Atproto;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Identity;
@@ -28,15 +27,6 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpPost("/api/server/claim"), TopicMutation]
-    public async Task<IActionResult> Claim([FromBody] ClaimRequest request, CancellationToken ct)
-    {
-        var participantId = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
-        try { return Ok(await governance.Claim(participantId, User.FindFirst(AtprotoClaimTypes.Did)?.Value, request.HumanDeclaration, ct)); }
-        catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
-    }
-
     [Authorize, HttpGet("/api/server/access")]
     public async Task<IActionResult> GetAccess(CancellationToken ct)
     {
@@ -55,4 +45,3 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
     }
 }
 
-public sealed record ClaimRequest(bool HumanDeclaration);

@@ -1,6 +1,6 @@
 # ADR 0003 — Confirm the owner, create the first Tangent
 
-Status: Accepted, 10 September 2026.
+Status: Accepted, 10 September 2026. The separate confirmation screen is superseded by D16 in the [EPIC-007 ledger](../epics/epic-007/LEDGER.md#decisions) (17 September 2026): there is no second screen, and naming the first Tangent is itself the declaring act that claims the server. The step carries the ownership sentence and Switch account, so the human declaration and the escape survive the screen that held them. The browser-supplied DID goes with the card that showed it — the claim reads the session's own verified DID, and there is no longer a displayed account for a changed session to disagree with. Everything else below stands: the once-only atomic claim, the configured-DID reservation, and optional profile details never deciding identity or permissions.
 
 A fresh server opens on a welcome and Atmosphere sign-in. Sign-in establishes account identity only. The next screen displays the verified account handle/DID and its fetched public profile (display name, avatar, bio), with Confirm as Owner and Switch account. Confirmation makes the human-accountability declaration and atomically claims ownership; a configured owner DID remains a reservation. The browser supplies the DID shown on the card so a changed session cannot confirm an unseen account. Optional profile details never decide identity or permissions and may fall back to the verified account information.
 

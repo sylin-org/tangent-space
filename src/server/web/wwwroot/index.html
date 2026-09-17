@@ -9,7 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/app.css?v=20260912-polish1">
   <link rel="stylesheet" href="/rooms.css?v=20260915-inline2">
-  <link rel="stylesheet" href="/onboarding.css?v=20260916-first-tangent">
+  <link rel="stylesheet" href="/onboarding.css?v=20260916-owner-in-one-step">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
   <link rel="stylesheet" href="/landing.css?v=20260913-roles5">
   <link rel="stylesheet" href="/access.css?v=20260914-access5">
@@ -17,8 +17,8 @@
   <link rel="stylesheet" href="/atmosphere.css?v=20260915-inline1">
   <script src="/ascii-scenes.js?v=20260912-live1" defer></script>
   <script src="/atmosphere.js?v=20260915-inline1" defer></script>
-  <script src="/pages.js?v=20260913-spa4" defer></script>
-  <script src="/onboarding.js?v=20260916-first-tangent" defer></script>
+  <script src="/pages.js?v=20260916-owner-in-one-step" defer></script>
+  <script src="/onboarding.js?v=20260917-owner-in-one-step" defer></script>
   <script src="/app.js?v=20260913-spa2" defer></script>
   <script src="/activity-transport.js?v=20260912-shared2" defer></script>
   <script src="/activity-coordinator.js?v=20260912-shared2" defer></script>
@@ -182,7 +182,7 @@
         <div class="onboarding-layout">
           <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">Conversation has a home here.</h1>
             <p class="lede" id="anonymous-copy">A home for your people, your companions, and the conversations you want to keep.</p>
-            <p class="note" id="note-unestablished" hidden>Sign in with your Atmosphere account. You’ll confirm this server’s owner next.</p>
+            <p class="note" id="note-unestablished" hidden>Sign in with your Atmosphere account. You’ll name your first Tangent next.</p>
             <form id="sign-in-form" method="get" class="sign-in">
               <input type="hidden" name="return" value="/"><button type="submit" class="btn btn-primary" id="sign-in-button">Log in with Bluesky <span aria-hidden="true">→</span></button>
             </form>
@@ -200,31 +200,15 @@
       </section>
 
       <section id="onboarding" hidden aria-label="Make this place yours">
-        <div id="owner-confirmation" class="onboarding-layout" hidden>
-          <div class="onboarding-copy"><p class="eyebrow"><span class="step-count">01 / 02</span> Your account</p><h1 id="owner-greeting">Welcome!</h1>
-            <p class="lede">This account will own your Tangent server.</p><p class="hint">You’ll choose who can create Tangents and help look after the place. As its human owner, you’re responsible for this server.</p>
-          </div>
-          <div class="owner-actions">
-            <div class="onboarding-actions"><button id="confirm-owner" class="btn btn-primary" type="button">Confirm as Owner</button></div>
-            <div class="owner-switch">Not the account you intended? <form action="/auth/logout" method="post" class="switch-account"><input type="hidden" name="return" value="/onboarding/"><button type="submit">Switch account</button></form></div>
-
-          </div>
-          <aside class="owner-card" aria-label="Your connected account">
-            <div class="owner-avatar-wrap"><span id="owner-avatar-fallback" class="owner-avatar owner-avatar-fallback" aria-hidden="true">✦</span><img id="owner-avatar" class="owner-avatar" alt="Your account avatar" referrerpolicy="no-referrer" hidden></div>
-            <h2 id="owner-display-name"></h2><p id="owner-handle" class="handle"></p><p id="owner-bio" class="bio" hidden></p>
-            <span class="owner-label">Server Owner</span><p id="owner-profile-status" class="hint" role="status"></p>
-            <details><summary>Account details</summary><code id="owner-did"></code></details>
-          </aside>
-        </div>
         <div id="first-tangent" class="onboarding-layout" hidden>
-          <div class="onboarding-copy"><p class="eyebrow"><span class="step-count">02 / 02</span> Your first Tangent</p><h1>This place is yours.</h1><p class="lede">Give your first Tangent a name.</p>
+          <div class="onboarding-copy"><p class="eyebrow">Your first Tangent</p><h1>This place is yours.</h1><p class="lede">Give your first Tangent a name.</p><p class="hint">This makes you the owner of this server, and its accountable human: you decide who can create Tangents and help look after the place.</p>
             <form id="first-tangent-form" class="stack"><div class="onboarding-choices"><p class="field-label" id="first-tangent-presets-label">Start from one of these <span class="field-note">Optional</span></p><div id="first-tangent-presets" class="choice-row" role="group" aria-labelledby="first-tangent-presets-label"></div></div>
               <label for="first-tangent-name">Name<input class="input" id="first-tangent-name" name="name" maxlength="120" required placeholder="Small Hours" autocomplete="off"></label>
               <label for="first-tangent-description"><span class="field-label">A short description <span class="field-note">Optional</span></span><textarea class="input" id="first-tangent-description" name="description" rows="2" maxlength="1000" placeholder="What would you like to talk about?"></textarea></label>
               <div class="onboarding-choices"><p class="field-label" id="first-tangent-art-label">Card artwork <span class="field-note">Optional</span></p><div id="first-tangent-art" class="art-row" role="group" aria-labelledby="first-tangent-art-label"></div><input type="hidden" id="first-tangent-artwork" name="artwork" value=""></div>
               <p class="hint">You can make more Tangents later. Change these details anytime.</p>
               <div class="onboarding-actions"><button class="btn btn-primary" type="submit">Create Tangent</button><button id="skip-first-tangent" class="btn btn-quiet" type="button">Skip for now</button></div>
-              <p class="hint">Skip creates “My Tangent”. You can rename it later.</p>
+              <p class="hint">Skip creates “My Tangent”. You can rename it later.</p><div class="owner-switch">Not the account you intended? <form action="/auth/logout" method="post" class="switch-account"><input type="hidden" name="return" value="/onboarding/"><button type="submit">Switch account</button></form></div>
             </form>
           </div>
           <aside class="onboarding-preview" aria-label="Your Tangent card preview">

@@ -101,7 +101,15 @@
       name.dataset.profileFallback = 'Your account';
       delete name.dataset.profileVersion;
       $('nav-account-handle').textContent = person.handle ? '@' + person.handle.replace(/^@/, '') : '';
-      $('nav-account-mark').textContent = (person.handle || 'You').slice(0, 1).toUpperCase();
+      // The mark decorates from the same stream as the name beside it. Wiring it here rather
+      // than off tangent:welcome is what makes it appear during onboarding, where that event
+      // is never dispatched.
+      const mark = $('nav-account-mark');
+      mark.textContent = (person.handle || 'You').slice(0, 1).toUpperCase();
+      mark.dataset.profileDid = person.did || '';
+      mark.dataset.profilePart = 'avatar';
+      mark.dataset.profileFallback = person.handle || 'You';
+      delete mark.dataset.profileVersion;
       $('nav-profile').href = '/u/' + encodeURIComponent(person.did || 'tangent:local:' + person.participantRef);
       $('nav-account-role').textContent = person.isOwner ? 'Server owner' : 'Signed in';
       $('nav-sign-out').hidden = !site.signOut;

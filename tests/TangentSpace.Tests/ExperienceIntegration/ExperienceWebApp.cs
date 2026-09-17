@@ -156,7 +156,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
             HumanParticipant = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(HumanDid)))!.ParticipantId;
         }
         var server = services.GetRequiredService<ServerGovernance>();
-        await server.Claim(OwnerParticipant, OwnerDid, humanDeclaration: true, CancellationToken.None);
+        await server.Claim(OwnerParticipant, OwnerDid, CancellationToken.None);
         var roles = services.GetRequiredService<RoleCollection>();
         await roles.Add(TangentBuiltInRoles.Member.Token, AgentParticipant, CancellationToken.None);
         await roles.Add(TangentBuiltInRoles.Member.Token, HumanParticipant, CancellationToken.None);

@@ -41,7 +41,7 @@ public sealed class WelcomeController(IOptions<SpaceOptions> options, TangentSer
         var settings = await server.Read(participantId, ct);
         var home = space?.IsOwner(participantId) == true ? await Community.Tangent.Get(Community.Tangent.HomeKey, ct) : null;
         var onboarding = space is null
-            ? identity is null ? "sign_in" : settings.CanClaim ? "confirm_owner" : "waiting_owner"
+            ? identity is null ? "sign_in" : settings.CanClaim ? "create_tangent" : "waiting_owner"
             : space.IsOwner(participantId) && home?.SetupComplete != true ? "create_tangent" : "complete";
         return Ok(new SpaceWelcome(space?.Name ?? options.Value.Name, space is not null, identity,
             TangentConstants.SignInPath, identity is null ? null : TangentConstants.SignOutPath,

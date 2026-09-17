@@ -306,7 +306,7 @@ public sealed class EnrollmentTests
         var companions = fixture.Host.Services.GetRequiredService<ParticipantGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<OperationReceipts>();
         var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
-        await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
+        await server.Claim(await Pid(owner), owner, CancellationToken.None);
         await tangents.Create(await Pid(owner), "atomic-invites", "Atomic invitations", null, null, null, null, CancellationToken.None);
         var ownerId = await Pid(owner);
         await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", ownerId, "invite-once", async () =>
@@ -342,7 +342,7 @@ public sealed class EnrollmentTests
         var companions = fixture.Host.Services.GetRequiredService<ParticipantGovernance>();
         var requests = fixture.Host.Services.GetRequiredService<OperationReceipts>();
         var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
-        await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
+        await server.Claim(await Pid(owner), owner, CancellationToken.None);
         await tangents.Create(await Pid(owner), "atomic-rollback", "Atomic rollback", null, null, null, null, CancellationToken.None);
         var rollbackOwner = await Pid(owner);
         await Assert.ThrowsAsync<IOException>(() => requests.Run<int>("runtime", rollbackOwner, "failed-invite", async () =>
@@ -376,10 +376,10 @@ public sealed class EnrollmentTests
             var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
             await arrival.Enter(first, "first.test", CancellationToken.None);
             await arrival.Enter(second, "second.test", CancellationToken.None);
-            await server.Claim(await Pid(first), first, humanDeclaration: true, CancellationToken.None);
+            await server.Claim(await Pid(first), first, CancellationToken.None);
             var secondId = await Pid(second);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                server.Claim(secondId, second, humanDeclaration: true, CancellationToken.None));
+                server.Claim(secondId, second, CancellationToken.None));
             using (EntityContext.NoCache())
                 Assert.Equal(await Pid(first), (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
         }
@@ -391,7 +391,7 @@ public sealed class EnrollmentTests
             await arrival.Enter(second, "second.test", CancellationToken.None);
             var returningId = await Pid(second);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                server.Claim(returningId, second, humanDeclaration: true, CancellationToken.None));
+                server.Claim(returningId, second, CancellationToken.None));
             using (EntityContext.NoCache())
                 Assert.Equal(await Pid(first), (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
         }
@@ -409,7 +409,7 @@ public sealed class EnrollmentTests
             var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
             var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
             await arrival.Enter(owner, null, CancellationToken.None);
-            await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
+            await server.Claim(await Pid(owner), owner, CancellationToken.None);
         }
         // Configuration cannot transfer persisted ownership: a restart pinning another
         // account's DID fails the boot-time configured-owner check and the host refuses to start.
@@ -430,7 +430,7 @@ public sealed class EnrollmentTests
             await arrival.Enter(did, null, CancellationToken.None);
             try
             {
-                await server.Claim((await Pid(did)), did, humanDeclaration: true, CancellationToken.None);
+                await server.Claim((await Pid(did)), did, CancellationToken.None);
                 return true;
             }
             catch (InvalidOperationException) { return false; }
@@ -457,11 +457,11 @@ public sealed class EnrollmentTests
         await arrival.Enter("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", null, CancellationToken.None);
         var visitorId = await Pid("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb");
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            server.Claim(visitorId, "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", humanDeclaration: true, CancellationToken.None));
+            server.Claim(visitorId, "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", CancellationToken.None));
         using (EntityContext.NoCache())
             Assert.Null(await Space.Get(TangentConstants.SpaceId, CancellationToken.None));
         await arrival.Enter(owner, null, CancellationToken.None);
-        await server.Claim(await Pid(owner), owner, humanDeclaration: true, CancellationToken.None);
+        await server.Claim(await Pid(owner), owner, CancellationToken.None);
         using (EntityContext.NoCache())
             Assert.Equal(await Pid(owner), (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
     }
