@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/rooms.css?v=20260915-inline2">
   <link rel="stylesheet" href="/onboarding.css?v=20260916-owner-in-one-step">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
-  <link rel="stylesheet" href="/landing.css?v=20260913-roles5">
+  <link rel="stylesheet" href="/landing.css?v=20260917-people1">
   <link rel="stylesheet" href="/access.css?v=20260914-access5">
   <link rel="stylesheet" href="/moderation.css?v=20260915-inline1">
   <link rel="stylesheet" href="/atmosphere.css?v=20260915-inline1">
@@ -25,8 +25,9 @@
   <script src="/moderation.js?v=20260915-inline1" defer></script>
   <script src="/inline-confirm.js?v=20260915-inline1" defer></script>
   <script src="/rooms.js?v=20260915-inline1" defer></script>
-  <script src="/roles.js?v=20260914-roles8" defer></script>
-  <script src="/access.js?v=20260914-access5" defer></script>
+  <script src="/roles.js?v=20260917-people3" defer></script>
+  <script src="/people.js?v=20260917-people1" defer></script>
+  <script src="/access.js?v=20260917-people3" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260913-spa2" defer></script>
@@ -70,6 +71,7 @@
             <button id="settings-context-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-context-panel" aria-selected="false" data-settings-tab="context" hidden><span aria-hidden="true">&#9671;</span><span><strong id="settings-context-label">Tangent</strong><small>Identity and details</small></span></button>
             <button id="settings-roles-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-roles-panel" aria-selected="false" data-settings-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Permissions and people</small></span></button>
             <button id="settings-access-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-access-panel" aria-selected="false" data-settings-tab="access"><span aria-hidden="true">&#9670;</span><span><strong>Access</strong><small>Who can see and act</small></span></button>
+            <button id="settings-people-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-people-panel" aria-selected="false" data-settings-tab="people"><span aria-hidden="true">&#9673;</span><span><strong>People</strong><small>Everyone who has arrived</small></span></button>
           </nav>
           <div class="settings-tab-content">
             <section id="settings-server-panel" role="tabpanel" aria-labelledby="settings-server-tab">
@@ -157,6 +159,12 @@
                   </form>
                 </div>
               </section>
+            </section>
+            <section id="settings-people-panel" role="tabpanel" aria-labelledby="settings-people-tab" hidden>
+              <header class="roles-heading"><div><p class="eyebrow">WHO IS HERE</p><h2>People</h2><p>Everyone who has arrived on this server, newest last. Roles are granted on the Roles tab.</p></div></header>
+              <div id="people-list" class="people-list"></div>
+              <p id="people-status" class="hint" role="status">Loading people…</p>
+              <button id="people-more" class="btn btn-quiet" type="button" hidden>Show more</button>
             </section>
             <section id="settings-access-panel" class="access-panel" role="tabpanel" aria-labelledby="settings-access-tab" hidden>
               <header class="access-heading"><div><p class="eyebrow">A CLEAR DOOR</p><h2>Access</h2><p id="access-intro">Choose who can discover this place and what they may do here.</p></div><span id="access-scope-badge" class="access-scope-badge"></span></header>

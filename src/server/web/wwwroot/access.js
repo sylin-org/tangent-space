@@ -244,7 +244,7 @@
     const signature = contextSignature(context); if (!site?.participant) { $('settings-shell').hidden = true; return; }
     try { const resource = await resourceFor(context); if (token !== openToken || signature !== contextSignature(contextFor(route()))) return;
       if (!resource.canManage) throw new Error('Your current role cannot change settings here.'); configureShell(context, resource);
-      const requested = new URL(location.href).searchParams.get('tab'); tab(requested === 'access' ? 'access' : context.kind === 'server' && requested === 'roles' ? 'roles' : context.kind === 'server' ? 'server' : 'context');
+      tab(window.TangentSettingsTabs.requested(context.kind));
       document.title = context.title + ' · ' + resource.name + ' · Tangent Space';
     } catch (error) { if (token !== openToken || signature !== contextSignature(contextFor(route()))) return;
       $('settings-shell').hidden = true; $('settings-denied').hidden = false; $('settings-denied').textContent = error.message || 'These settings are not available.'; }

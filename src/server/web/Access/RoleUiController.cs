@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
-using Tangent.Identity;
 using Tangent.Spaces;
 
 namespace Tangent.Access;
@@ -29,7 +28,7 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
     [HttpGet("descriptor")]
     public async Task<ActionResult<object>> Descriptor(CancellationToken ct)
     {
-        if (!await IsOwner(ct)) return Forbid();
+        if (!await SpaceOwnership.IsOwner(User, ct)) return Forbid();
         return Ok(new
         {
             Capabilities = TangentPermissions.Catalog.Select(permission => new
@@ -44,7 +43,7 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
     [HttpGet("resolve")]
     public async Task<ActionResult<object>> Resolve([FromQuery] string identifier, CancellationToken ct)
     {
-        if (!await IsOwner(ct)) return Forbid();
+        if (!await SpaceOwnership.IsOwner(User, ct)) return Forbid();
         if (string.IsNullOrWhiteSpace(identifier) || identifier.Length > 256)
             return BadRequest(new { error = "Enter one handle, DID, or participant identifier." });
         var match = await directory.ByIdentifier(identifier, ct);
@@ -67,7 +66,7 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
     [HttpGet("participants")]
     public async Task<ActionResult<object>> Participants([FromQuery(Name = "id")] string[] ids, CancellationToken ct)
     {
-        if (!await IsOwner(ct)) return Forbid();
+        if (!await SpaceOwnership.IsOwner(User, ct)) return Forbid();
         var window = ids.Where(Participant.IsValidId).Distinct(StringComparer.Ordinal).Take(ParticipantWindow + 1).ToArray();
         if (window.Length > ParticipantWindow) return BadRequest(new { error = $"Request at most {ParticipantWindow} participants." });
         var people = await Task.WhenAll(window.Select(async id =>
@@ -85,12 +84,4 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
         return Ok(people);
     }
 
-    private async Task<bool> IsOwner(CancellationToken ct)
-    {
-        string actor;
-        try { actor = ParticipationAccess.Require(User, ParticipationGrants.Manage); }
-        catch (UnauthorizedAccessException) { return false; }
-        var space = await Space.Get(TangentConstants.SpaceId, ct);
-        return space?.IsOwner(actor) == true;
-    }
 }

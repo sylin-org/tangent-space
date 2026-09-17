@@ -6,6 +6,9 @@ using Xunit;
 
 namespace Tangent.Tests.ExperienceIntegration;
 
+// Shares the serialized collection with every other integration class: these fixtures stand up
+// a real host over shared state, and two of them at once corrupt each other's transactions.
+[Xunit.Collection("Experience integration")]
 public sealed class AccessSettingsTests
 {
     [Fact]

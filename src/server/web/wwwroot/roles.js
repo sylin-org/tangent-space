@@ -128,8 +128,20 @@
     history[mode + 'State'](state, '', url.pathname + url.search + url.hash);
   }
 
+  // Which tab the URL asks for, or the one this context opens on. Stated once on purpose:
+  // this decision used to live here *and* in access.js with two different lists, so a tab
+  // added to one was silently clicked shut by the other the moment both ran.
+  function requestedTab(contextKind) {
+    const requested = new URL(location.href).searchParams.get('tab');
+    const fallback = contextKind === 'server' ? 'server' : 'context';
+    if (!requested) return fallback;
+    if (requested === 'access') return 'access';
+    // Roles and People describe the server itself, so they mean nothing in a Tangent or Topic.
+    return contextKind === 'server' && ['roles', 'people'].includes(requested) ? requested : fallback;
+  }
+
   function settingsTab(name, updateUrl = true) {
-    if (!['server', 'context', 'roles', 'access'].includes(name)) name = 'server';
+    if (!['server', 'context', 'roles', 'access', 'people'].includes(name)) name = 'server';
     document.querySelectorAll('[data-settings-tab]').forEach(button => {
       const active = button.dataset.settingsTab === name;
       button.setAttribute('aria-selected', String(active));
@@ -139,6 +151,7 @@
     $('settings-context-panel').hidden = name !== 'context';
     $('settings-roles-panel').hidden = name !== 'roles';
     $('settings-access-panel').hidden = name !== 'access';
+    $('settings-people-panel').hidden = name !== 'people';
     if (updateUrl) {
       const url = new URL(location.href);
       if (name !== 'server' && name !== 'context') url.searchParams.set('tab', name);
@@ -146,6 +159,7 @@
       history.replaceState({ ...(history.state || {}), tangentRoleEditor: false }, '', url.pathname + url.search + url.hash);
     }
     if (name === 'roles' && !(dirty && selected)) loadScope();
+    if (name === 'people') window.TangentPeople?.load?.();
     window.TangentAccess?.activate?.(name);
   }
 
@@ -701,9 +715,7 @@
     const owner = site?.participant?.isOwner === true;
     $('settings-shell').hidden = !owner;
     if (!owner) return;
-    const requested = new URL(location.href).searchParams.get('tab');
-    const initial = requested === 'roles' || requested === 'access' ? requested : 'server';
-    settingsTab(initial, false);
+    settingsTab(requestedTab('server'), false);
   }
 
   document.querySelectorAll('[data-settings-tab]').forEach(button => {
@@ -756,6 +768,7 @@
   $('role-members-previous').addEventListener('click', event => changeMemberPage(-1, event.currentTarget).catch(error => message('role-members-status', error.message, true)));
   $('role-members-next').addEventListener('click', event => changeMemberPage(1, event.currentTarget).catch(error => message('role-members-status', error.message, true)));
   $('role-member-profiles-retry').addEventListener('click', event => retryMemberProfiles(event.currentTarget).catch(error => message('role-members-status', error.message, true)));
+  window.TangentSettingsTabs = { requested: requestedTab };
   window.addEventListener('tangent:welcome', event => openFor(event.detail));
   window.addEventListener('tangent:route', event => openFor(event.detail));
   window.addEventListener('popstate', syncRoleHistory);
