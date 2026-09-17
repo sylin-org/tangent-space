@@ -120,4 +120,32 @@ Newest last. Each entry: what I did, what happened, what it means for a resumer.
   take; once R3.4 makes membership authoritative it would silently have become real.
 - **[9] Ledger updated:** N-063 written; R4.7's row notes that the owner's side of the door now
   exists and that it should treat both sides as one door; Resume here checkpointed.
-- **[10] Next: commit + push, then final report.**
+- **[10] Committed and pushed as `4d883ce`.** Working tree clean, branch level with origin.
+
+## Session complete — state as left
+
+**Everything is committed and pushed. Nothing is half-done.**
+
+- Branch `claude/epic-007-realignment` at `4d883ce`, clean, pushed.
+- Install healthy at `http://127.0.0.1:5220`, serving this build, claimed by Leo.
+- Suites: **.NET 90/90, node 7/7, connector 52/52**. Greenfield **508**, unchanged.
+- Install state: Tangent `home` ("Projects"), Topic `open-questions` (Public, 33 posts, one
+  edited, one removed), participants Leo (owner) and Lumen (no roles). **No orphaned
+  membership row** — the install is clean for W11 whenever R4.7 lands.
+- DB backup from before the row deletion: `.local/backups/sqlite-20260917-011042-tangent.sqlite`.
+
+### What is still open, and who it belongs to
+
+| Item | Owner | Note |
+|---|---|---|
+| The join reports `ok` and grants nothing | **R3.4** | Diagnosed to `TangentGovernance.cs:49`. Do **not** point-fix: `Member` is a role D12 deletes. N-030 and N-063 carry the reasoning |
+| W5 — enrol the agent | **Leo** | `tangent-connector.exe forget`, then Connect (N-056). An atproto sign-in, so never Claude's |
+| W4, W6, W8's live bar | blocked by W5 | All three need a second author; the server is right to refuse a faked one |
+| W11 — stranger arrives | **R4.7** | n/a until the newcomer's side of the door exists |
+
+### If you are a new session resuming this
+
+1. `git log --oneline -8` and `git status --short` — reality first, this file second.
+2. Read [docs/epics/epic-007/LEDGER.md](docs/epics/epic-007/LEDGER.md) **Resume here**, then
+   N-061, N-062, N-063 — they carry the findings in full and outlive this file.
+3. This file is disposable once R2.6 closes. The ledger is not.
