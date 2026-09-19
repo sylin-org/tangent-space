@@ -12,10 +12,6 @@ $targets = 'src/server/web', 'tests', 'scripts', 'compose.yaml', 'Dockerfile' | 
 $rules = [ordered]@{
     'Inbound MCP transport' = '\bMcp[A-Z]\w*|\bTangentSpace\.Mcp\b'
     'Browser WebMCP'        = '(?i:\bwebmcp\b)'
-    # Narrowed in R2.1 (N-038): every remaining finding is SourceDecision, and the broad
-    # patterns would have reported the product's own new word - a Space is what an operator
-    # runs - as the deleted atproto concept. R3.6 removes SourceDecision and this rule with it.
-    'Spaces storage'        = '\bSpaceUri\b|\bWriteIntent\b|\bSourceNotification\w*|\bSourceDecision\b'
     'Change classification' = '\bChangeClass\w*|Koan\.AI\.Connector\.Onnx'
     # Narrowed in R2.4 (N-053): the product's channel vocabulary reached zero, and every remaining
     # match was .NET's System.Threading.Channels, which is not ours to rename. The clause still

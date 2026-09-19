@@ -85,7 +85,7 @@ public sealed partial class ConversationService
         var snapshot = new Post
         {
             Id = Guid.CreateVersion7().ToString(),
-            TopicKey = live.TopicKey, AuthorParticipantId = live.AuthorParticipantId, SourceUri = live.SourceUri, SourceCid = live.SourceCid,
+            TopicKey = live.TopicKey, AuthorParticipantId = live.AuthorParticipantId,
             Sequence = live.Sequence, AcceptedAt = live.AcceptedAt, Content = live.Content, Removed = live.Removed,
             RemovedAt = live.RemovedAt, RemovedByParticipantId = live.RemovedByParticipantId, EditedAt = live.EditedAt,
             Permissions = live.Permissions, OperationId = live.OperationId, Facets = live.Facets,

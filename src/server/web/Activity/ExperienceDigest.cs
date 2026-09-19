@@ -140,10 +140,11 @@ public sealed class ExperienceDigest(
                 if (post.Removed) continue;
                 var authorHandle = handles.GetValueOrDefault(post.AuthorParticipantId);
                 // Direct replies answer this participant's accepted post.
-                if (post.Content.ReplyTo is { } parent)
+                if (post.Content.ReplyTo is { } parentId)
                 {
-                    var decision = await SourceDecision.Get(SourceDecision.Key(topic.Key, parent.Uri, parent.Cid), token);
-                    if (AttentionRules.IsDirectReply(post, decision, did))
+                    var parent = await Post.Get(parentId, token);
+                    if (parent is not null && parent.TopicKey == topic.Key
+                        && AttentionRules.IsDirectReply(post, parent, did))
                     {
                         addressedPosts.Add(post.Id);
                         directed.Add(Item(did, topic, stored.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
@@ -203,7 +204,7 @@ public sealed class ExperienceDigest(
             string.IsNullOrEmpty(authorHandle) ? null : authorHandle, did,
             refs.Topic(tangentKey, topic.Key), refs.Post(tangentKey, topic.Key, post.Id),
             relationship, Preview(post.Content.Text, 160),
-            post.SourceCid ?? "seq:" + post.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "seq:" + post.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "pending");
 
     internal static string Preview(string value, int limit)

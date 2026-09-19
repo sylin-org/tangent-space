@@ -2,7 +2,7 @@ using System.Text;
 
 namespace Tangent.Conversation;
 
-public sealed record PostContent(string Text, DateTimeOffset CreatedAt, SourceReference? ReplyTo)
+public sealed record PostContent(string Text, DateTimeOffset CreatedAt, string? ReplyTo)
 {
     public static void CheckText(string text)
     {

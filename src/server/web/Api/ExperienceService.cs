@@ -246,7 +246,7 @@ public sealed partial class ExperienceService(
         PostContent.CheckText(text);
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         if (!AccessEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) throw new UnauthorizedAccessException();
-        SourceReference? replySource = null;
+        string? replyParent = null;
         if (replyTo is { } reference)
         {
             var target = refs.ParsePost(reference)
@@ -256,17 +256,17 @@ public sealed partial class ExperienceService(
                 throw new RequestArgumentException("replyTo", "Reply to a Post in this Topic.");
             using var fresh = EntityContext.NoCache();
             var anchor = await Post.Get(target.PostId, ct);
-            if (anchor is null || anchor.TopicKey != topicKey)
+            if (anchor is null || anchor.TopicKey != topicKey || anchor.Removed)
                 throw new RequestArgumentException("replyTo", "Reply to a Post in this Topic.");
-            replySource = new SourceReference(anchor.SourceUri, anchor.SourceCid);
+            replyParent = anchor.Id;
         }
         // The requestId is the post's operation id: CreatePost returns the post that id already
         // created (ADR 0007), so a retry heals a lost response instead of doubling the post.
         var operationId = requestId ?? "post-" + Guid.CreateVersion7().ToString("n");
-        var post = await conversation.CreatePost(participantId, topicKey, new PostCreateRequest(operationId, text, replySource, facets), ct);
+        var post = await conversation.CreatePost(participantId, topicKey, new PostCreateRequest(operationId, text, replyParent, facets), ct);
         var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
         var postRef = refs.Post(tangentKey, topicKey, post.Id);
-        var data = new ExperiencePostData(postRef, new ExperienceSource(post.SourceUri, post.SourceCid),
+        var data = new ExperiencePostData(postRef, null,
             refs.Origin + "/tangents/" + tangentKey + "/posts/" + post.Id + "/");
         return await Assemble("create_post", ExperienceStatus.Ok, identity, place,
             new ExperienceResult(data, new ExperienceReceipt(operationId, "completed", postRef, null), null),
@@ -572,9 +572,9 @@ public sealed partial class ExperienceService(
         foreach (var post in window.Messages)
         {
             string? replyTo = null;
-            if (post.Content.ReplyTo is { } parent)
+            if (post.Content.ReplyTo is { } parentId)
             {
-                var projection = (from m in window.Messages where m.SourceUri == parent.Uri select m).FirstOrDefault();
+                var projection = (from m in window.Messages where m.Id == parentId select m).FirstOrDefault();
                 if (projection is not null) replyTo = refs.Post(tangentKey, topicKey, projection.Id);
             }
             posts.Add(new ExperiencePostDto(refs.Post(tangentKey, topicKey, post.Id), post.AuthorParticipantId,

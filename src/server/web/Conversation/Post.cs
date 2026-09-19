@@ -7,8 +7,6 @@ public sealed class Post : Entity<Post>
 {
     public string TopicKey { get; set; } = "";
     public string AuthorParticipantId { get; set; } = "";
-    public string SourceUri { get; set; } = "";
-    public string SourceCid { get; set; } = "";
     public long Sequence { get; set; }
     public DateTimeOffset AcceptedAt { get; set; }
     public PostContent Content { get; set; } = new("", default, null);
@@ -41,9 +39,4 @@ public sealed class Post : Entity<Post>
     /// <summary>Live rows only: the newest changelog snapshot for this post. Null until the first change.</summary>
     public string? ChangeId { get; set; }
 
-    public static Post Project(SourceDecision source) => new()
-    {
-        Id = source.Id, TopicKey = source.TopicKey, AuthorParticipantId = source.AuthorParticipantId, SourceUri = source.SourceUri,
-        SourceCid = source.SourceCid, Sequence = source.Sequence, AcceptedAt = source.DecidedAt, Content = source.Content!
-    };
 }

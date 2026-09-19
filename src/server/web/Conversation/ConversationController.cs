@@ -25,7 +25,7 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         {
             var did = ParticipationAccess.Require(User, ParticipationGrants.Post);
             var post = await conversation.CreatePost(did, roomKey, input, ct);
-            return Ok(new { post.OperationId, State = "accepted", post.SourceUri, post.SourceCid });
+            return Ok(new { post.OperationId, State = "accepted" });
         });
 
     [HttpPatch("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]

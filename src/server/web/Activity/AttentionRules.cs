@@ -30,9 +30,9 @@ internal static class AttentionRules
     /// <summary>Default priority: own direct replies first, then topics the participant engaged with.</summary>
     public static int PriorityTier(int directReplies, long readSequence) => directReplies > 0 ? 0 : readSequence > 0 ? 1 : 2;
 
-    /// <summary>Whether a delivered post marker is itself a reply to the actor's accepted post.
-    /// The actor's own reply never counts: own posts are not attention.</summary>
-    public static bool IsDirectReply(Conversation.Post? post, Conversation.SourceDecision? parent, string did)
-        => post?.Content.ReplyTo is not null && post.AuthorParticipantId != did
-            && parent?.Accepted == true && parent.AuthorParticipantId == did;
+    /// <summary>Whether a post is a direct reply to one of the actor's own posts in the same
+    /// Topic. The actor's own reply never counts: own posts are not attention.</summary>
+    public static bool IsDirectReply(Conversation.Post? post, Conversation.Post? parent, string did)
+        => post is not null && parent is not null
+            && post.AuthorParticipantId != did && parent.AuthorParticipantId == did;
 }

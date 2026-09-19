@@ -276,10 +276,10 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
     }
 
     private static string SubjectRevision(Post post)
-        => Hash(string.Join('\n', "moderation-subject", post.Id, post.TopicKey, post.SourceCid,
+        => Hash(string.Join('\n', "moderation-subject", post.Id, post.TopicKey,
             post.ChangeId ?? "", post.EditedAt?.ToString("O") ?? "", post.Removed.ToString(),
             post.RemovedAt?.ToString("O") ?? "", post.Content.CreatedAt.ToString("O"),
-            post.Content.ReplyTo?.Uri ?? "", post.Content.ReplyTo?.Cid ?? "", post.Content.Text,
+            post.Content.ReplyTo ?? "", post.Content.Text,
             string.Join('|', post.Facets?.Select(facet => facet.Canonical()) ?? [])));
 
     private static string Hash(string value)

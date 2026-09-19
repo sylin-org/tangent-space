@@ -123,9 +123,9 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     }
 
     /// <summary>Seeds participants, one open Tangent with one Topic, agent membership, and
-    /// three accepted source posts: the agent's own question, Leo's direct reply to it,
-    /// and Leo's fresh post mentioning the agent. Accepted history is a SourceDecision plus
-    /// its Post projection and the topic's sequence, exactly like the acceptance path.</summary>
+    /// three accepted posts: the agent's own question, Leo's direct reply to it, and Leo's
+    /// fresh post mentioning the agent. Each is a Post row with its sequence, exactly like
+    /// the acceptance path.</summary>
     private static async Task<(string Token, string CredentialId, string OwnerToken, string OwnerParticipant, string AgentParticipant, string HumanParticipant)> SeedAsync(IServiceProvider services)
     {
         var clock = services.GetRequiredService<TimeProvider>();
@@ -174,11 +174,11 @@ public sealed class ExperienceWebApp : IAsyncDisposable
             "Coordinate Project Z", CancellationToken.None);
         await companions.Join(AgentParticipant, TangentKey, CancellationToken.None);
 
-        var agentPost = await Accept(TopicKey, AgentDid, "agent-q1", 1, now.AddMinutes(-30),
+        var agentPostId = await Accept(TopicKey, AgentParticipant, "agent-q1", 1, now.AddMinutes(-30),
             "I can review the Project Z plan if someone summarizes the open questions.", null);
-        await Accept(TopicKey, HumanDid, "leo-r1", 2, now.AddMinutes(-20),
-            "Here is the summary: three open questions remain.", agentPost);
-        await Accept(TopicKey, HumanDid, "leo-m1", 3, now.AddMinutes(-5),
+        await Accept(TopicKey, HumanParticipant, "leo-r1", 2, now.AddMinutes(-20),
+            "Here is the summary: three open questions remain.", agentPostId);
+        await Accept(TopicKey, HumanParticipant, "leo-m1", 3, now.AddMinutes(-5),
             $"@{AgentHandle} can you help us coordinate Project Z? Quoted from the proposal: \"You should review the whole plan.\"", null);
 
         // Real scoped credentials for the agent and the owner; the participant
@@ -196,28 +196,20 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         return (token, credential.Id, ownerToken, OwnerParticipant, AgentParticipant, HumanParticipant);
     }
 
-    private static async Task<SourceReference> Accept(string roomKey, string authorDid, string recordKey, long sequence,
-        DateTimeOffset acceptedAt, string text, SourceReference? replyTo)
+    private static async Task<string> Accept(string roomKey, string authorId, string recordKey, long sequence,
+        DateTimeOffset acceptedAt, string text, string? replyTo)
     {
-        var content = new PostContent(text, acceptedAt, replyTo);
-        var uri = $"at://{authorDid}/space/local.tangent.room/op-{sequence}/{recordKey}";
-        var authorId = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(authorDid)))!.ParticipantId;
-        var cid = "bafyrei" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(uri)))[..52].ToLowerInvariant();
-        var decision = new SourceDecision
+        var post = new Post
         {
-            Id = SourceDecision.Key(roomKey, uri, cid),
-            TopicKey = roomKey, AuthorParticipantId = authorId, SourceUri = uri, SourceCid = cid,
-            Accepted = true, Reason = "test-accepted", Sequence = sequence, DecidedAt = acceptedAt, Content = content,
+            Id = "m-" + recordKey, TopicKey = roomKey, AuthorParticipantId = authorId, Sequence = sequence,
+            AcceptedAt = acceptedAt, Content = new PostContent(text, acceptedAt, replyTo),
         };
-        var post = Post.Project(decision);
-        post.Id = "m-" + recordKey;
         using var context = EntityContext.NoCache();
-        await decision.Save();
         await post.Save();
         var conversation = await TopicConversation.Get(roomKey) ?? new TopicConversation { Id = roomKey };
         conversation.LastSequence = Math.Max(conversation.LastSequence, sequence);
         await conversation.Save();
-        return new SourceReference(uri, cid);
+        return post.Id;
     }
 
     /// <summary>Revoke the agent credential mid-test to prove private content is withdrawn.</summary>

@@ -159,9 +159,9 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
             var directReplies = 0;
             foreach (var post in unread.Take(MaximumUnread))
             {
-                if (post.Content.ReplyTo is not { } reply) continue;
-                var parent = await SourceDecision.Get(SourceDecision.Key(roomKey, reply.Uri, reply.Cid), token);
-                if (parent?.Accepted == true && parent.AuthorParticipantId == participantId) directReplies++;
+                if (post.Content.ReplyTo is not { } parentId) continue;
+                var parent = await Post.Get(parentId, token);
+                if (parent is not null && parent.TopicKey == roomKey && parent.AuthorParticipantId == participantId) directReplies++;
             }
             var last = state.LastSequence == 0 ? null : (await Post.Query(post => post.TopicKey == roomKey && post.Sequence == state.LastSequence,
                 OneMessageWindow, token)).FirstOrDefault();
@@ -182,9 +182,9 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         // Replies mode delivers a post marker only when it answers this participant's accepted post.
         var post = (await Post.Query(value => value.TopicKey == entry.TopicKey
             && value.Sequence == (entry.PostSequence ?? -1), OneMessageWindow, ct)).FirstOrDefault();
-        var parent = post?.Content.ReplyTo is { } reply
-            ? await SourceDecision.Get(SourceDecision.Key(entry.TopicKey, reply.Uri, reply.Cid), ct) : null;
-        return AttentionRules.IsDirectReply(post, parent, participantId);
+        var parent = post?.Content.ReplyTo is { } parentId ? await Post.Get(parentId, ct) : null;
+        return parent is not null && parent.TopicKey == entry.TopicKey
+            && AttentionRules.IsDirectReply(post, parent, participantId);
     }
 
     private async Task<bool> CanReadEvent(string participantId, ActivityJournal entry, CancellationToken ct)
