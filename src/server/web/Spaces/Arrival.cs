@@ -13,7 +13,8 @@ namespace Tangent.Spaces;
 
 // This host-owned operation coordinates two records. Tangent runs one writer process.
 public sealed class Arrival(IOptions<SpaceOptions> options, TimeProvider clock, PolicyGate gate,
-    ParticipantDirectory directory, IAtprotoHandleSource handles, ParticipantProfiles profiles)
+    ParticipantDirectory directory, IAtprotoHandleSource handles, ParticipantProfiles profiles,
+    TangentRoleAccess roleAccess)
 {
     public async Task CheckConfiguration(CancellationToken ct)
     {
@@ -23,6 +24,14 @@ public sealed class Arrival(IOptions<SpaceOptions> options, TimeProvider clock, 
             using var fresh = EntityContext.NoCache();
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             if (space is not null) await space.CheckConfiguredOwner(options.Value, ct);
+            var participants = await Participant.All(ct);
+            foreach (var participant in participants)
+            {
+                await roleAccess.EnsureParticipant(participant.Id, ct);
+                var did = await directory.AtprotoDidOf(participant.Id, ct);
+                if (!string.IsNullOrEmpty(did))
+                    profiles.Request(did);
+            }
         }
         finally { gate.Exit(); }
     }
@@ -39,13 +48,16 @@ public sealed class Arrival(IOptions<SpaceOptions> options, TimeProvider clock, 
         await gate.Enter(ct);
         try
         {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TangentConstants.ArrivalTransaction);
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            if (space is not null) await space.CheckConfiguredOwner(options.Value, ct);
-            participant = await directory.ArriveAtproto(verifiedDid, verifiedHandle, clock.GetUtcNow(), ct);
-            // Arrival establishes participant identity only. Server ownership requires an explicit human declaration.
-            await EntityContext.Commit(ct);
+            using (var fresh = EntityContext.NoCache())
+            using (var transaction = EntityContext.Transaction(TangentConstants.ArrivalTransaction))
+            {
+                var space = await Space.Get(TangentConstants.SpaceId, ct);
+                if (space is not null) await space.CheckConfiguredOwner(options.Value, ct);
+                participant = await directory.ArriveAtproto(verifiedDid, verifiedHandle, clock.GetUtcNow(), ct);
+                // Arrival establishes participant identity only. Server ownership requires an explicit human declaration.
+                await EntityContext.Commit(ct);
+            }
+            await roleAccess.EnsureParticipant(participant.Id, ct);
             profiles.Request(verifiedDid);
         }
         finally { gate.Exit(); }

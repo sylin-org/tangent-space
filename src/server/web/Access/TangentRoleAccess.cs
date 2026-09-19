@@ -63,7 +63,7 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         foreach (var seed in TangentBuiltInRoles.Defaults)
         {
             var current = await roles.Get(seed.Token, ct);
-            if (current is null || seed.Key == TangentBuiltInRoles.OwnerKey)
+            if (current is null || seed.Key == TangentBuiltInRoles.OwnerKey || seed.IsSelfEnrollable)
                 await roles.Define(seed.Token, seed.Name, seed.Permissions, Metadata(seed), ct);
         }
 
@@ -81,6 +81,18 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         foreach (var other in owner.Members.Where(member => member != participantId).ToArray())
             await roles.Remove(owner.Id, other, ct);
         await roles.Add(owner.Id, participantId, ct);
+        await EnsureParticipant(participantId, ct);
+    }
+
+    public async Task EnsureParticipant(string participantId, CancellationToken ct = default)
+    {
+        if (!Participant.IsValidId(participantId))
+            throw new ArgumentException("The participant must be an enrolled participant.", nameof(participantId));
+        var role = await roles.Get(TangentBuiltInRoles.Participant.Token, ct)
+            ?? await roles.Define(TangentBuiltInRoles.Participant.Token, TangentBuiltInRoles.Participant.Name,
+                TangentBuiltInRoles.Participant.Permissions, Metadata(TangentBuiltInRoles.Participant), ct);
+        if (!role.Members.Contains(participantId))
+            await roles.Add(role.Id, participantId, ct);
     }
 
     internal static IReadOnlyDictionary<string, string> Metadata(TangentRoleSeed seed)
@@ -88,7 +100,8 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         {
             ["purpose"] = seed.Description,
             ["color"] = seed.Color,
-            ["system"] = seed.Key == TangentBuiltInRoles.OwnerKey ? "true" : "false"
+            ["system"] = seed.Key == TangentBuiltInRoles.OwnerKey ? "true" : "false",
+            ["selfEnrollable"] = seed.IsSelfEnrollable ? "true" : "false"
         };
 }
 

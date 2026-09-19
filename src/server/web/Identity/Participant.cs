@@ -14,6 +14,7 @@ public sealed class Participant : Entity<Participant>
     // A declaration, never an inference: absent labels prove nothing and undeclared stays distinct from human.
     public ParticipantClassification Classification { get; set; }
     public bool WasDeclaredAgent { get; set; }
+    public bool HasDeclared { get; set; }
 
     public static string NewIdentifier() => Guid.CreateVersion7().ToString("N");
 
@@ -47,13 +48,12 @@ public sealed class Participant : Entity<Participant>
         LastArrivedAt = now;
     }
 
-    /// <summary>Owner-reviewed prototype declaration; validated claim sources arrive later.</summary>
+    /// <summary>Sets the participant's classification declaration.</summary>
     public void Declare(ParticipantClassification classification)
     {
         if (!Enum.IsDefined(classification)) throw new InvalidOperationException("Choose undeclared, human, or agent.");
-        if (WasDeclaredAgent && classification == ParticipantClassification.Human)
-            throw new InvalidOperationException("A known agent cannot declare itself human.");
         Classification = classification;
+        HasDeclared = true;
         if (classification == ParticipantClassification.Agent) WasDeclaredAgent = true;
     }
 }

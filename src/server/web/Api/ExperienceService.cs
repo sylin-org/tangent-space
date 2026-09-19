@@ -24,7 +24,7 @@ namespace Tangent.Api;
 /// actor always derives from the verified credential: submitted identifiers are never authority.</summary>
 public sealed partial class ExperienceService(
     TangentServer hub, OperationReceipts receipts, References refs, TimeProvider clock, ExperienceDigest digest,
-    ModerationCaseService moderation)
+    ModerationCaseService moderation, UserManagementService users)
 {
     private TangentGovernance tangents => hub.Tangents;
     private TopicGovernance topics => hub.Topics;
@@ -63,12 +63,18 @@ public sealed partial class ExperienceService(
         var actions = new List<ExperienceAction>(page.FollowUps);
         if (actions.Count == 0 && directory.Count > 0)
             actions.Add(new(ExperienceActionNames.ListTopics, directory[0].TangentRef, null, $"Browse Topics in {directory[0].Name}"));
-        return await Assemble("arrive", ExperienceStatus.Ok, identity,
-            ServerPlace(principal, space),
+        // Arrival is the persona's capability readout: held rungs project here, so a steward's
+        // catalog widens at Connect and a revoked one narrows without reading a Topic first.
+        var rungs = await LadderRungs(participantId, ct);
+        var place = rungs.Count > 0
+            ? new ExperiencePlace(refs.ServerRef, null, null, space, "participant",
+                [ExperienceActionNames.ListTangents, "get_updates", .. rungs])
+            : ServerPlace(principal, space);
+        return await Assemble("arrive", ExperienceStatus.Ok, identity, place,
             new ExperienceResult(new ExperienceArrivalData(directory, continuation), null, null),
             page.Attention, new ExperienceContinuation(null, null, null, null, null, null),
             actions, orientation,
-            new ExperienceCapabilities(Attention: true, Coordination: false), participantId, credential, ct);
+            new ExperienceCapabilities(Attention: true, Coordination: false, Stewardship: rungs.Count > 0), participantId, credential, ct);
     }
 
     // ---------- Directories ----------
@@ -171,15 +177,21 @@ public sealed partial class ExperienceService(
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead,
             ExperienceActionNames.SetWatch, ExperienceActionNames.ReportPost };
         if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
-        var stewardship = TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
+        var manage = TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
             && TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed;
-        if (stewardship) allowed.Add(ExperienceActionNames.ListModerationCases);
+        if (manage) allowed.Add(ExperienceActionNames.ListModerationCases);
+        // The ladder is server-scoped authority: it projects wherever the holder can see, not
+        // only where the Topic's own access map grants management. A steward's remit reads
+        // exactly as carried.
+        var rungs = await LadderRungs(participantId, ct);
+        allowed.AddRange(rungs);
+        var stewardship = manage || rungs.Count > 0;
         var place = new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Topic(tangentKey, topicKey),
             $"{await TangentName(tangentKey, ct)} / {stored.Title}", await RoleOf(participantId, tangentKey, ct), allowed);
         var actions = new List<ExperienceAction>();
         if (posts.Count > 0)
             actions.Add(new(ExperienceActionNames.MarkRead, refs.Topic(tangentKey, topicKey), null, "Acknowledge reading through the newest Post"));
-        if (stewardship)
+        if (manage)
             actions.Add(new(ExperienceActionNames.ListModerationCases, refs.Topic(tangentKey, topicKey), null, "Review this Topic's moderation cases"));
         return await Assemble("read_topic", ExperienceStatus.Ok, identity, place,
             new ExperienceResult(new ExperienceTopicData(stored.Title, ExperienceDigest.Preview(stored.Description, 480),
@@ -568,11 +580,13 @@ public sealed partial class ExperienceService(
         OperationReceipt record, string participantId, string credential, CancellationToken ct)
     {
         // Retries of a committed action return the recorded result; no side effect repeats.
+        // The stored JSON parses to a JToken because the wire serializer is Newtonsoft: a boxed
+        // System.Text.Json element would render its own shape, not the recorded data.
         var receipt = new ExperienceReceipt(record.RequestId, record.State == "completed" ? "completed" : record.State,
             await RefReadable(participantId, record.ResultRef, ct) ? record.ResultRef : null, null);
         return await Assemble(operation, ExperienceStatus.Ok, identity,
             ServerPlace(principal, await SiteLabel(ct)),
-            new ExperienceResult(record.ResultData is null ? null : System.Text.Json.JsonSerializer.Deserialize<object>(record.ResultData, ExperienceJson.Options),
+            new ExperienceResult(record.ResultData is null ? null : Newtonsoft.Json.Linq.JToken.Parse(record.ResultData),
                 receipt, null),
             (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention, Empty(), [], null, null, participantId, credential, ct);
     }
@@ -626,6 +640,7 @@ public sealed partial class ExperienceService(
         if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
             && TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed)
             allowed.Add(ExperienceActionNames.ListModerationCases);
+        allowed.AddRange(await LadderRungs(participantId, ct));
         return new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Topic(tangentKey, topicKey),
             $"{await TangentName(tangentKey, ct)} / {topic?.Title ?? topicKey}", await RoleOf(participantId, tangentKey, ct), allowed);
     }

@@ -1,13 +1,15 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Koan.Data.Core;
 using Koan.Web.Auth.Connector.Atproto.Protocol;
 
 namespace Tangent.Identity;
 
 /// <summary>The only upstream profile reader. Persists media before announcing a new snapshot.</summary>
-public sealed class ProfileCapture(ParticipantProfiles profiles, AtprotoSessions sessions, AtprotoHttp network,
-    IWebHostEnvironment environment, TimeProvider clock, ILogger<ProfileCapture> logger) : BackgroundService
+public sealed partial class ProfileCapture(ParticipantProfiles profiles, AtprotoSessions sessions, AtprotoHttp network,
+    IWebHostEnvironment environment, TimeProvider clock, ILogger<ProfileCapture> logger,
+    ParticipantDirectory directory) : BackgroundService
 {
     public const int MaxImageBytes = 5 * 1024 * 1024;
     public static string MediaDirectory(IWebHostEnvironment environment) => Path.Combine(environment.ContentRootPath, "profile-media");
@@ -95,6 +97,44 @@ public sealed class ProfileCapture(ParticipantProfiles profiles, AtprotoSessions
         var changed = old.CapturedAt == default || old.DisplayName != snapshot.DisplayName
             || old.Description != snapshot.Description || old.AvatarFile != snapshot.AvatarFile;
         await profiles.Store(snapshot, changed, ct);
+
+        var isAgent = HasAgentIndicators(value, snapshot.Description);
+        var participant = await directory.ByDid(did, ct);
+        if (participant is not null && !participant.HasDeclared)
+        {
+            var newClassification = isAgent ? ParticipantClassification.Agent : ParticipantClassification.Human;
+            if (participant.Classification != newClassification)
+            {
+                participant.Classification = newClassification;
+                if (isAgent) participant.WasDeclaredAgent = true;
+                await participant.Save(ct);
+            }
+        }
+    }
+
+    [GeneratedRegex(@"\b(ai\s+(?:companion|agent|assistant|bot)|automated\s+account|autonomous\s+agent|bot\s+account|bot\s+run\s+by|bespoke\s+ai|virtual\s+assistant|\bbot\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex AgentDescriptionRegex();
+
+    private static bool HasAgentIndicators(JsonElement value, string? description)
+    {
+        if (value.TryGetProperty("labels", out var labels)
+            && labels.TryGetProperty("values", out var values)
+            && values.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in values.EnumerateArray())
+            {
+                if (item.TryGetProperty("val", out var val) && val.ValueKind == JsonValueKind.String)
+                {
+                    var v = val.GetString();
+                    if (string.Equals(v, "bot", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(v, "agent", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(description) && AgentDescriptionRegex().IsMatch(description))
+            return true;
+        return false;
     }
 
     internal static string? ImageExtension(byte[] bytes)

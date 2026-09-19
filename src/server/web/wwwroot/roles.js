@@ -4,12 +4,11 @@
   const groupOrder = ['host', 'tangent', 'topic', 'post', 'other'];
   const groupLabels = { host: 'Server', tangent: 'Tangents', topic: 'Topics', post: 'Posts', other: 'Other' };
   const roleMemberPageSize = 50;
-  let site, descriptor, descriptorError, roles = [], selected, loadVersion = 0, csrf, pendingMember;
+  let site, descriptor, descriptorError, roles = [], selected, loadVersion = 0, csrf;
   const rolePageSize = 100;
   let roleTotal = 0, editorTab = 'appearance', dirty = false;
   let roleListPage = 1, roleListHasPrevious = false, roleListHasNext = false;
-  let membersByRole = new Map(), memberTotals = new Map(), loadedMemberRoles = new Set(), roleMemberState = new Map(), memberProfileCache = new Map();
-  let memberProfileFailures = new Set();
+  let memberTotals = new Map(), roleMemberState = new Map();
   let lastMemberScope = '', lastMemberIdentity = '';
   let draftGrantKeys = new Set();
 
@@ -22,12 +21,11 @@
   const api = suffix => '/api/identity/roles' + String(suffix || '').replace(/^roles/, '');
   const normalizeRole = role => {
     const metadata = role?.metadata || {};
-    return { ...role, purpose: metadata.purpose || '', presentation: { color: metadata.color || '#a98df0', system: metadata.system || 'false' },
+    return { ...role, purpose: metadata.purpose || '', presentation: { color: metadata.color || '#a98df0', system: metadata.system || 'false', selfEnrollable: metadata.selfEnrollable || 'false' },
       grants: (role?.permissions || []).map(capability => ({ capability })) };
   };
   const message = (id, value, error = false) => { const node = $(id); node.textContent = value || ''; node.classList.toggle('error', error); };
   const make = (tag, className, text) => { const node = document.createElement(tag); node.className = className || ''; if (text !== undefined) node.textContent = text; return node; };
-  const roleMembers = role => membersByRole.get(role?.id) || [];
   const memberCount = role => {
     const total = memberTotals.get(role?.id);
     return total == null ? '—' : String(total);
@@ -38,7 +36,6 @@
     return `${scope.type}:${scope.id}`;
   };
   const currentIdentitySignature = () => (site?.participant?.id || site?.participant?.did || '').toString();
-  const normalizeLookupIdentifier = value => String(value || '').trim().replace(/^@/, '').toLocaleLowerCase();
   const memberByline = person => person?.handle
     ? (person.handle.startsWith('@') ? person.handle : '@' + person.handle)
     : 'Tangent Space participant';
@@ -52,43 +49,11 @@
   }
 
   function clearMemberData() {
-    membersByRole = new Map();
     memberTotals = new Map();
     roleMemberState = new Map();
-    loadedMemberRoles = new Set();
-    memberProfileCache = new Map();
-    memberProfileFailures = new Set();
   }
 
-  function memberPaginationPath(roleId, page) {
-    const params = new URLSearchParams({ pageSize: String(roleMemberPageSize) });
-    if (typeof page === 'number' && page > 1) params.set('page', String(page));
-    return api(`roles/${encodeURIComponent(roleId)}/members?${params}`);
-  }
 
-  function hydrateMemberRows(roleId) {
-    if (!selected || selected.id !== roleId) return;
-    document.querySelectorAll('#role-members [data-subject]').forEach(node => {
-      const subject = node.dataset.subject;
-      const person = memberProfileCache.get(subject);
-      const failed = memberProfileFailures.has(subject);
-      const label = person?.displayName || person?.label || person?.handle || 'Participant';
-      const byline = person ? memberByline(person) : failed ? 'Profile unavailable' : 'Loading profile…';
-      const displayName = node.querySelector('strong');
-      const bylineNode = node.querySelector('small');
-      const removeButton = node.querySelector('.role-member-remove');
-      if (displayName) displayName.textContent = label;
-      if (bylineNode) bylineNode.textContent = byline;
-      showAvatar(node.querySelector('.role-member-avatar'), person, label);
-      if (removeButton) {
-        const title = person ? `Remove ${label} from ${selected.name}` : 'Profile required before removing this membership';
-        removeButton.title = title;
-        removeButton.setAttribute('aria-label', title);
-        removeButton.disabled = !person;
-      }
-    });
-    $('role-member-profiles-retry').hidden = !roleMembers(selected).some(member => memberProfileFailures.has(member.subject));
-  }
 
   async function session() {
     if (csrf) return csrf;
@@ -175,6 +140,10 @@
     $('role-permissions-panel').hidden = name !== 'permissions';
     $('role-members-panel').hidden = name !== 'members';
     $('role-editor-actions').hidden = name === 'members' || systemRole(selected);
+    if (name === 'members' && selected && !selected._new) {
+      $('role-member-search').value = '';
+      searchMembers('');
+    }
   }
 
   async function loadScope() {
@@ -216,10 +185,7 @@
       roleListPage = 1;
       roleListHasPrevious = false;
       roleListHasNext = roles.length < roleTotal;
-      membersByRole = new Map();
-      memberTotals = new Map();
-      loadedMemberRoles = new Set();
-      roleMemberState = new Map();
+      clearMemberData();
       const requested = new URL(location.href).searchParams.get('role');
       let target = requested === 'new' && selected?._new ? selected : roles.find(role => role.id === requested);
       if (requested && requested !== 'new' && !target) {
@@ -241,7 +207,7 @@
     } catch (error) {
       if (version !== loadVersion) return;
       roles = []; roleTotal = 0; roleListPage = 1; roleListHasPrevious = false; roleListHasNext = false;
-      membersByRole = new Map(); memberTotals = new Map(); loadedMemberRoles = new Set(); roleMemberState = new Map(); selected = undefined; showOverview(false);
+      memberTotals = new Map(); roleMemberState = new Map(); selected = undefined; showOverview(false);
       message('role-list-status', error.message, true);
     }
   }
@@ -300,49 +266,6 @@
     }
   }
 
-  async function refreshMembers(role = selected, stepBackIfEmpty = false) {
-    if (!role || role._new) return;
-    const page = Math.max(memberState(role.id).page || 1, 1);
-    await loadRoleMembers(role, page);
-    if (stepBackIfEmpty && page > 1 && !roleMembers(role).length) await loadRoleMembers(role, page - 1);
-    renderOverview(); renderSiblingList(); renderMembers();
-  }
-
-  async function loadRoleMembers(role, page = 1) {
-    if (!role || role._new) return;
-    const state = memberState(role.id);
-    const data = (await request(memberPaginationPath(role.id, page))).data;
-    const items = (Array.isArray(data?.items) ? data.items : []).map(value => typeof value === 'string' ? { subject: value } : value);
-    const total = data?.totalCount ?? role.memberCount ?? role.members?.length ?? memberTotals.get(role.id);
-    const hasNext = typeof total === 'number' ? page * roleMemberPageSize < total : items.length === roleMemberPageSize;
-    roleMemberState.set(role.id, { ...state, page, total, hasPrevious: page > 1, hasNext, pageSize: roleMemberPageSize });
-    membersByRole = new Map([[role.id, items]]);
-    if (typeof total === 'number') memberTotals.set(role.id, total);
-    loadedMemberRoles = new Set([role.id]);
-    const subjects = new Set(items.map(member => member.subject));
-    memberProfileCache = new Map([...memberProfileCache].filter(([id]) => subjects.has(id)));
-    memberProfileFailures = new Set([...memberProfileFailures].filter(id => subjects.has(id)));
-    await loadMemberProfiles([...subjects], role.id);
-  }
-
-  async function changeMemberPage(delta, button) {
-    if (!selected || selected._new) return;
-    const state = memberState(selected.id);
-    const page = state.page + delta;
-    if (page < 1 || (delta < 0 && !state.hasPrevious) || (delta > 0 && !state.hasNext)) return;
-    button.disabled = true;
-    message('role-members-status', 'Loading members…');
-    try {
-      await loadRoleMembers(selected, page);
-      renderMembers();
-      message('role-members-status', '');
-    } catch (error) {
-      message('role-members-status', error.message, true);
-    } finally {
-      button.disabled = false;
-    }
-  }
-
   function showOverview(updateUrl = true) {
     selected = undefined; dirty = false;
     $('role-overview').hidden = false;
@@ -357,9 +280,6 @@
     $('role-editor-view').hidden = false;
     if (urlMode) roleUrl(role, urlMode);
     renderRole(); roleEditorTab(tab);
-    if (!role._new && !loadedMemberRoles.has(role.id)) {
-      refreshMembers(role).catch(error => message('role-members-status', error.message, true));
-    }
   }
 
   function roleCopy(role) {
@@ -367,6 +287,7 @@
     const line = make('span', 'role-directory-name'); line.append(make('strong', '', role.name));
     if (systemRole(role)) line.append(make('small', 'role-kind', 'Built in'));
     else if (role._new) line.append(make('small', 'role-kind', 'Unsaved'));
+    if (role.presentation?.selfEnrollable === 'true') line.append(make('small', 'role-kind', 'Self-enrollable'));
     copy.append(line, make('small', 'role-directory-purpose', role.purpose || (systemRole(role) ? 'Managed by Tangent Space' : 'Custom role')));
     return copy;
   }
@@ -478,88 +399,127 @@
       ? 'Appearance and permissions are managed by Tangent. The server owner is set by server administration and this setting is not changeable here.'
       : 'Appearance and permissions are managed by Tangent. Authorized owners can still change direct membership.';
     for (const field of [$('role-name'), $('role-purpose'), $('role-color')]) field.disabled = managed;
+    const selfEnrollableInput = $('role-self-enrollable');
+    if (selfEnrollableInput) {
+      selfEnrollableInput.checked = selected.presentation?.selfEnrollable === 'true' || selected.metadata?.selfEnrollable === 'true';
+      selfEnrollableInput.disabled = managed;
+    }
     $('role-save').textContent = selected._new ? 'Create role' : 'Save changes';
     $('role-reset').hidden = managed;
     $('role-retire').hidden = managed || selected._new;
-    $('role-member-open').hidden = !canManageMembers(selected);
-    closeMemberInvite();
-    updateRolePreview(); renderCapabilities(selected, managed); renderMembers(); renderSiblingList();
+    updateRolePreview(); renderCapabilities(selected, managed); renderSiblingList();
+    if (editorTab === 'members') searchMembers('');
   }
 
-  async function loadMemberProfiles(ids, roleId, retry = false) {
-    if (!ids.length) return;
-    const needed = [...new Set(ids)].filter(id => !memberProfileCache.has(id) && (retry || !memberProfileFailures.has(id)));
-    if (!needed.length) { hydrateMemberRows(roleId); return; }
-    for (let cursor = 0; cursor < needed.length; cursor += roleMemberPageSize) {
-      const batch = needed.slice(cursor, cursor + roleMemberPageSize);
-      try {
-        const query = batch.map(id => 'id=' + encodeURIComponent(id)).join('&');
-        const rows = (await request('/api/roles/ui/participants?' + query)).data || [];
-        const returned = new Set();
-        for (const row of rows) {
-          if (row?.id) { memberProfileCache.set(row.id, row); memberProfileFailures.delete(row.id); returned.add(row.id); }
-        }
-        batch.filter(id => !returned.has(id)).forEach(id => memberProfileFailures.add(id));
-      } catch (_) {
-        batch.forEach(id => memberProfileFailures.add(id));
-      }
+  let searchSeq = 0;
+  async function searchMembers(query = '') {
+    const seq = ++searchSeq;
+    const root = $('role-members');
+    if (!selected || selected._new) {
+      root.replaceChildren();
+      root.append(make('p', 'role-member-empty', 'Create this role before managing members.'));
+      $('role-member-count').textContent = '0';
+      $('role-members-heading-count').textContent = '0';
+      return;
     }
-    if (selected?.id === roleId) hydrateMemberRows(roleId);
-  }
-
-  async function retryMemberProfiles(button) {
-    if (!selected) return;
-    const ids = roleMembers(selected).map(member => member.subject).filter(id => memberProfileFailures.has(id));
-    button.disabled = true;
-    message('role-members-status', 'Retrying profiles…');
-    try {
-      await loadMemberProfiles(ids, selected.id, true);
-      const stillFailed = ids.some(id => memberProfileFailures.has(id));
-      message('role-members-status', stillFailed ? 'Some profiles are still unavailable.' : '', stillFailed);
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  function renderMembers() {
-    const root = $('role-members'); root.replaceChildren();
-    if (!selected) return;
-    const values = selected._new ? [] : roleMembers(selected);
-    const state = memberState(selected.id);
-    const total = state.total == null ? (memberTotals.get(selected.id) ?? values.length) : state.total;
-    const first = values.length ? (Math.max(state.page, 1) - 1) * roleMemberPageSize + 1 : 0;
-    const last = first ? first + values.length - 1 : 0;
-    $('role-member-count').textContent = state.countUnavailable ? '—' : String(total);
-    $('role-members-heading-count').textContent = `${first}–${last} of ${total}`;
-    $('role-members-previous').hidden = !state.hasPrevious;
-    $('role-members-next').hidden = !state.hasNext;
-    const scope = currentScope();
-    $('role-members-scope').textContent = `Direct assignments in ${scope.type === 'host' ? 'this server' : `this ${scope.type}`}.`;
-    const protectedOwner = protectedOwnerRole(selected), manageable = canManageMembers(selected);
-    $('role-member-open').hidden = !manageable;
+    const protectedOwner = protectedOwnerRole(selected);
+    const manageable = canManageMembers(selected);
     $('role-member-protected').hidden = !protectedOwner;
-    $('role-member-identifier').disabled = !manageable;
-    $('role-member-resolve').disabled = !manageable;
-    $('role-member-add').disabled = !manageable;
-    if (!values.length) root.append(make('p', 'role-member-empty', selected._new
-      ? 'Create this role before adding members.'
-      : loadedMemberRoles.has(selected.id) ? 'No direct members yet.' : 'Loading members…'));
-    for (const member of values) {
-      const person = memberProfileCache.get(member.subject);
-      const label = person?.displayName || person?.label || person?.handle || 'Participant';
-      const row = make('div', 'role-member'); row.dataset.subject = member.subject;
-      row.style.setProperty('--role-color', color(selected.presentation?.color));
-      const avatar = make('span', 'role-member-avatar', label.slice(0, 1).toUpperCase()); showAvatar(avatar, person, label); row.append(avatar);
-      const copy = make('span'); copy.append(make('strong', '', label), make('small', '', person ? memberByline(person) : 'Loading profile…')); row.append(copy);
-      const remove = make('button', 'role-member-remove', '×'); remove.type = 'button'; remove.hidden = !manageable;
-      const removeLabel = person ? `Remove ${label} from ${selected.name}` : 'Profile required before removing this membership';
-      remove.title = removeLabel;
-      remove.setAttribute('aria-label', removeLabel);
-      remove.disabled = !person;
-      remove.addEventListener('click', () => removeMember(member.subject, remove)); row.append(remove); root.append(row);
+    $('role-member-search').disabled = !manageable && !protectedOwner;
+
+    message('role-members-status', 'Loading members…');
+    try {
+      const q = (query || '').trim();
+      const params = new URLSearchParams({ role: selected.id });
+      if (q) params.set('query', q);
+      const res = await fetch('/api/roles/ui/search?' + params, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw failure(res, data);
+      }
+      const items = await res.json();
+      if (seq !== searchSeq) return;
+
+      root.replaceChildren();
+      message('role-members-status', '');
+
+      if (!q) {
+        $('role-member-count').textContent = String(items.length);
+        $('role-members-heading-count').textContent = String(items.length);
+        memberTotals.set(selected.id, items.length);
+      }
+
+      if (!items.length) {
+        root.append(make('p', 'role-member-empty', q ? 'No matching participants found.' : 'No members in this role yet.'));
+        return;
+      }
+
+      for (const person of items) {
+        const label = person.displayName || person.handle || 'Participant';
+        const row = make('div', 'role-member');
+        row.dataset.subject = person.id;
+        row.style.setProperty('--role-color', color(selected.presentation?.color));
+
+        const avatar = make('span', 'role-member-avatar', label.slice(0, 1).toUpperCase());
+        showAvatar(avatar, person, label);
+        row.append(avatar);
+
+        const copy = make('span');
+        copy.append(make('strong', '', label), make('small', '', memberByline(person)));
+        row.append(copy);
+
+        if (manageable) {
+          const inRole = !!person.inRole;
+          const toggle = make('button', inRole ? 'btn btn-quiet role-member-toggle in-role' : 'btn btn-primary role-member-toggle', inRole ? 'Remove' : 'Add');
+          toggle.type = 'button';
+          toggle.title = inRole ? `Remove ${label} from ${selected.name}` : `Add ${label} to ${selected.name}`;
+          toggle.setAttribute('aria-label', toggle.title);
+          toggle.addEventListener('click', async () => {
+            toggle.disabled = true;
+            const willAdd = !person.inRole;
+            message('role-members-status', (willAdd ? `Adding ${label}…` : `Removing ${label}…`));
+            try {
+              await request(api('roles/' + encodeURIComponent(selected.id) + '/members/' + encodeURIComponent(person.id)), {
+                method: willAdd ? 'PUT' : 'DELETE'
+              });
+              person.inRole = willAdd;
+              toggle.textContent = willAdd ? 'Remove' : 'Add';
+              toggle.className = willAdd ? 'btn btn-quiet role-member-toggle in-role' : 'btn btn-primary role-member-toggle';
+              toggle.title = willAdd ? `Remove ${label} from ${selected.name}` : `Add ${label} to ${selected.name}`;
+              toggle.setAttribute('aria-label', toggle.title);
+              message('role-members-status', willAdd ? `${label} added to ${selected.name}.` : `${label} removed from ${selected.name}.`);
+              if (!q && !willAdd) {
+                row.remove();
+                const newCount = root.querySelectorAll('.role-member').length;
+                $('role-member-count').textContent = String(newCount);
+                $('role-members-heading-count').textContent = String(newCount);
+                memberTotals.set(selected.id, newCount);
+                if (newCount === 0) {
+                  root.append(make('p', 'role-member-empty', 'No members in this role yet.'));
+                }
+              } else if (willAdd) {
+                const currentCount = (memberTotals.get(selected.id) || 0) + 1;
+                memberTotals.set(selected.id, currentCount);
+                $('role-member-count').textContent = String(currentCount);
+                $('role-members-heading-count').textContent = String(currentCount);
+              }
+            } catch (err) {
+              message('role-members-status', err.message, true);
+            } finally {
+              toggle.disabled = false;
+            }
+          });
+          row.append(toggle);
+        }
+        root.append(row);
+      }
+    } catch (err) {
+      if (seq !== searchSeq) return;
+      message('role-members-status', err.message, true);
     }
-    loadMemberProfiles(values.map(member => member.subject), selected.id);
-    if (values.length) hydrateMemberRows(selected.id);
   }
 
   function roleGrants() {
@@ -581,7 +541,15 @@
     if (!name) { message('role-status', 'Give this role a name.', true); return; }
     button.disabled = true; message('role-status', selected._new ? 'Creating…' : 'Saving…');
     try {
-      const body = { name, permissions: roleGrants(), metadata: { purpose: purpose || '', color: $('role-color').value } };
+      const body = {
+        name,
+        permissions: roleGrants(),
+        metadata: {
+          purpose: purpose || '',
+          color: $('role-color').value,
+          selfEnrollable: $('role-self-enrollable')?.checked ? 'true' : 'false'
+        }
+      };
       let key = selected.id;
       if (selected._new) {
         key = roleKeyFor(name);
@@ -602,7 +570,7 @@
     if (!selected || systemRole(selected)) return;
     const tab = editorTab;
     selected = selected._new
-      ? { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0', system: 'false' } }
+      ? { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0', system: 'false', selfEnrollable: 'false' } }
       : roles.find(role => role.id === selected.id) || selected;
     dirty = false; renderRole(); roleEditorTab(tab); message('role-status', 'Changes reset.');
   }
@@ -618,78 +586,9 @@
     finally { button.disabled = false; }
   }
 
-  function clearResolvedMember() {
-    pendingMember = undefined;
-    $('role-member-resolved').hidden = true;
-    $('role-member-resolved-name').textContent = '';
-    $('role-member-resolved-byline').textContent = '';
-  }
-
-  function closeMemberInvite() {
-    $('role-member-invite').hidden = true;
-    $('role-member-identifier').value = '';
-    message('role-member-lookup-status', '');
-    clearResolvedMember();
-  }
-
-  async function resolveMember(button) {
-    if (!canManageMembers(selected)) return;
-    const identifier = $('role-member-identifier').value.trim();
-    const normalizedIdentifier = normalizeLookupIdentifier(identifier);
-    message('role-member-lookup-status', '');
-    if (!normalizedIdentifier) { message('role-member-lookup-status', 'Enter a handle or DID.', true); return; }
-    const currentSubjects = new Set(roleMembers(selected).map(member => member.subject));
-    const duplicate = [...memberProfileCache.values()].find(person => currentSubjects.has(person.id)
-      && [person.id, person.did, person.handle].some(value => normalizeLookupIdentifier(value) === normalizedIdentifier));
-    if (duplicate) {
-      const duplicateLabel = duplicate.displayName || duplicate.label || duplicate.handle || 'Participant';
-      clearResolvedMember(); message('role-member-lookup-status', `${duplicateLabel} already has this role`, true); return;
-    }
-    button.disabled = true; message('role-member-lookup-status', 'Finding participant…');
-    try {
-      const person = (await request('/api/roles/ui/resolve?identifier=' + encodeURIComponent(identifier))).data;
-      if (roleMembers(selected).some(member => member.subject === person.id)) {
-        const existingLabel = person.displayName || person.label || person.handle || 'Participant';
-        clearResolvedMember(); message('role-member-lookup-status', existingLabel + ' already has this role', true); return;
-      }
-      pendingMember = person;
-      const label = person.displayName || person.label || person.handle || 'Participant';
-      showAvatar($('role-member-resolved-avatar'), person, label);
-      $('role-member-resolved-name').textContent = label;
-      $('role-member-resolved-byline').textContent = memberByline(person);
-      $('role-member-add').textContent = 'Add to role';
-      $('role-member-resolved').hidden = false;
-      message('role-member-lookup-status', 'Participant found. Confirm the assignment.');
-    } catch (error) { clearResolvedMember(); message('role-member-lookup-status', error.message, true); }
-    finally { button.disabled = false; }
-  }
-
-  async function addMember(button) {
-    if (!canManageMembers(selected) || !pendingMember) return;
-    const person = pendingMember;
-    const personLabel = person.displayName || person.label || person.handle || 'Participant';
-    button.disabled = true; message('role-members-status', `Adding ${personLabel}…`);
-    try {
-      await request(api('roles/' + encodeURIComponent(selected.id) + '/members/' + encodeURIComponent(person.id)), { method: 'PUT' });
-      closeMemberInvite();
-      await refreshMembers(); roleEditorTab('members');
-      message('role-members-status', `${personLabel} now has this role.`);
-    } catch (error) { message('role-members-status', error.message, true); }
-    finally { button.disabled = false; }
-  }
-
-  async function removeMember(subject, button) {
-    if (!canManageMembers(selected)) return;
-    button.disabled = true; message('role-members-status', 'Removing…');
-    try {
-      await request(api('roles/' + encodeURIComponent(selected.id) + '/members/' + encodeURIComponent(subject)), { method: 'DELETE' });
-      await refreshMembers(selected, true); roleEditorTab('members'); message('role-members-status', 'Member removed from this role.');
-    } catch (error) { message('role-members-status', error.message, true); }
-    finally { button.disabled = false; }
-  }
 
   function createRole() {
-    const role = { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0', system: 'false' } };
+    const role = { _new: true, id: '', name: 'New role', purpose: '', grants: [], presentation: { color: '#a98df0', system: 'false', selfEnrollable: 'false' } };
     showEditor(role); $('role-name').select();
   }
 
@@ -756,18 +655,17 @@
   for (const field of [$('role-name'), $('role-purpose'), $('role-color')]) field.addEventListener('input', () => {
     dirty = true; updateRolePreview(); message('role-status', 'Unsaved changes');
   });
+  $('role-self-enrollable')?.addEventListener('change', () => {
+    dirty = true; message('role-status', 'Unsaved changes');
+  });
   $('role-form').addEventListener('submit', event => { event.preventDefault(); saveRole(event.submitter || $('role-save')); });
   $('role-reset').addEventListener('click', resetRole);
   $('role-retire').addEventListener('click', event => retireRole(event.currentTarget));
-  $('role-member-open').addEventListener('click', () => { message('role-member-lookup-status', ''); $('role-member-invite').hidden = false; clearResolvedMember(); $('role-member-identifier').focus(); });
-  $('role-member-cancel').addEventListener('click', () => { closeMemberInvite(); message('role-members-status', ''); $('role-member-open').focus(); });
-  $('role-member-resolve').addEventListener('click', event => resolveMember(event.currentTarget));
-  $('role-member-add').addEventListener('click', event => addMember(event.currentTarget));
-  $('role-member-identifier').addEventListener('input', () => { message('role-member-lookup-status', ''); clearResolvedMember(); });
-  $('role-member-identifier').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); resolveMember($('role-member-resolve')); } });
-  $('role-members-previous').addEventListener('click', event => changeMemberPage(-1, event.currentTarget).catch(error => message('role-members-status', error.message, true)));
-  $('role-members-next').addEventListener('click', event => changeMemberPage(1, event.currentTarget).catch(error => message('role-members-status', error.message, true)));
-  $('role-member-profiles-retry').addEventListener('click', event => retryMemberProfiles(event.currentTarget).catch(error => message('role-members-status', error.message, true)));
+  let memberSearchDebounce;
+  $('role-member-search').addEventListener('input', () => {
+    clearTimeout(memberSearchDebounce);
+    memberSearchDebounce = setTimeout(() => searchMembers($('role-member-search').value), 200);
+  });
   window.TangentSettingsTabs = { requested: requestedTab };
   window.addEventListener('tangent:welcome', event => openFor(event.detail));
   window.addEventListener('tangent:route', event => openFor(event.detail));

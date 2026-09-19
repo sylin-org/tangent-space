@@ -19,6 +19,9 @@ public static class TangentPermissions
     public const string ManageTopics = "global:topic_manage";
     public const string CreatePosts = "global:post_create";
     public const string RemovePosts = "global:post_remove";
+    public const string WarnUsers = "global:user_warn";
+    public const string TimeoutUsers = "global:user_timeout";
+    public const string BanUsers = "global:user_ban";
 
     public static readonly IReadOnlyList<TangentPermissionDefinition> Catalog =
     [
@@ -33,7 +36,10 @@ public static class TangentPermissions
         new(ReadTopics, "See every Topic", "See Topics regardless of their local access list."),
         new(ManageTopics, "Manage every Topic", "Change details and access for every Topic."),
         new(CreatePosts, "Post anywhere", "Reply in every visible Topic."),
-        new(RemovePosts, "Remove any Post", "Moderate Posts in every visible Topic.")
+        new(RemovePosts, "Remove any Post", "Moderate Posts in every visible Topic."),
+        new(WarnUsers, "Warn participants", "Deliver an official, journaled warning to a participant."),
+        new(TimeoutUsers, "Time out participants", "Apply reversible, time-boxed restrictions in a Tangent."),
+        new(BanUsers, "Ban participants", "Ban participants from a Tangent.")
     ];
 
     public static readonly IReadOnlySet<string> All = Catalog
@@ -46,6 +52,7 @@ public static class TangentBuiltInRoles
     public const string OwnerKey = "owner";
     public const string AdministratorKey = "administrator";
     public const string MemberKey = "member";
+    public const string ParticipantKey = "participant";
 
     public static readonly TangentRoleSeed Owner = new(
         OwnerKey,
@@ -70,7 +77,9 @@ public static class TangentBuiltInRoles
             TangentPermissions.ReadTopics,
             TangentPermissions.ManageTopics,
             TangentPermissions.CreatePosts,
-            TangentPermissions.RemovePosts
+            TangentPermissions.RemovePosts,
+            TangentPermissions.WarnUsers,
+            TangentPermissions.TimeoutUsers
         });
 
     public static readonly TangentRoleSeed Member = new(
@@ -78,9 +87,17 @@ public static class TangentBuiltInRoles
         "Member",
         "A server member. Local access lists decide where they can act.",
         "#9b7ede",
+        new HashSet<string>(StringComparer.Ordinal),
+        IsSelfEnrollable: true);
+
+    public static readonly TangentRoleSeed Participant = new(
+        ParticipantKey,
+        "Participant",
+        "A registered participant on this server.",
+        "#4ecdc4",
         new HashSet<string>(StringComparer.Ordinal));
 
-    public static readonly IReadOnlyList<TangentRoleSeed> Defaults = [Owner, Administrator, Member];
+    public static readonly IReadOnlyList<TangentRoleSeed> Defaults = [Owner, Administrator, Member, Participant];
 }
 
 public sealed record TangentPermissionDefinition(string Token, string Name, string Description);
@@ -90,7 +107,8 @@ public sealed record TangentRoleSeed(
     string Name,
     string Description,
     string Color,
-    IReadOnlySet<string> Permissions)
+    IReadOnlySet<string> Permissions,
+    bool IsSelfEnrollable = false)
 {
     public string Token => $"role:{Key}";
 }

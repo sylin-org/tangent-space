@@ -6,8 +6,6 @@ using Tangent.Community;
 using Tangent.Conversation;
 using Tangent.Activity;
 using Tangent.Identity;
-using Tangent.Identity;
-using Tangent.Community;
 using Tangent.Stewardship;
 using Tangent.Infrastructure;
 using Tangent.Spaces;
@@ -46,6 +44,13 @@ public sealed partial class ExperienceService
         {
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             if (space?.IsOwner(participantId) == true) roles.Add(new("server", "", "This server", "owner"));
+            var bag = await hub.Roles.Bag(participantId, ct);
+            foreach (var token in bag.Tokens.Where(token => token.StartsWith("role:", StringComparison.Ordinal)))
+            {
+                var roleKey = token["role:".Length..];
+                if (roles.Any(r => r.Scope == "server" && r.Role == roleKey)) continue;
+                roles.Add(new("server", "", "This server", roleKey));
+            }
             foreach (var membership in await TangentMembership.Query(value => value.ParticipantId == participantId, ct))
             {
                 var tangent = await tangents.Describe(viewer, membership.TangentKey, ct);
@@ -56,25 +61,8 @@ public sealed partial class ExperienceService
             }
         }
 
-        var posts = new List<ExperiencePostDto>();
-        var visibleMessages = new List<Post>();
-        IReadOnlyList<Post> scanned;
-        using (EntityContext.NoCache())
-            scanned = await Post.Query(post => post.AuthorParticipantId == participantId, RecentPosts(), ct);
-        foreach (var post in scanned)
-        {
-            if (posts.Count >= ProfilePostLimit) break;
-            var description = await topics.Describe(viewer, post.TopicKey, ct);
-            if (description is null || !description.CanRead) continue;
-            visibleMessages.Add(post);
-            string? replyTo = null;
-            posts.Add(new ExperiencePostDto(
-                refs.Post(description.TangentKey, post.TopicKey, post.Id), participantId,
-                profile.DisplayName ?? label ?? "Participant", post.Removed ? "" : post.Content.Text, replyTo,
-                refs.Origin + "/t/" + Uri.EscapeDataString(description.TangentKey) + "/" + Uri.EscapeDataString(post.Id),
-                Format(post.AcceptedAt), post.EditedAt is { } edited ? Format(edited) : null, post.Removed,
-                post.Facets));
-        }
+        var window = await VisibleRecentPosts(viewer, participantId,
+            profile.DisplayName ?? label ?? "Participant", ProfilePostLimit, ct);
 
         // Permitted operational actions for this viewer, computed from real authority.
         var actions = new List<ExperienceAction>();
@@ -96,13 +84,46 @@ public sealed partial class ExperienceService
             ServerPlace(principal, await SiteLabel(ct)),
             new ExperienceResult(new ExperienceProfileData(
                 participantId, did, label, participant.Classification.ToString(),
-                Format(participant.JoinedAt), self, participant.IsSuspended, roles, posts,
-                posts.Count >= ProfilePostLimit, profile.DisplayName, profile.Description, profile.Avatar,
+                Format(participant.JoinedAt), self, participant.IsSuspended, roles,
+                window.Posts.Select(view => view.Dto).ToList(), window.More, profile.DisplayName, profile.Description, profile.Avatar,
                 "/u/" + Uri.EscapeDataString(did ?? ParticipantIdentity.InternalValue(participantId)),
-                await conversation.ResolveParticipants(visibleMessages, ct)), null, null),
+                window.Resolved), null, null),
             (await digest.Page(viewer, credential, null, null, null, 3, ct)).Attention,
             Empty(), actions.Take(3).ToList(), null, null, viewer, credential, ct);
     }
+
+    /// <summary>The bounded recent-posts window two readers share (the profile page and the
+    /// persona's participant read): newest first, only through Topics the viewer may read,
+    /// with the mention facets resolved for fresh labels.</summary>
+    internal async Task<RecentPostWindow> VisibleRecentPosts(string viewer, string participantId,
+        string authorName, int limit, CancellationToken ct)
+    {
+        var views = new List<RecentPostView>(limit);
+        IReadOnlyList<Post> scanned;
+        using (EntityContext.NoCache())
+            scanned = await Post.Query(post => post.AuthorParticipantId == participantId, RecentPosts(), ct);
+        var visible = new List<Post>(limit);
+        foreach (var post in scanned)
+        {
+            if (views.Count >= limit) break;
+            var description = await topics.Describe(viewer, post.TopicKey, ct);
+            if (description is null || !description.CanRead) continue;
+            visible.Add(post);
+            views.Add(new(new ExperiencePostDto(
+                refs.Post(description.TangentKey, post.TopicKey, post.Id), participantId,
+                authorName, post.Removed ? "" : post.Content.Text, null,
+                refs.Origin + "/t/" + Uri.EscapeDataString(description.TangentKey) + "/" + Uri.EscapeDataString(post.Id),
+                Format(post.AcceptedAt), post.EditedAt is { } edited ? Format(edited) : null, post.Removed,
+                post.Facets), description.TangentKey, post.TopicKey));
+        }
+        var resolved = await conversation.ResolveParticipants(visible, ct);
+        return new(views, views.Count >= limit, resolved);
+    }
+
+    internal sealed record RecentPostWindow(IReadOnlyList<RecentPostView> Posts, bool More,
+        IReadOnlyDictionary<string, ParticipantResolution>? Resolved);
+
+    internal sealed record RecentPostView(ExperiencePostDto Dto, string TangentKey, string TopicKey);
 
     internal static QueryDefinition RecentPosts()
     {

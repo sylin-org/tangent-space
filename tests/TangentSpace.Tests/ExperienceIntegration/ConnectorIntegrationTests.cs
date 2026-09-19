@@ -1,6 +1,8 @@
 using Xunit;
 using System.Diagnostics;
+using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Tangent.Tests.ExperienceIntegration;
 
@@ -178,6 +180,78 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public void The_manage_enum_appears_only_when_the_roles_carry_it()
+    {
+        using var peer = ConnectorPeer.Start(ConnectorBinary(), home);
+        peer.Initialize();
+        // A member holds no rungs: the member ring alone, and no manage key at all.
+        Assert.Equal(13, peer.Tools().GetArrayLength());
+
+        // Granting the persona's participant the Administrator role widens the envelope; the
+        // next session reports it, and the catalog projects the case keys and the ladder —
+        // the enum carrying exactly the rungs the role holds.
+        app.Services.GetRequiredService<Koan.Identity.Roles.RoleCollection>()
+            .Add(Tangent.Access.TangentBuiltInRoles.Administrator.Token, app.AgentParticipantId, TestContext.Current.CancellationToken).Wait();
+        var connected = peer.Call("tools/call", new { name = "Connect", arguments = new { service = "tangent", persona = "agent", address = app.Origin } });
+        Assert.False(connected.GetProperty("result").GetProperty("isError").GetBoolean());
+        var tools = peer.Tools();
+        // The administrator's rungs widen the catalog by the manage key alone: the case keys
+        // stay absent because the access map does not grant Topic management here — the
+        // projection carries exactly the authority, no wider.
+        Assert.Equal(14, tools.GetArrayLength());
+        var manage = tools.EnumerateArray().Single(entry => entry.GetProperty("name").GetString() == "Forum_Manage_User");
+        Assert.Equal(new[] { "suspend", "timeout", "warn" },
+            manage.GetProperty("inputSchema").GetProperty("properties").GetProperty("action").GetProperty("enum")
+                .EnumerateArray().Select(value => value.GetString()).ToArray());
+    }
+
+    [Fact]
+    public void The_member_ring_writes_and_the_participant_read_run_through_the_real_binary()
+    {
+        var context = Connect();
+        var spaceRef = $"{app.Origin}::proj";
+        var started = Call("Forum_Start_Thread", JsonSerializer.Serialize(new
+        {
+            session = context, spaceRef, requestId = "bin-thread-1",
+            title = "Binary Thread", text = "Started from the connector binary.",
+        }));
+        var data = started.GetProperty("experience").GetProperty("result").GetProperty("data");
+        var topicRef = data.GetProperty("topicRef").GetString()!;
+        var postRef = data.GetProperty("postRef").GetString()!;
+        Assert.StartsWith(app.Origin, topicRef);
+
+        var read = Call("Forum_Read_User", JsonSerializer.Serialize(new { session = context, userRef = ExperienceWebApp.HumanDid }));
+        var profile = read.GetProperty("experience").GetProperty("result").GetProperty("data").GetProperty("profile");
+        Assert.Equal(ExperienceWebApp.HumanHandle, profile.GetProperty("handle").GetString());
+
+        // Edit-own and delete-own ride the domain's own-post rules; the Topic must allow editing.
+        EnableEditing(topicRef.Split("::")[^1]);
+        Call("Forum_Edit_Post", JsonSerializer.Serialize(new { session = context, postRef, text = "Edited from the binary." }));
+        var window = Call("Forum_Read_Thread", JsonSerializer.Serialize(new { session = context, threadRef = topicRef }));
+        Assert.Equal("Edited from the binary.", window.GetProperty("experience").GetProperty("result")
+            .GetProperty("data").GetProperty("posts")[0].GetProperty("text").GetString());
+        Call("Forum_Delete_Post", JsonSerializer.Serialize(new { session = context, postRef }));
+        var after = Call("Forum_Read_Thread", JsonSerializer.Serialize(new { session = context, threadRef = topicRef }));
+        Assert.True(after.GetProperty("experience").GetProperty("result").GetProperty("data")
+            .GetProperty("posts")[0].GetProperty("removed").GetBoolean());
+    }
+
+    private string Connect()
+    {
+        var arrived = Call("Connect", JsonSerializer.Serialize(new { service = "tangent", persona = "agent", address = app.Origin }));
+        return arrived.GetProperty("connector").GetProperty("contextId").GetString()!;
+    }
+
+    private void EnableEditing(string topicKey)
+    {
+        app.Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", app.OwnerToken);
+        using var settings = app.Http.PatchAsync($"/api/rooms/{topicKey}/settings",
+            JsonContent.Create(new { allowPostEditing = true, isLocked = false }), TestContext.Current.CancellationToken).Result;
+        settings.EnsureSuccessStatusCode();
+        app.Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", app.AgentToken);
+    }
+
+    [Fact]
     public void The_stdio_mcp_intake_negotiates_and_serves_the_full_flow()
     {
         using var peer = ConnectorPeer.Start(ConnectorBinary(), home);
@@ -248,17 +322,43 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
             var id = nextId++;
             input.WriteLine(JsonSerializer.Serialize(new { jsonrpc = "2.0", id, method, @params = parameters }));
             var deadline = Task.Delay(TimeSpan.FromSeconds(30));
-            var read = output.ReadLineAsync();
-            if (Task.WhenAny(read, deadline).Result != read)
-                throw new TimeoutException($"MCP call timed out: {method}");
-            using var response = JsonDocument.Parse(read.Result!);
-            Assert.Equal(id, response.RootElement.GetProperty("id").GetInt32());
-            return response.RootElement.Clone();
+            while (true)
+            {
+                var read = output.ReadLineAsync();
+                if (Task.WhenAny(read, deadline).Result != read)
+                    throw new TimeoutException($"MCP call timed out: {method}");
+                using var response = JsonDocument.Parse(read.Result!);
+                // A notification (a projected-catalog change, say) may ride the stream ahead of
+                // the answer; the response id is what pairs.
+                if (!response.RootElement.TryGetProperty("id", out var matched)) continue;
+                Assert.Equal(id, matched.GetInt32());
+                return response.RootElement.Clone();
+            }
         }
 
         public void Notify(string method, object parameters)
         {
             input.WriteLine(JsonSerializer.Serialize(new { jsonrpc = "2.0", method, @params = parameters }));
+        }
+
+        /// <summary>The negotiated handshake, so a test can list tools without repeating it.</summary>
+        public void Initialize()
+        {
+            var initialize = Call("initialize", new
+            {
+                protocolVersion = "2025-06-18",
+                capabilities = new { },
+                clientInfo = new { name = "dotnet-integration", version = "1" },
+            });
+            Assert.Equal("2025-06-18", initialize.GetProperty("result").GetProperty("protocolVersion").GetString());
+            Notify("notifications/initialized", new { });
+        }
+
+        /// <summary>The live projected catalog — projection runs per call, never declared.</summary>
+        public JsonElement Tools()
+        {
+            var tools = Call("tools/list", new { });
+            return tools.GetProperty("result").GetProperty("tools").Clone();
         }
 
         public void Dispose()

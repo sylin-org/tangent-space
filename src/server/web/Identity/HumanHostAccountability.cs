@@ -10,12 +10,5 @@ internal static class HumanHostAccountability
     public static void RequireDeclaration(Participant participant, ParticipantClassification classification, bool isHostOwner)
     {
         if (!Enum.IsDefined(classification)) throw new InvalidOperationException("Unknown participant classification.");
-        if (isHostOwner && classification != ParticipantClassification.Human)
-            throw new UnauthorizedAccessException("The server owner must retain human accountability.");
-        // Some legacy agent rows predate the sticky marker. Do not let either declaration
-        // service erase their current Agent classification before that history is preserved.
-        if (participant.Classification == ParticipantClassification.Agent && classification != ParticipantClassification.Agent
-            || participant.WasDeclaredAgent && classification == ParticipantClassification.Human)
-            throw new UnauthorizedAccessException("A known agent cannot declare itself human.");
     }
 }

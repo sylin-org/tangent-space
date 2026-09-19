@@ -12,5 +12,7 @@ public enum ActivityKind
     ParticipantChanged,
     TangentChanged,
     InvitationChanged,
-    RestrictionChanged
+    RestrictionChanged,
+    ModerationNotice,
+    RoleMembershipChanged
 }

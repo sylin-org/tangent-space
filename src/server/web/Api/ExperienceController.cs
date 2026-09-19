@@ -55,6 +55,27 @@ public sealed class ExperienceController(ExperienceService experience) : Control
     public Task<IActionResult> CreatePost(string topicKey, [FromBody] ExperienceCreatePostRequest request, CancellationToken ct)
         => Mutate(principal => experience.CreatePost(principal, topicKey, request.RequestId, request.Text, request.ReplyTo, request.Facets, ct));
 
+    [HttpPost("tangents/{tangentKey}/topics")]
+    public Task<IActionResult> StartThread(string tangentKey, [FromBody] ExperienceStartThreadRequest request, CancellationToken ct)
+        => Mutate(principal => experience.StartThread(principal, tangentKey, request.RequestId, request.Title, request.Text, ct));
+
+    [HttpPatch("posts/{postRef}")]
+    public Task<IActionResult> EditPost(string postRef, [FromBody] ExperienceEditPostRequest request, CancellationToken ct)
+        => Mutate(principal => experience.EditPost(principal, postRef, request.Text, request.RequestId, ct));
+
+    [HttpDelete("posts/{postRef}")]
+    public Task<IActionResult> DeletePost(string postRef, [FromQuery] string? requestId, CancellationToken ct)
+        => Mutate(principal => experience.DeletePost(principal, postRef, requestId, ct));
+
+    [HttpGet("participants/{*identifier}")]
+    public Task<IActionResult> Participant(string identifier, CancellationToken ct)
+        => Read(principal => experience.ReadParticipant(principal, identifier, ct));
+
+    [HttpPost("moderation/users/{user}/management")]
+    public Task<IActionResult> ManageUser(string user, [FromBody] ExperienceManageUserRequest request, CancellationToken ct)
+        => Mutate(principal => experience.ManageUser(principal, user, request.RequestId, request.Action,
+            request.Reason, request.DurationSeconds, request.Role, request.CaseRef, ct));
+
     [HttpPost("topics/{topicKey}/reports")]
     public Task<IActionResult> ReportPost(string topicKey, [FromBody] ExperienceReportPostRequest request, CancellationToken ct)
         => Mutate(principal => experience.ReportPost(principal, topicKey, request.RequestId, request.PostRef,
@@ -158,3 +179,10 @@ public sealed record ExperienceModerationPreviewRequest(string Action, string Su
 
 public sealed record ExperienceModerationActionRequest(string RequestId, string Action, string Summary,
     DateTimeOffset? DeferredUntil, long ExpectedCaseRevision, string ExpectedSubjectRevision);
+
+public sealed record ExperienceStartThreadRequest(string RequestId, string Title, string Text);
+
+public sealed record ExperienceEditPostRequest(string Text, string? RequestId);
+
+public sealed record ExperienceManageUserRequest(string Action, string Reason, long? DurationSeconds = null,
+    string? Role = null, string? CaseRef = null, string? RequestId = null);

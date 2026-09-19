@@ -86,6 +86,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<ExperienceDigest>();
         services.AddSingleton<ExperienceService>();
         services.AddSingleton<ModerationCaseService>();
+        services.AddSingleton<UserManagementService>();
         var protection = services.AddDataProtection().SetApplicationName(DataProtectionApplicationName);
         if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
         services.AddOptions<KeyManagementOptions>().Configure<IHostEnvironment, ILoggerFactory>((keyOptions, host, logger) =>
@@ -95,9 +96,9 @@ public sealed class TangentModule : KoanModule
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)
     {
-        await services.GetRequiredService<Arrival>().CheckConfiguration(ct);
         await services.GetRequiredService<TangentRoleAccess>().Seed(
             await Space.Get(TangentConstants.SpaceId, ct), ct);
+        await services.GetRequiredService<Arrival>().CheckConfiguration(ct);
     }
 
     public override void Report(ProvenanceModuleWriter module, IConfiguration cfg, IHostEnvironment env)

@@ -121,6 +121,11 @@ public static class ExperienceActionNames
     public const string ReadModerationCase = "read_moderation_case";
     public const string PreviewModerationAction = "preview_moderation_action";
     public const string ApplyModerationAction = "apply_moderation_action";
+    public const string WarnUser = "warn_user";
+    public const string TimeoutUser = "timeout_user";
+    public const string SuspendUser = "suspend_user";
+    public const string BanUser = "ban_user";
+    public const string AssignRoles = "assign_roles";
 }
 
 // ---------- Result data payloads ----------
@@ -179,3 +184,19 @@ public sealed record ExperienceProfileRole(string Scope, string Key, string Labe
 /// <summary>One autocomplete target: a participant or a dynamic role group.</summary>
 public sealed record ExperienceMentionable(string Kind, string Label, string Insert,
     string? Did, string? Classification, string? Badge, int Rank, int? Count = null);
+
+/// <summary>One rung of the user-management ladder, applied. Until is the timeout's computed
+/// expiry; TangentRef scopes a restriction to the Tangent its cited case lives in.</summary>
+public sealed record ExperienceUserManagementData(string UserRef, string Action, string Reason,
+    string? Role = null, DateTimeOffset? Until = null, string? TangentRef = null, string? CaseRef = null);
+
+/// <summary>A thread started through one job: the Topic and its opening Post.</summary>
+public sealed record ExperienceThreadData(string TopicRef, string TangentRef, string PostRef, string Title, string Url);
+
+/// <summary>The participant read for a companion: an identity card and a bounded, read-filtered
+/// window of their recent Posts — the contextualization instrument.</summary>
+public sealed record ExperienceReadUserData(ExperienceReadUserProfile Profile,
+    IReadOnlyList<ExperiencePostDto> RecentPosts, IReadOnlyDictionary<string, Conversation.ParticipantResolution>? Resolved = null);
+
+public sealed record ExperienceReadUserProfile(string ParticipantRef, string? Did, string? Handle,
+    string DisplayName, string Classification, string? Description, string? Avatar, string ProfileUrl);

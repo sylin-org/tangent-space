@@ -7,13 +7,13 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Field | Value |
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
-| Current slice | R2 — Rename to the product's words |
-| Current task | R2.6 — wipe and verify (`waiting` on Leo for the walkthrough). The wipe itself is done |
-| Next action | **Walkthrough W1–W11 with Leo on the fresh install**, which closes R2.6 and R2. The install is unclaimed, so W1 starts at the claim — which is now the first-Tangent press itself (D16), not a screen before it; the connector needs `forget` then Connect (N-056). After that, R3 begins with R3.1's design note. Two things still owed: the `probes/` question (N-047) and push authorization |
-| Last checkpoint | 2026-09-17 · autonomous session · The user list is built and live (N-063); the join defect is diagnosed to a line and deliberately left for R3.4; the orphaned membership row is cleared. .NET 90/90, node 7/7, connector 52/52, greenfield 508 |
-| Durability | Commits at task checkpoints are authorized (D10). **Pushed to `origin/claude/epic-007-realignment` through `f212237` on 2026-09-17**, so the work no longer exists only on this machine |
-| Waiting on | Leo, for the four steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account). Nothing else |
-| Blockers | None. The stranded tables are gone with the wipe, so N-044 is closed |
+| Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
+| Current task | The connector's wire, server side — **done** (see In flight). R3 resumes with R3.1's design note |
+| Next action | The W1–W11 walkthrough with Leo, which closes R2.6 and R2; the connector's live walk already passed (S-006). Leo may also want to re-enrol the agent (`forget` then Connect, N-056) so its context picks up the widened catalog |
+| Last checkpoint | 2026-09-19 · autonomous session · the four server-side growth items from CompanionLobby's `capabilities.md` implemented and verified: ladder, member-tier writes, settlement attention, participant read. .NET 100/100, node 7/7, connector 62/62, greenfield 492. Live walk green: Connect as ox-omega widened the catalog 13 → 14 with `Forum_Manage_User`'s enum exactly `["suspend","timeout","warn"]`, and a warn was applied and journaled |
+| Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
+| Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
+| Blockers | None |
 
 ## Resume protocol
 
@@ -203,6 +203,24 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 ## In flight
 
+**Completed: the connector's wire, server side** (2026-09-19)
+
+The connector now lives in the sibling `../CompanionLobby` checkout, rebuilt around its own [ADR 0001](../../../CompanionLobby/docs/adr/0001-toolset-surface.md): capability rings, labeled sessions, the volition boundary. Its `docs/capabilities.md` §"Wire the server still needs to grow" was this task's work order, and its fake server the reference wire contract. This is R4.2's "add the missing `/api/v1` operations" pulled forward by the matched-pair work, plus part of R4.1's stewardship surface; the ledger rows stay and absorb the outcome.
+
+- [x] **The moderation ladder.** Permission tokens `global:user_warn`, `global:user_timeout`, `global:user_ban` (suspend rides the existing `global:participant_manage`, assign_roles rides `global:role_manage`), emitted as `warn_user` / `timeout_user` / `suspend_user` / `ban_user` / `assign_roles` in steward envelopes per the holder's role bag, and `POST /api/v1/experience/moderation/users/{user}/management`. One new `Stewardship.UserManagementService`: warn is communicative and journaled as moderation; timeout is a reversible Tangent-scoped restriction with a duration; ban is the indefinite Tangent-scoped restriction; both restrictions must cite the case that grounds them (the case names the Tangent where the sanction binds); suspend is the server-wide `Participant.IsSuspended`; `add_role`/`remove_role` go through Koan roles, the actor holding both `role_manage` and the role in question (D12), never the Owner role. Administrator's built-in seed gains warn+timeout, so a fresh install demonstrates two distinct enums. Emission points: arrival (a steward's catalog widens at Connect), topic windows and every `TopicPlaceOf` envelope — held rungs project wherever the holder can see, not only where a Topic's access map grants management
+- [x] **Member-tier endpoints.** `POST /tangents/{space}/topics {requestId, title, text}` — the server mints a deterministic topic key from title plus a hash of the requestId, so a replay lands on the same Topic and the text becomes its opening Post; `PATCH /posts/{post} {text}` and `DELETE /posts/{post}` over `ConversationService.ChangePost`, whose own-post authority and edit history were already the rules; requestId optional
+- [x] **Job semantics.** requestId stays the idempotency key through the receipt registry (replay → recorded result; a different action under the same id → 409 `request_conflict`); the digest mints `write_settlement` attention items for the actor's own unread posts in watched Topics, so the connector reads settlement from CatchUp and keeps no journal
+- [x] **The participant profile read.** `GET /api/v1/experience/participants/{identifier}` — the `read_user` envelope: identity card plus a bounded, read-filtered window of recent Posts, with `read_topic` follow-ups. The scan is extracted as `VisibleRecentPosts`, shared with the profile page
+- [x] **Contract tests.** `ConnectorWireTests` (real HTTP): rung projection per role, the ladder's acts and refusals, suspension, role assignment bounds, thread replay idempotence, edit/delete-own, the participant read, settlement clearing on acknowledgement. `ConnectorIntegrationTests` gained the real-binary journeys: the projected catalog widens only when the roles carry it (13 → 14 for an administrator whose enum is exactly `["suspend","timeout","warn"]`), and start-thread / read-user / edit-own / delete-own through `companion-lobby call`. The peer now skips mid-stream notifications
+- [x] **Live walk (green).** Image rebuilt and relaunched at 5220; the owner role's startup re-seed picked up the new tokens. With a throwaway copy of the operator's connector state (the manager on 5219 and its lock untouched): Connect as ox-omega → briefing, `notifications/tools/list_changed`, catalog 13 → 14 with the manage enum exactly `["suspend","timeout","warn"]`; WhoAmI's readout lists the rungs; `Forum_Read_User` on the owner's participant answers profile plus recent posts; `Forum_Manage_User` with action `warn` answered ok and the `TopicAudit` row (`Warn`, accepted) is in the live database. The live administrator role definition was brought level with the new built-in seed (warn+timeout added by direct SQLite, same precedent as when the role membership was seeded for the connector exercise)
+
+Evidence: .NET 100/100 (98 prior + 8 `ConnectorWireTests`, plus the widened integration journeys), node 7/7, connector 62/62 in the sibling workspace, greenfield 492 (the roles-UI WIP carries its own count; this task added no new findings — four "companion" comment words it initially introduced were rewritten).
+
+Two defects the work surfaced:
+
+- **N-064** (fixed here) — replay envelopes carried shapeless data. `ExperienceService.Replay` deserialized stored result JSON into a `System.Text.Json.JsonElement` boxed as `object`; the wire serializer is Newtonsoft (Koan's `AddNewtonsoftJson`), which renders the box's own shape — `{"valueKind":"Object"}` — instead of the recorded data. Every retry that recovered a lost response (Join, CreatePost, …) returned garbage `data`. Fixed by parsing the stored JSON to a `JToken` in `Replay`.
+- **N-065** (worked around here; routed to Koan below) — `RoleCollection` mutations cannot ride a deferred transaction. Under `EntityContext.Transaction`, the Role save is deferred past `RoleMutationGuard.Allow`, and the commit fails with `EntityLifecycleCancelledException` ("Role is managed by RoleCollection; generic entity mutation is not authorized"). `UserManagementService.AssignRole` therefore commits the role change immediately and journals its record in a small transaction of its own.
+
 **R2.6 — wipe and verify** (waiting on Leo)
 
 The wipe is done and the install is fresh, so R2.1's stranded tables are resolved and the epic is no longer carrying them. What remains is the part Claude cannot do.
@@ -306,9 +324,9 @@ The originals, if the assertions are wanted: `git show 88f470f -- tests/TangentS
 | Greenfield findings (lines): total | 4,132 | **507** | 0 |
 | — inbound MCP / WebMCP / Spaces / classification | 712 / 20 / 220 / 38 | 30 / 0 / 21 (`SourceDecision`, R3.6) / 0 | 0 |
 | — retired vocabulary / historical markers / bootstrap | 3,095 / 29 / 18 | 1,831 / 8 / 0 | 0 |
-| .NET tests | 506 of 518 (12 known failures) | **87 of 87** | all pass |
+| .NET tests | 506 of 518 (12 known failures) | **100 of 100** | all pass |
 | Browser tests | 170 of 170 | **7 of 7** | all pass |
-| Connector tests | 98 of 98 | **52 of 52** | all pass |
+| Connector tests | 98 of 98 | **62 of 62** (sibling workspace) | all pass |
 | Connector Rust lines (baseline at `deb70ab`) | 9,489 | 8,820 | about 8,300 |
 | Connector enrollment / account-binding paths | 3 / 2 | 1 / 1 | 1 / 1 |
 | Connector source without a working path | about 850 | 0 | 0 |
@@ -538,7 +556,7 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 
 ## Findings to route
 
-None yet. Record Koan defects here with the framework revision, a reproducer, expected and observed behavior, severity and consumer impact, then ask Leo to route them.
+- **F-001** (2026-09-19, ask Leo to route to the Koan agent) — **`RoleCollection` mutations cannot participate in Koan deferred transactions.** Framework revision `21b18c69` (`.local/upstream/koan-framework`, pinned in `scripts/prepare-framework.ps1`). Under `Koan.Data.Core`'s deferred coordination (`EntityContext.Transaction("tangent-topic-administration")`), a `RoleCollection.Add/Remove` defers the `Role` entity save past the `using (RoleMutationGuard.Allow(roleKey, …))` scope that authorizes it; the guard then cancels the write at commit, and `EntityContext.Commit` throws `TransactionException` wrapping `EntityLifecycleCancelledException: Role is managed by RoleCollection; generic entity mutation is not authorized` — "failed after 0 completed operation(s)", outcome unknown. Expected: two framework features compose — a managed-entity mutation inside an ambient deferred transaction either commits with the guard honored or refuses at the call site with a precise error. Observed: a late, misleading failure that names the entity "generic" although the mutation went through the collection. Reproducer: Tangent's `UserManagementService.Manage` with `add_role` inside the transaction (see the ledger's In flight, 2026-09-19; the probe that isolated it ran `roles.Add` as the only registered operation). Severity: medium — silent composition failure between two advertised features, with a confusing error at commit time. Consumer impact: Tangent's user-management rung now commits role changes outside any transaction and journals afterwards; a crash between the two leaves a role change without its audit record. Recorded delivery: none yet — Leo routes it.
 
 ## Session log
 
@@ -603,6 +621,15 @@ None yet. Record Koan defects here with the framework revision, a reproducer, ex
 - **D16 (`f212237`), and the lesson in it.** Leo: the confirmation screen is unnecessary; then, when I had only stopped routing to it — "fully remove the interstitial, don't just abandon it. Greenfield app, too early to start accumulating tech debt." Removing it properly took an endpoint, a record, a parameter, a guard, a handler, a listener, 18 CSS rules and an orphaned using — and then two lines of copy still promising the screen, which no compiler was ever going to find (N-060).
 - Every suite green throughout: .NET 87/87, node 7/7.
 - Next: the W1–W11 walkthrough with Leo on the fresh install, which closes R2.6 and R2. W11 is expected to fail until R4.7 builds the arrival model.
+
+### S-006 · 2026-09-19 · Claude (GLM 5.3 Flash)
+
+- Resumed after the connector extraction. The working tree held 15 roles-UI/profile files of prior WIP (self-enrollable `participant` role, role editor, profile classification capture); reconciled against the checkpoint and built on top of it — several of this task's files overlap it, so the commit carries both, stated plainly in the message.
+- The connector matched pair, server side, landed (see In flight): the moderation ladder with its one management endpoint and `UserManagementService`; start-thread / edit-own-post / delete-own-post; `write_settlement` attention items; the `read_user` participant read. The ladder's emission widened during the work: the binary test proved an administrator's rungs never surface when emission waits on a Topic's access-map manage, so held rungs now project at arrival and on every topic place — the enum carries exactly the authority, no wider.
+- Two defects surfaced: N-064 (replay envelopes rendered `{"valueKind":"Object"}` under the Newtonsoft wire serializer — fixed by parsing stored result JSON to a `JToken`), and F-001 (Koan `RoleCollection` mutations fail under deferred transactions — worked around in `AssignRole`, routed in Findings).
+- Suites: .NET 100/100 (8 new contract tests plus the widened real-binary journeys), node 7/7, connector 62/62 in the sibling workspace, greenfield 492 (all of the delta from the carried WIP; four "companion" words this task briefly added were rewritten).
+- Live walk green on the rebuilt image: with a throwaway copy of the operator's connector state (manager on 5219 and its lock untouched), Connect as ox-omega fired `notifications/tools/list_changed` and widened the catalog 13 → 14 with `Forum_Manage_User`'s enum exactly `["suspend","timeout","warn"]`; `Forum_Read_User` and a `warn` rung both answered ok, and the `TopicAudit` row is in the live database. The live administrator definition was raised to the new seed by direct SQLite (the box's established precedent). Throwaway state deleted.
+- The one-process rule still binds one state directory to one serve (the temp walk needed its own copy); R3.7 is what makes sharing real.
 
 ## Evidence index
 

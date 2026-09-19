@@ -7,6 +7,7 @@ using Tangent.Spaces;
 using Tangent.Conversation;
 using Tangent.Activity;
 using Tangent.Identity;
+using Tangent.Access;
 
 namespace Tangent;
 
@@ -17,7 +18,8 @@ public sealed class TangentServer(
     ServerGovernance space, TangentGovernance tangents, ParticipantGovernance participants,
     TopicGovernance topics, ConversationService posts, ActivityService activity,
     ParticipantProfiles profiles,
-    ParticipantDirectory directory, LiveSessions live)
+    ParticipantDirectory directory, LiveSessions live,
+    TangentRoleAccess roles)
 {
     public ParticipantProfiles Profiles { get; } = profiles;
     public ServerGovernance Space { get; } = space;
@@ -28,5 +30,5 @@ public sealed class TangentServer(
     public ActivityService Activity { get; } = activity;
     public ParticipantDirectory Directory { get; } = directory;
     public LiveSessions Live { get; } = live;
-
+    public TangentRoleAccess Roles { get; } = roles;
 }

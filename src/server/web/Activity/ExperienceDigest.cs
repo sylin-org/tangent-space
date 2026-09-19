@@ -126,7 +126,18 @@ public sealed class ExperienceDigest(
             var addressedPosts = new HashSet<string>(StringComparer.Ordinal);
             foreach (var post in unread)
             {
-                if (post.Removed || post.AuthorParticipantId == did) continue;
+                // The actor's own writes settle into their inbox — read mail about what you
+                // posted, so the author sees the double post and can reconcile it with the
+                // delete key it already holds. Settlement rides the Topic's watch: a
+                // watched-out Topic delivers nothing.
+                if (post.AuthorParticipantId == did)
+                {
+                    if (!post.Removed)
+                        watched.Add(Item(did, topic, stored.TangentKey, post, "write_settlement", null,
+                            handles.GetValueOrDefault(did)));
+                    continue;
+                }
+                if (post.Removed) continue;
                 var authorHandle = handles.GetValueOrDefault(post.AuthorParticipantId);
                 // Direct replies answer this participant's accepted post.
                 if (post.Content.ReplyTo is { } parent)

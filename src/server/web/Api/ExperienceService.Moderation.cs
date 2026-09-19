@@ -145,7 +145,10 @@ public sealed partial class ExperienceService
     }
 
     private static ExperienceCapabilities CapabilitiesOf(ExperiencePlace place)
-        => new(true, false, place.AllowedActions.Contains(ExperienceActionNames.ListModerationCases));
+        => new(true, false, place.AllowedActions.Any(action => action == ExperienceActionNames.ListModerationCases
+            || action is ExperienceActionNames.WarnUser or ExperienceActionNames.TimeoutUser
+                or ExperienceActionNames.SuspendUser or ExperienceActionNames.BanUser
+                or ExperienceActionNames.AssignRoles));
 
     private static string CaseId(string value)
     {

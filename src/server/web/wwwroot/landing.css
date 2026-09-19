@@ -171,16 +171,11 @@ body[data-page='settings'] #server-welcome,body[data-page='settings'] #place { d
 .role-members-heading { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:20px; }
 .role-members-heading h4 { margin:0 0 4px; font:500 20px Georgia,serif; }
 .role-members-heading p { margin:0; }
-.role-member-invite { display:grid; gap:16px; margin-bottom:22px; padding:18px; border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line)); border-radius:10px; background:#16141b; }
-.role-member-invite h4 { margin:0 0 4px; font:500 18px Georgia,serif; }
-.role-member-invite p { margin:0; }
-.role-member-query { display:grid; gap:8px; font:650 13px var(--sans); }
-.role-member-add { display:flex; gap:8px; }
-.role-member-add .input { min-width:0; }
-.role-member-resolved { display:grid; grid-template-columns:36px minmax(0,1fr) auto; gap:11px; align-items:center; padding:13px; border:1px solid var(--line); border-radius:9px; background:#201c25; }
-.role-member-resolved strong,.role-member-resolved small { display:block; }
-.role-member-resolved strong { font-size:13px; }
-.role-member-resolved small { margin-top:3px; color:var(--ink-soft); font:9px var(--mono); }
+.role-member-search { display:block; margin-bottom:18px; }
+.role-member-search .input { width:100%; box-sizing:border-box; }
+.role-member-toggle { min-width:76px; padding:6px 14px; font-size:.82rem; border-radius:6px; cursor:pointer; }
+.role-member-toggle.in-role { border-color:var(--line); color:var(--ink-soft); background:transparent; }
+.role-member-toggle.in-role:hover { border-color:#f1aaa3; color:#f1aaa3; background:#f1aaa310; }
 .role-member-protected { margin-bottom:20px; padding:16px 18px; border:1px solid #f4b94240; border-radius:10px; background:#2a231c; }
 .role-member-protected strong { display:block; margin-bottom:5px; color:#ffe2a1; font-size:13px; }
 .role-member-protected p { margin:0; color:var(--ink-soft); font:12px/1.5 var(--sans); }
@@ -244,28 +239,22 @@ body[data-page='settings'] #server-welcome,body[data-page='settings'] #place { d
   .role-members-heading h4 { font-size:18px; }
   .role-members-heading { align-items:flex-start; margin-bottom:12px; }
   .role-members-heading p { margin-top:2px; }
-  .role-fields,.role-member-invite { grid-template-columns:1fr; }
-  .role-member-add { flex-wrap:wrap; }
-  .role-member-add .input { flex:1 0 100%; min-height:44px; }
-  .role-member-add .btn { min-height:44px; }
-  .role-member-resolved { grid-template-columns:36px minmax(0,1fr); }
-  .role-member-resolved .btn { grid-column:1 / -1; min-height:44px; }
-  .role-member { grid-template-columns:36px minmax(0,1fr) 44px; align-items:center; }
+  .role-fields { grid-template-columns:1fr; }
+  .role-member { grid-template-columns:36px minmax(0,1fr) auto; align-items:center; }
   .role-member > span:nth-child(2) { min-width:0; }
   .role-member strong { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .role-member small { white-space:normal; overflow-wrap:anywhere; }
-  .role-member-remove { width:44px; height:44px; justify-self:end; }
   .role-members-heading .btn { min-height:44px; }
   .role-editor-actions { margin-left:16px; margin-right:16px; padding:12px 0 16px; flex-wrap:wrap; }
 }
 @media(max-width:1000px) { .role-editor-workspace { grid-template-columns:1fr; } .role-browser { display:none; } }
 @media(prefers-reduced-motion:reduce) { body[data-page] .tangent-card.sylin-card:hover { transform:none; } .tcg-holo,.tcg-holo2 { display:none; } }
 
-/* People — everyone who has arrived. Same row rhythm as the role directory, but these rows
-   are facts rather than controls: nothing here is clickable, because granting a role is the
-   Roles tab's job and this list exists so the owner can see someone is there at all. */
+/* People — everyone who has arrived. Clickable rows navigate to the participant's profile. */
 .people-list { display:grid; }
-.person-row { display:grid; grid-template-columns:34px minmax(0,1fr) auto 48px; gap:14px; align-items:center; min-height:62px; padding:10px 14px; border-bottom:1px solid var(--line); }
+.person-row { display:grid; grid-template-columns:34px minmax(0,1fr) auto 48px; gap:14px; align-items:center; min-height:62px; padding:10px 14px; border-bottom:1px solid var(--line); text-decoration:none; color:inherit; cursor:pointer; transition:background .15s ease; border-radius:6px; }
+.person-row:hover { background:#241e2f; }
+.person-row:focus-visible { background:#241e2f; outline:2px solid var(--accent); outline-offset:-2px; }
 .person-mark { width:34px; height:34px; border-radius:50%; overflow:hidden; display:grid; place-items:center; background:#241f2d; border:1px solid var(--line); color:var(--ink-soft); font:600 .82rem var(--sans); }
 .person-mark img { width:100%; height:100%; object-fit:cover; display:block; }
 .person-body { display:grid; min-width:0; gap:2px; }
@@ -275,6 +264,8 @@ body[data-page='settings'] #server-welcome,body[data-page='settings'] #place { d
 .person-chip { border:1px solid var(--line); border-radius:999px; padding:3px 9px; font:500 .7rem var(--sans); color:var(--ink-soft); white-space:nowrap; }
 .person-chip-empty { border-style:dashed; opacity:.75; }
 .person-chip-quiet { color:#9b8fa6; }
+.person-chip-agent { background:#382649; color:#dfb8ff; border-color:#9955dd55; }
+.person-chip-human { background:#253835; color:#a2ebd7; border-color:#38b29355; }
 .person-chip-danger { border-color:#a8555580; color:#ffb9ac; }
 .person-arrived { color:var(--ink-soft); font-size:.72rem; text-align:right; white-space:nowrap; }
 @media(max-width:560px) {
@@ -282,3 +273,104 @@ body[data-page='settings'] #server-welcome,body[data-page='settings'] #place { d
  .person-mark { width:28px; height:28px; }
  .person-arrived { display:none; }
 }
+
+/* Profile page rail layout — mirroring settings shell */
+.profile-shell { display:grid; grid-template-columns:210px minmax(0,1fr); align-items:start; gap:28px; margin-top:24px; }
+.profile-tabs { position:sticky; top:24px; display:grid; gap:5px; padding:8px; border:1px solid var(--line); border-radius:14px; background:#17151d; box-shadow:0 18px 45px -34px #000; }
+.profile-tab { display:grid; grid-template-columns:22px minmax(0,1fr); gap:10px; align-items:center; width:100%; padding:11px 12px; border:1px solid transparent; border-radius:9px; color:var(--ink-soft); background:transparent; text-align:left; cursor:pointer; }
+.profile-tab>span:first-child { color:var(--accent); font:20px/1 Georgia,serif; }
+.profile-tab strong,.profile-tab small { display:block; }
+.profile-tab strong { color:inherit; font:650 13px/1.25 var(--sans); }
+.profile-tab small { margin-top:3px; color:var(--ink-soft); font:10px/1.3 var(--sans); }
+.profile-tab:hover { background:#211e28; color:var(--ink); }
+.profile-tab[aria-selected='true'] { border-color:#f4b94255; background:#2a231c; color:#ffe6a6; box-shadow:inset 3px 0 0 var(--accent); }
+.profile-tab-content { min-width:0; }
+.profile-panel { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:16px; background:#191620; box-shadow:0 24px 60px -36px #000; }
+.profile-panel-heading { padding:24px 26px 20px; border-bottom:1px solid var(--line); background:#1d1a23; }
+.profile-panel-heading .eyebrow { margin:0 0 6px; color:var(--accent); font-size:9px; }
+.profile-panel-heading h3 { margin:0; font:500 24px/1.1 Georgia,serif; }
+.profile-panel-heading p.hint { margin:6px 0 0; color:var(--ink-soft); font-size:13px; }
+.profile-panel-body { padding:24px 26px; }
+.profile-identity-details { display:grid; gap:16px; }
+.profile-identity-details label { display:grid; gap:6px; }
+.profile-identity-details label span { color:var(--ink-soft); font:600 11px/1 var(--sans); text-transform:uppercase; letter-spacing:.05em; }
+.profile-identity-details code { padding:10px 14px; background:#16141b; border:1px solid var(--line); border-radius:8px; font:12px/1.4 monospace; word-break:break-all; color:var(--ink); }
+@media(max-width:800px) { .profile-shell { grid-template-columns:1fr; gap:12px; } .profile-tabs { position:static; display:flex; overflow-x:auto; } .profile-tab { min-width:140px; } }
+
+/* Profile page role management */
+.profile-role-management { display:grid; gap:16px; }
+.profile-role-list { display:grid; gap:10px; }
+.profile-role-row { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:14px; align-items:center; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:#1e1a26; }
+.profile-role-row .role-list-dot { width:12px; height:12px; border-radius:50%; background:var(--role-color,#a98df0); flex-shrink:0; }
+.profile-role-info { display:grid; gap:2px; }
+.profile-role-name-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.profile-role-info strong { font-size:.92rem; }
+.profile-role-info small { color:var(--ink-soft); font-size:.8rem; }
+.profile-role-badge { font-size:.72rem; padding:2px 7px; border:1px solid var(--line); border-radius:4px; text-transform:uppercase; letter-spacing:.04em; }
+.profile-role-badge.system { border-color:#8e744b66; color:#e0c184; background:#8e744b15; }
+.profile-role-badge.self-enrollable { border-color:#4ecdc466; color:#4ecdc4; background:#4ecdc415; }
+.profile-role-badge.restricted { border-color:var(--line); color:var(--ink-soft); }
+.profile-role-actions { display:flex; align-items:center; gap:8px; }
+.profile-role-toggle { min-width:84px; padding:6px 14px; font-size:.82rem; border-radius:6px; cursor:pointer; font-weight:600; }
+.profile-role-toggle.in-role { border-color:var(--line); color:var(--ink-soft); background:transparent; }
+.profile-role-toggle.in-role:hover { border-color:#f1aaa3; color:#f1aaa3; background:#f1aaa310; }
+#profile-role-status { margin:0; font-size:13px; min-height:18px; }
+
+/* Participant profile handles & classification badges */
+.profile-handle-link { color:var(--ink-soft); text-decoration:none; transition:color .15s ease; display:inline-flex; align-items:center; gap:5px; }
+.profile-handle-link:hover { color:var(--accent); text-decoration:underline; }
+.profile-handle-butterfly { font-size:.95em; vertical-align:middle; filter:sepia(1) hue-rotate(180deg) saturate(5) brightness(1.1); }
+.profile-classification-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; font:600 12px/1.2 var(--sans); }
+.profile-classification-badge.agent { background:#382649; color:#dfb8ff; border:1px solid #9955dd55; }
+.profile-classification-badge.human { background:#253835; color:#a2ebd7; border:1px solid #38b29355; }
+.profile-classification-badge.undeclared { background:#241f2d; color:var(--ink-soft); border:1px dashed var(--line); font-size:11px; }
+.profile-classification-badge.undeclared:hover { border-color:var(--accent); color:var(--ink); }
+
+/* Profile pills group */
+.profile-pills { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 6px; }
+.profile-pills:empty { display:none; }
+#profile-classification { display:inline-flex; align-items:center; margin:0; }
+#profile-classification:empty { display:none; }
+.profile-roles { display:inline-flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0; }
+.profile-roles:empty { display:none; }
+
+.role-chip {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 10px; border-radius:999px;
+  font:600 12px/1.2 var(--sans);
+  border:1px solid var(--line);
+  background:#241f2d; color:var(--ink-soft);
+}
+.role-chip.role-owner {
+  background:#3a2e1d; color:#ffe6a6; border-color:#f4b94255;
+}
+.role-chip.role-administrator {
+  background:#3a221f; color:#ffb9ac; border-color:#ee6c4d55;
+}
+.role-chip.role-participant {
+  background:#1e2638; color:#b3cdef; border-color:#4a75b555;
+}
+#profile-joined { margin:4px 0 0; font-size:13px; color:var(--ink-soft); }
+
+/* Classification badge menu */
+.profile-classification-menu { position:relative; display:inline-block; vertical-align:middle; }
+.profile-classification-menu > summary { list-style:none; cursor:pointer; user-select:none; transition:opacity .15s ease; }
+.profile-classification-menu > summary::-webkit-details-marker { display:none; }
+.profile-classification-menu > summary:hover { opacity:.9; }
+.badge-caret { font-size:10px; opacity:.75; margin-left:2px; }
+
+.profile-classification-popover {
+  position:absolute; top:calc(100% + 6px); left:0; z-index:30;
+  display:grid; gap:3px; min-width:140px; padding:6px;
+  background:#1e1a26; border:1px solid var(--line); border-radius:10px;
+  box-shadow:0 12px 32px #0009;
+}
+.profile-classification-option {
+  display:flex; align-items:center; width:100%; padding:7px 10px;
+  background:none; border:0; border-radius:6px;
+  color:var(--ink); font:500 12px/1.3 var(--sans);
+  cursor:pointer; text-align:left; transition:background .12s ease;
+}
+.profile-classification-option:hover { background:#ffffff12; color:var(--accent); }
+.profile-classification-option.active { background:#f4b94218; color:var(--accent); font-weight:600; }
+

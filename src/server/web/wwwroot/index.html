@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/rooms.css?v=20260915-inline2">
   <link rel="stylesheet" href="/onboarding.css?v=20260916-owner-in-one-step">
   <link rel="stylesheet" href="/pages.css?v=20260913-spa2">
-  <link rel="stylesheet" href="/landing.css?v=20260917-people1">
+  <link rel="stylesheet" href="/landing.css?v=20260917-rail1">
   <link rel="stylesheet" href="/access.css?v=20260914-access5">
   <link rel="stylesheet" href="/moderation.css?v=20260915-inline1">
   <link rel="stylesheet" href="/atmosphere.css?v=20260915-inline1">
@@ -25,14 +25,14 @@
   <script src="/moderation.js?v=20260915-inline1" defer></script>
   <script src="/inline-confirm.js?v=20260915-inline1" defer></script>
   <script src="/rooms.js?v=20260915-inline1" defer></script>
-  <script src="/roles.js?v=20260917-people3" defer></script>
-  <script src="/people.js?v=20260917-people1" defer></script>
+  <script src="/roles.js?v=20260917-rail1" defer></script>
+  <script src="/people.js?v=20260917-people4" defer></script>
   <script src="/access.js?v=20260917-people3" defer></script>
   <script src="/artwork-catalog.js?v=20260912-artset16" defer></script>
   <script src="/artwork.js?v=20260912-artset16" defer></script>
   <script src="/facets.js?v=20260913-spa2" defer></script>
   <script src="/history.js?v=20260915-history1" defer></script>
-  <script src="/profile.js?v=20260913-spa5" defer></script>
+  <script src="/profile.js?v=20260917-filter1" defer></script>
   <script src="/profile-live.js?v=20260912-shared2" defer></script>
   <script src="/card-foil.js?v=20260912-welcome" defer></script>
   <script type="module" src="/spa-router.js?v=20260913-spa5"></script>
@@ -128,6 +128,7 @@
                           <label>Role name<input id="role-name" class="input" maxlength="160" required></label>
                           <label>Purpose<textarea id="role-purpose" class="input" maxlength="1024" rows="3" placeholder="What is this role for?"></textarea></label>
                           <label class="role-color-field"><span>Role color</span><span class="role-color-control"><input id="role-color" type="color" value="#a98df0"><code id="role-color-value">#a98df0</code></span></label>
+                          <label class="check-row"><input id="role-self-enrollable" type="checkbox"> Allow participants to self-enroll</label>
                           <p id="role-managed-explanation" class="role-managed-explanation" hidden>Appearance and permissions are managed by Tangent. Direct membership is handled separately.</p>
                         </div>
                         <aside id="role-preview" class="role-preview" aria-label="Role preview">
@@ -143,16 +144,15 @@
                       <div id="role-capabilities" class="role-capabilities"></div>
                     </section>
                     <section id="role-members-panel" role="tabpanel" hidden>
-                      <div class="role-members-heading"><div><h4>Members <span id="role-members-heading-count">0</span></h4><p id="role-members-scope" class="hint">Direct assignments in this scope.</p></div><button id="role-member-open" class="btn btn-primary" type="button">Add member</button></div>
-                      <div id="role-member-invite" class="role-member-invite" hidden>
-                        <div><h4>Add someone</h4><p class="hint">Find a participant by handle or DID, then confirm who receives this role.</p></div>
-                        <label class="role-member-query"><span>Handle or DID</span><span class="role-member-add"><input id="role-member-identifier" class="input" maxlength="256" aria-describedby="role-member-lookup-status" placeholder="alice.example.com or did:plc:…"><button id="role-member-resolve" class="btn btn-primary" type="button">Find participant</button><button id="role-member-cancel" class="btn btn-quiet" type="button">Cancel</button></span></label>
-                        <p id="role-member-lookup-status" class="hint" role="status"></p>
-                        <div id="role-member-resolved" class="role-member-resolved" hidden><span id="role-member-resolved-avatar" class="role-member-avatar" aria-hidden="true">?</span><span><strong id="role-member-resolved-name"></strong><small id="role-member-resolved-byline"></small></span><button id="role-member-add" class="btn btn-primary" type="button">Add to role</button></div>
+                      <div class="role-members-heading">
+                        <div><h4>Members <span id="role-members-heading-count">0</span></h4><p id="role-members-scope" class="hint">Direct assignments in this scope.</p></div>
                       </div>
+                      <label class="role-member-search">
+                        <span class="visually-hidden">Search members</span>
+                        <input id="role-member-search" class="input" type="search" placeholder="Search members by name, handle, or DID…">
+                      </label>
                       <div id="role-member-protected" class="role-member-protected" hidden><strong>Ownership is protected</strong><p>The server owner is the human account designated by server administration. This role assignment cannot replace that ownership.</p></div>
                       <div id="role-members" class="role-members"></div>
-                      <div class="role-members-actions"><button id="role-member-profiles-retry" class="btn btn-quiet" type="button" hidden>Retry profiles</button><button id="role-members-previous" class="btn btn-quiet" type="button" hidden>Previous</button><button id="role-members-next" class="btn btn-quiet" type="button" hidden>Next</button></div>
                       <p id="role-members-status" class="hint" role="status"></p>
                     </section>
                     <div id="role-editor-actions" class="role-editor-actions"><button id="role-save" class="btn btn-primary">Save changes</button><button id="role-reset" class="btn btn-quiet" type="button">Reset</button><p id="role-status" role="status"></p></div>
@@ -396,14 +396,44 @@
           <div class="profile-intro"><p class="eyebrow">Around the table</p><h1 id="profile-name" tabindex="-1">Participant</h1>
           <p id="profile-handle" class="profile-handle"></p>
           <p id="profile-description" class="profile-description" hidden></p>
-          <p id="profile-classification" class="hint"></p>
-          <p id="profile-joined" class="hint"></p>
-          <div id="profile-roles" class="profile-roles"></div></div>
+          <div id="profile-pills" class="profile-pills">
+            <span id="profile-classification"></span>
+            <div id="profile-roles" class="profile-roles"></div>
+          </div>
+          <p id="profile-joined" class="hint"></p></div>
         </header>
         <div id="profile-actions" class="profile-actions"></div>
-        <details class="profile-identity"><summary>Account identity</summary><p id="profile-did" class="did"></p></details>
-        <h3>Recent posts</h3>
-        <ul id="profile-posts" class="profile-posts"></ul>
+        <div id="profile-shell" class="profile-shell">
+          <nav class="profile-tabs" role="tablist" aria-label="Participant profile">
+            <button id="profile-posts-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-posts-panel" aria-selected="true" data-profile-tab="posts"><span aria-hidden="true">&#9670;</span><span><strong>Posts</strong><small>Recent contributions</small></span></button>
+            <button id="profile-roles-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-roles-panel" aria-selected="false" data-profile-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Groups and permissions</small></span></button>
+            <button id="profile-identity-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-identity-panel" aria-selected="false" data-profile-tab="identity"><span aria-hidden="true">&#9673;</span><span><strong>Identity</strong><small>Account and DID</small></span></button>
+          </nav>
+          <div class="profile-tab-content">
+            <section id="profile-posts-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-posts-tab">
+              <header class="profile-panel-heading"><div><p class="eyebrow">CONVERSATION</p><h3>Recent posts</h3><p class="hint">Contributions by this participant across the server.</p></div></header>
+              <div class="profile-panel-body">
+                <ul id="profile-posts" class="profile-posts"></ul>
+              </div>
+            </section>
+            <section id="profile-roles-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-roles-tab" hidden>
+              <header class="profile-panel-heading"><div><p class="eyebrow">AROUND THE TABLE</p><h3>Server groups and roles</h3><p class="hint">Roles shape visibility, permissions, and group participation.</p></div></header>
+              <div class="profile-panel-body">
+                <div id="profile-role-management" class="profile-role-management"></div>
+              </div>
+            </section>
+            <section id="profile-identity-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-identity-tab" hidden>
+              <header class="profile-panel-heading"><div><p class="eyebrow">ACCOUNT</p><h3>Account identity</h3><p class="hint">Cryptographic identifier and account details.</p></div></header>
+              <div class="profile-panel-body">
+                <div class="profile-identity-details">
+                  <label><span>Decentralized Identifier (DID)</span><code id="profile-did" class="did"></code></label>
+                  <label><span>Handle</span><code id="profile-identity-handle" class="did"></code></label>
+                  <label><span>Account type</span><span id="profile-identity-classification" class="hint"></span></label>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </section>
 
       <noscript>

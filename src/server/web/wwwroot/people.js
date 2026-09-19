@@ -14,8 +14,10 @@
   }
 
   function card(person) {
-    const row = document.createElement('div');
+    const row = document.createElement('a');
     row.className = 'person-row';
+    const target = person.handle || person.did || person.id;
+    row.href = '/u/' + encodeURIComponent(target);
     const mark = document.createElement('span');
     mark.className = 'person-mark';
     if (person.avatar) {
@@ -41,10 +43,15 @@
       chip.textContent = role;
       marks.append(chip);
     }
-    if (person.classification && person.classification !== 'Human') {
+    if (person.classification === 'Agent') {
       const chip = document.createElement('span');
-      chip.className = 'person-chip person-chip-quiet';
-      chip.textContent = person.classification.toLowerCase();
+      chip.className = 'person-chip person-chip-agent';
+      chip.textContent = '🤖 Agent';
+      marks.append(chip);
+    } else if (person.classification === 'Human') {
+      const chip = document.createElement('span');
+      chip.className = 'person-chip person-chip-human';
+      chip.textContent = '👤 Human';
       marks.append(chip);
     }
     if (person.isSuspended) {
