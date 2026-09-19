@@ -20,7 +20,7 @@ namespace Tangent.Stewardship;
 /// permissions as its action enum; the enforcement lives only here.
 /// </summary>
 public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, ParticipantDirectory directory,
-    TangentRoleAccess roleAccess, RoleCollection roles, References refs)
+    TangentRoleAccess roleAccess, RoleCollection roles, References refs, SignalBus signals)
 {
     public const int MaximumReasonLength = 2000;
     public static readonly TimeSpan MaximumTimeout = TimeSpan.FromDays(30);
@@ -76,12 +76,12 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
     /// transaction: the Role entity is RoleCollection-managed, and its guarded write cancels
     /// when coordination defers it, so the mutation commits immediately and its record follows
     /// in a small transaction of its own.</summary>
-    private static async Task<Outcome> Coordinate(Func<Task<Outcome>> act, CancellationToken ct)
+    private async Task<Outcome> Coordinate(Func<Task<Outcome>> act, CancellationToken ct)
     {
         using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
         var outcome = await act();
         await EntityContext.Commit(ct);
-        ActivityJournal.SignalAfterCommit();
+        signals.Pulse();
         return outcome;
     }
 
@@ -183,7 +183,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
             await EntityContext.Commit(ct);
             auditId = audit.Id;
         }
-        ActivityJournal.SignalAfterCommit();
+        signals.Pulse();
         return new Outcome(action, targetId, reason, roleToken, null, null, null, auditId);
     }
 

@@ -75,7 +75,7 @@ public sealed partial class ParticipantGovernance
                 };
                 await audit.Save(ct);
                 await EntityContext.Commit(ct);
-                ActivityJournal.SignalAfterCommit();
+                signals.Pulse();
                 return new RestrictionResult(scope, scopeKey, targetId, stored.Kind, stored.Until, stored.Reason, audit.Id);
             }
             catch (TopicRuleViolation rejected) { denial = rejected; }

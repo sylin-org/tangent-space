@@ -81,7 +81,7 @@ public sealed partial class ConversationService
             }
             return (position.Sequence, Changed: position.Sequence > previous);
         }, ct);
-        if (result.Changed) ActivityJournal.SignalAfterCommit();
+        if (result.Changed) signals.Pulse();
         return result.Sequence;
     }
 

@@ -67,8 +67,8 @@ public sealed partial class ConversationService
                     roomKey, participantId, current.AuthorParticipantId, topic?.TangentKey, current.Sequence, clock.GetUtcNow(), token);
                 return new PostChangeResult(state, messageId, detail);
             }, ct);
-            updates.Pulse(roomKey);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse(roomKey);
+            signals.Pulse();
             return result;
         }
         finally { writes.Release(); }

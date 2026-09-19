@@ -1,38 +1,46 @@
 namespace Tangent.Activity;
 
-// A wake-up hint for this process. Durable history and current authorization remain authoritative.
-public sealed class ConversationUpdates
+/// <summary>
+/// The host's one live bus: a signal means committed state changed. Subscribers capture before
+/// reading and wake to re-derive from current authority; a signal carries no payload, so a missed
+/// or duplicate one costs one poll and never a wrong answer. Durability lives in the journal and
+/// the digest's cursors, never here. A null or empty topic is the server-wide signal; otherwise
+/// the wake is scoped to one Topic.
+/// </summary>
+public sealed class SignalBus
 {
     private readonly object gate = new();
     private readonly Dictionary<string, Signal> topics = new(StringComparer.Ordinal);
 
-    public Subscription Capture(string topic)
+    public Subscription Capture(string? topic)
     {
-        ArgumentException.ThrowIfNullOrEmpty(topic);
         lock (gate)
         {
-            if (!topics.TryGetValue(topic, out var signal)) topics.Add(topic, signal = new Signal());
+            var key = Normalize(topic);
+            if (!topics.TryGetValue(key, out var signal)) topics.Add(key, signal = new Signal());
             signal.Subscribers++;
-            return new Subscription(signal.Changed.Task, () => Release(topic, signal));
+            return new Subscription(signal.Changed.Task, () => Release(key, signal));
         }
     }
 
-    public void Pulse(string topic)
+    public void Pulse(string? topic = null)
     {
         Signal? signal;
-        lock (gate) topics.Remove(topic, out signal);
+        lock (gate) topics.Remove(Normalize(topic), out signal);
         // New subscribers capture a new generation; previously captured tasks retain this pulse.
         signal?.Changed.TrySetResult();
     }
 
-    private void Release(string topic, Signal signal)
+    private void Release(string key, Signal signal)
     {
         lock (gate)
         {
-            if (topics.TryGetValue(topic, out var current) && ReferenceEquals(current, signal)
-                && --signal.Subscribers == 0) topics.Remove(topic);
+            if (topics.TryGetValue(key, out var current) && ReferenceEquals(current, signal)
+                && --signal.Subscribers == 0) topics.Remove(key);
         }
     }
+
+    private static string Normalize(string? topic) => string.IsNullOrWhiteSpace(topic) ? "" : topic;
 
     private sealed class Signal
     {

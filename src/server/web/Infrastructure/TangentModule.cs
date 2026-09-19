@@ -82,6 +82,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<ConversationService>();
         services.AddSingleton<ActivityService>();
         services.AddSingleton<LiveSessions>();
+        services.AddSingleton<SignalBus>();
         services.AddSingleton<ExperienceDigest>();
         services.AddSingleton<ExperienceService>();
         services.AddSingleton<ModerationCaseService>();

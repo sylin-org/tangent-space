@@ -3,8 +3,6 @@ namespace Tangent.Conversation;
 
 public sealed partial class ConversationService
 {
-    private readonly ConversationUpdates updates = new();
-
     public async Task<PostPage> WaitForUpdates(string did, string topic, string cursor, CancellationToken ct)
     {
         // Denied and unknown topics never allocate notification state.
@@ -14,7 +12,7 @@ public sealed partial class ConversationService
         if (selected.Boundary is not null) throw new ArgumentException("Wait for updates with a resume cursor, not a paging continuation.");
 
         // Capture before the history read: a commit between the read and wait must remain observable.
-        using var notification = updates.Capture(topic);
+        using var notification = signals.Capture(topic);
         var page = await History(did, topic, cursor, ct);
         if (page.Messages.Count > 0 || page.Boundary > selected.After) return page;
 

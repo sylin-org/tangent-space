@@ -4,13 +4,11 @@ using Koan.Data.Core.Model;
 namespace Tangent.Activity;
 
 /// <summary>
-/// A compact, durable delivery journal. Call AppendInTransaction only from an already coordinated
-/// transaction, then call SignalAfterCommit only after that transaction commits successfully.
+/// A compact, durable delivery journal. AppendInTransaction runs only inside an already
+/// coordinated transaction; the caller signals the bus after that transaction commits.
 /// </summary>
 public sealed class ActivityJournal : Entity<ActivityJournal>
 {
-    private static readonly ActivityUpdates updates = new();
-
     public long Sequence { get; set; }
     public ActivityKind Kind { get; set; }
     public string TopicKey { get; set; } = "";
@@ -44,8 +42,4 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
         await head.Save(ct);
         return entry;
     }
-
-    public static void SignalAfterCommit() => updates.Pulse();
-
-    internal static ActivityUpdates.Subscription Capture() => updates.Capture();
 }

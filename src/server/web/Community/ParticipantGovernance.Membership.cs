@@ -95,7 +95,7 @@ public sealed partial class ParticipantGovernance
             await departed.Save(ct);
             await Journal(ActivityKind.MembershipChanged, actorId, actorId, tangentKey, ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             return new LeaveResult(LeaveOutcome.Left, MembershipOf(departed));
         }
         finally { gate.Exit(); }
@@ -178,7 +178,7 @@ public sealed partial class ParticipantGovernance
     private async Task<JoinResult> CommitJoin(JoinResult result, CancellationToken ct)
     {
         await EntityContext.Commit(ct);
-        ActivityJournal.SignalAfterCommit();
+        signals.Pulse();
         return result;
     }
 
@@ -186,7 +186,7 @@ public sealed partial class ParticipantGovernance
     {
 
         await EntityContext.Commit(ct);
-        ActivityJournal.SignalAfterCommit();
+        signals.Pulse();
         return result;
     }
 

@@ -4,6 +4,7 @@ using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
 using Tangent.Stewardship;
+using Tangent.Activity;
 using Tangent.Spaces;
 
 namespace Tangent.Community;
@@ -19,7 +20,7 @@ namespace Tangent.Community;
 /// shared by all of them, and it is a hand-rolled command pipeline that R3.3 replaces with the real one.
 /// </summary>
 public sealed partial class ParticipantGovernance(TimeProvider clock, PolicyGate gate, TopicGovernance topics,
-    ParticipantDirectory directory)
+    ParticipantDirectory directory, SignalBus signals)
 {
     /// <summary>
     /// Read-only current-authority check for replay gates: an active, unrestricted steward at Tangent scope

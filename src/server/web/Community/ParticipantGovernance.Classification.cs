@@ -31,7 +31,7 @@ public sealed partial class ParticipantGovernance
             await participant.Save(ct);
             await Journal(ActivityKind.ParticipantChanged, actorId, participant.Id, null, ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             return participant.Classification;
         }
         finally { gate.Exit(); }

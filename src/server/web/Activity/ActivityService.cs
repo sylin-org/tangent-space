@@ -14,7 +14,7 @@ using Tangent.Stewardship;
 namespace Tangent.Activity;
 
 /// <summary>Builds bounded, current-policy participant activity snapshots from the durable journal.</summary>
-public sealed class ActivityService(TopicGovernance governance, TangentGovernance tangents, TimeProvider clock, IDataProtectionProvider protection)
+public sealed class ActivityService(TopicGovernance governance, TangentGovernance tangents, TimeProvider clock, IDataProtectionProvider protection, SignalBus signals)
 {
     private const int MaximumJournalScan = 100;
     private const int MaximumEvents = 25;
@@ -65,7 +65,7 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     public async Task<ActivitySnapshot> Wait(string participantId, string? credentialId, string? cursor, string? topicCursor, CancellationToken ct)
     {
         // Capture before inspecting durable state. A commit between the snapshot and wait is therefore replayed.
-        using var notification = ActivityJournal.Capture();
+        using var notification = signals.Capture(null);
         var first = await Snapshot(participantId, credentialId, cursor, topicCursor, ct);
         if (first.ResetRequired || !string.Equals(first.Checkpoint, cursor, StringComparison.Ordinal)) return first;
         await notification.WaitAsync(TimeSpan.FromSeconds(15), ct);

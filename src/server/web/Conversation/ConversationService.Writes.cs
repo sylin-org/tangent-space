@@ -69,8 +69,8 @@ public sealed partial class ConversationService
                 return true;
             }, ct);
             if (conflict) throw new OperationConflictException(input.OperationId);
-            updates.Pulse(roomKey);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse(roomKey);
+            signals.Pulse();
             return result!;
         }
         finally { writes.Release(); }

@@ -14,7 +14,7 @@ namespace Tangent.Community;
 
 /// <summary>Coordinates card ownership, Tangent membership and topic creation under the host policy gate.</summary>
 public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
-    ParticipantDirectory directory, TangentRoleAccess roleAccess)
+    ParticipantDirectory directory, TangentRoleAccess roleAccess, SignalBus signals)
 {
     public const int TangentsPerPage = 50;
     public const int TopicsPerTangent = 100;
@@ -153,7 +153,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             if (!tangent.IsOwner(actorId)) await TangentMembership.Assign(tangent, actorId, TangentRole.Admin, space.OwnerParticipantId, clock.GetUtcNow()).Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: tangent.Id, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             return await DescribeForOwner(tangent, actorId, ct);
         }
         finally { gate.Exit(); }
@@ -182,7 +182,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
                 await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: home.Id, ct: ct);
             }
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             return await DescribeForOwner(home, actorId, ct);
         }
         finally { gate.Exit(); }
@@ -207,7 +207,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             await tangent.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: tangent.Id, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             return await DescribeForOwner(tangent, actorId, ct);
         }
         finally { gate.Exit(); }
@@ -253,7 +253,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             await tangent.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: key, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             var selected = tangent.Access!.NormalizeForTangent();
             return new AccessMapView(selected, selected.ResolveTangent(), []);
         }
@@ -296,7 +296,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             await audit.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TopicChanged, topic.Id, actorId, tangentKey: tangent.Id, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             var policy = topic.CurrentPolicy(space, actorId, null, actor?.IsSuspended == true, tangent, actorMembership,
                 actor?.Classification ?? ParticipantClassification.Undeclared);
             result = new TangentTopicCreation(new TopicAdministrationResult(true, null, "Accepted.", topic.Id, topic.PolicyRevision, audit.Id), TopicDescription.From(topic, policy));
@@ -327,7 +327,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             await member.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.MembershipChanged, "", actorId, target.Id, tangent.Id, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             result = new TangentMembershipResult(member.TangentKey, member.ParticipantId, member.Role);
         }
         finally { gate.Exit(); }

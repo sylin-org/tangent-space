@@ -12,7 +12,7 @@ using Tangent.Access;
 namespace Tangent.Spaces;
 
 public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptions<SpaceOptions> options, ParticipantDirectory directory,
-    TangentRoleAccess roleAccess)
+    TangentRoleAccess roleAccess, SignalBus signals)
 {
     public async Task<ServerSettings> Read(string? actorId, CancellationToken ct)
     {
@@ -80,7 +80,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             if (establishing) await Community.Tangent.Home(space).Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             result = new ServerSettings(space.Name, space.WelcomeMessage, space.Motd, space.AllowAgentTangentOwnership,
                 space.OwnerParticipantId, true, false, Permissions.Server(true), space.Byline, space.CoverImageUrl, space.BackgroundScene, space.BackgroundColor, space.BackgroundIntensity, space.BackgroundMotion, space.BackgroundMouseSpotlight);
         }
@@ -128,7 +128,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await space.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             return new ServerSettings(space.Name, space.WelcomeMessage, space.Motd, space.AllowAgentTangentOwnership,
                 space.OwnerParticipantId, true, false, Permissions.Server(space.IsOwner(actorId)), space.Byline, space.CoverImageUrl, space.BackgroundScene, space.BackgroundColor, space.BackgroundIntensity, space.BackgroundMotion, space.BackgroundMouseSpotlight);
         }
@@ -171,7 +171,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await space.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
-            ActivityJournal.SignalAfterCommit();
+            signals.Pulse();
             var selected = (space.Access ?? AccessMap.ServerDefaults()).NormalizeForServer();
             return new AccessMapView(selected, selected.ResolveServer(), []);
         }
@@ -204,7 +204,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             HumanHostAccountability.RequireDeclaration(participant, classification, space?.IsOwner(actorId) == true);
             participant.Declare(classification); await participant.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
-            await EntityContext.Commit(ct); ActivityJournal.SignalAfterCommit(); return participant;
+            await EntityContext.Commit(ct); signals.Pulse(); return participant;
         }
         finally { gate.Exit(); }
     }

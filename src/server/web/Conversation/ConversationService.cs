@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.DataProtection;
 using Tangent.Identity;
 using Tangent.Community;
 using Tangent.Stewardship;
+using Tangent.Activity;
 
 namespace Tangent.Conversation;
 
 public sealed partial class ConversationService(TopicGovernance governance, TimeProvider clock, IDataProtectionProvider protection,
-    ParticipantDirectory directory, ParticipantProfiles profiles) : IDisposable
+    ParticipantDirectory directory, ParticipantProfiles profiles, SignalBus signals) : IDisposable
 {
     private readonly SemaphoreSlim writes = new(1, 1);
     private readonly IDataProtector cursors = protection.CreateProtector("Cursor.v1");

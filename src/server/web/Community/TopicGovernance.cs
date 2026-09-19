@@ -13,7 +13,7 @@ namespace Tangent.Community;
 
 /// <summary>Register once as a singleton; policy and acceptance share the host's arrival gate.</summary>
 public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, ParticipantDirectory directory,
-    TangentRoleAccess roleAccess)
+    TangentRoleAccess roleAccess, SignalBus signals)
 {
     private static readonly QueryDefinition directoryQuery = new QueryDefinition
     {
@@ -123,7 +123,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             };
             await audit.Save(ct);
             await EntityContext.Commit(ct);
-            if (denial is null) ActivityJournal.SignalAfterCommit();
+            if (denial is null) signals.Pulse();
             return new TopicAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, "",
                 audit.SpacePolicyRevision, audit.Id);
         }
@@ -328,7 +328,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             };
             await audit.Save(ct);
             await EntityContext.Commit(ct);
-            if (change is not null) ActivityJournal.SignalAfterCommit();
+            if (change is not null) signals.Pulse();
             result = new TopicAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, roomKey,
                 audit.SelectedPolicyRevision, audit.Id);
         }
