@@ -54,6 +54,24 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
                 },
             },
             sessions = new Dictionary<string, string> { [enrollmentId] = app.AgentToken },
+            // The credential the completed bind leaves behind, with its default grant:
+            // without it the persona holds no reach and the projected catalog is bare.
+            atproto_sessions = new Dictionary<string, object>
+            {
+                [localId] = new
+                {
+                    did = ExperienceWebApp.AgentDid,
+                    handle = "agent.test",
+                    access_jwt = "seeded-not-used",
+                    refresh_jwt = (string?)null,
+                    pds = app.Origin,
+                    authserver = (string?)null,
+                    client_id = (string?)null,
+                    dpop_key = (string?)null,
+                    services = new[] { "tangent" },
+                    obtained_at = 1757000000000L,
+                },
+            },
         };
         await File.WriteAllTextAsync(Path.Combine(home, "state.json"),
             JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
@@ -118,19 +136,15 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         Assert.Contains(app.AgentToken, state);
         // And it is a working session: the real server answers arrival on it, naming the
         // identity the server itself resolved rather than anything the connector supplied.
-        var selected = Call("SelectCompanion", "{\"moniker\":\"agent\"}");
-        var companion = selected.GetProperty("connector").GetProperty("enrollmentId").GetString()!;
-        var arrived = Call("Arrive", JsonSerializer.Serialize(new { enrollmentId = companion, serverUrl = app.Origin }));
-        Assert.Equal("orientation", arrived.GetProperty("connector").GetProperty("view").GetString());
-        Assert.Contains(ExperienceWebApp.AgentDid, arrived.ToString());
+        var connected = Call("Connect", JsonSerializer.Serialize(new { service = "tangent", persona = "agent", address = app.Origin }));
+        Assert.Equal("orientation", connected.GetProperty("connector").GetProperty("view").GetString());
+        Assert.Contains(ExperienceWebApp.AgentDid, connected.ToString());
     }
 
     [Fact]
     public void The_cli_intake_reads_you_rendered_attention_and_resynchronizes_reads()
     {
-        var selected = Call("SelectCompanion", "{\"moniker\":\"agent\"}");
-        var companion = selected.GetProperty("connector").GetProperty("enrollmentId").GetString()!;
-        var arrived = Call("Arrive", JsonSerializer.Serialize(new { enrollmentId = companion, serverUrl = app.Origin }));
+        var arrived = Call("Connect", JsonSerializer.Serialize(new { service = "tangent", persona = "agent", address = app.Origin }));
         var connectorLayer = arrived.GetProperty("connector");
         Assert.Equal("orientation", connectorLayer.GetProperty("view").GetString());
         Assert.Equal("tool_response_only", connectorLayer.GetProperty("deliveryMode").GetString());
@@ -146,18 +160,18 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
 
         // The rendered view keeps the you perspective over real data, previews in the
         // expanded view (compact shows the count line only, per the response budget).
-        var (_, text, _) = Run("call", "GetUpdates",
-            JsonSerializer.Serialize(new { contextId = context, view = "expanded" }));
+        var (_, text, _) = Run("call", "CatchUp",
+            JsonSerializer.Serialize(new { session = context, view = "expanded" }));
         Assert.Contains("asked you", text);
         Assert.Contains("replied to you", text);
 
-        var read = Call("ReadTopic", JsonSerializer.Serialize(new { topicRef = app.TopicRef, contextId = context }));
+        var read = Call("Forum_Read_Thread", JsonSerializer.Serialize(new { threadRef = app.TopicRef, session = context }));
         var posts = read.GetProperty("experience").GetProperty("result").GetProperty("data").GetProperty("posts");
         Assert.Equal(3, posts.GetArrayLength());
         var cursor = read.GetProperty("experience").GetProperty("continuation").GetProperty("readCursor").GetString()!;
 
-        Call("MarkRead", JsonSerializer.Serialize(new { contextId = context, topicRef = app.TopicRef, readCursor = cursor }));
-        var (_, after, _) = Run("call", "GetUpdates", JsonSerializer.Serialize(new { contextId = context }));
+        Call("Forum_Mark_Read", JsonSerializer.Serialize(new { session = context, threadRef = app.TopicRef, readCursor = cursor }));
+        var (_, after, _) = Run("call", "CatchUp", JsonSerializer.Serialize(new { session = context }));
         Assert.DoesNotContain("asked you", after);
         Assert.DoesNotContain("replied to you", after);
         Assert.Contains("Waiting for you: 0", after);
@@ -176,17 +190,18 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         Assert.Equal("2025-06-18", initialize.GetProperty("result").GetProperty("protocolVersion").GetString());
         peer.Notify("notifications/initialized", new { });
         var tools = peer.Call("tools/list", new { });
-        Assert.Equal(14, tools.GetProperty("result").GetProperty("tools").GetArrayLength());
+        // The core four plus the Forum ring's member keys: the projected surface.
+        Assert.Equal(13, tools.GetProperty("result").GetProperty("tools").GetArrayLength());
 
-        var selected = peer.Call("tools/call", new { name = "SelectCompanion", arguments = new { moniker = "agent" } });
-        var companion = selected.GetProperty("result").GetProperty("structuredContent").GetProperty("connector")
-            .GetProperty("enrollmentId").GetString()!;
-        var arrival = peer.Call("tools/call", new { name = "Arrive", arguments = new { enrollmentId = companion, serverUrl = app.Origin } });
-        var arrivalText = arrival.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
-        Assert.Contains("you are participating as", arrivalText);
+        var connected = peer.Call("tools/call", new { name = "Connect", arguments = new { service = "tangent", persona = "agent", address = app.Origin } });
+        var arrivalText = connected.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
+        Assert.Contains("You are agent — session tangent_", arrivalText);
         Assert.Contains("asked you", arrivalText);
 
-        var updates = peer.Call("tools/call", new { name = "GetUpdates", arguments = new { contextId = "ctx_missing" } });
+        var who = peer.Call("tools/call", new { name = "WhoAmI", arguments = new { session = "tangent_00000000" } });
+        Assert.True(who.GetProperty("result").GetProperty("isError").GetBoolean());
+
+        var updates = peer.Call("tools/call", new { name = "CatchUp", arguments = new { session = "tangent_00000000" } });
         // Unknown context ids must fail closed, not leak another context's state.
         Assert.True(updates.GetProperty("result").GetProperty("isError").GetBoolean());
         Assert.Equal("context_expired",
