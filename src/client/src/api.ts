@@ -69,6 +69,7 @@ export interface Envelope<T> {
   place: Place | null
   result: { data: T | null; problem: Problem | null }
   attention: { waitingCount: { value: number; atLeast: boolean } }
+  continuation: { readCursor: string | null } | null
 }
 
 export class EnvelopeError extends Error {
@@ -112,6 +113,18 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId, text, ...(replyTo ? { replyTo } : {}) }),
+    }),
+  watch: (scopeRef: string, mode: 'all' | 'replies' | 'none') =>
+    call<{ scopeRef: string; mode: string }>('/watches', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scopeRef, mode }),
+    }),
+  readPosition: (topicKey: string, readCursor: string) =>
+    call<{ throughPostRef: string | null; topicRef: string }>(`/topics/${encodeURIComponent(topicKey)}/read-position`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ readCursor }),
     }),
 }
 

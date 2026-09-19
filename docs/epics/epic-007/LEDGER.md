@@ -214,6 +214,7 @@ The workspace application lives in `src/client`: Vue 3 + Vite + TypeScript per D
 
 - [x] Scaffold, toolchain, envelope api module, store, App + TangentList/TopicList/TopicReader/Composer
 - [x] vitest 4/4, vue-tsc + vite build green, bundle at `wwwroot/app` (committed so the image carries it; a lifecycle npm-build step replaces this when Docker verifies), .NET 107/107, node rule checks 7/7
+- [x] Watch and read-position slice: `api.watch`/`api.readPosition`, readCursor captured from the topic window, watch selector (all/replies/none) and Mark read in the reader toolbar. vitest 4/4, build green, node checks 7/7
 - [ ] Serve verification at `/app/` (Docker was down); lifecycle npm-build step
 - [ ] Parity slices: watches, read-position, reports and moderation queue, people, roles, settings — then the vanilla monolith retires (R4.2)
 
