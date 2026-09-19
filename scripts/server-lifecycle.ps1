@@ -1,6 +1,7 @@
 # Tangent Space server lifecycle engine. Two servers live under src/server:
 #   web       — the .NET/Koan Tangent web+experience server; runs as the Docker container.
-#   connector — the Rust local connector (src/connector); a host-run binary, no container.
+#   connector — the Rust local connector (the sibling CompanionLobby checkout); a host-run
+#   binary, no container.
 # Every action applies to all servers where it is meaningful:
 # Wipe: stop/remove only the Compose tangent service, then clear one validated state
 #   directory under <repo>/.local/docker. Interactive use requires typing WIPE; -Force
@@ -11,7 +12,7 @@
 #   (web) and cargo build --release (connector). No stop and no wipe.
 # Launch: delegate to scripts/start-docker.ps1 (retain or create the configuration, then
 #   start only Tangent). The connector is launched by its hosts (agent applications run
-#   `tangent-connector serve`; operators use the CLI), so launch reports its binary path
+#   `companion-lobby serve`; operators use the CLI), so launch reports its binary path
 #   instead of starting a process.
 [CmdletBinding()]
 param(
@@ -157,15 +158,15 @@ function Invoke-TangentDockerBuild {
     Write-Output 'Built the Tangent image. Nothing was stopped or removed.'
 }
 
-# Build the connector (src/connector): a release binary. Kept separate from the web image
-# build so lifecycle tests can drive the web path with mocks.
+# Build the connector: a release binary from the sibling CompanionLobby checkout. Kept
+# separate from the web image build so lifecycle tests can drive the web path with mocks.
 function Invoke-ConnectorBuild {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$RepoRoot, [scriptblock]$CommandRunner)
     $runner = if ($CommandRunner) { $CommandRunner } else { $script:DefaultTangentCommandRunner }
-    $connector = Join-Path $RepoRoot 'src/connector'
+    $connector = Join-Path (Split-Path -Parent $RepoRoot) 'CompanionLobby'
     if (-not (Test-Path -LiteralPath (Join-Path $connector 'Cargo.toml'))) {
-        throw "The connector sources are missing: $connector"
+        throw "The connector workspace is missing: $connector (a sibling checkout of github.com/sylin-org/CompanionLobby)"
     }
     $cargo = Get-Command cargo -ErrorAction SilentlyContinue
     if (-not $cargo) { throw 'cargo (Rust) is required to build the connector: install the Rust toolchain or add it to PATH.' }
@@ -173,7 +174,7 @@ function Invoke-ConnectorBuild {
     Set-Location -LiteralPath $connector
     try { & $runner @('cargo', 'build', '--release') }
     finally { Set-Location -LiteralPath $previous.Path }
-    $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'tangent-connector.exe' } else { 'tangent-connector' }
+    $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'companion-lobby.exe' } else { 'companion-lobby' }
     Write-Output "Built the connector: $(Join-Path $connector "target/release/$binary")"
 }
 
@@ -200,8 +201,9 @@ if (-not ($TangentLifecycleSkipMain -or $global:TangentLifecycleSkipMain)) {
             if ($CommandRunner) { $launchArguments.CommandRunner = $CommandRunner }
             & (Join-Path $repoRoot 'scripts/start-docker.ps1') @launchArguments
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'tangent-connector.exe' } else { 'tangent-connector' }
-            Write-Output "The connector is host-run, not containerized: agent hosts start it via 'tangent-connector serve' (see src/connector/README.md). Expected binary after Build: $(Join-Path $repoRoot "src/connector/target/release/$binary")"
+            $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'companion-lobby.exe' } else { 'companion-lobby' }
+            $lobby = Join-Path (Split-Path -Parent $repoRoot) 'CompanionLobby'
+            Write-Output "The connector is host-run, not containerized: agent hosts start it via 'companion-lobby serve' (see the CompanionLobby README). Expected binary after Build: $(Join-Path $lobby "target/release/$binary")"
         }
     }
 }

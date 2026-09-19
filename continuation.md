@@ -139,7 +139,7 @@ Newest last. Each entry: what I did, what happened, what it means for a resumer.
 | Item | Owner | Note |
 |---|---|---|
 | The join reports `ok` and grants nothing | **R3.4** | Diagnosed to `TangentGovernance.cs:49`. Do **not** point-fix: `Member` is a role D12 deletes. N-030 and N-063 carry the reasoning |
-| W5 — enrol the agent | **Leo** | `tangent-connector.exe forget`, then Connect (N-056). An atproto sign-in, so never Claude's |
+| W5 — enrol the agent | **Leo** | `companion-lobby.exe forget`, then Connect (N-056). An atproto sign-in, so never Claude's |
 | W4, W6, W8's live bar | blocked by W5 | All three need a second author; the server is right to refuse a faked one |
 | W11 — stranger arrives | **R4.7** | n/a until the newcomer's side of the door exists |
 

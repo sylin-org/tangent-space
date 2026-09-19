@@ -8,7 +8,7 @@ namespace Tangent.Tests.ExperienceIntegration;
 /// to the real web application over its genuine HTTP contract. Exercises both intakes of the
 /// connector hub — the command line and the stdio MCP edge — against accepted seeded history,
 /// including you-rendered attention, read resynchronization and MCP negotiation. The binary
-/// comes from the standard Build action (server-lifecycle.ps1 builds web and mcp together).</summary>
+/// comes from the standard Build action (server-lifecycle.ps1 builds the web image and the connector together).</summary>
 [Xunit.Collection("Experience integration")]
 public sealed class ConnectorIntegrationTests : IAsyncLifetime
 {
@@ -61,19 +61,20 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
 
     private string ConnectorBinary()
     {
+        // Walk up to this repository's root, then across to the sibling CompanionLobby checkout.
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "src", "connector")))
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "compose.yaml")))
             directory = directory.Parent;
         Assert.NotNull(directory);
-        var crate = Path.Combine(directory.FullName, "src", "connector");
+        var crate = Path.Combine(directory.Parent!.FullName, "CompanionLobby");
         foreach (var profile in new[] { "release", "debug" })
         {
             var candidate = Path.Combine(crate, "target", profile,
-                OperatingSystem.IsWindows() ? "tangent-connector.exe" : "tangent-connector");
+                OperatingSystem.IsWindows() ? "companion-lobby.exe" : "companion-lobby");
             if (File.Exists(candidate)) return candidate;
         }
         throw new FileNotFoundException(
-            "The tangent-connector binary was not found under src/connector/target. Run Build.bat (or cargo build --release in src/connector) before these integration tests.");
+            $"The companion-lobby binary was not found under {crate}/target. Run Build.bat (or cargo build --release in the CompanionLobby workspace) before these integration tests.");
     }
 
     private (int Exit, string Output, string Error) Run(params string[] arguments)
@@ -87,8 +88,8 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         };
         // ArgumentList applies correct platform quoting; JSON arguments contain quotes.
         foreach (var argument in arguments) information.ArgumentList.Add(argument);
-        information.Environment["TANGENT_CONNECTOR_HOME"] = home;
-        information.Environment["TANGENT_CONNECTOR_NO_BROWSER"] = "1";
+        information.Environment["COMPANION_LOBBY_HOME"] = home;
+        information.Environment["COMPANION_LOBBY_NO_BROWSER"] = "1";
         using var process = Process.Start(information)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
@@ -218,10 +219,10 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
-            information.Environment["TANGENT_CONNECTOR_HOME"] = home;
-            information.Environment["TANGENT_CONNECTOR_NO_BROWSER"] = "1";
+            information.Environment["COMPANION_LOBBY_HOME"] = home;
+            information.Environment["COMPANION_LOBBY_NO_BROWSER"] = "1";
             // Its own fixed page port, so an operator's running connector keeps 5219.
-            information.Environment["TANGENT_CONNECTOR_PORT"] = "5229";
+            information.Environment["COMPANION_LOBBY_PORT"] = "5229";
             var process = Process.Start(information)!;
             _ = process.StandardError.ReadToEndAsync(); // drain to avoid pipe blocking
             return new ConnectorPeer(process, process.StandardOutput, process.StandardInput);

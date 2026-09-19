@@ -99,7 +99,7 @@ Outbound      Tangent client: one route table · atproto client: identity resolu
 
 ### Connector modules
 
-Each module is a folder of the connector crate, which is `src/connector`.
+Each module is a folder of the connector crate, which lives in the sibling `CompanionLobby` repository.
 
 | Module | Owns | Built from |
 |---|---|---|

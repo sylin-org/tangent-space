@@ -9,7 +9,7 @@ rem first if this install holds anything you want to keep, or Wipe/Build/Launch
 rem separately when you only mean one of them.
 rem
 rem The connector keeps its own state in your user profile and is untouched; after a
-rem wipe its saved enrollment is dead, so run `tangent-connector forget` then connect
+rem wipe its saved enrollment is dead, so run `companion-lobby forget` then connect
 rem again before testing an agent.
 setlocal
 set "ROOT=%~dp0"

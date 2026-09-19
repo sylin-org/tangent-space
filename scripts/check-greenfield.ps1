@@ -8,7 +8,7 @@ param([switch]$Strict)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$targets = 'src/server/web', 'src/connector', 'tests', 'scripts', 'compose.yaml', 'Dockerfile' | ForEach-Object { Join-Path $root $_ }
+$targets = 'src/server/web', 'tests', 'scripts', 'compose.yaml', 'Dockerfile' | ForEach-Object { Join-Path $root $_ }
 $rules = [ordered]@{
     'Inbound MCP transport' = '\bMcp[A-Z]\w*|\bTangentSpace\.Mcp\b'
     'Browser WebMCP'        = '(?i:\bwebmcp\b)'
@@ -21,8 +21,8 @@ $rules = [ordered]@{
     # match was .NET's System.Threading.Channels, which is not ours to rename. The clause still
     # catches a returning product channel; it no longer counts the BCL type as one.
     'Retired vocabulary'    = '(?i:\broom\w*|(?<!Threading\.)\bchannels?\w*(?!\s*(<|\.Create)))|\bTangentSite\b|\bTangentCommunity\b|\bEntity<Message>|\bMessage\.(Get|Query|Lifecycle|Project)\b'
-    # Retired on the server, where Participant replaces it; current in the connector, whose
-    # glossary makes Companion a product word. Governed everywhere except src/connector.
+    # Retired on the server, where Participant replaces it. The connector — where Companion
+    # is the product word — lives in its own repository with its own check.
     'Server vocabulary'     = '(?i:\bcompanion\w*)'
     # The connector glossary's Replaces column (C6), as identifiers rather than prose.
     'Connector vocabulary'  = '\bAtprotoSession\b|\bCompanionEntry\b|\bcompanion_id\b|\bcompanionId\b|\bLocalContext\b|\bPendingWrite\b'
@@ -38,14 +38,9 @@ $rules = [ordered]@{
     'Owner narration'       = '(?i:owner (direction|correction|decision|call|note)|the owner (asked|wanted|said|directed|corrected|decided)|per the owner|by owner)'
 }
 
-# Some words are retired on one side of the pair and current on the other, so a rule can name
-# the paths it does not govern. "Companion" is the clearest case: ARCHITECTURE's server glossary
-# retires it in favour of Participant, and its connector glossary makes it the connector's own
-# product word. One rule applied everywhere would have to be wrong about one of them.
-$notGoverned = @{
-    'Server vocabulary' = '\\src\\connector\\'
-}
-
+# Rules can name paths they do not govern; with the connector in its own repository,
+# none currently do.
+$notGoverned = @{}
 $files = Get-ChildItem -Path $targets -Recurse -File -Include *.cs, *.rs, *.js, *.mjs, *.css, *.html, *.json, *.ps1, *.yaml, *.md, Dockerfile |
     Where-Object { $_.FullName -notmatch '\\(bin|obj|target|TestResults)\\' -and $_.FullName -ne $PSCommandPath }
 
