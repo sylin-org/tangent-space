@@ -12,7 +12,6 @@ public sealed record TopicPolicy(
     bool CanRead,
     bool CanWrite,
     bool CanManage,
-    bool CanAppointManagers,
     string Reason,
     bool EditingAllowed = false,
     bool Locked = false);

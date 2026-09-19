@@ -96,7 +96,7 @@ public sealed class Topic : Entity<Topic>
             role, owner, admitted,
             admitted && !timedOut && !IsLocked
                 && (owner || role != TopicRole.Reader && !tangentReader && classificationWrite),
-            (owner && !suspended) || (manager && !timedOut), owner && !suspended, reason,
+            (owner && !suspended) || (manager && !timedOut), reason,
             AllowPostEditing, IsLocked);
     }
 
@@ -123,10 +123,6 @@ public sealed class Topic : Entity<Topic>
         // The Tangent owner can never become a membership target; the creator of a delegated topic holds no ownership.
         if (tangent?.IsOwner(targetDid) == true)
             throw Forbidden("Topic membership cannot change or remove the owner.");
-        if (!authorized && !policy.CanAppointManagers && role == TopicRole.Manager)
-            throw Forbidden("Only the owner can appoint topic managers.");
-        if (!authorized && !policy.CanAppointManagers && targetMembership?.Role == TopicRole.Manager && targetDid != actorDid)
-            throw Forbidden("A topic manager cannot change another manager's authority.");
 
         Advance(now);
         return TopicMembership.Assign(this, targetDid, role, actorDid, now);

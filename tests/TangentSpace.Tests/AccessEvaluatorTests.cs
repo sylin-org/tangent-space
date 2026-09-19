@@ -32,7 +32,7 @@ public sealed class AccessEvaluatorTests
     private static TopicPolicy Draft(Topic topic, string? actor, bool isOwner = false) => new(
         topic.Id, actor, SelectedPolicyRevision: 3, SpacePolicyRevision: 1, TopicAdmission.SignedIn,
         Role: null, IsOwner: isOwner, CanRead: false, CanWrite: false, CanManage: false,
-        CanAppointManagers: false, Reason: "", EditingAllowed: topic.AllowPostEditing, Locked: topic.IsLocked);
+        Reason: "", EditingAllowed: topic.AllowPostEditing, Locked: topic.IsLocked);
 
     private static TopicPolicy Decide(Topic topic, Community.Tangent? tangent, string[] bag,
         bool suspended = false, EffectiveRestriction? restriction = null,

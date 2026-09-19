@@ -7,7 +7,6 @@ public enum TopicCapability
     Reply,
     ManageTopic,
     ManageParticipants,
-    AppointManagers,
     EditOwnPost,
     DeleteOwnPost,
     RemovePost,

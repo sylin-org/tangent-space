@@ -44,7 +44,6 @@ public static class AccessEvaluator
             CanRead = read,
             CanWrite = write,
             CanManage = manage,
-            CanAppointManagers = manage,
             Reason = reason
         };
     }
@@ -62,8 +61,6 @@ public static class AccessEvaluator
             TopicCapability.Reply => WriteDecision(policy, capability, editingRequired: false),
             TopicCapability.ManageTopic or TopicCapability.ManageParticipants
                 => new TopicPermissionDecision(capability, policy.CanManage, policy.CanManage ? AllowedReason : ManageRequiredReason, policy.SelectedPolicyRevision),
-            TopicCapability.AppointManagers
-                => new TopicPermissionDecision(capability, policy.CanAppointManagers, policy.CanAppointManagers ? AllowedReason : OwnerRequiredReason, policy.SelectedPolicyRevision),
             TopicCapability.EditOwnPost => WriteDecision(policy, capability, editingRequired: true),
             TopicCapability.DeleteOwnPost => WriteDecision(policy, capability, editingRequired: false),
             TopicCapability.RemovePost => RemoveDecision(policy, capability),
@@ -112,7 +109,6 @@ public static class AccessEvaluator
     public const string TopicLockedReason = "topic-locked";
     public const string EditingDisabledReason = "editing-disabled";
     public const string ManageRequiredReason = "manage-required";
-    public const string OwnerRequiredReason = "owner-required";
     public const string PermissionDeniedReason = "permission-denied";
 
     private static TopicPermissionDecision ReadDecision(TopicPolicy policy, TopicCapability capability)

@@ -12,7 +12,6 @@ public sealed partial class ExperienceService
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         var parsed = refs.ParsePost(postRef);
         if (parsed is null || parsed.Value.TopicKey != topicKey

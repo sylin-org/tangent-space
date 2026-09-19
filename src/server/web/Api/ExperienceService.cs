@@ -43,7 +43,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var (scopeTangent, scopeTopic) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
         var identity = await IdentityOf(participantId, ct);
         var space = await SiteLabel(ct);
@@ -79,7 +78,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         var selected = DecodeDirectoryCursor(cursor, "experience:tangents", participantId);
         var page = selected?.Page ?? 1;
@@ -96,7 +94,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         TangentDescription? selected;
         using (EntityContext.NoCache())
@@ -136,7 +133,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         Topic? stored;
         using (EntityContext.NoCache())
@@ -238,7 +234,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Post);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         Topic? stored;
         using (EntityContext.NoCache())
@@ -283,7 +278,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         Topic? stored;
         using (EntityContext.NoCache())
@@ -326,7 +320,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         string? invitationId = null;
         if (inviteRef is { } invite)
@@ -372,7 +365,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         await participants.Leave(participantId, tangentKey, ct);
         return await Assemble("leave", ExperienceStatus.Ok, identity,
@@ -387,7 +379,6 @@ public sealed partial class ExperienceService(
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         var (tangentKey, roomKey) = ScopeDestination(scopeRef);
         if (!await tangents.CanAccess(participantId, tangentKey, ct)) throw new UnauthorizedAccessException();
@@ -412,7 +403,6 @@ public sealed partial class ExperienceService(
         ExperienceOrientation? orientation, ExperienceCapabilities? capabilities,
         string participantId, string credential, CancellationToken ct)
     {
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         return new ExperienceResponse(ExperienceResponse.Version, operation, status,
             new ExperienceSnapshot(await digest.HeadRevision(ct), Timestamp(), "current"),
             identity, place, result, attention, continuation, actions, orientation, capabilities);

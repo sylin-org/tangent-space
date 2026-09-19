@@ -22,7 +22,6 @@ public sealed partial class ExperienceService
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         var outcome = await users.Manage(participantId, user, action, reason, durationSeconds, role, caseRef, ct);
         var data = new ExperienceUserManagementData(outcome.TargetParticipantId, outcome.Action, outcome.Reason,
@@ -78,7 +77,6 @@ public sealed partial class ExperienceService
     {
         var viewer = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(viewer, credential, ct);
         var identity = await IdentityOf(viewer, ct);
         (Participant Participant, string MatchedForm)? resolved;
         using (EntityContext.NoCache())

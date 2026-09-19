@@ -245,7 +245,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             var policy = topic is null ? null : await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
                 participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
             policy ??= new TopicPolicy(roomKey, actorId, 0, space?.PolicyRevision ?? 0, TopicAdmission.InvitationOnly,
-                    null, false, false, false, false, false, "room-not-found");
+                    null, false, false, false, false, "room-not-found");
             var result = await operation(policy, ct);
             await EntityContext.Commit(ct);
             return result;
@@ -296,12 +296,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                         topic.CurrentPolicy(space, actorId, actor, false, tangent, tangentMembership,
                             actorParticipant?.Classification ?? ParticipantClassification.Undeclared, restriction),
                         actorParticipant, restriction, ct);
-                    var allowed = operation switch
-                    {
-                        TopicAdministration.SetMembership => projected.CanManage,
-                        TopicAdministration.SetAdmission or TopicAdministration.SetReadAudience => projected.CanAppointManagers,
-                        _ => projected.CanManage
-                    };
+                    var allowed = projected.CanManage;
                     if (!allowed) throw new TopicRuleViolation(TopicDenial.Forbidden, "The current role does not permit this Topic operation.");
                 }
                 // The domain command, membership row and audit use the same once-resolved identity.

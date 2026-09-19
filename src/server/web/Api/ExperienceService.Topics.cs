@@ -25,7 +25,6 @@ public sealed partial class ExperienceService
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Post);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         TangentDescription? tangent;
         using (EntityContext.NoCache())
@@ -82,7 +81,6 @@ public sealed partial class ExperienceService
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Post);
         var credential = CredentialOf(principal);
-        await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
         if (!delete) PostContent.CheckText(text!);
         var target = await ResolvePostRef(postRef, ct);
