@@ -203,7 +203,8 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             var canManage = (tangent.IsOwner(actorId) || TangentRoleAccess.CanDo(
                 (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().Manage, bag))
                 && await Restrictions.ForTangent(actorId, tangent.Id, clock.GetUtcNow(), ct) is null;
-            tangent.ChangeAuthorized(actorId, canManage, name, description, motto, accent, artwork, clock.GetUtcNow());
+            if (!canManage) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can change its card.");
+            tangent.ChangeAuthorized(name, description, motto, accent, artwork, clock.GetUtcNow());
             await tangent.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: tangent.Id, ct: ct);
             await EntityContext.Commit(ct);
@@ -249,7 +250,8 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
                 && (tangent.IsOwner(actorId) || TangentRoleAccess.CanDo(
                     (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().Manage, bag))
                 && await Restrictions.ForTangent(actorId, key, clock.GetUtcNow(), ct) is null;
-            tangent.ChangeAccess(actorId, access, clock.GetUtcNow(), canManage);
+            if (!canManage) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can change access.");
+            tangent.ChangeAccess(actorId, access, clock.GetUtcNow());
             await tangent.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: key, ct: ct);
             await EntityContext.Commit(ct);

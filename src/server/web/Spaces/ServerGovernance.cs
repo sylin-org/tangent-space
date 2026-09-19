@@ -167,7 +167,8 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             var bag = await roleAccess.Bag(actorId, ct);
             var canManage = participant?.IsSuspended != true
                 && TangentRoleAccess.CanDo((space.Access ?? AccessMap.ServerDefaults()).ResolveServer().Manage, bag);
-            space.ChangeAccess(actorId, access, canManage);
+            if (!canManage) throw new UnauthorizedAccessException("The current role cannot change server access.");
+            space.ChangeAccess(access);
             await space.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);

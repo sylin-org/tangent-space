@@ -56,9 +56,8 @@ public sealed class Space : Entity<Space>
 
     public bool IsOwner(string? participantId) => string.Equals(OwnerParticipantId, participantId, StringComparison.Ordinal);
 
-    public void ChangeAccess(string actorId, AccessMap access, bool canManage = false)
+    public void ChangeAccess(AccessMap access)
     {
-        if (!IsOwner(actorId) && !canManage) throw new UnauthorizedAccessException("The current role cannot change server access.");
         Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForServer();
         PolicyRevision = checked(PolicyRevision + 1);
     }

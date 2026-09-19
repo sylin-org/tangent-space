@@ -70,10 +70,10 @@ public sealed class Tangent : Entity<Tangent>
         SetupComplete = true;
     }
 
-    internal void ChangeAuthorized(string actorDid, bool authorized, string? name, string? description, string? motto,
+    /// <summary>Internal: the governance layer vetted the administrator's authority before this call.</summary>
+    internal void ChangeAuthorized(string? name, string? description, string? motto,
         string? accent, string? artwork, DateTimeOffset now)
     {
-        if (!authorized) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only an authorized Tangent administrator can change its card.");
         CheckCard(name ?? Name, description ?? Description, motto ?? Motto, accent ?? Accent, artwork ?? Artwork);
         Name = (name ?? Name).Trim(); Description = Clean(description ?? Description); Motto = Clean(motto ?? Motto);
         Accent = Clean(accent ?? Accent); Artwork = Clean(artwork ?? Artwork); UpdatedAt = now; PolicyRevision = checked(PolicyRevision + 1); SetupComplete = true;
