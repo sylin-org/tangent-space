@@ -9,18 +9,16 @@ namespace Tangent.Application;
 /// Registers a mutation before its side effects and reconciles retries. Within one participant
 /// credential a requestId names exactly one action; a different action under the same id is a
 /// conflict. Registration through completion runs under a per-key in-process lock on top of the
-/// durable insert-only key.
+/// durable insert-only key. The adapter completes the receipt from its command's result; the
+/// pipeline (R3.3) will stage that completion in the command's own transaction.
 /// </summary>
 public sealed class OperationReceipts(TimeProvider clock)
 {
-    private readonly SemaphoreSlim[] stripes = Enumerable.Range(0, 128).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
-    private readonly AsyncLocal<CommitBinding?> binding = new();
+    /// <summary>Receipt-registry scope for browser-session mutations, which carry no participant
+    /// credential claim. Connector callers always use their real credential id.</summary>
+    public const string WebSessionScope = "web-session";
 
-    private sealed class CommitBinding
-    {
-        public OperationReceipt? Receipt;
-        public Func<object?, (string State, string? Reference, string Data)>? Map;
-    }
+    private readonly SemaphoreSlim[] stripes = Enumerable.Range(0, 128).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
 
     public sealed record Registration(OperationReceipt Record, bool Reused);
 
@@ -32,18 +30,8 @@ public sealed class OperationReceipts(TimeProvider clock)
         var key = OperationReceipt.Key(credentialId, participantId, requestId);
         var stripe = stripes[Convert.ToInt32(key[..2], 16) % stripes.Length];
         await stripe.WaitAsync(ct);
-        var previous = binding.Value;
-        var current = new CommitBinding();
-        binding.Value = current;
-        using var observer = CommandCommit.Observe(async (result, token) =>
-        {
-            if (current.Receipt is not { } receipt || current.Map is not { } map) return;
-            var value = map(result);
-            receipt.Complete(value.State, value.Reference, value.Data, clock.GetUtcNow());
-            await receipt.Save(token); // Staged in the domain transaction; a rollback includes this receipt.
-        });
         try { return await action(); }
-        finally { binding.Value = previous; stripe.Release(); }
+        finally { stripe.Release(); }
     }
 
     /// <summary>Insert-only registration at the deterministic key. An existing receipt must match exactly;
@@ -89,13 +77,6 @@ public sealed class OperationReceipts(TimeProvider clock)
         if (stored.State == "completed" && state == "completed" && resultData is not null)
         { stored.ResultData = resultData; stored.ResultRef = resultRef ?? stored.ResultRef; }
         await stored.Save(ct);
-    }
-
-    public void CompleteWithDomain(OperationReceipt receipt, Func<object?, (string State, string? Reference, string Data)> map)
-    {
-        var current = binding.Value ?? throw new InvalidOperationException("Receipt binding requires a running command.");
-        current.Receipt = receipt;
-        current.Map = map;
     }
 
     /// <summary>Canonical payload text: stable key order, explicit nulls. Small fixed argument sets only.</summary>

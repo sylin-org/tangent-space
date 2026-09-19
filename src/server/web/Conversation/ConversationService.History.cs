@@ -79,8 +79,6 @@ public sealed partial class ConversationService
                 await ActivityJournal.AppendInTransaction(ActivityKind.ReadAcknowledged, topic, participantId, null,
                     currentTopic?.TangentKey, position.Sequence, position.AcknowledgedAt, token);
             }
-            // The MCP boundary can persist a read receipt in this same transaction.
-            await CommandCommit.Report(position.Sequence, token);
             return (position.Sequence, Changed: position.Sequence > previous);
         }, ct);
         if (result.Changed) ActivityJournal.SignalAfterCommit();

@@ -84,8 +84,9 @@ public sealed partial class ExperienceService
         => ChangePost(principal, postRef, text: null, delete: true, requestId, "delete_post", "DeletePost", ct);
 
     /// <summary>The connector sends a bare Post id; full references from this server's own
-    /// envelopes resolve the same way. No requestId means no receipt: the PostChange ledger
-    /// still refuses a used operation id, and the domain stays the authority.</summary>
+    /// envelopes resolve the same way. requestId is the registry's idempotency key: a replay
+    /// answers the recorded result and a divergent one is a conflict. Without one the act
+    /// re-executes — an edit converges on its text, a removal answers "already removed".</summary>
     private async Task<ExperienceResponse> ChangePost(ClaimsPrincipal principal, string postRef, string? text,
         bool delete, string? requestId, string operation, string registryOperation, CancellationToken ct)
     {
@@ -96,11 +97,11 @@ public sealed partial class ExperienceService
         if (!delete) PostContent.CheckText(text!);
         var target = await ResolvePostRef(postRef, ct);
         var payload = new Dictionary<string, string?> { ["text"] = text, ["delete"] = delete ? "true" : "false" };
-        Task<ExperienceResponse> perform(string operationId) => Act(operationId);
-        async Task<ExperienceResponse> Act(string operationId)
+        Task<ExperienceResponse> perform() => Act();
+        async Task<ExperienceResponse> Act()
         {
-            await conversation.ChangePost(participantId, target.TopicKey, target.PostId,
-                text, delete, operationId, ct);
+            var result = await conversation.ChangePost(participantId, target.TopicKey, target.PostId,
+                text, delete, ct);
             var fullRef = refs.Post(target.TangentKey, target.TopicKey, target.PostId);
             var data = new ExperiencePostData(fullRef, null,
                 refs.Origin + "/tangents/" + target.TangentKey + "/posts/" + target.PostId + "/");
@@ -113,16 +114,14 @@ public sealed partial class ExperienceService
                 null, CapabilitiesOf(place), participantId, credential, ct);
         }
         if (requestId is null)
-            return await perform("exp-" + Guid.CreateVersion7().ToString("n"));
+            return await perform();
         return await receipts.Run(RegistryCredential(principal), participantId, requestId, async () =>
         {
             var registration = await receipts.Register(RegistryCredential(principal), participantId, requestId,
                 registryOperation, target.PostId, payload, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay(operation, principal, identity, registration.Record, participantId, credential, ct);
-            var operationId = registration.Record.NamespacedOperationId
-                ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
-            var outcome = await perform(operationId);
+            var outcome = await perform();
             if (outcome.Status == ExperienceStatus.Ok)
                 await receipts.Complete(registration.Record, "completed", outcome.Result.Receipt?.ResultRef,
                     Serialize(outcome.Result.Data!), ct);

@@ -74,7 +74,6 @@ public sealed partial class ParticipantGovernance
                     SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
                 };
                 await audit.Save(ct);
-                await CommandCommit.Report(new RestrictionResult(scope, scopeKey, targetId, stored.Kind, stored.Until, stored.Reason, audit.Id), ct);
                 await EntityContext.Commit(ct);
                 ActivityJournal.SignalAfterCommit();
                 return new RestrictionResult(scope, scopeKey, targetId, stored.Kind, stored.Until, stored.Reason, audit.Id);

@@ -1,11 +1,14 @@
+using System.Text.Json;
+using Koan.Data.Core;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Tangent.Application;
 using Tangent.Identity;
 
 namespace Tangent.Conversation;
 
 [ApiController, Authorize, Route("api/rooms/{roomKey}")]
-public sealed class ConversationController(TangentServer hub) : ControllerBase
+public sealed class ConversationController(TangentServer hub, OperationReceipts receipts) : ControllerBase
 {
     private ConversationService conversation => hub.Posts;
 
@@ -28,22 +31,37 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
 
     [HttpPatch("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
     public Task<IActionResult> Edit(string roomKey, string messageId, PostChangeRequest input, CancellationToken ct)
-        => Execute(async () =>
-        {
-            var did = await RequireChangeActor(roomKey, messageId, ct);
-            var result = await conversation.ChangePost(did, roomKey, messageId, input.Text, false, input.OperationId, ct,
-                facets: input.Facets);
-            return StatusCode(result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
-        });
+        => Execute(() => Change(roomKey, messageId, input.Text, false, input.OperationId, input.Facets, ct));
 
     [HttpDelete("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
     public Task<IActionResult> Delete(string roomKey, string messageId, PostDeleteRequest input, CancellationToken ct)
-        => Execute(async () =>
+        => Execute(() => Change(roomKey, messageId, null, true, input.OperationId, null, ct));
+
+    /// <summary>The browser's operationId is its requestId: the receipt registry answers a replay
+    /// with the recorded result and refuses a divergent one, exactly as it does for the
+    /// experience API.</summary>
+    private async Task<IActionResult> Change(string roomKey, string messageId, string? text, bool delete,
+        string operationId, IReadOnlyList<PostFacet>? facets, CancellationToken ct)
+    {
+        var did = await RequireChangeActor(roomKey, messageId, ct);
+        var payload = new Dictionary<string, string?>
         {
-            var did = await RequireChangeActor(roomKey, messageId, ct);
-            var result = await conversation.ChangePost(did, roomKey, messageId, null, true, input.OperationId, ct);
-            return StatusCode(result.State is "accepted" or "deleted" or "moderated" ? 200 : 409, result);
-        });
+            ["text"] = text, ["delete"] = delete ? "true" : "false",
+            ["facets"] = facets is null || facets.Count == 0 ? null
+                : string.Join("|", facets.OrderBy(facet => facet.Start).Select(facet => facet.Canonical())),
+        };
+        return await receipts.Run(OperationReceipts.WebSessionScope, did, operationId, async () =>
+        {
+            var registration = await receipts.Register(OperationReceipts.WebSessionScope, did, operationId,
+                delete ? "DeletePost" : "EditPost", $"{roomKey}/{messageId}", payload, ct);
+            if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
+                return Ok(Newtonsoft.Json.Linq.JToken.Parse(registration.Record.ResultData));
+            var change = await conversation.ChangePost(did, roomKey, messageId, text, delete, ct, facets);
+            await receipts.Complete(registration.Record, "completed", null,
+                JsonSerializer.Serialize(change, new JsonSerializerOptions(JsonSerializerDefaults.Web)), ct);
+            return Ok(change);
+        }, ct);
+    }
 
     [HttpGet("updates")]
     public Task<IActionResult> Updates(string roomKey, [FromQuery] string cursor, CancellationToken ct)
@@ -56,7 +74,7 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
     private async Task<string> RequireChangeActor(string roomKey, string messageId, CancellationToken ct)
     {
         var did = ParticipationAccess.Require(User, ParticipationGrants.Read);
-        using var fresh = Koan.Data.Core.EntityContext.NoCache();
+        using var fresh = EntityContext.NoCache();
         var post = await Post.Get(messageId, ct);
         if (post is null || post.TopicKey != roomKey) throw new ArgumentException("Choose a post in this Topic.");
         ParticipationAccess.Require(User, post.AuthorParticipantId == did ? ParticipationGrants.Post : ParticipationGrants.Manage);
@@ -68,7 +86,7 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         Response.Headers.CacheControl = "no-store";
         try { return await operation(); }
         catch (UnauthorizedAccessException) { return StatusCode(403, new { reason = "Your current access does not permit this operation." }); }
-        catch (WriteConflict) { return Conflict(new { reason = "That operation ID was already used with different content." }); }
+        catch (RequestConflictException error) { return Conflict(new { reason = $"{error.RequestId} already identifies a different action." }); }
         catch (ArgumentException error) { return BadRequest(new { reason = error.Message }); }
     }
 }

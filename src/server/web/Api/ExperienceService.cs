@@ -37,10 +37,6 @@ public sealed partial class ExperienceService(
     public const int MaximumDigestLimit = 25;
     public const int DirectoryLimit = 10;
 
-    /// <summary>Receipt-registry scope for browser-session mutations, which carry no participant
-    /// credential claim. Connector callers always use their real credential id.</summary>
-    private const string WebSessionScope = "web-session";
-
     // ---------- Arrival and orientation ----------
 
     public async Task<ExperienceResponse> Arrive(ClaimsPrincipal principal, string? scopeRef, CancellationToken ct)
@@ -398,12 +394,6 @@ public sealed partial class ExperienceService(
                 tangentKey, new Dictionary<string, string?> { ["inviteRef"] = inviteRef }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("join", principal, identity, registration.Record, participantId, credential, ct);
-            receipts.CompleteWithDomain(registration.Record, raw =>
-            {
-                var joined = (JoinResult)raw!;
-                var pending = joined.Outcome == JoinOutcome.PendingApproval;
-                return (pending ? "pending" : "completed", pending ? null : refs.Tangent(tangentKey), "{}");
-            });
             JoinResult join;
             try
             {
@@ -452,7 +442,6 @@ public sealed partial class ExperienceService(
                 tangentKey, new Dictionary<string, string?>(), ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("leave", principal, identity, registration.Record, participantId, credential, ct);
-            receipts.CompleteWithDomain(registration.Record, _ => ("completed", null, "{}"));
             await participants.Leave(participantId, tangentKey, ct);
             await receipts.Complete(registration.Record, "completed", null, "{}", ct);
             return await Assemble("leave", ExperienceStatus.Ok, identity,
@@ -484,7 +473,6 @@ public sealed partial class ExperienceService(
                 roomKey ?? tangentKey, new Dictionary<string, string?> { ["scopeRef"] = scopeRef, ["mode"] = mode }, ct);
             if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
                 return await Replay("set_watch", principal, identity, registration.Record, participantId, credential, ct);
-            receipts.CompleteWithDomain(registration.Record, _ => ("completed", null, "{}"));
             if (roomKey is { } watchedTopic) await participants.SetWatch(participantId, watchedTopic, parsed, ct);
             else await participants.SetTangentWatch(participantId, tangentKey, parsed, ct);
             await receipts.Complete(registration.Record, "completed", null, "{}", ct);
@@ -781,7 +769,7 @@ public sealed partial class ExperienceService(
         => principal.FindFirst(ParticipationConstants.CredentialClaim)?.Value;
 
     private static string RegistryCredential(ClaimsPrincipal principal)
-        => CredentialOf(principal) ?? WebSessionScope;
+        => CredentialOf(principal) ?? OperationReceipts.WebSessionScope;
 
     private static ExperienceContinuation Empty() => new(null, null, null, null, null, null);
 

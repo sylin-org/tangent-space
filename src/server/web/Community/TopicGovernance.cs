@@ -327,9 +327,6 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
             };
             await audit.Save(ct);
-            if (audit.Accepted)
-                await CommandCommit.Report(new TopicAdministrationResult(true, null, audit.Reason, roomKey,
-                    audit.SelectedPolicyRevision, audit.Id), ct);
             await EntityContext.Commit(ct);
             if (change is not null) ActivityJournal.SignalAfterCommit();
             result = new TopicAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, roomKey,

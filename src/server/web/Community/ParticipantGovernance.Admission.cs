@@ -36,7 +36,6 @@ public sealed partial class ParticipantGovernance
             var invitation = TangentInvitation.Issue(tangent, target, granted, actorId, now);
             await invitation.Save(ct);
             await Journal(ActivityKind.InvitationChanged, actorId, target, tangentKey, ct);
-            await CommandCommit.Report(Describe(invitation), ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             return Describe(invitation);
@@ -160,7 +159,6 @@ public sealed partial class ParticipantGovernance
             tangent.ChangeParticipationPolicy(actorId, admission, preset, undeclared, clock.GetUtcNow());
             await tangent.Save(ct);
             await Journal(ActivityKind.TangentChanged, actorId, null, tangentKey, ct);
-            await CommandCommit.Report(new TangentPolicyResult(tangent.Id, tangent.EffectiveAdmission, tangent.ParticipationPreset, tangent.UndeclaredAccess, tangent.PolicyRevision), ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             return new TangentPolicyResult(tangent.Id, tangent.EffectiveAdmission, tangent.ParticipationPreset,

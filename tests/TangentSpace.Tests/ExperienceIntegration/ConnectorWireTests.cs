@@ -255,6 +255,65 @@ public sealed class ConnectorWireTests
             item => item.GetProperty("kind").GetString() == "write_settlement");
     }
 
+    [Fact]
+    public async Task A_request_id_replays_its_edit_and_conflicts_on_divergence()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.OwnerToken);
+        using (var settings = await app.Http.PatchAsync("/api/rooms/proj-z/settings",
+            JsonContent.Create(new { allowPostEditing = true, isLocked = false }), TestContext.Current.CancellationToken))
+        {
+            settings.EnsureSuccessStatusCode();
+        }
+        UseToken(app.Http, app.AgentToken);
+        using (var edit = await app.Http.PatchAsync("/api/v1/experience/posts/m-agent-q1",
+            JsonContent.Create(new { text = "First revision.", requestId = "edit-once-1" }), TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        }
+        // The same request replays the recorded result; a different action under the same
+        // request id is a conflict, never a second edit.
+        using (var replay = await app.Http.PatchAsync("/api/v1/experience/posts/m-agent-q1",
+            JsonContent.Create(new { text = "First revision.", requestId = "edit-once-1" }), TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+            Assert.Equal("completed", (await ReadAsync(replay)).GetProperty("result").GetProperty("receipt").GetProperty("state").GetString());
+        }
+        using (var divergent = await app.Http.PatchAsync("/api/v1/experience/posts/m-agent-q1",
+            JsonContent.Create(new { text = "A different edit.", requestId = "edit-once-1" }), TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, divergent.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task The_browser_path_replays_and_conflicts_through_the_same_registry()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.OwnerToken);
+        using (var settings = await app.Http.PatchAsync("/api/rooms/proj-z/settings",
+            JsonContent.Create(new { allowPostEditing = true, isLocked = false }), TestContext.Current.CancellationToken))
+        {
+            settings.EnsureSuccessStatusCode();
+        }
+        UseToken(app.Http, app.AgentToken);
+        using (var first = await app.Http.PatchAsync("/api/rooms/proj-z/messages/m-agent-q1",
+            JsonContent.Create(new { text = "Browser edit.", operationId = "browser-edit-1" }), TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        }
+        using (var replay = await app.Http.PatchAsync("/api/rooms/proj-z/messages/m-agent-q1",
+            JsonContent.Create(new { text = "Browser edit.", operationId = "browser-edit-1" }), TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        }
+        using (var divergent = await app.Http.PatchAsync("/api/rooms/proj-z/messages/m-agent-q1",
+            JsonContent.Create(new { text = "A different browser edit.", operationId = "browser-edit-1" }), TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, divergent.StatusCode);
+        }
+    }
+
     private static async Task<JsonElement> ReadTopic(HttpClient http, string topicRef)
     {
         var topicKey = topicRef.Split("::")[^1];

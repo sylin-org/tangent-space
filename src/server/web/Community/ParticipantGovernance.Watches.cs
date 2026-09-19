@@ -22,7 +22,6 @@ public sealed partial class ParticipantGovernance
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "Watch state needs read access to the topic.");
             var setting = WatchSetting.Choose(actorId, roomKey, mode, actorId, clock.GetUtcNow());
             await setting.Save(ct);
-            await CommandCommit.Report(new WatchResult(roomKey, setting.Mode), ct);
             await EntityContext.Commit(ct);
             return new WatchResult(roomKey, setting.Mode);
         }
@@ -46,7 +45,6 @@ public sealed partial class ParticipantGovernance
                 ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             var setting = TangentWatchSetting.Choose(actorId, tangentKey, mode, actorId, clock.GetUtcNow());
             await setting.Save(ct);
-            await CommandCommit.Report(new WatchResult(tangentKey, setting.Mode), ct);
             await EntityContext.Commit(ct);
             return new WatchResult(tangentKey, setting.Mode);
         }

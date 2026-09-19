@@ -94,7 +94,6 @@ public sealed partial class ParticipantGovernance
             var departed = TangentMembership.Assign(tangent, actorId, TangentRole.Left, actorId, now);
             await departed.Save(ct);
             await Journal(ActivityKind.MembershipChanged, actorId, actorId, tangentKey, ct);
-            await CommandCommit.Report(new LeaveResult(LeaveOutcome.Left, MembershipOf(departed)), ct);
             await EntityContext.Commit(ct);
             ActivityJournal.SignalAfterCommit();
             return new LeaveResult(LeaveOutcome.Left, MembershipOf(departed));
@@ -178,7 +177,6 @@ public sealed partial class ParticipantGovernance
 
     private async Task<JoinResult> CommitJoin(JoinResult result, CancellationToken ct)
     {
-        await CommandCommit.Report(result, ct);
         await EntityContext.Commit(ct);
         ActivityJournal.SignalAfterCommit();
         return result;
@@ -186,7 +184,7 @@ public sealed partial class ParticipantGovernance
 
     private async Task<RoleChangeResult> CommitRole(RoleChangeResult result, CancellationToken ct)
     {
-        await CommandCommit.Report(result, ct);
+
         await EntityContext.Commit(ct);
         ActivityJournal.SignalAfterCommit();
         return result;
@@ -195,7 +193,6 @@ public sealed partial class ParticipantGovernance
     private async Task<LeaveResult> AlreadyLeft(TangentMembership? membership, CancellationToken ct)
     {
         var result = new LeaveResult(LeaveOutcome.AlreadyNotMember, membership is null ? null : MembershipOf(membership));
-        await CommandCommit.Report(result, ct);
         await EntityContext.Commit(ct);
         return result;
     }
