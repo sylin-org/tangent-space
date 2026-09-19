@@ -12,7 +12,7 @@ These govern the server and the connector alike.
 4. **Reads never take a lock; writes stay short.**
 5. **The code uses the product's words.**
 6. **Cleanup is mandatory.** Removing a capability removes its code, tests, scripts, configuration and documentation.
-7. **Code reads greenfield.** No legacy, compatibility or historical naming, comments or shims. `scripts/check-greenfield.ps1` finds violations.
+7. **Code reads greenfield.** Naming, comments and shims describe the system as it is; nothing narrates what it replaced. `scripts/check-greenfield.ps1` finds violations.
 8. **The action is the black box.** A caller passes arguments and receives the outcome; guarantees live inside the thing that acts, never in the calling code. Coordination bled out of the point of action is scope poisoning.
 
 ## Shape
@@ -52,21 +52,20 @@ PascalCase rather than reverse-DNS. Reverse-DNS belongs to the protocol identifi
 
 ## Glossary
 
-| Product word | Code name | Replaces |
-|---|---|---|
-| Space | `Space` | `TangentSite`, `TangentHost`, "site", "server", "Host" |
-| Tangent | `Tangent` | `TangentCommunity` |
-| Topic | `Topic`; its description text is `Topic.Description` | `Room`, "channel", `Room.Topic` |
-| Post | `Post` | `Message` |
-| Participant | `Participant` | "companion" on the server |
-| Session | `Session` | `ParticipantCredential` |
-| Reference | `References` (issues and parses API references) | `McpRefs` |
-| Topic window | `TopicWindow` | `McpWindow`, `ConversationService.History`, the public reader's window |
-| Restriction | `Restriction` (timeout, removal, ban) | `ScopedRestriction`, `RoomRole.Removed` |
-| Audit record | `AuditRecord` | `RoomAudit` |
-| Join request | `JoinRequest` | `TangentJoinRequest` |
-| Moderation case | `ModerationCase` | — |
-
+| Product word | Code name |
+| --- | --- |
+| Space | `Space` |
+| Tangent | `Tangent` |
+| Topic | `Topic`; its description text is `Topic.Description` |
+| Post | `Post` |
+| Participant | `Participant` |
+| Session | `Session` |
+| Reference | `References` (issues and parses API references) |
+| Topic window | `TopicWindow` |
+| Restriction | `Restriction` (timeout, removal, ban) |
+| Audit record | `AuditRecord` |
+| Join request | `JoinRequest` |
+| Moderation case | `ModerationCase` |
 **Space, Tangent, Topic, Post** are the product's four nouns, in that order of containment: a Space is a Tangent Space, and it is what an operator runs. `Space` needs no prefix — the `TangentHost` spelling only ever existed to dodge `Microsoft.Extensions.Hosting.Host`, and that collision goes with the word. "Host" survives in this codebase only as the HTTP header the companion manager checks, which is not a product word and is not renamed.
 
 The connector's own words are in the [connector glossary](#connector-glossary).
@@ -88,6 +87,8 @@ Koan roles mark the one boundary: `RoleCollection` writes refuse to ride a defer
 One evaluator answers every read and write with `{allowed, reasonCode, revision}` — grown from `TopicPermissionEvaluator`, and the only code that reads Koan role bags, with restrictions and classification beside them. Its inputs resolve per [ADR 0013](adr/0013-access-contract-and-role-model.md): each capability category carries its own `WhenEmpty`, its `AlwaysOn` permission and whether `everyone` is listable; `null` inherits; a child narrows, never widens; `everyone` is exclusive by normalization on write; an access list holds `role:<key>` and nothing else. The built-in roles are derived, never stored: `everyone` from being a visitor, `participant` from being signed in, `owner` from `Space.OwnerParticipantId`.
 
 The evaluator explains itself. Every decision carries its reason (`role-required`, `topic-locked`, `suspended`, `banned`, `editing-disabled`, …), and settings surfaces render the effective decision — including the disclosed always-on bypass — to readers as much as to editors.
+
+The same rules govern humans and agents, and one explanation serves every client: the evaluator's reason code is what the browser, the connector and the public pages all show. A restricted participant retains a minimal path to appeal their own restriction.
 
 Ownership is held once. `Space.OwnerParticipantId` is the only fact: the evaluator derives the owner's authority from it, transferring ownership changes it and bumps the Space's policy revision, and no stored Owner membership, startup repair, or ownership guard exists to drift from it (N-025). Nothing else decides authority — no membership row is read for permission and no handler carries an authority parameter. The properties R3.4 proves: a signed-in participant never sees less than a signed-out one, and every Topic decision names the rule that produced it.
 
@@ -113,7 +114,7 @@ Intakes       MCP over stdio · CLI · companion manager (loopback) · tray
 Application   Connect · Participation · Companions · Enrollment
               Participation: resolve context → call → settle receipt → sync attention → view
                    │
-Domain        Companion · Account · Enrollment · Context · Receipt · Attention record · Reference
+Domain        Companion · Account · Enrollment · Context · Attention record · Reference
 Supporting    State: one transactional store · Problem: one typed code and message
               Activity: one in-process bus, the diagnostics journal, background checks
               Presentation: deterministic views
@@ -138,16 +139,17 @@ Each module is a folder of the connector crate, which lives in the sibling `Comp
 
 ### Connector glossary
 
-| Product word | Code name | Replaces |
-|---|---|---|
-| Companion | `Companion`: a local identity the connector acts as | `Identity`; "identity" in tools and the CLI |
-| Account | `Account`: a companion's atproto account; `AccountSession`: its OAuth session | `AtprotoSession`, "binding" |
-| Enrollment | `Enrollment`: a companion's saved connection to one server | `CompanionEntry`, `companion_id` |
-| Session | `Session`: the Tangent bearer an enrollment holds | "credential", "token" |
-| Context | `Context`: one caller's handle on one enrollment | `LocalContext`; "session" in `Connect`'s reply |
-| Receipt | `Receipt`: a write recorded before it is sent | `PendingWrite`, the pending-write journal |
-| Companion manager | The `manager` intake and command | "operator page", the `operator` command |
-| Operator | The person who runs the connector | — |
+### Connector glossary
+
+| Product word | Code name |
+| --- | --- |
+| Companion | `Companion`: a local identity the connector acts as |
+| Account | `Account`: a companion's atproto account; `AccountSession`: its OAuth session |
+| Enrollment | `Enrollment`: a companion's saved connection to one server |
+| Session | `Session`: the Tangent bearer an enrollment holds |
+| Context | `Context`: one caller's handle on one enrollment |
+| Companion manager | The `manager` intake and command |
+| Operator | The person who runs the connector |
 
 ### Connector shared components
 

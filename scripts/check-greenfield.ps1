@@ -38,6 +38,14 @@ $rules = [ordered]@{
     'Owner narration'       = '(?i:owner (direction|correction|decision|call|note)|the owner (asked|wanted|said|directed|corrected|decided)|per the owner|by owner)'
 }
 
+# Living documentation describes the system as it is. The ledger, the epics and the decision
+# records are the historical archive by purpose and stay outside this scan.
+$docTargets = @('ARCHITECTURE.md', 'MANDATES.md', 'PRODUCT.md', 'CURRENT_STATE.md', 'DOCKER.md', 'README.md', 'AGENTS.md') | ForEach-Object { Join-Path (Join-Path $root 'docs') $_ }
+$docTargets += Join-Path $root 'AGENTS.md'
+$docRules = [ordered]@{
+    'Docs: historical markers' = '(?i:\blegacy\b|\bdeprecated\b|\bback-?compat\w*\b|\bformerly\b|\bsuperseded\b|\bno longer\b|\bused to\b|\bwas (removed|deleted|replaced|retired)\b)'
+}
+
 # Rules can name paths they do not govern; with the connector in its own repository,
 # none currently do.
 $notGoverned = @{}
@@ -55,5 +63,16 @@ foreach ($rule in $rules.GetEnumerator()) {
         ForEach-Object { '{0} ({1})' -f [IO.Path]::GetRelativePath($root, $_.Name), $_.Count }
     '{0,-22} {1,6}  {2}' -f $rule.Key, $hits.Count, ($top -join ', ')
 }
+$docTotal = 0
+foreach ($rule in $docRules.GetEnumerator()) {
+    $hits = @($docTargets | ForEach-Object {
+        if (Test-Path $_) { Select-String -Path $_ -Pattern $rule.Value -CaseSensitive }
+    })
+    $docTotal += $hits.Count
+    $top = $hits | Group-Object Path | Sort-Object Count -Descending | Select-Object -First 4 |
+        ForEach-Object { '{0} ({1})' -f [IO.Path]::GetRelativePath($root, $_.Name), $_.Count }
+    '{0,-22} {1,6}  {2}' -f $rule.Key, $hits.Count, ($top -join ', ')
+}
+$total += $docTotal
 '{0,-22} {1,6}' -f 'Total (lines)', $total
 if ($Strict -and $total -gt 0) { exit 1 }

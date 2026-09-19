@@ -28,7 +28,7 @@ Keep the POC lightweight: prioritize tangible user experience and proportionate 
 
 The active epic is [EPIC-007](docs/epics/EPIC-007.md), the server and connector realignment ([ADR 0011](docs/adr/0011-realigned-server-architecture.md), [ADR 0012](docs/adr/0012-realigned-connector-architecture.md)). Its [work ledger](docs/epics/epic-007/LEDGER.md) is the single source of execution state: start at "Resume here", follow its resume protocol and update it at every checkpoint. [EPIC-006](docs/epics/EPIC-006.md) is paused except where EPIC-007 re-homes its stories; its moderator-environment work continues separately and does not authorize enrolling or deploying an autonomous moderator.
 
-Two standing rules from Leo apply to all work: **cleanup of deprecated content is mandatory** — removing a capability removes its code, tests, scripts, configuration and documentation — and **code must read greenfield**, with no legacy, compatibility or historical naming, comments or shims. `scripts/check-greenfield.ps1` reports violations.
+Two standing rules from Leo apply to all work: **cleanup is mandatory** — removing a capability removes its code, tests, scripts, configuration and documentation — and **code and documentation read greenfield**: names, comments and prose describe the system as it is and never narrate what it replaced. `scripts/check-greenfield.ps1` reports violations.
 
 Leo also set a UI rule: **the app never opens a dialog**. The browser and the connector's companion page do not block with `alert`, `confirm`, `prompt` or a modal `<dialog>`; a destructive action confirms inline in place, and a form opens as a panel in the page. `tests/no-dialogs.test.mjs` and the connector's operator tests enforce it.
 
