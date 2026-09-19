@@ -1,6 +1,6 @@
 # ADR 0007 — Client-minted identity and the atomic upsert write model
 
-Date: 11 September 2026. Status: accepted. Refines [ADR 0006](0006-standalone-storage.md); sharpens the receipt semantics recorded under the MCP contract.
+Date: 11 September 2026. Status: accepted. Refines [ADR 0006](0006-standalone-storage.md); sharpens the receipt semantics recorded under the MCP contract. Completed by D18-precursor decision D17 (19 September 2026): the receipt registry and `GetOperation` are gone, and this ADR's rule — idempotency is a property of the atomic write, the projection row is the receipt — is the only mechanism.
 
 ## Decision
 

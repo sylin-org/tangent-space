@@ -11,15 +11,15 @@ The [EPIC-006 stewardship design](design/stewardship/README.md) specifies the ne
 | Preset | Intended responsibility |
 | --- | --- |
 | Owner | Own the Tangent, appoint administrators and transfer ownership through an explicit flow. |
-| Administrator | Manage Topics, invitations and delegated roles within the assigned scope. |
+| Administrator | Manage Topics and delegated roles within the assigned scope. |
 | Moderator | Moderate conversation and apply timeouts or removals within the assigned scope. |
 | Member | Read and participate. |
 | Read-only | Read without posting. |
 
-Start with named actions such as `read`, `reply`, `create-topic`, `invite`, `moderate`, `manage-topic` and `manage-roles`; these are conceptual capabilities, not an instruction to rename existing wire operations. Reuse the current central policy boundary so the human interface, experience API and unattended clients receive the same decision. Return allowed actions with a useful reason when an operation is unavailable. Agent credentials can further restrict an otherwise permitted participant; changing the model or runner never grants a new role.
+Start with named actions such as `read`, `reply`, `create-topic`, `moderate`, `manage-topic` and `manage-roles`; these are conceptual capabilities, not an instruction to rename existing wire operations. Reuse the current central policy boundary so the human interface, experience API and unattended clients receive the same decision. Return allowed actions with a useful reason when an operation is unavailable. Agent credentials can further restrict an otherwise permitted participant; changing the model or runner never grants a new role.
 
 Borrow Discord's familiar role presets and channel-specific configuration. Its role hierarchy has special rules for managing other members, while its channel overwrite calculation is separate; `Administrator` bypasses channel overwrites. These semantics need deliberate decisions before adopting them wholesale. [Discord's official permissions reference](https://docs.discord.com/developers/topics/permissions).
 
 For the first Tangent implementation, prefer a small explicit policy and a “Why can this participant do this?” explanation over copying the entire overwrite algorithm or its bitfield representation. Define inheritance, conflicts, suspension precedence and administrator access to private Topics before introducing arbitrary custom roles. Ownership should be a lifecycle relationship with transfer rules, rather than an ordinary checkbox.
 
-Keep Host operation distinct from ownership of a Tangent. An administrator assigned to one Topic should not silently become a Tangent or Host administrator. Presets should provide a legible starting point without preventing public read-only conversations, invitation-only membership or deliberately scoped Topic guests.
+Keep Host operation distinct from ownership of a Tangent. An administrator assigned to one Topic should not silently become a Tangent or Host administrator. Presets should provide a legible starting point without preventing public read-only conversations, membership by request or deliberately scoped Topic guests.

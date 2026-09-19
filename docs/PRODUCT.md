@@ -25,7 +25,7 @@ These are product concepts, not a requirement for a class, service or separate p
 
 After reviewing the supplied design, Leo selected a little TCG-like card for each Tangent. The card belongs to the community, so one Host can carry several distinct Tangent cards. Artwork, name, accent, short description and a house rule give the place its identity; audience and the viewer's relationship explain participation.
 
-Use a full card for discovery, invitation previews and owner welcome, a compact card for saved/joined places, and the same visual identity in navigation. These placements are design recommendations. Small live activity markers reuse the Channel/participant activity model. All displayed metadata follows current audience and listing policy. [Design reference and handoff](design/DESIGN_REFERENCE_REVIEW.md).
+Use a full card for discovery, join-request previews and owner welcome, a compact card for saved/joined places, and the same visual identity in navigation. These placements are design recommendations. Small live activity markers reuse the Channel/participant activity model. All displayed metadata follows current audience and listing policy. [Design reference and handoff](design/DESIGN_REFERENCE_REVIEW.md).
 
 ## A new owner's first few minutes
 
@@ -33,7 +33,7 @@ A fresh installation has a short, resumable welcome. Once ownership is establish
 
 1. Name the first Tangent. “What would you like to call it?” Reassure the owner: “You can make more Tangents later.”
 2. Offer a few Channel suggestions and clear audience choices. A Lounge can be enough; additional Channels are optional.
-3. Offer help: “Want someone to help you look after things?” Invite administrators now or later.
+3. Offer help: “Want someone to help you look after things?” Bring in administrators now or later.
 4. Land in the community with a useful first action and a brief celebration.
 
 Ownership can be preconfigured by verified DID. The bootstrap choice remains open: an installer claim link is the current recommendation; unrestricted first-sign-in ownership would need an explicit operator choice. The initial Participant owns the first Tangent; whether that bootstrap also grants host administration is an open scope decision. Provisioning protocol authority and assigning the Tangent owner are distinct operations. The tutorial must not assign ownership to an arbitrary later visitor. Agent Participants can also own a Tangent; the same setup choices must be available through configuration or the agent interface.
@@ -46,7 +46,7 @@ A newcomer can identify the community, their signed-in identity or visitor state
 
 Catch-up sits alongside complete browsing, search and saved places. Already-read conversations remain discoverable. Seeing an overview, reading a message and completing an optional action are separate states. A backlog is not a task assignment.
 
-Joining, accepting an invitation, watching, saving and replying are separate choices. “My Tangents” should be a private collection of saved or joined places; optional public affiliation is a separate feature. Cross-host synchronization is a later portability experiment, not a consequence we can assume from atproto identity.
+Joining, watching, saving and replying are separate choices. “My Tangents” should be a private collection of saved or joined places; optional public affiliation is a separate feature. Cross-host synchronization is a later portability experiment, not a consequence we can assume from atproto identity.
 
 Humans get readable conversation, familiar reply controls and live updates. Agents receive the same authorized information in bounded structured responses, with explicit continuation and available actions. Anonymous reading is possible where the audience permits it.
 
@@ -66,7 +66,7 @@ Pins, topics, optional declared goals and attributed summaries remain native con
 
 ## People and agents choose how to participate
 
-A human invitation opens a comprehensible destination and access decision. An agent invitation identifies the same place, expected participation, available actions and authority. Inviting an AT account does not install or start its runner. Sending an invitation over an external service depends on that service's supported delivery and the sender's authorization.
+Arrival opens a comprehensible destination and access decision. Enrolling an agent identifies the same place, expected participation, available actions and authority. Enrolling an AT account does not install or start its runner; admission is open or by request, and delivery over an external service depends on that service's supported delivery and the sender's authorization.
 
 The efficient agent interaction is: authenticated identity plus “What changed for me since this checkpoint?” The server returns a bounded overview; the client selects what to expand. Ordinary software handles idle checks, delivery and batching. The participant's operator decides when to invoke a model.
 

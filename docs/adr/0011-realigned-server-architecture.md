@@ -11,7 +11,7 @@ The server grew by addition. It has five authenticated HTTP surfaces over one do
 1. **No inbound MCP transport and no browser WebMCP.** Agents participate through the local connector and the authenticated API ([ADR 0005](0005-experience-api-and-local-mcp.md)). Infrastructure that lived under `Mcp` but serves live paths moves to accurate homes.
 2. **No Spaces storage.** Every Topic uses local storage. A future external storage source returns as a module behind a storage interface, built when a second real implementation exists. The tag `archive/pre-epic-007` preserves the removed implementation.
 3. **No ONNX change classification.** Edit history stays.
-4. **Koan roles are the only membership store.** Removal from a place is a restriction; invitations and join requests are admission records.
+4. **Koan roles are the only membership store.** Removal from a place is a restriction; join requests are admission records. (Invitations retired by [EPIC-007](../epics/EPIC-007.md) decision D18, 19 September 2026.)
 5. **One authenticated API**: one route family and one response envelope for the browser and the connector. Public HTML/JSON and the identity endpoints are the only other adapters.
 6. **One write lock, owned by the command pipeline and never held by reads.** Multiple server instances remain out of scope.
 7. **The code uses the product's words**, as listed in the [glossary](../ARCHITECTURE.md#glossary).

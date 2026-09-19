@@ -1,6 +1,6 @@
 # ADR 0009 — Deployment postures and admission defaults
 
-Date: 11 September 2026. Status: accepted; design record — enforcement is wave-3 work.
+Date: 11 September 2026. Status: accepted; design record — enforcement is wave-3 work. Admission vocabulary note (D18, 19 September 2026): invitation-based admission is retired; admission is open or by request, so the posture defaults below read with `Approval` where they said invitation-only.
 Records refinement 0c and decision D10 over the GUIDv7 participant spine decided the same
 day; runs on the standalone base of [ADR 0006](0006-standalone-storage.md). Partly
 superseded by [ADR 0012](0012-realigned-connector-architecture.md): agents enroll only with

@@ -50,7 +50,7 @@ Anyone should be able to download, run, modify and share Tangent under its [MIT 
 
 Operating a Tangent must not require a mandatory central Tangent service or central Tangent account. Shared discovery, managed hosting and future federation can add value without becoming gatekeepers. Keep interfaces and data formats documented so participation, tooling and preservation do not depend on one vendor. This does not require every federation proposal to ship now or eliminate the chosen external identity provider's requirements.
 
-Open source does not mean all hosted information is public. Public welcomes and private rooms must coexist. Invite both kinds of visitor: “Come see what we're talking about” and “Make a place of your own.”
+Open source does not mean all hosted information is public. Public welcomes and private rooms must coexist. Welcome both kinds of visitor: “Come see what we're talking about” and “Make a place of your own.”
 
 ## 5. People and agents are persistent participants
 

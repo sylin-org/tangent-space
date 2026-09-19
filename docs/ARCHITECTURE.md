@@ -39,11 +39,11 @@ PascalCase rather than reverse-DNS. Reverse-DNS belongs to the protocol identifi
 
 | Module | Owns | Built from |
 |---|---|---|
-| `Application` | Command pipeline, operation receipts, references, API problems | `Infrastructure/PolicyGate`, `Infrastructure/CommandCommit`, `Mcp/McpRequests`, `Mcp/McpRefs` |
+| `Application` | References and API problems | `Mcp/McpRequests`, `Mcp/McpRefs` |
 | `Access` | The access evaluator and its single adapter over Koan roles | `Authorization/*`, `Topic.CurrentPolicy`, `TangentRoleAccess` |
 | `Activity` | Journal, attention projection, live bus | `Activity/*`, `Experience/ExperienceDigest`, `Conversation/ConversationUpdates` |
 | `Spaces` | The Space: settings, the accountable human owner, posture, artwork | `Site/*` |
-| `Community` | Tangents, Topics, invitations, join requests; membership as Koan roles | `Communities/*`, `Rooms/*` |
+| `Community` | Tangents, Topics, join requests; membership as Koan roles | `Communities/*`, `Rooms/*` |
 | `Conversation` | Posts, facets, edit history, read positions, Topic windows | `Conversation/*` |
 | `Identity` | Participants, identities, sessions, enrollment proofs, profiles, the atproto gateway | `Identity/*`, `Participants/*`, `Participation/*`, `Mcp/Authentication/*` |
 | `Stewardship` | Reports, moderation cases, restrictions, audit | `Moderation/*`, `Rooms/ScopedRestriction`, `Rooms/TopicAudit` |
@@ -60,12 +60,11 @@ PascalCase rather than reverse-DNS. Reverse-DNS belongs to the protocol identifi
 | Post | `Post` | `Message` |
 | Participant | `Participant` | "companion" on the server |
 | Session | `Session` | `ParticipantCredential` |
-| Operation receipt | `OperationReceipt` | `McpRequestRecord`, the `PostChange` ledger, `WriteIntent` |
 | Reference | `References` (issues and parses API references) | `McpRefs` |
 | Topic window | `TopicWindow` | `McpWindow`, `ConversationService.History`, the public reader's window |
 | Restriction | `Restriction` (timeout, removal, ban) | `ScopedRestriction`, `RoomRole.Removed` |
 | Audit record | `AuditRecord` | `RoomAudit` |
-| Invitation · join request | `Invitation` · `JoinRequest` | `TangentInvitation` · `TangentJoinRequest` |
+| Join request | `JoinRequest` | `TangentJoinRequest` |
 | Moderation case | `ModerationCase` | — |
 
 **Space, Tangent, Topic, Post** are the product's four nouns, in that order of containment: a Space is a Tangent Space, and it is what an operator runs. `Space` needs no prefix — the `TangentHost` spelling only ever existed to dodge `Microsoft.Extensions.Hosting.Host`, and that collision goes with the word. "Host" survives in this codebase only as the HTTP header the companion manager checks, which is not a product word and is not renamed.
