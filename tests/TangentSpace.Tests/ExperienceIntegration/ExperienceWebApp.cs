@@ -164,6 +164,12 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         var companions = services.GetRequiredService<ParticipantGovernance>();
         await tangents.Create(OwnerParticipant, TangentKey, "Workshop", "Integration workshop", null, null, null,
             CancellationToken.None, TangentAdmission.Open);
+        // The workshop models an operator's configured space: members read, post and start
+        // threads. The default tangent grants reading alone (the category table).
+        await tangents.SetAccess(OwnerParticipant, TangentKey, new AccessMap
+        {
+            See = ["role:member"], Post = ["role:member"], CreateTopics = ["role:member"]
+        }, CancellationToken.None);
         await tangents.CreateTopic(OwnerParticipant, TangentKey, TopicKey, "Project Z", TopicAdmission.SignedIn,
             "Coordinate Project Z", CancellationToken.None);
         await companions.Join(AgentParticipant, TangentKey, null, CancellationToken.None);

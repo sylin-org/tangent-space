@@ -172,9 +172,9 @@ public sealed partial class ExperienceService(
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead,
             ExperienceActionNames.SetWatch, ExperienceActionNames.ReportPost };
-        if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
-        var manage = TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
-            && TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed;
+        if (AccessEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
+        var manage = AccessEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
+            && AccessEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed;
         if (manage) allowed.Add(ExperienceActionNames.ListModerationCases);
         // The ladder is server-scoped authority: it projects wherever the holder can see, not
         // only where the Topic's own access map grants management. A steward's remit reads
@@ -250,7 +250,7 @@ public sealed partial class ExperienceService(
         var tangentKey = stored.TangentKey;
         PostContent.CheckText(text);
         var policy = await conversation.ReadPolicy(participantId, topicKey, ct);
-        if (!TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) throw new UnauthorizedAccessException();
+        if (!AccessEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) throw new UnauthorizedAccessException();
         SourceReference? replySource = null;
         if (replyTo is { } reference)
         {
@@ -472,9 +472,9 @@ public sealed partial class ExperienceService(
         var topic = await Topic.Get(topicKey, ct);
         var allowed = new List<string> { ExperienceActionNames.ReadTopic, ExperienceActionNames.MarkRead,
             ExperienceActionNames.SetWatch, ExperienceActionNames.ReportPost };
-        if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
-        if (TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
-            && TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed)
+        if (AccessEvaluator.Evaluate(policy, TopicCapability.Reply).Allowed) allowed.Add(ExperienceActionNames.CreatePost);
+        if (AccessEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
+            && AccessEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed)
             allowed.Add(ExperienceActionNames.ListModerationCases);
         allowed.AddRange(await LadderRungs(participantId, ct));
         return new ExperiencePlace(refs.ServerRef, refs.Tangent(tangentKey), refs.Topic(tangentKey, topicKey),

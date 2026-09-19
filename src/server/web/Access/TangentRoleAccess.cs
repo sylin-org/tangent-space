@@ -28,35 +28,8 @@ public sealed class TangentRoleAccess(RoleCollection roles)
     public async Task<TopicPolicy> ProjectTopic(Topic topic, Community.Tangent? tangent, TopicPolicy selected,
         bool suspended, EffectiveRestriction? restriction, ParticipantClassification classification,
         CancellationToken ct = default)
-    {
-        var bag = await Bag(selected.ActorParticipantId, ct);
-        var effective = (topic.Access ?? AccessMap.TopicDefaults())
-            .ResolveTopic(tangent?.Access ?? AccessMap.TangentDefaults());
-        var ownsResource = selected.IsOwner
-            || string.Equals(topic.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
-        var siteUnavailable = selected.SpacePolicyRevision <= 0;
-        var missingParent = tangent is null;
-        var banned = restriction is { Banned: true } && !ownsResource;
-        var timedOut = restriction is { Banned: false } && !ownsResource;
-        var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
-        var read = !siteUnavailable && !suspended && !missingParent && !banned && rights.Read
-            && (ownsResource || CanDo(effective.See, bag));
-        var write = read && !timedOut && !topic.IsLocked && rights.Write
-            && (ownsResource || CanDo(effective.Post, bag));
-        var manage = !siteUnavailable && !suspended && !missingParent && !banned && !timedOut
-            && (ownsResource || CanDo(effective.Manage, bag));
-        var reason = siteUnavailable ? "site-unavailable" : missingParent ? "tangent-not-found" : suspended ? "suspended" : banned ? "banned"
-            : !read ? "role-required" : "allowed";
-        return selected with
-        {
-            IsOwner = ownsResource,
-            CanRead = read,
-            CanWrite = write,
-            CanManage = manage,
-            CanAppointManagers = manage,
-            Reason = reason
-        };
-    }
+        => AccessEvaluator.Decide(topic, tangent, selected, (await Bag(selected.ActorParticipantId, ct)).Tokens,
+            suspended, restriction, classification);
 
     public async Task Seed(Space? space, CancellationToken ct = default)
     {

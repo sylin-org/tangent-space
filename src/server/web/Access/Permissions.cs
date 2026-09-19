@@ -24,7 +24,7 @@ public static class Permissions
 
         void Add(TopicCapability capability, string wireName)
         {
-            if (TopicPermissionEvaluator.Evaluate(policy, capability).Allowed) actions.Add(wireName);
+            if (AccessEvaluator.Evaluate(policy, capability).Allowed) actions.Add(wireName);
         }
     }
 
@@ -40,7 +40,7 @@ public static class Permissions
 
         void Add(TopicCapability capability, string wireName)
         {
-            if (TopicPermissionEvaluator.EvaluatePost(policy, capability, authorDid, removed).Allowed) actions.Add(wireName);
+            if (AccessEvaluator.EvaluatePost(policy, capability, authorDid, removed).Allowed) actions.Add(wireName);
         }
     }
 

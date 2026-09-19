@@ -22,13 +22,10 @@ public sealed class AccessMap
         CreateTangents = []
     };
 
-    public static AccessMap TangentDefaults() => new()
-    {
-        See = ["role:member"],
-        Post = ["role:member"],
-        Manage = [],
-        CreateTopics = ["role:member"]
-    };
+    /// <summary>The default Tangent decision is no decision: every category falls to the table
+    /// (everyone reads; the always-on permissions post, create and manage). A Space grants its
+    /// members by naming roles in its access lists, never by requiring a built-in role.</summary>
+    public static AccessMap TangentDefaults() => new();
 
     public static AccessMap TopicDefaults() => new();
 
@@ -46,10 +43,13 @@ public sealed class AccessMap
 
     public AccessMap NormalizeForTangent() => new()
     {
-        See = AccessCriteria.Normalize(See ?? TangentDefaults().See),
-        Post = AccessCriteria.Normalize(Post ?? TangentDefaults().Post),
-        Manage = AccessCriteria.Normalize(Manage ?? TangentDefaults().Manage),
-        CreateTopics = AccessCriteria.Normalize(CreateTopics ?? TangentDefaults().CreateTopics),
+        // A null See stays null: it is the category's empty decision, and See's empty decision is
+        // everyone. Post, Manage and Create Topics normalize empty — their empty decision is the
+        // category's always-on permission alone, which resolution appends.
+        See = See is null ? null : AccessCriteria.Normalize(See),
+        Post = AccessCriteria.Normalize(Post ?? []),
+        Manage = AccessCriteria.Normalize(Manage ?? []),
+        CreateTopics = AccessCriteria.Normalize(CreateTopics ?? []),
         CreateTangents = CreateTangents is null ? null
             : throw new ArgumentException("Create Tangents is a Server access decision, not a Tangent access decision.")
     };
@@ -68,19 +68,34 @@ public sealed class AccessMap
         };
     }
 
-    /// <summary>Resolve Topic inheritance before adding its global authority grants.</summary>
+    /// <summary>Resolve Topic inheritance (ADR 0013 §5): a null decision inherits its parent's,
+    /// two listed decisions intersect so a child narrows and never widens, an explicit empty
+    /// decision intersects to the category's always-on permission alone, and a decision absent at
+    /// every level falls to the table — everyone reads, the always-on permissions do the rest.</summary>
     public AccessMap ResolveTopic(AccessMap tangent)
     {
         var local = NormalizeForTopic();
         var parent = tangent.NormalizeForTangent();
         return new AccessMap
         {
-            See = AccessCriteria.With(local.See ?? parent.See, TangentPermissions.ReadTopics),
-            Post = AccessCriteria.With(local.Post ?? parent.Post, TangentPermissions.CreatePosts),
-            Manage = AccessCriteria.With(local.Manage ?? parent.Manage, TangentPermissions.ManageTopics),
+            See = Narrow(local.See, parent.See, TangentPermissions.ReadTopics, fallsTo: AccessTokens.Everyone),
+            Post = Narrow(local.Post, parent.Post, TangentPermissions.CreatePosts),
+            Manage = Narrow(local.Manage, parent.Manage, TangentPermissions.ManageTopics),
             CreateTangents = null,
             CreateTopics = null
         };
+    }
+
+    /// <summary>The one narrowing rule every category shares. `fallsTo` is the category table's
+    /// answer when no level decides; See's answer is everyone, the write categories' is the
+    /// always-on permission alone.</summary>
+    private static string[] Narrow(string[]? local, string[]? parent, string alwaysOn, string? fallsTo = null)
+    {
+        var tokens = local is null && parent is null ? new[] { fallsTo ?? alwaysOn }
+            : local is null ? parent
+            : parent is null ? local
+            : local.Intersect(parent, StringComparer.Ordinal).ToArray();
+        return AccessCriteria.With(tokens.Length == 0 ? [alwaysOn] : tokens, alwaysOn);
     }
 
     public AccessMap ResolveTangent()
@@ -88,7 +103,7 @@ public sealed class AccessMap
         var selected = NormalizeForTangent();
         return new AccessMap
         {
-            See = AccessCriteria.With(selected.See, TangentPermissions.ReadTangents),
+            See = AccessCriteria.With(selected.See ?? [AccessTokens.Everyone], TangentPermissions.ReadTangents),
             Post = AccessCriteria.With(selected.Post, TangentPermissions.CreatePosts),
             Manage = AccessCriteria.With(selected.Manage, TangentPermissions.ManageTangents),
             CreateTangents = null,

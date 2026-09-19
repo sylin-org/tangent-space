@@ -39,7 +39,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
             var post = await Post.Get(messageId, token);
             if (post is null || post.TopicKey != roomKey)
                 throw new ArgumentException("Choose a Post in this Topic.", nameof(messageId));
-            Require(TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read),
+            Require(AccessEvaluator.Evaluate(policy, TopicCapability.Read),
                 "The current Topic rules do not allow reporting this Post.");
             var now = clock.GetUtcNow();
             var id = ModerationCase.Key(roomKey, messageId);
@@ -53,7 +53,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
                     throw new ModerationCaseConflictException("That operation already identifies a different report.");
                 return new ModerationReportResult(Summary(current!, post, policy), AlreadyReported: false, Accepted: true);
             }
-            Require(TopicPermissionEvaluator.EvaluatePost(policy, TopicCapability.ReportPost,
+            Require(AccessEvaluator.EvaluatePost(policy, TopicCapability.ReportPost,
                 post.AuthorParticipantId, post.Removed), "The current Topic rules do not allow reporting this Post.");
             if (current is null)
             {
@@ -224,8 +224,8 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
 
     private static IReadOnlyList<string> StewardActions(TopicPolicy policy, ModerationCase item)
     {
-        if (!TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
-            || !TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed) return [];
+        if (!AccessEvaluator.Evaluate(policy, TopicCapability.Read).Allowed
+            || !AccessEvaluator.Evaluate(policy, TopicCapability.ManageTopic).Allowed) return [];
         return item.State == ModerationCaseStates.Escalated
             ? ["read_moderation_case"]
             : ["read_moderation_case", "preview_moderation_action", "apply_moderation_action"];
@@ -233,9 +233,9 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
 
     private static void RequireSteward(TopicPolicy policy)
     {
-        Require(TopicPermissionEvaluator.Evaluate(policy, TopicCapability.Read),
+        Require(AccessEvaluator.Evaluate(policy, TopicCapability.Read),
             "The current Topic rules do not allow reading this moderation case.");
-        Require(TopicPermissionEvaluator.Evaluate(policy, TopicCapability.ManageTopic),
+        Require(AccessEvaluator.Evaluate(policy, TopicCapability.ManageTopic),
             "Only a current Topic steward can inspect or decide moderation cases.");
     }
 

@@ -8,7 +8,7 @@ public sealed partial class ConversationService
 {
     private static void RequireTopicCapability(TopicPolicy policy, TopicCapability capability, string denial)
     {
-        if (!TopicPermissionEvaluator.Evaluate(policy, capability).Allowed)
+        if (!AccessEvaluator.Evaluate(policy, capability).Allowed)
             throw new UnauthorizedAccessException(denial);
     }
 
@@ -27,9 +27,9 @@ public sealed partial class ConversationService
         var own = string.Equals(current.AuthorParticipantId, policy.ActorParticipantId, StringComparison.Ordinal);
         var capability = !delete ? TopicCapability.EditOwnPost
             : own ? TopicCapability.DeleteOwnPost : TopicCapability.RemovePost;
-        var decision = TopicPermissionEvaluator.EvaluatePost(policy, capability, current.AuthorParticipantId, current.Removed);
+        var decision = AccessEvaluator.EvaluatePost(policy, capability, current.AuthorParticipantId, current.Removed);
         if (decision.Allowed) return;
-        if (decision.Reason == TopicPermissionEvaluator.RemovedReason)
+        if (decision.Reason == AccessEvaluator.RemovedReason)
             throw new ArgumentException("That post has already been removed.");
         if (!delete && !own)
             throw new UnauthorizedAccessException("Moderators may remove posts but cannot rewrite their authors' words.");

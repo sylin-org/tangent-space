@@ -1,43 +1,56 @@
 using Tangent.Community;
+using Tangent.Identity;
 using Tangent.Stewardship;
 
 namespace Tangent.Access;
 
 /// <summary>
-/// Pure typed permission evaluator over the current effective <see cref="TopicPolicy"/>, shared by HTTP and MCP
-/// callers so per-action rules stop being duplicated. Fail closed: unknown capability values, a null policy and
-/// synthetically inconsistent flags deny instead of allowing or throwing.
+/// One evaluator answers every Topic question (ADR 0013). Resolution: a null decision inherits its
+/// parent's; a listed decision intersects with it, so a child narrows and never widens; an empty
+/// See means everyone, and empty Post, Manage or Create Topics means the category's always-on
+/// permission holders alone — that table lives in <see cref="AccessMap"/>'s defaults and
+/// resolutions. The actor's role bag and its derived tokens grant; restrictions, suspension and
+/// classification bound what any grant reaches; ownership is derived from the Space, the Tangent
+/// or topic authorship, never read from a record. The transitional membership arithmetic
+/// (<c>Topic.CurrentPolicy</c>) feeds selected facts into <see cref="Decide"/> but decides nothing.
 /// </summary>
-/// <remarks>
-/// Effective write, edit and delete always require <c>CanRead</c> as well as <c>CanWrite</c>, even when a supplied
-/// policy flag combination could not arise from <c>Topic.CurrentPolicy</c>. Management never requires <c>CanRead</c>,
-/// matching the existing management-recovery behavior for not-yet-mapped spaces.
-/// <para>
-/// Denial reason precedence, most specific first:
-/// <c>unsupported-action</c> (unknown value or capability not valid at this level),
-/// <c>removed</c> (post already removed),
-/// <c>not-author</c> (edit/delete require the post's author) or <c>use-delete-own-post</c> (own-post removal),
-/// <c>manage-required</c>/<c>owner-required</c> (missing management or appointment authority),
-/// the effective policy reason at the read/policy boundary (<c>policy.Reason</c> when it is a denial, else
-/// <c>permission-denied</c>), then <c>topic-locked</c> and <c>editing-disabled</c> for otherwise admitted writers.
-/// Every other denial, including synthetic flag inconsistencies, falls back to <c>permission-denied</c>.
-/// </para>
-/// </remarks>
-public static class TopicPermissionEvaluator
+public static class AccessEvaluator
 {
-    public const string AllowedReason = "allowed";
-    public const string UnsupportedActionReason = "unsupported-action";
-    public const string RemovedReason = "removed";
-    public const string NotAuthorReason = "not-author";
-    public const string OwnPostRemovalReason = "use-delete-own-post";
-    public const string OwnPostReportReason = "own-post";
-    public const string TopicLockedReason = "topic-locked";
-    public const string EditingDisabledReason = "editing-disabled";
-    public const string ManageRequiredReason = "manage-required";
-    public const string OwnerRequiredReason = "owner-required";
-    public const string PermissionDeniedReason = "permission-denied";
+    /// <summary>The final decision for one actor on one Topic. The bag arrives as its tokens —
+    /// Koan's compiled answer — because the question is a plain any-of match.</summary>
+    public static TopicPolicy Decide(Topic topic, Community.Tangent? tangent, TopicPolicy selected,
+        IReadOnlyCollection<string> bagTokens,
+        bool suspended, EffectiveRestriction? restriction, ParticipantClassification classification)
+    {
+        var effective = (topic.Access ?? AccessMap.TopicDefaults()).ResolveTopic(tangent?.Access ?? AccessMap.TangentDefaults());
+        var ownsResource = selected.IsOwner
+            || string.Equals(topic.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
+        var siteUnavailable = selected.SpacePolicyRevision <= 0;
+        var missingParent = tangent is null;
+        var banned = restriction is { Banned: true } && !ownsResource;
+        var timedOut = restriction is { Banned: false } && !ownsResource;
+        var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
+        var read = !siteUnavailable && !suspended && !missingParent && !banned && rights.Read
+            && (ownsResource || CanDo(effective.See, bagTokens));
+        var write = read && !timedOut && !topic.IsLocked && rights.Write
+            && (ownsResource || CanDo(effective.Post, bagTokens));
+        var manage = !siteUnavailable && !suspended && !missingParent && !banned && !timedOut
+            && (ownsResource || CanDo(effective.Manage, bagTokens));
+        var reason = siteUnavailable ? "site-unavailable" : missingParent ? "tangent-not-found" : suspended ? "suspended"
+            : banned ? "banned" : !read ? "role-required" : "allowed";
+        return selected with
+        {
+            IsOwner = ownsResource,
+            CanRead = read,
+            CanWrite = write,
+            CanManage = manage,
+            CanAppointManagers = manage,
+            Reason = reason
+        };
+    }
 
-    /// <summary>Evaluates a Topic-level capability. EditOwnPost/DeleteOwnPost here are affordances only.</summary>
+    /// <summary>Evaluates a Topic-level capability over the decided policy. EditOwnPost and
+    /// DeleteOwnPost here are affordances only; authorship is decided by <see cref="EvaluatePost"/>.</summary>
     public static TopicPermissionDecision Evaluate(TopicPolicy? policy, TopicCapability capability)
     {
         if (policy is null) return DenyNull(capability);
@@ -90,6 +103,18 @@ public static class TopicPermissionEvaluator
         return ReadDecision(policy, capability);
     }
 
+    public const string AllowedReason = "allowed";
+    public const string UnsupportedActionReason = "unsupported-action";
+    public const string RemovedReason = "removed";
+    public const string NotAuthorReason = "not-author";
+    public const string OwnPostRemovalReason = "use-delete-own-post";
+    public const string OwnPostReportReason = "own-post";
+    public const string TopicLockedReason = "topic-locked";
+    public const string EditingDisabledReason = "editing-disabled";
+    public const string ManageRequiredReason = "manage-required";
+    public const string OwnerRequiredReason = "owner-required";
+    public const string PermissionDeniedReason = "permission-denied";
+
     private static TopicPermissionDecision ReadDecision(TopicPolicy policy, TopicCapability capability)
         => policy.CanRead
             ? Allow(policy, capability)
@@ -125,6 +150,9 @@ public static class TopicPermissionEvaluator
         !string.IsNullOrWhiteSpace(policy.Reason) && !string.Equals(policy.Reason, AllowedReason, StringComparison.Ordinal)
             ? policy.Reason
             : PermissionDeniedReason;
+
+    private static bool CanDo(IEnumerable<string>? tokens, IReadOnlyCollection<string> bagTokens)
+        => (tokens ?? []).Any(bagTokens.Contains);
 
     private static TopicPermissionDecision Allow(TopicPolicy policy, TopicCapability capability)
         => new(capability, true, AllowedReason, policy.SelectedPolicyRevision);
