@@ -13,15 +13,16 @@ These govern the server and the connector alike.
 5. **The code uses the product's words.**
 6. **Cleanup is mandatory.** Removing a capability removes its code, tests, scripts, configuration and documentation.
 7. **Code reads greenfield.** No legacy, compatibility or historical naming, comments or shims. `scripts/check-greenfield.ps1` finds violations.
+8. **The action is the black box.** A caller passes arguments and receives the outcome; guarantees live inside the thing that acts, never in the calling code. Coordination bled out of the point of action is scope poisoning.
 
 ## Shape
 
 ```text
 Adapters      Authenticated API /api/v1 (browser + connector) · Public HTML/JSON · Identity
                                    │
-Application   Command: receipt → write lock → transaction → scope snapshot → Access → handler
-                       → audit + journal → commit → signal
-              Query:   scope snapshot → Access filter → bounded window (no lock)
+Application   Action:   the domain method owns its coordination — write lock, transaction,
+                       Access check inside it, audit + journal, commit, signal
+              Query:   Access filter → bounded window (no lock)
                                    │
 Domain        Hosting · Community · Conversation · Identity · Stewardship
 Supporting    Access: one evaluator over Koan role bags, restrictions, classification
@@ -73,15 +74,15 @@ The connector's own words are in the [connector glossary](#connector-glossary).
 
 ## Shared components
 
-Four components carry everything the server does; R3 builds them, and these are their designs. Each states its contract, its mechanics, and the property that proves it.
+The server runs on three ideas: the action is the black box, one Access evaluator answers every question, and signals wake readers while the journal remembers. These are their designs; R3 builds them.
 
-### The command pipeline
+### The action is the black box
 
-One component is the only code that takes the write lock (commands only), opens the transaction, loads the scope snapshot, consults Access, runs the handler, stages audit and journal and receipt, commits, and signals after the commit lands. Handlers load aggregates and call domain methods that check their own invariants; authority is never re-derived inside a handler, and no adapter opens a transaction or a lock.
+Every mutation is one domain method: the caller passes its arguments and receives the outcome. Coordination lives inside the method — the write lock while it mutates, the transaction that makes its rows atomic, the Access check inside that transaction so an authority change cannot slip between the check and the commit (N-020), the audit and journal entries that commit with the change, and the signal after. No adapter opens a transaction or a lock, and no consumer of an action assembles a guarantee by hand.
 
-The ordering is the design. Access is consulted inside the same transaction that stages the mutation, so an authority change either commits before the command — the command sees it — or after it — it does not; no window exists between the check and the commit for a race to occupy (N-020). The write lock serializes commands and nothing else: reads never take it (Rule 4) and re-check the revision they read. A command ends four ways, each with one shape: **denied** (Access refused — one denial record with a reason code), **replayed** (a completed receipt answers without side effects), **conflicted** (the same requestId naming a different action), or **committed** (staged rows, the receipt and the journal entry commit atomically or not at all).
+Idempotency is a domain invariant, not a layer. A double costs something only where it is visible, and exactly one action has that property: creating a Post. The Post row carries the client's operation id; creating with an id that already exists returns the row it created, so a retry heals a lost response, and a different text under the same id is refused as the action's own conflict ([ADR 0007](adr/0007-experience-api-and-local-mcp.md)). Every other mutation is naturally convergent — an edit lands on its text, a removal answers "already removed", a join answers "already a member" — or heals socially through the attention feed. There is no receipt record, no request protocol, and nothing to poll.
 
-Koan roles mark the one boundary: `RoleCollection` writes refuse to ride a deferred transaction (ledger F-001). A command that changes role membership commits that change immediately after the pipeline's commit and journals it there; the pipeline owns the ordering, and no other escape exists.
+Koan roles mark the one boundary: `RoleCollection` writes refuse to ride a deferred transaction (ledger F-001). A domain action that changes role membership commits that change immediately after its own transaction and journals it there; the action owns the ordering, and no other escape exists.
 
 ### Access
 
@@ -91,15 +92,9 @@ The evaluator explains itself. Every decision carries its reason (`role-required
 
 Ownership is held once. `Space.OwnerParticipantId` is the only fact: the evaluator derives the owner's authority from it, transferring ownership changes it and bumps the Space's policy revision, and no stored Owner membership, startup repair, or ownership guard exists to drift from it (N-025). Nothing else decides authority — no membership row is read for permission and no handler carries an authority parameter. The properties R3.4 proves: a signed-in participant never sees less than a signed-out one, and every Topic decision names the rule that produced it.
 
-### Receipts
-
-One receipt per mutation: registered before the side effects at a deterministic key (credential, participant, requestId), fingerprinted over operation, target and canonical payload, completed in the same transaction as its mutation. A retry with the same fingerprint answers the recorded result — a client recovers a lost response without repeating the act; the same requestId with a different fingerprint is a conflict, never a second action. The response carries the receipt either way, and settlement of queued work arrives as attention (`write_settlement` items), so a caller keeps no journal and never polls.
-
-The receipt is the idempotency mechanism for every family — posts, edits and removals, membership, watches, moderation, user management. Per-family dedupe folds into the fingerprint; a mutation's operation identity is the receipt's namespaced id. One serializer writes the stored result JSON and one parses it back at the wire seam; no layer re-serializes an opaque object.
-
 ### The signal bus
 
-The host owns one instance-scoped bus, and nothing signals through process-wide static state. The pipeline's after-commit hook is the only publisher — a signal means *committed state changed* — and SSE streams, long waits and the attention projection are the subscribers. A signal carries no payload: it wakes a reader, and the reader re-derives what changed from committed state under current authority, so a missed or duplicate signal costs one poll and never a wrong answer. Durability lives in the journal and the digest's recovery cursors, never in the bus; a signal that dies with its instance loses nothing but a wake-up.
+The host owns one instance-scoped bus, and nothing signals through process-wide static state. A domain action's after-commit signal is the only publication — a signal means *committed state changed* — and SSE streams, long waits and the attention projection are the subscribers. A signal carries no payload: it wakes a reader, and the reader re-derives what changed from committed state under current authority, so a missed or duplicate signal costs one poll and never a wrong answer. Durability lives in the journal and the digest's recovery cursors, never in the bus; a signal that dies with its instance loses nothing but a wake-up.
 
 The same Activity module owns the durable half: one journal whose sequence needs no shared counter row, and the attention projection each participant reads — directed requests, watched activity, and the settlement of their own writes — with group mentions resolved at read time and read acknowledgements withdrawing what was seen.
 

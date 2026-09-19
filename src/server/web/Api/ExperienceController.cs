@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Application;
 using Tangent.Activity;
+using Tangent.Conversation;
 using Tangent.Identity;
 using Tangent.Stewardship;
 
@@ -61,11 +62,11 @@ public sealed class ExperienceController(ExperienceService experience) : Control
 
     [HttpPatch("posts/{postRef}")]
     public Task<IActionResult> EditPost(string postRef, [FromBody] ExperienceEditPostRequest request, CancellationToken ct)
-        => Mutate(principal => experience.EditPost(principal, postRef, request.Text, request.RequestId, ct));
+        => Mutate(principal => experience.EditPost(principal, postRef, request.Text, ct));
 
     [HttpDelete("posts/{postRef}")]
-    public Task<IActionResult> DeletePost(string postRef, [FromQuery] string? requestId, CancellationToken ct)
-        => Mutate(principal => experience.DeletePost(principal, postRef, requestId, ct));
+    public Task<IActionResult> DeletePost(string postRef, CancellationToken ct)
+        => Mutate(principal => experience.DeletePost(principal, postRef, ct));
 
     [HttpGet("participants/{*identifier}")]
     public Task<IActionResult> Participant(string identifier, CancellationToken ct)
@@ -73,7 +74,7 @@ public sealed class ExperienceController(ExperienceService experience) : Control
 
     [HttpPost("moderation/users/{user}/management")]
     public Task<IActionResult> ManageUser(string user, [FromBody] ExperienceManageUserRequest request, CancellationToken ct)
-        => Mutate(principal => experience.ManageUser(principal, user, request.RequestId, request.Action,
+        => Mutate(principal => experience.ManageUser(principal, user, request.Action,
             request.Reason, request.DurationSeconds, request.Role, request.CaseRef, ct));
 
     [HttpPost("topics/{topicKey}/reports")]
@@ -102,27 +103,23 @@ public sealed class ExperienceController(ExperienceService experience) : Control
 
     [HttpPost("topics/{topicKey}/read-position")]
     public Task<IActionResult> ReadPosition(string topicKey, [FromBody] ExperienceReadPositionRequest request, CancellationToken ct)
-        => Mutate(principal => experience.ReadPosition(principal, topicKey, request.ReadCursor, request.RequestId, ct));
+        => Mutate(principal => experience.ReadPosition(principal, topicKey, request.ReadCursor, ct));
 
     [HttpPut("tangents/{tangentKey}/membership")]
     public Task<IActionResult> Join(string tangentKey, [FromBody] ExperienceMembershipRequest request, CancellationToken ct)
-        => Mutate(principal => experience.Join(principal, tangentKey, request.InviteRef, request.RequestId, ct));
+        => Mutate(principal => experience.Join(principal, tangentKey, request.InviteRef, ct));
 
     [HttpDelete("tangents/{tangentKey}/membership")]
-    public Task<IActionResult> Leave(string tangentKey, [FromQuery] string requestId, CancellationToken ct)
-        => Mutate(principal => experience.Leave(principal, tangentKey, requestId, ct));
+    public Task<IActionResult> Leave(string tangentKey, CancellationToken ct)
+        => Mutate(principal => experience.Leave(principal, tangentKey, ct));
 
     [HttpPut("watches")]
     public Task<IActionResult> SetWatch([FromBody] ExperienceWatchRequest request, CancellationToken ct)
-        => Mutate(principal => experience.SetWatch(principal, request.ScopeRef, request.Mode, request.RequestId, ct));
+        => Mutate(principal => experience.SetWatch(principal, request.ScopeRef, request.Mode, ct));
 
     [HttpGet("/api/participants/{identifier}/profile")]
     public Task<IActionResult> Profile(string identifier, CancellationToken ct)
         => Read(principal => experience.ParticipantProfile(principal, identifier, ct));
-
-    [HttpGet("operations/{requestId}")]
-    public Task<IActionResult> Operation(string requestId, CancellationToken ct)
-        => Read(principal => experience.GetOperation(principal, requestId, ct));
 
     private async Task<IActionResult> Read(Func<ClaimsPrincipal, Task<ExperienceResponse>> operation)
     {
@@ -139,10 +136,9 @@ public sealed class ExperienceController(ExperienceService experience) : Control
         {
             return Problem(ExperienceProblem.Of("invalid_arguments", error.Message, error.Field), 400);
         }
-        catch (RequestConflictException error)
+        catch (OperationConflictException error)
         {
-            return Problem(ExperienceProblem.Of("request_conflict",
-                $"{error.RequestId} already identifies a different action. Inspect its receipt before creating another action."), 409);
+            return Problem(ExperienceProblem.Of("request_conflict", error.Message), 409);
         }
         catch (ModerationCaseConflictException error)
         {
@@ -166,11 +162,11 @@ public sealed class ExperienceController(ExperienceService experience) : Control
 public sealed record ExperienceCreatePostRequest(string RequestId, string Text, string? ReplyTo,
     IReadOnlyList<Conversation.PostFacet>? Facets = null);
 
-public sealed record ExperienceReadPositionRequest(string ReadCursor, string? RequestId);
+public sealed record ExperienceReadPositionRequest(string ReadCursor);
 
-public sealed record ExperienceMembershipRequest(string? InviteRef, string RequestId);
+public sealed record ExperienceMembershipRequest(string? InviteRef);
 
-public sealed record ExperienceWatchRequest(string ScopeRef, string Mode, string RequestId);
+public sealed record ExperienceWatchRequest(string ScopeRef, string Mode);
 
 public sealed record ExperienceReportPostRequest(string RequestId, string PostRef, string ReasonCode, string Statement);
 
@@ -182,7 +178,7 @@ public sealed record ExperienceModerationActionRequest(string RequestId, string 
 
 public sealed record ExperienceStartThreadRequest(string RequestId, string Title, string Text);
 
-public sealed record ExperienceEditPostRequest(string Text, string? RequestId);
+public sealed record ExperienceEditPostRequest(string Text);
 
 public sealed record ExperienceManageUserRequest(string Action, string Reason, long? DurationSeconds = null,
-    string? Role = null, string? CaseRef = null, string? RequestId = null);
+    string? Role = null, string? CaseRef = null);

@@ -79,7 +79,6 @@ public sealed class TangentModule : KoanModule
         services.AddParticipation();
         services.AddTangentMcpAuthentication();
         services.AddSingleton<References>();
-        services.AddSingleton<OperationReceipts>();
         services.AddSingleton<ConversationService>();
         services.AddSingleton<ActivityService>();
         services.AddSingleton<LiveSessions>();

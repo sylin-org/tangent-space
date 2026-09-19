@@ -68,7 +68,7 @@ public sealed partial class ConversationService
                 result = projected;
                 return true;
             }, ct);
-            if (conflict) throw new ArgumentException("That operation ID was already used with different content.");
+            if (conflict) throw new OperationConflictException(input.OperationId);
             updates.Pulse(roomKey);
             ActivityJournal.SignalAfterCommit();
             return result!;

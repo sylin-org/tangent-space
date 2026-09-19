@@ -38,57 +38,47 @@ public sealed partial class ExperienceService
             throw new ArgumentException("A thread title must contain 1–120 characters.", nameof(title));
         PostContent.CheckText(text);
         var cleanTitle = title.Trim();
-        return await receipts.Run(RegistryCredential(principal), participantId, requestId, async () =>
+        // The topic key is minted from the title plus a hash of the requestId, so a retry after
+        // a lost response lands on the same Topic; the opening post carries the requestId as its
+        // operation id, so the same job replays its post instead of doubling it.
+        var topicKey = MintTopicKey(cleanTitle, requestId);
+        try
         {
-            var registration = await receipts.Register(RegistryCredential(principal), participantId, requestId,
-                "StartThread", tangentKey, new Dictionary<string, string?> { ["title"] = cleanTitle, ["text"] = text }, ct);
-            if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("start_thread", principal, identity, registration.Record, participantId, credential, ct);
-            var operationId = registration.Record.NamespacedOperationId
-                ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
-            var topicKey = MintTopicKey(cleanTitle, requestId);
-            try
-            {
-                await tangents.CreateTopic(participantId, tangentKey, topicKey, cleanTitle, TopicAdmission.SignedIn, null, ct);
-            }
-            catch (TangentRuleViolation violated) when (violated.Denial == TangentDenial.AlreadyExists)
-            {
-                // A deterministic key can only exist here as this job's own earlier attempt; the
-                // opening Post below carries its own replay guard.
-            }
-            catch (TangentRuleViolation violated) when (violated.Denial is TangentDenial.Forbidden or TangentDenial.NotFound)
-            {
-                throw new UnauthorizedAccessException(violated.Message);
-            }
-            var post = await conversation.CreatePost(participantId, topicKey, new PostCreateRequest(operationId, text), ct);
-            var topicRef = refs.Topic(tangentKey, topicKey);
-            var data = new ExperienceThreadData(topicRef, refs.Tangent(tangentKey),
-                refs.Post(tangentKey, topicKey, post.Id), cleanTitle,
-                refs.Origin + "/tangents/" + tangentKey + "/posts/" + post.Id + "/");
-            await receipts.Complete(registration.Record, "completed", topicRef, Serialize(data), ct);
-            var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
-            return await Assemble("start_thread", ExperienceStatus.Ok, identity, place,
-                new ExperienceResult(data, new ExperienceReceipt(requestId, "completed", topicRef, null), null),
-                (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
-                Empty(), [new(ExperienceActionNames.ReadTopic, topicRef, refs.Post(tangentKey, topicKey, post.Id), "Open the new thread")],
-                null, CapabilitiesOf(place), participantId, credential, ct);
-        }, ct);
+            await tangents.CreateTopic(participantId, tangentKey, topicKey, cleanTitle, TopicAdmission.SignedIn, null, ct);
+        }
+        catch (TangentRuleViolation violated) when (violated.Denial == TangentDenial.AlreadyExists)
+        {
+            // The deterministic key exists because this job's earlier attempt created it; the
+            // opening post below replays through its operation id.
+        }
+        catch (TangentRuleViolation violated) when (violated.Denial is TangentDenial.Forbidden or TangentDenial.NotFound)
+        {
+            throw new UnauthorizedAccessException(violated.Message);
+        }
+        var post = await conversation.CreatePost(participantId, topicKey, new PostCreateRequest(requestId, text), ct);
+        var topicRef = refs.Topic(tangentKey, topicKey);
+        var data = new ExperienceThreadData(topicRef, refs.Tangent(tangentKey),
+            refs.Post(tangentKey, topicKey, post.Id), cleanTitle,
+            refs.Origin + "/tangents/" + tangentKey + "/posts/" + post.Id + "/");
+        var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
+        return await Assemble("start_thread", ExperienceStatus.Ok, identity, place,
+            new ExperienceResult(data, new ExperienceReceipt(requestId, "completed", topicRef, null), null),
+            (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
+            Empty(), [new(ExperienceActionNames.ReadTopic, topicRef, refs.Post(tangentKey, topicKey, post.Id), "Open the new thread")],
+            null, CapabilitiesOf(place), participantId, credential, ct);
     }
 
-    public Task<ExperienceResponse> EditPost(ClaimsPrincipal principal, string postRef, string text,
-        string? requestId, CancellationToken ct)
-        => ChangePost(principal, postRef, text, delete: false, requestId, "edit_post", "EditPost", ct);
+    public Task<ExperienceResponse> EditPost(ClaimsPrincipal principal, string postRef, string text, CancellationToken ct)
+        => ChangePost(principal, postRef, text, delete: false, "edit_post", ct);
 
-    public Task<ExperienceResponse> DeletePost(ClaimsPrincipal principal, string postRef,
-        string? requestId, CancellationToken ct)
-        => ChangePost(principal, postRef, text: null, delete: true, requestId, "delete_post", "DeletePost", ct);
+    public Task<ExperienceResponse> DeletePost(ClaimsPrincipal principal, string postRef, CancellationToken ct)
+        => ChangePost(principal, postRef, text: null, delete: true, "delete_post", ct);
 
     /// <summary>The connector sends a bare Post id; full references from this server's own
-    /// envelopes resolve the same way. requestId is the registry's idempotency key: a replay
-    /// answers the recorded result and a divergent one is a conflict. Without one the act
-    /// re-executes — an edit converges on its text, a removal answers "already removed".</summary>
+    /// envelopes resolve the same way. An edit converges on its text; a removal of a removed
+    /// post answers "already removed" — no request protocol is needed to make that safe.</summary>
     private async Task<ExperienceResponse> ChangePost(ClaimsPrincipal principal, string postRef, string? text,
-        bool delete, string? requestId, string operation, string registryOperation, CancellationToken ct)
+        bool delete, string operation, CancellationToken ct)
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Post);
         var credential = CredentialOf(principal);
@@ -96,37 +86,16 @@ public sealed partial class ExperienceService
         var identity = await IdentityOf(participantId, ct);
         if (!delete) PostContent.CheckText(text!);
         var target = await ResolvePostRef(postRef, ct);
-        var payload = new Dictionary<string, string?> { ["text"] = text, ["delete"] = delete ? "true" : "false" };
-        Task<ExperienceResponse> perform() => Act();
-        async Task<ExperienceResponse> Act()
-        {
-            var result = await conversation.ChangePost(participantId, target.TopicKey, target.PostId,
-                text, delete, ct);
-            var fullRef = refs.Post(target.TangentKey, target.TopicKey, target.PostId);
-            var data = new ExperiencePostData(fullRef, null,
-                refs.Origin + "/tangents/" + target.TangentKey + "/posts/" + target.PostId + "/");
-            var receipt = requestId is null ? null : new ExperienceReceipt(requestId, "completed", fullRef, null);
-            var place = await TopicPlaceOf(principal, participantId, target.TangentKey, target.TopicKey, ct);
-            return await Assemble(operation, ExperienceStatus.Ok, identity, place,
-                new ExperienceResult(data, receipt, null),
-                (await digest.Page(participantId, credential, null, target.TangentKey, target.TopicKey, 3, ct)).Attention,
-                Empty(), [new(ExperienceActionNames.ReadTopic, refs.Topic(target.TangentKey, target.TopicKey), fullRef, "Open the Topic")],
-                null, CapabilitiesOf(place), participantId, credential, ct);
-        }
-        if (requestId is null)
-            return await perform();
-        return await receipts.Run(RegistryCredential(principal), participantId, requestId, async () =>
-        {
-            var registration = await receipts.Register(RegistryCredential(principal), participantId, requestId,
-                registryOperation, target.PostId, payload, ct);
-            if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay(operation, principal, identity, registration.Record, participantId, credential, ct);
-            var outcome = await perform();
-            if (outcome.Status == ExperienceStatus.Ok)
-                await receipts.Complete(registration.Record, "completed", outcome.Result.Receipt?.ResultRef,
-                    Serialize(outcome.Result.Data!), ct);
-            return outcome;
-        }, ct);
+        await conversation.ChangePost(participantId, target.TopicKey, target.PostId, text, delete, ct);
+        var fullRef = refs.Post(target.TangentKey, target.TopicKey, target.PostId);
+        var data = new ExperiencePostData(fullRef, null,
+            refs.Origin + "/tangents/" + target.TangentKey + "/posts/" + target.PostId + "/");
+        var place = await TopicPlaceOf(principal, participantId, target.TangentKey, target.TopicKey, ct);
+        return await Assemble(operation, ExperienceStatus.Ok, identity, place,
+            new ExperienceResult(data, null, null),
+            (await digest.Page(participantId, credential, null, target.TangentKey, target.TopicKey, 3, ct)).Attention,
+            Empty(), [new(ExperienceActionNames.ReadTopic, refs.Topic(target.TangentKey, target.TopicKey), fullRef, "Open the Topic")],
+            null, CapabilitiesOf(place), participantId, credential, ct);
     }
 
     private async Task<(string TangentKey, string TopicKey, string PostId)> ResolvePostRef(string value, CancellationToken ct)

@@ -18,35 +18,21 @@ public sealed partial class ExperienceService
         if (parsed is null || parsed.Value.TopicKey != topicKey
             || postRef != refs.Post(parsed.Value.TangentKey, parsed.Value.TopicKey, parsed.Value.PostId))
             throw new RequestArgumentException("postRef", "Copy a Post reference returned by this Topic.");
-        return await receipts.Run(RegistryCredential(principal), participantId, requestId, async () =>
-        {
-            var registration = await receipts.Register(RegistryCredential(principal), participantId, requestId,
-                "ReportPost", parsed.Value.PostId, new Dictionary<string, string?>
-                {
-                    ["postRef"] = postRef, ["reasonCode"] = reasonCode, ["statement"] = statement
-                }, ct);
-            // Domain replay is intentionally used for pending receipts: its embedded operation id
-            // recovers a committed case update after a process failure between the two entities.
-            if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("report_post", principal, identity, registration.Record, participantId, credential, ct);
-            var operationId = registration.Record.NamespacedOperationId
-                ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
-            var result = await moderation.Report(participantId, topicKey, parsed.Value.PostId,
-                operationId, reasonCode, statement, ct);
-            // A reporter may submit testimony but is not thereby entitled to inspect the case,
-            // its other testimony, its state, or the human escalation target. Persist the same
-            // reporter-safe shape for receipt replay so GET operation cannot become a side door.
-            var report = new ExperienceReportData(postRef, result.Accepted, result.AlreadyReported,
-                result.Case.TestimonySaturated);
-            var data = Serialize(report);
-            await receipts.Complete(registration.Record, "completed", postRef, data, ct);
-            var place = await TopicPlaceOf(principal, participantId, parsed.Value.TangentKey, topicKey, ct);
-            return await Assemble("report_post", ExperienceStatus.Ok, identity, place,
-                new ExperienceResult(report, new ExperienceReceipt(requestId, "completed", postRef, null), null),
-                (await digest.Page(participantId, credential, null, parsed.Value.TangentKey, topicKey, 3, ct)).Attention,
-                Empty(), [new(ExperienceActionNames.ReadTopic, place.TopicRef!, postRef, "Return to the reported Post")],
-                null, CapabilitiesOf(place), participantId, credential, ct);
-        }, ct);
+        // The requestId names the testimony inside its case: the same id replays that testimony,
+        // a different report under it is the case's own conflict.
+        var operationId = requestId ?? "report-" + Guid.CreateVersion7().ToString("n");
+        var result = await moderation.Report(participantId, topicKey, parsed.Value.PostId,
+            operationId, reasonCode, statement, ct);
+        // A reporter may submit testimony but is not thereby entitled to inspect the case,
+        // its other testimony, its state, or the human escalation target.
+        var report = new ExperienceReportData(postRef, result.Accepted, result.AlreadyReported,
+            result.Case.TestimonySaturated);
+        var place = await TopicPlaceOf(principal, participantId, parsed.Value.TangentKey, topicKey, ct);
+        return await Assemble("report_post", ExperienceStatus.Ok, identity, place,
+            new ExperienceResult(report, null, null),
+            (await digest.Page(participantId, credential, null, parsed.Value.TangentKey, topicKey, 3, ct)).Attention,
+            Empty(), [new(ExperienceActionNames.ReadTopic, place.TopicRef!, postRef, "Return to the reported Post")],
+            null, CapabilitiesOf(place), participantId, credential, ct);
     }
 
     public async Task<ExperienceResponse> ListModerationCases(ClaimsPrincipal principal, string topicKey,
@@ -116,32 +102,17 @@ public sealed partial class ExperienceService
         var credential = CredentialOf(principal);
         var identity = await IdentityOf(participantId, ct);
         var rawCaseId = CaseId(caseId);
-        // Reauthorize before even replaying presentation from the request registry.
+        // Reauthorize before deciding; the decision itself names its steward inside the case.
         await moderation.Read(participantId, rawCaseId, 0, 1, 1, ct);
-        return await receipts.Run(RegistryCredential(principal), participantId, requestId, async () =>
-        {
-            var registration = await receipts.Register(RegistryCredential(principal), participantId, requestId,
-                "ApplyModerationAction", rawCaseId, new Dictionary<string, string?>
-                {
-                    ["action"] = action, ["summary"] = summary, ["deferredUntil"] = deferredUntil?.ToString("O"),
-                    ["expectedCaseRevision"] = expectedCaseRevision.ToString(),
-                    ["expectedSubjectRevision"] = expectedSubjectRevision
-                }, ct);
-            if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("apply_moderation_action", principal, identity, registration.Record, participantId, credential, ct);
-            var operationId = registration.Record.NamespacedOperationId
-                ?? OperationReceipt.BuildOperationId(RegistryCredential(principal), participantId, requestId);
-            var result = await moderation.Decide(participantId, rawCaseId, operationId, action, summary,
-                deferredUntil, expectedCaseRevision, expectedSubjectRevision, ct);
-            var data = Serialize(result);
-            await receipts.Complete(registration.Record, "completed", result.Case.CaseRef, data, ct);
-            var scope = refs.ParseTopic(result.Case.TopicRef) ?? throw new InvalidOperationException("The case scope is invalid.");
-            var place = await TopicPlaceOf(principal, participantId, scope.TangentKey, scope.TopicKey, ct);
-            return await Assemble("apply_moderation_action", ExperienceStatus.Ok, identity, place,
-                new ExperienceResult(result, new ExperienceReceipt(requestId, "completed", result.Case.CaseRef, null), null),
-                (await digest.Page(participantId, credential, null, scope.TangentKey, scope.TopicKey, 3, ct)).Attention,
-                Empty(), [], null, new ExperienceCapabilities(true, false, true), participantId, credential, ct);
-        }, ct);
+        var operationId = requestId ?? "decision-" + Guid.CreateVersion7().ToString("n");
+        var result = await moderation.Decide(participantId, rawCaseId, operationId, action, summary,
+            deferredUntil, expectedCaseRevision, expectedSubjectRevision, ct);
+        var scope = refs.ParseTopic(result.Case.TopicRef) ?? throw new InvalidOperationException("The case scope is invalid.");
+        var place = await TopicPlaceOf(principal, participantId, scope.TangentKey, scope.TopicKey, ct);
+        return await Assemble("apply_moderation_action", ExperienceStatus.Ok, identity, place,
+            new ExperienceResult(result, null, null),
+            (await digest.Page(participantId, credential, null, scope.TangentKey, scope.TopicKey, 3, ct)).Attention,
+            Empty(), [], null, new ExperienceCapabilities(true, false, true), participantId, credential, ct);
     }
 
     private static ExperienceCapabilities CapabilitiesOf(ExperiencePlace place)

@@ -169,8 +169,6 @@ public sealed record ExperienceMembershipData(string Membership, string Message)
 
 public sealed record ExperienceWatchData(string ScopeRef, string Mode);
 
-public sealed record ExperienceOperationData(string Operation, ExperienceReceipt Receipt);
-
 public sealed record ExperienceMentionablesData(IReadOnlyList<ExperienceMentionable> Targets, string TopicTitle);
 
 public sealed record ExperienceProfileData(string ParticipantRef, string? Did, string? Handle, string Classification,

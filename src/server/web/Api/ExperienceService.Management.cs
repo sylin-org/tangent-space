@@ -14,47 +14,25 @@ public sealed partial class ExperienceService
 {
     public const int ReadUserPostLimit = 10;
 
-    /// <summary>One rung of the user-management ladder. requestId is optional on the wire; when
-    /// present the receipt registry makes a replay answer the recorded outcome and a different
-    /// action under the same id a conflict.</summary>
-    public async Task<ExperienceResponse> ManageUser(ClaimsPrincipal principal, string user, string? requestId,
+    /// <summary>One rung of the user-management ladder: the domain service applies it and the
+    /// audit record names what happened. The ladder is idempotent by nature — a warn is a
+    /// record, a suspension is a state — so it carries no request protocol.</summary>
+    public async Task<ExperienceResponse> ManageUser(ClaimsPrincipal principal, string user,
         string action, string reason, long? durationSeconds, string? role, string? caseRef, CancellationToken ct)
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
         await activity.EnsureParticipantActive(participantId, credential, ct);
         var identity = await IdentityOf(participantId, ct);
-        var payload = new Dictionary<string, string?>
-        {
-            ["action"] = action, ["reason"] = reason, ["durationSeconds"] = durationSeconds?.ToString(),
-            ["role"] = role, ["caseRef"] = caseRef
-        };
-        Task<ExperienceResponse> perform() => Manage();
-        async Task<ExperienceResponse> Manage()
-        {
-            var outcome = await users.Manage(participantId, user, action, reason, durationSeconds, role, caseRef, ct);
-            var data = new ExperienceUserManagementData(outcome.TargetParticipantId, outcome.Action, outcome.Reason,
-                outcome.Role, outcome.Until,
-                outcome.TangentKey is { Length: > 0 } tangentKey ? refs.Tangent(tangentKey) : null, outcome.CaseRef);
-            var place = await ManagementPlaceOf(principal, participantId, caseRef, ct);
-            return await Assemble("manage_user", ExperienceStatus.Ok, identity, place,
-                new ExperienceResult(data,
-                    requestId is null ? null : new ExperienceReceipt(requestId, "completed", null, null), null),
-                (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention,
-                Empty(), [], null, new ExperienceCapabilities(true, false, true), participantId, credential, ct);
-        }
-        if (requestId is null) return await perform();
-        return await receipts.Run(RegistryCredential(principal), participantId, requestId, async () =>
-        {
-            var registration = await receipts.Register(RegistryCredential(principal), participantId, requestId,
-                "ManageUser", user, payload, ct);
-            if (registration.Reused && registration.Record.State == "completed" && registration.Record.ResultData is not null)
-                return await Replay("manage_user", principal, identity, registration.Record, participantId, credential, ct);
-            var outcome = await perform();
-            if (outcome.Status == ExperienceStatus.Ok)
-                await receipts.Complete(registration.Record, "completed", null, Serialize(outcome.Result.Data!), ct);
-            return outcome;
-        }, ct);
+        var outcome = await users.Manage(participantId, user, action, reason, durationSeconds, role, caseRef, ct);
+        var data = new ExperienceUserManagementData(outcome.TargetParticipantId, outcome.Action, outcome.Reason,
+            outcome.Role, outcome.Until,
+            outcome.TangentKey is { Length: > 0 } tangentKey ? refs.Tangent(tangentKey) : null, outcome.CaseRef);
+        var place = await ManagementPlaceOf(principal, participantId, caseRef, ct);
+        return await Assemble("manage_user", ExperienceStatus.Ok, identity, place,
+            new ExperienceResult(data, null, null),
+            (await digest.Page(participantId, credential, null, null, null, 3, ct)).Attention,
+            Empty(), [], null, new ExperienceCapabilities(true, false, true), participantId, credential, ct);
     }
 
     /// <summary>The envelope for a ladder act: the cited case's Topic when one exists, else the
