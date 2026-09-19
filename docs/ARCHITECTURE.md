@@ -104,11 +104,7 @@ Map HTTP to commands and queries, and results to one response envelope. The publ
 
 ### Browser
 
-The browser is build-free: native ES modules served as source, no framework, no bundler, no vendored UI library. `index.html` is the workspace — panels shown and hidden by navigation — and the signed-out pages are server-rendered fragments.
-
-- **Shared modules.** `api.js` is the only fetch layer and the one place that knows the envelope; `dom.js` is the element-builder and visibility helpers; `state.js` is a minimal observable store.
-- **Feature modules.** One per surface, mirroring the server's modules: the Tangent directory, the Topic reader and composer, people, roles, settings, connect. Logic — drafts, cursor math, facet handling, routing — lives apart from DOM wiring, so it unit-tests in Node without a browser.
-- **Checks.** The static suite enforces the boundaries: no globals outside the namespace, no fetch outside `api.js`, no dialog primitives, fixed ports.
+The workspace is a Vue 3 single-page application built with Vite and written in TypeScript: single-file components with scoped styles, Pinia for state, and one typed api module over the envelope. Components mirror the server's modules — the Tangent directory, the Topic reader and composer, people, roles, settings, connect. `vite build` emits static assets the server hosts; component unit tests and the rule checks run in Node. Signed-out and public pages stay server-rendered fragments, so anonymous readers get real HTML without executing the application.
 
 ## Connector
 

@@ -38,7 +38,7 @@ The seven rules in [ARCHITECTURE](../ARCHITECTURE.md#rules) govern every task, i
 | D10 | Working branch and commits | `claude/epic-007-realignment`; commit at task checkpoints; push only with Leo's authorization |
 | D17 | Receipts and the request protocol | Deleted: the action is the black box, and the Post row is the only idempotency mechanism (ADR 0007); the receipt registry, `GetOperation` and the request protocol are gone |
 | D18 | Invitations | Retired: admission is open or by request; the mandate is amended and the subtraction landed across server, browser and connector |
-| D19 | The browser | Build-free ES modules over one fetch layer; logic unit-tests in Node without a browser; Node is the browser's test runner and never a product dependency |
+| D19 | The workspace UX | Vanilla retired for the workspace; Vue 3 + Vite + TypeScript with reusable components and Pinia state; public pages stay server-rendered; Vite output served as static assets |
 | C1 | Connector enrollment | One path: the account-bound proof exchange after an OAuth bind. Delete the unbound tier, the app-password binding, session import and the server's person-scoped credential endpoints |
 | C2 | Connector sessions | Renew themselves: repeat the exchange before expiry or after a refusal |
 | C3 | Connector state | One transactional store under a per-change OS file lock, shared by every process; no lockfile, no append-only journal |
