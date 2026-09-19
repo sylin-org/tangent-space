@@ -54,7 +54,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
     [TopicMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentId}/topics")]
     public Task<IActionResult> CreateTopic(string tangentId, CreateTangentTopicRequest request, CancellationToken ct)
-        => Execute(actor => hub.Tangents.CreateTopic(actor, tangentId, request.Key, request.Title, request.Admission, request.Topic, ct), created: true);
+        => Execute(actor => hub.Tangents.CreateTopic(actor, tangentId, request.Key, request.Title, request.Topic, ct), created: true);
 
     [TopicMutation]
     [HttpPatch("{tangentId}")]

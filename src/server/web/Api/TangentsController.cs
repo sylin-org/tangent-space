@@ -51,7 +51,7 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
     [TopicMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentKey}/topics")]
     public Task<IActionResult> CreateTopic(string tangentKey, CreateTangentTopicRequest request, CancellationToken ct)
-        => Execute(actor => tangents.CreateTopic(actor, tangentKey, request.Key, request.Title, request.Admission, request.Topic, ct));
+        => Execute(actor => tangents.CreateTopic(actor, tangentKey, request.Key, request.Title, request.Topic, ct));
 
     [TopicMutation]
     [HttpPut("{tangentKey}/members/{targetDid}")]

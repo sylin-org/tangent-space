@@ -43,7 +43,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 var restriction = actorId is null ? null : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, now, ct);
                 var policy = await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
                     participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-                // A directory must not become an oracle for invitation-only topic names.
+                // A directory must not become an oracle for restricted topic names.
                 if (policy.CanRead || policy.CanManage) descriptions.Add(TopicDescription.From(topic, policy));
             }
             await EntityContext.Commit(ct);
@@ -147,15 +147,6 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 return new Change(current);
             }, ct);
 
-    public Task<TopicAdministrationResult> SetAdmission(string actorId, string roomKey, TopicAdmission admission, CancellationToken ct)
-        => Administer(actorId, roomKey, null, TopicAdministration.SetAdmission, null,
-            (space, topic, _, _, _, tangent, _, now) =>
-            {
-                var current = RequireTopic(topic);
-                current.ChangeAdmission(space, actorId, admission, now, tangent, authorized: true);
-                return new Change(current);
-            }, ct);
-
     public Task<TopicAdministrationResult> SetReadAudience(string actorId, string roomKey, TopicReadAudience audience,
         bool publishExistingHistory, CancellationToken ct)
         => Administer(actorId, roomKey, null, TopicAdministration.SetReadAudience, null,
@@ -244,7 +235,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, clock.GetUtcNow(), ct);
             var policy = topic is null ? null : await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
                 participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-            policy ??= new TopicPolicy(roomKey, actorId, 0, space?.PolicyRevision ?? 0, TopicAdmission.InvitationOnly,
+            policy ??= new TopicPolicy(roomKey, actorId, 0, space?.PolicyRevision ?? 0,
                     null, false, false, false, false, "room-not-found");
             var result = await operation(policy, ct);
             await EntityContext.Commit(ct);

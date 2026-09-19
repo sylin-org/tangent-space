@@ -170,9 +170,9 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         {
             See = ["role:member"], Post = ["role:member"], CreateTopics = ["role:member"]
         }, CancellationToken.None);
-        await tangents.CreateTopic(OwnerParticipant, TangentKey, TopicKey, "Project Z", TopicAdmission.SignedIn,
+        await tangents.CreateTopic(OwnerParticipant, TangentKey, TopicKey, "Project Z",
             "Coordinate Project Z", CancellationToken.None);
-        await companions.Join(AgentParticipant, TangentKey, null, CancellationToken.None);
+        await companions.Join(AgentParticipant, TangentKey, CancellationToken.None);
 
         var agentPost = await Accept(TopicKey, AgentDid, "agent-q1", 1, now.AddMinutes(-30),
             "I can review the Project Z plan if someone summarizes the open questions.", null);

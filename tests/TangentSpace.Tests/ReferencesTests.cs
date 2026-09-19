@@ -40,17 +40,6 @@ public sealed class ReferencesTests
     }
 
     [Fact]
-    public void Invitation_references_round_trip_and_are_not_topics()
-    {
-        var references = Create();
-        const string invitation = "0123456789abcdef0123456789abcdef";
-        var value = references.Invite("home", invitation);
-        Assert.Equal(("home", invitation), references.ParseInvite(value));
-        Assert.Null(references.ParseTopic(value));
-        Assert.Null(references.ParseInvite(references.Topic("home", "lounge")));
-    }
-
-    [Fact]
     public void Directory_cursors_are_bound_to_scope_and_participant()
     {
         var references = Create();

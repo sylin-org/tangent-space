@@ -138,7 +138,7 @@
     for (const entry of listing.topics || []) {
       const activity = activityFor(entry.key);
       const button = element('a', 'room-link', ''); button.href = topicUrl(entry.tangentKey || activeTangentKey, entry.key); button.dataset.key = entry.key;
-      const state = entry.admission === 'InvitationOnly' ? 'By invitation' : 'Open to signed-in participants';
+      const state = 'Open to signed-in participants';
       const label = element('span', 'room-name', entry.title);
       if (activity.directReplies > 0) label.append(element('span', 'activity-diamond', '◆'));
       else if (activity.unreadCount > 0) label.append(element('span', 'activity-count', activity.unreadCountCapped || activity.unreadCount > 50 ? '50+' : String(activity.unreadCount)));
@@ -386,8 +386,8 @@
     if (mark) { if (mark.style) mark.style.background = safeAccent(tangent?.accent); mark.textContent = tangent?.artwork ? '◈' : '✦'; mark.title = tangent?.name || ''; }
     text('room-admission', room.readAudience === 'Public'
       ? 'Publicly readable · signed-in participation'
-      : room.admission === 'InvitationOnly' ? 'By invitation' : 'Signed-in participants');
-    const access = { 'sign-in-required': 'Sign in to enter this room.', 'invitation-required': 'A room manager can invite your DID to join.', removed: 'Your access to this room has been removed.', suspended: 'Your participation at this site is suspended.' };
+      : 'Signed-in participants');
+    const access = { 'sign-in-required': 'Sign in to enter this room.', 'not-admitted': 'The current rules do not admit you.', removed: 'Your access to this room has been removed.', suspended: 'Your participation at this site is suspended.' };
     text('room-access', access[room.accessState] || (room.canWrite ? 'You can read and take part.' : room.canRead ? 'You can read this room.' : 'Content is not available under your current access.'));
     show('choose-room', false); show('room-content', true); show('room-admin', room.canManage || can(room, 'manageTopic'));
     const topicSettings = $('topic-settings-form');
@@ -395,8 +395,7 @@
     show('message-form', room.canWrite);
     $('topic-details').open = !room.canRead;
     field('topic-form', 'topic').value = room.topic || '';
-    field('admission-form', 'admission').value = room.admission;
-    show('admission-form', room.canAppointManagers); show('manager-choice', room.canAppointManagers);
+    show('manager-choice', room.canAppointManagers);
     show('topic-access-settings', room.canAppointManagers);
     const audienceForm = $('read-audience-form');
     if (audienceForm) {
@@ -1012,7 +1011,6 @@
   }));
   $('topic-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/topic', { topic: field('topic-form', 'topic').value }, 'PUT')); });
   $('member-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/members/' + encodeURIComponent(field('member-form', 'did').value.trim()), { role: field('member-form', 'role').value }, 'PUT')); });
-  $('admission-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => mutateRoom('/admission', { admission: field('admission-form', 'admission').value }, 'PUT')); });
   field('read-audience-form', 'audience').addEventListener('change', updateReadAudience);
   field('member-form', 'role').addEventListener('change', updateTopicRoleNote);
   $('read-audience-form').addEventListener('submit', event => { event.preventDefault(); action(event.submitter, () => {

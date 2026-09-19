@@ -316,24 +316,15 @@ public sealed partial class ExperienceService(
             Empty(), [new(ExperienceActionNames.ReadTopic, refs.Topic(tangentKey, topicKey), null, "Open the Topic")], null, null, participantId, credential, ct);
     }
 
-    public async Task<ExperienceResponse> Join(ClaimsPrincipal principal, string tangentKey, string? inviteRef, CancellationToken ct)
+    public async Task<ExperienceResponse> Join(ClaimsPrincipal principal, string tangentKey, CancellationToken ct)
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         var credential = CredentialOf(principal);
         var identity = await IdentityOf(participantId, ct);
-        string? invitationId = null;
-        if (inviteRef is { } invite)
-        {
-            var parsed = refs.ParseInvite(invite)
-                ?? throw new RequestArgumentException("inviteRef", "Copy an invitation reference returned by this server.");
-            if (parsed.TangentKey != tangentKey)
-                throw new RequestArgumentException("inviteRef", "That invitation belongs to another Tangent.");
-            invitationId = parsed.InvitationId;
-        }
         JoinResult join;
         try
         {
-            join = await participants.Join(participantId, tangentKey, invitationId, ct);
+            join = await participants.Join(participantId, tangentKey, ct);
         }
         catch (TangentRuleViolation denied) when (denied.Denial == TangentDenial.Forbidden)
         {
@@ -566,10 +557,9 @@ public sealed partial class ExperienceService(
         ExperienceDigest.Preview(tangent.Name, 80), ExperienceDigest.Preview(tangent.Description, 240), RoleOf(tangent),
         tangent.Admission switch
         {
-            TangentAdmission.Open => "open", TangentAdmission.Approval => "approval", _ => "invite"
+            TangentAdmission.Open => "open", _ => "approval"
         },
-        tangent.MembershipRole != TangentRole.Removed && RoleOf(tangent) == "visitor"
-            && tangent.Admission is TangentAdmission.Open or TangentAdmission.Approval,
+        tangent.MembershipRole != TangentRole.Removed && RoleOf(tangent) == "visitor",
         tangent.Topics.Any(topic => topic.CanRead), tangent.Topics.Any(topic => topic.CanWrite));
 
     internal ExperienceTopicDto TopicDto(string tangentKey, TopicDescription topic)

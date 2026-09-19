@@ -92,7 +92,7 @@ public sealed class Tangent : Entity<Tangent>
 
     /// <summary>The one admission the stored open and approval bits express together.</summary>
     public TangentAdmission EffectiveAdmission => ApprovalRequired ? TangentAdmission.Approval
-        : OpenToSignedIn ? TangentAdmission.Open : TangentAdmission.Invite;
+        : OpenToSignedIn ? TangentAdmission.Open : TangentAdmission.Approval;
 
     public void ChangeParticipationPolicy(string actorDid, TangentAdmission admission, ParticipationPreset preset,
         UndeclaredAccess undeclared, DateTimeOffset now)

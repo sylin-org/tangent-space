@@ -6,7 +6,6 @@ public sealed record TopicPolicy(
     string? ActorParticipantId,
     long SelectedPolicyRevision,
     long SpacePolicyRevision,
-    TopicAdmission Admission,
     TopicRole? Role,
     bool IsOwner,
     bool CanRead,

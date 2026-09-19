@@ -308,8 +308,7 @@
             <h2>Create a Topic</h2>
             <label>Topic name<input class="input" name="title" required maxlength="120"></label>
             <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="first-thoughts"></label>
-            <label>Who can enter<select class="input" name="admission"><option value="SignedIn">Signed-in participants</option><option value="InvitationOnly">Invited participants</option></select></label>
-            <button class="btn btn-primary">Create Topic</button>
+                        <button class="btn btn-primary">Create Topic</button>
           </form>
         </details>
         </div></details>
@@ -337,7 +336,6 @@
                   <div class="topic-settings-controls">
                     <div id="topic-access-settings" hidden>
                       <form id="read-audience-form" class="stack" hidden><label>Who can read<select name="audience" class="input" aria-describedby="read-audience-note"><option value="Restricted">Only admitted participants</option><option value="Public">Anyone on the web</option></select></label><p id="read-audience-note" class="hint" aria-live="polite"></p><label id="publish-history-confirmation" class="check-row" hidden><input type="checkbox" name="publishExistingHistory" disabled> I understand that existing posts will become public and copies may persist</label><button class="btn btn-quiet">Save reading audience</button></form>
-                      <form id="admission-form" class="stack" hidden><label>Who can join<select name="admission" class="input" aria-describedby="topic-admission-note"><option value="SignedIn">Signed-in participants</option><option value="InvitationOnly">Invited participants</option></select></label><p id="topic-admission-note" class="hint">Controls signed-in participation. Tangent access and participant roles still apply.</p><button class="btn btn-quiet">Save admission</button></form>
                     </div>
                     <form id="topic-settings-form" class="stack" hidden><label class="check-row"><input type="checkbox" name="allowPostEditing"> Allow authors to edit their posts</label><label class="check-row"><input type="checkbox" name="isLocked"> Lock this topic</label><button class="btn btn-quiet">Save participation settings</button></form>
                   </div>

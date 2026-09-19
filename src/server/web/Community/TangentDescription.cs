@@ -6,7 +6,7 @@ namespace Tangent.Community;
 public sealed record TangentDescription(string Key, string Name, string Description, string Motto, string Accent, string Artwork,
     string OwnerParticipantId, bool IsOwner, bool CanManage, IReadOnlyList<TopicDescription> Topics, bool TopicsTruncated = false,
     int? NextTopicsPage = null, bool TopicsIncomplete = false, bool IsMember = false, TangentRole? MembershipRole = null,
-    TangentAdmission Admission = TangentAdmission.Invite, bool MembershipPending = false,
+    TangentAdmission Admission = TangentAdmission.Open, bool MembershipPending = false,
     bool CanCreateTopic = false, PermissionView? Permissions = null);
 
 public sealed record TangentsResponse(IReadOnlyList<TangentDescription> Tangents, bool CanCreate,

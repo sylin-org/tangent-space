@@ -12,9 +12,8 @@ public sealed class Topic : Entity<Topic>
     public string TangentKey { get; set; } = "";
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
-    public TopicAdmission Admission { get; set; }
     public TopicReadAudience ReadAudience { get; set; }
-    // A members-only topic admits the Tangent's own members without a separate topic invitation.
+    // A members-only topic admits the Tangent's own members without a separate grant.
     public bool MembersOnly { get; set; }
     public bool AllowPostEditing { get; set; }
     public bool IsLocked { get; set; }
@@ -24,32 +23,31 @@ public sealed class Topic : Entity<Topic>
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
-    public static Topic Create(Space? space, string actorDid, string key, string title, TopicAdmission admission, DateTimeOffset now,
+    public static Topic Create(Space? space, string actorDid, string key, string title, DateTimeOffset now,
         Tangent tangent)
     {
         RequireOwner(space, tangent, actorDid);
-        return Validate(actorDid, key, title, admission, now, tangent);
+        return Validate(actorDid, key, title, now, tangent);
     }
 
     /// <summary>A tangent administrator creates a topic under delegated authority; the creator gains no ownership.</summary>
-    internal static Topic CreateDelegated(Space? space, string actorDid, string key, string title, TopicAdmission admission,
+    internal static Topic CreateDelegated(Space? space, string actorDid, string key, string title,
         DateTimeOffset now, Tangent tangent)
     {
         if (space is null || !Participant.IsValidId(actorDid))
             throw Forbidden("A delegated topic needs an established space and a verified participant.");
-        return Validate(actorDid, key, title, admission, now, tangent);
+        return Validate(actorDid, key, title, now, tangent);
     }
 
-    private static Topic Validate(string actorDid, string key, string title, TopicAdmission admission,
+    private static Topic Validate(string actorDid, string key, string title,
         DateTimeOffset now, Tangent tangent)
     {
         CheckKey(key);
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > TopicConstants.MaximumTitleLength)
             throw Invalid("A topic title must contain 1–120 characters.");
-        if (!Enum.IsDefined(admission)) throw Invalid("Choose signed-in or invitation-only admission.");
         return new Topic
         {
-            Id = key, TangentKey = tangent.Id, Title = title.Trim(), Admission = admission, CreatorParticipantId = actorDid,
+            Id = key, TangentKey = tangent.Id, Title = title.Trim(), CreatorParticipantId = actorDid,
             PolicyRevision = 1, CreatedAt = now, UpdatedAt = now
         };
     }
@@ -82,7 +80,7 @@ public sealed class Topic : Entity<Topic>
         var memberRecord = tangentRole is TangentRole.Member or TangentRole.Admin or TangentRole.Reader;
         var admitted = signedIn && tangentAdmitted && !suspended && !banned && classificationRead && (owner || roleAdmitted || delegatedAdmin
             || MembersOnly && role is null && memberRecord
-            || !MembersOnly && role is null && Admission == TopicAdmission.SignedIn && tangentAdmitted);
+            || !MembersOnly && role is null && tangentAdmitted);
         // An explicit topic grant of member or manager widens a Tangent reader inside that topic only.
         var tangentReader = !owner && tangentRole == TangentRole.Reader && role is not (TopicRole.Member or TopicRole.Manager);
         var reason = space is null ? "site-unavailable" : tangent is null ? "tangent-not-found"
@@ -91,8 +89,8 @@ public sealed class Topic : Entity<Topic>
             : !owner && role == TopicRole.Removed ? "removed"
             : !owner && role is null && (MembersOnly ? !memberRecord : !tangentAdmitted) ? "community-membership-required"
             : !classificationRead ? "participation-policy"
-            : !admitted ? "invitation-required" : "allowed";
-        return new TopicPolicy(Id, actorDid, PolicyRevision, space?.PolicyRevision ?? 0, Admission,
+            : !admitted ? "not-admitted" : "allowed";
+        return new TopicPolicy(Id, actorDid, PolicyRevision, space?.PolicyRevision ?? 0,
             role, owner, admitted,
             admitted && !timedOut && !IsLocked
                 && (owner || role != TopicRole.Reader && !tangentReader && classificationWrite),
@@ -163,15 +161,6 @@ public sealed class Topic : Entity<Topic>
             throw Forbidden("Only a current Tangent or Topic administrator can change Topic access.");
         try { Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTopic(); }
         catch (ArgumentException invalid) { throw Invalid(invalid.Message); }
-        Advance(now);
-    }
-
-    public void ChangeAdmission(Space? space, string actorDid, TopicAdmission admission, DateTimeOffset now,
-        Tangent? tangent = null, bool authorized = false)
-    {
-        if (!authorized) RequireOwner(space, tangent, actorDid);
-        if (!Enum.IsDefined(admission)) throw Invalid("Choose signed-in or invitation-only admission.");
-        Admission = admission;
         Advance(now);
     }
 

@@ -43,7 +43,7 @@ public sealed partial class ExperienceService
         var topicKey = MintTopicKey(cleanTitle, requestId);
         try
         {
-            await tangents.CreateTopic(participantId, tangentKey, topicKey, cleanTitle, TopicAdmission.SignedIn, null, ct);
+            await tangents.CreateTopic(participantId, tangentKey, topicKey, cleanTitle, null, ct);
         }
         catch (TangentRuleViolation violated) when (violated.Denial == TangentDenial.AlreadyExists)
         {

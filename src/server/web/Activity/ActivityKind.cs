@@ -11,7 +11,6 @@ public enum ActivityKind
     MembershipChanged,
     ParticipantChanged,
     TangentChanged,
-    InvitationChanged,
     RestrictionChanged,
     ModerationNotice,
     RoleMembershipChanged

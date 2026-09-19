@@ -30,7 +30,7 @@ public sealed class AccessEvaluatorTests
     /// <summary>The topic's own state rides the draft: editing and locked are facts of the row,
     /// not of the actor.</summary>
     private static TopicPolicy Draft(Topic topic, string? actor, bool isOwner = false) => new(
-        topic.Id, actor, SelectedPolicyRevision: 3, SpacePolicyRevision: 1, TopicAdmission.SignedIn,
+        topic.Id, actor, SelectedPolicyRevision: 3, SpacePolicyRevision: 1,
         Role: null, IsOwner: isOwner, CanRead: false, CanWrite: false, CanManage: false,
         Reason: "", EditingAllowed: topic.AllowPostEditing, Locked: topic.IsLocked);
 

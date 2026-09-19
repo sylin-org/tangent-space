@@ -16,7 +16,6 @@ namespace Tangent.Application;
 /// </summary>
 public sealed class References(IOptions<SpaceOptions> options, IDataProtectionProvider protection)
 {
-    public const string InvitePrefix = "i_";
     public const string CasePrefix = "case_";
 
     private readonly string origin = ConfiguredOrigin(options.Value);
@@ -32,7 +31,6 @@ public sealed class References(IOptions<SpaceOptions> options, IDataProtectionPr
     public string Tangent(string tangentKey) => origin + "::" + tangentKey;
     public string Topic(string tangentKey, string topicKey) => Tangent(tangentKey) + "::" + topicKey;
     public string Post(string tangentKey, string topicKey, string postId) => Topic(tangentKey, topicKey) + "::" + postId;
-    public string Invite(string tangentKey, string invitationId) => Tangent(tangentKey) + "::" + InvitePrefix + invitationId;
     public string Case(string tangentKey, string topicKey, string caseId) => Topic(tangentKey, topicKey) + "::" + CasePrefix + caseId;
 
     /// <summary>Parses origin::tangentKey.</summary>
@@ -50,15 +48,6 @@ public sealed class References(IOptions<SpaceOptions> options, IDataProtectionPr
         => Parse(reference, 4) is { } parts && IsTangentKey(parts[1]) && IsTopicKey(parts[2]) && IsOpaque(parts[3])
             ? (parts[1], parts[2], parts[3])
             : null;
-
-    /// <summary>Parses origin::tangentKey::i_invitationId.</summary>
-    public (string TangentKey, string InvitationId)? ParseInvite(string? reference)
-    {
-        if (Parse(reference, 3) is not { } parts || !IsTangentKey(parts[1])
-            || !parts[2].StartsWith(InvitePrefix, StringComparison.Ordinal)) return null;
-        var id = parts[2][InvitePrefix.Length..];
-        return IsOpaque(id) ? (parts[1], id) : null;
-    }
 
     /// <summary>Parses origin::tangentKey::topicKey::case_id, where the id is 64 lowercase hexadecimal digits.</summary>
     public (string TangentKey, string TopicKey, string CaseId)? ParseCase(string? reference)

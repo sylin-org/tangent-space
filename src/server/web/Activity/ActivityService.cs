@@ -200,7 +200,7 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     {
         // Membership, moderation and participant targets are administration metadata, not topic conversation data.
         var privateTarget = entry.Kind is ActivityKind.MembershipChanged or ActivityKind.ParticipantChanged
-            or ActivityKind.InvitationChanged or ActivityKind.RestrictionChanged;
+            or ActivityKind.RestrictionChanged;
         var target = privateTarget && entry.TargetParticipantId != participantId && entry.ActorParticipantId != participantId ? null : entry.TargetParticipantId;
         return new(entry.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture), entry.Kind.ToString(), entry.TopicKey,
             entry.TangentKey, entry.ActorParticipantId, target, entry.PostSequence, entry.OccurredAt);

@@ -10,9 +10,6 @@ public sealed record JoinResult(JoinOutcome Outcome, TangentMembershipResult? Me
 
 public sealed record LeaveResult(LeaveOutcome Outcome, TangentMembershipResult? Membership);
 
-public sealed record TangentInvitationResult(string InvitationId, string TangentKey, string RecipientParticipantId, TangentRole GrantedRole,
-    DateTimeOffset IssuedAt, DateTimeOffset ExpiresAt, bool Revoked, bool Redeemed, bool Delivered);
-
 public sealed record TangentJoinRequestSummary(string RequestId, string TangentKey, string ParticipantId,
     DateTimeOffset RequestedAt, bool Decided, bool? Accepted);
 

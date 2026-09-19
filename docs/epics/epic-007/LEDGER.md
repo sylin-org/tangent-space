@@ -99,6 +99,7 @@ Accepted by Leo on 2026-09-15 ("Accept all recommendations"). Details in [EPIC-0
 | D14 | The root namespace | **`Tangent`**, with one module per segment: `Tangent.Spaces`, `Tangent.Community`, `Tangent.Conversation`, `Tangent.Identity`, `Tangent.Access`, `Tangent.Activity`, `Tangent.Stewardship`, `Tangent.Api`, `Tangent.Application`, `Tangent.Infrastructure`. This replaces ARCHITECTURE's `Hosting` module with `Spaces`, resolving that row's conflict with D13 by removing the word rather than ruling on it. PascalCase product root, matching Sylin's own Koan (`Koan.Data.Core`), not reverse-DNS. The assembly stays `TangentSpace` (N-051) | accepted 2026-09-16 |
 | D15 | Protocol identifiers | Lowercase reverse-DNS under **`org.sylin.tangent.`** — atproto NSIDs, the enrollment exchange method and the OAuth consent scope that travels with it. `local.` was a placeholder for a lexicon backed by no domain. **R6.2 applies it**, which is the task already obliged to replace `local.tangent.mcp.exchange` because its own rule is no `mcp` names on either side | accepted 2026-09-16 |
 | D17 | Receipts and the request protocol | **Deleted.** The action is the black box: a caller passes arguments and receives the outcome, and guarantees live inside the thing that acts. Idempotency is a domain invariant only where a double costs something visible — the Post row carries the client's operation id (ADR 0007); creating with a used id replays its row, divergent content is refused. The receipt registry, `GetOperation`, and every other mutation's requestId are gone; natural convergence and social healing cover the rest. Value test for any guarantee layer: N lines of code against N/50 value is a deletion, not a design (Leo, 19 September) | accepted 2026-09-19 |
+| D18 | Invitations | **Retired and removed.** Admission is open (join freely) or by request (ask to join); reading needs neither. The mandate's invitation passages are amended to match. Subtraction footprint: `TangentInvitation`, `InvitationController` and its page, invite references, the join path's `inviteRef`, the `Invite`/`InvitationOnly` admission values, `InvitationChanged`, the browser invitation page, the connector's optional `inviteRef`. Join requests (R4.7's Applications queue) are the remaining non-open door | accepted 2026-09-19 |
 | D16 | The owner's declaring act | **Naming the first Tangent is the claim.** The confirmation screen between sign-in and the first Tangent is removed, not disabled: its endpoint, its request record, its markup, its handler and its CSS are gone, and the always-true `humanDeclaration` flag it existed to pass goes with it. The step it fed carries the ownership sentence and Switch account, so the declaration and the escape survive the screen. Supersession noted on [ADR 0003](../../adr/0003-owner-onboarding.md) | accepted 2026-09-17 |
 
 ## Task board
@@ -203,6 +204,18 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R6.6 | Documentation cleanup: remove superseded handoffs, briefs, design prompts, research snapshots and evidence for removed capabilities; `check-greenfield.ps1 -Strict` passes | todo | Only living documents and decision records remain | |
 
 ## In flight
+
+## In flight
+
+**Completed: D18 — invitations retired** (2026-09-19)
+
+Leo ruled the direction has moved past invitations; the mandate was amended (admission is open or by request; the topic-guest-invitation and invitation-UX passages struck), and the subtraction landed in the same commit across all three surfaces:
+
+- Server: `TangentInvitation`, `InvitationController`, `TopicAdmission` (with it, the topic-admission field, `ChangeAdmission`/`SetAdmission`, the create and settings forms' admission choices), invite references on `References`, the join path's `inviteRef` and its redemption/private-bypass branches, `TangentAdmission.Invite` (a formerly invite-only Tangent now answers as approval), `InvitationChanged`, and the invitation result record. The unreachable "by invitation only" denial died with its concept; a removed participant's rejoin refusal is unconditional.
+- Browser: the invitation page assets, the admission settings form, the create-form admission select, the invitation labels, and the `invitation-required` access reason (now `not-admitted`).
+- Connector (matched pair): `Forum_Join_Space`'s optional `inviteRef` argument and schema property.
+
+Join requests are the remaining non-open door (R4.7's Applications queue). .NET 107/107 (the invitation reference round-trip test went with `References.Invite`), node 7/7, connector 62/62, greenfield 469. One open verification: Docker was down at execution time, so the live database was not queried for invitation-era rows (`InvitationChanged` journal entries would fail enum deserialization on the activity feed until the next wipe); the join defect makes their existence unlikely — verify on next boot, and the wipe is pre-authorized with announce + backup.
 
 **R3.4 stage 1 — the one evaluator** (done · 2026-09-19)
 

@@ -263,7 +263,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
     }
 
     public async Task<TangentTopicCreation> CreateTopic(string actorId, string tangentKey, string roomKey, string title,
-        TopicAdmission admission, string? description, CancellationToken ct, bool membersOnly = false)
+        string? description, CancellationToken ct, bool membersOnly = false)
     {
         TangentTopicCreation result;
         await gate.Enter(ct);
@@ -288,8 +288,8 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "A scoped restriction currently denies topic administration.");
             if (await Topic.Get(roomKey, ct) is not null) throw new TangentRuleViolation(TangentDenial.AlreadyExists, "That stable topic key already exists.");
             var topic = tangent.IsOwner(actorId)
-                ? Topic.Create(space, actorId, roomKey, title, admission, now, tangent)
-                : Topic.CreateDelegated(space, actorId, roomKey, title, admission, now, tangent);
+                ? Topic.Create(space, actorId, roomKey, title, now, tangent)
+                : Topic.CreateDelegated(space, actorId, roomKey, title, now, tangent);
             topic.MembersOnly = membersOnly;
             if (description is not null) topic.ChangeDescription(space, actorId, null, description, now, tangent, actorMembership);
             await topic.Save(ct);
@@ -307,7 +307,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         return result;
     }
 
-    /// <summary>Invitation workflows can call this now; the human invitation endpoint remains a later scope.
+    /// <summary>Topic creation under delegated authority.
     /// The target arrives as an external identifier (DID, internal DID, or handle) and resolves to
     /// its current holder here.</summary>
     public async Task<TangentMembershipResult> SetMembership(string actorId, string tangentKey, string targetIdentifier, TangentRole role, CancellationToken ct)

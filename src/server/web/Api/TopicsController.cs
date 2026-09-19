@@ -48,11 +48,6 @@ public sealed class TopicsController(TangentServer hub) : ControllerBase
         => Outcome(await topics.SetTopic(Actor(), roomKey, request.Topic, ct));
 
     [TopicMutation]
-    [HttpPut("{roomKey}/admission")]
-    public async Task<IActionResult> SetAdmission(string roomKey, ChangeTopicAdmissionRequest request, CancellationToken ct)
-        => Outcome(await topics.SetAdmission(Actor(), roomKey, request.Admission, ct));
-
-    [TopicMutation]
     [HttpPut("{roomKey}/read-audience")]
     public async Task<IActionResult> SetReadAudience(string roomKey, ChangeTopicReadAudienceRequest request, CancellationToken ct)
         => Outcome(await topics.SetReadAudience(Actor(), roomKey, request.Audience, request.PublishExistingHistory, ct));

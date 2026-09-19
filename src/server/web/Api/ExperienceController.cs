@@ -102,7 +102,7 @@ public sealed class ExperienceController(ExperienceService experience) : Control
 
     [HttpPut("tangents/{tangentKey}/membership")]
     public Task<IActionResult> Join(string tangentKey, [FromBody] ExperienceMembershipRequest request, CancellationToken ct)
-        => Mutate(principal => experience.Join(principal, tangentKey, request.InviteRef, ct));
+        => Mutate(principal => experience.Join(principal, tangentKey, ct));
 
     [HttpDelete("tangents/{tangentKey}/membership")]
     public Task<IActionResult> Leave(string tangentKey, CancellationToken ct)
@@ -159,7 +159,7 @@ public sealed record ExperienceCreatePostRequest(string RequestId, string Text, 
 
 public sealed record ExperienceReadPositionRequest(string ReadCursor);
 
-public sealed record ExperienceMembershipRequest(string? InviteRef);
+public sealed record ExperienceMembershipRequest();
 
 public sealed record ExperienceWatchRequest(string ScopeRef, string Mode);
 

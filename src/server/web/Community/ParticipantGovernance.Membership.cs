@@ -9,7 +9,7 @@ namespace Tangent.Community;
 public sealed partial class ParticipantGovernance
 {
     /// <summary>Self-join is idempotent for members, honest about pending approval, and never leaks private tangents.</summary>
-    public async Task<JoinResult> Join(string actorId, string tangentKey, string? invitationId, CancellationToken ct)
+    public async Task<JoinResult> Join(string actorId, string tangentKey, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tangentKey);
         await gate.Enter(ct);
@@ -19,30 +19,14 @@ public sealed partial class ParticipantGovernance
             using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var now = clock.GetUtcNow();
             var (tangent, membership, participant) = await LoadTangentContext(actorId, tangentKey, ct);
-            var invitation = await ResolveInvitation(invitationId, actorId, tangentKey, now, ct);
-            // A durable admin removal is an override no self-join can bypass; only an owner/admin-issued
-            // invitation (checked below) restores a removed participant under issuer authority.
-            if (membership?.Role == TangentRole.Removed && invitation is null)
+            // A durable admin removal is an override no self-join can bypass.
+            if (membership?.Role == TangentRole.Removed)
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "A removed participant cannot rejoin on their own.");
-            // Private (invite-only) tangents unknown to this actor answer as not found; they are not listed either.
-            if (!tangent.CanParticipate(actorId, membership) && invitation is null
-                && tangent.EffectiveAdmission is not (TangentAdmission.Open or TangentAdmission.Approval))
-                throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
             if (await Restrictions.ForTangent(actorId, tangentKey, now, ct) is not null)
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "A scoped restriction currently denies this participation.");
             if ((tangent.IsOwner(actorId) || await IsServerOwner(actorId, ct)) || membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader)
                 return await CommitJoin(new JoinResult(JoinOutcome.AlreadyMember,
                     membership is null ? null : MembershipOf(membership), null), ct);
-            if (invitation is not null)
-            {
-                invitation.Redeem(actorId, now);
-                await invitation.Save(ct);
-                var redeemed = TangentMembership.Assign(tangent, actorId, invitation.GrantedRole, actorId, now);
-                await redeemed.Save(ct);
-                await Journal(ActivityKind.MembershipChanged, actorId, actorId, tangentKey, ct);
-                await Journal(ActivityKind.InvitationChanged, actorId, invitation.RecipientParticipantId, tangentKey, ct);
-                return await CommitJoin(new JoinResult(JoinOutcome.Joined, MembershipOf(redeemed), null), ct);
-            }
             if (tangent.EffectiveAdmission == TangentAdmission.Open)
             {
                 var joined = TangentMembership.Assign(tangent, actorId, TangentRole.Member, actorId, now);
@@ -50,8 +34,8 @@ public sealed partial class ParticipantGovernance
                 await Journal(ActivityKind.MembershipChanged, actorId, actorId, tangentKey, ct);
                 return await CommitJoin(new JoinResult(JoinOutcome.Joined, MembershipOf(joined), null), ct);
             }
-            if (tangent.EffectiveAdmission == TangentAdmission.Approval)
             {
+                // Approval is the only other admission: queue a durable request.
                 var request = await TangentJoinRequest.Get(TangentJoinRequest.Key(tangentKey, actorId), ct);
                 if (request is null)
                 {
@@ -70,7 +54,6 @@ public sealed partial class ParticipantGovernance
                 }
                 return await CommitJoin(new JoinResult(JoinOutcome.PendingApproval, null, request.Id), ct);
             }
-            throw new TangentRuleViolation(TangentDenial.Forbidden, "This Tangent admits new participants by invitation only.");
         }
         finally { gate.Exit(); }
     }

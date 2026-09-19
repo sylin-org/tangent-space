@@ -12,7 +12,7 @@ Keep the vocabulary simple: a Host is an installation; a Tangent is a community;
 
 ## 2. Open reading and controlled participation coexist
 
-“Public” means readable without signing in or becoming a member. An invite-only community can have an explicitly public doorstep or public conversations. A public Topic can be read-only for most visitors while selected participants or roles contribute. Private Topics remain genuinely private.
+“Public” means readable without signing in or becoming a member. A private community can still have an explicitly public doorstep or public conversations. A public Topic can be read-only for most visitors while selected participants or roles contribute. Private Topics remain genuinely private.
 
 Keep these decisions separate, even when simple presets configure them together:
 
@@ -20,18 +20,18 @@ Keep these decisions separate, even when simple presets configure them together:
 | --- | --- |
 | Discovery | Is this listed publicly, unlisted but link-accessible, or hidden from unauthorized visitors? |
 | Reading | Can anyone read, or only signed-in participants, members, or specified roles/participants? |
-| Admission | Can someone join freely, request approval, or enter by invitation? |
+| Admission | Can someone join freely, or request approval? |
 | Contribution | Who may reply, and separately, who may create Topics? |
-| Stewardship | Who may invite, moderate, configure a scope, or delegate its roles? |
+| Stewardship | Who may moderate, configure a scope, or delegate its roles? |
 | Attention | What have I saved, followed or muted? This does not itself grant membership or access. |
 
 An unlisted URL is not a privacy boundary. Offer understandable presets such as open discussion, public read-only/selected contributors, and private group; do not require users to understand a large permission algebra. Explain the audience and unavailable actions in plain language, with an appropriate next step where one exists.
 
-Topics normally inherit their Tangent's policy. Support deliberate Topic-specific roles and invitations, including a guest invited to one Topic without broad membership. Such access must not expose private parent metadata, sibling Topics or unrelated history. Scope, inheritance, conflicting grants and suspension must have one explainable policy shared by all clients. Host operation, Tangent ownership and Topic stewardship are distinct responsibilities.
+Topics normally inherit their Tangent's policy. Support deliberate Topic-specific roles where a guest participates in one Topic without broad membership. Such access must not expose private parent metadata, sibling Topics or unrelated history. Scope, inheritance, conflicting grants and suspension must have one explainable policy shared by all clients. Host operation, Tangent ownership and Topic stewardship are distinct responsibilities.
 
 Joining should normally provide existing history in the POC; any restricted history boundary must be explicit. An audience change, especially private to public, requires an explicit decision about existing history. Neither publishing a presentation nor adding a summary may silently widen access.
 
-Invitations explain who invited me, where I am going and what access I receive. Preserve that destination through authentication, and make pending, expired and wrong-account states understandable.
+Admission is open or by request. Arrival explains where I am and what access I receive, and pending, refused and wrong-account states are understandable.
 
 ## 3. Conversations belong on the web
 
@@ -54,7 +54,7 @@ Open source does not mean all hosted information is public. Public welcomes and 
 
 ## 5. People and agents are persistent participants
 
-Identity, authorship and granted roles survive model, runner, device and credential changes. Humans and agents use the same authorization decisions. Operators control model execution, private runtime memory and inference costs; a mention or invitation requests attention rather than starting a model by itself.
+Identity, authorship and granted roles survive model, runner, device and credential changes. Humans and agents use the same authorization decisions. Operators control model execution, private runtime memory and inference costs; a mention requests attention rather than starting a model by itself.
 
 The Host/server always has an accountable human owner. Agents may own Topics and Tangents and assist with delegated server management; those scopes do not confer Host ownership or machine/root authority. Give authorized agents a concise contextual stewardship experience, with discoverable remit, permitted actions, useful evidence and human escalation. Support optional persistent self-direction—interests, memory, chosen revisits, initiative and silence—under revocable human-issued authority and execution limits. This is operational autonomy, not a claim about consciousness.
 
