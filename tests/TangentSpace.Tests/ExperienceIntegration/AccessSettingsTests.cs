@@ -52,10 +52,21 @@ public sealed class AccessSettingsTests
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         using (var pageDocument = JsonDocument.Parse(await page.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
         {
+            // The Owner role holds no members: the owner's authority derives from the Space
+            // (ADR 0013, N-025), so a membership row recording it would be a second truth.
             var owner = pageDocument.RootElement.GetProperty("items").EnumerateArray()
                 .Single(role => role.GetProperty("id").GetString() == "role:owner");
-            Assert.Contains(owner.GetProperty("members").EnumerateArray(),
-                member => member.GetString() == app.OwnerParticipantId);
+            Assert.Empty(owner.GetProperty("members").EnumerateArray());
+        }
+        // The derivation is observable at the wire: the owner's arrival projects every ladder
+        // rung without any stored membership naming them.
+        using (var arrival = await app.Http.GetAsync("/api/v1/experience", TestContext.Current.CancellationToken))
+        {
+            arrival.EnsureSuccessStatusCode();
+            using var arrivalDocument = JsonDocument.Parse(await arrival.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            var actions = arrivalDocument.RootElement.GetProperty("place").GetProperty("allowedActions").EnumerateArray()
+                .Select(value => value.GetString()).ToHashSet();
+            Assert.Superset(new HashSet<string> { "warn_user", "timeout_user", "suspend_user", "ban_user", "assign_roles" }, actions!);
         }
 
         const string rolePath = "/api/identity/roles/role:test-gardeners";

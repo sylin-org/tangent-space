@@ -54,7 +54,7 @@ public sealed class PeopleController(ParticipantProfiles profiles, ParticipantDi
                 Classification = participant.Classification.ToString(),
                 // Only the granted roles: the bag also carries the ambient everyone/authenticated
                 // tokens, and listing those beside a real grant would read as one.
-                Roles = bag.Tokens.Where(token => token.StartsWith("role:", StringComparison.Ordinal))
+                Roles = bag.Where(token => token.StartsWith("role:", StringComparison.Ordinal))
                     .Select(token => token["role:".Length..]).ToArray()
             });
         }

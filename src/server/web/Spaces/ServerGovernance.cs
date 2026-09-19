@@ -86,7 +86,6 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         }
         finally { gate.Exit(); }
         // The Owner role projects the committed space; startup repeats the projection (TangentRoleAccess.Seed).
-        await roleAccess.EnsureOwner(result.OwnerParticipantId, ct);
         return result;
     }
 

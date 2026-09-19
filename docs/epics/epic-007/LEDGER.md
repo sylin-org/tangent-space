@@ -221,7 +221,14 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 - [x] The ladder's grant rule is now permission containment (D12): derived roles refuse outright ("everyone signed in already holds it"), stored roles grant only to an actor holding every permission the role carries. The wire test caught the old membership-equality rule breaking the moment derivation landed — the owner stopped holding `role:participant` when arrival stopped force-adding, and the right answer was refusal, not re-adding
 - [x] Nine hostless evaluator tests (the derived-roles test joins), .NET 108/108, node 7/7, greenfield 469. Inert `role:participant` membership rows linger in the live database until the R4.6 wipe clears them
 
-Stage 2 remains on the row: `TopicReadAudience` deleted into `See: [everyone]`, mandatory role permissions, the owner's membership row removed (the bag must then derive the owner's global tokens from `Space.OwnerParticipantId`), and the browser's `ParticipationGrants.Manage` gate replaced by the bag (N-066's dual-authority kill).
+**Stage 2b — the Owner role stores no members** (done · 2026-09-19, closes N-025)
+
+- [x] `TangentRoleAccess.Bag` is the one seam where authority tokens compile: Koan's stored bag plus the derivation — when the actor is `Space.OwnerParticipantId`, the Owner role's token and its permissions join the set. No membership row records it. The bag returns the token collection now; `RoleBag` stays a Koan internal
+- [x] `EnsureOwner` deleted with its last caller (`ServerGovernance.Claim`); the startup sweep and repair are gone with it. `TangentOwnerRoleGuard` keeps only the definition and deletion guards — the member rules had nothing left to guard
+- [x] The roles-UI test re-pinned from the old promise (owner stored as the role's one member) to the new one: `role:owner` holds zero members, and the owner's arrival envelope projects every ladder rung purely from derivation
+- [x] .NET 108/108, node 7/7, greenfield 469. One flake met on the way: a readonly-SQLite temp fixture left over from the machine crash; cleared with the fixture directories, passes since
+
+Stage 2 remains on the row: `TopicReadAudience` deleted into `See: [everyone]`, mandatory role permissions, and the browser's `ParticipationGrants.Manage` gate replaced by the bag (N-066's dual-authority kill).
 
 **Completed: D17 — the action is the black box; the receipt layer is deleted** (2026-09-19)
 

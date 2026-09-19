@@ -86,7 +86,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
     }
 
     private async Task<Outcome> WarnParticipant(string actorId, string targetId, string reason,
-        RoleBag bag, DateTimeOffset now, CancellationToken ct)
+        IReadOnlyCollection<string> bag, DateTimeOffset now, CancellationToken ct)
     {
         RequireRung(TangentPermissions.WarnUsers, bag);
         return await Coordinate(async () =>
@@ -101,7 +101,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
     /// grounds them: the case names the Tangent where the sanction binds, so the act and its
     /// evidence cannot drift apart. A warning or a filed case precedes either.</summary>
     private async Task<Outcome> Restrict(string actorId, string targetId, string action, string reason,
-        long? durationSeconds, string? caseRef, RoleBag bag, DateTimeOffset now, CancellationToken ct)
+        long? durationSeconds, string? caseRef, IReadOnlyCollection<string> bag, DateTimeOffset now, CancellationToken ct)
     {
         RequireRung(action == Timeout ? TangentPermissions.TimeoutUsers : TangentPermissions.BanUsers, bag);
         var parsedCase = refs.ParseCase(caseRef) ?? throw new ArgumentException(
@@ -134,7 +134,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
     }
 
     private async Task<Outcome> SuspendParticipant(string actorId, string targetId, string reason,
-        Space space, RoleBag bag, DateTimeOffset now, CancellationToken ct)
+        Space space, IReadOnlyCollection<string> bag, DateTimeOffset now, CancellationToken ct)
     {
         RequireRung(TangentPermissions.ManageParticipants, bag);
         return await Coordinate(async () =>
@@ -155,7 +155,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
     /// <summary>One string covers both role rungs. Besides role management the actor must hold
     /// the role in question, and the Owner role is not assignable here at all.</summary>
     private async Task<Outcome> AssignRole(string actorId, string targetId, string action, string reason,
-        string? role, RoleBag bag, DateTimeOffset now, CancellationToken ct)
+        string? role, IReadOnlyCollection<string> bag, DateTimeOffset now, CancellationToken ct)
     {
         RequireRung(TangentPermissions.ManageRoles, bag);
         if (string.IsNullOrWhiteSpace(role))
@@ -187,7 +187,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
         return new Outcome(action, targetId, reason, roleToken, null, null, null, auditId);
     }
 
-    private static void RequireRung(string permission, RoleBag bag)
+    private static void RequireRung(string permission, IReadOnlyCollection<string> bag)
     {
         if (!TangentRoleAccess.CanDo([permission], bag))
             throw new UnauthorizedAccessException("The current roles do not carry this rung of the ladder.");

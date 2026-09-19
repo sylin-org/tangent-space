@@ -45,7 +45,7 @@ public sealed partial class ExperienceService
             var space = await Space.Get(TangentConstants.SpaceId, ct);
             if (space?.IsOwner(participantId) == true) roles.Add(new("server", "", "This server", "owner"));
             var bag = await hub.Roles.Bag(participantId, ct);
-            foreach (var token in bag.Tokens.Where(token => token.StartsWith("role:", StringComparison.Ordinal)))
+            foreach (var token in bag.Where(token => token.StartsWith("role:", StringComparison.Ordinal)))
             {
                 var roleKey = token["role:".Length..];
                 if (roles.Any(r => r.Scope == "server" && r.Role == roleKey)) continue;
