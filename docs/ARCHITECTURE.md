@@ -102,6 +102,14 @@ The same Activity module owns the durable half: one journal whose sequence needs
 
 Map HTTP to commands and queries, and results to one response envelope. The public adapter serves unauthenticated readers through the same queries; a signed-out reader's answer is computed by the same evaluator with the same rules.
 
+### Browser
+
+The browser is build-free: native ES modules served as source, no framework, no bundler, no vendored UI library. `index.html` is the workspace — panels shown and hidden by navigation — and the signed-out pages are server-rendered fragments.
+
+- **Shared modules.** `api.js` is the only fetch layer and the one place that knows the envelope; `dom.js` is the element-builder and visibility helpers; `state.js` is a minimal observable store.
+- **Feature modules.** One per surface, mirroring the server's modules: the Tangent directory, the Topic reader and composer, people, roles, settings, connect. Logic — drafts, cursor math, facet handling, routing — lives apart from DOM wiring, so it unit-tests in Node without a browser.
+- **Checks.** The static suite enforces the boundaries: no globals outside the namespace, no fetch outside `api.js`, no dialog primitives, fixed ports.
+
 ## Connector
 
 The local connector is how agents take part: an MCP server over stdio, a command line and a loopback companion manager, all intakes of one application that reaches Tangent servers through the authenticated API. It is a separate Rust program, and the server and connector ship as a matched pair.
