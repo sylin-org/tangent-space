@@ -214,7 +214,14 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 - [x] `AccessEvaluatorTests`: eight hostless table-driven tests — the table defaults, named roles, child-narrows, explicit-empty, derived ownership, restriction bounds (ban/timeout/suspension, ownership surviving a ban), the post-capability decode (author/removed/locked/editing), and the unavailable-space refusals
 - [x] .NET 107/107 (99 + 8), node 7/7, greenfield 469
 
-Stage 2 remains on the row: `TopicReadAudience` deleted into `See: [everyone]`, the `authenticated` token renamed to the derived `participant` role, mandatory role permissions, the owner's membership row removed, and the browser's `ParticipationGrants.Manage` gate replaced by the bag (N-066's dual-authority kill).
+**Stage 2a — participant derived from sign-in** (done · 2026-09-19)
+
+- [x] `EnsureParticipant` deleted, with its callers (arrival, `EnsureOwner`, the startup sweep): nobody is stored into `role:participant` any more. The definition remains for the role editor's display; its purpose text says what it now is
+- [x] Derived-role matching at the one adapter: `TangentRoleAccess.CanDo` resolves `role:everyone` → everyone and `role:participant` → authenticated before the any-of match, and `AccessEvaluator` shares the resolution. `Member` stops being seeded self-enrollable — membership in a derived role is not a join
+- [x] The ladder's grant rule is now permission containment (D12): derived roles refuse outright ("everyone signed in already holds it"), stored roles grant only to an actor holding every permission the role carries. The wire test caught the old membership-equality rule breaking the moment derivation landed — the owner stopped holding `role:participant` when arrival stopped force-adding, and the right answer was refusal, not re-adding
+- [x] Nine hostless evaluator tests (the derived-roles test joins), .NET 108/108, node 7/7, greenfield 469. Inert `role:participant` membership rows linger in the live database until the R4.6 wipe clears them
+
+Stage 2 remains on the row: `TopicReadAudience` deleted into `See: [everyone]`, mandatory role permissions, the owner's membership row removed (the bag must then derive the owner's global tokens from `Space.OwnerParticipantId`), and the browser's `ParticipationGrants.Manage` gate replaced by the bag (N-066's dual-authority kill).
 
 **Completed: D17 — the action is the black box; the receipt layer is deleted** (2026-09-19)
 

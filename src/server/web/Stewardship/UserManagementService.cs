@@ -165,8 +165,13 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
             ?? throw new ArgumentException("That role does not exist on this server.", nameof(role));
         if (target.Id == TangentBuiltInRoles.Owner.Token)
             throw new UnauthorizedAccessException("The Owner role follows the server's accountable human owner.");
-        if (!bag.Contains(roleToken))
-            throw new UnauthorizedAccessException("No one grants a role they do not hold.");
+        if (target.Id == TangentBuiltInRoles.Participant.Token || target.Id == "role:everyone")
+            throw new UnauthorizedAccessException("Everyone signed in already holds that role; it is derived and never granted or removed.");
+        // Permission containment decides (ADR 0013): no positional hierarchy, so granting a role
+        // means holding every permission it carries.
+        var missing = target.Permissions.FirstOrDefault(permission => !bag.Contains(permission));
+        if (missing is not null)
+            throw new UnauthorizedAccessException("No one grants a role whose permissions they do not hold.");
         if (action == AddRole) await roles.Add(target.Id, targetId, ct);
         else await roles.Remove(target.Id, targetId, ct);
         string auditId;

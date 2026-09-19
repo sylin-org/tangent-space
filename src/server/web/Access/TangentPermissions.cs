@@ -87,13 +87,14 @@ public static class TangentBuiltInRoles
         "Member",
         "A server member. Local access lists decide where they can act.",
         "#9b7ede",
-        new HashSet<string>(StringComparer.Ordinal),
-        IsSelfEnrollable: true);
+        new HashSet<string>(StringComparer.Ordinal));
 
+    /// <summary>The definition exists for the role editor's display; membership is derived from
+    /// sign-in and never stored (ADR 0013).</summary>
     public static readonly TangentRoleSeed Participant = new(
         ParticipantKey,
         "Participant",
-        "A registered participant on this server.",
+        "Everyone signed in on this server holds this role; it is never granted or removed.",
         "#4ecdc4",
         new HashSet<string>(StringComparer.Ordinal));
 

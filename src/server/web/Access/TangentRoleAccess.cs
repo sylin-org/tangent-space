@@ -19,11 +19,19 @@ public sealed class TangentRoleAccess(RoleCollection roles)
     public Task<RoleBag> Bag(string? participantId, CancellationToken ct = default)
         => roles.Bag(participantId, Participant.IsValidId(participantId), ct);
 
+    /// <summary>Any-of match with the derived built-in roles resolved at the one adapter:
+    /// `role:everyone` matches every visitor and `role:participant` everyone signed in, because
+    /// neither is stored (ADR 0013). The bare `everyone` and `authenticated` tokens the framework
+    /// mints keep matching as they always did.</summary>
     public static bool CanDo(IEnumerable<string>? tokens, RoleBag bag)
+        => (tokens ?? []).Select(ResolveDerived).Any(bag.Contains);
+
+    public static string ResolveDerived(string token) => token switch
     {
-        var criteria = PermissionCriteria.Any((tokens ?? []).ToArray());
-        return Koan.Identity.Roles.Role.CanDo(criteria, bag);
-    }
+        "role:everyone" => AccessTokens.Everyone,
+        "role:participant" => AccessTokens.Authenticated,
+        _ => token
+    };
 
     public async Task<TopicPolicy> ProjectTopic(Topic topic, Community.Tangent? tangent, TopicPolicy selected,
         bool suspended, EffectiveRestriction? restriction, ParticipantClassification classification,
@@ -54,18 +62,6 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         foreach (var other in owner.Members.Where(member => member != participantId).ToArray())
             await roles.Remove(owner.Id, other, ct);
         await roles.Add(owner.Id, participantId, ct);
-        await EnsureParticipant(participantId, ct);
-    }
-
-    public async Task EnsureParticipant(string participantId, CancellationToken ct = default)
-    {
-        if (!Participant.IsValidId(participantId))
-            throw new ArgumentException("The participant must be an enrolled participant.", nameof(participantId));
-        var role = await roles.Get(TangentBuiltInRoles.Participant.Token, ct)
-            ?? await roles.Define(TangentBuiltInRoles.Participant.Token, TangentBuiltInRoles.Participant.Name,
-                TangentBuiltInRoles.Participant.Permissions, Metadata(TangentBuiltInRoles.Participant), ct);
-        if (!role.Members.Contains(participantId))
-            await roles.Add(role.Id, participantId, ct);
     }
 
     internal static IReadOnlyDictionary<string, string> Metadata(TangentRoleSeed seed)

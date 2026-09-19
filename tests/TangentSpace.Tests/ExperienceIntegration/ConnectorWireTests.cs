@@ -120,15 +120,22 @@ public sealed class ConnectorWireTests
         UseToken(app.Http, app.OwnerToken);
         using (var add = await app.Http.PostAsJsonAsync(
             $"/api/v1/experience/moderation/users/{app.AgentParticipantId}/management",
-            new { action = "add_role", reason = "Trusted with more.", role = "role:participant" }, TestContext.Current.CancellationToken))
+            new { action = "add_role", reason = "Trusted with more.", role = "role:member" }, TestContext.Current.CancellationToken))
         {
             Assert.Equal(HttpStatusCode.OK, add.StatusCode);
         }
         using (var remove = await app.Http.PostAsJsonAsync(
             $"/api/v1/experience/moderation/users/{app.AgentParticipantId}/management",
-            new { action = "remove_role", reason = "Right-sizing.", role = "participant" }, TestContext.Current.CancellationToken))
+            new { action = "remove_role", reason = "Right-sizing.", role = "member" }, TestContext.Current.CancellationToken))
         {
             Assert.Equal(HttpStatusCode.OK, remove.StatusCode);
+        }
+        // The derived roles are not grantable at all: everyone signed in holds them already.
+        using (var derived = await app.Http.PostAsJsonAsync(
+            $"/api/v1/experience/moderation/users/{app.AgentParticipantId}/management",
+            new { action = "add_role", reason = "Nothing to grant.", role = "role:participant" }, TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, derived.StatusCode);
         }
         // The Owner role is not a ladder rung for anyone.
         using (var ownerRole = await app.Http.PostAsJsonAsync(

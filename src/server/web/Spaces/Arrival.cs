@@ -27,7 +27,6 @@ public sealed class Arrival(IOptions<SpaceOptions> options, TimeProvider clock, 
             var participants = await Participant.All(ct);
             foreach (var participant in participants)
             {
-                await roleAccess.EnsureParticipant(participant.Id, ct);
                 var did = await directory.AtprotoDidOf(participant.Id, ct);
                 if (!string.IsNullOrEmpty(did))
                     profiles.Request(did);
@@ -57,7 +56,6 @@ public sealed class Arrival(IOptions<SpaceOptions> options, TimeProvider clock, 
                 // Arrival establishes participant identity only. Server ownership requires an explicit human declaration.
                 await EntityContext.Commit(ct);
             }
-            await roleAccess.EnsureParticipant(participant.Id, ct);
             profiles.Request(verifiedDid);
         }
         finally { gate.Exit(); }

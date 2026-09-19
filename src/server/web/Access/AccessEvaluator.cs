@@ -152,7 +152,7 @@ public static class AccessEvaluator
             : PermissionDeniedReason;
 
     private static bool CanDo(IEnumerable<string>? tokens, IReadOnlyCollection<string> bagTokens)
-        => (tokens ?? []).Any(bagTokens.Contains);
+        => (tokens ?? []).Select(TangentRoleAccess.ResolveDerived).Any(bagTokens.Contains);
 
     private static TopicPermissionDecision Allow(TopicPolicy policy, TopicCapability capability)
         => new(capability, true, AllowedReason, policy.SelectedPolicyRevision);

@@ -161,6 +161,29 @@ public sealed class AccessEvaluatorTests
     }
 
     [Fact]
+    public void The_derived_roles_match_without_storage()
+    {
+        var tangent = Tangent(new AccessMap
+        {
+            See = ["role:participant"],
+            Post = ["role:member"],
+            Manage = ["role:everyone"],
+        });
+        // role:participant matches the sign-in fact; nobody is a member of anything.
+        var anySignIn = Decide(Topic(), tangent, [.. SignedIn]);
+        Assert.True(anySignIn.CanRead, "role:participant is derived from being signed in");
+        Assert.False(anySignIn.CanWrite, "role:member is stored membership, not sign-in");
+
+        // role:everyone matches the signed-out visitor too.
+        var anyone = Decide(Topic(), tangent, SignedOut);
+        Assert.True(anyone.CanManage, "role:everyone holds even for a signed-out visitor");
+
+        // The bare tokens the framework mints keep matching.
+        var bare = Decide(Topic(), Tangent(new AccessMap { See = ["role:everyone"] }), SignedOut);
+        Assert.True(bare.CanRead);
+    }
+
+    [Fact]
     public void A_missing_tangent_or_space_admits_no_one()
     {
         var orphanTopic = Topic();
