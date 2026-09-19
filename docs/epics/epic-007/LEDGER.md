@@ -59,6 +59,7 @@ Status values: `todo` · `doing` · `waiting` (on Leo) · `blocked` · `done` ·
 | Backup · restore | `./Backup.bat` · `./Restore.bat` |
 | .NET tests | `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`; focused runs add `--filter "FullyQualifiedName~Name"` |
 | Browser tests | `node --test "tests/*.test.mjs"`; syntax check `node --check <file>` |
+| Workspace tests | `npm run test` in `src/client`; `npm run build` builds the Vue workspace to `wwwroot/app` |
 | Connector tests | `cargo test --manifest-path src/server/mcp/Cargo.toml` |
 | Greenfield check | `pwsh scripts/check-greenfield.ps1` (report); add `-Strict` to fail on findings |
 
@@ -205,6 +206,16 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R6.6 | Documentation cleanup: remove superseded handoffs, briefs, design prompts, research snapshots and evidence for removed capabilities; `check-greenfield.ps1 -Strict` passes | doing | Only living documents and decision records remain | Done early: `docs/handoff/` (N-066), `EXPERIMENTS.md`/`OPEN_QUESTIONS.md` (N-069), `PERMISSIONS.md` folded (N-072). The greenfield check now also scans the living documents for historical markers (0). Remaining: the ASSESSMENT-era documents still linked from the ledger's evidence index, `docs/research`, `docs/design`, `docs/evidence` |
 
 ## In flight
+
+
+**D19 implementation — the Vue workspace, first slice** (doing · 2026-09-19)
+
+The workspace application lives in `src/client`: Vue 3 + Vite + TypeScript per D19. `npm run build` emits to `src/server/web/wwwroot/app`, hosted by the server at `/app/` as static assets; `npm run dev` proxies `/api` to 5220 for live development. `api.ts` is the only fetch layer, typed against the experience envelope; the Pinia store holds identity, the Tangent directory, Topics and Posts; the first slice is arrival → Tangent list → Topic list → reader → composer. Vitest unit-tests the reference-key helpers (Node's first real job). The vanilla app remains the working surface until parity.
+
+- [x] Scaffold, toolchain, envelope api module, store, App + TangentList/TopicList/TopicReader/Composer
+- [x] vitest 4/4, vue-tsc + vite build green, bundle at `wwwroot/app` (committed so the image carries it; a lifecycle npm-build step replaces this when Docker verifies), .NET 107/107, node rule checks 7/7
+- [ ] Serve verification at `/app/` (Docker was down); lifecycle npm-build step
+- [ ] Parity slices: watches, read-position, reports and moderation queue, people, roles, settings — then the vanilla monolith retires (R4.2)
 
 ## In flight
 

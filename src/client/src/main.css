@@ -1,0 +1,16 @@
+:root {
+  --line: #ddd;
+  --quiet: #777;
+  --danger: #a11;
+  --hover: #ececec;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #222;
+  background: #fafafa;
+}
+button { font: inherit; color: inherit; }
+input, textarea, select { font: inherit; padding: 0.4rem; border: 1px solid var(--line); border-radius: 6px; }
