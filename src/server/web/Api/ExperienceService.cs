@@ -231,29 +231,6 @@ public sealed partial class ExperienceService(
             actions, null, null, participantId, credential, ct);
     }
 
-    public async Task<ExperienceResponse> Wait(ClaimsPrincipal principal, string? checkpoint, string? sinceRevision,
-        string? scopeRef, CancellationToken ct)
-    {
-        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
-        var credential = CredentialOf(principal);
-        var (scopeTangent, scopeTopic) = await ScopeOf(principal, participantId, credential, scopeRef, ct);
-        var identity = await IdentityOf(participantId, ct);
-        // Capture before inspecting state so a commit between snapshot and wait is replayed.
-        using var notification = ActivityJournal.Capture();
-        var current = await digest.Page(participantId, credential, digest.Decode(checkpoint, participantId, scopeTangent, scopeTopic), scopeTangent, scopeTopic, DefaultDigestLimit, ct);
-        if (sinceRevision is { Length: > 0 } && string.Equals(current.Attention.Revision, sinceRevision, StringComparison.Ordinal))
-        {
-            await notification.WaitAsync(TimeSpan.FromSeconds(15), ct);
-            current = await digest.Page(participantId, credential, null, scopeTangent, scopeTopic, DefaultDigestLimit, ct);
-        }
-        var recovery = digest.Encode(new ExperienceDigest.DigestCursor(participantId, scopeTangent, scopeTopic, 0, clock.GetUtcNow().AddDays(7)));
-        return await Assemble("wait", ExperienceStatus.Ok, identity,
-            ServerPlace(principal, await SiteLabel(ct)),
-            new ExperienceResult(new ExperienceUpdatesData(scopeRef ?? refs.ServerRef), null, null),
-            current.Attention, new ExperienceContinuation(recovery, null, null, null, null, null),
-            current.FollowUps.Take(3).ToList(), null, null, participantId, credential, ct);
-    }
-
     // ---------- Participation mutations ----------
 
     public async Task<ExperienceResponse> CreatePost(ClaimsPrincipal principal, string topicKey, string requestId,

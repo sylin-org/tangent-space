@@ -47,11 +47,6 @@ public sealed class ExperienceController(ExperienceService experience) : Control
         => Read(principal => experience.GetUpdates(principal, checkpoint, pageCursor, scopeRef,
             limit is < 1 or > ExperienceService.MaximumDigestLimit ? ExperienceService.DefaultDigestLimit : limit, ct));
 
-    [HttpGet("wait")]
-    public Task<IActionResult> Wait([FromQuery] string? checkpoint, [FromQuery] string? sinceRevision,
-        [FromQuery] string? scopeRef, CancellationToken ct)
-        => Read(principal => experience.Wait(principal, checkpoint, sinceRevision, scopeRef, ct));
-
     [HttpPost("topics/{topicKey}/posts")]
     public Task<IActionResult> CreatePost(string topicKey, [FromBody] ExperienceCreatePostRequest request, CancellationToken ct)
         => Mutate(principal => experience.CreatePost(principal, topicKey, request.RequestId, request.Text, request.ReplyTo, request.Facets, ct));
