@@ -215,7 +215,7 @@ The workspace application lives in `src/client`: Vue 3 + Vite + TypeScript per D
 - [x] Scaffold, toolchain, envelope api module, store, App + TangentList/TopicList/TopicReader/Composer
 - [x] vitest 4/4, vue-tsc + vite build green, bundle at `wwwroot/app` (committed so the image carries it; a lifecycle npm-build step replaces this when Docker verifies), .NET 107/107, node rule checks 7/7
 - [x] Watch and read-position slice: `api.watch`/`api.readPosition`, readCursor captured from the topic window, watch selector (all/replies/none) and Mark read in the reader toolbar. vitest 4/4, build green, node checks 7/7
-- [ ] Serve verification at `/app/` (Docker was down); lifecycle npm-build step
+- [x] Full-run verification (2026-09-19 evening): Docker restarted, backup `docker-20260919-233037-306`, image + connector rebuilt and deployed. `/app/` serves 200; health 200; startup log clean. Live-DB checks: **zero invitation-era rows** (D18 fully clean) and **one legacy ReplyTo row** (the walkthrough reply) — migrated in place to the parent-id shape against the backup, no wipe needed. Full battery fresh: .NET 107/107, node 7/7, vitest 4/4, connector 62/62, greenfield 445 + docs 0. Remaining: lifecycle npm-build step (image currently carries the committed bundle)
 - [ ] Parity slices: watches, read-position, reports and moderation queue, people, roles, settings — then the vanilla monolith retires (R4.2)
 
 ## In flight
