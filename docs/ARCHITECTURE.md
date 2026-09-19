@@ -73,10 +73,39 @@ The connector's own words are in the [connector glossary](#connector-glossary).
 
 ## Shared components
 
-- **Command pipeline.** The only code that takes the write lock, opens transactions, stages operation receipts, writes audit records and journal entries, commits and signals. Handlers load aggregates and call domain methods that check only their own invariants.
-- **Access.** One evaluator returns `{allowed, reasonCode, revision, limits}` for every read and write, from the scope chain (Host → Tangent → Topic), the participant's Koan role bag, restrictions and classification. It is the only code that reads Koan roles.
-- **Activity.** One journal whose sequence needs no shared counter row; attention items written when a post is accepted, with group mentions resolved at read time; a host-owned live bus behind SSE and waits.
-- **Adapters.** Map HTTP to commands and queries, and results to one response envelope. The public adapter serves unauthenticated readers through the same queries.
+Four components carry everything the server does; R3 builds them, and these are their designs. Each states its contract, its mechanics, and the property that proves it.
+
+### The command pipeline
+
+One component is the only code that takes the write lock (commands only), opens the transaction, loads the scope snapshot, consults Access, runs the handler, stages audit and journal and receipt, commits, and signals after the commit lands. Handlers load aggregates and call domain methods that check their own invariants; authority is never re-derived inside a handler, and no adapter opens a transaction or a lock.
+
+The ordering is the design. Access is consulted inside the same transaction that stages the mutation, so an authority change either commits before the command — the command sees it — or after it — it does not; no window exists between the check and the commit for a race to occupy (N-020). The write lock serializes commands and nothing else: reads never take it (Rule 4) and re-check the revision they read. A command ends four ways, each with one shape: **denied** (Access refused — one denial record with a reason code), **replayed** (a completed receipt answers without side effects), **conflicted** (the same requestId naming a different action), or **committed** (staged rows, the receipt and the journal entry commit atomically or not at all).
+
+Koan roles mark the one boundary: `RoleCollection` writes refuse to ride a deferred transaction (ledger F-001). A command that changes role membership commits that change immediately after the pipeline's commit and journals it there; the pipeline owns the ordering, and no other escape exists.
+
+### Access
+
+One evaluator answers every read and write with `{allowed, reasonCode, revision}` — grown from `TopicPermissionEvaluator`, and the only code that reads Koan role bags, with restrictions and classification beside them. Its inputs resolve per [ADR 0013](adr/0013-access-contract-and-role-model.md): each capability category carries its own `WhenEmpty`, its `AlwaysOn` permission and whether `everyone` is listable; `null` inherits; a child narrows, never widens; `everyone` is exclusive by normalization on write; an access list holds `role:<key>` and nothing else. The built-in roles are derived, never stored: `everyone` from being a visitor, `participant` from being signed in, `owner` from `Space.OwnerParticipantId`.
+
+The evaluator explains itself. Every decision carries its reason (`role-required`, `topic-locked`, `suspended`, `banned`, `editing-disabled`, …), and settings surfaces render the effective decision — including the disclosed always-on bypass — to readers as much as to editors.
+
+Ownership is held once. `Space.OwnerParticipantId` is the only fact: the evaluator derives the owner's authority from it, transferring ownership changes it and bumps the Space's policy revision, and no stored Owner membership, startup repair, or ownership guard exists to drift from it (N-025). Nothing else decides authority — no membership row is read for permission and no handler carries an authority parameter. The properties R3.4 proves: a signed-in participant never sees less than a signed-out one, and every Topic decision names the rule that produced it.
+
+### Receipts
+
+One receipt per mutation: registered before the side effects at a deterministic key (credential, participant, requestId), fingerprinted over operation, target and canonical payload, completed in the same transaction as its mutation. A retry with the same fingerprint answers the recorded result — a client recovers a lost response without repeating the act; the same requestId with a different fingerprint is a conflict, never a second action. The response carries the receipt either way, and settlement of queued work arrives as attention (`write_settlement` items), so a caller keeps no journal and never polls.
+
+The receipt is the idempotency mechanism for every family — posts, edits and removals, membership, watches, moderation, user management. Per-family dedupe folds into the fingerprint; a mutation's operation identity is the receipt's namespaced id. One serializer writes the stored result JSON and one parses it back at the wire seam; no layer re-serializes an opaque object.
+
+### The signal bus
+
+The host owns one instance-scoped bus, and nothing signals through process-wide static state. The pipeline's after-commit hook is the only publisher — a signal means *committed state changed* — and SSE streams, long waits and the attention projection are the subscribers. A signal carries no payload: it wakes a reader, and the reader re-derives what changed from committed state under current authority, so a missed or duplicate signal costs one poll and never a wrong answer. Durability lives in the journal and the digest's recovery cursors, never in the bus; a signal that dies with its instance loses nothing but a wake-up.
+
+The same Activity module owns the durable half: one journal whose sequence needs no shared counter row, and the attention projection each participant reads — directed requests, watched activity, and the settlement of their own writes — with group mentions resolved at read time and read acknowledgements withdrawing what was seen.
+
+### Adapters
+
+Map HTTP to commands and queries, and results to one response envelope. The public adapter serves unauthenticated readers through the same queries; a signed-out reader's answer is computed by the same evaluator with the same rules.
 
 ## Connector
 

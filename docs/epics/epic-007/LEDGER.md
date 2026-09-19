@@ -8,8 +8,8 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
-| Current task | The connector's wire, server side — **done** (see In flight). R3 resumes with R3.1's design note |
-| Next action | The W1–W11 walkthrough with Leo, which closes R2.6 and R2; the connector's live walk already passed (S-006). Leo may also want to re-enrol the agent (`forget` then Connect, N-056) so its context picks up the widened catalog |
+| Current task | R3.1 — the shared components' design note — **done** (into [ARCHITECTURE](../../ARCHITECTURE.md#shared-components)). R3.2, the one receipt mechanism, is next |
+| Next action | **R3.2**: one operation-receipt mechanism replacing `CommandCommit`, the `PostChange` ledger and ad-hoc operation ids — replay and conflict tests pass. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
 | Last checkpoint | 2026-09-19 · autonomous session · the four server-side growth items from CompanionLobby's `capabilities.md` implemented and verified: ladder, member-tier writes, settlement attention, participant read. .NET 100/100, node 7/7, connector 62/62, greenfield 492. Live walk green: Connect as ox-omega widened the catalog 13 → 14 with `Forum_Manage_User`'s enum exactly `["suspend","timeout","warn"]`, and a warn was applied and journaled |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
 | Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
@@ -154,7 +154,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 
 | ID | Task | Status | Done when | Evidence |
 |---|---|---|---|---|
-| R3.1 | Short design note: pipeline, Access decision, receipts, signal bus, and ownership held once (N-025) | todo | Written into ARCHITECTURE | |
+| R3.1 | Short design note: pipeline, Access decision, receipts, signal bus, and ownership held once (N-025) | done | Written into ARCHITECTURE | The [Shared components](../../ARCHITECTURE.md#shared-components) section now designs all four: the command pipeline (Access inside the mutation's transaction — the N-020 window cannot reopen; denial/replay/conflict/commit as the four endings; the F-001 role-write boundary), Access per ADR 0013 with ownership held once at `Space.OwnerParticipantId` (N-025), receipts as the one idempotency mechanism with settlement as attention, and the instance-owned signal bus whose signals carry no payload. `doc` change only — no suite moves; greenfield 488 unchanged | |
 | R3.2 | One operation-receipt mechanism, replacing `CommandCommit`, the `PostChange` ledger and ad-hoc operation IDs | todo | One receipt type; replay and conflict tests pass | |
 | R3.3 | Command pipeline: write lock (commands only), transaction, scope snapshot, Access hook, audit, journal, receipt, commit, signal | todo | Pipeline tests cover denial, replay, conflict and rollback | |
 | R3.4 | Access evaluator grown from `TopicPermissionEvaluator`, with a single adapter over Koan role bags and table-driven tests; write the tests for [the bug they marked](#the-bug-the-known-failures-used-to-mark), and cover an authority change racing a command at the Access hook (N-020); derive the Host owner's authority from the site so the Owner role stores no members (N-025). Per D11: the capability category table (`WhenEmpty`, listable tokens, `AlwaysOn`) and `everyone` exclusivity in `AccessCriteria.Normalize`; `participant` derived from sign-in, replacing the `authenticated` token's name; delete `Room.ReadAudience` and fold public reading into `See`; fix `TangentDefaults()` (N-030). Per D12: role keys independent of display names, mandatory permissions, and "no one grants what they do not hold" | todo | The evaluator explains every Topic decision; membership rows change what a participant may do; a signed-in participant never sees less than a signed-out one | |
@@ -202,6 +202,15 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R6.6 | Documentation cleanup: remove superseded handoffs, briefs, design prompts, research snapshots and evidence for removed capabilities; `check-greenfield.ps1 -Strict` passes | todo | Only living documents and decision records remain | |
 
 ## In flight
+
+**Completed: R3.1 — the shared components' design note** (2026-09-19)
+
+[ARCHITECTURE](../../ARCHITECTURE.md#shared-components)'s sketch became the design the rest of R3 builds against. The decisions it fixes now:
+
+- **The command pipeline** owns lock, transaction, scope snapshot, Access hook, audit, journal, receipt, commit, signal — and nothing else touches any of them. Access is consulted inside the mutation's transaction, closing the N-020 window by construction; a command ends denied, replayed, conflicted, or committed, each with one shape. `RoleCollection` writes stay the one documented boundary (F-001): immediate commit after the pipeline's, journaled there.
+- **Access** is one evaluator over the ADR 0013 rules with `{allowed, reasonCode, revision}` answers, derived built-in roles, and disclosed bypasses. Ownership is held once at `Space.OwnerParticipantId`; the stored Owner membership, its startup repair and the guard's membership rule are R3.4/R4.5 deletions.
+- **Receipts** are the one idempotency mechanism: deterministic key, payload fingerprint, same-transaction completion, conflict on divergence, settlement as attention. The `PostChange` ledger and ad-hoc operation ids fold into it (R3.2's work).
+- **The signal bus** is instance-owned, payload-free, after-commit only; durability lives in the journal and the digest's cursors.
 
 **Completed: the connector's wire, server side** (2026-09-19)
 
@@ -630,6 +639,7 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - Suites: .NET 100/100 (8 new contract tests plus the widened real-binary journeys), node 7/7, connector 62/62 in the sibling workspace, greenfield 492 (all of the delta from the carried WIP; four "companion" words this task briefly added were rewritten).
 - Live walk green on the rebuilt image: with a throwaway copy of the operator's connector state (manager on 5219 and its lock untouched), Connect as ox-omega fired `notifications/tools/list_changed` and widened the catalog 13 → 14 with `Forum_Manage_User`'s enum exactly `["suspend","timeout","warn"]`; `Forum_Read_User` and a `warn` rung both answered ok, and the `TopicAudit` row is in the live database. The live administrator definition was raised to the new seed by direct SQLite (the box's established precedent). Throwaway state deleted.
 - The one-process rule still binds one state directory to one serve (the temp walk needed its own copy); R3.7 is what makes sharing real.
+- Leo: keep going. R3.1 landed the same session: ARCHITECTURE's Shared-components sketch became the design note — pipeline, Access with ownership held once, receipts, signal bus — that R3.2–R3.5 build against (see In flight). Doc-only change; suites and greenfield untouched (488).
 
 ## Evidence index
 
