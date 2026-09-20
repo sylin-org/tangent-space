@@ -32,11 +32,11 @@
         <div class="onboarding-layout">
           <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">{{ anonymousTitle }}</h1>
             <p class="lede" id="anonymous-copy">{{ anonymousCopy }}</p>
-            <p class="note" id="note-unestablished" :hidden="router.route.kind !== 'home' || site.established">Sign in with your Atmosphere account. You’ll name your first Tangent next.</p>
+            <p class="note" id="note-unestablished" :hidden="site.established">Sign in with your Atmosphere account. You’ll name your first Tangent next.</p>
             <form id="sign-in-form" method="get" class="sign-in" :action="site.site?.signIn">
               <input type="hidden" name="return" :value="signInReturn"><button type="submit" class="btn btn-primary" id="sign-in-button">Log in with Bluesky <span aria-hidden="true">→</span></button>
             </form>
-            <p class="hint" id="sign-in-hint">Choose your account on Bluesky. Your password stays there.</p>
+            <p class="hint" id="sign-in-hint">{{ onboardingSignIn ? 'Choose your account on Bluesky. That account becomes this server’s owner.' : 'Choose your account on Bluesky. Your password stays there.' }}</p>
           </div>
           <aside class="onboarding-preview" aria-label="A Tangent card">
             <div class="tangent-card onboarding-tcg" style="--tangent-accent:#f4b942">
@@ -49,29 +49,8 @@
         </div>
       </section>
 
-      <section id="onboarding" hidden aria-label="Make this place yours">
-        <div id="first-tangent" class="onboarding-layout" hidden>
-          <div class="onboarding-copy"><p class="eyebrow">Your first Tangent</p><h1>This place is yours.</h1><p class="lede">Give your first Tangent a name.</p><p class="hint">This makes you the owner of this server, and its accountable human: you decide who can create Tangents and help look after the place.</p>
-            <form id="first-tangent-form" class="stack"><div class="onboarding-choices"><p class="field-label" id="first-tangent-presets-label">Start from one of these <span class="field-note">Optional</span></p><div id="first-tangent-presets" class="choice-row" role="group" aria-labelledby="first-tangent-presets-label"></div></div>
-              <label for="first-tangent-name">Name<input class="input" id="first-tangent-name" name="name" maxlength="120" required placeholder="Small Hours" autocomplete="off"></label>
-              <label for="first-tangent-description"><span class="field-label">A short description <span class="field-note">Optional</span></span><textarea class="input" id="first-tangent-description" name="description" rows="2" maxlength="1000" placeholder="What would you like to talk about?"></textarea></label>
-              <div class="onboarding-choices"><p class="field-label" id="first-tangent-art-label">Card artwork <span class="field-note">Optional</span></p><div id="first-tangent-art" class="art-row" role="group" aria-labelledby="first-tangent-art-label"></div><input type="hidden" id="first-tangent-artwork" name="artwork" value=""></div>
-              <p class="hint">You can make more Tangents later. Change these details anytime.</p>
-              <div class="onboarding-actions"><button class="btn btn-primary" type="submit">Create Tangent</button><button id="skip-first-tangent" class="btn btn-quiet" type="button">Skip for now</button></div>
-              <p class="hint">Skip creates “My Tangent”. You can rename it later.</p><div class="owner-switch">Not the account you intended? <form action="/auth/logout" method="post" class="switch-account"><input type="hidden" name="return" value="/onboarding/"><button type="submit">Switch account</button></form></div>
-            </form>
-          </div>
-          <aside class="onboarding-preview" aria-label="Your Tangent card preview">
-            <div class="tangent-card onboarding-tcg" style="--tangent-accent:#f4b942">
-              <div class="tangent-card-top"><span class="card-kicker">TANGENT SPACE</span><span class="card-edition" aria-hidden="true">✧</span></div>
-              <div class="card-face" id="first-card-face"><img id="first-card-art" class="card-art" alt="" hidden><span class="card-orbit" aria-hidden="true"></span><span class="card-sigil" aria-hidden="true">✦</span></div>
-              <div><div class="card-stripe"></div><div class="card-glass"><h2 class="tangent-card-name" id="first-card-name">Your first Tangent</h2><p class="tangent-card-description" id="first-card-description">A place for the conversations that matter to you.</p><em class="tangent-card-rule">Make room for the next thought.</em></div></div>
-            </div>
-            <p class="preview-caption">Your card, as you make it.</p>
-          </aside>
-        </div>
-        <div id="owner-waiting" hidden><p class="eyebrow">A new beginning</p><h1>This server is waiting for its owner.</h1><p class="lede">The account you signed in with isn’t eligible to claim this server. Sign in with the designated human owner’s account.</p><form action="/auth/logout" method="post"><input type="hidden" name="return" value="/onboarding/"><button class="btn btn-primary">Switch account</button></form></div>
-        <p id="onboarding-error" class="onboarding-error" role="alert" tabindex="-1"></p>
+      <section id="onboarding" :hidden="!onboardingVisible" aria-label="Make this place yours">
+        <OnboardingPanel :site="site" :router="router" />
       </section>
 
       <section id="state-signed-in" :hidden="site.state !== 'signedIn' || authenticationRoute" aria-labelledby="signed-in-title">
@@ -187,6 +166,7 @@ import TangentDirectory from './components/TangentDirectory.vue'
 import ProfilePanel from './components/ProfilePanel.vue'
 import TangentEditorPanel from './components/TangentEditorPanel.vue'
 import StewardshipPanel from './components/StewardshipPanel.vue'
+import OnboardingPanel from './components/OnboardingPanel.vue'
 import ReportPanel from './components/ReportPanel.vue'
 
 // The boot port (app.js), the conversation loop (rooms.js core), the directories,
@@ -248,9 +228,18 @@ watch(() => router.route, () => {
 // Anonymous visitors see the welcome copy only where they are asked to sign in;
 // everywhere else the hero carries the sign-in action (pages.js prepare()).
 const anonymousVisible = computed(() => authenticationRoute.value && site.state !== 'loading' && !site.site?.participant)
-const anonymousTitle = computed(() => (router.route.kind === 'sign-in' ? 'Welcome back.' : 'Conversation has a home here.'))
+// Onboarding's sign-in step rewrites the welcome copy for the owner-to-be
+// (onboarding.js show(), state sign_in).
+const onboardingState = computed(() => site.site?.onboarding || 'complete')
+const onboardingSignIn = computed(() => router.route.kind === 'onboarding' && onboardingState.value === 'sign_in')
+const onboardingVisible = computed(() => router.route.kind === 'onboarding' && site.state !== 'loading' && !['complete', 'sign_in'].includes(onboardingState.value))
+
+const anonymousTitle = computed(() =>
+  onboardingSignIn.value ? 'Welcome to your own Tangents.' : router.route.kind === 'sign-in' ? 'Welcome back.' : 'Conversation has a home here.')
 const anonymousCopy = computed(() =>
-  router.route.kind === 'sign-in' ? 'Sign in to ' + (site.site?.name ?? 'this server') + ' with your Atmosphere account.' : 'A home for your people, your companions, and the conversations you want to keep.',
+  router.route.kind === 'sign-in' || onboardingSignIn.value
+    ? 'Sign in to ' + (site.site?.name ?? 'this server') + ' with your Atmosphere account.'
+    : 'A home for your people, your companions, and the conversations you want to keep.',
 )
 
 const signInReturn = computed(() => {

@@ -10,7 +10,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
 | Current task | R3.5 — the host-owned live bus — **done**; no process-wide signal state remains. R3.6, the Conversation port, is next |
 | Next action | **Continue the Port**: the welcome hero + masthead account menu + the state-section bindings (the boot machine's visible half), then the place section's route reactions (`enterRoute`'s tangent/topic/post dispatch), moderation detail, participant profile, activity transport, facets, onboarding, atmosphere — then the swap: Vue at `/`, vanilla deleted. R3.6 stage 2 (`WithCurrentPolicy` → action-owns-its-transaction) stays queued behind the Port. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
-| Last checkpoint | 2026-09-20 · autonomous session · stewardship ported: moderation.ts + StewardshipPanel (scope check, case queue, testimony paging, preview→apply decisions) + ReportPanel, wired into the conversation toolbar. vitest 22/22, build green, node 7/7 |
+| Last checkpoint | 2026-09-20 · autonomous session · onboarding ported (OnboardingPanel + the artwork catalog as a typed module): starters, cover picker, live preview, skip, claim, waiting_owner, and the sign_in copy variant. vitest 22/22, build green |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
 | Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
 | Blockers | None |
@@ -788,6 +788,10 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - The conversation panel gains the toolbar (connection state placeholder + the Stewardship toggle) and the per-message Report action gated on `reportPost`. Two test-caught fixes: the scope watch must run immediately (a room may already be open when stewardship wires up), and case rows must filter on well-formed references exactly where the vanilla's renderer did.
 - **Verification:** vitest 22/22 (steward queue + no-stewardship case), vue-tsc + vite build green (bundle committed). The live stewardship walk needs an authorized steward — Leo's walkthrough.
 - **Remaining:** the activity transport (SSE + coordinator), onboarding, atmosphere + ascii-scenes, facets/artwork utilities, then the swap.
+
+### S-015 · 2026-09-20 · Claude (continued)
+
+- **Onboarding is ported** (`components/OnboardingPanel.vue` + `composables/artwork-presets.ts`): the create_tangent state with starter choices that fill two editable fields, the eight-square cover picker (one per mood before repeats — onboarding.js starterArtwork), the live card preview, skip ("My Tangent"), the claim POST to `/api/onboarding/tangent`, and the waiting_owner state. The artwork catalog is now a typed module; the sign_in state rewrites the anonymous section's copy for the owner-to-be; the `onboarding-active` body class and the complete-state redirect home follow the vanilla.
 
  index
 
