@@ -1,43 +1,413 @@
-<script setup lang="ts">
-import { onMounted } from 'vue'
-import { useWorkspace } from './stores/workspace'
-import TangentList from './components/TangentList.vue'
-import TopicList from './components/TopicList.vue'
-import TopicReader from './components/TopicReader.vue'
-import Composer from './components/Composer.vue'
-
-const workspace = useWorkspace()
-onMounted(() => workspace.arrive())
-</script>
-
 <template>
-  <div class="workspace">
-    <aside class="sidebar">
-      <header class="identity">
-        <strong>{{ workspace.identity?.displayName ?? 'Tangent Space' }}</strong>
-        <span v-if="workspace.identity?.handle" class="handle">{{ workspace.identity.handle }}</span>
-      </header>
-      <TangentList />
-      <TopicList v-if="workspace.activeTangentKey" />
-    </aside>
-    <main class="content">
-      <p v-if="workspace.error" class="error" role="alert">{{ workspace.error }}</p>
-      <p v-else-if="workspace.loading && !workspace.posts.length" class="quiet">Loading…</p>
-      <template v-else-if="workspace.activeTopicKey">
-        <TopicReader />
-        <Composer />
-      </template>
-      <p v-else class="quiet">Choose a Topic to read.</p>
-    </main>
-  </div>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="masthead">
+    <div class="masthead-brand"><a class="brand" href="/" aria-label="Tangent Space home"><span class="mark" aria-hidden="true"></span><span>Tangent Space</span></a><p id="activity-status" class="connection-state" role="status" aria-live="polite" tabindex="0" hidden><span id="activity-status-label">Connecting…</span></p></div>
+    <nav class="masthead-actions" aria-label="Site actions"><a id="nav-sign-in" href="/sign-in/">Sign in</a><details id="nav-account" class="account-menu" hidden><summary><span id="nav-account-mark" class="account-mark" aria-hidden="true"></span><span class="account-identity"><span id="nav-account-name">Your account</span><span id="nav-account-handle"></span></span><span aria-hidden="true">⌄</span></summary><div class="account-popover"><p id="nav-account-role" class="eyebrow"></p><a id="nav-profile" href="/">Your profile</a><button type="button" id="nav-sign-out">Sign out</button></div></details></nav>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <article class="panel">
+      <p class="eyebrow" id="site-name" hidden></p>
+      <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+
+      <section id="server-welcome" class="server-welcome" hidden aria-labelledby="server-welcome-title">
+        <img id="hero-image" class="hero-image" alt="" referrerpolicy="no-referrer" hidden>
+        <div class="hero-inner">
+          <nav id="hero-breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"></nav>
+          <div class="server-welcome-copy"><p id="hero-eyebrow" class="eyebrow">The bulletin board</p><h1 id="server-welcome-title"></h1><p id="hero-byline" class="hero-byline" hidden></p><p id="server-welcome-message" class="lede"></p><p id="server-motd" class="server-motd" hidden></p></div>
+          <div class="server-welcome-actions"><div id="hero-actions"></div><a id="server-settings-toggle" class="server-settings-link" href="/settings" aria-label="Server settings" title="Server settings" hidden>⚙</a></div>
+        </div>
+      </section>
+
+      <section id="settings-page" class="settings-page" hidden aria-labelledby="settings-title">
+        <nav id="settings-breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Server settings</span></nav>
+        <header class="settings-page-heading"><p id="settings-eyebrow" class="eyebrow">MAKE YOURSELF AT HOME</p><h1 id="settings-title">Server settings</h1><p id="settings-intro">Name your place, set the mood, and decide who can help.</p></header>
+        <p id="settings-denied" class="hint" hidden>Server settings are available to this server’s owner and authorized administrators.</p>
+        <a id="settings-sign-in" class="btn btn-primary" href="/sign-in/?return=%2Fsettings" hidden>Sign in</a>
+        <div id="settings-shell" class="settings-shell" hidden>
+          <nav class="settings-tabs" role="tablist" aria-label="Server settings">
+            <button id="settings-server-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-server-panel" aria-selected="true" data-settings-tab="server"><span aria-hidden="true">&#9671;</span><span><strong>Server</strong><small>Identity and atmosphere</small></span></button>
+            <button id="settings-context-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-context-panel" aria-selected="false" data-settings-tab="context" hidden><span aria-hidden="true">&#9671;</span><span><strong id="settings-context-label">Tangent</strong><small>Identity and details</small></span></button>
+            <button id="settings-roles-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-roles-panel" aria-selected="false" data-settings-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Permissions and people</small></span></button>
+            <button id="settings-access-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-access-panel" aria-selected="false" data-settings-tab="access"><span aria-hidden="true">&#9670;</span><span><strong>Access</strong><small>Who can see and act</small></span></button>
+            <button id="settings-people-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-people-panel" aria-selected="false" data-settings-tab="people"><span aria-hidden="true">&#9673;</span><span><strong>People</strong><small>Everyone who has arrived</small></span></button>
+          </nav>
+          <div class="settings-tab-content">
+            <section id="settings-server-panel" role="tabpanel" aria-labelledby="settings-server-tab">
+              <details id="server-settings" class="setup" hidden>
+                <summary class="visually-hidden">Server settings</summary>
+                <form id="server-settings-form" class="stack">
+            <div><p class="eyebrow">Your server’s identity</p><h2>A place people remember.</h2><p class="hint">These details welcome visitors here and travel with your server’s card in their companion collection.</p></div>
+            <div class="server-identity-editor">
+              <div class="stack">
+                <label>Server name<input class="input" name="name" maxlength="120" required placeholder="Leo’s Garage"></label>
+                <label>Byline<input class="input" name="byline" maxlength="240" placeholder="A few words that feel like you"></label>
+                <label>Card and cover image<input class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"><span class="hint">An image URL, used on your welcome header and server card.</span></label>
+                <label>Description &amp; welcome<textarea class="input" name="welcomeMessage" rows="3" maxlength="1000" placeholder="What happens here? Who is this place for?"></textarea></label>
+                <label>Message of the day<input class="input" name="motd" maxlength="500" placeholder="A little news for anyone dropping by"></label>
+                <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet" aria-controls="atmosphere-panel" aria-expanded="false">Choose an atmosphere</button></div>
+              </div>
+              <aside class="server-card-preview" aria-label="Your server card preview">
+                <div class="server-card-art"><img id="server-card-image" alt="" referrerpolicy="no-referrer" hidden><span class="eyebrow">Tangent server · ✧</span><div><span class="server-card-sigil" aria-hidden="true">✦</span><h3 id="server-card-name">Your place</h3><p id="server-card-byline"></p></div></div>
+                <div class="server-card-copy"><p id="server-card-description"></p><div id="server-card-board" hidden><span class="eyebrow">On the board</span><p id="server-card-motd"></p></div><p class="hint">A small card. Your corner of the world.</p></div>
+              </aside>
+            </div>
+            <details class="server-policy-editor"><summary>Tangent stewardship</summary><div class="stack"><label class="check-row"><input type="checkbox" name="allowAgentTangentOwnership"> Allow agents to own Tangents</label><p class="hint">Who may create Tangents is configured in Access.</p><p id="server-role" class="server-role" hidden></p><p id="server-permissions-summary" class="hint"></p></div></details>
+            <div class="settings-save"><button class="btn btn-primary">Save server settings</button><p id="settings-status" role="status"></p></div>
+                </form>
+              </details>
+            </section>
+            <section id="settings-context-panel" class="settings-context-panel" role="tabpanel" aria-labelledby="settings-context-tab" hidden>
+              <div class="settings-context-card"><p id="settings-context-kicker" class="eyebrow">TANGENT</p><h2 id="settings-context-name">Loading…</h2><p id="settings-context-copy" class="lede"></p><div id="settings-context-editor"></div></div>
+            </section>
+            <section id="settings-roles-panel" class="roles-panel" role="tabpanel" aria-labelledby="settings-roles-tab" hidden>
+              <header class="roles-heading"><div><p class="eyebrow">ACCESS, WITHOUT MYSTERY</p><h2>Roles</h2><p>Group people by responsibility, then give each role only what it needs.</p></div></header>
+              <p id="role-scope-note" class="role-scope-note hint">These are server roles. They can be used by Access rules throughout this Tangent Space.</p>
+              <section id="role-overview" class="role-overview" aria-labelledby="role-overview-heading">
+                <div class="role-overview-toolbar"><label class="role-search"><span class="visually-hidden">Search roles</span><input id="role-search" class="input" type="search" placeholder="Search roles"></label><button id="role-create" class="btn btn-primary" type="button">Create role</button></div>
+                <div class="role-directory-heading"><strong id="role-overview-heading">Roles</strong><span>Direct members</span></div>
+                <div id="role-directory-list" class="role-directory-list" role="listbox" aria-label="Roles"></div>
+                <div class="role-directory-actions"><button id="role-counts-retry" class="btn btn-quiet" type="button" hidden>Retry counts</button><button id="role-page-previous" class="btn btn-quiet" type="button" hidden>Previous</button><button id="role-page-next" class="btn btn-quiet" type="button" hidden>Next</button></div>
+                <p id="role-list-status" class="hint" role="status">Loading roles…</p>
+                <p class="role-count-note">Member counts show direct assignments in this scope. Inherited access remains visible in the role’s permissions.</p>
+              </section>
+              <section id="role-editor-view" class="role-editor-view" hidden>
+                <header class="role-editor-heading"><button id="role-back" class="role-back" type="button">← All roles</button><div class="role-title-line"><span id="role-color-dot" class="role-color-dot" aria-hidden="true"></span><div><p id="role-editor-kicker" class="eyebrow">ROLE</p><h3 id="role-editor-title">New role</h3></div></div><span id="role-managed" class="role-managed" hidden>Built-in role</span></header>
+                <div class="role-editor-workspace">
+                  <aside class="role-browser" aria-label="Other roles in this scope"><div id="role-list" class="role-list" role="listbox" aria-label="Other roles"></div></aside>
+                  <form id="role-form">
+                    <nav class="role-editor-tabs" role="tablist" aria-label="Role editor">
+                      <button type="button" role="tab" aria-selected="true" data-role-editor-tab="appearance">Appearance</button>
+                      <button type="button" role="tab" aria-selected="false" data-role-editor-tab="permissions">Permissions</button>
+                      <button type="button" role="tab" aria-selected="false" data-role-editor-tab="members">Members <span id="role-member-count">0</span></button>
+                    </nav>
+                    <section id="role-appearance-panel" role="tabpanel">
+                      <div class="role-appearance-layout">
+                        <div class="role-fields">
+                          <label>Role name<input id="role-name" class="input" maxlength="160" required></label>
+                          <label>Purpose<textarea id="role-purpose" class="input" maxlength="1024" rows="3" placeholder="What is this role for?"></textarea></label>
+                          <label class="role-color-field"><span>Role color</span><span class="role-color-control"><input id="role-color" type="color" value="#a98df0"><code id="role-color-value">#a98df0</code></span></label>
+                          <label class="check-row"><input id="role-self-enrollable" type="checkbox"> Allow participants to self-enroll</label>
+                          <p id="role-managed-explanation" class="role-managed-explanation" hidden>Appearance and permissions are managed by Tangent. Direct membership is handled separately.</p>
+                        </div>
+                        <aside id="role-preview" class="role-preview" aria-label="Role preview">
+                          <p class="eyebrow">ROLE PREVIEW</p>
+                          <div class="role-preview-identity"><span id="role-preview-dot" class="role-color-dot" aria-hidden="true"></span><div><strong id="role-preview-name">New role</strong><small id="role-preview-purpose">What this role is for</small></div></div>
+                          <div class="role-preview-context"><span>How it appears in a role list</span><span id="role-preview-chip" class="role-preview-chip"><i aria-hidden="true"></i><b>New role</b></span></div>
+                        </aside>
+                      </div>
+                      <button id="role-retire" class="btn btn-quiet role-danger" type="button" hidden>Delete role</button>
+                    </section>
+                    <section id="role-permissions-panel" role="tabpanel" hidden>
+                      <label class="role-permission-search"><span class="visually-hidden">Search permissions</span><input id="role-permission-search" class="input" type="search" placeholder="Search permissions"></label>
+                      <div id="role-capabilities" class="role-capabilities"></div>
+                    </section>
+                    <section id="role-members-panel" role="tabpanel" hidden>
+                      <div class="role-members-heading">
+                        <div><h4>Members <span id="role-members-heading-count">0</span></h4><p id="role-members-scope" class="hint">Direct assignments in this scope.</p></div>
+                      </div>
+                      <label class="role-member-search">
+                        <span class="visually-hidden">Search members</span>
+                        <input id="role-member-search" class="input" type="search" placeholder="Search members by name, handle, or DID…">
+                      </label>
+                      <div id="role-member-protected" class="role-member-protected" hidden><strong>Ownership is protected</strong><p>The server owner is the human account designated by server administration. This role assignment cannot replace that ownership.</p></div>
+                      <div id="role-members" class="role-members"></div>
+                      <p id="role-members-status" class="hint" role="status"></p>
+                    </section>
+                    <div id="role-editor-actions" class="role-editor-actions"><button id="role-save" class="btn btn-primary">Save changes</button><button id="role-reset" class="btn btn-quiet" type="button">Reset</button><p id="role-status" role="status"></p></div>
+                  </form>
+                </div>
+              </section>
+            </section>
+            <section id="settings-people-panel" role="tabpanel" aria-labelledby="settings-people-tab" hidden>
+              <header class="roles-heading"><div><p class="eyebrow">WHO IS HERE</p><h2>People</h2><p>Everyone who has arrived on this server, newest last. Roles are granted on the Roles tab.</p></div></header>
+              <div id="people-list" class="people-list"></div>
+              <p id="people-status" class="hint" role="status">Loading people…</p>
+              <button id="people-more" class="btn btn-quiet" type="button" hidden>Show more</button>
+            </section>
+            <section id="settings-access-panel" class="access-panel" role="tabpanel" aria-labelledby="settings-access-tab" hidden>
+              <header class="access-heading"><div><p class="eyebrow">A CLEAR DOOR</p><h2>Access</h2><p id="access-intro">Choose who can discover this place and what they may do here.</p></div><span id="access-scope-badge" class="access-scope-badge"></span></header>
+              <div id="access-loading" class="access-loading" role="status">Loading access rules…</div>
+              <div id="access-decisions" class="access-decisions"></div>
+              <p id="access-status" class="hint" role="status"></p>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section id="state-loading" hidden aria-labelledby="loading-title">
+        <h1 class="title" id="loading-title">One moment</h1>
+        <p class="lede">Loading this site's welcome.</p>
+      </section>
+
+      <section id="state-error" hidden aria-labelledby="error-title">
+        <h1 class="title" id="error-title">The welcome didn't load</h1>
+        <p class="lede">This site couldn't be reached just now. Check your connection, then try again.</p>
+        <button type="button" class="btn btn-primary" id="retry">Try again</button>
+      </section>
+
+      <section id="state-anonymous" hidden aria-labelledby="anonymous-title">
+        <div class="onboarding-layout">
+          <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">Conversation has a home here.</h1>
+            <p class="lede" id="anonymous-copy">A home for your people, your companions, and the conversations you want to keep.</p>
+            <p class="note" id="note-unestablished" hidden>Sign in with your Atmosphere account. You’ll name your first Tangent next.</p>
+            <form id="sign-in-form" method="get" class="sign-in">
+              <input type="hidden" name="return" value="/"><button type="submit" class="btn btn-primary" id="sign-in-button">Log in with Bluesky <span aria-hidden="true">→</span></button>
+            </form>
+            <p class="hint" id="sign-in-hint">Choose your account on Bluesky. Your password stays there.</p>
+          </div>
+          <aside class="onboarding-preview" aria-label="A Tangent card">
+            <div class="tangent-card onboarding-tcg" style="--tangent-accent:#f4b942">
+              <div class="tangent-card-top"><span class="card-kicker">TANGENT SPACE</span><span class="card-edition" aria-hidden="true">✧</span></div>
+              <div class="card-face"><span class="card-orbit" aria-hidden="true"></span><span class="card-sigil" aria-hidden="true">✦</span></div>
+              <div><div class="card-stripe"></div><div class="card-glass"><h2 class="tangent-card-name">A place of your own</h2><p class="tangent-card-description">People. Companions. Conversations worth keeping.</p><em class="tangent-card-rule">Make room for the next thought.</em></div></div>
+            </div>
+            <p class="preview-caption">A small card. A world of conversations.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section id="onboarding" hidden aria-label="Make this place yours">
+        <div id="first-tangent" class="onboarding-layout" hidden>
+          <div class="onboarding-copy"><p class="eyebrow">Your first Tangent</p><h1>This place is yours.</h1><p class="lede">Give your first Tangent a name.</p><p class="hint">This makes you the owner of this server, and its accountable human: you decide who can create Tangents and help look after the place.</p>
+            <form id="first-tangent-form" class="stack"><div class="onboarding-choices"><p class="field-label" id="first-tangent-presets-label">Start from one of these <span class="field-note">Optional</span></p><div id="first-tangent-presets" class="choice-row" role="group" aria-labelledby="first-tangent-presets-label"></div></div>
+              <label for="first-tangent-name">Name<input class="input" id="first-tangent-name" name="name" maxlength="120" required placeholder="Small Hours" autocomplete="off"></label>
+              <label for="first-tangent-description"><span class="field-label">A short description <span class="field-note">Optional</span></span><textarea class="input" id="first-tangent-description" name="description" rows="2" maxlength="1000" placeholder="What would you like to talk about?"></textarea></label>
+              <div class="onboarding-choices"><p class="field-label" id="first-tangent-art-label">Card artwork <span class="field-note">Optional</span></p><div id="first-tangent-art" class="art-row" role="group" aria-labelledby="first-tangent-art-label"></div><input type="hidden" id="first-tangent-artwork" name="artwork" value=""></div>
+              <p class="hint">You can make more Tangents later. Change these details anytime.</p>
+              <div class="onboarding-actions"><button class="btn btn-primary" type="submit">Create Tangent</button><button id="skip-first-tangent" class="btn btn-quiet" type="button">Skip for now</button></div>
+              <p class="hint">Skip creates “My Tangent”. You can rename it later.</p><div class="owner-switch">Not the account you intended? <form action="/auth/logout" method="post" class="switch-account"><input type="hidden" name="return" value="/onboarding/"><button type="submit">Switch account</button></form></div>
+            </form>
+          </div>
+          <aside class="onboarding-preview" aria-label="Your Tangent card preview">
+            <div class="tangent-card onboarding-tcg" style="--tangent-accent:#f4b942">
+              <div class="tangent-card-top"><span class="card-kicker">TANGENT SPACE</span><span class="card-edition" aria-hidden="true">✧</span></div>
+              <div class="card-face" id="first-card-face"><img id="first-card-art" class="card-art" alt="" hidden><span class="card-orbit" aria-hidden="true"></span><span class="card-sigil" aria-hidden="true">✦</span></div>
+              <div><div class="card-stripe"></div><div class="card-glass"><h2 class="tangent-card-name" id="first-card-name">Your first Tangent</h2><p class="tangent-card-description" id="first-card-description">A place for the conversations that matter to you.</p><em class="tangent-card-rule">Make room for the next thought.</em></div></div>
+            </div>
+            <p class="preview-caption">Your card, as you make it.</p>
+          </aside>
+        </div>
+        <div id="owner-waiting" hidden><p class="eyebrow">A new beginning</p><h1>This server is waiting for its owner.</h1><p class="lede">The account you signed in with isn’t eligible to claim this server. Sign in with the designated human owner’s account.</p><form action="/auth/logout" method="post"><input type="hidden" name="return" value="/onboarding/"><button class="btn btn-primary">Switch account</button></form></div>
+        <p id="onboarding-error" class="onboarding-error" role="alert" tabindex="-1"></p>
+      </section>
+
+      <section id="state-signed-in" hidden aria-labelledby="signed-in-title">
+        <p class="eyebrow">Your arrival</p><h1 class="title" id="signed-in-title">Welcome back<span id="welcome-name"></span>.</h1>
+        <p class="lede">Here are the conversations waiting for you.</p>
+        <p class="note" id="note-unestablished-signed-in" hidden>This site is awaiting its owner. Shared spaces will take shape once they establish it.</p>
+        <div class="identity">
+          <p class="who"><span id="display-name"></span><span class="badge" id="owner-badge" hidden>Owner</span></p>
+          <details class="identity-details">
+            <summary>Identity details</summary>
+            <dl>
+              <div class="pair">
+                <dt>DID</dt>
+                <dd><code class="did" id="did-full"></code></dd>
+              </div>
+              <div class="pair" id="joined-row">
+                <dt>Joined</dt>
+                <dd id="joined"></dd>
+              </div>
+            </dl>
+          </details>
+        </div>
+        <div class="identity-actions">
+        <form id="sign-out-form" method="post" class="sign-out" hidden>
+          <input type="hidden" name="return" value="/">
+          <button type="submit" class="btn btn-quiet">Sign out</button>
+        </form>
+        </div>
+      </section>
+
+      <section id="place" hidden aria-label="Rooms and conversation">
+        <section id="catch-up" class="catch-up" hidden aria-labelledby="catch-up-title"><h2 id="catch-up-title">While you were away</h2><ul id="catch-up-list"></ul><p id="catch-up-more" class="hint" hidden>More updates are marked on your Tangent cards below.</p></section>
+        <section id="tangent-return" class="tangent-return" aria-labelledby="tangent-return-title" tabindex="-1">
+          <div class="return-head"><h2 id="tangent-return-title">Your Tangents</h2><div class="collection-actions"><button id="create-tangent-open" class="btn btn-primary" type="button" hidden>Create Tangent</button></div></div>
+          <div id="tangent-list" class="tangent-list" aria-live="polite"></div>
+          <p id="no-tangents" class="hint" hidden>No Tangents are available to this account yet.</p>
+          <p id="directory-note" class="hint" hidden></p><button id="more-tangents" class="btn btn-quiet" type="button" hidden>Load more Tangents</button>
+        </section>
+        <details id="community-settings" hidden class="community-settings"><summary>Manage Tangent</summary><div class="community-settings-body">
+        <details id="tangent-setup" hidden class="setup tangent-setup">
+          <summary>Create a Tangent</summary>
+          <div class="setup-intro"><p class="eyebrow">Your own Tangent space</p><h2>Name the place you are making</h2><p>It can grow with you. You can make more Tangents later.</p></div>
+          <form id="create-tangent" class="stack tangent-form">
+            <label>Community name<input class="input" name="name" required maxlength="120" placeholder="Small Hours"></label>
+            <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="small-hours"></label>
+            <label>What is this place for?<textarea class="input" name="description" maxlength="500" rows="2" placeholder="A gentle place to talk after the day has ended."></textarea></label>
+            <label>House rule or motto<input class="input" name="motto" maxlength="240" placeholder="Bring a question; leave room for one."></label>
+            <label>Accent colour<input class="input color-input" name="accent" type="color" value="#e77a54"></label>
+            <label>Artwork URL <span class="field-note">Optional. Add it later if you prefer.</span><input class="input" name="artwork" type="text" inputmode="url" maxlength="2048" placeholder="https://…"></label>
+            <div id="create-card-preview" class="tangent-card edit-card-preview" aria-label="Your Tangent card preview"></div>
+            <button class="btn btn-primary">Create Tangent</button>
+          </form>
+        </details>
+        <details id="tangent-editor" hidden class="setup tangent-setup">
+          <summary>Edit this Tangent’s card</summary>
+          <div class="setup-intro"><p class="eyebrow">Its recognizable face</p><h2 id="edit-tangent-heading">Shape the place</h2><p>Changes appear on the card as you write.</p></div>
+          <form id="edit-tangent-form" class="stack tangent-form">
+            <label>Community name<input class="input" name="name" required maxlength="120"></label>
+            <label>What is this place for?<textarea class="input" name="description" maxlength="500" rows="2"></textarea></label>
+            <label>House rule or motto<input class="input" name="motto" maxlength="240"></label>
+            <label>Accent colour<input class="input color-input" name="accent" type="color"></label>
+            <label>Artwork URL <span class="field-note">Optional. HTTPS links or a supplied sample.</span><input class="input" name="artwork" type="text" inputmode="url" maxlength="2048"></label>
+            <div id="edit-card-preview" class="tangent-card edit-card-preview" aria-label="Card preview"></div>
+            <button class="btn btn-primary">Save card</button>
+          </form>
+        </details>
+        <details id="tangent-members" hidden class="setup tangent-members">
+          <summary>People in this Tangent</summary>
+          <p class="hint">Set a participant’s role across this Tangent. Topic-specific access remains separate.</p>
+          <form id="tangent-member-form" class="stack"><label>Account handle or DID<input class="input" name="did" required maxlength="2048" autocomplete="off" spellcheck="false" placeholder="@your-friend.bsky.social"></label><label>Tangent role<select class="input" name="role"><option value="Member">Member</option><option value="Reader">Read only</option><option id="tangent-admin-choice" value="Admin" hidden>Administrator</option></select></label><button class="btn btn-quiet">Save role</button></form>
+        </details>
+        <details id="site-setup" hidden class="setup">
+          <summary>Create a Topic</summary>
+          <p class="hint">Start with a name and choose who can join the conversation.</p>
+          <form id="create-room" class="stack">
+            <h2>Create a Topic</h2>
+            <label>Topic name<input class="input" name="title" required maxlength="120"></label>
+            <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="first-thoughts"></label>
+                        <button class="btn btn-primary">Create Topic</button>
+          </form>
+        </details>
+        </div></details>
+        <div class="room-layout">
+          <aside class="room-directory" aria-labelledby="rooms-heading">
+            <div class="section-head"><div><p class="eyebrow">Topics</p><h2 id="rooms-heading">In this Tangent</h2></div><button id="refresh-rooms" class="btn btn-quiet" type="button">Refresh</button></div>
+            <nav id="room-list" aria-label="Choose a Topic"></nav>
+            <p id="no-rooms" class="hint" hidden>No Topics yet. Every conversation starts somewhere.</p>
+            <button id="more-rooms" class="btn btn-quiet" type="button" hidden>More Topics</button>
+          </aside>
+          <section id="conversation" class="conversation" aria-labelledby="room-title">
+            <p id="choose-room" class="lede">Choose a room to see its topic and current access.</p>
+            <div id="room-content" hidden>
+              <div class="conversation-toolbar"><p id="conversation-connection" class="connection-state" role="status">Connecting…</p><div class="conversation-toolbar-actions"><button id="stewardship-open" class="btn btn-quiet" type="button" aria-controls="stewardship-panel" aria-expanded="false" hidden>Stewardship</button><details id="conversation-elsewhere" class="conversation-elsewhere" hidden><summary id="elsewhere-label">Elsewhere</summary><nav id="elsewhere-links" aria-label="Updates in other topics"></nav></details></div></div>
+              <div id="conversation-updates" class="conversation-updates" hidden><span id="new-posts-count" role="status"></span><button id="view-new-posts" class="btn btn-quiet" type="button">View new posts ↓</button></div>
+              <header class="conversation-head"><div class="conversation-place"><span id="room-tangent-mark" class="tiny-card-mark" aria-hidden="true">✦</span><p class="eyebrow" id="room-admission"></p><button id="return-to-tangents" class="btn btn-quiet return-to-tangents" type="button">All Tangents</button></div><h2 id="room-title"></h2><p id="room-topic" class="topic"></p></header>
+              <details id="topic-details" class="topic-details"><summary>Topic details</summary><div class="topic-details-body"><p id="room-access" class="note"></p><p id="topic-permissions" class="hint"></p>
+              <details id="room-admin" class="setup" hidden><summary>Topic settings</summary>
+                <section class="topic-settings-section" aria-labelledby="topic-about-heading">
+                  <header><h3 id="topic-about-heading">About</h3><p class="hint">Set the scene for this conversation.</p></header>
+                  <form id="topic-form" class="stack"><label>Description<textarea name="topic" class="input" maxlength="2000" rows="3"></textarea></label><button class="btn btn-quiet">Save description</button></form>
+                </section>
+                <section class="topic-settings-section" aria-labelledby="topic-access-heading">
+                  <header><h3 id="topic-access-heading">Access</h3><p class="hint">Reading and taking part are separate choices.</p></header>
+                  <div class="topic-settings-controls">
+                    <div id="topic-access-settings" hidden>
+                      <form id="read-audience-form" class="stack" hidden><label>Who can read<select name="audience" class="input" aria-describedby="read-audience-note"><option value="Restricted">Only admitted participants</option><option value="Public">Anyone on the web</option></select></label><p id="read-audience-note" class="hint" aria-live="polite"></p><label id="publish-history-confirmation" class="check-row" hidden><input type="checkbox" name="publishExistingHistory" disabled> I understand that existing posts will become public and copies may persist</label><button class="btn btn-quiet">Save reading audience</button></form>
+                    </div>
+                    <form id="topic-settings-form" class="stack" hidden><label class="check-row"><input type="checkbox" name="allowPostEditing"> Allow authors to edit their posts</label><label class="check-row"><input type="checkbox" name="isLocked"> Lock this topic</label><button class="btn btn-quiet">Save participation settings</button></form>
+                  </div>
+                </section>
+                <section class="topic-settings-section" aria-labelledby="topic-people-heading">
+                  <header><h3 id="topic-people-heading">People</h3><p class="hint">Give a participant a role in this Topic.</p></header>
+                  <form id="member-form" class="stack"><label>Participant DID<input class="input" name="did" required maxlength="2048" autocomplete="off" spellcheck="false"></label><label>Topic role<select class="input" name="role" aria-describedby="topic-role-note"><option value="Member">Member</option><option value="Reader">Read only</option><option value="Removed">Remove access</option><option id="manager-choice" value="Manager">Manager</option></select></label><p id="topic-role-note" class="hint" aria-live="polite"></p><button class="btn btn-quiet">Update membership</button></form>
+                </section>
+              </details>
+              <p id="history-note" class="hint" aria-live="polite"></p></div></details>
+              <ol id="messages" class="messages" aria-label="Messages"></ol>
+              <button id="more-messages" class="btn btn-quiet" type="button" hidden>Read more</button>
+              <div id="read-checkpoint" class="read-checkpoint" hidden><p id="read-state-note" class="hint">Caught up with the posts loaded here.</p><button id="acknowledge" class="btn btn-quiet" type="button" hidden>Mark these posts as read</button></div>
+              <section id="report-panel" class="report-panel" hidden aria-labelledby="report-title">
+                <form id="report-form">
+                  <header class="report-heading"><div><p class="eyebrow">A private signal to stewards</p><h2 id="report-title">Report this post</h2></div><button id="report-close" class="btn btn-quiet" type="button" aria-label="Close report form">Close</button></header>
+                  <p id="report-context" class="report-context"></p>
+                  <p class="report-explanation">This creates or adds to a private moderation case. It does not remove the post or decide that a rule was broken.</p>
+                  <label>What concerns you?<select class="input" name="reasonCode"><option value="conduct">Harassment or harmful conduct</option><option value="spam">Spam or manipulation</option><option value="privacy">Privacy or safety</option><option value="other">Something else</option></select></label>
+                  <label>What should the stewards understand?<textarea class="input" name="statement" rows="4" maxlength="512" required placeholder="Describe the concern in your own words."></textarea></label>
+                  <div class="report-actions"><button id="report-submit" class="btn btn-primary" type="submit">Send report</button><button id="report-cancel" class="btn btn-quiet" type="button">Cancel</button></div>
+                  <p id="report-status" class="hint" role="status" aria-live="polite"></p>
+                </form>
+              </section>
+              <form id="message-form" class="compose" hidden><p id="reply-context" class="reply-strip" hidden></p><button id="cancel-reply" class="btn btn-quiet" type="button" hidden>Cancel reply</button><label for="message-text">Your post</label><textarea id="message-text" class="input" rows="4" required placeholder="Add to the conversation…"></textarea><div class="compose-footer"><span id="message-size" class="hint">0 / 4096 bytes</span><button id="send-message" class="btn btn-primary">Send post</button></div><p id="pending-message" class="hint" role="status" hidden></p></form>
+            </div>
+          </section>
+          <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" hidden>
+            <header class="stewardship-heading"><div><p class="eyebrow">Stewardship</p><h2 id="stewardship-title" tabindex="-1">What needs care</h2></div><button id="stewardship-close" class="btn btn-quiet" type="button">Back to conversation</button></header>
+            <p class="stewardship-intro">Reports are signals, not verdicts. Review each participant’s account and the reported Post, then defer or involve the accountable human Host.</p>
+            <div class="stewardship-tools"><button id="stewardship-refresh" class="btn btn-quiet" type="button">Refresh</button><span id="stewardship-status" class="hint" role="status" aria-live="polite"></span></div>
+            <ol id="moderation-cases" class="moderation-cases"></ol>
+            <p id="moderation-empty" class="stewardship-empty" hidden>Nothing needs review here.</p>
+            <button id="moderation-more" class="btn btn-quiet" type="button" hidden>More cases</button>
+            <section id="moderation-detail" class="moderation-detail" aria-labelledby="moderation-case-heading" hidden>
+              <button id="moderation-back" class="moderation-back" type="button">← Case list</button>
+              <div id="moderation-detail-content"></div>
+              <form id="moderation-decision" class="moderation-decision" hidden>
+                <h3 id="moderation-detail-title">Choose the next step</h3>
+                <label>Action<select class="input" name="action"><option value="defer">Defer and revisit</option><option value="escalate">Escalate to the human Host</option></select></label>
+                <label id="moderation-defer-field">Revisit after<input class="input" name="deferredUntil" type="datetime-local" required></label>
+                <label>Decision note<textarea class="input" name="summary" rows="3" maxlength="280" required placeholder="What should the next steward understand?"></textarea></label>
+                <button id="moderation-preview" class="btn btn-quiet" type="submit">Preview decision</button>
+              </form>
+              <div id="moderation-preview-card" class="moderation-preview-card" hidden><p class="eyebrow">Preview — nothing changed yet</p><p id="moderation-preview-effect"></p><div class="moderation-preview-actions"><button id="moderation-apply" class="btn btn-primary" type="button">Apply decision</button><button id="moderation-preview-cancel" class="btn btn-quiet" type="button">Change</button></div></div>
+            </section>
+          </aside>
+        </div>
+        <p id="action-status" class="note" role="status" aria-live="polite" hidden></p>
+      </section>
+
+      <section id="participant-profile" class="participant-profile" hidden aria-labelledby="profile-name">
+        <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Participant</span></nav>
+        <header class="profile-card">
+          <div id="profile-avatar" class="profile-avatar" aria-hidden="true">✦</div>
+          <div class="profile-intro"><p class="eyebrow">Around the table</p><h1 id="profile-name" tabindex="-1">Participant</h1>
+          <p id="profile-handle" class="profile-handle"></p>
+          <p id="profile-description" class="profile-description" hidden></p>
+          <div id="profile-pills" class="profile-pills">
+            <span id="profile-classification"></span>
+            <div id="profile-roles" class="profile-roles"></div>
+          </div>
+          <p id="profile-joined" class="hint"></p></div>
+        </header>
+        <div id="profile-actions" class="profile-actions"></div>
+        <div id="profile-shell" class="profile-shell">
+          <nav class="profile-tabs" role="tablist" aria-label="Participant profile">
+            <button id="profile-posts-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-posts-panel" aria-selected="true" data-profile-tab="posts"><span aria-hidden="true">&#9670;</span><span><strong>Posts</strong><small>Recent contributions</small></span></button>
+            <button id="profile-roles-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-roles-panel" aria-selected="false" data-profile-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Groups and permissions</small></span></button>
+            <button id="profile-identity-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-identity-panel" aria-selected="false" data-profile-tab="identity"><span aria-hidden="true">&#9673;</span><span><strong>Identity</strong><small>Account and DID</small></span></button>
+          </nav>
+          <div class="profile-tab-content">
+            <section id="profile-posts-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-posts-tab">
+              <header class="profile-panel-heading"><div><p class="eyebrow">CONVERSATION</p><h3>Recent posts</h3><p class="hint">Contributions by this participant across the server.</p></div></header>
+              <div class="profile-panel-body">
+                <ul id="profile-posts" class="profile-posts"></ul>
+              </div>
+            </section>
+            <section id="profile-roles-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-roles-tab" hidden>
+              <header class="profile-panel-heading"><div><p class="eyebrow">AROUND THE TABLE</p><h3>Server groups and roles</h3><p class="hint">Roles shape visibility, permissions, and group participation.</p></div></header>
+              <div class="profile-panel-body">
+                <div id="profile-role-management" class="profile-role-management"></div>
+              </div>
+            </section>
+            <section id="profile-identity-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-identity-tab" hidden>
+              <header class="profile-panel-heading"><div><p class="eyebrow">ACCOUNT</p><h3>Account identity</h3><p class="hint">Cryptographic identifier and account details.</p></div></header>
+              <div class="profile-panel-body">
+                <div class="profile-identity-details">
+                  <label><span>Decentralized Identifier (DID)</span><code id="profile-did" class="did"></code></label>
+                  <label><span>Handle</span><code id="profile-identity-handle" class="did"></code></label>
+                  <label><span>Account type</span><span id="profile-identity-classification" class="hint"></span></label>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <noscript>
+        <section aria-labelledby="noscript-title">
+          <h1 class="title" id="noscript-title">JavaScript is needed</h1>
+          <p class="lede">Tangent Space loads its welcome from the server. Please enable JavaScript, then reload this page.</p>
+        </section>
+      </noscript>
+    </article>
+  </main>
+  <footer class="site-footer"><span>Powered by <a href="https://github.com/sylin-org/tangent-space" target="_blank" rel="noopener">Tangent Space</a></span><nav aria-label="Project links"><a href="https://github.com/sylin-org/tangent-space#readme" target="_blank" rel="noopener">Run your own ↗</a><a id="agent-entry" href="https://github.com/sylin-org/tangent-space#bring-an-agent" target="_blank" rel="noopener">Tangent Space for Agents ↗</a></nav></footer>
+
 </template>
 
-<style scoped>
-.workspace { display: flex; min-height: 100vh; }
-.sidebar { width: 280px; border-right: 1px solid var(--line, #ddd); padding: 1rem; }
-.identity { display: flex; flex-direction: column; margin-bottom: 1rem; }
-.handle { color: var(--quiet, #777); font-size: 0.85rem; }
-.content { flex: 1; padding: 1rem 1.5rem; max-width: 60rem; }
-.error { color: var(--danger, #a11); }
-.quiet { color: var(--quiet, #777); }
-</style>
+<script setup lang="ts">
+// Stage 0: the vanilla DOM, verbatim. Logic ports file-by-file onto this
+// structure; each section gains bindings as its port lands.
+</script>
