@@ -8,7 +8,12 @@ interface TangentCard {
   name: string
   description: string
   motto?: string
+  accent?: string
   artwork?: string
+  canManage?: boolean
+  isOwner?: boolean
+  canCreateTopic?: boolean
+  topics?: Array<{ key: string }>
 }
 
 export interface TopicCard {
@@ -23,6 +28,7 @@ export interface TopicCard {
 export function createDirectories() {
   const tangents = ref<TangentCard[]>([])
   const tangentsNextPage = ref<number | null>(null)
+  const tangentsCanCreate = ref(false)
   const topics = ref<TopicCard[]>([])
   const topicsNextPage = ref<number | null>(null)
   const loading = ref(false)
@@ -32,10 +38,11 @@ export function createDirectories() {
     try {
       const data = (await fetch('/api/v1/tangents' + (page ? `?page=${encodeURIComponent(page)}` : ''), {
         credentials: 'same-origin', cache: 'no-store',
-      }).then(r => r.ok ? r.json() : null)) as { tangents?: TangentCard[]; nextPage?: number | null } | null
+      }).then(r => r.ok ? r.json() : null)) as { tangents?: TangentCard[]; nextPage?: number | null; canCreate?: boolean } | null
       if (!data) return
       tangents.value = page ? [...tangents.value, ...(data.tangents ?? [])] : (data.tangents ?? [])
       tangentsNextPage.value = data.nextPage ?? null
+      tangentsCanCreate.value = data.canCreate === true
     } finally {
       loading.value = false
     }
@@ -80,7 +87,7 @@ export function createDirectories() {
   }
 
   const directories = reactive({
-    tangents, tangentsNextPage, topics, topicsNextPage, loading,
+    tangents, tangentsNextPage, tangentsCanCreate, topics, topicsNextPage, loading,
     loadTangents, createTangent, loadTopics, createTopic,
   })
   return directories

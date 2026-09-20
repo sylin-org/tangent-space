@@ -102,21 +102,19 @@
         </div>
       </section>
 
-      <section id="place" hidden aria-label="Rooms and conversation">
+      <section id="place" :hidden="!placeVisible" aria-label="Rooms and conversation">
         <section id="catch-up" class="catch-up" hidden aria-labelledby="catch-up-title"><h2 id="catch-up-title">While you were away</h2><ul id="catch-up-list"></ul><p id="catch-up-more" class="hint" hidden>More updates are marked on your Tangent cards below.</p></section>
         <section id="tangent-return" class="tangent-return" aria-labelledby="tangent-return-title" tabindex="-1">
-          <div class="return-head"><h2 id="tangent-return-title">Your Tangents</h2><div class="collection-actions"><button id="create-tangent-open" class="btn btn-primary" type="button" hidden>Create Tangent</button></div></div>
-          <div id="tangent-list" class="tangent-list" aria-live="polite"></div>
-          <p id="no-tangents" class="hint" hidden>No Tangents are available to this account yet.</p>
-          <p id="directory-note" class="hint" hidden></p><button id="more-tangents" class="btn btn-quiet" type="button" hidden>Load more Tangents</button>
+          <div class="return-head"><h2 id="tangent-return-title">Your Tangents</h2><div class="collection-actions"><button id="create-tangent-open" class="btn btn-primary" type="button" :hidden="!(site.site?.participant && directories.tangentsCanCreate && site.site.onboarding === 'complete')" @click="openCreateTangent">Create Tangent</button></div></div>
+          <TangentDirectory :directories="directories" :signed-in="!!site.site?.participant" @settings="key => router.navigate('/t/' + encodeURIComponent(key) + '/settings')" />
         </section>
-        <details id="community-settings" hidden class="community-settings"><summary>Manage Tangent</summary><div class="community-settings-body">
-        <details id="tangent-setup" hidden class="setup tangent-setup">
+        <details id="community-settings" ref="communitySettings" hidden class="community-settings"><summary>Manage Tangent</summary><div class="community-settings-body">
+        <details id="tangent-setup" ref="tangentSetup" hidden class="setup tangent-setup">
           <summary>Create a Tangent</summary>
           <div class="setup-intro"><p class="eyebrow">Your own Tangent space</p><h2>Name the place you are making</h2><p>It can grow with you. You can make more Tangents later.</p></div>
-          <form id="create-tangent" class="stack tangent-form">
+          <form id="create-tangent" ref="createTangentForm" class="stack tangent-form" @submit.prevent="submitCreateTangent" @input="autoKey">
             <label>Community name<input class="input" name="name" required maxlength="120" placeholder="Small Hours"></label>
-            <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="small-hours"></label>
+            <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="small-hours" data-automatic="true" @input="manualKey"></label>
             <label>What is this place for?<textarea class="input" name="description" maxlength="500" rows="2" placeholder="A gentle place to talk after the day has ended."></textarea></label>
             <label>House rule or motto<input class="input" name="motto" maxlength="240" placeholder="Bring a question; leave room for one."></label>
             <label>Accent colour<input class="input color-input" name="accent" type="color" value="#e77a54"></label>
@@ -259,12 +257,14 @@ import ConversationPanel from './components/ConversationPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import WelcomeHero from './components/WelcomeHero.vue'
 import MastheadBar from './components/MastheadBar.vue'
+import TangentDirectory from './components/TangentDirectory.vue'
 
 // The boot port (app.js), the conversation loop (rooms.js core), the directories,
-// the settings page, and the hero + masthead (pages.js prepare/hero).
+// the settings page, the hero + masthead (pages.js prepare/hero), and the place
+// section's route reactions (rooms.js enterRoute).
 const site = useSite()
 const router = useRouter()
-const conversation = createConversation()
+const conversation = createConversation(router)
 const directories = createDirectories()
 const settings = createSettings(site, router)
 
@@ -277,16 +277,41 @@ watchEffect(() => {
 onMounted(async () => {
   router.bind()
   await site.load()
-  directories.loadTangents().catch(() => {})
+  await directories.loadTangents().catch(() => {})
   site.loadServer().catch(() => {})
   if (router.isSettings) await settings.open()
-})
-
-watch(() => router.route, () => {
-  if (router.isSettings) void settings.open()
+  await dispatchRoute()
 })
 
 const authenticationRoute = computed(() => ['sign-in', 'onboarding'].includes(router.route.kind))
+
+// The place section owns conversation; the other routes own their sections
+// (rooms.js enterRoute's visibility half).
+const placeVisible = computed(() =>
+  !['settings', 'tangent-settings', 'topic-settings', 'participant', 'sign-in', 'onboarding'].includes(router.route.kind),
+)
+
+// enterRoute's dispatch: a Tangent route loads its Topics, a Topic route opens
+// the conversation, a Post route opens its window. The route key guards against
+// re-entering for the same place.
+let dispatchedRoute = ''
+async function dispatchRoute() {
+  if (site.state === 'loading') return
+  const route = router.route
+  const key = [route.kind, 'tangent' in route ? route.tangent : '', 'topic' in route ? route.topic : '', 'post' in route ? route.post : ''].filter(Boolean).join(':')
+  if (!placeVisible.value || key === dispatchedRoute) return
+  dispatchedRoute = key
+  if ('tangent' in route && route.tangent) {
+    await directories.loadTopics(route.tangent)
+    if (route.kind === 'topic') await conversation.choose(route.topic)
+    else if (route.kind === 'post') await conversation.openPost(route.tangent, route.post)
+  }
+}
+
+watch(() => router.route, () => {
+  if (router.isSettings) void settings.open()
+  void dispatchRoute()
+})
 
 // Anonymous visitors see the welcome copy only where they are asked to sign in;
 // everywhere else the hero carries the sign-in action (pages.js prepare()).
@@ -321,13 +346,70 @@ const routeTangent = computed(() => {
 })
 const routeTopic = computed(() => (['topic', 'post'].includes(router.route.kind) ? conversation.room.value : null))
 
+// The room sidebar follows the route's Tangent, then the open room, then the
+// first card (rooms.js activeTangentKey).
+const activeTangentKey = computed(() => {
+  if ('tangent' in router.route && router.route.tangent) return router.route.tangent
+  return conversation.room.value?.tangentKey ?? directories.tangents[0]?.key ?? null
+})
+
+const communitySettings = ref<HTMLDetailsElement | null>(null)
+const tangentSetup = ref<HTMLDetailsElement | null>(null)
+const createTangentForm = ref<HTMLFormElement | null>(null)
+
+function openCreateTangent() {
+  if (communitySettings.value) communitySettings.value.open = true
+  if (tangentSetup.value) tangentSetup.value.open = true
+  const name = createTangentForm.value?.elements.namedItem('name')
+  if (name instanceof HTMLInputElement) name.focus()
+}
+
+// pages.js derives the address from the name until the operator edits it.
+function slugFromName(name: string): string {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 64)
+    .replace(/-$/, '')
+}
+
+function autoKey(event: Event) {
+  const form = event.target as HTMLFormElement
+  const title = form.elements.namedItem('name') as HTMLInputElement | null
+  const key = form.elements.namedItem('key') as HTMLInputElement | null
+  if (!title || !key || key.dataset.automatic === 'false') return
+  key.value = slugFromName(title.value)
+}
+
+function manualKey() {
+  const form = tangentSetup.value?.querySelector<HTMLFormElement>('#create-tangent')
+  const key = form?.elements.namedItem('key') as HTMLInputElement | null
+  if (key) key.dataset.automatic = key.value ? 'false' : 'true'
+}
+
+async function submitCreateTangent(event: Event) {
+  const form = event.target as HTMLFormElement
+  const body = Object.fromEntries(new FormData(form)) as Record<string, string>
+  body.name = body.name.trim()
+  body.key = body.key.trim()
+  body.description = (body.description ?? '').trim()
+  body.motto = (body.motto ?? '').trim()
+  if (!body.name || !body.key) throw new Error('Give this Tangent a name and stable address.')
+  await directories.createTangent(body as never)
+  form.reset()
+  if (communitySettings.value) communitySettings.value.open = false
+  router.navigate('/t/' + encodeURIComponent(body.key) + '/topics')
+}
+
 async function createTopic(event: Event) {
   const form = event.target as HTMLFormElement
   const body = Object.fromEntries(new FormData(form)) as { key: string; title: string }
   if (!activeTangentKey.value) throw new Error('Choose a Tangent before starting a Topic.')
   await directories.createTopic(activeTangentKey.value, body)
   form.reset()
-  await conversation.choose(body.key)
+  router.navigate('/t/' + encodeURIComponent(activeTangentKey.value) + '/topics/' + encodeURIComponent(body.key))
 }
-const activeTangentKey = computed(() => conversation.room.value?.tangentKey ?? directories.tangents[0]?.key ?? null)
 </script>

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import { useSiteStore } from './siteStore'
+import { useSite } from '../stores/site'
+import type { RouterStore } from '../stores/router'
 
 // The conversation loop, ported from rooms.js: epoch-guarded navigation,
 // cursor page accumulation, pending-mutation retries, refresh queueing.
@@ -34,21 +35,19 @@ export interface Room {
   key: string
   tangentKey: string
   title: string
+  topic?: string
   canRead: boolean
   canWrite: boolean
   isLocked: boolean
+  canManage?: boolean
+  allowPostEditing?: boolean
+  readAudience?: string
   permissions?: { allowedActions: string[] } | null
 }
 
 interface MutationIntent {
   method: 'POST' | 'PATCH' | 'DELETE'
   body: Record<string, unknown>
-}
-
-declare global {
-  interface Window {
-    TangentPages?: { route: { kind: string; tangent?: string; post?: string } }
-  }
 }
 
 const encoder = new TextEncoder()
@@ -75,8 +74,8 @@ async function request(path: string, body?: unknown, method = 'POST', signal?: A
   return { data: data as { state?: string }, status: response.status }
 }
 
-export function createConversation() {
-  const site = useSiteStore()
+export function createConversation(router: RouterStore) {
+  const site = useSite()
   const viewerRef = () => site.site?.participant?.participantRef ?? ''
   const room = ref<Room | null>(null)
   const messages = ref<Message[]>([])
@@ -113,7 +112,7 @@ export function createConversation() {
   }
 
   async function choose(key: string) {
-    if (window.TangentPages?.route?.kind === 'post') return openPost(window.TangentPages.route.tangent ?? '', key)
+    if (router.route.kind === 'post') return openPost(router.route.tangent, key)
     rememberDraft()
     const version = ++epoch
     room.value = null
@@ -122,7 +121,8 @@ export function createConversation() {
     messages.value = []
     loadingRoom.value = true
     try {
-      const data = (await request(`/api/tangents/${encodeURIComponent(window.TangentPages?.route?.tangent ?? '')}/topics/${encodeURIComponent(key)}`, undefined, 'GET')).data as unknown as Room
+      const routeTangent = 'tangent' in router.route ? router.route.tangent : ''
+      const data = (await request(`/api/tangents/${encodeURIComponent(routeTangent)}/topics/${encodeURIComponent(key)}`, undefined, 'GET')).data as unknown as Room
       if (version !== epoch) return
       room.value = data
       restoreDraft()
