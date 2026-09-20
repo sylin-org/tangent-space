@@ -14,6 +14,7 @@ These govern the server and the connector alike.
 6. **Cleanup is mandatory.** Removing a capability removes its code, tests, scripts, configuration and documentation.
 7. **Code reads greenfield.** Naming, comments and shims describe the system as it is; nothing narrates what it replaced. `scripts/check-greenfield.ps1` finds violations.
 8. **The action is the black box.** A caller passes arguments and receives the outcome; guarantees live inside the thing that acts, never in the calling code. Coordination bled out of the point of action is scope poisoning.
+9. **Minimal roundtrip; background workers do background work.** Derived state is never computed at fetch time and never compiled inside the write that triggered it: the write settles the fact and signals, a background job compiles the projections (coalesced, so bursts compile once), and reads consume the compiled state. The framework's own mechanisms carry this — Koan.Jobs for the work, Koan.Cache for the reads.
 
 ## Shape
 
