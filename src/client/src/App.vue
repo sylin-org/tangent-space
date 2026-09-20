@@ -269,16 +269,18 @@
             <h2>Create a Topic</h2>
             <label>Topic name<input class="input" name="title" required maxlength="120"></label>
             <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="first-thoughts"></label>
-                        <button class="btn btn-primary">Create Topic</button>
+            <button class="btn btn-primary" type="submit" @click.prevent="createTopic($event)">Create Topic</button>
           </form>
         </details>
         </div></details>
         <div class="room-layout">
           <aside class="room-directory" aria-labelledby="rooms-heading">
-            <div class="section-head"><div><p class="eyebrow">Topics</p><h2 id="rooms-heading">In this Tangent</h2></div><button id="refresh-rooms" class="btn btn-quiet" type="button">Refresh</button></div>
-            <nav id="room-list" aria-label="Choose a Topic"></nav>
-            <p id="no-rooms" class="hint" hidden>No Topics yet. Every conversation starts somewhere.</p>
-            <button id="more-rooms" class="btn btn-quiet" type="button" hidden>More Topics</button>
+            <div class="section-head"><div><p class="eyebrow">Topics</p><h2 id="rooms-heading">In this Tangent</h2></div><button id="refresh-rooms" class="btn btn-quiet" type="button" @click="directories.loadTopics(activeTangentKey ?? '')">Refresh</button></div>
+            <nav id="room-list" aria-label="Choose a Topic">
+              <button v-for="topic in directories.topics" :key="topic.key" class="room-link" type="button" @click="conversation.choose(topic.key); directories.loadTopics(activeTangentKey ?? '')">{{ topic.title }}</button>
+            </nav>
+            <p v-if="!directories.topics.length" class="hint">No Topics yet. Every conversation starts somewhere.</p>
+            <button v-if="directories.topicsNextPage" class="btn btn-quiet" type="button">More Topics</button>
           </aside>
           <ConversationPanel :conversation="conversation" />
           <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" hidden>
@@ -367,12 +369,29 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { computed } from 'vue'
 import { useSite } from './stores/site'
 import { createConversation } from './composables/conversation'
+import { createDirectories } from './composables/directories'
 import ConversationPanel from './components/ConversationPanel.vue'
 
 // The boot port (app.js) and the conversation loop (rooms.js core), wired.
 const site = useSite()
 const conversation = createConversation()
-onMounted(() => site.load())
+const directories = createDirectories()
+
+onMounted(async () => {
+  await site.load()
+  await directories.loadTangents()
+})
+
+async function createTopic(event: Event) {
+  const form = event.target as HTMLFormElement
+  const body = Object.fromEntries(new FormData(form)) as { key: string; title: string }
+  if (!activeTangentKey.value) throw new Error('Choose a Tangent before starting a Topic.')
+  await directories.createTopic(activeTangentKey.value, body)
+  form.reset()
+  await conversation.choose(body.key)
+}
+const activeTangentKey = computed(() => conversation.room.value?.tangentKey ?? directories.tangents[0]?.key ?? null)
 </script>
