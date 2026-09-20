@@ -10,7 +10,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
 | Current task | R3.5 — the host-owned live bus — **done**; no process-wide signal state remains. R3.6, the Conversation port, is next |
 | Next action | **Continue the Port**: the welcome hero + masthead account menu + the state-section bindings (the boot machine's visible half), then the place section's route reactions (`enterRoute`'s tangent/topic/post dispatch), moderation detail, participant profile, activity transport, facets, onboarding, atmosphere — then the swap: Vue at `/`, vanilla deleted. R3.6 stage 2 (`WithCurrentPolicy` → action-owns-its-transaction) stays queued behind the Port. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
-| Last checkpoint | 2026-09-20 · autonomous session · onboarding ported (OnboardingPanel + the artwork catalog as a typed module): starters, cover picker, live preview, skip, claim, waiting_owner, and the sign_in copy variant. vitest 22/22, build green |
+| Last checkpoint | 2026-09-20 · session close · six Port units landed (see S-016): router+settings, hero/masthead/CSS, place dispatch+directory, profile, manage forms, stewardship+reports, onboarding. vitest 22/22, build green, node 7/7. **Next unit: the activity transport** (SSE + coordinator + shared worker), then atmosphere, facets, the small utilities, then the swap |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
 | Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
 | Blockers | None |
@@ -792,6 +792,13 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 ### S-015 · 2026-09-20 · Claude (continued)
 
 - **Onboarding is ported** (`components/OnboardingPanel.vue` + `composables/artwork-presets.ts`): the create_tangent state with starter choices that fill two editable fields, the eight-square cover picker (one per mood before repeats — onboarding.js starterArtwork), the live card preview, skip ("My Tangent"), the claim POST to `/api/onboarding/tangent`, and the waiting_owner state. The artwork catalog is now a typed module; the sign_in state rewrites the anonymous section's copy for the owner-to-be; the `onboarding-active` body class and the complete-state redirect home follow the vanilla.
+
+### S-016 · 2026-09-20 · Claude (continued) — session close
+
+- **Six Port units landed this stretch**, commits `760cb8f` (router + settings page), `c874c33` (hero + masthead + state sections + the full eight-stylesheet CSS surface), `7dc17bb` (place dispatch + TangentDirectory), `01e8a15` (profile), `4c12fd6` (Topic/Tangent manage forms), `57b0bec` (stewardship + reports), `27a4d20` (onboarding). The vanilla workspace's logic is now substantially in Vue; the app is interactive end to end at `/app/` behind the dev proxy.
+- **Bugs the tests/live walks caught and fixed**: main.ts never installed Pinia (no served bundle had ever mounted — 200 checks verified delivery, not rendering); the canonicalize infinite loop (route reassignment + base prefix); deep-linked active tabs never loading; the scope watch missing an already-open room.
+- **Remaining before the swap, inventoried from the source**: the activity transport (activity-transport.js 296 + activity-coordinator.js 93 + activity-shared-worker.js 126 — SSE, unread marks on the directory cards, the connection badge, the elsewhere strip), atmosphere.js (187) + ascii-scenes.js (241) with the settings-side opener, facets.js (266, faceted post text + the wire facets on send), artwork.js (76, the settings-side artwork picker), history.js (131, back/forward scroll restoration), profile-live.js (74), card-foil.js (20), agent-entry.js (51). connect.js belongs to the connector page surface — decide its home at the swap, not in the workspace port.
+- **Suites at close:** vitest 22/22, vue-tsc + vite build green (bundle committed), node rule checks 7/7, greenfield unchanged (3 pre-existing rooms.js markers). Live walks green: home hero (anonymous), `/app/tangents`, `/app/settings` (in-app nav + popstate). Authenticated flows rest on component tests until Leo's walkthrough.
 
  index
 
