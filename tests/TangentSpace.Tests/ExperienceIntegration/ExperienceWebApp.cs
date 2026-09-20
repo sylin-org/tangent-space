@@ -196,7 +196,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         return (token, credential.Id, ownerToken, OwnerParticipant, AgentParticipant, HumanParticipant);
     }
 
-    private static async Task<string> Accept(string roomKey, string authorId, string recordKey, long sequence,
+    internal static async Task<string> Accept(string roomKey, string authorId, string recordKey, long sequence,
         DateTimeOffset acceptedAt, string text, string? replyTo)
     {
         var post = new Post
