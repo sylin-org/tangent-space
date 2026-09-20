@@ -81,9 +81,8 @@ public sealed class Tangent : Entity<Tangent>
 
     public bool IsOwner(string? participantId) => string.Equals(OwnerParticipantId, participantId, StringComparison.Ordinal);
 
-    public void ChangeAccess(string actorDid, AccessMap access, DateTimeOffset now, bool authorized = false)
+    public void ChangeAccess(AccessMap access, DateTimeOffset now)
     {
-        if (!IsOwner(actorDid) && !authorized) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can change access.");
         try { Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTangent(); }
         catch (ArgumentException invalid) { throw Invalid(invalid.Message); }
         UpdatedAt = now;

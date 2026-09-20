@@ -251,7 +251,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
                     (tangent.Access ?? AccessMap.TangentDefaults()).ResolveTangent().Manage, bag))
                 && await Restrictions.ForTangent(actorId, key, clock.GetUtcNow(), ct) is null;
             if (!canManage) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only a Tangent administrator can change access.");
-            tangent.ChangeAccess(actorId, access, clock.GetUtcNow());
+            tangent.ChangeAccess(access, clock.GetUtcNow());
             await tangent.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: key, ct: ct);
             await EntityContext.Commit(ct);
@@ -263,7 +263,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
     }
 
     public async Task<TangentTopicCreation> CreateTopic(string actorId, string tangentKey, string roomKey, string title,
-        string? description, CancellationToken ct, bool membersOnly = false)
+        string? description, CancellationToken ct)
     {
         TangentTopicCreation result;
         await gate.Enter(ct);
@@ -290,8 +290,7 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
             var topic = tangent.IsOwner(actorId)
                 ? Topic.Create(space, actorId, roomKey, title, now, tangent)
                 : Topic.CreateDelegated(space, actorId, roomKey, title, now, tangent);
-            topic.MembersOnly = membersOnly;
-            if (description is not null) topic.ChangeDescription(space, actorId, null, description, now, tangent, actorMembership);
+            if (description is not null) topic.ChangeDescription(description, now);
             await topic.Save(ct);
             var audit = new TopicAudit { ActorParticipantId = actorId, TopicKey = roomKey, Operation = TopicAdministration.Create, Accepted = true,
                 Reason = "Accepted.", SelectedPolicyRevision = topic.PolicyRevision, SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now };

@@ -135,7 +135,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             (space, topic, actor, targetId, target, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
-                return new Change(current, current.ChangeMembership(space, actorId, actor, targetId!, target, role, now, tangent, tangentMembership, authorized: true));
+                return new Change(current, current.ChangeMembership(actorId, targetId!, target, role, now, tangent, tangentMembership));
             }, ct);
 
     public Task<TopicAdministrationResult> SetTopic(string actorId, string roomKey, string description, CancellationToken ct)
@@ -143,7 +143,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             (space, topic, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
-                current.ChangeDescription(space, actorId, actor, description, now, tangent, tangentMembership, authorized: true);
+                current.ChangeDescription(description, now);
                 return new Change(current);
             }, ct);
 
@@ -153,7 +153,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             (space, topic, _, _, _, tangent, _, now) =>
             {
                 var current = RequireTopic(topic);
-                current.ChangeReadAudience(space, actorId, audience, publishExistingHistory, now, tangent, authorized: true);
+                current.ChangeReadAudience(audience, publishExistingHistory, now);
                 return new Change(current);
             }, ct, audience, publishExistingHistory);
 
@@ -163,7 +163,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             (space, topic, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
-                current.ChangeSettings(space, actorId, actor, allowPostEditing, isLocked, title, description, now, tangent, tangentMembership, authorized: true);
+                current.ChangeSettings(allowPostEditing, isLocked, title, description, now);
                 return new Change(current);
             }, ct);
 
@@ -206,7 +206,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             (space, topic, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
-                current.ChangeAccess(space, actorId, actor, access, now, tangent, tangentMembership, authorized: true);
+                current.ChangeAccess(access, now);
                 return new Change(current);
             }, ct);
 

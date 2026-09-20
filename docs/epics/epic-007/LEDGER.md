@@ -826,6 +826,12 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **Suites at close:** vitest 36/36, vue-tsc + vite build green (bundle + worker chunk committed), node rule checks 7/7, greenfield unchanged. Live walks green (anonymous): home hero, /app/tangents with the galaxy atmosphere painting, /app/settings navigation, no regressions.
 - **Next: the swap** — Vue serves `/`, the vanilla workspace deletes wholesale, and the deep verification (parity review feature-by-feature with Leo, then the R4.2 envelope migration) follows. The swap itself is a server routing change plus the deletion: `wwwroot/index.html`'s SPA entry swap and `TangentServer.cs`'s static-file mapping move to the Vue bundle; every vanilla asset the SPA now carries (its scripts and the stylesheets the SPA now carries... see the swap checklist below) leaves the tree. **Still Leo-gated:** the parity walkthrough (W-series sign-ins) before deletion is final, F-001 routing, push authorization.
 
+### S-021 · 2026-09-20 · Claude (continued) — R3.6 stage 2a
+
+- **The six `bool authorized` seams died** (N-068's co-removal): Topic's ChangeMembership/ChangeDescription/ChangeSettings/ChangeAccess/ChangeReadAudience and Tangent's ChangeAccess no longer take the flag nor re-derive authority from the row-based policy — the governance gate is the one authority check, and the entities keep validation only. Signatures shrank to what the bodies use; every call site updated.
+- **`Topic.MembersOnly` folded** (the N-071 policy-unification fold): the flag had no setter left in production (CreateTopic's parameter defaulted false and its only caller never passed it), so its admission branches reduced to `role is null && tangentAdmitted`, the flag left Topic, TopicDescription and CreateTopic, and the dead `memberRecord` local went with it.
+- .NET 107/107. Next: stage 2b — `WithCurrentPolicy` splits into the lock-free read projection and mutation-owned acceptance transactions.
+
  index
 
 - [Architecture assessment, 15 September](../../ASSESSMENT_2026-09-15.md)

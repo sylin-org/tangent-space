@@ -13,8 +13,6 @@ public sealed class Topic : Entity<Topic>
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public TopicReadAudience ReadAudience { get; set; }
-    // A members-only topic admits the Tangent's own members without a separate grant.
-    public bool MembersOnly { get; set; }
     public bool AllowPostEditing { get; set; }
     public bool IsLocked { get; set; }
     public AccessMap Access { get; set; } = AccessMap.TopicDefaults();
@@ -77,17 +75,15 @@ public sealed class Topic : Entity<Topic>
         // Topic grants can widen a reader within an admitted Tangent. Parent admission/removal
         // remains an upper bound; a topic role cannot restore access to a private or removed Tangent.
         var roleAdmitted = role is TopicRole.Manager or TopicRole.Member or TopicRole.Reader;
-        var memberRecord = tangentRole is TangentRole.Member or TangentRole.Admin or TangentRole.Reader;
-        var admitted = signedIn && tangentAdmitted && !suspended && !banned && classificationRead && (owner || roleAdmitted || delegatedAdmin
-            || MembersOnly && role is null && memberRecord
-            || !MembersOnly && role is null && tangentAdmitted);
+        var admitted = signedIn && tangentAdmitted && !suspended && !banned && classificationRead
+            && (owner || roleAdmitted || delegatedAdmin || role is null && tangentAdmitted);
         // An explicit topic grant of member or manager widens a Tangent reader inside that topic only.
         var tangentReader = !owner && tangentRole == TangentRole.Reader && role is not (TopicRole.Member or TopicRole.Manager);
         var reason = space is null ? "site-unavailable" : tangent is null ? "tangent-not-found"
             : !signedIn ? "sign-in-required" : suspended ? "suspended"
             : banned ? "banned"
             : !owner && role == TopicRole.Removed ? "removed"
-            : !owner && role is null && (MembersOnly ? !memberRecord : !tangentAdmitted) ? "community-membership-required"
+            : !owner && role is null && !tangentAdmitted ? "community-membership-required"
             : !classificationRead ? "participation-policy"
             : !admitted ? "not-admitted" : "allowed";
         return new TopicPolicy(Id, actorDid, PolicyRevision, space?.PolicyRevision ?? 0,
@@ -98,13 +94,13 @@ public sealed class Topic : Entity<Topic>
             AllowPostEditing, IsLocked);
     }
 
-    public TopicMembership ChangeMembership(Space? space, string actorDid, TopicMembership? actorMembership,
-        string targetDid, TopicMembership? targetMembership, TopicRole role, DateTimeOffset now,
-        Tangent? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
+    public TopicMembership ChangeMembership(string actorDid, string targetDid, TopicMembership? targetMembership,
+        TopicRole role, DateTimeOffset now, Tangent? tangent = null, TangentMembership? tangentMembership = null)
     {
         // Callers supply the Tangent membership that matters to this change: their own when acting on
         // delegated authority, or the target's when the owner adjusts a participant's standing. Authority
-        // is never evaluated through a record belonging to someone else.
+        // is never evaluated through a record belonging to someone else, and it is checked at the
+        // governance gate — not re-derived here from a record belonging to someone else.
         var actorTangentMembership = tangentMembership;
         if (actorTangentMembership is not null && actorTangentMembership.ParticipantId != actorDid)
         {
@@ -113,9 +109,7 @@ public sealed class Topic : Entity<Topic>
                 throw new TopicRuleViolation(TopicDenial.MembershipMismatch, "The Tangent membership does not belong to this topic and participant.");
             actorTangentMembership = null;
         }
-        var policy = CurrentPolicy(space, actorDid, actorMembership, false, tangent, actorTangentMembership);
         CheckMembership(targetMembership, targetDid);
-        if (!authorized && !policy.CanManage) throw Forbidden("Only the owner or a current topic manager can change topic membership.");
         if (!Participant.IsValidId(targetDid)) throw Invalid("A membership target must be a valid participant.");
         if (!Enum.IsDefined(role)) throw Invalid("Choose manager, member, reader, or removed.");
         // The Tangent owner can never become a membership target; the creator of a delegated topic holds no ownership.
@@ -126,25 +120,16 @@ public sealed class Topic : Entity<Topic>
         return TopicMembership.Assign(this, targetDid, role, actorDid, now);
     }
 
-    public void ChangeDescription(Space? space, string actorDid, TopicMembership? membership, string description, DateTimeOffset now,
-        Tangent? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
+    public void ChangeDescription(string description, DateTimeOffset now)
     {
-        if (!authorized && !CurrentPolicy(space, actorDid, membership, false, tangent, tangentMembership).CanManage)
-            throw Forbidden("Only the owner or a current topic manager can change the description.");
         if (description is null || description.Length > TopicConstants.MaximumDescriptionLength)
             throw Invalid("A description can contain at most 2000 characters.");
         Description = description.Trim();
         Advance(now);
     }
 
-    public void ChangeSettings(Space? space, string actorDid, TopicMembership? membership, bool allowPostEditing,
-        bool isLocked, string? title, string? description, DateTimeOffset now, Tangent? tangent = null,
-        TangentMembership? tangentMembership = null, bool authorized = false)
+    public void ChangeSettings(bool allowPostEditing, bool isLocked, string? title, string? description, DateTimeOffset now)
     {
-        // Creation history is not a fallback grant: removals and parent admission
-        // changes must revoke settings access just as they revoke other management.
-        if (!authorized && !CurrentPolicy(space, actorDid, membership, false, tangent, tangentMembership).CanManage)
-            throw Forbidden("Only a current Tangent or topic administrator can change topic settings.");
         if (title is not null && (string.IsNullOrWhiteSpace(title) || title.Trim().Length > TopicConstants.MaximumTitleLength))
             throw Invalid("A topic title must contain 1–120 characters.");
         if (description is not null && description.Length > TopicConstants.MaximumDescriptionLength) throw Invalid("A description can contain at most 2000 characters.");
@@ -154,22 +139,15 @@ public sealed class Topic : Entity<Topic>
         Advance(now);
     }
 
-    public void ChangeAccess(Space? space, string actorDid, TopicMembership? membership, AccessMap access,
-        DateTimeOffset now, Tangent? tangent = null, TangentMembership? tangentMembership = null, bool authorized = false)
+    public void ChangeAccess(AccessMap access, DateTimeOffset now)
     {
-        if (!authorized && !CurrentPolicy(space, actorDid, membership, false, tangent, tangentMembership).CanManage)
-            throw Forbidden("Only a current Tangent or Topic administrator can change Topic access.");
         try { Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTopic(); }
         catch (ArgumentException invalid) { throw Invalid(invalid.Message); }
         Advance(now);
     }
 
-    public void ChangeReadAudience(Space? space, string actorDid, TopicReadAudience audience,
-        bool publishExistingHistory, DateTimeOffset now, Tangent? tangent = null, bool authorized = false)
+    public void ChangeReadAudience(TopicReadAudience audience, bool publishExistingHistory, DateTimeOffset now)
     {
-        if (!authorized && (space is null || !Participant.IsValidId(actorDid)
-            || !space.IsOwner(actorDid) && tangent?.IsOwner(actorDid) != true))
-            throw Forbidden("Only the current Host or Tangent owner can publish a Topic.");
         if (!Enum.IsDefined(audience)) throw Invalid("Choose restricted or public reading.");
         if (ReadAudience != TopicReadAudience.Public && audience == TopicReadAudience.Public && !publishExistingHistory)
             throw Invalid("Confirm that the Topic's existing history will become publicly readable.");
