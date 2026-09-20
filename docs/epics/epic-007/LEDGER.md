@@ -732,7 +732,17 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - The machine crashed mid-stage; recovery was clean — the ledger's checkpoint discipline made reconciliation a two-minute grep.
 - Nine commits this session. Suites: .NET 108/108, node 7/7, greenfield 469. Next: R3.6, the Conversation port — the largest remaining R3 task, opened fresh.
 
-## Evidence index
+### S-008 · 2026-09-19 · Claude (continued)
+
+- **The Port is in progress.** Stage 0 committed: the App template is the vanilla DOM regenerated from index.html's body (44 KB, all 8 sections, 43 elements, 99 hidden states), with landing.css + rooms.css imported unchanged. The build emits html + CSS + JS to `wwwroot/app`.
+- **Stage 1a committed:** `stores/site.ts` ports app.js's boot machine (loading/error/anonymous/signed-in, payload validation, compactDid, formatJoined, onboarding redirect). App.vue binds the four state sections.
+- **Stage 2 committed:** `composables/conversation.ts` ports rooms.js's conversation loop — epoch-guarded navigation, cursor page accumulation with loop detection, refresh queueing, reply-to-parent-id, edit/remove with pending-mutation retries, the request wrapper's error contract. `components/ConversationPanel.vue` binds it.
+- **The scratch first-slice code is deleted** from src/client/src; only the Port's files remain.
+- **True scale:** the workspace is 5,078 lines across 21 scripts. ~3,000 lines are ported or have composables; ~2,000 remain: the settings tabs (server card, context, roles editor 673 lines, people, access), moderation detail (401), profile (458), the activity transport (296), facets (266), onboarding (139), and the smaller utilities.
+- **The standing rule for each remaining stage:** regenerate the App template from index.html's body, substitute only the ported panel's section, verify against the vanilla behavior. Same ids, classes, endpoints, forms.
+- **D19 recorded:** the workspace UX standardizes on Vue 3 + Vite + TypeScript. The browser data plane endpoints stay during the port; the envelope migration is R4.2's separate step.
+- **Still parked on Leo:** W5/W9 walkthrough sign-ins, F-001 routing, push authorization, and the Vue parity review once the Port reaches it.
+ index
 
 - [Architecture assessment, 15 September](../../ASSESSMENT_2026-09-15.md)
 - [Connector architecture assessment, 15 September](../../ASSESSMENT_2026-09-15-CONNECTOR.md)
