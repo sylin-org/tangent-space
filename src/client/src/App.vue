@@ -187,50 +187,7 @@
       </section>
 
       <section id="participant-profile" class="participant-profile" :hidden="router.route.kind !== 'participant'" aria-labelledby="profile-name">
-        <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Participant</span></nav>
-        <header class="profile-card">
-          <div id="profile-avatar" class="profile-avatar" aria-hidden="true">✦</div>
-          <div class="profile-intro"><p class="eyebrow">Around the table</p><h1 id="profile-name" tabindex="-1">Participant</h1>
-          <p id="profile-handle" class="profile-handle"></p>
-          <p id="profile-description" class="profile-description" hidden></p>
-          <div id="profile-pills" class="profile-pills">
-            <span id="profile-classification"></span>
-            <div id="profile-roles" class="profile-roles"></div>
-          </div>
-          <p id="profile-joined" class="hint"></p></div>
-        </header>
-        <div id="profile-actions" class="profile-actions"></div>
-        <div id="profile-shell" class="profile-shell">
-          <nav class="profile-tabs" role="tablist" aria-label="Participant profile">
-            <button id="profile-posts-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-posts-panel" aria-selected="true" data-profile-tab="posts"><span aria-hidden="true">&#9670;</span><span><strong>Posts</strong><small>Recent contributions</small></span></button>
-            <button id="profile-roles-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-roles-panel" aria-selected="false" data-profile-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Groups and permissions</small></span></button>
-            <button id="profile-identity-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-identity-panel" aria-selected="false" data-profile-tab="identity"><span aria-hidden="true">&#9673;</span><span><strong>Identity</strong><small>Account and DID</small></span></button>
-          </nav>
-          <div class="profile-tab-content">
-            <section id="profile-posts-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-posts-tab">
-              <header class="profile-panel-heading"><div><p class="eyebrow">CONVERSATION</p><h3>Recent posts</h3><p class="hint">Contributions by this participant across the server.</p></div></header>
-              <div class="profile-panel-body">
-                <ul id="profile-posts" class="profile-posts"></ul>
-              </div>
-            </section>
-            <section id="profile-roles-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-roles-tab" hidden>
-              <header class="profile-panel-heading"><div><p class="eyebrow">AROUND THE TABLE</p><h3>Server groups and roles</h3><p class="hint">Roles shape visibility, permissions, and group participation.</p></div></header>
-              <div class="profile-panel-body">
-                <div id="profile-role-management" class="profile-role-management"></div>
-              </div>
-            </section>
-            <section id="profile-identity-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-identity-tab" hidden>
-              <header class="profile-panel-heading"><div><p class="eyebrow">ACCOUNT</p><h3>Account identity</h3><p class="hint">Cryptographic identifier and account details.</p></div></header>
-              <div class="profile-panel-body">
-                <div class="profile-identity-details">
-                  <label><span>Decentralized Identifier (DID)</span><code id="profile-did" class="did"></code></label>
-                  <label><span>Handle</span><code id="profile-identity-handle" class="did"></code></label>
-                  <label><span>Account type</span><span id="profile-identity-classification" class="hint"></span></label>
-                </div>
-              </div>
-            </section>
-          </div>
-        </div>
+        <ProfilePanel :site="site" :router="router" />
       </section>
 
       <noscript>
@@ -258,6 +215,7 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import WelcomeHero from './components/WelcomeHero.vue'
 import MastheadBar from './components/MastheadBar.vue'
 import TangentDirectory from './components/TangentDirectory.vue'
+import ProfilePanel from './components/ProfilePanel.vue'
 
 // The boot port (app.js), the conversation loop (rooms.js core), the directories,
 // the settings page, the hero + masthead (pages.js prepare/hero), and the place

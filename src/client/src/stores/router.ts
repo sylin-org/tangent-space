@@ -100,6 +100,20 @@ export const useRouter = defineStore('router', {
       window.history[replace ? 'replaceState' : 'pushState']({ tangentRoute: nextHref }, '', nextHref)
       return this.apply(nextPath)
     },
+    /** Point history at a route's canonical URL when a resource answers under another. */
+    canonicalize(href: string): boolean {
+      const destination = workspaceDestination(href, window.location.origin)
+      if (!destination) return false
+      const next = parseWorkspaceRoute(destination.pathname)
+      if (!next || next.kind !== this.route.kind) return false
+      const nextPath = baseHref(destination.pathname)
+      const nextHref = nextPath + destination.search + destination.hash
+      // Already canonical: touch nothing, so route watchers stay quiet.
+      if (nextHref === window.location.pathname + window.location.search + window.location.hash) return true
+      window.history.replaceState({ ...((window.history.state as Record<string, unknown>) || {}), tangentRoute: nextHref }, '', nextHref)
+      this.route = next
+      return true
+    },
     /** Install the document-level listeners once. */
     bind() {
       window.addEventListener('popstate', () => {

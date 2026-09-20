@@ -10,7 +10,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
 | Current task | R3.5 — the host-owned live bus — **done**; no process-wide signal state remains. R3.6, the Conversation port, is next |
 | Next action | **Continue the Port**: the welcome hero + masthead account menu + the state-section bindings (the boot machine's visible half), then the place section's route reactions (`enterRoute`'s tangent/topic/post dispatch), moderation detail, participant profile, activity transport, facets, onboarding, atmosphere — then the swap: Vue at `/`, vanilla deleted. R3.6 stage 2 (`WithCurrentPolicy` → action-owns-its-transaction) stays queued behind the Port. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
-| Last checkpoint | 2026-09-19 · autonomous session · the place section answers routes: Tangent/Topic/Post dispatch from the router, the Tangent directory renders (cards, gear, empty states, load-more), and the conversation composable runs on the workspace router with its TangentPages coupling deleted. vitest 16/16, build green, node 7/7 |
+| Last checkpoint | 2026-09-19 · autonomous session · the participant profile ported (ProfilePanel), and the component tests exposed + fixed an infinite canonicalize loop (route reassignment + base-prefixed URL never compared equal). vitest 20/20, build green, node 7/7 |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
 | Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
 | Blockers | None |
@@ -767,6 +767,13 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **The Tangent directory renders** (`components/TangentDirectory.vue`, the renderTangents + cardContents port): cards with accent, validity-checked artwork, the tcg structure, per-card settings gear navigating to the Tangent's settings, the empty-state copy per signed-in state, and load-more pagination. The directories store captures the payload's `canCreate` and per-card flags; the Create Tangent button, the create form with the name→address slug, and create-room's navigate-to-new-topic are wired. The unread disc renders its neutral state — real marks arrive with the activity transport.
 - **Verification:** vitest 16/16 (directory card/gear/pagination/empty-state added), vue-tsc + vite build green (bundle committed). Live walk: `/app/tangents` anonymous — zero cards matches the API's genuinely empty viewer-filtered directory, and the anonymous empty-state copy shows.
 - **Next:** the manage forms' remaining halves (edit card + preview, Tangent members), the Topic settings forms in the conversation, moderation detail + stewardship, profile, transport, onboarding, atmosphere.
+
+### S-012 · 2026-09-19 · Claude (continued)
+
+- **The participant profile is ported** (`components/ProfilePanel.vue`, the profile.js port): the identity card with Bluesky handle link and classification badge (self-serve menu included), role chips, the roles tab with add/remove/join/leave over the CSRF session, the posts tab, the identity tab, tab state in `?tab=`, retry on failure, and the set_role action links.
+- **The tests caught a genuinely nasty one: the canonicalize pass could spin forever.** `canonicalize` always assigned the route (a fresh object every time), and under the `/app/` base the canonical path (`/u/a.b`) never equaled the base-prefixed location (`/app/u/a.b`) — so the route watch re-ran the profile load in a tight fetch loop. In the browser it would have hung the participant page exactly the same. The fix: when the URL is already canonical, canonicalize touches nothing. File-written traces in a hung worker found it — an infinite loop starves timers, so only persistent evidence survives to testify.
+- **Verification:** vitest 20/20 (profile identity card, posts with Topic links, canonical URL, blocked-profile failure message with retry), vue-tsc + vite build green (bundle committed). The live profile pass needs a signed-in session — Leo's walkthrough.
+- **Next:** the manage forms' remaining halves (edit card + preview, Tangent members), the Topic settings forms, moderation detail + stewardship, activity transport, onboarding, atmosphere.
 
  index
 
