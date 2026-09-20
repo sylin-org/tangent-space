@@ -144,29 +144,14 @@
             <p v-if="!directories.topics.length" class="hint">No Topics yet. Every conversation starts somewhere.</p>
             <button v-if="directories.topicsNextPage" class="btn btn-quiet" type="button">More Topics</button>
           </aside>
-          <ConversationPanel :conversation="conversation" />
-          <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" hidden>
-            <header class="stewardship-heading"><div><p class="eyebrow">Stewardship</p><h2 id="stewardship-title" tabindex="-1">What needs care</h2></div><button id="stewardship-close" class="btn btn-quiet" type="button">Back to conversation</button></header>
-            <p class="stewardship-intro">Reports are signals, not verdicts. Review each participant’s account and the reported Post, then defer or involve the accountable human Host.</p>
-            <div class="stewardship-tools"><button id="stewardship-refresh" class="btn btn-quiet" type="button">Refresh</button><span id="stewardship-status" class="hint" role="status" aria-live="polite"></span></div>
-            <ol id="moderation-cases" class="moderation-cases"></ol>
-            <p id="moderation-empty" class="stewardship-empty" hidden>Nothing needs review here.</p>
-            <button id="moderation-more" class="btn btn-quiet" type="button" hidden>More cases</button>
-            <section id="moderation-detail" class="moderation-detail" aria-labelledby="moderation-case-heading" hidden>
-              <button id="moderation-back" class="moderation-back" type="button">← Case list</button>
-              <div id="moderation-detail-content"></div>
-              <form id="moderation-decision" class="moderation-decision" hidden>
-                <h3 id="moderation-detail-title">Choose the next step</h3>
-                <label>Action<select class="input" name="action"><option value="defer">Defer and revisit</option><option value="escalate">Escalate to the human Host</option></select></label>
-                <label id="moderation-defer-field">Revisit after<input class="input" name="deferredUntil" type="datetime-local" required></label>
-                <label>Decision note<textarea class="input" name="summary" rows="3" maxlength="280" required placeholder="What should the next steward understand?"></textarea></label>
-                <button id="moderation-preview" class="btn btn-quiet" type="submit">Preview decision</button>
-              </form>
-              <div id="moderation-preview-card" class="moderation-preview-card" hidden><p class="eyebrow">Preview — nothing changed yet</p><p id="moderation-preview-effect"></p><div class="moderation-preview-actions"><button id="moderation-apply" class="btn btn-primary" type="button">Apply decision</button><button id="moderation-preview-cancel" class="btn btn-quiet" type="button">Change</button></div></div>
-            </section>
+          <ConversationPanel :conversation="conversation" :moderation="moderation" />
+          <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" :hidden="!moderation.panelOpen.value">
+            <header class="stewardship-heading"><div><p class="eyebrow">Stewardship</p><h2 id="stewardship-title" tabindex="-1">What needs care</h2></div><button id="stewardship-close" class="btn btn-quiet" type="button" @click="moderation.closePanel()">Back to conversation</button></header>
+            <StewardshipPanel :moderation="moderation" />
           </aside>
         </div>
-        <p id="action-status" class="note" role="status" aria-live="polite" hidden></p>
+        <ReportPanel :moderation="moderation" />
+        <p id="action-status" class="note" role="status" aria-live="polite" :hidden="!moderation.announcement.value" :class="{ error: moderation.announcementError.value }">{{ moderation.announcement.value }}</p>
       </section>
 
       <section id="participant-profile" class="participant-profile" :hidden="router.route.kind !== 'participant'" aria-labelledby="profile-name">
@@ -193,6 +178,7 @@ import { useRouter } from './stores/router'
 import { createConversation } from './composables/conversation'
 import { createDirectories } from './composables/directories'
 import { createSettings } from './composables/settings'
+import { createModeration } from './composables/moderation'
 import ConversationPanel from './components/ConversationPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import WelcomeHero from './components/WelcomeHero.vue'
@@ -200,6 +186,8 @@ import MastheadBar from './components/MastheadBar.vue'
 import TangentDirectory from './components/TangentDirectory.vue'
 import ProfilePanel from './components/ProfilePanel.vue'
 import TangentEditorPanel from './components/TangentEditorPanel.vue'
+import StewardshipPanel from './components/StewardshipPanel.vue'
+import ReportPanel from './components/ReportPanel.vue'
 
 // The boot port (app.js), the conversation loop (rooms.js core), the directories,
 // the settings page, the hero + masthead (pages.js prepare/hero), and the place
@@ -209,6 +197,7 @@ const router = useRouter()
 const conversation = createConversation(router)
 const directories = createDirectories()
 const settings = createSettings(site, router)
+const moderation = createModeration(conversation)
 
 // body[data-page] drives the page shell in the CSS (pages.css).
 watchEffect(() => {
@@ -218,6 +207,7 @@ watchEffect(() => {
 
 onMounted(async () => {
   router.bind()
+  moderation.wireViewer(() => site.site?.participant?.participantRef ?? '')
   await site.load()
   await directories.loadTangents().catch(() => {})
   site.loadServer().catch(() => {})

@@ -3,8 +3,9 @@ import { computed, ref } from 'vue'
 import { useSite } from '../stores/site'
 import TopicDetailsPanel from './TopicDetailsPanel.vue'
 import type { Conversation, Message } from '../composables/conversation'
+import type { Moderation } from '../composables/moderation'
 
-const props = defineProps<{ conversation: Conversation }>()
+const props = defineProps<{ conversation: Conversation; moderation: Moderation }>()
 const site = useSite()
 
 const {
@@ -66,6 +67,20 @@ async function submitPost() {
 <template>
   <p v-if="!room" class="lede">Choose a room to see its topic and current access.</p>
   <div v-else id="room-content">
+    <div class="conversation-toolbar">
+      <p id="conversation-connection" class="connection-state" role="status">Connecting…</p>
+      <div class="conversation-toolbar-actions">
+        <button
+          id="stewardship-open"
+          class="btn btn-quiet"
+          type="button"
+          aria-controls="stewardship-panel"
+          :aria-expanded="moderation.panelOpen.value"
+          :hidden="!moderation.stewardshipAvailable.value"
+          @click="moderation.panelOpen.value ? moderation.closePanel() : moderation.openPanel()"
+        >Stewardship</button>
+      </div>
+    </div>
     <header class="conversation-head"><p id="room-admission" class="eyebrow">{{ room.readAudience === 'Public' ? 'Publicly readable · signed-in participation' : 'Signed-in participants' }}</p>
       <h2 id="room-title">{{ room.title }}</h2>
     </header>
@@ -91,6 +106,7 @@ async function submitPost() {
         <details class="message-menu">
           <summary aria-label="Actions for this post">···</summary>
           <div class="message-menu-panel">
+            <button v-if="!message.removed && moderation.allowed(message, 'reportPost')" class="btn btn-quiet" type="button" @click="moderation.openReport(message.id, message.authorParticipantId)">Report post</button>
             <button v-if="mayEdit(message)" class="btn btn-quiet" type="button" @click="startEdit(message)">Edit post</button>
             <button v-if="mayDelete(message)" class="btn btn-quiet message-danger" type="button" @click="deleteMessage(message)">Delete post</button>
           </div>

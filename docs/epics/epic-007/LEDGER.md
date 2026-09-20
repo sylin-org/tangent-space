@@ -10,7 +10,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
 | Current task | R3.5 — the host-owned live bus — **done**; no process-wide signal state remains. R3.6, the Conversation port, is next |
 | Next action | **Continue the Port**: the welcome hero + masthead account menu + the state-section bindings (the boot machine's visible half), then the place section's route reactions (`enterRoute`'s tangent/topic/post dispatch), moderation detail, participant profile, activity transport, facets, onboarding, atmosphere — then the swap: Vue at `/`, vanilla deleted. R3.6 stage 2 (`WithCurrentPolicy` → action-owns-its-transaction) stays queued behind the Port. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
-| Last checkpoint | 2026-09-20 · autonomous session · the manage forms ported: TopicDetailsPanel (description/reading-audience/participation/people over the mutateRoom port) and TangentEditorPanel (edit card with live preview, Tangent people), plus the community-settings visibility rules. vitest 20/20, build green, node 7/7 |
+| Last checkpoint | 2026-09-20 · autonomous session · stewardship ported: moderation.ts + StewardshipPanel (scope check, case queue, testimony paging, preview→apply decisions) + ReportPanel, wired into the conversation toolbar. vitest 22/22, build green, node 7/7 |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
 | Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
 | Blockers | None |
@@ -781,6 +781,13 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **`TangentEditorPanel.vue`** ports edit-card (with the live tcg preview) and the Tangent people form, over new `directories.updateTangent`/`setMemberRole`; the Admin option follows `isOwner`. The community-settings, create-Tangent and create-Topic details now follow the vanilla visibility rules (`tangentsCanCreate`, `canManage`/`isOwner`/`canCreateTopic`).
 - **Verification:** vitest 20/20, vue-tsc + vite build green (bundle committed). The manage forms need an authenticated owner for a live walk — Leo's walkthrough covers them.
 - **Next:** moderation stewardship + report panel, the activity transport (SSE + coordinator), onboarding, atmosphere + facets, then the swap.
+
+### S-014 · 2026-09-20 · Claude (continued)
+
+- **Stewardship is ported** (`composables/moderation.ts` + `StewardshipPanel.vue` + `ReportPanel.vue`, the moderation.js port): the scope check against the experience envelope (`capabilities.stewardship` + `list_moderation_cases`, the canonical serverRef), the bounded case queue with malformed-ref filtering, the case detail with testimony paging and recent decisions, the preview-then-apply decision flow with optimistic-concurrency handling (409 re-opens the case), the private report form with the already-reported/saturated responses, and the body attributes (`data-stewardship`, `steward-panel-open`) the CSS keys on.
+- The conversation panel gains the toolbar (connection state placeholder + the Stewardship toggle) and the per-message Report action gated on `reportPost`. Two test-caught fixes: the scope watch must run immediately (a room may already be open when stewardship wires up), and case rows must filter on well-formed references exactly where the vanilla's renderer did.
+- **Verification:** vitest 22/22 (steward queue + no-stewardship case), vue-tsc + vite build green (bundle committed). The live stewardship walk needs an authorized steward — Leo's walkthrough.
+- **Remaining:** the activity transport (SSE + coordinator), onboarding, atmosphere + ascii-scenes, facets/artwork utilities, then the swap.
 
  index
 
