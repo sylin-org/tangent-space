@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useRouter } from './router'
 
 const SIGN_IN_PATH = '/auth/atproto/challenge'
 const SIGN_OUT_PATH = '/auth/logout'
@@ -7,6 +8,7 @@ export interface SiteParticipant {
   participantRef: string
   did: string | null
   handle: string | null
+  displayName?: string
   isOwner: boolean
   joinedAt: string
 }
@@ -17,6 +19,7 @@ export interface Site {
   signIn: string
   signOut: string | null
   participant: SiteParticipant | null
+  onboarding?: string
 }
 
 export interface ServerPermissions {
@@ -68,7 +71,7 @@ function parseSite(payload: unknown): Site | null {
   if (typeof p.established !== 'boolean') return null
   if (!isAllowedPath(p.signIn, SIGN_IN_PATH)) return null
   if (p.participant === undefined || p.participant === null) {
-    return { name: p.name, established: p.established, signIn: p.signIn, signOut: null, participant: null }
+    return { name: p.name, established: p.established, signIn: p.signIn, signOut: null, participant: null, onboarding: typeof p.onboarding === 'string' ? p.onboarding : undefined }
   }
   if (typeof p.participant !== 'object') return null
   const participant = p.participant as Record<string, unknown>
@@ -85,9 +88,11 @@ function parseSite(payload: unknown): Site | null {
       participantRef: participant.participantRef,
       did: typeof participant.did === 'string' ? participant.did : null,
       handle: (participant.handle as string | null) ?? null,
+      displayName: typeof participant.displayName === 'string' ? participant.displayName : undefined,
       isOwner: participant.isOwner,
       joinedAt: participant.joinedAt,
     },
+    onboarding: typeof p.onboarding === 'string' ? p.onboarding : undefined,
   }
 }
 
@@ -121,7 +126,7 @@ export const useSite = defineStore('site', {
         const site = parseSite(await response.json())
         if (!site) throw new Error('Unexpected site payload')
         this.site = site
-        if (!site.established && location.pathname === '/') {
+        if (!site.established && useRouter().route.kind === 'home') {
           location.replace('/onboarding/')
           return
         }
@@ -147,3 +152,5 @@ export const useSite = defineStore('site', {
     },
   },
 })
+
+export type SiteStore = ReturnType<typeof useSite>

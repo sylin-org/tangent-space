@@ -3,45 +3,38 @@
   <a class="skip" href="#main">Skip to content</a>
 
   <header class="masthead">
-    <div class="masthead-brand"><a class="brand" href="/" aria-label="Tangent Space home"><span class="mark" aria-hidden="true"></span><span>Tangent Space</span></a><p id="activity-status" class="connection-state" role="status" aria-live="polite" tabindex="0" hidden><span id="activity-status-label">Connecting…</span></p></div>
-    <nav class="masthead-actions" aria-label="Site actions"><a id="nav-sign-in" href="/sign-in/">Sign in</a><details id="nav-account" class="account-menu" hidden><summary><span id="nav-account-mark" class="account-mark" aria-hidden="true"></span><span class="account-identity"><span id="nav-account-name">Your account</span><span id="nav-account-handle"></span></span><span aria-hidden="true">⌄</span></summary><div class="account-popover"><p id="nav-account-role" class="eyebrow"></p><a id="nav-profile" href="/">Your profile</a><button type="button" id="nav-sign-out">Sign out</button></div></details></nav>
+    <MastheadBar :site="site" :router="router" @sign-out="submitSignOut" />
   </header>
 
   <main id="main" tabindex="-1">
     <article class="panel">
-      <p class="eyebrow" id="site-name" hidden></p>
-      <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+      <p class="eyebrow" id="site-name" :hidden="!site.site">{{ site.site?.name }}</p>
+      <p class="visually-hidden" id="announcer" role="status" aria-live="polite">{{ site.announcement }}</p>
 
-      <section id="server-welcome" class="server-welcome" hidden aria-labelledby="server-welcome-title">
-        <img id="hero-image" class="hero-image" alt="" referrerpolicy="no-referrer" hidden>
-        <div class="hero-inner">
-          <nav id="hero-breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"></nav>
-          <div class="server-welcome-copy"><p id="hero-eyebrow" class="eyebrow">The bulletin board</p><h1 id="server-welcome-title"></h1><p id="hero-byline" class="hero-byline" hidden></p><p id="server-welcome-message" class="lede"></p><p id="server-motd" class="server-motd" hidden></p></div>
-          <div class="server-welcome-actions"><div id="hero-actions"></div><a id="server-settings-toggle" class="server-settings-link" href="/settings" aria-label="Server settings" title="Server settings" hidden>⚙</a></div>
-        </div>
-      </section>
+      <WelcomeHero :site="site" :router="router" :tangent="routeTangent" :topic="routeTopic" />
 
       <section id="settings-page" class="settings-page" :hidden="!router.isSettings" aria-labelledby="settings-title">
         <SettingsPanel :settings="settings" />
       </section>
-      <section id="state-loading" hidden aria-labelledby="loading-title">
+
+      <section id="state-loading" :hidden="site.state !== 'loading'" aria-labelledby="loading-title">
         <h1 class="title" id="loading-title">One moment</h1>
         <p class="lede">Loading this site's welcome.</p>
       </section>
 
-      <section id="state-error" hidden aria-labelledby="error-title">
+      <section id="state-error" :hidden="site.state !== 'error'" aria-labelledby="error-title">
         <h1 class="title" id="error-title">The welcome didn't load</h1>
         <p class="lede">This site couldn't be reached just now. Check your connection, then try again.</p>
-        <button type="button" class="btn btn-primary" id="retry">Try again</button>
+        <button type="button" class="btn btn-primary" id="retry" @click="site.load()">Try again</button>
       </section>
 
-      <section id="state-anonymous" hidden aria-labelledby="anonymous-title">
+      <section id="state-anonymous" :hidden="!anonymousVisible" aria-labelledby="anonymous-title">
         <div class="onboarding-layout">
-          <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">Conversation has a home here.</h1>
-            <p class="lede" id="anonymous-copy">A home for your people, your companions, and the conversations you want to keep.</p>
-            <p class="note" id="note-unestablished" hidden>Sign in with your Atmosphere account. You’ll name your first Tangent next.</p>
-            <form id="sign-in-form" method="get" class="sign-in">
-              <input type="hidden" name="return" value="/"><button type="submit" class="btn btn-primary" id="sign-in-button">Log in with Bluesky <span aria-hidden="true">→</span></button>
+          <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">{{ anonymousTitle }}</h1>
+            <p class="lede" id="anonymous-copy">{{ anonymousCopy }}</p>
+            <p class="note" id="note-unestablished" :hidden="router.route.kind !== 'home' || site.established">Sign in with your Atmosphere account. You’ll name your first Tangent next.</p>
+            <form id="sign-in-form" method="get" class="sign-in" :action="site.site?.signIn">
+              <input type="hidden" name="return" :value="signInReturn"><button type="submit" class="btn btn-primary" id="sign-in-button">Log in with Bluesky <span aria-hidden="true">→</span></button>
             </form>
             <p class="hint" id="sign-in-hint">Choose your account on Bluesky. Your password stays there.</p>
           </div>
@@ -81,28 +74,28 @@
         <p id="onboarding-error" class="onboarding-error" role="alert" tabindex="-1"></p>
       </section>
 
-      <section id="state-signed-in" hidden aria-labelledby="signed-in-title">
-        <p class="eyebrow">Your arrival</p><h1 class="title" id="signed-in-title">Welcome back<span id="welcome-name"></span>.</h1>
+      <section id="state-signed-in" :hidden="site.state !== 'signedIn' || authenticationRoute" aria-labelledby="signed-in-title">
+        <p class="eyebrow">Your arrival</p><h1 class="title" id="signed-in-title">Welcome back<span id="welcome-name">{{ welcomeName }}</span>.</h1>
         <p class="lede">Here are the conversations waiting for you.</p>
-        <p class="note" id="note-unestablished-signed-in" hidden>This site is awaiting its owner. Shared spaces will take shape once they establish it.</p>
+        <p class="note" id="note-unestablished-signed-in" :hidden="site.established">This site is awaiting its owner. Shared spaces will take shape once they establish it.</p>
         <div class="identity">
-          <p class="who"><span id="display-name"></span><span class="badge" id="owner-badge" hidden>Owner</span></p>
+          <p class="who"><span id="display-name">{{ site.displayName }}</span><span class="badge" id="owner-badge" :hidden="!site.site?.participant?.isOwner">Owner</span></p>
           <details class="identity-details">
             <summary>Identity details</summary>
             <dl>
               <div class="pair">
                 <dt>DID</dt>
-                <dd><code class="did" id="did-full"></code></dd>
+                <dd><code class="did" id="did-full">{{ site.site?.participant?.did || site.site?.participant?.participantRef }}</code></dd>
               </div>
-              <div class="pair" id="joined-row">
+              <div class="pair" id="joined-row" :hidden="!site.joinedLabel">
                 <dt>Joined</dt>
-                <dd id="joined"></dd>
+                <dd id="joined">{{ site.joinedLabel }}</dd>
               </div>
             </dl>
           </details>
         </div>
         <div class="identity-actions">
-        <form id="sign-out-form" method="post" class="sign-out" hidden>
+        <form id="sign-out-form" ref="signOutForm" method="post" class="sign-out" :hidden="!site.site?.signOut" :action="site.site?.signOut ?? ''">
           <input type="hidden" name="return" value="/">
           <button type="submit" class="btn btn-quiet">Sign out</button>
         </form>
@@ -195,7 +188,7 @@
         <p id="action-status" class="note" role="status" aria-live="polite" hidden></p>
       </section>
 
-      <section id="participant-profile" class="participant-profile" hidden aria-labelledby="profile-name">
+      <section id="participant-profile" class="participant-profile" :hidden="router.route.kind !== 'participant'" aria-labelledby="profile-name">
         <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Participant</span></nav>
         <header class="profile-card">
           <div id="profile-avatar" class="profile-avatar" aria-hidden="true">✦</div>
@@ -256,8 +249,7 @@
 
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import { useSite } from './stores/site'
 import { useRouter } from './stores/router'
 import { createConversation } from './composables/conversation'
@@ -265,25 +257,69 @@ import { createDirectories } from './composables/directories'
 import { createSettings } from './composables/settings'
 import ConversationPanel from './components/ConversationPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import WelcomeHero from './components/WelcomeHero.vue'
+import MastheadBar from './components/MastheadBar.vue'
 
 // The boot port (app.js), the conversation loop (rooms.js core), the directories,
-// and the settings page (access.js + roles.js + people.js + the server form).
+// the settings page, and the hero + masthead (pages.js prepare/hero).
 const site = useSite()
 const router = useRouter()
 const conversation = createConversation()
 const directories = createDirectories()
 const settings = createSettings(site, router)
 
+// body[data-page] drives the page shell in the CSS (pages.css).
+watchEffect(() => {
+  document.body.dataset.page = router.route.kind
+  document.body.dataset.signedIn = String(!!site.site?.participant)
+})
+
 onMounted(async () => {
   router.bind()
   await site.load()
-  await directories.loadTangents()
+  directories.loadTangents().catch(() => {})
+  site.loadServer().catch(() => {})
   if (router.isSettings) await settings.open()
 })
 
 watch(() => router.route, () => {
   if (router.isSettings) void settings.open()
 })
+
+const authenticationRoute = computed(() => ['sign-in', 'onboarding'].includes(router.route.kind))
+
+// Anonymous visitors see the welcome copy only where they are asked to sign in;
+// everywhere else the hero carries the sign-in action (pages.js prepare()).
+const anonymousVisible = computed(() => authenticationRoute.value && site.state !== 'loading' && !site.site?.participant)
+const anonymousTitle = computed(() => (router.route.kind === 'sign-in' ? 'Welcome back.' : 'Conversation has a home here.'))
+const anonymousCopy = computed(() =>
+  router.route.kind === 'sign-in' ? 'Sign in to ' + (site.site?.name ?? 'this server') + ' with your Atmosphere account.' : 'A home for your people, your companions, and the conversations you want to keep.',
+)
+
+const signInReturn = computed(() => {
+  if (router.route.kind === 'onboarding') return '/onboarding/'
+  const requested = new URLSearchParams(window.location.search).get('return')
+  return requested && /^\/(?!\/)/.test(requested) && !/[\\\u0000-\u001f]/.test(requested) ? requested : '/'
+})
+
+const welcomeName = computed(() => {
+  const handle = site.site?.participant?.handle
+  return handle && handle.length > 0 ? ', ' + handle : ''
+})
+
+const signOutForm = ref<HTMLFormElement | null>(null)
+
+function submitSignOut() {
+  signOutForm.value?.requestSubmit()
+}
+
+// The hero's Tangent and Topic come from the route when the directory or the
+// conversation holds them (rooms.js updateHero's lookup).
+const routeTangent = computed(() => {
+  const key = 'tangent' in router.route ? router.route.tangent : undefined
+  return (key && directories.tangents.find(t => t.key === key)) || null
+})
+const routeTopic = computed(() => (['topic', 'post'].includes(router.route.kind) ? conversation.room.value : null))
 
 async function createTopic(event: Event) {
   const form = event.target as HTMLFormElement

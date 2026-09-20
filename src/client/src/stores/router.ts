@@ -14,6 +14,9 @@ export type WorkspaceRoute =
   | { kind: 'topic'; tangent: string; topic: string }
   | { kind: 'topic-settings'; tangent: string; topic: string }
   | { kind: 'post'; tangent: string; post: string }
+  // Full page loads in the vanilla router: the app never client-navigates into them.
+  | { kind: 'sign-in' }
+  | { kind: 'onboarding' }
 
 // The build hosts the workspace under a fixed base (/app today, / at the swap);
 // routes are always parsed relative to it.
@@ -49,7 +52,14 @@ export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
 
 function parseHere(pathname: string): WorkspaceRoute | null {
   const rest = BASE !== '/' && pathname.startsWith(BASE) ? pathname.slice(BASE.length - 1) : pathname
-  return parseWorkspaceRoute(rest)
+  const workspace = parseWorkspaceRoute(rest)
+  if (workspace) return workspace
+  // Authentication pages are full page loads; the app still needs their kind when
+  // it is the one serving them.
+  const first = rest.split('/').filter(Boolean)[0]
+  if (first === 'sign-in') return { kind: 'sign-in' }
+  if (first === 'onboarding') return { kind: 'onboarding' }
+  return null
 }
 
 function baseHref(path: string): string {
