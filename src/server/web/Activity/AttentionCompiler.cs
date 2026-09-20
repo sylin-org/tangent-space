@@ -64,6 +64,9 @@ internal static class AttentionCompiler
             rows.Add(await CompileReader(readerId, topicKey, state, posts, parents, last, clock.GetUtcNow(), ct));
         }
 
+        // An empty write set commits nothing: topics with no readers or nothing to change
+        // skip the transaction entirely (Koan rejects a zero-operation commit).
+        if (rows.Count == 0 && stale.Count == 0) return;
         using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
         foreach (var row in rows) await row.Save(ct);
         foreach (var id in stale) await TopicAttention.Remove(id, ct);
