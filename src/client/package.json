@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "clean": "node scripts/clean-root-output.mjs",
+    "prebuild": "npm run clean",
     "build": "vue-tsc --noEmit && vite build",
     "test": "vitest run"
   },

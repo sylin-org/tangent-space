@@ -3,13 +3,13 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 
 // The workspace's stylesheets, in the vanilla head's order (the cascade matters).
-import '../../server/web/wwwroot/app.css'
-import '../../server/web/wwwroot/rooms.css'
-import '../../server/web/wwwroot/onboarding.css'
-import '../../server/web/wwwroot/pages.css'
-import '../../server/web/wwwroot/landing.css'
-import '../../server/web/wwwroot/access.css'
-import '../../server/web/wwwroot/moderation.css'
-import '../../server/web/wwwroot/atmosphere.css'
+import './assets/app.css'
+import './assets/rooms.css'
+import './assets/onboarding.css'
+import './assets/pages.css'
+import './assets/landing.css'
+import './assets/access.css'
+import './assets/moderation.css'
+import './assets/atmosphere.css'
 
 createApp(App).use(createPinia()).mount('#app')
