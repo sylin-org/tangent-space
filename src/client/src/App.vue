@@ -21,120 +21,8 @@
         </div>
       </section>
 
-      <section id="settings-page" class="settings-page" hidden aria-labelledby="settings-title">
-        <nav id="settings-breadcrumbs" class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Server settings</span></nav>
-        <header class="settings-page-heading"><p id="settings-eyebrow" class="eyebrow">MAKE YOURSELF AT HOME</p><h1 id="settings-title">Server settings</h1><p id="settings-intro">Name your place, set the mood, and decide who can help.</p></header>
-        <p id="settings-denied" class="hint" hidden>Server settings are available to this server’s owner and authorized administrators.</p>
-        <a id="settings-sign-in" class="btn btn-primary" href="/sign-in/?return=%2Fsettings" hidden>Sign in</a>
-        <div id="settings-shell" class="settings-shell" hidden>
-          <nav class="settings-tabs" role="tablist" aria-label="Server settings">
-            <button id="settings-server-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-server-panel" aria-selected="true" data-settings-tab="server"><span aria-hidden="true">&#9671;</span><span><strong>Server</strong><small>Identity and atmosphere</small></span></button>
-            <button id="settings-context-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-context-panel" aria-selected="false" data-settings-tab="context" hidden><span aria-hidden="true">&#9671;</span><span><strong id="settings-context-label">Tangent</strong><small>Identity and details</small></span></button>
-            <button id="settings-roles-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-roles-panel" aria-selected="false" data-settings-tab="roles"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Permissions and people</small></span></button>
-            <button id="settings-access-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-access-panel" aria-selected="false" data-settings-tab="access"><span aria-hidden="true">&#9670;</span><span><strong>Access</strong><small>Who can see and act</small></span></button>
-            <button id="settings-people-tab" class="settings-tab" type="button" role="tab" aria-controls="settings-people-panel" aria-selected="false" data-settings-tab="people"><span aria-hidden="true">&#9673;</span><span><strong>People</strong><small>Everyone who has arrived</small></span></button>
-          </nav>
-          <div class="settings-tab-content">
-            <section id="settings-server-panel" role="tabpanel" aria-labelledby="settings-server-tab">
-              <details id="server-settings" class="setup" hidden>
-                <summary class="visually-hidden">Server settings</summary>
-                <form id="server-settings-form" class="stack">
-            <div><p class="eyebrow">Your server’s identity</p><h2>A place people remember.</h2><p class="hint">These details welcome visitors here and travel with your server’s card in their companion collection.</p></div>
-            <div class="server-identity-editor">
-              <div class="stack">
-                <label>Server name<input class="input" name="name" maxlength="120" required placeholder="Leo’s Garage"></label>
-                <label>Byline<input class="input" name="byline" maxlength="240" placeholder="A few words that feel like you"></label>
-                <label>Card and cover image<input class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"><span class="hint">An image URL, used on your welcome header and server card.</span></label>
-                <label>Description &amp; welcome<textarea class="input" name="welcomeMessage" rows="3" maxlength="1000" placeholder="What happens here? Who is this place for?"></textarea></label>
-                <label>Message of the day<input class="input" name="motd" maxlength="500" placeholder="A little news for anyone dropping by"></label>
-                <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet" aria-controls="atmosphere-panel" aria-expanded="false">Choose an atmosphere</button></div>
-              </div>
-              <aside class="server-card-preview" aria-label="Your server card preview">
-                <div class="server-card-art"><img id="server-card-image" alt="" referrerpolicy="no-referrer" hidden><span class="eyebrow">Tangent server · ✧</span><div><span class="server-card-sigil" aria-hidden="true">✦</span><h3 id="server-card-name">Your place</h3><p id="server-card-byline"></p></div></div>
-                <div class="server-card-copy"><p id="server-card-description"></p><div id="server-card-board" hidden><span class="eyebrow">On the board</span><p id="server-card-motd"></p></div><p class="hint">A small card. Your corner of the world.</p></div>
-              </aside>
-            </div>
-            <details class="server-policy-editor"><summary>Tangent stewardship</summary><div class="stack"><label class="check-row"><input type="checkbox" name="allowAgentTangentOwnership"> Allow agents to own Tangents</label><p class="hint">Who may create Tangents is configured in Access.</p><p id="server-role" class="server-role" hidden></p><p id="server-permissions-summary" class="hint"></p></div></details>
-            <div class="settings-save"><button class="btn btn-primary">Save server settings</button><p id="settings-status" role="status"></p></div>
-                </form>
-              </details>
-            </section>
-            <section id="settings-context-panel" class="settings-context-panel" role="tabpanel" aria-labelledby="settings-context-tab" hidden>
-              <div class="settings-context-card"><p id="settings-context-kicker" class="eyebrow">TANGENT</p><h2 id="settings-context-name">Loading…</h2><p id="settings-context-copy" class="lede"></p><div id="settings-context-editor"></div></div>
-            </section>
-            <section id="settings-roles-panel" class="roles-panel" role="tabpanel" aria-labelledby="settings-roles-tab" hidden>
-              <header class="roles-heading"><div><p class="eyebrow">ACCESS, WITHOUT MYSTERY</p><h2>Roles</h2><p>Group people by responsibility, then give each role only what it needs.</p></div></header>
-              <p id="role-scope-note" class="role-scope-note hint">These are server roles. They can be used by Access rules throughout this Tangent Space.</p>
-              <section id="role-overview" class="role-overview" aria-labelledby="role-overview-heading">
-                <div class="role-overview-toolbar"><label class="role-search"><span class="visually-hidden">Search roles</span><input id="role-search" class="input" type="search" placeholder="Search roles"></label><button id="role-create" class="btn btn-primary" type="button">Create role</button></div>
-                <div class="role-directory-heading"><strong id="role-overview-heading">Roles</strong><span>Direct members</span></div>
-                <div id="role-directory-list" class="role-directory-list" role="listbox" aria-label="Roles"></div>
-                <div class="role-directory-actions"><button id="role-counts-retry" class="btn btn-quiet" type="button" hidden>Retry counts</button><button id="role-page-previous" class="btn btn-quiet" type="button" hidden>Previous</button><button id="role-page-next" class="btn btn-quiet" type="button" hidden>Next</button></div>
-                <p id="role-list-status" class="hint" role="status">Loading roles…</p>
-                <p class="role-count-note">Member counts show direct assignments in this scope. Inherited access remains visible in the role’s permissions.</p>
-              </section>
-              <section id="role-editor-view" class="role-editor-view" hidden>
-                <header class="role-editor-heading"><button id="role-back" class="role-back" type="button">← All roles</button><div class="role-title-line"><span id="role-color-dot" class="role-color-dot" aria-hidden="true"></span><div><p id="role-editor-kicker" class="eyebrow">ROLE</p><h3 id="role-editor-title">New role</h3></div></div><span id="role-managed" class="role-managed" hidden>Built-in role</span></header>
-                <div class="role-editor-workspace">
-                  <aside class="role-browser" aria-label="Other roles in this scope"><div id="role-list" class="role-list" role="listbox" aria-label="Other roles"></div></aside>
-                  <form id="role-form">
-                    <nav class="role-editor-tabs" role="tablist" aria-label="Role editor">
-                      <button type="button" role="tab" aria-selected="true" data-role-editor-tab="appearance">Appearance</button>
-                      <button type="button" role="tab" aria-selected="false" data-role-editor-tab="permissions">Permissions</button>
-                      <button type="button" role="tab" aria-selected="false" data-role-editor-tab="members">Members <span id="role-member-count">0</span></button>
-                    </nav>
-                    <section id="role-appearance-panel" role="tabpanel">
-                      <div class="role-appearance-layout">
-                        <div class="role-fields">
-                          <label>Role name<input id="role-name" class="input" maxlength="160" required></label>
-                          <label>Purpose<textarea id="role-purpose" class="input" maxlength="1024" rows="3" placeholder="What is this role for?"></textarea></label>
-                          <label class="role-color-field"><span>Role color</span><span class="role-color-control"><input id="role-color" type="color" value="#a98df0"><code id="role-color-value">#a98df0</code></span></label>
-                          <label class="check-row"><input id="role-self-enrollable" type="checkbox"> Allow participants to self-enroll</label>
-                          <p id="role-managed-explanation" class="role-managed-explanation" hidden>Appearance and permissions are managed by Tangent. Direct membership is handled separately.</p>
-                        </div>
-                        <aside id="role-preview" class="role-preview" aria-label="Role preview">
-                          <p class="eyebrow">ROLE PREVIEW</p>
-                          <div class="role-preview-identity"><span id="role-preview-dot" class="role-color-dot" aria-hidden="true"></span><div><strong id="role-preview-name">New role</strong><small id="role-preview-purpose">What this role is for</small></div></div>
-                          <div class="role-preview-context"><span>How it appears in a role list</span><span id="role-preview-chip" class="role-preview-chip"><i aria-hidden="true"></i><b>New role</b></span></div>
-                        </aside>
-                      </div>
-                      <button id="role-retire" class="btn btn-quiet role-danger" type="button" hidden>Delete role</button>
-                    </section>
-                    <section id="role-permissions-panel" role="tabpanel" hidden>
-                      <label class="role-permission-search"><span class="visually-hidden">Search permissions</span><input id="role-permission-search" class="input" type="search" placeholder="Search permissions"></label>
-                      <div id="role-capabilities" class="role-capabilities"></div>
-                    </section>
-                    <section id="role-members-panel" role="tabpanel" hidden>
-                      <div class="role-members-heading">
-                        <div><h4>Members <span id="role-members-heading-count">0</span></h4><p id="role-members-scope" class="hint">Direct assignments in this scope.</p></div>
-                      </div>
-                      <label class="role-member-search">
-                        <span class="visually-hidden">Search members</span>
-                        <input id="role-member-search" class="input" type="search" placeholder="Search members by name, handle, or DID…">
-                      </label>
-                      <div id="role-member-protected" class="role-member-protected" hidden><strong>Ownership is protected</strong><p>The server owner is the human account designated by server administration. This role assignment cannot replace that ownership.</p></div>
-                      <div id="role-members" class="role-members"></div>
-                      <p id="role-members-status" class="hint" role="status"></p>
-                    </section>
-                    <div id="role-editor-actions" class="role-editor-actions"><button id="role-save" class="btn btn-primary">Save changes</button><button id="role-reset" class="btn btn-quiet" type="button">Reset</button><p id="role-status" role="status"></p></div>
-                  </form>
-                </div>
-              </section>
-            </section>
-            <section id="settings-people-panel" role="tabpanel" aria-labelledby="settings-people-tab" hidden>
-              <header class="roles-heading"><div><p class="eyebrow">WHO IS HERE</p><h2>People</h2><p>Everyone who has arrived on this server, newest last. Roles are granted on the Roles tab.</p></div></header>
-              <div id="people-list" class="people-list"></div>
-              <p id="people-status" class="hint" role="status">Loading people…</p>
-              <button id="people-more" class="btn btn-quiet" type="button" hidden>Show more</button>
-            </section>
-            <section id="settings-access-panel" class="access-panel" role="tabpanel" aria-labelledby="settings-access-tab" hidden>
-              <header class="access-heading"><div><p class="eyebrow">A CLEAR DOOR</p><h2>Access</h2><p id="access-intro">Choose who can discover this place and what they may do here.</p></div><span id="access-scope-badge" class="access-scope-badge"></span></header>
-              <div id="access-loading" class="access-loading" role="status">Loading access rules…</div>
-              <div id="access-decisions" class="access-decisions"></div>
-              <p id="access-status" class="hint" role="status"></p>
-            </section>
-          </div>
-        </div>
+      <section id="settings-page" class="settings-page" :hidden="!router.isSettings" aria-labelledby="settings-title">
+        <SettingsPanel :settings="settings" />
       </section>
       <section id="state-loading" hidden aria-labelledby="loading-title">
         <h1 class="title" id="loading-title">One moment</h1>
@@ -368,21 +256,33 @@
 
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { computed } from 'vue'
 import { useSite } from './stores/site'
+import { useRouter } from './stores/router'
 import { createConversation } from './composables/conversation'
 import { createDirectories } from './composables/directories'
+import { createSettings } from './composables/settings'
 import ConversationPanel from './components/ConversationPanel.vue'
+import SettingsPanel from './components/SettingsPanel.vue'
 
-// The boot port (app.js) and the conversation loop (rooms.js core), wired.
+// The boot port (app.js), the conversation loop (rooms.js core), the directories,
+// and the settings page (access.js + roles.js + people.js + the server form).
 const site = useSite()
+const router = useRouter()
 const conversation = createConversation()
 const directories = createDirectories()
+const settings = createSettings(site, router)
 
 onMounted(async () => {
+  router.bind()
   await site.load()
   await directories.loadTangents()
+  if (router.isSettings) await settings.open()
+})
+
+watch(() => router.route, () => {
+  if (router.isSettings) void settings.open()
 })
 
 async function createTopic(event: Event) {

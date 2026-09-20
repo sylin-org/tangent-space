@@ -19,6 +19,23 @@ export interface Site {
   participant: SiteParticipant | null
 }
 
+export interface ServerPermissions {
+  role?: string
+  allowedActions?: string[]
+  restrictions?: string[]
+}
+
+export interface ServerView {
+  name?: string
+  byline?: string
+  coverImageUrl?: string
+  welcomeMessage?: string
+  motd?: string
+  allowAgentTangentOwnership?: boolean
+  role?: string
+  permissions?: ServerPermissions | Array<{ role?: string; scope?: string; allowedActions?: string[] }>
+}
+
 type SiteState = 'loading' | 'error' | 'anonymous' | 'signedIn'
 
 function isAllowedPath(value: unknown, allowed: string): value is string {
@@ -78,6 +95,7 @@ export const useSite = defineStore('site', {
   state: () => ({
     state: 'loading' as SiteState,
     site: null as Site | null,
+    server: null as ServerView | null,
     announcement: '',
   }),
   getters: {
@@ -113,6 +131,19 @@ export const useSite = defineStore('site', {
         this.state = 'error'
         this.announcement = 'The welcome could not be loaded.'
       }
+    },
+    /** The server's own details (rooms.js refreshServer). Throws when the read fails. */
+    async loadServer() {
+      const response = await fetch('/api/server', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      })
+      const value = await response.json().catch(() => null)
+      if (!response.ok || !value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('Server settings could not be read.')
+      }
+      this.server = value
     },
   },
 })
