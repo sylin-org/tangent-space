@@ -15,6 +15,7 @@ export interface DirectoryTangent {
   canManage?: boolean
   isOwner?: boolean
   canCreateTopic?: boolean
+  permissions?: { role?: string; allowedActions?: string[] }
   topics?: Array<{ key: string }>
 }
 

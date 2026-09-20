@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useSite } from '../stores/site'
+import TopicDetailsPanel from './TopicDetailsPanel.vue'
 import type { Conversation, Message } from '../composables/conversation'
 
 const props = defineProps<{ conversation: Conversation }>()
@@ -65,11 +66,12 @@ async function submitPost() {
 <template>
   <p v-if="!room" class="lede">Choose a room to see its topic and current access.</p>
   <div v-else id="room-content">
-    <header class="conversation-head">
+    <header class="conversation-head"><p id="room-admission" class="eyebrow">{{ room.readAudience === 'Public' ? 'Publicly readable · signed-in participation' : 'Signed-in participants' }}</p>
       <h2 id="room-title">{{ room.title }}</h2>
     </header>
     <p v-if="error" class="action-status error" role="alert">{{ error }}</p>
     <p v-if="loadingHistory" class="hint">Loading history…</p>
+    <TopicDetailsPanel :conversation="conversation" />
     <ol class="messages" aria-label="Messages">
       <li v-for="message in messages" :key="message.id" class="message" :class="{ removed: message.removed }">
         <header class="message-head">

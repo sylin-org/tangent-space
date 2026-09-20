@@ -17,6 +17,8 @@ function directoriesFixture(tangents: unknown[], nextPage: number | null = null)
     createTangent: async () => {},
     loadTopics: async () => {},
     createTopic: async () => {},
+    updateTangent: async () => {},
+    setMemberRole: async () => {},
   }) as Directories
 }
 

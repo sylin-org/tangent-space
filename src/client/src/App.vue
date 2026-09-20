@@ -108,8 +108,8 @@
           <div class="return-head"><h2 id="tangent-return-title">Your Tangents</h2><div class="collection-actions"><button id="create-tangent-open" class="btn btn-primary" type="button" :hidden="!(site.site?.participant && directories.tangentsCanCreate && site.site.onboarding === 'complete')" @click="openCreateTangent">Create Tangent</button></div></div>
           <TangentDirectory :directories="directories" :signed-in="!!site.site?.participant" @settings="key => router.navigate('/t/' + encodeURIComponent(key) + '/settings')" />
         </section>
-        <details id="community-settings" ref="communitySettings" hidden class="community-settings"><summary>Manage Tangent</summary><div class="community-settings-body">
-        <details id="tangent-setup" ref="tangentSetup" hidden class="setup tangent-setup">
+        <details id="community-settings" ref="communitySettings" :hidden="!communitySettingsVisible" class="community-settings"><summary>Manage Tangent</summary><div class="community-settings-body">
+        <details id="tangent-setup" ref="tangentSetup" :hidden="!directories.tangentsCanCreate" class="setup tangent-setup">
           <summary>Create a Tangent</summary>
           <div class="setup-intro"><p class="eyebrow">Your own Tangent space</p><h2>Name the place you are making</h2><p>It can grow with you. You can make more Tangents later.</p></div>
           <form id="create-tangent" ref="createTangentForm" class="stack tangent-form" @submit.prevent="submitCreateTangent" @input="autoKey">
@@ -123,25 +123,8 @@
             <button class="btn btn-primary">Create Tangent</button>
           </form>
         </details>
-        <details id="tangent-editor" hidden class="setup tangent-setup">
-          <summary>Edit this Tangent’s card</summary>
-          <div class="setup-intro"><p class="eyebrow">Its recognizable face</p><h2 id="edit-tangent-heading">Shape the place</h2><p>Changes appear on the card as you write.</p></div>
-          <form id="edit-tangent-form" class="stack tangent-form">
-            <label>Community name<input class="input" name="name" required maxlength="120"></label>
-            <label>What is this place for?<textarea class="input" name="description" maxlength="500" rows="2"></textarea></label>
-            <label>House rule or motto<input class="input" name="motto" maxlength="240"></label>
-            <label>Accent colour<input class="input color-input" name="accent" type="color"></label>
-            <label>Artwork URL <span class="field-note">Optional. HTTPS links or a supplied sample.</span><input class="input" name="artwork" type="text" inputmode="url" maxlength="2048"></label>
-            <div id="edit-card-preview" class="tangent-card edit-card-preview" aria-label="Card preview"></div>
-            <button class="btn btn-primary">Save card</button>
-          </form>
-        </details>
-        <details id="tangent-members" hidden class="setup tangent-members">
-          <summary>People in this Tangent</summary>
-          <p class="hint">Set a participant’s role across this Tangent. Topic-specific access remains separate.</p>
-          <form id="tangent-member-form" class="stack"><label>Account handle or DID<input class="input" name="did" required maxlength="2048" autocomplete="off" spellcheck="false" placeholder="@your-friend.bsky.social"></label><label>Tangent role<select class="input" name="role"><option value="Member">Member</option><option value="Reader">Read only</option><option id="tangent-admin-choice" value="Admin" hidden>Administrator</option></select></label><button class="btn btn-quiet">Save role</button></form>
-        </details>
-        <details id="site-setup" hidden class="setup">
+        <TangentEditorPanel :directories="directories" :tangent="activeTangent" @saved="key => router.navigate('/t/' + encodeURIComponent(key) + '/topics')" />
+        <details id="site-setup" :hidden="!siteSetupVisible" class="setup">
           <summary>Create a Topic</summary>
           <p class="hint">Start with a name and choose who can join the conversation.</p>
           <form id="create-room" class="stack">
@@ -216,6 +199,7 @@ import WelcomeHero from './components/WelcomeHero.vue'
 import MastheadBar from './components/MastheadBar.vue'
 import TangentDirectory from './components/TangentDirectory.vue'
 import ProfilePanel from './components/ProfilePanel.vue'
+import TangentEditorPanel from './components/TangentEditorPanel.vue'
 
 // The boot port (app.js), the conversation loop (rooms.js core), the directories,
 // the settings page, the hero + masthead (pages.js prepare/hero), and the place
@@ -310,6 +294,15 @@ const activeTangentKey = computed(() => {
   if ('tangent' in router.route && router.route.tangent) return router.route.tangent
   return conversation.room.value?.tangentKey ?? directories.tangents[0]?.key ?? null
 })
+
+// The active Tangent as the manage forms see it (rooms.js selectTangent's flags).
+const activeTangent = computed(() => directories.tangents.find(t => t.key === activeTangentKey.value) ?? null)
+
+const communitySettingsVisible = computed(() =>
+  !!(directories.tangentsCanCreate || site.site?.participant?.isOwner || activeTangent.value?.canManage || activeTangent.value?.isOwner || activeTangent.value?.canCreateTopic === true))
+
+const siteSetupVisible = computed(() =>
+  site.site?.participant?.isOwner === true || activeTangent.value?.canCreateTopic === true || (activeTangent.value?.permissions?.allowedActions?.includes('createTopic') ?? false))
 
 const communitySettings = ref<HTMLDetailsElement | null>(null)
 const tangentSetup = ref<HTMLDetailsElement | null>(null)

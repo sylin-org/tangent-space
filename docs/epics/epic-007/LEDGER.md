@@ -10,7 +10,7 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
 | Current task | R3.5 — the host-owned live bus — **done**; no process-wide signal state remains. R3.6, the Conversation port, is next |
 | Next action | **Continue the Port**: the welcome hero + masthead account menu + the state-section bindings (the boot machine's visible half), then the place section's route reactions (`enterRoute`'s tangent/topic/post dispatch), moderation detail, participant profile, activity transport, facets, onboarding, atmosphere — then the swap: Vue at `/`, vanilla deleted. R3.6 stage 2 (`WithCurrentPolicy` → action-owns-its-transaction) stays queued behind the Port. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
-| Last checkpoint | 2026-09-19 · autonomous session · the participant profile ported (ProfilePanel), and the component tests exposed + fixed an infinite canonicalize loop (route reassignment + base-prefixed URL never compared equal). vitest 20/20, build green, node 7/7 |
+| Last checkpoint | 2026-09-20 · autonomous session · the manage forms ported: TopicDetailsPanel (description/reading-audience/participation/people over the mutateRoom port) and TangentEditorPanel (edit card with live preview, Tangent people), plus the community-settings visibility rules. vitest 20/20, build green, node 7/7 |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
 | Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
 | Blockers | None |
@@ -774,6 +774,13 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **The tests caught a genuinely nasty one: the canonicalize pass could spin forever.** `canonicalize` always assigned the route (a fresh object every time), and under the `/app/` base the canonical path (`/u/a.b`) never equaled the base-prefixed location (`/app/u/a.b`) — so the route watch re-ran the profile load in a tight fetch loop. In the browser it would have hung the participant page exactly the same. The fix: when the URL is already canonical, canonicalize touches nothing. File-written traces in a hung worker found it — an infinite loop starves timers, so only persistent evidence survives to testify.
 - **Verification:** vitest 20/20 (profile identity card, posts with Topic links, canonical URL, blocked-profile failure message with retry), vue-tsc + vite build green (bundle committed). The live profile pass needs a signed-in session — Leo's walkthrough.
 - **Next:** the manage forms' remaining halves (edit card + preview, Tangent members), the Topic settings forms, moderation detail + stewardship, activity transport, onboarding, atmosphere.
+
+### S-013 · 2026-09-20 · Claude (continued)
+
+- **The manage forms are ported.** `TopicDetailsPanel.vue` carries the Topic's details and settings: the access and permission notes (rooms.js renderRoom), the description form, and — gated on manage/appointing rights — the reading-audience form with its publishing confirmation and live note, the participation form (editing/lock), and the people form with the Manager option's visibility and role notes. The conversation composable gained the `mutateRoom` port (`saveTopicDescription`, `updateMember`, `saveReadAudience`, `saveParticipation`) with the 403-goes-home rule and the re-open of the room after a save.
+- **`TangentEditorPanel.vue`** ports edit-card (with the live tcg preview) and the Tangent people form, over new `directories.updateTangent`/`setMemberRole`; the Admin option follows `isOwner`. The community-settings, create-Tangent and create-Topic details now follow the vanilla visibility rules (`tangentsCanCreate`, `canManage`/`isOwner`/`canCreateTopic`).
+- **Verification:** vitest 20/20, vue-tsc + vite build green (bundle committed). The manage forms need an authenticated owner for a live walk — Leo's walkthrough covers them.
+- **Next:** moderation stewardship + report panel, the activity transport (SSE + coordinator), onboarding, atmosphere + facets, then the swap.
 
  index
 

@@ -13,6 +13,7 @@ interface TangentCard {
   canManage?: boolean
   isOwner?: boolean
   canCreateTopic?: boolean
+  permissions?: { role?: string; allowedActions?: string[] }
   topics?: Array<{ key: string }>
 }
 
@@ -86,9 +87,39 @@ export function createDirectories() {
     await loadTopics(tangentKey)
   }
 
+  /** Save a Tangent's card (rooms.js edit-tangent-form). A 403 sends the viewer home. */
+  async function updateTangent(key: string, body: { name: string; description: string; motto: string; accent: string; artwork: string }) {
+    const response = await fetch('/api/v1/tangents/' + encodeURIComponent(key), {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (response.status === 403) {
+      window.location.assign('/')
+      return
+    }
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error((payload as { reason?: string; title?: string }).reason || (payload as { title?: string }).title || 'The Tangent card could not be saved.')
+    await loadTangents()
+  }
+
+  /** Set a participant's role across a Tangent (rooms.js tangent-member-form). */
+  async function setMemberRole(tangentKey: string, did: string, role: string) {
+    const response = await fetch('/api/tangents/' + encodeURIComponent(tangentKey) + '/roles/' + encodeURIComponent(did), {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error((payload as { reason?: string; title?: string }).reason || (payload as { title?: string }).title || 'The role could not be saved.')
+    await loadTangents()
+  }
+
   const directories = reactive({
     tangents, tangentsNextPage, tangentsCanCreate, topics, topicsNextPage, loading,
-    loadTangents, createTangent, loadTopics, createTopic,
+    loadTangents, createTangent, loadTopics, createTopic, updateTangent, setMemberRole,
   })
   return directories
 }

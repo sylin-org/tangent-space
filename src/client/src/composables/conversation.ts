@@ -40,9 +40,11 @@ export interface Room {
   canWrite: boolean
   isLocked: boolean
   canManage?: boolean
+  canAppointManagers?: boolean
   allowPostEditing?: boolean
   readAudience?: string
-  permissions?: { allowedActions: string[] } | null
+  accessState?: string
+  permissions?: { role?: string; allowedActions: string[] } | null
 }
 
 interface MutationIntent {
@@ -85,6 +87,7 @@ export function createConversation(router: RouterStore) {
   const moreMessages = ref(false)
   const error = ref('')
   const draft = ref('')
+  const status = ref('')
 
   let epoch = 0
   let nextCursor: string | null = null
@@ -316,11 +319,35 @@ export function createConversation(router: RouterStore) {
     void removing
   }
 
+  // The room's settings mutations (rooms.js mutateRoom): the action re-opens the
+  // room afterwards; a 403 sends the viewer home.
+  async function mutate(suffix: string, body: unknown, method: string) {
+    const key = room.value?.key
+    if (!key) throw new Error('Choose a room before changing its settings.')
+    try {
+      await request(roomPath(key) + suffix, body, method)
+    } catch (error) {
+      if ((error as Error & { status?: number }).status === 403) {
+        window.location.assign('/')
+        return
+      }
+      throw error
+    }
+    status.value = 'Saved.'
+    if (room.value?.key === key) await choose(key)
+  }
+
+  const saveTopicDescription = (topic: string) => mutate('/topic', { topic }, 'PUT')
+  const updateMember = (did: string, role: string) => mutate('/members/' + encodeURIComponent(did.trim()), { role }, 'PUT')
+  const saveReadAudience = (audience: string, publishExistingHistory: boolean) => mutate('/read-audience', { audience, publishExistingHistory }, 'PUT')
+  const saveParticipation = (allowPostEditing: boolean, isLocked: boolean) => mutate('/settings', { allowPostEditing, isLocked }, 'PATCH')
+
   return {
-    room, messages, replyTo, replyParentId, loadingRoom: loadingRoom, loadingHistory, moreMessages, error, draft,
+    room, messages, replyTo, replyParentId, loadingRoom: loadingRoom, loadingHistory, moreMessages, error, draft, status,
     get canWrite() { return room.value?.canWrite ?? false },
     choose, openPost, historyPage, refreshOpenHistory,
     beginReply, cancelReply, send, beginEdit, saveEdit, cancelEdit, removeMessage,
+    saveTopicDescription, updateMember, saveReadAudience, saveParticipation,
   }
 }
 
