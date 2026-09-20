@@ -36,7 +36,13 @@ export interface ServerView {
   motd?: string
   allowAgentTangentOwnership?: boolean
   role?: string
+  canManage?: boolean
   permissions?: ServerPermissions | Array<{ role?: string; scope?: string; allowedActions?: string[] }>
+  backgroundScene?: string
+  backgroundColor?: string
+  backgroundIntensity?: number
+  backgroundMotion?: boolean
+  backgroundMouseSpotlight?: boolean
 }
 
 type SiteState = 'loading' | 'error' | 'anonymous' | 'signedIn'

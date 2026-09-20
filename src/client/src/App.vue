@@ -14,7 +14,7 @@
       <WelcomeHero :site="site" :router="router" :tangent="routeTangent" :topic="routeTopic" />
 
       <section id="settings-page" class="settings-page" :hidden="!router.isSettings" aria-labelledby="settings-title">
-        <SettingsPanel :settings="settings" />
+        <SettingsPanel :settings="settings" :atmosphere="atmosphere" />
       </section>
 
       <section id="state-loading" :hidden="site.state !== 'loading'" aria-labelledby="loading-title">
@@ -168,6 +168,7 @@ import { createDirectories } from './composables/directories'
 import { createSettings } from './composables/settings'
 import { createModeration } from './composables/moderation'
 import { createActivity } from './composables/activity'
+import { createAtmosphere } from './composables/atmosphere'
 import ConversationPanel from './components/ConversationPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import WelcomeHero from './components/WelcomeHero.vue'
@@ -189,6 +190,12 @@ const directories = createDirectories()
 const settings = createSettings(site, router)
 const moderation = createModeration(conversation)
 const activity = createActivity({ conversation, directories, site, router })
+const atmosphere = createAtmosphere()
+
+// The atmosphere follows the server's own settings as they load and change.
+watch([() => site.server, () => site.site?.participant], ([server]) => {
+  atmosphere.configure(server ?? null, site.site?.participant ?? null)
+})
 
 // body[data-page] drives the page shell in the CSS (pages.css).
 watchEffect(() => {
@@ -209,6 +216,7 @@ onMounted(async () => {
   })
   window.addEventListener('pagehide', () => activity.stop())
   window.addEventListener('pageshow', () => activity.start())
+  atmosphere.install()
   await site.load()
   await directories.loadTangents().catch(() => {})
   site.loadServer().catch(() => {})

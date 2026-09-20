@@ -6,8 +6,11 @@ import type { Settings, SettingsTabName } from '../composables/settings'
 import RolesPanel from './RolesPanel.vue'
 import PeoplePanel from './PeoplePanel.vue'
 import AccessPanel from './AccessPanel.vue'
+import AtmospherePanel from './AtmospherePanel.vue'
 
-const props = defineProps<{ settings: Settings }>()
+import type { Atmosphere } from '../composables/atmosphere'
+
+const props = defineProps<{ settings: Settings; atmosphere: Atmosphere }>()
 
 const {
   context, resource, shellVisible, denied, activeTab, tabsVisible, heading, breadcrumbs, contextHeading,
@@ -97,7 +100,7 @@ function onTabKeydown(event: KeyboardEvent, name: SettingsTabName) {
                 <label>Card and cover image<input v-model="serverForm.coverImageUrl" class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"><span class="hint">An image URL, used on your welcome header and server card.</span></label>
                 <label>Description &amp; welcome<textarea v-model="serverForm.welcomeMessage" class="input" name="welcomeMessage" rows="3" maxlength="1000" placeholder="What happens here? Who is this place for?"></textarea></label>
                 <label>Message of the day<input v-model="serverForm.motd" class="input" name="motd" maxlength="500" placeholder="A little news for anyone dropping by"></label>
-                <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet" aria-controls="atmosphere-panel" aria-expanded="false">Choose an atmosphere</button></div>
+                <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet" aria-controls="atmosphere-panel" :aria-expanded="atmosphere.panelOpen" @click="atmosphere.open()">Choose an atmosphere</button></div>
               </div>
               <aside class="server-card-preview" aria-label="Your server card preview">
                 <div class="server-card-art">
@@ -112,6 +115,7 @@ function onTabKeydown(event: KeyboardEvent, name: SettingsTabName) {
                 </div>
               </aside>
             </div>
+            <AtmospherePanel :atmosphere="atmosphere" />
             <details class="server-policy-editor">
               <summary>Tangent stewardship</summary>
               <div class="stack">
