@@ -136,18 +136,18 @@
           </div>
         </div>
       </section>
-      <section id="state-loading" :hidden="site.state !== 'loading'" aria-labelledby="loading-title">
+      <section id="state-loading" hidden aria-labelledby="loading-title">
         <h1 class="title" id="loading-title">One moment</h1>
         <p class="lede">Loading this site's welcome.</p>
       </section>
 
-      <section id="state-error" :hidden="site.state !== 'error'" aria-labelledby="error-title">
+      <section id="state-error" hidden aria-labelledby="error-title">
         <h1 class="title" id="error-title">The welcome didn't load</h1>
         <p class="lede">This site couldn't be reached just now. Check your connection, then try again.</p>
         <button type="button" class="btn btn-primary" id="retry">Try again</button>
       </section>
 
-      <section id="state-anonymous" :hidden="site.state !== 'anonymous'" aria-labelledby="anonymous-title">
+      <section id="state-anonymous" hidden aria-labelledby="anonymous-title">
         <div class="onboarding-layout">
           <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">Conversation has a home here.</h1>
             <p class="lede" id="anonymous-copy">A home for your people, your companions, and the conversations you want to keep.</p>
@@ -193,7 +193,7 @@
         <p id="onboarding-error" class="onboarding-error" role="alert" tabindex="-1"></p>
       </section>
 
-      <section id="state-signed-in" :hidden="site.state !== 'signedIn'" aria-labelledby="signed-in-title">
+      <section id="state-signed-in" hidden aria-labelledby="signed-in-title">
         <p class="eyebrow">Your arrival</p><h1 class="title" id="signed-in-title">Welcome back<span id="welcome-name"></span>.</h1>
         <p class="lede">Here are the conversations waiting for you.</p>
         <p class="note" id="note-unestablished-signed-in" hidden>This site is awaiting its owner. Shared spaces will take shape once they establish it.</p>
@@ -280,50 +280,7 @@
             <p id="no-rooms" class="hint" hidden>No Topics yet. Every conversation starts somewhere.</p>
             <button id="more-rooms" class="btn btn-quiet" type="button" hidden>More Topics</button>
           </aside>
-          <section id="conversation" class="conversation" aria-labelledby="room-title">
-            <p id="choose-room" class="lede">Choose a room to see its topic and current access.</p>
-            <div id="room-content" hidden>
-              <div class="conversation-toolbar"><p id="conversation-connection" class="connection-state" role="status">Connecting…</p><div class="conversation-toolbar-actions"><button id="stewardship-open" class="btn btn-quiet" type="button" aria-controls="stewardship-panel" aria-expanded="false" hidden>Stewardship</button><details id="conversation-elsewhere" class="conversation-elsewhere" hidden><summary id="elsewhere-label">Elsewhere</summary><nav id="elsewhere-links" aria-label="Updates in other topics"></nav></details></div></div>
-              <div id="conversation-updates" class="conversation-updates" hidden><span id="new-posts-count" role="status"></span><button id="view-new-posts" class="btn btn-quiet" type="button">View new posts ↓</button></div>
-              <header class="conversation-head"><div class="conversation-place"><span id="room-tangent-mark" class="tiny-card-mark" aria-hidden="true">✦</span><p class="eyebrow" id="room-admission"></p><button id="return-to-tangents" class="btn btn-quiet return-to-tangents" type="button">All Tangents</button></div><h2 id="room-title"></h2><p id="room-topic" class="topic"></p></header>
-              <details id="topic-details" class="topic-details"><summary>Topic details</summary><div class="topic-details-body"><p id="room-access" class="note"></p><p id="topic-permissions" class="hint"></p>
-              <details id="room-admin" class="setup" hidden><summary>Topic settings</summary>
-                <section class="topic-settings-section" aria-labelledby="topic-about-heading">
-                  <header><h3 id="topic-about-heading">About</h3><p class="hint">Set the scene for this conversation.</p></header>
-                  <form id="topic-form" class="stack"><label>Description<textarea name="topic" class="input" maxlength="2000" rows="3"></textarea></label><button class="btn btn-quiet">Save description</button></form>
-                </section>
-                <section class="topic-settings-section" aria-labelledby="topic-access-heading">
-                  <header><h3 id="topic-access-heading">Access</h3><p class="hint">Reading and taking part are separate choices.</p></header>
-                  <div class="topic-settings-controls">
-                    <div id="topic-access-settings" hidden>
-                      <form id="read-audience-form" class="stack" hidden><label>Who can read<select name="audience" class="input" aria-describedby="read-audience-note"><option value="Restricted">Only admitted participants</option><option value="Public">Anyone on the web</option></select></label><p id="read-audience-note" class="hint" aria-live="polite"></p><label id="publish-history-confirmation" class="check-row" hidden><input type="checkbox" name="publishExistingHistory" disabled> I understand that existing posts will become public and copies may persist</label><button class="btn btn-quiet">Save reading audience</button></form>
-                    </div>
-                    <form id="topic-settings-form" class="stack" hidden><label class="check-row"><input type="checkbox" name="allowPostEditing"> Allow authors to edit their posts</label><label class="check-row"><input type="checkbox" name="isLocked"> Lock this topic</label><button class="btn btn-quiet">Save participation settings</button></form>
-                  </div>
-                </section>
-                <section class="topic-settings-section" aria-labelledby="topic-people-heading">
-                  <header><h3 id="topic-people-heading">People</h3><p class="hint">Give a participant a role in this Topic.</p></header>
-                  <form id="member-form" class="stack"><label>Participant DID<input class="input" name="did" required maxlength="2048" autocomplete="off" spellcheck="false"></label><label>Topic role<select class="input" name="role" aria-describedby="topic-role-note"><option value="Member">Member</option><option value="Reader">Read only</option><option value="Removed">Remove access</option><option id="manager-choice" value="Manager">Manager</option></select></label><p id="topic-role-note" class="hint" aria-live="polite"></p><button class="btn btn-quiet">Update membership</button></form>
-                </section>
-              </details>
-              <p id="history-note" class="hint" aria-live="polite"></p></div></details>
-              <ol id="messages" class="messages" aria-label="Messages"></ol>
-              <button id="more-messages" class="btn btn-quiet" type="button" hidden>Read more</button>
-              <div id="read-checkpoint" class="read-checkpoint" hidden><p id="read-state-note" class="hint">Caught up with the posts loaded here.</p><button id="acknowledge" class="btn btn-quiet" type="button" hidden>Mark these posts as read</button></div>
-              <section id="report-panel" class="report-panel" hidden aria-labelledby="report-title">
-                <form id="report-form">
-                  <header class="report-heading"><div><p class="eyebrow">A private signal to stewards</p><h2 id="report-title">Report this post</h2></div><button id="report-close" class="btn btn-quiet" type="button" aria-label="Close report form">Close</button></header>
-                  <p id="report-context" class="report-context"></p>
-                  <p class="report-explanation">This creates or adds to a private moderation case. It does not remove the post or decide that a rule was broken.</p>
-                  <label>What concerns you?<select class="input" name="reasonCode"><option value="conduct">Harassment or harmful conduct</option><option value="spam">Spam or manipulation</option><option value="privacy">Privacy or safety</option><option value="other">Something else</option></select></label>
-                  <label>What should the stewards understand?<textarea class="input" name="statement" rows="4" maxlength="512" required placeholder="Describe the concern in your own words."></textarea></label>
-                  <div class="report-actions"><button id="report-submit" class="btn btn-primary" type="submit">Send report</button><button id="report-cancel" class="btn btn-quiet" type="button">Cancel</button></div>
-                  <p id="report-status" class="hint" role="status" aria-live="polite"></p>
-                </form>
-              </section>
-              <form id="message-form" class="compose" hidden><p id="reply-context" class="reply-strip" hidden></p><button id="cancel-reply" class="btn btn-quiet" type="button" hidden>Cancel reply</button><label for="message-text">Your post</label><textarea id="message-text" class="input" rows="4" required placeholder="Add to the conversation…"></textarea><div class="compose-footer"><span id="message-size" class="hint">0 / 4096 bytes</span><button id="send-message" class="btn btn-primary">Send post</button></div><p id="pending-message" class="hint" role="status" hidden></p></form>
-            </div>
-          </section>
+          <ConversationPanel :conversation="conversation" />
           <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" hidden>
             <header class="stewardship-heading"><div><p class="eyebrow">Stewardship</p><h2 id="stewardship-title" tabindex="-1">What needs care</h2></div><button id="stewardship-close" class="btn btn-quiet" type="button">Back to conversation</button></header>
             <p class="stewardship-intro">Reports are signals, not verdicts. Review each participant’s account and the reported Post, then defer or involve the accountable human Host.</p>
@@ -407,12 +364,15 @@
 
 </template>
 
+
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useSite } from './stores/site'
+import { createConversation } from './composables/conversation'
+import ConversationPanel from './components/ConversationPanel.vue'
 
-// The boot port (app.js): the four state sections and the onboarding
-// redirect are live; each remaining panel gains bindings as its port lands.
+// The boot port (app.js) and the conversation loop (rooms.js core), wired.
 const site = useSite()
+const conversation = createConversation()
 onMounted(() => site.load())
 </script>
