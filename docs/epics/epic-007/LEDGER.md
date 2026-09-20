@@ -187,7 +187,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | ID | Task | Status | Done when | Evidence |
 |---|---|---|---|---|
 | R5.1 | One Topic window for browser, connector and public pages; re-express `window-red-team`'s and `activity-red-team`'s 32 safety properties against it, checked against the list R1.15 extracts (N-040) | todo | One implementation remains; every listed property still has a test | |
-| R5.2 | Attention projection, with a cheap attention summary on responses | todo | Digest cost follows item count | |
+| R5.2 | Attention projection, with a cheap attention summary on responses | todo | Digest cost follows item count | Ruled by Leo 2026-09-20: fetch-time compute is an antipattern and a SoC violation, on both sides — the profile read must not walk the world, and the posting user's transaction must not compile other users' projections. Shape: the journal append is the change signal; a background job consumes it with a debounce (coalescing channel, as `ParticipantProfiles` already does for atproto captures), recompiles the affected projections, and announces; reads consume compiled state. Three concerns, three contracts — authority synchronous, delivery durable via the journal, projections eventual |
 | R5.3 | Keyset directories without exact counts or per-row queries | todo | Query plans are bounded | |
 | R5.4 | Journal sequence without the `ActivityHead` row | done | No shared counter row | 2026-09-20: `LatestSequence()` reads the journal's own maximum; appends serialize in-process with a high-water mark for same-transaction double appends |
 | R5.5 | Public reads without the lock, re-checking the Topic revision | todo | A concurrent audience-narrowing test passes | |
