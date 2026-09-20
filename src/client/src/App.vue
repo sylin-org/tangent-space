@@ -3,7 +3,7 @@
   <a class="skip" href="#main">Skip to content</a>
 
   <header class="masthead">
-    <MastheadBar :site="site" :router="router" :activity="activity" @sign-out="submitSignOut" />
+    <MastheadBar :site="site" :router="router" :activity="activity" :profiles="profiles" @sign-out="submitSignOut" />
   </header>
 
   <main id="main" tabindex="-1">
@@ -201,10 +201,28 @@ watch([() => site.server, () => site.site?.participant], ([server]) => {
   atmosphere.configure(server ?? null, site.site?.participant ?? null)
 })
 
-// The signed-in viewer's own profile decorates immediately (profile-live.js).
+// The signed-in viewer's own profile decorates immediately (profile-live.js), and the
+// page keeps the server announcing for every identity it renders: the viewer plus the
+// authors resolved on the open conversation.
 watch(() => site.site?.participant?.did, did => {
   if (did) profiles.loadOwn(did)
 })
+
+const watchedDids = computed<string[]>(() => {
+  const dids = new Set<string>()
+  const own = site.site?.participant?.did
+  if (own) dids.add(own)
+  for (const key of Object.keys(conversation.resolved.value)) dids.add(key)
+  for (const message of conversation.messages.value) {
+    const author = message.authorParticipantId
+    if (author?.startsWith('did:')) dids.add(author)
+  }
+  return [...dids]
+})
+
+watch(watchedDids, dids => {
+  if (site.state === 'signedIn') profiles.sync(dids)
+}, { immediate: true })
 
 // body[data-page] drives the page shell in the CSS (pages.css).
 watchEffect(() => {

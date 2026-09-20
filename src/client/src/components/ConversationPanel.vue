@@ -203,6 +203,12 @@ function authorHandle(message: Message): string {
   const entry = resolved.value[message.authorParticipantId]
   return entry?.handle ?? ''
 }
+
+function authorLabel(message: Message): string {
+  const entry = resolved.value[message.authorParticipantId]
+  const handle = entry?.handle ? '@' + entry.handle.replace(/^@/, '') : ''
+  return entry?.displayName || handle || message.authorParticipantId
+}
 function closeReply() {
   replyTarget.value = null
   cancelReply()
@@ -261,7 +267,7 @@ async function submitPost() {
     <ol class="messages" aria-label="Messages">
       <li v-for="message in messages" :key="message.id" class="message" :class="{ removed: message.removed }">
         <header class="message-head">
-          <strong>{{ message.authorParticipantId }}</strong>
+          <strong>{{ authorLabel(message) }}</strong>
           <time>{{ new Date(message.content.createdAt).toLocaleString() }}</time>
           <span v-if="message.editedAt" class="message-edited">Edited</span>
         </header>

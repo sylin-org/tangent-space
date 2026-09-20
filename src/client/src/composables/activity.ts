@@ -193,6 +193,11 @@ export function createActivity(options: {
     transport?.stop()
   }
 
+  /** Subscribe the shared connection to the profile-cache announcements for these DIDs. */
+  function setProfiles(dids: string[]): boolean {
+    return transport?.setProfiles(dids) ?? false
+  }
+
   function setVisible(value: boolean): void {
     transport?.setVisible(value)
   }
@@ -208,7 +213,7 @@ export function createActivity(options: {
 
   return {
     activityByRoom, connection, elsewhere, profileEvents, needsRefresh, recovering,
-    activityFor, start, stop, setVisible, connectionStatus,
+    activityFor, start, stop, setVisible, connectionStatus, setProfiles,
   }
 }
 

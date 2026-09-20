@@ -6,8 +6,9 @@ import type { SiteStore } from '../stores/site'
 import type { RouterStore } from '../stores/router'
 
 import type { Activity } from '../composables/activity'
+import type { Profiles } from '../composables/profiles'
 
-const props = defineProps<{ site: SiteStore; router: RouterStore; activity: Activity }>()
+const props = defineProps<{ site: SiteStore; router: RouterStore; activity: Activity; profiles: Profiles }>()
 
 const emit = defineEmits<{ (e: 'sign-out'): void }>()
 
@@ -21,9 +22,17 @@ const signInHref = computed(() => {
   return '/sign-in/?return=' + encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)
 })
 
-const accountName = computed(() => participant.value?.displayName || 'Your account')
+// Fresh identity from the local profile cache; the arrival payload is the fallback.
+const ownProfile = computed(() => props.profiles.snapshotOf(participant.value?.did))
+const accountName = computed(() =>
+  ownProfile.value?.displayName || participant.value?.displayName || participant.value?.handle || 'Your account')
 const accountHandle = computed(() => (participant.value?.handle ? '@' + participant.value.handle.replace(/^@/, '') : ''))
-const accountMark = computed(() => (participant.value?.handle || 'You').slice(0, 1).toUpperCase())
+const accountAvatar = computed(() => {
+  const avatar = ownProfile.value?.avatar
+  return typeof avatar === 'string' && avatar.startsWith('/api/profile-cache/avatar?') ? avatar : ''
+})
+const accountMark = computed(() =>
+  (ownProfile.value?.displayName || participant.value?.handle || 'You').slice(0, 1).toUpperCase())
 const accountRole = computed(() => (participant.value?.isOwner ? 'Server owner' : 'Signed in'))
 const profileHref = computed(() =>
   '/u/' + encodeURIComponent(participant.value?.did || 'tangent:local:' + (participant.value?.participantRef ?? '')),
@@ -72,7 +81,10 @@ onScopeDispose(() => {
     <a id="nav-sign-in" :href="signInHref" :hidden="!!participant">Sign in</a>
     <details id="nav-account" ref="accountMenu" class="account-menu" :hidden="!participant" @keydown="onMenuKeydown">
       <summary :aria-label="summaryLabel">
-        <span id="nav-account-mark" class="account-mark" aria-hidden="true">{{ accountMark }}</span>
+        <span id="nav-account-mark" class="account-mark" aria-hidden="true">
+          <img v-if="accountAvatar" :src="accountAvatar" alt="">
+          <template v-else>{{ accountMark }}</template>
+        </span>
         <span class="account-identity"><span id="nav-account-name">{{ accountName }}</span><span id="nav-account-handle">{{ accountHandle }}</span></span>
         <span aria-hidden="true">⌄</span>
       </summary>
