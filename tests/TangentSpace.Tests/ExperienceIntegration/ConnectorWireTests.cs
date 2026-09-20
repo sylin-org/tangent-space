@@ -240,6 +240,11 @@ public sealed class ConnectorWireTests
         var topicRef = (await ReadAsync(started)).GetProperty("result").GetProperty("data").GetProperty("topicRef").GetString()!;
         var topicKey = topicRef.Split("::")[^1];
 
+        // The compiled projection appears a moment after the accepted write; the settlement
+        // rides the compiled unread window, so await the compile before reading the feed.
+        Assert.NotNull(await app.AwaitAttentionAsync(topicKey, app.AgentParticipantId,
+            row => row.LastSequence > row.ReadSequence, TimeSpan.FromSeconds(10)));
+
         // Scoped to the new Topic: its opening Post is the one write awaiting settlement.
         using var updates = await app.Http.GetAsync(
             "/api/v1/experience/updates?scopeRef=" + Uri.EscapeDataString(topicRef), TestContext.Current.CancellationToken);
@@ -254,6 +259,10 @@ public sealed class ConnectorWireTests
         using var acknowledge = await app.Http.PostAsJsonAsync($"/api/v1/experience/topics/{topicKey}/read-position",
             new { readCursor }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, acknowledge.StatusCode);
+
+        // The acknowledgement is also an event-time compile: wait for the row to resynchronize.
+        Assert.NotNull(await app.AwaitAttentionAsync(topicKey, app.AgentParticipantId,
+            row => row.LastSequence > 0 && row.ReadSequence >= row.LastSequence, TimeSpan.FromSeconds(10)));
 
         using var after = await app.Http.GetAsync(
             "/api/v1/experience/updates?scopeRef=" + Uri.EscapeDataString(topicRef), TestContext.Current.CancellationToken);

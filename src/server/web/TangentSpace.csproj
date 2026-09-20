@@ -10,6 +10,9 @@
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="[2.7.0]" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Jobs/Koan.Jobs.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Cache/Koan.Cache.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Cache.Adapter.Sqlite/Koan.Cache.Adapter.Sqlite.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity.Web/Koan.Identity.Web.csproj" />

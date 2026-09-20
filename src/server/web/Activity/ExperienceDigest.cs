@@ -17,13 +17,14 @@ using Tangent.Infrastructure;
 
 namespace Tangent.Activity;
 
-/// <summary>Assembles the bounded per-participant attention digest from current post
-/// projections under current policy. Derived state: edits and deletes withdraw their items,
-/// re-ingestion never mints a fresh request, and explicit read acknowledgements resynchronize
-/// by removing items from later digests. Directed attention (mentions, direct replies) is kept
-/// distinct from mere watched-topic activity.</summary>
+/// <summary>Assembles the bounded per-participant attention digest from the compiled
+/// <see cref="TopicAttention"/> projection and current post projections. Writes signal, a
+/// background job compiles, reads consume the compiled state: edits and deletes withdraw their
+/// items when the item window is rebuilt, re-ingestion never mints a fresh request, and explicit
+/// read acknowledgements resynchronize by removing items from later digests. Directed attention
+/// (mentions, direct replies) is kept distinct from mere watched-topic activity.</summary>
 public sealed class ExperienceDigest(
-    TangentGovernance tangents, TopicGovernance governance, TimeProvider clock,
+    TangentGovernance tangents, TimeProvider clock,
     IDataProtectionProvider protection, References refs, TangentServer hub)
 {
     public const int MaximumTopics = 100;
@@ -99,25 +100,26 @@ public sealed class ExperienceDigest(
             throw new UnauthorizedAccessException("This participant credential is expired or revoked.");
     }
 
+    /// <summary>Adds one topic's attention items for the viewer by reading the compiled
+    /// projection. The directory walk already scoped the topic to what this viewer can read;
+    /// the compiled row carries the viewer's attention numbers, and the watch filter applies at
+    /// read time from two point reads. Items rebuild from a bounded unread window only when the
+    /// compiled window is non-empty, so cost follows item count.</summary>
     private async Task CollectTopic(string did, TopicDescription topic, List<ExperienceAttentionItem> directed,
         List<ExperienceAttentionItem> watched, CancellationToken ct)
     {
-        var context = await governance.ReadAsync(did, topic.Key, ct);
-        var policy = context.Policy;
-        if (!policy.CanRead) return;
-        var stored = context.Topic;
-        if (stored is null) return;
+        if (!topic.CanRead) return;
+        var attention = await TopicAttention.Get(TopicAttention.IdOf(topic.Key, did), ct);
+        if (attention is null) return;
         var mode = AttentionRules.Effective(
             await WatchSetting.Get(WatchSetting.Key(did, topic.Key), ct),
-            await TangentWatchSetting.Get(TangentWatchSetting.Key(did, stored.TangentKey), ct));
+            await TangentWatchSetting.Get(TangentWatchSetting.Key(did, topic.TangentKey), ct));
         if (!AttentionRules.DeliversTopic(mode)) return;
-        var state = await TopicConversation.Get(topic.Key, ct) ?? new TopicConversation { Id = topic.Key };
-        var position = await ReadPosition.Get(ReadPosition.Key(did, topic.Key), ct);
+        if (attention.LastSequence <= attention.ReadSequence) return;
         {
-            var readSequence = Math.Min(position?.Sequence ?? 0, state.LastSequence);
             var recipientDid = await hub.Directory.AtprotoDidOf(did, ct);
             var unread = (await Post.Query(
-            post => post.TopicKey == topic.Key && post.Sequence > readSequence, UnreadWindow, ct))
+            post => post.TopicKey == topic.Key && post.Sequence > attention.ReadSequence, UnreadWindow, ct))
             .OrderBy(post => post.Sequence).ToList();
             var handles = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var (author, label) in await hub.Directory.LabelsFor(
@@ -133,7 +135,7 @@ public sealed class ExperienceDigest(
             if (post.AuthorParticipantId == did)
             {
                 if (!post.Removed)
-                    watched.Add(Item(did, topic, stored.TangentKey, post, "write_settlement", null,
+                    watched.Add(Item(did, topic, topic.TangentKey, post, "write_settlement", null,
                         handles.GetValueOrDefault(did)));
                 continue;
             }
@@ -147,7 +149,7 @@ public sealed class ExperienceDigest(
                     && AttentionRules.IsDirectReply(post, parent, did))
                 {
                     addressedPosts.Add(post.Id);
-                    directed.Add(Item(did, topic, stored.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
+                    directed.Add(Item(did, topic, topic.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
                     continue;
                 }
             }
@@ -158,7 +160,7 @@ public sealed class ExperienceDigest(
                     || facet.References(ParticipantIdentity.InternalValue(did))))
             {
                 addressedPosts.Add(post.Id);
-                directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                directed.Add(Item(did, topic, topic.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                 continue;
             }
             // Group mentions expand to current holders of the scoped roles: the group is
@@ -166,14 +168,14 @@ public sealed class ExperienceDigest(
             var groups = facets.Where(facet => facet.Kind == Conversation.PostFacet.Group)
                 .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal))
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            if (groups.Count > 0 && post.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, ct))
+            if (groups.Count > 0 && post.AuthorParticipantId != did && await HoldsAnyRole(did, topic.TangentKey, groups, ct))
             {
                 addressedPosts.Add(post.Id);
-                directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                directed.Add(Item(did, topic, topic.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                 continue;
             }
             if (mode != WatchMode.Replies)
-                watched.Add(Item(did, topic, stored.TangentKey, post, "watched_activity", null, authorHandle));
+                watched.Add(Item(did, topic, topic.TangentKey, post, "watched_activity", null, authorHandle));
         }
     }
     }

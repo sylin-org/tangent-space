@@ -1,7 +1,11 @@
+using Koan.Core.Hosting.App;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
 using Koan.Data.Core.Model;
+using Koan.Jobs;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Tangent.Activity;
 
@@ -65,8 +69,29 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
             };
             await entry.Save(ct);
             lastAssigned = sequence;
+            await SignalCompile(roomKey, ct);
             return entry;
         }
         finally { AppendGate.Release(); }
+    }
+
+    /// <summary>Submits the topic's attention compile while the append gate is still held: the
+    /// compile's ledger row enlists in the caller's transaction and commits atomically with the
+    /// journal entry, and the worker wakes on commit. A signal that cannot be accepted costs
+    /// one stale projection until the topic's next event — it never fails the append.</summary>
+    private static async Task SignalCompile(string roomKey, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(roomKey)) return;
+        try
+        {
+            var compile = new CompileTopicAttention { Id = roomKey, TopicKey = roomKey };
+            await compile.Job.Submit(action: "", ct);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            var factory = AppHost.Current?.GetService(typeof(ILoggerFactory)) as ILoggerFactory;
+            (factory ?? NullLoggerFactory.Instance).CreateLogger(typeof(ActivityJournal))
+                .LogWarning(error, "The attention compile signal for {TopicKey} was not accepted; the compiled projection stays on its previous state until the next event.", roomKey);
+        }
     }
 }

@@ -51,6 +51,11 @@
           "System.Formats.Cbor": "10.0.5"
         }
       },
+      "Cronos": {
+        "type": "Transitive",
+        "resolved": "0.13.0",
+        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
+      },
       "DnsClient": {
         "type": "Transitive",
         "resolved": "1.8.0",
@@ -126,6 +131,26 @@
         "contentHash": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.11"
+        }
+      },
+      "Microsoft.Extensions.Caching.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "4ZFBNE+jzR+CrWWlhOesnmywCW7pYKT0dxyAQRdL11yJwxe4jvcAu31eorFtEkoFeCDcUTeNssgPv2yaRRptaQ==",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "10.0.10"
+        }
+      },
+      "Microsoft.Extensions.Caching.Memory": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "N1w5H7uK6gCTnCBZAWzE0/EQYSPysij/uYwDqntqBVvBa6bjMmBKitsnEFd6yh/SX3wLm67nO6+OnZ84K+gZWg==",
+        "dependencies": {
+          "Microsoft.Extensions.Caching.Abstractions": "10.0.10",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Options": "10.0.10",
+          "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
       "Microsoft.Extensions.Configuration": {
@@ -219,6 +244,11 @@
         "resolved": "10.0.10",
         "contentHash": "z/2xXlFw2aLGjHyEm6E0tQ+In6VfzQzTrtArbQ2c0TQE16ZbyDCMGPvaUT9I0s8rgy9sRWlU2P9waW37qV04qA=="
       },
+      "Microsoft.Extensions.DependencyModel": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA=="
+      },
       "Microsoft.Extensions.Diagnostics": {
         "type": "Transitive",
         "resolved": "10.0.10",
@@ -237,6 +267,22 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
           "Microsoft.Extensions.Options": "10.0.10"
         }
+      },
+      "Microsoft.Extensions.Diagnostics.HealthChecks": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "R0O5oG+zAJeBSM8nNTa+Ycj2Zobyr/v6Ilo7Dha0sNB2Vq/XXoLdoecj9DAWGbN8YrPaW6u8+osTQ5Ypj7ZF0w==",
+        "dependencies": {
+          "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Options": "10.0.10"
+        }
+      },
+      "Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "6euxgVR7NS83y0a2wLRAxfYXusLQJ2e1ah0MpQgYTYMs5lYrmdNP79C6T8uvRZdP87n5mcCcp6+w0EyWAidKZw=="
       },
       "Microsoft.Extensions.FileProviders.Abstractions": {
         "type": "Transitive",
@@ -638,10 +684,53 @@
           "xunit.v3.runner.common": "[3.2.2]"
         }
       },
+      "Sylin.Koan.Cache": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Caching.Memory": "[10.0.10, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.DependencyModel": "[10.0.10, )",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "[10.0.10, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )",
+          "Newtonsoft.Json": "[13.0.4, )",
+          "Sylin.Koan.Cache.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Communication": "[1.0.0, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
       "Sylin.Koan.Cache.Abstractions": {
         "type": "Project",
         "dependencies": {
           "Sylin.Koan.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Cache.Adapter.Sqlite": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.Sqlite": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )",
+          "SQLitePCLRaw.lib.e_sqlite3": "[3.53.3, )",
+          "Sylin.Koan.Cache": "[1.0.0, )",
+          "Sylin.Koan.Cache.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Communication": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Configuration.Binder": "[10.0.10, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Options.ConfigurationExtensions": "[10.0.10, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
         }
       },
       "Sylin.Koan.Core": {
@@ -734,6 +823,20 @@
           "Sylin.Koan.Web": "[1.0.0, )"
         }
       },
+      "Sylin.Koan.Jobs": {
+        "type": "Project",
+        "dependencies": {
+          "Cronos": "[0.13.0, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )",
+          "Sylin.Koan.Communication": "[1.0.0, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
       "Sylin.Koan.Security.Trust": {
         "type": "Project",
         "dependencies": {
@@ -789,9 +892,12 @@
         "type": "Project",
         "dependencies": {
           "BouncyCastle.Cryptography": "[2.7.0, 2.7.0]",
+          "Sylin.Koan.Cache": "[1.0.0, )",
+          "Sylin.Koan.Cache.Adapter.Sqlite": "[1.0.0, )",
           "Sylin.Koan.Data.Connector.Sqlite": "[1.0.0, )",
           "Sylin.Koan.Identity": "[1.0.0, )",
           "Sylin.Koan.Identity.Web": "[1.0.0, )",
+          "Sylin.Koan.Jobs": "[1.0.0, )",
           "Sylin.Koan.Web": "[1.0.0, )",
           "Sylin.Koan.Web.Auth.Connector.Atproto": "[1.0.0, )"
         }

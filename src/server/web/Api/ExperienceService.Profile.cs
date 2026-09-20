@@ -88,7 +88,7 @@ public sealed partial class ExperienceService
                 window.Posts.Select(view => view.Dto).ToList(), window.More, profile.DisplayName, profile.Description, profile.Avatar,
                 "/u/" + Uri.EscapeDataString(did ?? ParticipantIdentity.InternalValue(participantId)),
                 window.Resolved), null, null),
-            (await digest.Page(viewer, credential, null, null, null, 3, ct)).Attention,
+            null,
             Empty(), actions.Take(3).ToList(), null, null, viewer, credential, ct);
     }
 

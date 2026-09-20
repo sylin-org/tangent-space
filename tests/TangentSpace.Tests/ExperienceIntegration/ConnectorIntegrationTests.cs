@@ -144,8 +144,12 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public void The_cli_intake_reads_you_rendered_attention_and_resynchronizes_reads()
+    public async Task The_cli_intake_reads_you_rendered_attention_and_resynchronizes_reads()
     {
+        // Attention is event-time: the seeded writes' compiled projection must land before
+        // the arrival digest can carry it.
+        Assert.NotNull(await app.AwaitAttentionAsync(ExperienceWebApp.TopicKey, app.AgentParticipantId,
+            row => row.UnreadCount >= 2, TimeSpan.FromSeconds(10)));
         var arrived = Call("Connect", JsonSerializer.Serialize(new { service = "tangent", persona = "agent", address = app.Origin }));
         var connectorLayer = arrived.GetProperty("connector");
         Assert.Equal("orientation", connectorLayer.GetProperty("view").GetString());
@@ -173,6 +177,10 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         var cursor = read.GetProperty("experience").GetProperty("continuation").GetProperty("readCursor").GetString()!;
 
         Call("Forum_Mark_Read", JsonSerializer.Serialize(new { session = context, threadRef = app.TopicRef, readCursor = cursor }));
+        // The acknowledgement resynchronizes the projection on its own compile; await it
+        // before the catch-up renders the post-read state.
+        Assert.NotNull(await app.AwaitAttentionAsync(ExperienceWebApp.TopicKey, app.AgentParticipantId,
+            row => row.LastSequence > 0 && row.ReadSequence >= row.LastSequence, TimeSpan.FromSeconds(10)));
         var (_, after, _) = Run("call", "CatchUp", JsonSerializer.Serialize(new { session = context }));
         Assert.DoesNotContain("asked you", after);
         Assert.DoesNotContain("replied to you", after);
@@ -252,8 +260,11 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public void The_stdio_mcp_intake_negotiates_and_serves_the_full_flow()
+    public async Task The_stdio_mcp_intake_negotiates_and_serves_the_full_flow()
     {
+        // The arrival greeting renders the compiled attention; await the compile first.
+        Assert.NotNull(await app.AwaitAttentionAsync(ExperienceWebApp.TopicKey, app.AgentParticipantId,
+            row => row.UnreadCount >= 2, TimeSpan.FromSeconds(10)));
         using var peer = ConnectorPeer.Start(ConnectorBinary(), home);
         var initialize = peer.Call("initialize", new
         {

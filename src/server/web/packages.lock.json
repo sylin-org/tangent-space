@@ -21,6 +21,11 @@
           "CarpaNet": "1.1.0-alpha.5"
         }
       },
+      "Cronos": {
+        "type": "Transitive",
+        "resolved": "0.13.0",
+        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
+      },
       "DnsClient": {
         "type": "Transitive",
         "resolved": "1.8.0",
@@ -82,6 +87,11 @@
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.11"
         }
+      },
+      "Microsoft.Extensions.DependencyModel": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA=="
       },
       "Microsoft.IdentityModel.Abstractions": {
         "type": "Transitive",
@@ -179,10 +189,40 @@
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
       },
+      "Sylin.Koan.Cache": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyModel": "[10.0.10, )",
+          "Newtonsoft.Json": "[13.0.4, )",
+          "Sylin.Koan.Cache.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Communication": "[1.0.0, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
       "Sylin.Koan.Cache.Abstractions": {
         "type": "Project",
         "dependencies": {
           "Sylin.Koan.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Cache.Adapter.Sqlite": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.Sqlite": "[10.0.10, )",
+          "SQLitePCLRaw.lib.e_sqlite3": "[3.53.3, )",
+          "Sylin.Koan.Cache": "[1.0.0, )",
+          "Sylin.Koan.Cache.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Communication": {
+        "type": "Project",
+        "dependencies": {
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
         }
       },
       "Sylin.Koan.Core": {
@@ -255,6 +295,16 @@
         "dependencies": {
           "Sylin.Koan.Identity": "[1.0.0, )",
           "Sylin.Koan.Web": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Jobs": {
+        "type": "Project",
+        "dependencies": {
+          "Cronos": "[0.13.0, )",
+          "Sylin.Koan.Communication": "[1.0.0, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
         }
       },
       "Sylin.Koan.Security.Trust": {

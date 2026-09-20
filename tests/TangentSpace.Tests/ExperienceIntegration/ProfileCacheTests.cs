@@ -42,8 +42,7 @@ public sealed class ProfileCacheTests
         do { line = await reader.ReadLineAsync(budget.Token); } while (line is not null && !line.StartsWith("data: "));
         Assert.NotNull(line);
         Assert.Contains("\"displayName\":\"Leo\"", line);
-        using var hot = new MemoryCache(new MemoryCacheOptions());
-        var restarted = new ParticipantProfiles(hot, app.Services.GetRequiredService<ParticipantDirectory>(), TimeProvider.System);
+        var restarted = new ParticipantProfiles(app.Services.GetRequiredService<ParticipantDirectory>(), TimeProvider.System);
         var restored = await restarted.Read(app.HumanParticipantId, budget.Token);
         Assert.Equal("Leo", restored.DisplayName);
         Assert.StartsWith("/api/profile-cache/avatar?", restored.Avatar);

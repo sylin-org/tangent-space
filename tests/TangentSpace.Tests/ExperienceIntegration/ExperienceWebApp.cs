@@ -209,7 +209,26 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         var conversation = await TopicConversation.Get(roomKey) ?? new TopicConversation { Id = roomKey };
         conversation.LastSequence = Math.Max(conversation.LastSequence, sequence);
         await conversation.Save();
+        // The acceptance path journals the write, which is what signals the attention compile.
+        await ActivityJournal.AppendInTransaction(ActivityKind.PostAccepted, roomKey, authorId,
+            messageSequence: sequence, occurredAt: acceptedAt);
         return post.Id;
+    }
+
+    /// <summary>Waits, bounded, for the topic's compiled attention row for one participant to
+    /// reach the given state. The compile runs in the background off the journal's signal, so
+    /// tests that read attention through the projection await it instead of sleeping.</summary>
+    public async Task<TopicAttention?> AwaitAttentionAsync(string topicKey, string participantId,
+        Func<TopicAttention, bool>? ready = null, TimeSpan? timeout = null)
+    {
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? TimeSpan.FromSeconds(10));
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var row = await TopicAttention.Get(TopicAttention.IdOf(topicKey, participantId), CancellationToken.None);
+            if (row is not null && (ready is null || ready(row))) return row;
+            await Task.Delay(100, CancellationToken.None);
+        }
+        return null;
     }
 
     /// <summary>Revoke the agent credential mid-test to prove private content is withdrawn.</summary>

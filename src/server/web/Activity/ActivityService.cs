@@ -22,7 +22,6 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     private const int MaximumUnread = 100;
     private readonly IDataProtector cursors = protection.CreateProtector("Cursor.v1");
     private static readonly QueryDefinition JournalWindow = Window<ActivityJournal>(nameof(ActivityJournal.Sequence), MaximumJournalScan + 1);
-    private static readonly QueryDefinition MessagesWindow = Window<Post>(nameof(Post.Sequence), MaximumUnread + 1, descending: true);
     private static readonly QueryDefinition OneMessageWindow = Window<Post>(nameof(Post.Sequence), 1, descending: true);
 
     public Task<ActivitySnapshot> Snapshot(string participantId, string? credentialId, string? cursor, CancellationToken ct)
@@ -132,37 +131,26 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         return new(ordered, next, next is not null, reset, directory.ScanLimited);
     }
 
+    /// <summary>One topic's attention for the viewer, read from the compiled projection. The
+    /// row is the only source of numbers: absent means no attention is known, so the topic
+    /// contributes nothing to the overview until a compile lands.</summary>
     private async Task<ActivityTopic?> TopicActivity(string participantId, string roomKey, CancellationToken ct)
     {
         var policy = await governance.ReadPolicyAsync(participantId, roomKey, ct);
     if (!policy.CanRead) return null;
     var topic = await Topic.Get(roomKey, ct);
         if (topic is null) return null;
+        var attention = await TopicAttention.Get(TopicAttention.IdOf(roomKey, participantId), ct);
+        if (attention is null) return null;
         // Null-safe: an absent watch record (the common case) simply means All.
         var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, roomKey), ct),
             await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, topic.TangentKey), ct));
         if (!AttentionRules.DeliversTopic(mode)) return null;
-        var state = await TopicConversation.Get(roomKey, ct) ?? new TopicConversation { Id = roomKey };
-        var read = await ReadPosition.Get(ReadPosition.Key(participantId, roomKey), ct);
-        var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
-        // The window stays source-order; attention excludes the actor's own contributions.
-        var unreadWindow = await Post.Query(post => post.TopicKey == roomKey && post.Sequence > readSequence,
-            MessagesWindow, ct);
-        var unread = unreadWindow.Where(post => AttentionRules.CountsForAttention(post, participantId)).ToArray();
-        var unreadCount = Math.Min(unread.Length, MaximumUnread);
-        var directReplies = 0;
-        foreach (var post in unread.Take(MaximumUnread))
-        {
-            if (post.Content.ReplyTo is not { } parentId) continue;
-            var parent = await Post.Get(parentId, ct);
-            if (parent is not null && parent.TopicKey == roomKey && parent.AuthorParticipantId == participantId) directReplies++;
-        }
-        var last = state.LastSequence == 0 ? null : (await Post.Query(post => post.TopicKey == roomKey && post.Sequence == state.LastSequence,
-            OneMessageWindow, ct)).FirstOrDefault();
-        var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
-        // The window itself overflowed: any count derived from it may be clipped at the cap.
-        return new ActivityTopic(roomKey, topic.TangentKey, attention, unreadWindow.Count > MaximumUnread,
-            Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, last?.AcceptedAt);
+        return new ActivityTopic(roomKey, topic.TangentKey,
+            AttentionRules.AttentionUnread(mode, attention.UnreadCount, attention.DirectReplies),
+            attention.UnreadCount >= MaximumUnread,
+            Math.Min(attention.DirectReplies, MaximumUnread),
+            attention.LastSequence, attention.ReadSequence, attention.LastPostAt);
     }
 
     /// <summary>Personal watch preference layered after the access check; never widens access.</summary>
