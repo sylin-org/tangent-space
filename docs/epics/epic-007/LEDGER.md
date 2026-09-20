@@ -189,7 +189,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R5.1 | One Topic window for browser, connector and public pages; re-express `window-red-team`'s and `activity-red-team`'s 32 safety properties against it, checked against the list R1.15 extracts (N-040) | todo | One implementation remains; every listed property still has a test | |
 | R5.2 | Attention projection, with a cheap attention summary on responses | todo | Digest cost follows item count | |
 | R5.3 | Keyset directories without exact counts or per-row queries | todo | Query plans are bounded | |
-| R5.4 | Journal sequence without the `ActivityHead` row | todo | No shared counter row | |
+| R5.4 | Journal sequence without the `ActivityHead` row | done | No shared counter row | 2026-09-20: `LatestSequence()` reads the journal's own maximum; appends serialize in-process with a high-water mark for same-transaction double appends |
 | R5.5 | Public reads without the lock, re-checking the Topic revision | todo | A concurrent audience-narrowing test passes | |
 | R5.6 | The connector keeps only what its model has been shown; the attention projection carries the rest | todo | The connector stores no waiting counts, revisions or withdrawal heuristics | |
 | R5.7 | Measure on the EPIC-005 synthetic dataset through the real API | todo | Results recorded here | |
@@ -837,6 +837,11 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **`WithCurrentPolicy` is gone, split into the two disciplines it conflated.** `TopicGovernance.ReadAsync`/`ReadPolicyAsync` project current authority with no write gate and no transaction — reads tolerate a concurrent change and re-read on the next request. `WithinAcceptanceAsync` is the mutation envelope: the write gate, one `AcceptanceTransaction`, the policy check inside, the commit at the end — the caller's action owns the transaction (the N-020 discipline, stated where it runs).
 - **Call sites migrated by kind.** Reads: Conversation's ReadPolicy/History/window, TopicGovernance.Describe (now consuming the read context's topic instead of re-Getting), ActivityService's three checks, the digest's per-topic collection, the moderation queue/detail/preview. Mutations: CreatePost, EditPost/DeletePost, the moderation report, and the decision apply.
 - The R3.6 row: stage 1 (replies by Post id) and stage 2 (locks and transactions) are both done. `Topic.MembersOnly` and the `authorized` seams died in stage 2a; with them, the row's surface is closed.
+
+### S-023 · 2026-09-20 · Claude (continued) — R5.4
+
+- **The journal sequence no longer has a counter row.** `ActivityHead` is deleted: `ActivityJournal.LatestSequence()` reads the journal's own maximum, and `AppendInTransaction` assigns maximum-plus-one under a process-wide append gate — exact across restarts via the committed maximum, and exact within one transaction appending twice via an in-process high-water mark (the first append is not yet visible to reads). The head readers (the activity snapshot boundary and the digest's revision marker) became sequence reads. The double save per append died with the row.
+- .NET 107/107.
 
  index
 

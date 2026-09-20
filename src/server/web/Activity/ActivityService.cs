@@ -35,13 +35,13 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     {
         await EnsureParticipantActive(participantId, credentialId, ct);
         ActivityCursor? requested = Decode(cursor, participantId);
-        var head = await ReadHead(ct);
+        var head = await ActivityJournal.LatestSequence(ct);
         if (requested is null)
-            return await Bootstrap(participantId, head.LastSequence, resetRequired: cursor is not null, topicCursor, ct);
+            return await Bootstrap(participantId, head, resetRequired: cursor is not null, topicCursor, ct);
 
-        var boundary = requested.Boundary ?? head.LastSequence;
-        if (requested.After < 0 || requested.After > boundary || boundary > head.LastSequence)
-            return await Bootstrap(participantId, head.LastSequence, resetRequired: true, topicCursor, ct);
+        var boundary = requested.Boundary ?? head;
+        if (requested.After < 0 || requested.After > boundary || boundary > head)
+            return await Bootstrap(participantId, head, resetRequired: true, topicCursor, ct);
 
         var entries = (await ActivityJournal.Query(value => value.Sequence > requested.After && value.Sequence <= boundary,
             JournalWindow, ct)).OrderBy(value => value.Sequence).Take(MaximumJournalScan + 1).ToArray();
@@ -108,12 +108,6 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         var topics = await Topics(participantId, topicCursor, ct);
         return new ActivitySnapshot(checkpoint, [], null, false, resetRequired || topics.ResetRequired,
             topics.Values, topics.HasMore || topics.Incomplete, topics.NextCursor, topics.HasMore, topics.Incomplete);
-    }
-
-    private async Task<ActivityHead> ReadHead(CancellationToken ct)
-    {
-        using var fresh = EntityContext.NoCache();
-        return await ActivityHead.Get(ActivityHead.Key, ct) ?? new ActivityHead { Id = ActivityHead.Key };
     }
 
     private async Task<TopicOverview> Topics(string participantId, string? cursor, CancellationToken ct)

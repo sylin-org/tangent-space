@@ -210,11 +210,7 @@ public sealed class ExperienceDigest(
         => value.Length <= limit ? value : value[..(char.IsHighSurrogate(value[limit - 2]) ? limit - 2 : limit - 1)] + "…";
 
     public async Task<string> HeadRevision(CancellationToken ct)
-    {
-        using var fresh = EntityContext.NoCache();
-        var head = await ActivityHead.Get(ActivityHead.Key, ct) ?? new ActivityHead { Id = ActivityHead.Key };
-        return "att:" + head.LastSequence.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    }
+        => "att:" + (await ActivityJournal.LatestSequence(ct)).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     internal string Timestamp() => clock.GetUtcNow().UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
