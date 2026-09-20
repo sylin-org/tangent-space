@@ -21,17 +21,18 @@ public sealed partial class ConversationService
         Sort = [new SortSpec(new MemberPath(typeof(Post), [typeof(Post).GetProperty(nameof(Post.Sequence))!], typeof(long), false, -1), false)]
     };
 
-    public Task<PostPage> History(string participantId, string topic, string? cursor, CancellationToken ct, bool fromStart = false)
-        => governance.WithCurrentPolicy(participantId, topic, async (policy, token) =>
+    public async Task<PostPage> History(string participantId, string topic, string? cursor, CancellationToken ct, bool fromStart = false)
+    {
+        var policy = await governance.ReadPolicyAsync(participantId, topic, ct);
         {
             if (!policy.CanRead) throw new UnauthorizedAccessException("This topic's current rules do not allow reading.");
-            var state = await TopicConversation.Get(topic, token) ?? new TopicConversation { Id = topic };
-            var position = await ReadPosition.Get(ReadPosition.Key(participantId, topic), token);
+            var state = await TopicConversation.Get(topic, ct) ?? new TopicConversation { Id = topic };
+            var position = await ReadPosition.Get(ReadPosition.Key(participantId, topic), ct);
             if (fromStart && cursor is not null) throw new ArgumentException("Choose a continuation or read from the beginning, not both.");
             var selected = cursor is null ? new ConversationCursor(participantId, topic, fromStart ? 0 : position?.Sequence ?? 0, null, clock.GetUtcNow().AddDays(7)) : Decode(cursor, participantId, topic);
             var boundary = selected.Boundary ?? state.LastSequence;
             if (selected.After > boundary || boundary > state.LastSequence) throw new ArgumentException("The continuation no longer matches this conversation; restart the read.");
-            var candidates = await Post.Query(m => m.TopicKey == topic && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, token);
+            var candidates = await Post.Query(m => m.TopicKey == topic && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, ct);
             var posts = new List<Post>();
             var bytes = 4096; // Envelope and protected continuations stay inside the overall 128 KiB budget.
             foreach (var post in candidates.Take(20))
@@ -48,7 +49,7 @@ public sealed partial class ConversationService
             var resume = Encode(new(participantId, topic, more ? after : boundary, null, expiry));
             var handles = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var (author, label) in (await directory.LabelsFor(
-                     posts.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal).Take(20), token))
+                     posts.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal).Take(20), ct))
                      .Where(pair => pair.Value is { Length: > 0 and <= 253 }))
             {
                 var handleBytes = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, string> { [author] = label }).Length;
@@ -57,12 +58,13 @@ public sealed partial class ConversationService
                 bytes += handleBytes;
             }
             return new PostPage(posts, next, resume, boundary, handles,
-                await ResolveParticipants(posts, token));
-        }, ct);
+                await ResolveParticipants(posts, ct));
+        }
+    }
 
     public async Task<long> Acknowledge(string participantId, string topic, string cursor, CancellationToken ct)
     {
-        var result = await governance.WithCurrentPolicy(participantId, topic, async (policy, token) =>
+        var result = await governance.WithinAcceptanceAsync(participantId, topic, async (policy, token) =>
         {
             if (!policy.CanRead) throw new UnauthorizedAccessException("This topic's current rules do not allow reading.");
             var selected = Decode(cursor, participantId, topic);

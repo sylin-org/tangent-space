@@ -34,7 +34,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         CheckOperation(operationId);
         CheckReasonCode(reasonCode);
         CheckText(statement, nameof(statement), ModerationCase.MaximumStatementLength);
-        return topics.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
+        return topics.WithinAcceptanceAsync(actorId, roomKey, async (policy, token) =>
         {
             var post = await Post.Get(messageId, token);
             if (post is null || post.TopicKey != roomKey)
@@ -88,24 +88,24 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         }, ct);
     }
 
-    public Task<ModerationCasePage> List(string actorId, string roomKey, int page, CancellationToken ct)
+    public async Task<ModerationCasePage> List(string actorId, string roomKey, int page, CancellationToken ct)
     {
         if (page is < 1 or > MaximumPage)
             throw new ArgumentException("Choose a case page between 1 and 10000.", nameof(page));
-        return topics.WithCurrentPolicy(actorId, roomKey, async (policy, token) =>
+        var policy = await topics.ReadPolicyAsync(actorId, roomKey, ct);
         {
             RequireSteward(policy);
             var selected = (await ModerationCase.Query(item => item.TopicKey == roomKey,
-                queue.WithPagination(page, PageSize).WithCountStrategy(null), token)).ToList();
+                queue.WithPagination(page, PageSize).WithCountStrategy(null), ct)).ToList();
             var hasNext = page < MaximumPage && selected.Count == PageSize && (await ModerationCase.Query(item => item.TopicKey == roomKey,
-                queue.WithPagination(page + 1, PageSize).WithCountStrategy(null), token)).Count > 0;
+                queue.WithPagination(page + 1, PageSize).WithCountStrategy(null), ct)).Count > 0;
             var summaries = new List<ModerationCaseSummary>(selected.Count);
             foreach (var item in selected)
-                summaries.Add(Summary(item, await SubjectOrNull(item, token), policy));
+                summaries.Add(Summary(item, await SubjectOrNull(item, ct), policy));
             return new ModerationCasePage(summaries, page, hasNext ? page + 1 : null,
                 AtLeast: hasNext,
                 Saturated: summaries.Any(item => item.TestimonySaturated || item.DecisionSaturated));
-        }, ct);
+        }
     }
 
     public async Task<ModerationCaseView> Read(string actorId, string caseId, int testimonyOffset,
@@ -113,10 +113,10 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
     {
         ValidateProjection(testimonyOffset, testimonyLimit, decisionLimit);
         var seed = await Load(caseId, ct);
-        return await topics.WithCurrentPolicy(actorId, seed.TopicKey, async (policy, token) =>
+        var policy = await topics.ReadPolicyAsync(actorId, seed.TopicKey, ct);
         {
             RequireSteward(policy);
-            var current = await ModerationCase.Get(caseId, token)
+            var current = await ModerationCase.Get(caseId, ct)
                 ?? throw Unavailable();
             var testimonies = current.Testimonies.Skip(testimonyOffset).Take(testimonyLimit)
                 .Select(value => new ModerationTestimonyView("testimony:" + value.Id, value.ReasonCode,
@@ -127,9 +127,9 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
                 .Select(value => new ModerationDecisionView(value.ActorParticipantId, value.Action,
                     value.Reason, value.ReviewAfter, value.ExpectedCaseRevision,
                     value.ExpectedSubjectRevision, value.ResultingRevision, value.AppliedAt)).ToList();
-            return new ModerationCaseView(Summary(current, await SubjectOrNull(current, token), policy),
+            return new ModerationCaseView(Summary(current, await SubjectOrNull(current, ct), policy),
                 testimonies, testimonyOffset, next, decisions, current.Decisions.Count > decisions.Count);
-        }, ct);
+        }
     }
 
     public async Task<ModerationDecisionPreview> Preview(string actorId, string caseId, string action,
@@ -138,19 +138,19 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
     {
         CheckText(reason, nameof(reason), ModerationCase.MaximumDecisionReasonLength);
         var seed = await Load(caseId, ct);
-        return await topics.WithCurrentPolicy(actorId, seed.TopicKey, async (policy, token) =>
+        var policy = await topics.ReadPolicyAsync(actorId, seed.TopicKey, ct);
         {
             RequireSteward(policy);
-            var current = await ModerationCase.Get(caseId, token) ?? throw Unavailable();
+            var current = await ModerationCase.Get(caseId, ct) ?? throw Unavailable();
             if (current.Revision != expectedCaseRevision) throw StaleCase();
-            var subject = await CurrentSubject(current, expectedSubjectRevision, token);
+            var subject = await CurrentSubject(current, expectedSubjectRevision, ct);
             var until = ValidateTransition(current, action, reviewAfter, clock.GetUtcNow());
             return new ModerationDecisionPreview(Summary(current, subject, policy), action,
                 action == ModerationActions.Defer
                     ? $"Return this case to the steward queue after {until:O}."
                     : "Escalate this case to the accountable human Host owner; no sanction is applied.",
                 Reversible: action == ModerationActions.Defer, until);
-        }, ct);
+        }
     }
 
     public async Task<ModerationCaseView> Decide(string actorId, string caseId, string operationId,
@@ -160,7 +160,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         CheckOperation(operationId);
         CheckText(reason, nameof(reason), ModerationCase.MaximumDecisionReasonLength);
         var seed = await Load(caseId, ct);
-        return await topics.WithCurrentPolicy(actorId, seed.TopicKey, async (policy, token) =>
+        return await topics.WithinAcceptanceAsync(actorId, seed.TopicKey, async (policy, token) =>
         {
             RequireSteward(policy);
             var current = await ModerationCase.Get(caseId, token) ?? throw Unavailable();
@@ -175,7 +175,7 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
                 return await ReadWithin(current, policy, token);
             }
             if (current.Revision != expectedCaseRevision) throw StaleCase();
-            var subject = await CurrentSubject(current, expectedSubjectRevision, token);
+            var subject = await CurrentSubject(current, expectedSubjectRevision, ct);
             var now = clock.GetUtcNow();
             var until = ValidateTransition(current, action, reviewAfter, now);
             if (current.Decisions.Count >= ModerationCase.MaximumDecisions)

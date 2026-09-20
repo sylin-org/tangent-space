@@ -15,12 +15,12 @@ public sealed partial class ConversationService(TopicGovernance governance, Time
     private readonly SemaphoreSlim writes = new(1, 1);
     private readonly IDataProtector cursors = protection.CreateProtector("Cursor.v1");
 
-    public Task<TopicPolicy> ReadPolicy(string did, string topic, CancellationToken ct)
-        => governance.WithCurrentPolicy(did, topic, (policy, _) =>
-        {
-            if (!policy.CanRead) throw new UnauthorizedAccessException("This topic's current rules do not allow reading.");
-            return Task.FromResult(policy);
-        }, ct);
+    public async Task<TopicPolicy> ReadPolicy(string did, string topic, CancellationToken ct)
+    {
+        var policy = await governance.ReadPolicyAsync(did, topic, ct);
+        if (!policy.CanRead) throw new UnauthorizedAccessException("This topic's current rules do not allow reading.");
+        return policy;
+    }
 
     public void Dispose() => writes.Dispose();
 

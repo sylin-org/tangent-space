@@ -102,81 +102,80 @@ public sealed class ExperienceDigest(
     private async Task CollectTopic(string did, TopicDescription topic, List<ExperienceAttentionItem> directed,
         List<ExperienceAttentionItem> watched, CancellationToken ct)
     {
-        await governance.WithCurrentPolicy(did, topic.Key, async (policy, token) =>
+        var context = await governance.ReadAsync(did, topic.Key, ct);
+        var policy = context.Policy;
+        if (!policy.CanRead) return;
+        var stored = context.Topic;
+        if (stored is null) return;
+        var mode = AttentionRules.Effective(
+            await WatchSetting.Get(WatchSetting.Key(did, topic.Key), ct),
+            await TangentWatchSetting.Get(TangentWatchSetting.Key(did, stored.TangentKey), ct));
+        if (!AttentionRules.DeliversTopic(mode)) return;
+        var state = await TopicConversation.Get(topic.Key, ct) ?? new TopicConversation { Id = topic.Key };
+        var position = await ReadPosition.Get(ReadPosition.Key(did, topic.Key), ct);
         {
-            if (!policy.CanRead) return false;
-            using var fresh = EntityContext.NoCache();
-            var stored = await Topic.Get(topic.Key, token);
-            if (stored is null) return false;
-            var mode = AttentionRules.Effective(
-                await WatchSetting.Get(WatchSetting.Key(did, topic.Key), token),
-                await TangentWatchSetting.Get(TangentWatchSetting.Key(did, stored.TangentKey), token));
-            if (!AttentionRules.DeliversTopic(mode)) return false;
-            var state = await TopicConversation.Get(topic.Key, token) ?? new TopicConversation { Id = topic.Key };
-            var read = await ReadPosition.Get(ReadPosition.Key(did, topic.Key), token);
-            var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
-            var recipientDid = await hub.Directory.AtprotoDidOf(did, token);
+            var readSequence = Math.Min(position?.Sequence ?? 0, state.LastSequence);
+            var recipientDid = await hub.Directory.AtprotoDidOf(did, ct);
             var unread = (await Post.Query(
-                post => post.TopicKey == topic.Key && post.Sequence > readSequence, UnreadWindow, token))
-                .OrderBy(post => post.Sequence).ToList();
+            post => post.TopicKey == topic.Key && post.Sequence > readSequence, UnreadWindow, ct))
+            .OrderBy(post => post.Sequence).ToList();
             var handles = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var (author, label) in await hub.Directory.LabelsFor(
-                     unread.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal), token))
-                handles[author] = label;
+                 unread.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal), ct))
+            handles[author] = label;
             var addressedPosts = new HashSet<string>(StringComparer.Ordinal);
             foreach (var post in unread)
             {
-                // The actor's own writes settle into their inbox — read mail about what you
-                // posted, so the author sees the double post and can reconcile it with the
-                // delete key it already holds. Settlement rides the Topic's watch: a
-                // watched-out Topic delivers nothing.
-                if (post.AuthorParticipantId == did)
-                {
-                    if (!post.Removed)
-                        watched.Add(Item(did, topic, stored.TangentKey, post, "write_settlement", null,
-                            handles.GetValueOrDefault(did)));
-                    continue;
-                }
-                if (post.Removed) continue;
-                var authorHandle = handles.GetValueOrDefault(post.AuthorParticipantId);
-                // Direct replies answer this participant's accepted post.
-                if (post.Content.ReplyTo is { } parentId)
-                {
-                    var parent = await Post.Get(parentId, token);
-                    if (parent is not null && parent.TopicKey == topic.Key
-                        && AttentionRules.IsDirectReply(post, parent, did))
-                    {
-                        addressedPosts.Add(post.Id);
-                        directed.Add(Item(did, topic, stored.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
-                        continue;
-                    }
-                }
-                // Mentions are facets (ADR 0008): minted by the picker or detected when the post is saved,
-                // they carry the perennial identity value (atproto DID or internal DID) and need no prose resolution.
-                var facets = post.Facets ?? [];
-                if (facets.Any(facet => recipientDid is not null && facet.References(recipientDid)
-                        || facet.References(ParticipantIdentity.InternalValue(did))))
-                {
-                    addressedPosts.Add(post.Id);
-                    directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
-                    continue;
-                }
-                // Group mentions expand to current holders of the scoped roles: the group is
-                // resolved at digest time, never stored in anyone's words (ADR 0008).
-                var groups = facets.Where(facet => facet.Kind == Conversation.PostFacet.Group)
-                    .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal))
-                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                if (groups.Count > 0 && post.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, token))
-                {
-                    addressedPosts.Add(post.Id);
-                    directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
-                    continue;
-                }
-                if (mode != WatchMode.Replies)
-                    watched.Add(Item(did, topic, stored.TangentKey, post, "watched_activity", null, authorHandle));
+            // The actor's own writes settle into their inbox — read mail about what you
+            // posted, so the author sees the double post and can reconcile it with the
+            // delete key it already holds. Settlement rides the Topic's watch: a
+            // watched-out Topic delivers nothing.
+            if (post.AuthorParticipantId == did)
+            {
+                if (!post.Removed)
+                    watched.Add(Item(did, topic, stored.TangentKey, post, "write_settlement", null,
+                        handles.GetValueOrDefault(did)));
+                continue;
             }
-            return true;
-        }, ct);
+            if (post.Removed) continue;
+            var authorHandle = handles.GetValueOrDefault(post.AuthorParticipantId);
+            // Direct replies answer this participant's accepted post.
+            if (post.Content.ReplyTo is { } parentId)
+            {
+                var parent = await Post.Get(parentId, ct);
+                if (parent is not null && parent.TopicKey == topic.Key
+                    && AttentionRules.IsDirectReply(post, parent, did))
+                {
+                    addressedPosts.Add(post.Id);
+                    directed.Add(Item(did, topic, stored.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
+                    continue;
+                }
+            }
+            // Mentions are facets (ADR 0008): minted by the picker or detected when the post is saved,
+            // they carry the perennial identity value (atproto DID or internal DID) and need no prose resolution.
+            var facets = post.Facets ?? [];
+            if (facets.Any(facet => recipientDid is not null && facet.References(recipientDid)
+                    || facet.References(ParticipantIdentity.InternalValue(did))))
+            {
+                addressedPosts.Add(post.Id);
+                directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                continue;
+            }
+            // Group mentions expand to current holders of the scoped roles: the group is
+            // resolved at digest time, never stored in anyone's words (ADR 0008).
+            var groups = facets.Where(facet => facet.Kind == Conversation.PostFacet.Group)
+                .Select(facet => facet.Value!).Where(value => Conversation.PostFacet.Groups.Contains(value, StringComparer.Ordinal))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (groups.Count > 0 && post.AuthorParticipantId != did && await HoldsAnyRole(did, stored.TangentKey, groups, ct))
+            {
+                addressedPosts.Add(post.Id);
+                directed.Add(Item(did, topic, stored.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                continue;
+            }
+            if (mode != WatchMode.Replies)
+                watched.Add(Item(did, topic, stored.TangentKey, post, "watched_activity", null, authorHandle));
+        }
+    }
     }
 
     /// <summary>Whether the recipient currently holds any of the mentioned role groups in

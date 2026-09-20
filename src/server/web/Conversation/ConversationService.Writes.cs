@@ -25,7 +25,7 @@ public sealed partial class ConversationService
         {
             Post? result = null;
             var conflict = false;
-            await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
+            await governance.WithinAcceptanceAsync(participantId, roomKey, async (policy, token) =>
             {
                 RequireTopicCapability(policy, TopicCapability.Reply, "This topic's current rules do not allow posting.");
                 var existing = (await Post.Query(m => m.TopicKey == roomKey && m.AuthorParticipantId == participantId && m.OperationId == input.OperationId,

@@ -14,15 +14,15 @@ public sealed partial class ConversationService
 
     /// <summary>A bounded window of one Topic for one participant: the unread posts by default, a page
     /// from a continuation cursor, or the neighborhood of an anchor post.</summary>
-    public Task<TopicWindow> ReadWindow(string participantId, string topicKey, string? cursor, string? anchorPostId,
+    public async Task<TopicWindow> ReadWindow(string participantId, string topicKey, string? cursor, string? anchorPostId,
         int limit, CancellationToken ct)
-        => governance.WithCurrentPolicy(participantId, topicKey, async (policy, token) =>
-        {
-            if (!policy.CanRead) throw new UnauthorizedAccessException("This conversation is not available to your account.");
+    {
+        var policy = await governance.ReadPolicyAsync(participantId, topicKey, ct);
+        if (!policy.CanRead) throw new UnauthorizedAccessException("This conversation is not available to your account.");
             if (limit is < 1 or > 25) throw new ArgumentException("Choose a window of 1 to 25 posts.");
             if (cursor is not null && anchorPostId is not null)
                 throw new ArgumentException("Choose a history cursor or an anchor post, not both.");
-            var state = await TopicConversation.Get(topicKey, token) ?? new TopicConversation { Id = topicKey };
+            var state = await TopicConversation.Get(topicKey, ct) ?? new TopicConversation { Id = topicKey };
             var boundary = state.LastSequence;
             var position = "unread";
             var rows = new List<Post>();
@@ -37,35 +37,35 @@ public sealed partial class ConversationService
                 position = "page";
                 var candidates = selected.Older
                     ? await Post.Query(m => m.TopicKey == topicKey && m.Sequence < selected.Edge && m.Sequence <= boundary,
-                        SequenceQuery(limit, true), token)
+                        SequenceQuery(limit, true), ct)
                     : await Post.Query(m => m.TopicKey == topicKey && m.Sequence > selected.Edge && m.Sequence <= boundary,
-                        SequenceQuery(limit), token);
+                        SequenceQuery(limit), ct);
                 rows = candidates.OrderBy(m => m.Sequence).ToList();
                 anchorIndex = selected.Older ? Math.Max(0, rows.Count - 1) : 0;
             }
             else if (anchorPostId is not null)
             {
-                var anchor = await Post.Get(anchorPostId, token);
+                var anchor = await Post.Get(anchorPostId, ct);
                 if (anchor is null || anchor.TopicKey != topicKey || anchor.Sequence > boundary)
                     throw new ArgumentException("Choose an accessible Post in this Topic.");
                 var before = await Post.Query(m => m.TopicKey == topicKey && m.Sequence < anchor.Sequence,
-                    SequenceQuery(limit, true), token);
+                    SequenceQuery(limit, true), ct);
                 var after = await Post.Query(m => m.TopicKey == topicKey && m.Sequence > anchor.Sequence && m.Sequence <= boundary,
-                    SequenceQuery(limit), token);
+                    SequenceQuery(limit), ct);
                 rows = before.OrderBy(m => m.Sequence).Append(anchor).Concat(after.OrderBy(m => m.Sequence)).ToList();
                 anchorIndex = before.Count;
                 position = "around";
             }
             else
             {
-                var read = await ReadPosition.Get(ReadPosition.Key(participantId, topicKey), token);
+                var read = await ReadPosition.Get(ReadPosition.Key(participantId, topicKey), ct);
                 var after = Math.Min(read?.Sequence ?? 0, boundary);
                 rows = (await Post.Query(m => m.TopicKey == topicKey && m.Sequence > after && m.Sequence <= boundary,
-                    SequenceQuery(limit), token)).ToList();
+                    SequenceQuery(limit), ct)).ToList();
                 if (rows.Count == 0)
                 {
                     rows = (await Post.Query(m => m.TopicKey == topicKey && m.Sequence <= boundary,
-                        SequenceQuery(limit, true), token)).OrderBy(m => m.Sequence).ToList();
+                        SequenceQuery(limit, true), ct)).OrderBy(m => m.Sequence).ToList();
                     anchorIndex = Math.Max(0, rows.Count - 1);
                     position = "latest";
                 }
@@ -79,9 +79,9 @@ public sealed partial class ConversationService
                 var first = posts[0].Sequence;
                 var last = posts[^1].Sequence;
                 var hasOlder = (await Post.Query(m => m.TopicKey == topicKey && m.Sequence < first,
-                    SequenceQuery(1, true), token)).Count > 0;
+                    SequenceQuery(1, true), ct)).Count > 0;
                 var hasNewer = (await Post.Query(m => m.TopicKey == topicKey && m.Sequence > last && m.Sequence <= boundary,
-                    SequenceQuery(1), token)).Count > 0;
+                    SequenceQuery(1), ct)).Count > 0;
                 var expiry = clock.GetUtcNow().AddDays(7);
                 if (hasOlder) older = EncodeWindowCursor(new(participantId, topicKey, boundary, first, true, expiry));
                 if (hasNewer) newer = EncodeWindowCursor(new(participantId, topicKey, boundary, last, false, expiry));
@@ -89,11 +89,11 @@ public sealed partial class ConversationService
             }
             var handles = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var (author, handle) in await directory.LabelsFor(
-                     posts.Select(m => m.AuthorParticipantId).Distinct(StringComparer.Ordinal), token))
+                     posts.Select(m => m.AuthorParticipantId).Distinct(StringComparer.Ordinal), ct))
                 if (handle is { Length: > 0 and <= 253 }) handles[author] = handle;
-            return new TopicWindow(posts, older, newer, readCursor, position,
-                handles, await ResolveParticipants(posts, token));
-        }, ct);
+        return new TopicWindow(posts, older, newer, readCursor, position,
+            handles, await ResolveParticipants(posts, ct));
+    }
 
     private static QueryDefinition SequenceQuery(int size, bool descending = false)
     {

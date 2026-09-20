@@ -90,7 +90,7 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         await EnsureParticipantActive(participantId, credentialId, ct);
         foreach (var topic in snapshot.Topics)
         {
-            var allowed = await governance.WithCurrentPolicy(participantId, topic.TopicKey, (policy, _) => Task.FromResult(policy.CanRead), ct);
+            var allowed = (await governance.ReadPolicyAsync(participantId, topic.TopicKey, ct)).CanRead;
             if (!allowed) throw new UnauthorizedAccessException("Activity access changed while the snapshot was being prepared.");
         }
         foreach (var activityEvent in snapshot.Events)
@@ -138,38 +138,38 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         return new(ordered, next, next is not null, reset, directory.ScanLimited);
     }
 
-    private Task<ActivityTopic?> TopicActivity(string participantId, string roomKey, CancellationToken ct)
-        => governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
+    private async Task<ActivityTopic?> TopicActivity(string participantId, string roomKey, CancellationToken ct)
+    {
+        var policy = await governance.ReadPolicyAsync(participantId, roomKey, ct);
+    if (!policy.CanRead) return null;
+    var topic = await Topic.Get(roomKey, ct);
+        if (topic is null) return null;
+        // Null-safe: an absent watch record (the common case) simply means All.
+        var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, roomKey), ct),
+            await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, topic.TangentKey), ct));
+        if (!AttentionRules.DeliversTopic(mode)) return null;
+        var state = await TopicConversation.Get(roomKey, ct) ?? new TopicConversation { Id = roomKey };
+        var read = await ReadPosition.Get(ReadPosition.Key(participantId, roomKey), ct);
+        var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
+        // The window stays source-order; attention excludes the actor's own contributions.
+        var unreadWindow = await Post.Query(post => post.TopicKey == roomKey && post.Sequence > readSequence,
+            MessagesWindow, ct);
+        var unread = unreadWindow.Where(post => AttentionRules.CountsForAttention(post, participantId)).ToArray();
+        var unreadCount = Math.Min(unread.Length, MaximumUnread);
+        var directReplies = 0;
+        foreach (var post in unread.Take(MaximumUnread))
         {
-            if (!policy.CanRead) return null;
-            var topic = await Topic.Get(roomKey, token);
-            if (topic is null) return null;
-            // Null-safe: an absent watch record (the common case) simply means All.
-            var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, roomKey), token),
-                await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, topic.TangentKey), token));
-            if (!AttentionRules.DeliversTopic(mode)) return null;
-            var state = await TopicConversation.Get(roomKey, token) ?? new TopicConversation { Id = roomKey };
-            var read = await ReadPosition.Get(ReadPosition.Key(participantId, roomKey), token);
-            var readSequence = Math.Min(read?.Sequence ?? 0, state.LastSequence);
-            // The window stays source-order; attention excludes the actor's own contributions.
-            var unreadWindow = await Post.Query(post => post.TopicKey == roomKey && post.Sequence > readSequence,
-                MessagesWindow, token);
-            var unread = unreadWindow.Where(post => AttentionRules.CountsForAttention(post, participantId)).ToArray();
-            var unreadCount = Math.Min(unread.Length, MaximumUnread);
-            var directReplies = 0;
-            foreach (var post in unread.Take(MaximumUnread))
-            {
-                if (post.Content.ReplyTo is not { } parentId) continue;
-                var parent = await Post.Get(parentId, token);
-                if (parent is not null && parent.TopicKey == roomKey && parent.AuthorParticipantId == participantId) directReplies++;
-            }
-            var last = state.LastSequence == 0 ? null : (await Post.Query(post => post.TopicKey == roomKey && post.Sequence == state.LastSequence,
-                OneMessageWindow, token)).FirstOrDefault();
-            var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
-            // The window itself overflowed: any count derived from it may be clipped at the cap.
-            return new ActivityTopic(roomKey, topic.TangentKey, attention, unreadWindow.Count > MaximumUnread,
-                Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, last?.AcceptedAt);
-        }, ct);
+            if (post.Content.ReplyTo is not { } parentId) continue;
+            var parent = await Post.Get(parentId, ct);
+            if (parent is not null && parent.TopicKey == roomKey && parent.AuthorParticipantId == participantId) directReplies++;
+        }
+        var last = state.LastSequence == 0 ? null : (await Post.Query(post => post.TopicKey == roomKey && post.Sequence == state.LastSequence,
+            OneMessageWindow, ct)).FirstOrDefault();
+        var attention = AttentionRules.AttentionUnread(mode, unreadCount, Math.Min(directReplies, MaximumUnread));
+        // The window itself overflowed: any count derived from it may be clipped at the cap.
+        return new ActivityTopic(roomKey, topic.TangentKey, attention, unreadWindow.Count > MaximumUnread,
+            Math.Min(directReplies, MaximumUnread), state.LastSequence, readSequence, last?.AcceptedAt);
+    }
 
     /// <summary>Personal watch preference layered after the access check; never widens access.</summary>
     private async Task<bool> WatchesEvent(string participantId, ActivityJournal entry, CancellationToken ct)
@@ -193,7 +193,7 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
         if (entry.Kind == ActivityKind.ReadAcknowledged && entry.ActorParticipantId != participantId) return false;
         if (string.IsNullOrEmpty(entry.TopicKey))
             return await tangents.CanAccess(participantId, entry.TangentKey, ct);
-        return await governance.WithCurrentPolicy(participantId, entry.TopicKey, (policy, _) => Task.FromResult(policy.CanRead), ct);
+        return (await governance.ReadPolicyAsync(participantId, entry.TopicKey, ct)).CanRead;
     }
 
     internal static ActivityEvent EventFor(string participantId, ActivityJournal entry)

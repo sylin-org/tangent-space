@@ -27,7 +27,7 @@ public sealed partial class ConversationService
         await writes.WaitAsync(ct);
         try
         {
-            var result = await governance.WithCurrentPolicy(participantId, roomKey, async (policy, token) =>
+            var result = await governance.WithinAcceptanceAsync(participantId, roomKey, async (policy, token) =>
             {
                 var current = await ReadPostForChange(policy, roomKey, messageId, token);
                 RequirePostChange(policy, current, delete);

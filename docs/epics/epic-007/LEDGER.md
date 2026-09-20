@@ -8,8 +8,8 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
 | Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
-| Current task | R3.5 — the host-owned live bus — **done**; no process-wide signal state remains. R3.6, the Conversation port, is next |
-| Next action | **Continue the Port**: the welcome hero + masthead account menu + the state-section bindings (the boot machine's visible half), then the place section's route reactions (`enterRoute`'s tangent/topic/post dispatch), moderation detail, participant profile, activity transport, facets, onboarding, atmosphere — then the swap: Vue at `/`, vanilla deleted. R3.6 stage 2 (`WithCurrentPolicy` → action-owns-its-transaction) stays queued behind the Port. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
+| Current task | R3.6 — **done** (stage 1: replies by Post id; stage 2: reads lock-free via `ReadPolicyAsync`/`ReadAsync`, mutations own `WithinAcceptanceAsync`; `MembersOnly` and the `authorized` seams folded away). Next: R4 |
+| Next action | **The swap** — Vue serves `/` and the vanilla workspace deletes — staged behind Leo's parity walkthrough of the Vue workspace against the vanilla baseline (the same live data). After the swap: R4.2 (the route-family retirement rides the SPA's envelope migration), R4.5, R5. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
 | Last checkpoint | 2026-09-20 · autonomous session · **every port unit is in**: history disclosure, artwork picker, profiles store close the inventory — all 21 vanilla workspace scripts have Vue counterparts. vitest 36/36, build green, node 7/7. **Next: the swap** (Vue at `/`, vanilla deleted) behind Leo's parity walkthrough |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
 | Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
@@ -831,6 +831,12 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **The six `bool authorized` seams died** (N-068's co-removal): Topic's ChangeMembership/ChangeDescription/ChangeSettings/ChangeAccess/ChangeReadAudience and Tangent's ChangeAccess no longer take the flag nor re-derive authority from the row-based policy — the governance gate is the one authority check, and the entities keep validation only. Signatures shrank to what the bodies use; every call site updated.
 - **`Topic.MembersOnly` folded** (the N-071 policy-unification fold): the flag had no setter left in production (CreateTopic's parameter defaulted false and its only caller never passed it), so its admission branches reduced to `role is null && tangentAdmitted`, the flag left Topic, TopicDescription and CreateTopic, and the dead `memberRecord` local went with it.
 - .NET 107/107. Next: stage 2b — `WithCurrentPolicy` splits into the lock-free read projection and mutation-owned acceptance transactions.
+
+### S-022 · 2026-09-20 · Claude (continued) — R3.6 stage 2b
+
+- **`WithCurrentPolicy` is gone, split into the two disciplines it conflated.** `TopicGovernance.ReadAsync`/`ReadPolicyAsync` project current authority with no write gate and no transaction — reads tolerate a concurrent change and re-read on the next request. `WithinAcceptanceAsync` is the mutation envelope: the write gate, one `AcceptanceTransaction`, the policy check inside, the commit at the end — the caller's action owns the transaction (the N-020 discipline, stated where it runs).
+- **Call sites migrated by kind.** Reads: Conversation's ReadPolicy/History/window, TopicGovernance.Describe (now consuming the read context's topic instead of re-Getting), ActivityService's three checks, the digest's per-topic collection, the moderation queue/detail/preview. Mutations: CreatePost, EditPost/DeletePost, the moderation report, and the decision apply.
+- The R3.6 row: stage 1 (replies by Post id) and stage 2 (locks and transactions) are both done. `Topic.MembersOnly` and the `authorized` seams died in stage 2a; with them, the row's surface is closed.
 
  index
 

@@ -52,12 +52,13 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
         finally { gate.Exit(); }
     }
 
-    public Task<TopicDescription?> Describe(string? actorId, string roomKey, CancellationToken ct)
-        => WithCurrentPolicy<TopicDescription?>(actorId, roomKey, async (policy, token) =>
-        {
-            var topic = await Topic.Get(roomKey, token);
-            return topic is null || (!policy.CanRead && !policy.CanManage) ? null : TopicDescription.From(topic, policy);
-        }, ct);
+    public async Task<TopicDescription?> Describe(string? actorId, string roomKey, CancellationToken ct)
+    {
+        var read = await ReadAsync(actorId, roomKey, ct);
+        return read.Topic is null || (!read.Policy.CanRead && !read.Policy.CanManage)
+            ? null
+            : TopicDescription.From(read.Topic, read.Policy);
+    }
 
     /// <summary>Bounded actor-filtered topic directory for one Tangent.</summary>
     public async Task<TangentTopicDirectory> ListForTangent(string? actorId, string tangentKey, int page, CancellationToken ct)
@@ -210,12 +211,44 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 return new Change(current);
             }, ct);
 
+    /// <summary>One projected policy with the entities it was read from. Lock-free.</summary>
+    public sealed record TopicReadContext(TopicPolicy Policy, Topic? Topic, Tangent? Tangent);
+
     /// <summary>
-    /// Reload current authority and execute bounded local work under the same gate and transaction as administration.
+    /// Current authority for read paths: no write gate and no transaction. A concurrent
+    /// change surfaces on the next read; nothing here may save.
+    /// A denied snapshot still carries the selected revisions.
+    /// </summary>
+    public async Task<TopicReadContext> ReadAsync(string? actorId, string roomKey, CancellationToken ct)
+    {
+        using var fresh = EntityContext.NoCache();
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var topic = await Topic.Get(roomKey, ct);
+        var membership = topic is null || actorId is null ? null
+            : await TopicMembership.Get(TopicMembership.Key(roomKey, actorId), ct);
+        var participant = actorId is null ? null : await Participant.Get(actorId, ct);
+        var tangent = topic is null ? null : await Community.Tangent.Get(topic.TangentKey, ct);
+        var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
+        var restriction = topic is null || actorId is null ? null
+            : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, clock.GetUtcNow(), ct);
+        var policy = topic is null ? null : await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
+            participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
+        policy ??= new TopicPolicy(roomKey, actorId, 0, space?.PolicyRevision ?? 0,
+                null, false, false, false, false, "room-not-found");
+        return new TopicReadContext(policy, topic, tangent);
+    }
+
+    /// <summary>Current authority for a read that needs nothing but the decision.</summary>
+    public async Task<TopicPolicy> ReadPolicyAsync(string? actorId, string roomKey, CancellationToken ct)
+        => (await ReadAsync(actorId, roomKey, ct)).Policy;
+
+    /// <summary>
+    /// The acceptance envelope for mutations: the write gate, one transaction, and the
+    /// policy check inside — the caller's action owns this transaction and its commit.
     /// Do not call PDS/network services, nest a transaction, or reenter TopicGovernance/Arrival inside the callback.
     /// A denied snapshot still carries the selected revisions.
     /// </summary>
-    public async Task<T> WithCurrentPolicy<T>(string? actorId, string roomKey,
+    public async Task<T> WithinAcceptanceAsync<T>(string? actorId, string roomKey,
         Func<TopicPolicy, CancellationToken, Task<T>> operation, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -224,20 +257,8 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var topic = await Topic.Get(roomKey, ct);
-            var membership = topic is null || actorId is null ? null
-                : await TopicMembership.Get(TopicMembership.Key(roomKey, actorId), ct);
-            var participant = actorId is null ? null : await Participant.Get(actorId, ct);
-            var tangent = topic is null ? null : await Community.Tangent.Get(topic.TangentKey, ct);
-            var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-            var restriction = topic is null || actorId is null ? null
-                : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, clock.GetUtcNow(), ct);
-            var policy = topic is null ? null : await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
-                participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-            policy ??= new TopicPolicy(roomKey, actorId, 0, space?.PolicyRevision ?? 0,
-                    null, false, false, false, false, "room-not-found");
-            var result = await operation(policy, ct);
+            var read = await ReadAsync(actorId, roomKey, ct);
+            var result = await operation(read.Policy, ct);
             await EntityContext.Commit(ct);
             return result;
         }
