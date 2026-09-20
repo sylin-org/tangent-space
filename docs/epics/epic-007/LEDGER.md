@@ -215,6 +215,7 @@ The workspace application lives in `src/client`: Vue 3 + Vite + TypeScript per D
 The port checklist is generated from the source, panel by panel:
 
 - [x] Scaffold, toolchain (kept: package.json, vite.config.ts, tsconfig, vitest)
+- [ ] **Conversation loop (next up, anchor recorded).** rooms.js 410-470+: `choose`/`openPost`/`historyPage`/`refreshOpenHistory` — epoch-guarded async navigation, cursor page accumulation, the refresh queue, draft remember/restore. Port as a `conversation.ts` composable over the same /api/rooms endpoints; the Vue state sections from stage 1a stay
 - [x] **Shell + CSS + boot.** Root renders the section structure verbatim, both stylesheets unchanged; the app.js boot port is live in `stores/site.ts` — the loading/error/anonymous/signed-in state machine, payload validation, compactDid/formatJoined, and the unestablished onboarding redirect. Inner panel bindings (identity details, welcome name) land with the welcome panel port
 - [ ] **Conversation loop** (the core): topic reader, message composer with reply strip and byte counter, edit and remove with inline confirmation, read-position, report panel
 - [ ] **Directories**: Tangent directory with create, Topic list with create (title/key/admission-free form), starting points
