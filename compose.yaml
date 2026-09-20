@@ -9,6 +9,9 @@ services:
     environment:
       Tangent__Space__PublicOrigin: "http://127.0.0.1:5220"
       Koan__Cache__Adapters__Sqlite__DatabasePath: "/state/cache/cache.db"
+      Koan__Data__Sources__Default__ConnectionString: "Data Source=file:koanmem?mode=memory&cache=shared"
+      Tangent__Data__MemoryPrimary: "true"
+      Tangent__Data__SnapshotPath: "/state/tangent.sqlite"
     volumes:
       - type: bind
         source: ./.local/docker/site

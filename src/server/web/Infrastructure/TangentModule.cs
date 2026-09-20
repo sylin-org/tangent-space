@@ -71,6 +71,8 @@ public sealed class TangentModule : KoanModule
         services.AddMemoryCache();
         services.AddSingleton<ParticipantProfiles>();
         services.AddHostedService<ProfileCapture>();
+        services.AddSingleton<MemoryDataPersistence>();
+        services.AddHostedService(sp => sp.GetRequiredService<MemoryDataPersistence>());
         services.AddSingleton<ServerGovernance>();
         services.AddSingleton<TopicGovernance>();
         services.AddSingleton<PublicConversationReader>();

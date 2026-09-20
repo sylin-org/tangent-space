@@ -1,6 +1,7 @@
 using Koan.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
+using Koan.Jobs;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using System.Net;
@@ -13,8 +14,6 @@ using Tangent.Community;
 using Tangent.Conversation;
 using Tangent.Activity;
 using Tangent.Identity;
-using Tangent.Identity;
-using Tangent.Community;
 using Tangent.Stewardship;
 using Tangent.Spaces;
 
@@ -83,8 +82,10 @@ public sealed class ExperienceWebApp : IAsyncDisposable
             ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
             ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={Path.Combine(root, "space.sqlite")}",
             ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={Path.Combine(root, "space.sqlite")}",
+            ["Koan:Cache:Adapters:Sqlite:DatabasePath"] = Path.Combine(root, "cache.db"),
         });
         builder.Services.AddKoan();
+        builder.Services.AddKoanJobs(o => o.Mode = Koan.Jobs.JobMode.Inline);
         // The test host's entry assembly is this test project; add the application's
         // controllers explicitly so route discovery matches the deployed app.
         builder.Services.AddControllers().AddApplicationPart(typeof(Program).Assembly);
@@ -226,6 +227,17 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         {
             var row = await TopicAttention.Get(TopicAttention.IdOf(topicKey, participantId), CancellationToken.None);
             if (row is not null && (ready is null || ready(row))) return row;
+            // Inline jobs submitted inside a transaction wait for a drain that is not
+            // mid-transaction; re-trigger the compile so the test stays deterministic.
+            try
+            {
+                var coordinator = Services.GetRequiredService<Koan.Jobs.IJobCoordinator>();
+                await coordinator.TriggerAsync("Tangent.Activity.CompileTopicAttention", "", CancellationToken.None);
+            }
+            catch
+            {
+                // The re-trigger is best-effort; the poll is the actual wait.
+            }
             await Task.Delay(100, CancellationToken.None);
         }
         return null;
@@ -234,7 +246,6 @@ public sealed class ExperienceWebApp : IAsyncDisposable
     /// <summary>Revoke the agent credential mid-test to prove private content is withdrawn.</summary>
     public async Task RevokeAgentCredential()
     {
-        using var context = EntityContext.NoCache();
         var credential = await ParticipantCredential.Get(AgentCredentialId);
         Assert.NotNull(credential);
         credential!.Revoke(AgentParticipantId, DateTime.UtcNow);
