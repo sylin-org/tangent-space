@@ -208,15 +208,26 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 ## In flight
 
 
-**D19 implementation — the Vue workspace, first slice** (doing · 2026-09-19)
+**D19 implementation — the Port** (doing · 2026-09-19, definition corrected by Leo: *port the current vanilla app to Vue; don't invent structures*)
 
-The workspace application lives in `src/client`: Vue 3 + Vite + TypeScript per D19. `npm run build` emits to `src/server/web/wwwroot/app`, hosted by the server at `/app/` as static assets; `npm run dev` proxies `/api` to 5220 for live development. `api.ts` is the only fetch layer, typed against the experience envelope; the Pinia store holds identity, the Tangent directory, Topics and Posts; the first slice is arrival → Tangent list → Topic list → reader → composer. Vitest unit-tests the reference-key helpers (Node's first real job). The vanilla app remains the working surface until parity.
+The workspace application lives in `src/client`: Vue 3 + Vite + TypeScript per D19. **The first slice built today was an invented structure and is scratch** — the spec is the vanilla app itself: `index.html` (447 lines), `rooms.js` (1,069), `landing.css` + `rooms.css` (676). The port is mechanical: same sections, same ids and classes (so the existing CSS applies unchanged), same forms, same endpoints (the browser data plane; the envelope migration is R4.2's separate step and does not happen mid-port). `npm run build` emits to `src/server/web/wwwroot/app`, hosted by the server at `/app/` as static assets; `npm run dev` proxies `/api` to 5220 for live development. `api.ts` is the only fetch layer, typed against the experience envelope; the Pinia store holds identity, the Tangent directory, Topics and Posts; the first slice is arrival → Tangent list → Topic list → reader → composer. Vitest unit-tests the reference-key helpers (Node's first real job). The vanilla app remains the working surface until parity.
+
+The port checklist is generated from the source, panel by panel:
+
+- [x] Scaffold, toolchain (kept: package.json, vite.config.ts, tsconfig, vitest)
+- [ ] **Shell + CSS.** Root component renders the `index.html` section structure verbatim; `landing.css` + `rooms.css` imported unchanged; same masthead, same section ids. State-loading and hidden semantics preserved
+- [ ] **Conversation loop** (the core): topic reader, message composer with reply strip and byte counter, edit and remove with inline confirmation, read-position, report panel
+- [ ] **Directories**: Tangent directory with create, Topic list with create (title/key/admission-free form), starting points
+- [ ] **Tangent settings** (`settings-page` tabs): server card, context, roles overview + role editor (appearance/permissions/members), people, access
+- [ ] **Moderation detail** (case view + decision form) and **participant profile** (posts/roles/identity tabs)
+- [ ] **Welcome** (`server-welcome` hero) and masthead account menu
+- [ ] Parity review against the vanilla app feature-by-feature; then the scratch slice is deleted
 
 - [x] Scaffold, toolchain, envelope api module, store, App + TangentList/TopicList/TopicReader/Composer
 - [x] vitest 4/4, vue-tsc + vite build green, bundle at `wwwroot/app` (committed so the image carries it; a lifecycle npm-build step replaces this when Docker verifies), .NET 107/107, node rule checks 7/7
 - [x] Watch and read-position slice: `api.watch`/`api.readPosition`, readCursor captured from the topic window, watch selector (all/replies/none) and Mark read in the reader toolbar. vitest 4/4, build green, node checks 7/7
 - [x] Full-run verification (2026-09-19 evening): Docker restarted, backup `docker-20260919-233037-306`, image + connector rebuilt and deployed. `/app/` serves 200; health 200; startup log clean. Live-DB checks: **zero invitation-era rows** (D18 fully clean) and **one legacy ReplyTo row** (the walkthrough reply) — migrated in place to the parent-id shape against the backup, no wipe needed. Full battery fresh: .NET 107/107, node 7/7, vitest 4/4, connector 62/62, greenfield 445 + docs 0. Remaining: lifecycle npm-build step (image currently carries the committed bundle)
-- [ ] Parity slices: watches, read-position, reports and moderation queue, people, roles, settings — then the vanilla monolith retires (R4.2)
+- [ ] (superseded by the Port checklist above)
 
 ## In flight
 
