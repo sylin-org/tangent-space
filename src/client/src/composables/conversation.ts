@@ -137,14 +137,16 @@ export function createConversation(router: RouterStore) {
     }
   }
 
-  async function historyPage(cursor: string | undefined, version = epoch, key = room.value?.key, fromStart = false) {
+  async function historyPage(cursor: string | undefined, version = epoch, key = room.value?.key, fromStart = false, activity?: ActivityWorkContext) {
     if (!key || version !== epoch) return false
+    if (activity && activity.isCurrent && !activity.isCurrent()) return false
     try {
       const liveAppend = !!cursor && cursor === resumeCursor && !nextCursor
       const page = (await request(
         roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : fromStart ? '?from=start' : ''),
-        undefined, 'GET')).data as unknown as MessagesPage
+        undefined, 'GET', activity?.signal)).data as unknown as MessagesPage
       if (version !== epoch || room.value?.key !== key) return false
+      if (activity && activity.isCurrent && !activity.isCurrent()) return false
       renderPage(page, true, liveAppend)
       nextCursor = page.nextCursor
       resumeCursor = page.resumeCursor
@@ -164,13 +166,14 @@ export function createConversation(router: RouterStore) {
     void liveAppend
   }
 
-  async function refreshOpenHistory(force = false) {
+  async function refreshOpenHistory(force = false, activity?: ActivityWorkContext) {
     if (refreshingHistory) {
       queuedRefresh = { force: force || queuedRefresh?.force || false }
       return
     }
     if (!room.value?.canRead) return
     if (!force && document.querySelector('.message-edit-form')) return
+    if (activity && activity.isCurrent && !activity.isCurrent()) return
     const key = room.value.key
     const version = epoch
     refreshingHistory = true
@@ -180,8 +183,9 @@ export function createConversation(router: RouterStore) {
       let cursor: string | null = null
       let loaded = 0
       do {
-        const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '?from=start'), undefined, 'GET')).data as unknown as MessagesPage
+        const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '?from=start'), undefined, 'GET', activity?.signal)).data as unknown as MessagesPage
         if (version !== epoch || room.value?.key !== key) return
+        if (activity && activity.isCurrent && !activity.isCurrent()) return
         pages.push(page)
         loaded += page.messages?.length || 0
         cursor = page.nextCursor
@@ -319,6 +323,21 @@ export function createConversation(router: RouterStore) {
     void removing
   }
 
+  /** An identity change drops the whole conversation world; nothing is re-attributed. */
+  function reset() {
+    epoch++
+    room.value = null
+    messages.value = []
+    replyTo.value = null
+    replyParentId = null
+    draft.value = ''
+    error.value = ''
+    status.value = ''
+    nextCursor = null
+    resumeCursor = null
+    pendingMutations.clear()
+  }
+
   // The room's settings mutations (rooms.js mutateRoom): the action re-opens the
   // room afterwards; a 403 sends the viewer home.
   async function mutate(suffix: string, body: unknown, method: string) {
@@ -345,10 +364,18 @@ export function createConversation(router: RouterStore) {
   return {
     room, messages, replyTo, replyParentId, loadingRoom: loadingRoom, loadingHistory, moreMessages, error, draft, status,
     get canWrite() { return room.value?.canWrite ?? false },
+    get nextCursor() { return nextCursor },
+    get resumeCursor() { return resumeCursor },
     choose, openPost, historyPage, refreshOpenHistory,
     beginReply, cancelReply, send, beginEdit, saveEdit, cancelEdit, removeMessage,
     saveTopicDescription, updateMember, saveReadAudience, saveParticipation,
+    reset,
   }
+}
+
+export interface ActivityWorkContext {
+  signal?: AbortSignal
+  isCurrent?: () => boolean
 }
 
 export type Conversation = ReturnType<typeof createConversation>

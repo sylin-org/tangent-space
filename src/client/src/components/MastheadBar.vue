@@ -5,7 +5,9 @@ import { computed, onMounted, onScopeDispose, ref } from 'vue'
 import type { SiteStore } from '../stores/site'
 import type { RouterStore } from '../stores/router'
 
-const props = defineProps<{ site: SiteStore; router: RouterStore }>()
+import type { Activity } from '../composables/activity'
+
+const props = defineProps<{ site: SiteStore; router: RouterStore; activity: Activity }>()
 
 const emit = defineEmits<{ (e: 'sign-out'): void }>()
 
@@ -52,8 +54,18 @@ onScopeDispose(() => {
 <template>
   <div class="masthead-brand">
     <a class="brand" href="/" aria-label="Tangent Space home"><span class="mark" aria-hidden="true"></span><span>Tangent Space</span></a>
-    <p id="activity-status" class="connection-state" role="status" aria-live="polite" tabindex="0" :hidden="!participant || authenticationRoute">
-      <span id="activity-status-label">Connecting…</span>
+    <p
+      id="activity-status"
+      class="connection-state"
+      role="status"
+      aria-live="polite"
+      tabindex="0"
+      :hidden="!participant || authenticationRoute"
+      :data-state="activity.connection.state"
+      :title="activity.connection.title"
+      :aria-label="activity.connection.title"
+    >
+      <span id="activity-status-label">{{ activity.connection.label }}</span>
     </p>
   </div>
   <nav class="masthead-actions" aria-label="Site actions">

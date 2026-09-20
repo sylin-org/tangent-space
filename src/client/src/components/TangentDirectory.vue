@@ -4,6 +4,7 @@
 // those who manage it. Unread marks arrive with the activity transport.
 import { computed } from 'vue'
 import type { Directories } from '../composables/directories'
+import type { Activity } from '../composables/activity'
 
 export interface DirectoryTangent {
   key: string
@@ -19,7 +20,7 @@ export interface DirectoryTangent {
   topics?: Array<{ key: string }>
 }
 
-const props = defineProps<{ directories: Directories; signedIn: boolean }>()
+const props = defineProps<{ directories: Directories; signedIn: boolean; activity?: Activity }>()
 
 const emit = defineEmits<{ (e: 'settings', key: string): void }>()
 
@@ -32,6 +33,36 @@ function validArtwork(value?: string): boolean {
 }
 
 const cards = computed(() => props.directories.tangents as DirectoryTangent[])
+
+// The card's unread mark: the Topic activity the transport reports (rooms.js cardContents).
+function unread(tangent: DirectoryTangent): { count: number; capped: boolean; replies: boolean } {
+  const topics = tangent.topics ?? []
+  let count = 0
+  let capped = false
+  let replies = false
+  for (const topic of topics) {
+    const activity = props.activity?.activityFor(topic.key)
+    if (!activity) continue
+    count += activity.unreadCount
+    capped = capped || activity.unreadCountCapped
+    replies = replies || activity.directReplies > 0
+  }
+  return { count, capped, replies }
+}
+
+function unreadLabel(tangent: DirectoryTangent): string {
+  const mark = unread(tangent)
+  if (mark.replies) return 'replies to you'
+  if (!mark.count) return 'All caught up'
+  return (mark.capped ? '50+' : String(mark.count)) + ' unread'
+}
+
+function unreadMark(tangent: DirectoryTangent): string {
+  const mark = unread(tangent)
+  if (mark.replies) return '◆'
+  if (!mark.count) return '✦'
+  return mark.capped ? '50+' : String(mark.count)
+}
 </script>
 
 <template>
@@ -49,7 +80,7 @@ const cards = computed(() => props.directories.tangents as DirectoryTangent[])
           <span class="tcg-edition">TANGENT</span>
         </span>
         <span class="tcg-divider"></span>
-        <span class="tcg-disc activity-disc" title="All caught up">✦</span>
+        <span class="tcg-disc activity-disc" :title="unreadLabel(tangent)">{{ unreadMark(tangent) }}</span>
         <span class="tcg-notch" aria-hidden="true"></span>
         <span class="tcg-pane">
           <strong class="tcg-name">{{ tangent.name || tangent.key }}</strong>

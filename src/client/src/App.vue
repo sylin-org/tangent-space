@@ -3,7 +3,7 @@
   <a class="skip" href="#main">Skip to content</a>
 
   <header class="masthead">
-    <MastheadBar :site="site" :router="router" @sign-out="submitSignOut" />
+    <MastheadBar :site="site" :router="router" :activity="activity" @sign-out="submitSignOut" />
   </header>
 
   <main id="main" tabindex="-1">
@@ -82,10 +82,19 @@
       </section>
 
       <section id="place" :hidden="!placeVisible" aria-label="Rooms and conversation">
-        <section id="catch-up" class="catch-up" hidden aria-labelledby="catch-up-title"><h2 id="catch-up-title">While you were away</h2><ul id="catch-up-list"></ul><p id="catch-up-more" class="hint" hidden>More updates are marked on your Tangent cards below.</p></section>
+        <section id="catch-up" class="catch-up" :hidden="!catchUpEntries.length || router.route.kind !== 'home' || !site.site?.participant" aria-labelledby="catch-up-title">
+          <h2 id="catch-up-title">While you were away</h2>
+          <ul id="catch-up-list">
+            <li v-for="entry in catchUpEntries" :key="entry.topic.key">
+              <a :href="'/t/' + encodeURIComponent(entry.tangent.key) + '/topics/' + encodeURIComponent(entry.topic.key)">{{ entry.tangent.name || entry.tangent.key }} / {{ entry.topic.title || entry.topic.key }}</a>
+              <span class="hint">{{ entry.activity.directReplies > 0 ? 'replies to you' : entry.activity.unreadCount + ' new' }}</span>
+            </li>
+          </ul>
+          <p id="catch-up-more" class="hint" :hidden="catchUpEntries.length <= 3">More updates are marked on your Tangent cards below.</p>
+        </section>
         <section id="tangent-return" class="tangent-return" aria-labelledby="tangent-return-title" tabindex="-1">
           <div class="return-head"><h2 id="tangent-return-title">Your Tangents</h2><div class="collection-actions"><button id="create-tangent-open" class="btn btn-primary" type="button" :hidden="!(site.site?.participant && directories.tangentsCanCreate && site.site.onboarding === 'complete')" @click="openCreateTangent">Create Tangent</button></div></div>
-          <TangentDirectory :directories="directories" :signed-in="!!site.site?.participant" @settings="key => router.navigate('/t/' + encodeURIComponent(key) + '/settings')" />
+          <TangentDirectory :directories="directories" :signed-in="!!site.site?.participant" :activity="activity" @settings="key => router.navigate('/t/' + encodeURIComponent(key) + '/settings')" />
         </section>
         <details id="community-settings" ref="communitySettings" :hidden="!communitySettingsVisible" class="community-settings"><summary>Manage Tangent</summary><div class="community-settings-body">
         <details id="tangent-setup" ref="tangentSetup" :hidden="!directories.tangentsCanCreate" class="setup tangent-setup">
@@ -123,7 +132,7 @@
             <p v-if="!directories.topics.length" class="hint">No Topics yet. Every conversation starts somewhere.</p>
             <button v-if="directories.topicsNextPage" class="btn btn-quiet" type="button">More Topics</button>
           </aside>
-          <ConversationPanel :conversation="conversation" :moderation="moderation" />
+          <ConversationPanel :conversation="conversation" :moderation="moderation" :activity="activity" />
           <aside id="stewardship-panel" class="stewardship-panel" aria-labelledby="stewardship-title" :hidden="!moderation.panelOpen.value">
             <header class="stewardship-heading"><div><p class="eyebrow">Stewardship</p><h2 id="stewardship-title" tabindex="-1">What needs care</h2></div><button id="stewardship-close" class="btn btn-quiet" type="button" @click="moderation.closePanel()">Back to conversation</button></header>
             <StewardshipPanel :moderation="moderation" />
@@ -158,6 +167,7 @@ import { createConversation } from './composables/conversation'
 import { createDirectories } from './composables/directories'
 import { createSettings } from './composables/settings'
 import { createModeration } from './composables/moderation'
+import { createActivity } from './composables/activity'
 import ConversationPanel from './components/ConversationPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import WelcomeHero from './components/WelcomeHero.vue'
@@ -178,6 +188,7 @@ const conversation = createConversation(router)
 const directories = createDirectories()
 const settings = createSettings(site, router)
 const moderation = createModeration(conversation)
+const activity = createActivity({ conversation, directories, site, router })
 
 // body[data-page] drives the page shell in the CSS (pages.css).
 watchEffect(() => {
@@ -188,11 +199,28 @@ watchEffect(() => {
 onMounted(async () => {
   router.bind()
   moderation.wireViewer(() => site.site?.participant?.participantRef ?? '')
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      activity.needsRefresh.value = true
+      activity.setVisible(false)
+    } else {
+      activity.start()
+    }
+  })
+  window.addEventListener('pagehide', () => activity.stop())
+  window.addEventListener('pageshow', () => activity.start())
   await site.load()
   await directories.loadTangents().catch(() => {})
   site.loadServer().catch(() => {})
+  if (site.state === 'signedIn') activity.start()
   if (router.isSettings) await settings.open()
   await dispatchRoute()
+})
+
+// A completed welcome (re)starts activity; authentication routes never start it.
+watch([() => site.state, () => router.route.kind], ([state, kind]) => {
+  if (state === 'signedIn' && !['sign-in', 'onboarding'].includes(kind)) activity.start()
+  else activity.stop()
 })
 
 const authenticationRoute = computed(() => ['sign-in', 'onboarding'].includes(router.route.kind))
@@ -282,6 +310,14 @@ const communitySettingsVisible = computed(() =>
 
 const siteSetupVisible = computed(() =>
   site.site?.participant?.isOwner === true || activeTangent.value?.canCreateTopic === true || (activeTangent.value?.permissions?.allowedActions?.includes('createTopic') ?? false))
+
+// The while-you-were-away strip (rooms.js renderCatchUp): unread Topics first by
+// their replies to the viewer, then by unread count.
+const catchUpEntries = computed(() =>
+  directories.tangents
+    .flatMap(tangent => (tangent.topics ?? []).map(topic => ({ tangent, topic, activity: activity.activityFor(topic.key) })))
+    .filter(entry => entry.activity.unreadCount > 0 || entry.activity.directReplies > 0)
+    .sort((a, b) => b.activity.directReplies - a.activity.directReplies || b.activity.unreadCount - a.activity.unreadCount))
 
 const communitySettings = ref<HTMLDetailsElement | null>(null)
 const tangentSetup = ref<HTMLDetailsElement | null>(null)

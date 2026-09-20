@@ -14,7 +14,7 @@ interface TangentCard {
   isOwner?: boolean
   canCreateTopic?: boolean
   permissions?: { role?: string; allowedActions?: string[] }
-  topics?: Array<{ key: string }>
+  topics?: Array<{ key: string; title?: string }>
 }
 
 export interface TopicCard {

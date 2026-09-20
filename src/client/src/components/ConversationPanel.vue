@@ -4,8 +4,9 @@ import { useSite } from '../stores/site'
 import TopicDetailsPanel from './TopicDetailsPanel.vue'
 import type { Conversation, Message } from '../composables/conversation'
 import type { Moderation } from '../composables/moderation'
+import type { Activity } from '../composables/activity'
 
-const props = defineProps<{ conversation: Conversation; moderation: Moderation }>()
+const props = defineProps<{ conversation: Conversation; moderation: Moderation; activity: Activity }>()
 const site = useSite()
 
 const {
@@ -68,8 +69,25 @@ async function submitPost() {
   <p v-if="!room" class="lede">Choose a room to see its topic and current access.</p>
   <div v-else id="room-content">
     <div class="conversation-toolbar">
-      <p id="conversation-connection" class="connection-state" role="status">Connecting…</p>
+      <p
+        id="conversation-connection"
+        class="connection-state"
+        role="status"
+        :data-state="activity.connection.state"
+        :title="activity.connection.title"
+      >{{ activity.connection.state === 'connecting' ? 'Connecting…' : activity.connection.label }}</p>
       <div class="conversation-toolbar-actions">
+        <details id="conversation-elsewhere" class="conversation-elsewhere" :hidden="!activity.elsewhere.value.length">
+          <summary id="elsewhere-label">Elsewhere · {{ activity.elsewhere.value.length }} {{ activity.elsewhere.value.length === 1 ? 'topic' : 'topics' }}</summary>
+          <nav id="elsewhere-links" aria-label="Updates in other topics">
+            <a
+              v-for="entry in activity.elsewhere.value.slice(0, 3)"
+              :key="entry.topic.key"
+              :href="'/t/' + encodeURIComponent(entry.tangent.key) + '/topics/' + encodeURIComponent(entry.topic.key)"
+            >{{ entry.tangent.name || entry.tangent.key }} / {{ entry.topic.title || entry.topic.key }} · {{ entry.activity.directReplies > 0 ? 'reply to you' : (entry.activity.unreadCountCapped ? '50+' : entry.activity.unreadCount) + ' new' }}</a>
+            <a v-if="activity.elsewhere.value.length > 3" href="/tangents/">See all Tangents →</a>
+          </nav>
+        </details>
         <button
           id="stewardship-open"
           class="btn btn-quiet"
