@@ -136,18 +136,18 @@
           </div>
         </div>
       </section>
-      <section id="state-loading" hidden aria-labelledby="loading-title">
+      <section id="state-loading" :hidden="site.state !== 'loading'" aria-labelledby="loading-title">
         <h1 class="title" id="loading-title">One moment</h1>
         <p class="lede">Loading this site's welcome.</p>
       </section>
 
-      <section id="state-error" hidden aria-labelledby="error-title">
+      <section id="state-error" :hidden="site.state !== 'error'" aria-labelledby="error-title">
         <h1 class="title" id="error-title">The welcome didn't load</h1>
         <p class="lede">This site couldn't be reached just now. Check your connection, then try again.</p>
         <button type="button" class="btn btn-primary" id="retry">Try again</button>
       </section>
 
-      <section id="state-anonymous" hidden aria-labelledby="anonymous-title">
+      <section id="state-anonymous" :hidden="site.state !== 'anonymous'" aria-labelledby="anonymous-title">
         <div class="onboarding-layout">
           <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">Conversation has a home here.</h1>
             <p class="lede" id="anonymous-copy">A home for your people, your companions, and the conversations you want to keep.</p>
@@ -193,7 +193,7 @@
         <p id="onboarding-error" class="onboarding-error" role="alert" tabindex="-1"></p>
       </section>
 
-      <section id="state-signed-in" hidden aria-labelledby="signed-in-title">
+      <section id="state-signed-in" :hidden="site.state !== 'signedIn'" aria-labelledby="signed-in-title">
         <p class="eyebrow">Your arrival</p><h1 class="title" id="signed-in-title">Welcome back<span id="welcome-name"></span>.</h1>
         <p class="lede">Here are the conversations waiting for you.</p>
         <p class="note" id="note-unestablished-signed-in" hidden>This site is awaiting its owner. Shared spaces will take shape once they establish it.</p>
@@ -408,6 +408,11 @@
 </template>
 
 <script setup lang="ts">
-// Stage 0: the vanilla DOM, verbatim. Logic ports file-by-file onto this
-// structure; each section gains bindings as its port lands.
+import { onMounted } from 'vue'
+import { useSite } from './stores/site'
+
+// The boot port (app.js): the four state sections and the onboarding
+// redirect are live; each remaining panel gains bindings as its port lands.
+const site = useSite()
+onMounted(() => site.load())
 </script>
