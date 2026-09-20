@@ -169,6 +169,8 @@ import { createSettings } from './composables/settings'
 import { createModeration } from './composables/moderation'
 import { createActivity } from './composables/activity'
 import { createAtmosphere } from './composables/atmosphere'
+import { installCardFoil } from './card-foil'
+import { qualifyAgentEntry } from './agent-entry'
 import ConversationPanel from './components/ConversationPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import WelcomeHero from './components/WelcomeHero.vue'
@@ -217,6 +219,8 @@ onMounted(async () => {
   window.addEventListener('pagehide', () => activity.stop())
   window.addEventListener('pageshow', () => activity.start())
   atmosphere.install()
+  installCardFoil()
+  void qualifyAgentEntry(document.getElementById('agent-entry') as HTMLAnchorElement | null)
   await site.load()
   await directories.loadTangents().catch(() => {})
   site.loadServer().catch(() => {})

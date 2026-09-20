@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { useSite } from '../stores/site'
 import type { RouterStore } from '../stores/router'
+import { wireFacets, clearFacets } from './facets'
 
 // The conversation loop, ported from rooms.js: epoch-guarded navigation,
 // cursor page accumulation, pending-mutation retries, refresh queueing.
@@ -88,6 +89,7 @@ export function createConversation(router: RouterStore) {
   const error = ref('')
   const draft = ref('')
   const status = ref('')
+  const resolved = ref<Record<string, { handle?: string; displayName?: string; value?: string; profileUrl?: string; classification?: string }>>({})
 
   let epoch = 0
   let nextCursor: string | null = null
@@ -162,6 +164,7 @@ export function createConversation(router: RouterStore) {
   function renderPage(page: MessagesPage, nativeHistory = true, liveAppend = false) {
     if (nativeHistory) messages.value = page.messages
     else messages.value.push(...page.messages.filter(m => !messages.value.some(existing => existing.id === m.id)))
+    if (page.resolved) resolved.value = { ...resolved.value, ...page.resolved }
     moreMessages.value = !!nextCursor
     void liveAppend
   }
@@ -236,11 +239,13 @@ export function createConversation(router: RouterStore) {
     if (!room.value || !draft.value.trim()) return
     const key = room.value.key
     const mutationKey = (viewerRef()) + ':' + key + ':new'
+    const facets = wireFacets(key, draft.value)
     const intent: MutationIntent = {
       method: 'POST',
       body: {
         operationId: 'post-' + crypto.randomUUID(),
         text: draft.value,
+        ...(facets.length ? { facets } : {}),
         ...(replyParentId ? { replyTo: replyParentId } : {}),
       },
     }
@@ -250,6 +255,7 @@ export function createConversation(router: RouterStore) {
       if ((response.data as { state?: string }).state !== 'accepted') throw new Error('The post was not accepted.')
       pendingMutations.delete(mutationKey)
       sessionStorage.removeItem('draft:' + key)
+      clearFacets(key)
       draft.value = ''
       replyParentId = null
       replyTo.value = null
@@ -325,6 +331,7 @@ export function createConversation(router: RouterStore) {
 
   /** An identity change drops the whole conversation world; nothing is re-attributed. */
   function reset() {
+    const staleKey = room.value?.key
     epoch++
     room.value = null
     messages.value = []
@@ -336,6 +343,8 @@ export function createConversation(router: RouterStore) {
     nextCursor = null
     resumeCursor = null
     pendingMutations.clear()
+    resolved.value = {}
+    if (staleKey) clearFacets(staleKey)
   }
 
   // The room's settings mutations (rooms.js mutateRoom): the action re-opens the
@@ -362,7 +371,7 @@ export function createConversation(router: RouterStore) {
   const saveParticipation = (allowPostEditing: boolean, isLocked: boolean) => mutate('/settings', { allowPostEditing, isLocked }, 'PATCH')
 
   return {
-    room, messages, replyTo, replyParentId, loadingRoom: loadingRoom, loadingHistory, moreMessages, error, draft, status,
+    room, messages, replyTo, replyParentId, loadingRoom: loadingRoom, loadingHistory, moreMessages, error, draft, status, resolved,
     get canWrite() { return room.value?.canWrite ?? false },
     get nextCursor() { return nextCursor },
     get resumeCursor() { return resumeCursor },

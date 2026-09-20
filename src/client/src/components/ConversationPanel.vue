@@ -5,12 +5,16 @@ import TopicDetailsPanel from './TopicDetailsPanel.vue'
 import type { Conversation, Message } from '../composables/conversation'
 import type { Moderation } from '../composables/moderation'
 import type { Activity } from '../composables/activity'
+import {
+  byteLength as utf8ByteLength, sizeFacets, recordFacet, replyMention, facetedSegments,
+  mentionables, type MentionTarget,
+} from '../composables/facets'
 
 const props = defineProps<{ conversation: Conversation; moderation: Moderation; activity: Activity }>()
 const site = useSite()
 
 const {
-  room, messages, draft, error, loadingHistory, moreMessages,
+  room, messages, draft, error, loadingHistory, moreMessages, resolved,
   send, beginReply, cancelReply, saveEdit, cancelEdit, removeMessage,
 } = props.conversation
 
@@ -18,8 +22,144 @@ const editing = ref<Message | null>(null)
 const editText = ref('')
 const replyTarget = ref<Message | null>(null)
 
+// --- The @-mention composer (facets.js) ---
+const mentionOpen = ref(false)
+const mentionTargets = ref<MentionTarget[]>([])
+const mentionActive = ref(0)
+const composerText = computed({
+  get: () => draft.value,
+  set: (value: string) => {
+    draft.value = value
+  },
+})
+let tokenStart = -1
+let lookupVersion = 0
+const composerField = ref<HTMLTextAreaElement | null>(null)
+
+function onComposerInput() {
+  const textarea = composerField.value
+  if (!textarea || !room.value) return
+  sizeFacets(room.value.key, textarea.value)
+  const before = textarea.value.slice(0, textarea.selectionStart ?? 0)
+  const match = /(^|[\s(>])@([\w.-]*)$/.exec(before)
+  if (!match) {
+    closeMention()
+    return
+  }
+  tokenStart = (textarea.selectionStart ?? 0) - match[2]!.length - 1
+  void openMention(textarea, match[2]!)
+}
+
+async function openMention(textarea: HTMLTextAreaElement, prefix: string) {
+  const topicKey = room.value?.key
+  if (!topicKey) {
+    closeMention()
+    return
+  }
+  const version = ++lookupVersion
+  let list: MentionTarget[]
+  try {
+    list = await mentionables(topicKey, prefix)
+  } catch {
+    if (version === lookupVersion) closeMention()
+    return
+  }
+  if (version !== lookupVersion || topicKey !== room.value?.key || document.activeElement !== textarea) return
+  mentionTargets.value = list ?? []
+  if (!mentionTargets.value.length) {
+    closeMention()
+    return
+  }
+  mentionOpen.value = true
+  mentionActive.value = 0
+  positionMention(textarea)
+}
+
+function positionMention(textarea: HTMLTextAreaElement): void {
+  requestAnimationFrame(() => {
+    const node = document.getElementById('mention-popup')
+    const form = textarea.closest('form')?.getBoundingClientRect()
+    if (!node || !form) return
+    const caret = textarea.selectionStart ?? 0
+    const mirror = document.createElement('div')
+    const style = getComputedStyle(textarea)
+    for (const key of ['fontFamily', 'fontSize', 'lineHeight', 'padding', 'width', 'whiteSpace', 'wordBreak'] as const) {
+      (mirror.style as unknown as Record<string, string>)[key] = style[key]
+    }
+    mirror.style.position = 'absolute'
+    mirror.style.visibility = 'hidden'
+    mirror.textContent = textarea.value.slice(0, caret)
+    const marker = document.createElement('span')
+    marker.textContent = '​'
+    mirror.appendChild(marker)
+    document.body.appendChild(mirror)
+    const left = Math.min(marker.offsetLeft, form.width - node.offsetWidth - 8)
+    document.body.removeChild(mirror)
+    node.style.left = Math.max(0, left) + 'px'
+    node.style.top = Math.min(textarea.offsetTop + textarea.offsetHeight + 4, form.height - node.offsetHeight - 4) + 'px'
+  })
+}
+
+function onComposerKeydown(event: KeyboardEvent) {
+  if (!mentionOpen.value) return
+  const node = document.getElementById('mention-popup')
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    mentionActive.value = (mentionActive.value + (event.key === 'ArrowDown' ? 1 : -1) + mentionTargets.value.length) % mentionTargets.value.length
+    node?.querySelectorAll('.mention-row').forEach((row, index) => {
+      row.classList.toggle('active', index === mentionActive.value)
+      row.setAttribute('aria-selected', String(index === mentionActive.value))
+    })
+    composerField.value?.setAttribute('aria-activedescendant', 'mention-option-' + mentionActive.value)
+    node?.querySelectorAll('.mention-row')[mentionActive.value]?.scrollIntoView({ block: 'nearest' })
+  } else if (event.key === 'Enter' || event.key === 'Tab') {
+    event.preventDefault()
+    selectMention(mentionActive.value)
+  } else if (event.key === 'Escape') {
+    closeMention()
+  }
+}
+
+function selectMention(index: number) {
+  const textarea = composerField.value
+  const entry = mentionTargets.value[index]
+  if (!textarea || !room.value || !entry) {
+    closeMention()
+    return
+  }
+  const insert = '@' + entry.insert
+  const after = textarea.value.slice(textarea.selectionStart ?? 0)
+  const beforeKeep = textarea.value.slice(0, tokenStart)
+  const start = (beforeKeep + insert).length
+  const next = beforeKeep + insert + ' ' + after
+  draft.value = next
+  const caret = start + 1
+  recordFacet(room.value.key, next, tokenStart, entry, insert)
+  closeMention()
+  void textarea
+  requestAnimationFrame(() => {
+    composerField.value?.focus()
+    composerField.value?.setSelectionRange(caret, caret)
+  })
+}
+
+function closeMention() {
+  lookupVersion++
+  mentionOpen.value = false
+  mentionActive.value = 0
+  mentionTargets.value = []
+  composerField.value?.setAttribute('aria-expanded', 'false')
+  composerField.value?.removeAttribute('aria-activedescendant')
+}
+
+function onMentionBlur() {
+  setTimeout(() => {
+    if (mentionOpen.value && document.activeElement?.closest?.('#mention-popup') == null) closeMention()
+  }, 120)
+}
+
 const canWrite = computed(() => room.value?.canWrite ?? false)
-const byteLength = computed(() => new TextEncoder().encode(draft.value).length)
+
 
 function mayEdit(message: Message) {
   const viewer = site.site?.participant?.participantRef ?? ''
@@ -49,6 +189,18 @@ async function deleteMessage(message: Message) {
 function startReply(message: Message) {
   replyTarget.value = message
   beginReply(message)
+  if (room.value && message.authorParticipantId !== (site.site?.participant?.participantRef ?? '')) {
+    const inserted = replyMention(room.value.key, draft.value, message.authorParticipantId, authorHandle(message))
+    if (inserted) {
+      draft.value = inserted.text
+      requestAnimationFrame(() => composerField.value?.setSelectionRange(inserted.caret, inserted.caret))
+    }
+  }
+}
+
+function authorHandle(message: Message): string {
+  const entry = resolved.value[message.authorParticipantId]
+  return entry?.handle ?? ''
 }
 function closeReply() {
   replyTarget.value = null
@@ -117,7 +269,17 @@ async function submitPost() {
           <button class="btn btn-primary" type="submit">Save</button>
           <button class="btn btn-quiet" type="button" @click="closeEdit">Close</button>
         </form>
-        <p v-else class="message-text">{{ message.removed ? '[removed]' : message.content.text }}</p>
+        <p v-else class="message-text">
+          <template v-if="message.removed">[removed]</template>
+          <template v-else>
+            <template v-for="(segment, index) in facetedSegments(message.content.text, message.facets, resolved)" :key="index">
+              <a v-if="segment.kind === 'mention'" class="mention" :href="segment.href" :title="segment.title">{{ segment.text }}</a>
+              <span v-else-if="segment.kind === 'group'" class="mention-group" :title="segment.title">{{ segment.text }}</span>
+              <span v-else-if="segment.kind === 'tag'" class="mention-tag">{{ segment.text }}</span>
+              <template v-else>{{ segment.text }}</template>
+            </template>
+          </template>
+        </p>
         <footer class="message-footer">
           <button v-if="canWrite && !message.removed" class="btn btn-quiet message-reply" type="button" @click="startReply(message)">Reply</button>
         </footer>
@@ -136,9 +298,40 @@ async function submitPost() {
     <form v-if="canWrite" class="compose" @submit.prevent="submitPost">
       <p v-if="replyTarget" class="reply-strip">Replying <button class="btn btn-quiet" type="button" @click="closeReply">Cancel reply</button></p>
       <label for="message-text">Your post</label>
-      <textarea id="message-text" v-model="draft" class="input" rows="4" required placeholder="Add to the conversation…"></textarea>
+      <textarea
+        id="message-text"
+        ref="composerField"
+        v-model="composerText"
+        class="input"
+        rows="4"
+        required
+        placeholder="Add to the conversation…"
+        role="combobox"
+        aria-autocomplete="list"
+        :aria-expanded="mentionOpen"
+        aria-controls="mention-popup"
+        @input="onComposerInput"
+        @keydown="onComposerKeydown"
+        @blur="onMentionBlur"
+      ></textarea>
+      <div id="mention-popup" class="mention-popup" role="listbox" aria-label="Mention someone" :hidden="!mentionOpen">
+        <div
+          v-for="(entry, index) in mentionTargets"
+          :id="'mention-option-' + index"
+          :key="entry.insert + index"
+          class="mention-row"
+          :class="{ active: index === mentionActive }"
+          role="option"
+          :aria-selected="index === mentionActive"
+          @mousedown.prevent
+          @click="selectMention(index)"
+        >
+          <span class="mention-label">@{{ entry.label }}</span>
+          <span class="mention-meta">{{ entry.kind === 'group' ? (entry.count != null ? entry.count + ' member' + (entry.count === 1 ? '' : 's') : 'role group') : [entry.badge, entry.classification].filter(Boolean).join(' · ') || 'participant' }}</span>
+        </div>
+      </div>
       <div class="compose-footer">
-        <span class="hint">{{ byteLength }} / 4096 bytes</span>
+        <span class="hint">{{ utf8ByteLength(draft) }} / 4096 bytes</span>
         <button class="btn btn-primary" type="submit">Send post</button>
       </div>
     </form>
