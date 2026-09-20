@@ -169,6 +169,7 @@ import { createSettings } from './composables/settings'
 import { createModeration } from './composables/moderation'
 import { createActivity } from './composables/activity'
 import { createAtmosphere } from './composables/atmosphere'
+import { createProfiles } from './composables/profiles'
 import { installCardFoil } from './card-foil'
 import { qualifyAgentEntry } from './agent-entry'
 import ConversationPanel from './components/ConversationPanel.vue'
@@ -193,10 +194,16 @@ const settings = createSettings(site, router)
 const moderation = createModeration(conversation)
 const activity = createActivity({ conversation, directories, site, router })
 const atmosphere = createAtmosphere()
+const profiles = createProfiles(activity)
 
 // The atmosphere follows the server's own settings as they load and change.
 watch([() => site.server, () => site.site?.participant], ([server]) => {
   atmosphere.configure(server ?? null, site.site?.participant ?? null)
+})
+
+// The signed-in viewer's own profile decorates immediately (profile-live.js).
+watch(() => site.site?.participant?.did, did => {
+  if (did) profiles.loadOwn(did)
 })
 
 // body[data-page] drives the page shell in the CSS (pages.css).
@@ -219,6 +226,7 @@ onMounted(async () => {
   window.addEventListener('pagehide', () => activity.stop())
   window.addEventListener('pageshow', () => activity.start())
   atmosphere.install()
+  profiles.wire()
   installCardFoil()
   void qualifyAgentEntry(document.getElementById('agent-entry') as HTMLAnchorElement | null)
   await site.load()

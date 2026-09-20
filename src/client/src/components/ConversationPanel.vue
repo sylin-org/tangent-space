@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useSite } from '../stores/site'
 import TopicDetailsPanel from './TopicDetailsPanel.vue'
+import HistoryDisclosure from './HistoryDisclosure.vue'
 import type { Conversation, Message } from '../composables/conversation'
 import type { Moderation } from '../composables/moderation'
 import type { Activity } from '../composables/activity'
@@ -282,6 +283,8 @@ async function submitPost() {
         </p>
         <footer class="message-footer">
           <button v-if="canWrite && !message.removed" class="btn btn-quiet message-reply" type="button" @click="startReply(message)">Reply</button>
+          <HistoryDisclosure v-if="!message.removed && (message.editedAt || message.changeId)" :conversation="conversation" :message="message" />
+          <span v-else-if="message.editedAt" class="message-edited">Edited</span>
         </footer>
         <details class="message-menu">
           <summary aria-label="Actions for this post">···</summary>

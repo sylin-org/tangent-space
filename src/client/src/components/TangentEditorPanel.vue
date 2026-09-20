@@ -3,6 +3,7 @@
 // live preview, and set a participant's role across the Tangent.
 import { computed, reactive, ref, watch } from 'vue'
 import type { Directories } from '../composables/directories'
+import ArtworkPicker from './ArtworkPicker.vue'
 import type { DirectoryTangent } from './TangentDirectory.vue'
 
 const props = defineProps<{
@@ -109,6 +110,7 @@ async function submitMember() {
       <label>House rule or motto<input v-model="card.motto" class="input" name="motto" maxlength="240"></label>
       <label>Accent colour<input v-model="card.accent" class="input color-input" name="accent" type="color"></label>
       <label>Artwork URL <span class="field-note">Optional. HTTPS links or a supplied sample.</span><input v-model="card.artwork" class="input" name="artwork" type="text" inputmode="url" maxlength="2048"></label>
+      <ArtworkPicker scope="tangent" :tangent-key="tangent?.key ?? null" v-model="card.artwork" />
       <div class="tangent-card edit-card-preview sylin-card" :class="{ 'has-artwork': preview.hasArtwork }" :style="{ '--tangent-accent': preview.accent }" aria-label="Card preview">
         <span class="tcg-art">
           <img v-if="preview.hasArtwork" :src="card.artwork" alt="" loading="lazy">

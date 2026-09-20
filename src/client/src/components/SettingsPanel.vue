@@ -7,6 +7,7 @@ import RolesPanel from './RolesPanel.vue'
 import PeoplePanel from './PeoplePanel.vue'
 import AccessPanel from './AccessPanel.vue'
 import AtmospherePanel from './AtmospherePanel.vue'
+import ArtworkPicker from './ArtworkPicker.vue'
 
 import type { Atmosphere } from '../composables/atmosphere'
 
@@ -97,7 +98,10 @@ function onTabKeydown(event: KeyboardEvent, name: SettingsTabName) {
               <div class="stack">
                 <label>Server name<input v-model="serverForm.name" class="input" name="name" maxlength="120" required placeholder="Leo’s Garage"></label>
                 <label>Byline<input v-model="serverForm.byline" class="input" name="byline" maxlength="240" placeholder="A few words that feel like you"></label>
-                <label>Card and cover image<input v-model="serverForm.coverImageUrl" class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"><span class="hint">An image URL, used on your welcome header and server card.</span></label>
+                <div class="artwork-upload">
+                  <label>Card and cover image URL<input v-model="serverForm.coverImageUrl" class="input" name="coverImageUrl" maxlength="2048" placeholder="https://… or /local-image.png"></label>
+                  <ArtworkPicker scope="server" v-model="serverForm.coverImageUrl" />
+                </div>
                 <label>Description &amp; welcome<textarea v-model="serverForm.welcomeMessage" class="input" name="welcomeMessage" rows="3" maxlength="1000" placeholder="What happens here? Who is this place for?"></textarea></label>
                 <label>Message of the day<input v-model="serverForm.motd" class="input" name="motd" maxlength="500" placeholder="A little news for anyone dropping by"></label>
                 <div><button type="button" id="server-atmosphere-open" class="btn btn-quiet" aria-controls="atmosphere-panel" :aria-expanded="atmosphere.panelOpen" @click="atmosphere.open()">Choose an atmosphere</button></div>
