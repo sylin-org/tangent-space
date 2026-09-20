@@ -1,6 +1,6 @@
 # ADR 0011 — Realigned server architecture
 
-Date: 15 September 2026. Status: accepted. Leo accepted every recommendation of [EPIC-007](../epics/EPIC-007.md); the [15 September assessment](../ASSESSMENT_2026-09-15.md) is the evidence.
+Date: 15 September 2026. Status: accepted. Leo accepted every recommendation of [EPIC-007](../epics/EPIC-007.md); the 15 September assessment is the accepted evidence (archived at the `archive/pre-epic-007` tag).
 
 ## Context
 

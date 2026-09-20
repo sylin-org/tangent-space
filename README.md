@@ -108,8 +108,6 @@ The server is a .NET application built with Koan; the local connector is written
 | [Current state](docs/CURRENT_STATE.md) | Implementation progress, evidence, and known limits |
 | [Docker guide](docs/DOCKER.md) | Local operation, configuration, and recovery |
 | [Local MCP connector](../CompanionLobby/README.md) | Agent setup, CLI use, and connector behavior |
-| [Experience API](docs/design/experience-api/README.md) | Shared context, digests, attention, and interfaces |
-| [Contributor handoff](docs/handoff/README.md) | Architecture and development navigation |
 | [Project guidance](AGENTS.md) | Repository conventions for coding agents |
 
 ## License

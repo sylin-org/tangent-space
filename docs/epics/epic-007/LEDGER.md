@@ -178,7 +178,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R4.2 | Community: Tangent and Topic operations, access, admission, membership via Koan roles; add the missing `/api/v1` operations; repoint the browser; delete `/api/rooms`, `/api/tangents` and `ConversationController`. Per D19, the repoint is the workspace's Vue migration: components against the envelope api, the vanilla monolith retired wholesale | todo | One authenticated API family remains; the browser reads the envelope through `api.js` | |
 | R4.3 | Hosting: claim, settings, access defaults, artwork, posture | todo | Hosting tests green on the pipeline | |
 | R4.4 | Identity: arrival, enrollment, sessions, profiles, classification | todo | Identity tests green on the pipeline | |
-| R4.5 | Delete `Room.CurrentPolicy`, the role-bag overwrite, `bool authorized`, membership rows, duplicated admission fields, `PolicyGate`, `CommandCommit`, `TangentServer`, `WithCurrentPolicy` | todo | None of these identifiers remain | |
+| R4.5 | Delete `Room.CurrentPolicy`, the role-bag overwrite, `bool authorized`, membership rows, duplicated admission fields, `PolicyGate`, `CommandCommit`, `TangentServer`, `WithCurrentPolicy` | doing | None of these identifiers remain | 2026-09-20: `bool authorized` (six seams) and `WithCurrentPolicy` closed with R3.6; `CommandCommit` died with D17. Remaining: `PolicyGate` (its gate now lives inside `WithinAcceptanceAsync`; the public readers' gate use is next), the membership rows and `Topic.CurrentPolicy`'s row facts (coupled to R4.2's envelope migration) |
 | R4.7 | Per D11 and D12, the front door (N-035): arrival as one page with four slots — the server card, open content, self-enrollable roles, ask to join — pulling the arrival parts of EPIC-006 S09 and S12 forward; the Applications queue over the existing `ListJoinRequests`/`DecideJoinRequest`; the access field's computed always-on note, rendered to readers as well as editors; the role editor with renaming, mandatory permissions and auto-enrollment **The owner's side of this door is now built** — `GET /api/people` and the People tab name everyone who has arrived, including an arrival holding no role (N-063). R4.7 still owns the newcomer's side, and should treat the two as one door. | todo | A new participant arrives, reads without joining, self-enrols and applies where required (W11) | |
 | R4.6 | Wipe and verify; update metrics | todo | Suites and walkthrough green | |
 
@@ -203,7 +203,7 @@ The runtime baseline (build, launch, walkthrough) happens once, at R1.8, on a fr
 | R6.3 | Parallel integration tests: host-owned state; fixtures use `AppHost.PushScope` | todo | `DisableParallelization` removed or justified | |
 | R6.4 | JSDoc types for the browser's API payloads | todo | `node --check` and the suites green | |
 | R6.5 | Close-out: CURRENT_STATE rewritten as current state only; README, AGENTS, EPIC-006; final walkthrough on a fresh install | doing | Epic marked done | CURRENT_STATE rewritten to present-tense reality (N-072, 2026-09-19); the remaining close-out items are the README/AGENTS/EPIC-006 pass and the final walkthrough |
-| R6.6 | Documentation cleanup: remove superseded handoffs, briefs, design prompts, research snapshots and evidence for removed capabilities; `check-greenfield.ps1 -Strict` passes | doing | Only living documents and decision records remain | Done early: `docs/handoff/` (N-066), `EXPERIMENTS.md`/`OPEN_QUESTIONS.md` (N-069), `PERMISSIONS.md` folded (N-072). The greenfield check now also scans the living documents for historical markers (0). Remaining: the ASSESSMENT-era documents still linked from the ledger's evidence index, `docs/research`, `docs/design`, `docs/evidence` |
+| R6.6 | Documentation cleanup: remove superseded handoffs, briefs, design prompts, research snapshots and evidence for removed capabilities; `check-greenfield.ps1 -Strict` passes | done | Only living documents and decision records remain | 2026-09-20: `docs/handoff/` (N-066), `EXPERIMENTS.md`/`OPEN_QUESTIONS.md` (N-069), `PERMISSIONS.md` folded (N-072); the ASSESSMENT files, `docs/research`, `docs/design`, `docs/evidence` and the evidence index's dead links removed (S-024). `-Strict` passes |
 
 ## In flight
 
@@ -843,9 +843,9 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **The journal sequence no longer has a counter row.** `ActivityHead` is deleted: `ActivityJournal.LatestSequence()` reads the journal's own maximum, and `AppendInTransaction` assigns maximum-plus-one under a process-wide append gate — exact across restarts via the committed maximum, and exact within one transaction appending twice via an in-process high-water mark (the first append is not yet visible to reads). The head readers (the activity snapshot boundary and the digest's revision marker) became sequence reads. The double save per append died with the row.
 - .NET 107/107.
 
- index
+### S-024 · 2026-09-20 · Claude (continued) — R6.6 closes
 
-- [Architecture assessment, 15 September](../../ASSESSMENT_2026-09-15.md)
-- [Connector architecture assessment, 15 September](../../ASSESSMENT_2026-09-15-CONNECTOR.md)
-- [Previous assessment, 12 September](../../ASSESSMENT_2026-09-12.md)
+- **The non-living documentation surfaces are deleted**: the four ASSESSMENT-era files, `docs/research/`, `docs/design/` (including the SPA window contract whose node tests no longer exist, and the orphaned `src/client/core/window-store.mjs` with them), `docs/evidence/`, and the evidence index's links to what went. Decision records (DECISIONS.md, `adr/`, epics, session logs) stay; git history and the `archive/pre-epic-007` tag preserve every deleted file. R6.6's completion criterion — `check-greenfield.ps1 -Strict` passing with only living documents and decision records — holds.
+- Also closed today: R4.5's `bool authorized`, `WithCurrentPolicy` and `CommandCommit` identifiers (R3.6/D17). R6.2 stays parked pending the matched-pair rename with CompanionLobby — its working tree carries in-flight changes not mine to trample, and the rename binds companions again.
+
 - Recorded suite results before this epic: [CURRENT_STATE](../../CURRENT_STATE.md)

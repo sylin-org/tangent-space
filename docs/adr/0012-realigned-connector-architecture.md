@@ -1,6 +1,6 @@
 # ADR 0012 — Realigned connector architecture
 
-Date: 15 September 2026. Status: accepted. Leo accepted every recommendation of the [connector assessment](../ASSESSMENT_2026-09-15-CONNECTOR.md); [EPIC-007](../epics/EPIC-007.md) delivers them together with the server realignment of [ADR 0011](0011-realigned-server-architecture.md).
+Date: 15 September 2026. Status: accepted. Leo accepted every recommendation of the 15 September connector assessment (archived at the `archive/pre-epic-007` tag); [EPIC-007](../epics/EPIC-007.md) delivers them together with the server realignment of [ADR 0011](0011-realigned-server-architecture.md).
 
 ## Context
 
