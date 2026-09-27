@@ -62,7 +62,7 @@
 
 @media(min-width:1100px) {
   body[data-stewardship='true']:is([data-page='topic'],[data-page='post']) { --page-width:1240px; }
-  body[data-stewardship='true']:is([data-page='topic'],[data-page='post']) .room-layout { display:grid; grid-template-columns:minmax(0,780px) minmax(290px,360px); gap:32px; }
+  body[data-stewardship='true']:is([data-page='topic'],[data-page='post']) .topic-layout { display:grid; grid-template-columns:minmax(0,780px) minmax(290px,360px); gap:32px; }
   body[data-stewardship='true'] .stewardship-panel { display:block; position:sticky; top:20px; max-height:calc(100dvh - 40px); overflow:auto; }
   body[data-stewardship='true'] #stewardship-open,body[data-stewardship='true'] #stewardship-close { display:none; }
 }

@@ -16,7 +16,6 @@ public sealed class AttentionBackfill : Entity<AttentionBackfill>, IKoanJob<Atte
 {
     public static async Task Execute(AttentionBackfill job, JobContext ctx, CancellationToken ct)
     {
-        await ctx.Services.GetRequiredService<Infrastructure.MemoryDataPersistence>().WaitForRestoreAsync(ct);
         var compiled = 0;
         var page = 1;
         IReadOnlyList<Topic> batch;

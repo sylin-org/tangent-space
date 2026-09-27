@@ -7,13 +7,13 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Field | Value |
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
-| Current slice | R2 — Rename to the product's words (R2.6 still `waiting` on Leo's walkthrough) · the connector matched-pair wire landed |
-| Current task | R3.6 — **done** (stage 1: replies by Post id; stage 2: reads lock-free via `ReadPolicyAsync`/`ReadAsync`, mutations own `WithinAcceptanceAsync`; `MembersOnly` and the `authorized` seams folded away). Next: R4 |
-| Next action | **The swap** — Vue serves `/` and the vanilla workspace deletes — staged behind Leo's parity walkthrough of the Vue workspace against the vanilla baseline (the same live data). After the swap: R4.2 (the route-family retirement rides the SPA's envelope migration), R4.5, R5. The W1–W11 walkthrough with Leo stays owed and closes R2.6 whenever the sign-ins happen |
-| Last checkpoint | 2026-09-20 · R5.2 landed on the framework mechanisms: journal appends signal coalesced Koan jobs that compile per-reader attention rows, the digest and activity reads consume compiled state, the profile read dropped the digest entirely, and ParticipantProfiles rides Koan.Cache. .NET 107/107, deployed. Next: R4.2 envelope migration + parity walkthrough with Leo at `/` |
+| Current slice | Local release assessment: durable selectable storage, service-owned connector operations, local and Bluesky content sources, and public Post-ID paging |
+| Current task | Code implementation and automated checks complete; live local-container and public-origin release validation pending |
+| Next action | Start the Docker Linux engine, run the first-install SQLite/alternative-provider and backup/restore walk, then validate HTTPS OAuth metadata/callback and explicit Bluesky publish at the chosen public origin before opening access |
+| Last checkpoint | 2026-09-27 · Tangent .NET 120/120, Vue 43/43, type checking/build and no-dialog check pass; CompanionLobby Rust 82/82, strict Clippy, manager JavaScript syntax and release build pass. Real-binary Tangent/connector integration 5/5. Docker Desktop's Linux engine is unavailable here, so live container and OAuth walks remain open. |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
-| Waiting on | Leo, for the four walkthrough steps only they can run: **W5** (enrol the agent — `forget` then Connect, N-056), which then unblocks **W4** and **W6** and W8's live bar, and **W9** (sign in as a second account) |
-| Blockers | None |
+| Waiting on | A running Docker Linux engine and real account sign-ins for the public-origin OAuth and second-account walks; these are live-release validation gates |
+| Blockers | Live Docker validation is unavailable on this machine; the Linux engine pipe is absent |
 
 ## Resume protocol
 
@@ -47,11 +47,11 @@ Status values: `todo` · `doing` · `waiting` (on Leo) · `blocked` · `done` ·
 | Repository | `E:\repo\github\sylin-org\tangent-space` |
 | Working branch | `claude/epic-007-realignment`, created from `codex/epic-006-stewardship` @ `d682c26` |
 | Archive | Tag `archive/pre-epic-007` → `d682c26`: the full pre-realignment tree, including removed capabilities |
-| Koan checkout | `.local/upstream/koan-framework` @ `21b18c69`, pinned in `scripts/prepare-framework.ps1`; `KoanSourceRoot` is set in `src/Directory.Build.props` |
+| Koan checkout | `.local/upstream/koan-framework` @ `d942ad8454af3b46ad1d82295eff132ddfcfa3d1`, pinned in `scripts/prepare-framework.ps1`; `KoanSourceRoot` is set in `src/Directory.Build.props` |
 | Toolchains on this machine | .NET SDK 10.0.401 (`global.json`), Node 24.20.0, Cargo 1.98.1, Docker 29.7.2, PowerShell 7 |
 | New machine | Run `./Build.bat` (or `pwsh scripts/prepare-framework.ps1`) before `dotnet test` |
 | Server | `http://127.0.0.1:5220`; health `/health/ready`; logs `docker compose logs -f tangent` |
-| Public origin | `Tangent:Site:PublicOrigin` (`Tangent__Site__PublicOrigin` in `compose.yaml`) |
+| Public origin | `Tangent:Space:PublicOrigin` (`Tangent__Space__PublicOrigin` in `compose.yaml`) |
 | Connector companion manager | `http://127.0.0.1:5219` (`tangent-connector serve`) |
 | App state | `.local/docker/site`, mounted at `/state` |
 | Build · launch | `./Build.bat` · `./Launch.bat` |
@@ -59,8 +59,8 @@ Status values: `todo` · `doing` · `waiting` (on Leo) · `blocked` · `done` ·
 | Backup · restore | `./Backup.bat` · `./Restore.bat` |
 | .NET tests | `dotnet test tests/TangentSpace.Tests/TangentSpace.Tests.csproj`; focused runs add `--filter "FullyQualifiedName~Name"` |
 | Browser tests | `node --test "tests/*.test.mjs"`; syntax check `node --check <file>` |
-| Workspace tests | `npm run test` in `src/client`; `npm run build` builds the Vue workspace to `wwwroot/app` |
-| Connector tests | `cargo test --manifest-path src/server/mcp/Cargo.toml` |
+| Workspace tests | `npm test` in `src/client`; `npm run build` builds the Vue workspace to `wwwroot/` |
+| Connector tests | `cargo test --workspace` in the sibling `CompanionLobby` repository |
 | Greenfield check | `pwsh scripts/check-greenfield.ps1` (report); add `-Strict` to fail on findings |
 
 ## Guardrails
@@ -871,6 +871,15 @@ Arrival is one page with four slots, not three page designs — so it degrades g
 - **Consciously accepted:** attention counters are now eventually consistent (compiled within ~1s of the triggering write; the digest's own SSE remains the delivery truth), and never-captured profiles no longer negative-cache (each read of an uncaptured profile touches SQLite until the capture worker fills it).
 
  index
+
+### S-028 · 2026-09-26/27 · Codex server work — content sources and durable default
+
+- The Compose entity source now points Koan at `/state/tangent.sqlite`; the memory-primary snapshot worker and its restore gates are removed. The old restore copied the empty memory database over the disk snapshot, so the worker was unsafe to operate. Docker is unavailable on this machine; the existing disk file has not been wiped or changed by this work. Compose also supplies `/state/storage.json` for the first-install tested provider choice. `docs/DOCKER.md` now explains the durable state root, external-provider backup limit, Windows/WSL2 bind-mount SQLite fsync cost and public HTTPS OAuth metadata requirements.
+- Tangent owns a discoverable `/api/v1/experience/operations` catalog and generic invocation route. Callers POST the catalog `id`, not its display name. The server validates bounded arguments, requires a caller-supplied retry identity for non-idempotent operations, invokes the existing domain methods, and returns server-authored text plus structured results. Source discovery, selected Bluesky authors, stored Bluesky Posts and owner-only refresh are available through the same opaque operation path. Same-origin checks cover cookie mutations.
+- Local and Bluesky content sources implement `IContentSource`. Local uses the bounded public reader. Bluesky resolves a selected handle to DID and stores URI/CID/text in Koan. Refresh is now a resumable 25-record full author-feed sweep: changed CID/text are updated; only after a complete sweep are absent Posts marked hidden in bounded batches. Newly published records get one hour of AppView indexing grace measured from local projection time. Public JSON and no-JS HTML hide stale rows and page by Post identity. A collision regression forced two Posts with equal timestamp/hash slots; unique Sequence allocation preserves strict paging of both. Anonymous selected-author discovery is bounded to 25 and links to a server-rendered page sharing `public.css`.
+- Tangent owns a separate per-account Bluesky write consent flow. Normal sign-in asks only for `atproto`; explicit Connect requests `repo:app.bsky.feed.post` through Koan's protected AT session. The browser-only per-Post Publish checks current author, policy, public audience and scope, derives a stable valid TID rkey from DID + local Post identity, and recovers duplicate/lost create responses by reading that same record. A durable receipt prevents a changed retry id from double-publishing and replay heals a missing local projection. Service bearer credentials cannot spend the account's stored OAuth grant. The final public-policy check and PDS dispatch share the PolicyGate with local privacy/delete/restriction changes, with a 15-second outbound deadline and no open DB transaction; slow PDS calls can delay other mutations for up to 15 seconds. Actual browser consent/PDS publish remains a live validation gate because Docker and an authorized Bluesky account were unavailable here.
+- Public Topic JSON/HTML use `before=<postId>` / `after=<postId>` and re-check current Tangent/Topic See access before showing a Topic marked Public. Authenticated history also accepts `after=<postId>` using acceptance Sequence while preserving signed resume cursors. The authenticated Topic/Conversation route family now uses `/api/topics` and `/posts`.
+- Verification: the coordinated full .NET suite passed **120/120** in 10.24 minutes, including the real-binary connector integration, full-feed sweep, changed/deleted record hiding, Post-ID collision, publication grace and remote response recovery cases. Focused Bluesky runs passed 5/5 and 3/3 during development. `pwsh scripts/check-greenfield.ps1` exited 0 in report mode with 191 remaining vocabulary/plan findings elsewhere; historical markers were 0. Live Docker and real-account OAuth/PDS publishing still require a running Linux engine and authorized account.
 
 ## Evidence index
 

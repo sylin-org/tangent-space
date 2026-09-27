@@ -1,3 +1,4 @@
+import { httpRequest } from '../api'
 // The roles UI's shared request layer, ported from roles.js and access.js: one CSRF
 // session token for every write, one error-message contract, one role shape.
 
@@ -60,7 +61,7 @@ function failure(response: Response, data: Record<string, unknown>, kind: 'roles
 
 export async function rolesSession(): Promise<CsrfSession> {
   if (csrf) return csrf
-  const response = await fetch('/api/roles/ui/session', {
+  const response = await httpRequest('/api/roles/ui/session', {
     credentials: 'same-origin',
     cache: 'no-store',
     headers: { Accept: 'application/json' },
@@ -88,7 +89,7 @@ export async function rolesRequest<T = unknown>(
     headers[token.headerName] = token.requestToken
     headers['Content-Type'] = 'application/json'
   }
-  const response = await fetch(path, {
+  const response = await httpRequest(path, {
     method,
     credentials: 'same-origin',
     cache: 'no-store',

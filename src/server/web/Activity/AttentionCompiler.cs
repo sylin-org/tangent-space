@@ -23,7 +23,6 @@ internal static class AttentionCompiler
     /// honest compiled state.</summary>
     internal static async Task CompileTopic(string topicKey, IServiceProvider services, CancellationToken ct)
     {
-        await services.GetRequiredService<Infrastructure.MemoryDataPersistence>().WaitForRestoreAsync(ct);
         var governance = services.GetRequiredService<TopicGovernance>();
         var clock = services.GetRequiredService<TimeProvider>();
         using var fresh = EntityContext.NoCache();

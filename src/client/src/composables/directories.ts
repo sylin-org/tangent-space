@@ -1,6 +1,7 @@
+import { httpRequest } from '../api'
 import { reactive, ref } from 'vue'
 
-// The Tangent and Topic directories, ported from rooms.js's directory flows.
+// The Tangent and Topic directories, with bounded directory pages.
 // Same endpoints as the vanilla app (the browser data plane).
 
 interface TangentCard {
@@ -37,7 +38,7 @@ export function createDirectories() {
   async function loadTangents(page?: number) {
     loading.value = true
     try {
-      const data = (await fetch('/api/v1/tangents' + (page ? `?page=${encodeURIComponent(page)}` : ''), {
+      const data = (await httpRequest('/api/v1/tangents' + (page ? `?page=${encodeURIComponent(page)}` : ''), {
         credentials: 'same-origin', cache: 'no-store',
       }).then(r => r.ok ? r.json() : null)) as { tangents?: TangentCard[]; nextPage?: number | null; canCreate?: boolean } | null
       if (!data) return
@@ -50,7 +51,7 @@ export function createDirectories() {
   }
 
   async function createTangent(card: { name: string; key: string; description: string; motto: string; artwork: string }) {
-    const response = await fetch('/api/v1/tangents', {
+    const response = await httpRequest('/api/v1/tangents', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -64,7 +65,7 @@ export function createDirectories() {
   async function loadTopics(tangentKey: string, page?: number) {
     loading.value = true
     try {
-      const data = (await fetch(`/api/tangents/${encodeURIComponent(tangentKey)}/topics` + (page ? `?page=${encodeURIComponent(page)}` : ''), {
+      const data = (await httpRequest(`/api/tangents/${encodeURIComponent(tangentKey)}/topics` + (page ? `?page=${encodeURIComponent(page)}` : ''), {
         credentials: 'same-origin', cache: 'no-store',
       }).then(r => r.ok ? r.json() : null)) as { topics?: TopicCard[]; nextPage?: number | null } | null
       if (!data) return
@@ -76,7 +77,7 @@ export function createDirectories() {
   }
 
   async function createTopic(tangentKey: string, topic: { key: string; title: string }) {
-    const response = await fetch(`/api/tangents/${encodeURIComponent(tangentKey)}/topics`, {
+    const response = await httpRequest(`/api/tangents/${encodeURIComponent(tangentKey)}/topics`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -87,9 +88,9 @@ export function createDirectories() {
     await loadTopics(tangentKey)
   }
 
-  /** Save a Tangent's card (rooms.js edit-tangent-form). A 403 sends the viewer home. */
+  /** Save a Tangent's card. A 403 sends the viewer home. */
   async function updateTangent(key: string, body: { name: string; description: string; motto: string; accent: string; artwork: string }) {
-    const response = await fetch('/api/v1/tangents/' + encodeURIComponent(key), {
+    const response = await httpRequest('/api/v1/tangents/' + encodeURIComponent(key), {
       method: 'PATCH',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -104,9 +105,9 @@ export function createDirectories() {
     await loadTangents()
   }
 
-  /** Set a participant's role across a Tangent (rooms.js tangent-member-form). */
+  /** Set a participant's role across a Tangent. */
   async function setMemberRole(tangentKey: string, did: string, role: string) {
-    const response = await fetch('/api/tangents/' + encodeURIComponent(tangentKey) + '/roles/' + encodeURIComponent(did), {
+    const response = await httpRequest('/api/tangents/' + encodeURIComponent(tangentKey) + '/roles/' + encodeURIComponent(did), {
       method: 'PUT',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },

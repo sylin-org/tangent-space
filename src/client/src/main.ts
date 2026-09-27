@@ -4,7 +4,7 @@ import App from './App.vue'
 
 // The workspace's stylesheets, in the vanilla head's order (the cascade matters).
 import './assets/app.css'
-import './assets/rooms.css'
+import './assets/topics.css'
 import './assets/onboarding.css'
 import './assets/pages.css'
 import './assets/landing.css'

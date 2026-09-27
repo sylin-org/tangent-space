@@ -1,20 +1,20 @@
 /* Tangent Space: one coherent human conversation shell. */
 [hidden] { display: none !important; }
 textarea { resize: vertical; }
-body.has-rooms main { display:block; padding:.85rem clamp(1rem,3vw,2.75rem) 3rem; }
-body.has-rooms .panel { width:min(88rem,100%); margin-inline:auto; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+body.has-topics main { display:block; padding:.85rem clamp(1rem,3vw,2.75rem) 3rem; }
+body.has-topics .panel { width:min(88rem,100%); margin-inline:auto; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
 
 /* Compact account bar. Reading keeps a small identity badge in view. */
-body.has-rooms #state-signed-in { display:grid; grid-template-columns:auto minmax(12rem,1fr) auto; gap:.1rem 1rem; align-items:center; margin:0 0 .85rem; padding:.6rem .85rem; border:1px solid var(--line); border-radius:12px; background:rgba(20,18,26,.76); backdrop-filter:blur(12px); }
-body.has-rooms #state-signed-in .eyebrow { grid-column:1; margin:0; font-size:.62rem; }
-body.has-rooms #state-signed-in .title { grid-column:1; margin:0; white-space:nowrap; font:600 1.2rem/1.1 var(--sans); }
-body.has-rooms #state-signed-in .lede { grid-column:2; grid-row:1 / span 2; margin:0; font-size:.88rem; }
-body.has-rooms #state-signed-in .identity { grid-column:3; grid-row:1 / span 2; margin:0; padding:.35rem .65rem; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.035); }
-body.has-rooms #state-signed-in .identity-details { display:none; }
-body.has-rooms #state-signed-in .who { margin:0; font-size:.82rem; }
-body.has-rooms #state-signed-in .identity-actions { grid-column:1 / -1; display:flex; gap:.45rem; margin:.2rem 0 0; }
-body.has-rooms #state-signed-in .identity-actions p, body.has-rooms #state-signed-in .sign-out { margin:0; }
-body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padding:.28rem .55rem; font-size:.74rem; }
+body.has-topics #state-signed-in { display:grid; grid-template-columns:auto minmax(12rem,1fr) auto; gap:.1rem 1rem; align-items:center; margin:0 0 .85rem; padding:.6rem .85rem; border:1px solid var(--line); border-radius:12px; background:rgba(20,18,26,.76); backdrop-filter:blur(12px); }
+body.has-topics #state-signed-in .eyebrow { grid-column:1; margin:0; font-size:.62rem; }
+body.has-topics #state-signed-in .title { grid-column:1; margin:0; white-space:nowrap; font:600 1.2rem/1.1 var(--sans); }
+body.has-topics #state-signed-in .lede { grid-column:2; grid-row:1 / span 2; margin:0; font-size:.88rem; }
+body.has-topics #state-signed-in .identity { grid-column:3; grid-row:1 / span 2; margin:0; padding:.35rem .65rem; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.035); }
+body.has-topics #state-signed-in .identity-details { display:none; }
+body.has-topics #state-signed-in .who { margin:0; font-size:.82rem; }
+body.has-topics #state-signed-in .identity-actions { grid-column:1 / -1; display:flex; gap:.45rem; margin:.2rem 0 0; }
+body.has-topics #state-signed-in .identity-actions p, body.has-topics #state-signed-in .sign-out { margin:0; }
+body.has-topics #state-signed-in .identity-actions .btn { min-height:1.9rem; padding:.28rem .55rem; font-size:.74rem; }
 
 /* Arrival / return. */
 .arrival-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(16rem,.65fr); gap:clamp(1.5rem,5vw,3.5rem); align-items:center; }
@@ -85,17 +85,17 @@ body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padd
 .art-sample img { width:1.8rem; height:1.8rem; border-radius:4px; image-rendering:pixelated; }
 
 /* Stable topic rail and flat, readable live column. */
-.room-layout { display:grid; grid-template-columns:minmax(13.5rem,16rem) minmax(0,48rem); justify-content:start; gap:clamp(1.2rem,3vw,3rem); margin-top:.8rem; align-items:start; }
-.room-directory { position:sticky; top:1rem; min-width:0; padding:.8rem; border:1px solid var(--line); border-radius:13px; background:#17151d; box-shadow:0 18px 44px -34px #000; }
+.topic-layout { display:grid; grid-template-columns:minmax(13.5rem,16rem) minmax(0,48rem); justify-content:start; gap:clamp(1.2rem,3vw,3rem); margin-top:.8rem; align-items:start; }
+.topic-directory { position:sticky; top:1rem; min-width:0; padding:.8rem; border:1px solid var(--line); border-radius:13px; background:#17151d; box-shadow:0 18px 44px -34px #000; }
 .section-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.6rem; }
 .section-head h2 { margin:0; font:650 1rem var(--sans); }
-.room-directory .eyebrow { margin:0 0 .12rem; font-size:.6rem; }
-.room-directory nav { display:grid; gap:.2rem; }
-.room-link { display:block; width:100%; min-height:2.7rem; padding:.5rem .6rem; overflow-wrap:anywhere; color:var(--ink-soft); border:1px solid transparent; border-radius:7px; background:transparent; text-align:left; font:inherit; cursor:pointer; }
-.room-link:hover { background:rgba(255,255,255,.05); }
-.room-link[aria-current="true"] { border-color:rgba(244,185,66,.34); background:rgba(244,185,66,.1); color:#ffe6a6; }
-.room-name { display:block; font-size:.88rem; font-weight:650; }
-.room-state { display:block; color:var(--ink-soft); font-size:.7rem; }
+.topic-directory .eyebrow { margin:0 0 .12rem; font-size:.6rem; }
+.topic-directory nav { display:grid; gap:.2rem; }
+.topic-link { display:block; width:100%; min-height:2.7rem; padding:.5rem .6rem; overflow-wrap:anywhere; color:var(--ink-soft); border:1px solid transparent; border-radius:7px; background:transparent; text-align:left; font:inherit; cursor:pointer; }
+.topic-link:hover { background:rgba(255,255,255,.05); }
+.topic-link[aria-current="true"] { border-color:rgba(244,185,66,.34); background:rgba(244,185,66,.1); color:#ffe6a6; }
+.topic-name { display:block; font-size:.88rem; font-weight:650; }
+.topic-state { display:block; color:var(--ink-soft); font-size:.7rem; }
 .activity-count { float:right; padding:.05rem .3rem; border:1px solid rgba(255,255,255,.25); border-radius:99px; color:var(--accent-strong); font:.65rem var(--mono); }
 .activity-diamond { float:right; color:var(--accent); }
 .conversation { max-width:48rem; min-width:0; padding:.1rem 0 3rem; }
@@ -106,14 +106,14 @@ body.has-rooms #state-signed-in .identity-actions .btn { min-height:1.9rem; padd
 .conversation-head h2 { margin:.35rem 0; font:600 clamp(1.75rem,3.4vw,2.4rem)/1.1 var(--sans); }
 .topic { margin:0; color:var(--ink-soft); }
 .return-to-tangents { margin-left:auto; min-height:1.9rem; padding:.27rem .5rem; font-size:.74rem; }
-.room-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin:.65rem 0; }
+.topic-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin:.65rem 0; }
 .topic-details { margin:.7rem 0 0; border:1px solid var(--line); border-radius:9px; background:var(--surface); }
 .topic-details > summary { padding:.42rem .6rem; color:var(--ink-soft); cursor:pointer; font:600 .78rem var(--sans); }
 .topic-details[open] > summary { color:var(--accent-strong); border-bottom:1px solid var(--line); }
 .topic-details-body { padding:.7rem .75rem .15rem; }
 .topic-details .note { margin-bottom:.7rem; }
-#room-admin.setup { margin:.6rem 0; padding:.6rem .75rem; border-radius:9px; background:var(--surface-soft); }
-#room-admin.setup > summary { color:var(--ink-soft); cursor:pointer; font-size:.8rem; }
+#topic-admin.setup { margin:.6rem 0; padding:.6rem .75rem; border-radius:9px; background:var(--surface-soft); }
+#topic-admin.setup > summary { color:var(--ink-soft); cursor:pointer; font-size:.8rem; }
 .topic-settings-section { display:grid; grid-template-columns:minmax(0,1fr); gap:.75rem; margin:.9rem 0 0; padding:1rem; border:1px solid var(--line); border-radius:9px; background:var(--surface); }
 .topic-settings-section h3 { margin:0; font:600 1rem/1.4 var(--sans); }
 .topic-settings-section header .hint { margin:.25rem 0 0; }
@@ -168,13 +168,13 @@ body.conversation-open .tangent-card .card-glass { display:block; margin:0; padd
 body.conversation-open .tangent-card .tangent-card-name { display:block; font:600 .82rem/1.1 var(--sans); white-space:nowrap; }
 
 @media (max-width:759px) {
- body.has-rooms main { padding:.65rem .75rem 2rem; }
- body.has-rooms #state-signed-in { display:block; }
- body.has-rooms #state-signed-in .eyebrow,body.has-rooms #state-signed-in .title,body.has-rooms #state-signed-in .lede,body.has-rooms #state-signed-in .identity { margin:0 0 .45rem; }
- body.has-rooms #state-signed-in .identity-details { display:block; }
- .arrival-grid,.room-layout { grid-template-columns:1fr; }
- .room-directory { position:static; }
- .room-directory nav { grid-template-columns:repeat(auto-fit,minmax(8rem,1fr)); }
+ body.has-topics main { padding:.65rem .75rem 2rem; }
+ body.has-topics #state-signed-in { display:block; }
+ body.has-topics #state-signed-in .eyebrow,body.has-topics #state-signed-in .title,body.has-topics #state-signed-in .lede,body.has-topics #state-signed-in .identity { margin:0 0 .45rem; }
+ body.has-topics #state-signed-in .identity-details { display:block; }
+ .arrival-grid,.topic-layout { grid-template-columns:1fr; }
+ .topic-directory { position:static; }
+ .topic-directory nav { grid-template-columns:repeat(auto-fit,minmax(8rem,1fr)); }
  .tangent-list { grid-template-columns:minmax(0,18rem); }
  .tangent-card { min-height:19rem; }
  .compose { position:static; }
@@ -216,7 +216,7 @@ a.mention { font-weight: 600; text-decoration: underline; text-decoration-color:
 
 /* Conversation is a reading surface. Identity anchors the post; secondary actions wait
    in a keyboard-accessible disclosure. Every grid/flex child may shrink on a phone. */
-.conversation, #room-content, .messages, .message, .message-byline, .message-footer,
+.conversation, #topic-content, .messages, .message, .message-byline, .message-footer,
 .compose, .message-edit-form, .history-body { min-width:0; max-width:100%; box-sizing:border-box; }
 .messages { gap:0; margin:1.4rem 0 1rem; }
 .message { display:grid; grid-template-columns:2.4rem minmax(0,1fr); column-gap:.8rem; padding:1.1rem .65rem; border-left:0; border-bottom:1px solid color-mix(in srgb,var(--line) 65%,transparent); border-radius:7px; scroll-margin-top:5rem; }
@@ -294,7 +294,7 @@ a.reply-label:hover { color:var(--accent-strong); }
  .message-text { font-size:.96rem; line-height:1.65; }
  .compose { padding:.75rem; }
  .history-body { padding:.5rem; }
- .room-layout,.conversation,.room-directory,.tangent-return,.return-head { min-width:0; }
- .tangent-return h2,.room-title,.conversation-head h2 { overflow-wrap:anywhere; }
+ .topic-layout,.conversation,.topic-directory,.tangent-return,.return-head { min-width:0; }
+ .tangent-return h2,.topic-title,.conversation-head h2 { overflow-wrap:anywhere; }
  body.conversation-open .tangent-card .tangent-card-name { white-space:normal; overflow-wrap:anywhere; }
 }

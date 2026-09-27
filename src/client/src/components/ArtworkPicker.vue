@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { httpRequest } from '../api'
+
 // The cover picker, ported from artwork.js: an upload with bounded size and type,
 // a URL fallback, and the curated library filtered by mood. The picker blocks the
 // form's save handlers while an image is in flight.
@@ -56,7 +58,7 @@ async function onPick(event: Event): Promise<void> {
       reader.onerror = () => reject(new Error('This file could not be read. Try choosing it again.'))
       reader.readAsDataURL(file)
     })
-    const response = await fetch('/api/artwork', {
+    const response = await httpRequest('/api/artwork', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },

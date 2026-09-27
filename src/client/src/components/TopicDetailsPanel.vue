@@ -1,14 +1,12 @@
 <script setup lang="ts">
-// The Topic's details and settings, ported from rooms.js renderRoom + the
-// topic forms: the access note, and for those who manage it — the description,
-// the reading audience, participation, and people.
+// Topic details, effective access and the settings available to its stewards.
 import { computed, ref, watch } from 'vue'
 import type { Conversation } from '../composables/conversation'
 
 const props = defineProps<{ conversation: Conversation }>()
 
 const {
-  room, status, saveTopicDescription, updateMember, saveReadAudience, saveParticipation,
+  selectedTopic, status, saveTopicDescription, updateMember, saveReadAudience, saveParticipation,
 } = props.conversation
 
 const formError = ref('')
@@ -21,25 +19,25 @@ async function run(work: () => Promise<void>) {
   }
 }
 
-const can = (action: string): boolean => room.value?.permissions?.allowedActions?.includes(action) ?? false
+const can = (action: string): boolean => selectedTopic.value?.permissions?.allowedActions?.includes(action) ?? false
 
-const adminVisible = computed(() => !!room.value && (room.value.canManage === true || can('manageTopic')))
-const appointsManagers = computed(() => room.value?.canAppointManagers === true)
+const adminVisible = computed(() => !!selectedTopic.value && (selectedTopic.value.canManage === true || can('manageTopic')))
+const appointsManagers = computed(() => selectedTopic.value?.canAppointManagers === true)
 
 const accessNote = computed(() => {
   const notes: Record<string, string> = {
-    'sign-in-required': 'Sign in to enter this room.',
+    'sign-in-required': 'Sign in to enter this Topic.',
     'not-admitted': 'The current rules do not admit you.',
-    removed: 'Your access to this room has been removed.',
+    removed: 'Your access to this Topic has been removed.',
     suspended: 'Your participation at this site is suspended.',
   }
-  const r = room.value
+  const r = selectedTopic.value
   if (!r) return ''
-  return notes[r.accessState ?? ''] || (r.canWrite ? 'You can read and take part.' : r.canRead ? 'You can read this room.' : 'Content is not available under your current access.')
+  return notes[r.accessState ?? ''] || (r.canWrite ? 'You can read and take part.' : r.canRead ? 'You can read this Topic.' : 'Content is not available under your current access.')
 })
 
 const permissionsNote = computed(() => {
-  const r = room.value
+  const r = selectedTopic.value
   if (!r) return ''
   const labels: Record<string, string> = {
     read: 'read', reply: 'reply', manageServer: 'manage this server', createTangent: 'create Tangents',
@@ -56,7 +54,7 @@ const permissionsNote = computed(() => {
 
 // --- Description form ---
 const topicText = ref('')
-watch(room, r => {
+watch(selectedTopic, r => {
   topicText.value = r?.topic || ''
 }, { immediate: true })
 
@@ -64,16 +62,16 @@ watch(room, r => {
 const audience = ref('Restricted')
 const confirmPublish = ref(false)
 const audienceNote = ref('')
-watch(room, r => {
+watch(selectedTopic, r => {
   audience.value = r?.readAudience || 'Restricted'
   confirmPublish.value = false
   updateAudienceNote()
 }, { immediate: true })
 
-const publishing = computed(() => appointsManagers.value && room.value?.readAudience !== 'Public' && audience.value === 'Public')
+const publishing = computed(() => appointsManagers.value && selectedTopic.value?.readAudience !== 'Public' && audience.value === 'Public')
 
 function updateAudienceNote() {
-  const current = room.value?.readAudience
+  const current = selectedTopic.value?.readAudience
   audienceNote.value =
     audience.value === 'Public'
       ? current === 'Public'
@@ -101,7 +99,7 @@ function submitReadAudience() {
 // --- Participation ---
 const allowPostEditing = ref(false)
 const isLocked = ref(false)
-watch(room, r => {
+watch(selectedTopic, r => {
   allowPostEditing.value = r?.allowPostEditing === true
   isLocked.value = r?.isLocked === true
 }, { immediate: true })
@@ -138,12 +136,12 @@ function submitMember() {
 </script>
 
 <template>
-  <details id="topic-details" class="topic-details" :open="!!room && !room.canRead">
+  <details id="topic-details" class="topic-details" :open="!!selectedTopic && !selectedTopic.canRead">
     <summary>Topic details</summary>
     <div class="topic-details-body">
-      <p id="room-access" class="note">{{ accessNote }}</p>
+      <p id="topic-access" class="note">{{ accessNote }}</p>
       <p id="topic-permissions" class="hint">{{ permissionsNote }}</p>
-      <details v-if="room" id="room-admin" class="setup" :hidden="!adminVisible">
+      <details v-if="selectedTopic" id="topic-admin" class="setup" :hidden="!adminVisible">
         <summary>Topic settings</summary>
         <section class="topic-settings-section" aria-labelledby="topic-about-heading">
           <header><h3 id="topic-about-heading">About</h3><p class="hint">Set the scene for this conversation.</p></header>

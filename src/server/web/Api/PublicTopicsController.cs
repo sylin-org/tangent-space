@@ -34,11 +34,13 @@ public sealed class PublicTopicsController(PublicConversationReader reader, Poli
             return HiddenNotFound();
         if (response is not ObjectResult { Value: PublicTopicDescription topic }) return response;
         using var fresh = EntityContext.NoCache();
-        return await Community.Tangent.Get(topic.TangentKey, ct) is null ? HiddenNotFound() : response;
+        Topic? stored = await Topic.Get(id, ct);
+        var tangent = await Community.Tangent.Get(topic.TangentKey, ct);
+        return stored is not null && PublicTopicAccess.IsPublic(stored, tangent) ? response : HiddenNotFound();
     }
 
     [HttpGet("{id}/posts")]
-    public async Task<IActionResult> GetPosts(string id, [FromQuery] long? before = null, [FromQuery] long? after = null,
+    public async Task<IActionResult> GetPosts(string id, [FromQuery] string? before = null, [FromQuery] string? after = null,
         [FromQuery] string? around = null, [FromQuery] int limit = PublicConversationReader.MaximumPosts,
         CancellationToken ct = default)
     {

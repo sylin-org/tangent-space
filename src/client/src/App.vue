@@ -81,7 +81,7 @@
         </div>
       </section>
 
-      <section id="place" :hidden="!placeVisible" aria-label="Rooms and conversation">
+      <section id="place" :hidden="!placeVisible" aria-label="Topics and conversation">
         <section id="catch-up" class="catch-up" :hidden="!catchUpEntries.length || router.route.kind !== 'home' || !site.site?.participant" aria-labelledby="catch-up-title">
           <h2 id="catch-up-title">While you were away</h2>
           <ul id="catch-up-list">
@@ -96,6 +96,7 @@
           <div class="return-head"><h2 id="tangent-return-title">Your Tangents</h2><div class="collection-actions"><button id="create-tangent-open" class="btn btn-primary" type="button" :hidden="!(site.site?.participant && directories.tangentsCanCreate && site.site.onboarding === 'complete')" @click="openCreateTangent">Create Tangent</button></div></div>
           <TangentDirectory :directories="directories" :signed-in="!!site.site?.participant" :activity="activity" @settings="key => router.navigate('/t/' + encodeURIComponent(key) + '/settings')" />
         </section>
+        <BlueskyDirectory v-if="router.route.kind === 'home' && ['anonymous', 'signedIn'].includes(site.state)" />
         <details id="community-settings" ref="communitySettings" :hidden="!communitySettingsVisible" class="community-settings"><summary>Manage Tangent</summary><div class="community-settings-body">
         <details id="tangent-setup" ref="tangentSetup" :hidden="!directories.tangentsCanCreate" class="setup tangent-setup">
           <summary>Create a Tangent</summary>
@@ -115,7 +116,7 @@
         <details id="site-setup" :hidden="!siteSetupVisible" class="setup">
           <summary>Create a Topic</summary>
           <p class="hint">Start with a name and choose who can join the conversation.</p>
-          <form id="create-room" class="stack">
+          <form id="create-selectedTopic" class="stack">
             <h2>Create a Topic</h2>
             <label>Topic name<input class="input" name="title" required maxlength="120"></label>
             <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="first-thoughts"></label>
@@ -123,11 +124,11 @@
           </form>
         </details>
         </div></details>
-        <div class="room-layout">
-          <aside class="room-directory" aria-labelledby="rooms-heading">
-            <div class="section-head"><div><p class="eyebrow">Topics</p><h2 id="rooms-heading">In this Tangent</h2></div><button id="refresh-rooms" class="btn btn-quiet" type="button" @click="directories.loadTopics(activeTangentKey ?? '')">Refresh</button></div>
-            <nav id="room-list" aria-label="Choose a Topic">
-              <button v-for="topic in directories.topics" :key="topic.key" class="room-link" type="button" @click="conversation.choose(topic.key); directories.loadTopics(activeTangentKey ?? '')">{{ topic.title }}</button>
+        <div class="topic-layout">
+          <aside class="topic-directory" aria-labelledby="topics-heading">
+            <div class="section-head"><div><p class="eyebrow">Topics</p><h2 id="topics-heading">In this Tangent</h2></div><button id="refresh-topics" class="btn btn-quiet" type="button" @click="directories.loadTopics(activeTangentKey ?? '')">Refresh</button></div>
+            <nav id="topic-list" aria-label="Choose a Topic">
+              <button v-for="topic in directories.topics" :key="topic.key" class="topic-link" type="button" @click="conversation.choose(topic.key); directories.loadTopics(activeTangentKey ?? '')">{{ topic.title }}</button>
             </nav>
             <p v-if="!directories.topics.length" class="hint">No Topics yet. Every conversation starts somewhere.</p>
             <button v-if="directories.topicsNextPage" class="btn btn-quiet" type="button">More Topics</button>
@@ -181,11 +182,12 @@ import ProfilePanel from './components/ProfilePanel.vue'
 import TangentEditorPanel from './components/TangentEditorPanel.vue'
 import StewardshipPanel from './components/StewardshipPanel.vue'
 import OnboardingPanel from './components/OnboardingPanel.vue'
+import BlueskyDirectory from './components/BlueskyDirectory.vue'
 import ReportPanel from './components/ReportPanel.vue'
 
-// The boot port (app.js), the conversation loop (rooms.js core), the directories,
+// The boot port (app.js), the conversation loop, the directories,
 // the settings page, the hero + masthead (pages.js prepare/hero), and the place
-// section's route reactions (rooms.js enterRoute).
+// section's route reactions.
 const site = useSite()
 const router = useRouter()
 const conversation = createConversation(router)
@@ -264,7 +266,7 @@ watch([() => site.state, () => router.route.kind], ([state, kind]) => {
 const authenticationRoute = computed(() => ['sign-in', 'onboarding'].includes(router.route.kind))
 
 // The place section owns conversation; the other routes own their sections
-// (rooms.js enterRoute's visibility half).
+//.
 const placeVisible = computed(() =>
   !['settings', 'tangent-settings', 'topic-settings', 'participant', 'sign-in', 'onboarding'].includes(router.route.kind),
 )
@@ -326,21 +328,21 @@ function submitSignOut() {
 }
 
 // The hero's Tangent and Topic come from the route when the directory or the
-// conversation holds them (rooms.js updateHero's lookup).
+// conversation holds them.
 const routeTangent = computed(() => {
   const key = 'tangent' in router.route ? router.route.tangent : undefined
   return (key && directories.tangents.find(t => t.key === key)) || null
 })
-const routeTopic = computed(() => (['topic', 'post'].includes(router.route.kind) ? conversation.room.value : null))
+const routeTopic = computed(() => (['topic', 'post'].includes(router.route.kind) ? conversation.selectedTopic.value : null))
 
-// The room sidebar follows the route's Tangent, then the open room, then the
-// first card (rooms.js activeTangentKey).
+// The selectedTopic sidebar follows the route's Tangent, then the open selectedTopic, then the
+// first card.
 const activeTangentKey = computed(() => {
   if ('tangent' in router.route && router.route.tangent) return router.route.tangent
-  return conversation.room.value?.tangentKey ?? directories.tangents[0]?.key ?? null
+  return conversation.selectedTopic.value?.tangentKey ?? directories.tangents[0]?.key ?? null
 })
 
-// The active Tangent as the manage forms see it (rooms.js selectTangent's flags).
+// The active Tangent as the manage forms see it.
 const activeTangent = computed(() => directories.tangents.find(t => t.key === activeTangentKey.value) ?? null)
 
 const communitySettingsVisible = computed(() =>
@@ -349,7 +351,7 @@ const communitySettingsVisible = computed(() =>
 const siteSetupVisible = computed(() =>
   site.site?.participant?.isOwner === true || activeTangent.value?.canCreateTopic === true || (activeTangent.value?.permissions?.allowedActions?.includes('createTopic') ?? false))
 
-// The while-you-were-away strip (rooms.js renderCatchUp): unread Topics first by
+// The while-you-were-away strip: unread Topics first by
 // their replies to the viewer, then by unread count.
 const catchUpEntries = computed(() =>
   directories.tangents

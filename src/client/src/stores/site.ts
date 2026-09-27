@@ -1,3 +1,4 @@
+import { httpRequest } from '../api'
 import { defineStore } from 'pinia'
 import { useRouter } from './router'
 
@@ -123,7 +124,7 @@ export const useSite = defineStore('site', {
       this.state = 'loading'
       this.announcement = 'Loading the welcome.'
       try {
-        const response = await fetch('/api/site', {
+        const response = await httpRequest('/api/site', {
           credentials: 'same-origin',
           headers: { Accept: 'application/json' },
           cache: 'no-store',
@@ -143,9 +144,9 @@ export const useSite = defineStore('site', {
         this.announcement = 'The welcome could not be loaded.'
       }
     },
-    /** The server's own details (rooms.js refreshServer). Throws when the read fails. */
+    /** The server's own details. Throws when the read fails. */
     async loadServer() {
-      const response = await fetch('/api/server', {
+      const response = await httpRequest('/api/server', {
         credentials: 'same-origin',
         headers: { Accept: 'application/json' },
         cache: 'no-store',

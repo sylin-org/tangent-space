@@ -3,6 +3,101 @@
  * typed against the experience envelope. Never add fetch outside this module.
  */
 
+export function httpRequest(path: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return fetch(path, init)
+}
+
+export interface StorageProvider {
+  id: string
+  name: string
+  fields: Array<{ name: string; label: string; required: boolean; secret: boolean; type: string; placeholder?: string | null }>
+}
+
+export interface StorageState {
+  activeProvider: string
+  providers: StorageProvider[]
+  changeRequiresRestart: boolean
+  firstRun: boolean
+  pendingRestart: boolean
+}
+
+async function storageRequest<T>(suffix = '', body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  if (body !== undefined) {
+    const sessionResponse = await httpRequest('/api/roles/ui/session', { credentials: 'same-origin', cache: 'no-store' })
+    if (!sessionResponse.ok) throw new Error('Your session cannot change database settings. Sign in again and retry.')
+    const session = await sessionResponse.json() as { headerName: string; requestToken: string }
+    if (!session.headerName || !session.requestToken) throw new Error('The server did not provide a session token. Sign in again and retry.')
+    headers[session.headerName] = session.requestToken
+    headers['Content-Type'] = 'application/json'
+  }
+  const response = await httpRequest('/api/server/storage' + suffix, {
+    method: body === undefined ? 'GET' : 'POST',
+    credentials: 'same-origin', cache: 'no-store', headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const value = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(value.message || value.reason || value.title || 'Database settings are unavailable. Retry when the server is ready.')
+  return value as T
+}
+
+export const storageApi = {
+  get: () => storageRequest<StorageState>(),
+  test: (provider: string, settings: Record<string, string>) =>
+    storageRequest<{ testId: string; provider: string; message: string }>('/test', { provider, settings }),
+  activate: (testId: string) =>
+    storageRequest<{ provider: string; restartRequired: boolean; message: string }>('/activate', { testId }),
+}
+
+export interface ContentSourceState { id: string; status: string; read: boolean; publish: string }
+export interface BlueskyAuthor { actorDid: string; handle: string; refreshedAt: string; postsUrl: string }
+export interface ContentSourcePage {
+  source: string
+  posts: Array<{ source: string; id: string; author: string; text: string; createdAt: string; url: string }>
+  olderBefore?: string | null
+  newerAfter?: string | null
+}
+export interface BlueskyConnection {
+  status: 'connected' | 'disconnected' | 'reauthorize' | 'unavailable'
+  actorDid: string | null
+  canPublish: boolean
+  connectUrl: string | null
+}
+
+async function contentRequest<T>(path: string, refresh = false): Promise<T> {
+  const response = await httpRequest('/api/v1/content' + path, {
+    method: refresh ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+    headers: { Accept: 'application/json', ...(refresh ? { 'Content-Type': 'application/json' } : {}) },
+    body: refresh ? '{}' : undefined,
+  })
+  const value = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(value.reason || value.message || 'This request could not be completed. Retry when the service is available.')
+  return value as T
+}
+
+export const contentApi = {
+  sources: () => contentRequest<{ sources: ContentSourceState[] }>('/sources'),
+  blueskyAuthors: () => contentRequest<{ authors: BlueskyAuthor[] }>('/bluesky/authors?limit=25'),
+  refreshAuthor: (author: string) => contentRequest<{ actorDid: string; imported: number; refreshedAt: string; backfill: string; publish: string }>(
+    '/bluesky/authors/' + encodeURIComponent(author) + '/refresh', true),
+  readAuthor: (actorDid: string, direction?: 'before' | 'after', postId?: string) => {
+    const query = new URLSearchParams({ actorDid, limit: '25' })
+    if (direction && postId) query.set(direction, postId)
+    return contentRequest<ContentSourcePage>('/bluesky/posts?' + query)
+  },
+  blueskyConnection: () => contentRequest<BlueskyConnection>('/bluesky/connection'),
+  publishPost: async (postId: string) => {
+    const response = await httpRequest('/api/v1/content/bluesky/publish', {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId, requestId: 'post:' + postId }),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.reason || result.message || 'Publication could not be confirmed. Retry this Post to check the same publication.')
+    return result as { uri: string; cid: string; publishedAt: string; replayed: boolean }
+  },
+}
+
 const base = '/api/v1/experience'
 
 export interface Identity {
@@ -80,7 +175,7 @@ export class EnvelopeError extends Error {
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<Envelope<T>> {
-  const response = await fetch(base + path, {
+  const response = await httpRequest(base + path, {
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
     ...init,

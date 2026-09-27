@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The Manage Tangent forms, ported from rooms.js: edit the Tangent's card with a
+// The Manage Tangent forms, edit the Tangent's card with a
 // live preview, and set a participant's role across the Tangent.
 import { computed, reactive, ref, watch } from 'vue'
 import type { Directories } from '../composables/directories'

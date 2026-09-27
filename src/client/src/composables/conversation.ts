@@ -1,10 +1,10 @@
-import { ref } from 'vue'
+import { httpRequest } from '../api'
+import { ref, watch } from 'vue'
 import { useSite } from '../stores/site'
 import type { RouterStore } from '../stores/router'
 import { wireFacets, clearFacets } from './facets'
 
-// The conversation loop, ported from rooms.js: epoch-guarded navigation,
-// cursor page accumulation, pending-mutation retries, refresh queueing.
+// A bounded conversation page, with drafts scoped to the acting participant.
 
 export interface Message {
   id: string
@@ -32,7 +32,7 @@ export interface MessagesPage {
   authorHandles?: Record<string, string>
 }
 
-export interface Room {
+export interface Topic {
   key: string
   tangentKey: string
   title: string
@@ -56,7 +56,7 @@ interface MutationIntent {
 const encoder = new TextEncoder()
 
 async function request(path: string, body?: unknown, method = 'POST', signal?: AbortSignal) {
-  const response = await fetch(path, {
+  const response = await httpRequest(path, {
     method: body === undefined ? 'GET' : method,
     credentials: 'same-origin',
     cache: 'no-store',
@@ -80,12 +80,13 @@ async function request(path: string, body?: unknown, method = 'POST', signal?: A
 export function createConversation(router: RouterStore) {
   const site = useSite()
   const viewerRef = () => site.site?.participant?.participantRef ?? ''
-  const room = ref<Room | null>(null)
+  const selectedTopic = ref<Topic | null>(null)
   const messages = ref<Message[]>([])
   const replyTo = ref<string | null>(null)
-  const loadingRoom = ref(false)
+  const loadingTopic = ref(false)
   const loadingHistory = ref(false)
   const moreMessages = ref(false)
+  const newMessages = ref(false)
   const error = ref('')
   const draft = ref('')
   const status = ref('')
@@ -94,79 +95,105 @@ export function createConversation(router: RouterStore) {
   let epoch = 0
   let nextCursor: string | null = null
   let resumeCursor: string | null = null
+  let currentCursor: string | undefined
+  let anchor: { tangent: string; post: string } | null = null
   let replyParentId: string | null = null
   let refreshingHistory = false
   let queuedRefresh: { force: boolean } | undefined
   const pendingMutations = new Map<string, MutationIntent>()
 
-  const roomPath = (key: string) => `/api/rooms/${encodeURIComponent(key)}`
+  const topicPath = (key: string) => `/api/topics/${encodeURIComponent(key)}`
   const can = (subject: { permissions?: { allowedActions: string[] } | null } | null, action: string) =>
     subject?.permissions?.allowedActions?.includes(action) ?? false
 
+  const draftKey = (key: string) => 'draft:' + viewerRef() + ':' + key
   function rememberDraft() {
-    if (room.value) sessionStorage.setItem('draft:' + room.value.key, JSON.stringify({ text: draft.value, replyTo: replyParentId }))
+    if (selectedTopic.value) sessionStorage.setItem(draftKey(selectedTopic.value.key), JSON.stringify({ text: draft.value, replyTo: replyParentId }))
   }
   function restoreDraft() {
-    if (!room.value) return
-    const saved = sessionStorage.getItem('draft:' + room.value.key)
-    if (saved) {
-      const parsed = JSON.parse(saved) as { text: string; replyTo: string | null }
-      draft.value = parsed.text
-      replyParentId = parsed.replyTo
-    }
+    if (!selectedTopic.value) return
+    draft.value = ''
+    replyParentId = null
+    const saved = sessionStorage.getItem(draftKey(selectedTopic.value.key))
+    if (!saved) return
+    try {
+      const parsed = JSON.parse(saved) as { text?: string; replyTo?: string }
+      draft.value = typeof parsed.text === 'string' ? parsed.text : ''
+      replyParentId = typeof parsed.replyTo === 'string' ? parsed.replyTo : null
+    } catch { sessionStorage.removeItem(draftKey(selectedTopic.value.key)) }
   }
+  watch(draft, rememberDraft)
 
   async function choose(key: string) {
     if (router.route.kind === 'post') return openPost(router.route.tangent, key)
     rememberDraft()
     const version = ++epoch
-    room.value = null
+    selectedTopic.value = null
     replyTo.value = null
     replyParentId = null
     messages.value = []
-    loadingRoom.value = true
+    nextCursor = resumeCursor = null
+    currentCursor = undefined
+    anchor = null
+    newMessages.value = false
+    error.value = ''
+    loadingTopic.value = true
     try {
       const routeTangent = 'tangent' in router.route ? router.route.tangent : ''
-      const data = (await request(`/api/tangents/${encodeURIComponent(routeTangent)}/topics/${encodeURIComponent(key)}`, undefined, 'GET')).data as unknown as Room
+      const data = (await request(`/api/tangents/${encodeURIComponent(routeTangent)}/topics/${encodeURIComponent(key)}`, undefined, 'GET')).data as unknown as Topic
       if (version !== epoch) return
-      room.value = data
+      selectedTopic.value = data
       restoreDraft()
       if (data.canRead) await historyPage(undefined, version, key, true)
     } catch (err) {
       if (version === epoch) error.value = (err as Error).message
     } finally {
-      loadingRoom.value = false
+      if (version === epoch) loadingTopic.value = false
     }
   }
 
-  async function historyPage(cursor: string | undefined, version = epoch, key = room.value?.key, fromStart = false, activity?: ActivityWorkContext) {
+  async function historyPage(cursor: string | undefined, version = epoch, key = selectedTopic.value?.key, fromStart = false, activity?: ActivityWorkContext) {
     if (!key || version !== epoch) return false
     if (activity && activity.isCurrent && !activity.isCurrent()) return false
     try {
       const liveAppend = !!cursor && cursor === resumeCursor && !nextCursor
       const page = (await request(
-        roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : fromStart ? '?from=start' : ''),
+        topicPath(key) + '/posts' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : fromStart ? '?from=start' : ''),
         undefined, 'GET', activity?.signal)).data as unknown as MessagesPage
-      if (version !== epoch || room.value?.key !== key) return false
+      if (version !== epoch || selectedTopic.value?.key !== key) return false
       if (activity && activity.isCurrent && !activity.isCurrent()) return false
-      renderPage(page, true, liveAppend)
+      if (activity && liveAppend) {
+        newMessages.value = page.messages.length > 0
+        return true
+      }
+      currentCursor = cursor
       nextCursor = page.nextCursor
       resumeCursor = page.resumeCursor
+      renderPage(page)
+      newMessages.value = false
       return true
     } catch (err) {
       if (version !== epoch) return false
       const status = (err as { status?: number }).status
-      if (status === 403 || status === 401 || status === 404) room.value = null
+      if (status === 403 || status === 401 || status === 404) selectedTopic.value = null
       throw err
     }
   }
 
-  function renderPage(page: MessagesPage, nativeHistory = true, liveAppend = false) {
-    if (nativeHistory) messages.value = page.messages
-    else messages.value.push(...page.messages.filter(m => !messages.value.some(existing => existing.id === m.id)))
-    if (page.resolved) resolved.value = { ...resolved.value, ...page.resolved }
+  function renderPage(page: MessagesPage) {
+    messages.value = page.messages
+    resolved.value = page.resolved ?? {}
     moreMessages.value = !!nextCursor
-    void liveAppend
+  }
+
+  async function readMore() {
+    const cursor = nextCursor ?? (newMessages.value ? resumeCursor : null)
+    if (!cursor || loadingHistory.value) return
+    loadingHistory.value = true
+    error.value = ''
+    try { await historyPage(cursor) }
+    catch (err) { error.value = (err as Error).message }
+    finally { loadingHistory.value = false }
   }
 
   async function refreshOpenHistory(force = false, activity?: ActivityWorkContext) {
@@ -174,30 +201,17 @@ export function createConversation(router: RouterStore) {
       queuedRefresh = { force: force || queuedRefresh?.force || false }
       return
     }
-    if (!room.value?.canRead) return
+    if (!selectedTopic.value?.canRead) return
     if (!force && document.querySelector('.message-edit-form')) return
     if (activity && activity.isCurrent && !activity.isCurrent()) return
-    const key = room.value.key
+    const key = selectedTopic.value.key
     const version = epoch
     refreshingHistory = true
     try {
-      const pages: MessagesPage[] = []
-      const cursors = new Set<string>()
-      let cursor: string | null = null
-      let loaded = 0
-      do {
-        const page = (await request(roomPath(key) + '/messages' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '?from=start'), undefined, 'GET', activity?.signal)).data as unknown as MessagesPage
-        if (version !== epoch || room.value?.key !== key) return
-        if (activity && activity.isCurrent && !activity.isCurrent()) return
-        pages.push(page)
-        loaded += page.messages?.length || 0
-        cursor = page.nextCursor
-        if (!cursor || cursors.has(cursor) || !page.messages?.length) break
-        cursors.add(cursor)
-      } while (loaded < 4096)
-      if (version !== epoch || room.value?.key !== key) return
-      if (!force && document.querySelector('.message-edit-form')) return
-      messages.value = pages.flatMap(page => page.messages)
+      if (anchor) {
+        const result = (await request(`/api/tangents/${encodeURIComponent(anchor.tangent)}/posts/${encodeURIComponent(anchor.post)}`, undefined, 'GET', activity?.signal)).data as unknown as { window: MessagesPage }
+        if (version === epoch && (!activity?.isCurrent || activity.isCurrent())) renderPage(result.window)
+      } else await historyPage(currentCursor, version, key, !currentCursor, activity)
     } finally {
       refreshingHistory = false
       const queued = queuedRefresh
@@ -209,18 +223,26 @@ export function createConversation(router: RouterStore) {
   async function openPost(tangentKey: string, postId: string) {
     rememberDraft()
     const version = ++epoch
-    room.value = null
+    selectedTopic.value = null
     messages.value = []
-    loadingRoom.value = true
+    nextCursor = resumeCursor = null
+    newMessages.value = false
+    error.value = ''
+    anchor = { tangent: tangentKey, post: postId }
+    loadingTopic.value = true
     try {
-      const result = (await request(`/api/tangents/${encodeURIComponent(tangentKey)}/posts/${encodeURIComponent(postId)}`, undefined, 'GET')).data as unknown as { topic: Room; window: MessagesPage }
+      const result = (await request(`/api/tangents/${encodeURIComponent(tangentKey)}/posts/${encodeURIComponent(postId)}`, undefined, 'GET')).data as unknown as { topic: Topic; window: MessagesPage }
       if (version !== epoch) return
-      room.value = result.topic
-      renderPage(result.window, false)
+      selectedTopic.value = result.topic
+      nextCursor = result.window.nextCursor
+      resumeCursor = result.window.resumeCursor
+      currentCursor = undefined
+      restoreDraft()
+      renderPage(result.window)
     } catch (err) {
       if (version === epoch) error.value = (err as Error).message
     } finally {
-      loadingRoom.value = false
+      if (version === epoch) loadingTopic.value = false
     }
   }
 
@@ -228,19 +250,27 @@ export function createConversation(router: RouterStore) {
     if (pendingMutations.size > 0) return
     rememberDraft()
     replyParentId = message.id
-    restoreDraft()
+    rememberDraft()
   }
   function cancelReply() {
     replyParentId = null
     replyTo.value = null
+    rememberDraft()
   }
 
   async function send() {
-    if (!room.value || !draft.value.trim()) return
-    const key = room.value.key
+    if (!selectedTopic.value || !draft.value.trim()) return
+    const key = selectedTopic.value.key
+    const version = epoch
+    error.value = ''
     const mutationKey = (viewerRef()) + ':' + key + ':new'
     const facets = wireFacets(key, draft.value)
-    const intent: MutationIntent = {
+    const pending = pendingMutations.get(mutationKey)
+    if (pending && pending.body.text !== draft.value) {
+      error.value = 'The previous Post is awaiting confirmation. Restore its text before retrying.'
+      return
+    }
+    const intent: MutationIntent = pendingMutations.get(mutationKey) ?? {
       method: 'POST',
       body: {
         operationId: 'post-' + crypto.randomUUID(),
@@ -251,22 +281,23 @@ export function createConversation(router: RouterStore) {
     }
     pendingMutations.set(mutationKey, intent)
     try {
-      const response = await request(roomPath(key) + '/messages', intent.body, intent.method)
+      const response = await request(topicPath(key) + '/posts', intent.body, intent.method)
       if ((response.data as { state?: string }).state !== 'accepted') throw new Error('The post was not accepted.')
       pendingMutations.delete(mutationKey)
-      sessionStorage.removeItem('draft:' + key)
+      sessionStorage.removeItem(draftKey(key))
       clearFacets(key)
+      if (version !== epoch) return
       draft.value = ''
       replyParentId = null
       replyTo.value = null
       await refreshOpenHistory(true)
     } catch (err) {
-      error.value = (err as Error).message
+      if (version === epoch) error.value = (err as Error).message
     }
   }
 
   async function beginEdit(message: Message) {
-    const key = room.value?.key ?? ''
+    const key = selectedTopic.value?.key ?? ''
     const mutationKey = (viewerRef()) + ':' + key + ':' + message.id
     const saved = pendingMutations.get(mutationKey)
     if (saved?.method === 'DELETE') {
@@ -279,21 +310,23 @@ export function createConversation(router: RouterStore) {
   }
 
   async function saveEdit(message: Message, text: string) {
-    const key = room.value?.key ?? ''
+    const key = selectedTopic.value?.key ?? ''
     const mutationKey = (viewerRef()) + ':' + key + ':' + message.id
     if (!text.trim() || encoder.encode(text).length > 4096) throw new Error('Use a post of 1–4096 UTF-8 bytes.')
     const saved = pendingMutations.get(mutationKey)
     const body = { text, ...(saved?.body.operationId ? { operationId: saved.body.operationId } : { operationId: crypto.randomUUID() }) }
     pendingMutations.set(mutationKey, { method: 'PATCH', body })
     try {
-      const response = await request(roomPath(key) + '/messages/' + encodeURIComponent(message.id), body, 'PATCH')
+      const response = await request(topicPath(key) + '/posts/' + encodeURIComponent(message.id), body, 'PATCH')
       if ((response.data as { state?: string }).state !== 'accepted') throw new Error('The edit was not accepted.')
       pendingMutations.delete(mutationKey)
       message.content.text = text
       message._editing = false
       await refreshOpenHistory(true)
+      return true
     } catch (err) {
       error.value = (err as Error).message
+      return false
     }
   }
 
@@ -303,13 +336,13 @@ export function createConversation(router: RouterStore) {
   }
 
   async function removeMessage(message: Message) {
-    const key = room.value?.key ?? ''
+    const key = selectedTopic.value?.key ?? ''
     const mutationKey = (viewerRef()) + ':' + key + ':' + message.id
     if (pendingMutations.get(mutationKey)?.method === 'PATCH') {
       error.value = 'An edit is pending. Retry Edit to finish it.'
       return
     }
-    const removing = can(room.value, 'removePost') && message.authorParticipantId !== viewerRef()
+    const removing = can(selectedTopic.value, 'removePost') && message.authorParticipantId !== viewerRef()
     const saved = pendingMutations.get(mutationKey)
     const intent: MutationIntent = saved ?? {
       method: 'DELETE',
@@ -317,7 +350,7 @@ export function createConversation(router: RouterStore) {
     }
     pendingMutations.set(mutationKey, intent)
     try {
-      const response = await request(roomPath(key) + '/messages/' + encodeURIComponent(message.id), intent.body, intent.method)
+      const response = await request(topicPath(key) + '/posts/' + encodeURIComponent(message.id), intent.body, intent.method)
       if (!['deleted', 'moderated'].includes((response.data as { state?: string }).state ?? '')) {
         throw new Error('The post was not removed.')
       }
@@ -331,9 +364,9 @@ export function createConversation(router: RouterStore) {
 
   /** An identity change drops the whole conversation world; nothing is re-attributed. */
   function reset() {
-    const staleKey = room.value?.key
+    const staleKey = selectedTopic.value?.key
     epoch++
-    room.value = null
+    selectedTopic.value = null
     messages.value = []
     replyTo.value = null
     replyParentId = null
@@ -342,18 +375,20 @@ export function createConversation(router: RouterStore) {
     status.value = ''
     nextCursor = null
     resumeCursor = null
+    currentCursor = undefined
+    anchor = null
+    moreMessages.value = newMessages.value = false
     pendingMutations.clear()
     resolved.value = {}
     if (staleKey) clearFacets(staleKey)
   }
 
-  // The room's settings mutations (rooms.js mutateRoom): the action re-opens the
-  // room afterwards; a 403 sends the viewer home.
+  // Settings changes refresh the selected Topic under current authority.
   async function mutate(suffix: string, body: unknown, method: string) {
-    const key = room.value?.key
-    if (!key) throw new Error('Choose a room before changing its settings.')
+    const key = selectedTopic.value?.key
+    if (!key) throw new Error('Choose a Topic before changing its settings.')
     try {
-      await request(roomPath(key) + suffix, body, method)
+      await request(topicPath(key) + suffix, body, method)
     } catch (error) {
       if ((error as Error & { status?: number }).status === 403) {
         window.location.assign('/')
@@ -362,7 +397,7 @@ export function createConversation(router: RouterStore) {
       throw error
     }
     status.value = 'Saved.'
-    if (room.value?.key === key) await choose(key)
+    if (selectedTopic.value?.key === key) await choose(key)
   }
 
   const saveTopicDescription = (topic: string) => mutate('/topic', { topic }, 'PUT')
@@ -371,11 +406,11 @@ export function createConversation(router: RouterStore) {
   const saveParticipation = (allowPostEditing: boolean, isLocked: boolean) => mutate('/settings', { allowPostEditing, isLocked }, 'PATCH')
 
   return {
-    room, messages, replyTo, replyParentId, loadingRoom: loadingRoom, loadingHistory, moreMessages, error, draft, status, resolved,
-    get canWrite() { return room.value?.canWrite ?? false },
+    selectedTopic, messages, replyTo, replyParentId, loadingTopic, loadingHistory, moreMessages, newMessages, error, draft, status, resolved,
+    get canWrite() { return selectedTopic.value?.canWrite ?? false },
     get nextCursor() { return nextCursor },
     get resumeCursor() { return resumeCursor },
-    choose, openPost, historyPage, refreshOpenHistory,
+    choose, openPost, historyPage, readMore, refreshOpenHistory,
     beginReply, cancelReply, send, beginEdit, saveEdit, cancelEdit, removeMessage,
     saveTopicDescription, updateMember, saveReadAudience, saveParticipation,
     reset,

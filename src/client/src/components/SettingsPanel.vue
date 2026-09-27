@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The settings page, ported from index.html's settings section with access.js,
-// roles.js, people.js and rooms.js's server form. Same tabs, ids, classes, forms.
+// roles.js, people.js and conversation's server form. Same tabs, ids, classes, forms.
 import { computed } from 'vue'
 import type { Settings, SettingsTabName } from '../composables/settings'
 import RolesPanel from './RolesPanel.vue'
@@ -8,6 +8,8 @@ import PeoplePanel from './PeoplePanel.vue'
 import AccessPanel from './AccessPanel.vue'
 import AtmospherePanel from './AtmospherePanel.vue'
 import ArtworkPicker from './ArtworkPicker.vue'
+import DatabasePanel from './DatabasePanel.vue'
+import ContentSourcesPanel from './ContentSourcesPanel.vue'
 
 import type { Atmosphere } from '../composables/atmosphere'
 
@@ -132,6 +134,8 @@ function onTabKeydown(event: KeyboardEvent, name: SettingsTabName) {
             <div class="settings-save"><button class="btn btn-primary">Save server settings</button><p id="settings-status" role="status">{{ serverStatus }}</p></div>
           </form>
         </details>
+        <DatabasePanel v-if="context?.kind === 'server' && serverCanManage" />
+        <ContentSourcesPanel v-if="context?.kind === 'server' && serverCanManage" />
       </section>
       <section id="settings-context-panel" class="settings-context-panel" role="tabpanel" aria-labelledby="settings-context-tab" :hidden="activeTab !== 'context'">
         <div class="settings-context-card">

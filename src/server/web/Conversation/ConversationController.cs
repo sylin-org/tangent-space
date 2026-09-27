@@ -6,60 +6,62 @@ using Tangent.Identity;
 
 namespace Tangent.Conversation;
 
-[ApiController, Authorize, Route("api/rooms/{roomKey}")]
+[ApiController, Authorize, Route("api/topics/{topicKey}")]
 public sealed class ConversationController(TangentServer hub) : ControllerBase
 {
     private ConversationService conversation => hub.Posts;
 
-    [HttpGet("messages")]
-    public Task<IActionResult> History(string roomKey, [FromQuery] string? cursor, [FromQuery] string? from, CancellationToken ct)
+    [HttpGet("posts")]
+    public Task<IActionResult> History(string topicKey, [FromQuery] string? cursor, [FromQuery] string? from,
+        [FromQuery(Name = "after")] string? afterPostId, CancellationToken ct)
         => Execute(async () =>
         {
             if (from is not null && from != "start") throw new ArgumentException("The supported history origin is 'start'.");
-            return Ok(await conversation.History(ParticipationAccess.Require(User, ParticipationGrants.Read), roomKey, cursor, ct, from == "start"));
+            return Ok(await conversation.History(ParticipationAccess.Require(User, ParticipationGrants.Read), topicKey,
+                cursor, ct, from == "start", afterPostId));
         });
 
-    [HttpPost("messages"), ConversationMutation, RequestSizeLimit(16384)]
-    public Task<IActionResult> CreatePost(string roomKey, PostCreateRequest input, CancellationToken ct)
+    [HttpPost("posts"), ConversationMutation, RequestSizeLimit(16384)]
+    public Task<IActionResult> CreatePost(string topicKey, PostCreateRequest input, CancellationToken ct)
         => Execute(async () =>
         {
             var did = ParticipationAccess.Require(User, ParticipationGrants.Post);
-            var post = await conversation.CreatePost(did, roomKey, input, ct);
+            var post = await conversation.CreatePost(did, topicKey, input, ct);
             return Ok(new { post.OperationId, State = "accepted" });
         });
 
-    [HttpPatch("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
-    public Task<IActionResult> Edit(string roomKey, string messageId, PostChangeRequest input, CancellationToken ct)
+    [HttpPatch("posts/{postId}"), ConversationMutation, RequestSizeLimit(16384)]
+    public Task<IActionResult> Edit(string topicKey, string postId, PostChangeRequest input, CancellationToken ct)
         => Execute(async () =>
         {
-            var did = await RequireChangeActor(roomKey, messageId, ct);
-            var result = await conversation.ChangePost(did, roomKey, messageId, input.Text, false, ct, facets: input.Facets);
+            var did = await RequireChangeActor(topicKey, postId, ct);
+            var result = await conversation.ChangePost(did, topicKey, postId, input.Text, false, ct, facets: input.Facets);
             return Ok(result);
         });
 
-    [HttpDelete("messages/{messageId}"), ConversationMutation, RequestSizeLimit(16384)]
-    public Task<IActionResult> Delete(string roomKey, string messageId, PostDeleteRequest input, CancellationToken ct)
+    [HttpDelete("posts/{postId}"), ConversationMutation, RequestSizeLimit(16384)]
+    public Task<IActionResult> Delete(string topicKey, string postId, PostDeleteRequest input, CancellationToken ct)
         => Execute(async () =>
         {
-            var did = await RequireChangeActor(roomKey, messageId, ct);
-            var result = await conversation.ChangePost(did, roomKey, messageId, null, true, ct);
+            var did = await RequireChangeActor(topicKey, postId, ct);
+            var result = await conversation.ChangePost(did, topicKey, postId, null, true, ct);
             return Ok(result);
         });
 
     [HttpGet("updates")]
-    public Task<IActionResult> Updates(string roomKey, [FromQuery] string cursor, CancellationToken ct)
-        => Execute(async () => Ok(await conversation.WaitForUpdates(ParticipationAccess.Require(User, ParticipationGrants.Read), roomKey, cursor, ct)));
+    public Task<IActionResult> Updates(string topicKey, [FromQuery] string cursor, CancellationToken ct)
+        => Execute(async () => Ok(await conversation.WaitForUpdates(ParticipationAccess.Require(User, ParticipationGrants.Read), topicKey, cursor, ct)));
 
     [HttpPost("read-position"), ConversationMutation]
-    public Task<IActionResult> Acknowledge(string roomKey, ReadAcknowledgement input, CancellationToken ct)
-        => Execute(async () => Ok(new { sequence = await conversation.Acknowledge(ParticipationAccess.Require(User, ParticipationGrants.Read), roomKey, input.Cursor, ct) }));
+    public Task<IActionResult> Acknowledge(string topicKey, ReadAcknowledgement input, CancellationToken ct)
+        => Execute(async () => Ok(new { sequence = await conversation.Acknowledge(ParticipationAccess.Require(User, ParticipationGrants.Read), topicKey, input.Cursor, ct) }));
 
-    private async Task<string> RequireChangeActor(string roomKey, string messageId, CancellationToken ct)
+    private async Task<string> RequireChangeActor(string topicKey, string postId, CancellationToken ct)
     {
         var did = ParticipationAccess.Require(User, ParticipationGrants.Read);
         using var fresh = EntityContext.NoCache();
-        var post = await Post.Get(messageId, ct);
-        if (post is null || post.TopicKey != roomKey) throw new ArgumentException("Choose a post in this Topic.");
+        var post = await Post.Get(postId, ct);
+        if (post is null || post.TopicKey != topicKey) throw new ArgumentException("Choose a post in this Topic.");
         ParticipationAccess.Require(User, post.AuthorParticipantId == did ? ParticipationGrants.Post : ParticipationGrants.Manage);
         return did;
     }
@@ -73,7 +75,6 @@ public sealed class ConversationController(TangentServer hub) : ControllerBase
         catch (ArgumentException error) { return BadRequest(new { reason = error.Message }); }
     }
 }
-
 /// <summary>An edit carries the full composer package (D2a): text plus optional client-verified
 /// facets in the same DTO shape the create path uses; absent facets degrade to server re-detection.</summary>
 public sealed record PostChangeRequest(string Text, string OperationId, IReadOnlyList<PostFacet>? Facets = null);

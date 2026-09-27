@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { httpRequest } from '../api'
+
 // The participant profile, ported from profile.js (ADR 0008): identity card,
 // roles, recent posts, and the viewer's permitted actions — all served by the
 // experience API. Facet-aware post text lands with the facets unit.
@@ -128,7 +130,7 @@ async function show() {
   document.title = 'Participant · Tangent'
   activeTab.value = new URL(window.location.href).searchParams.get('tab') || 'posts'
   try {
-    const response = await fetch('/api/participants/' + encodeURIComponent(current.identifier) + '/profile', {
+    const response = await httpRequest('/api/participants/' + encodeURIComponent(current.identifier) + '/profile', {
       headers: { accept: 'application/json' },
       credentials: 'same-origin',
     })
@@ -175,7 +177,7 @@ async function loadManagedRoles() {
   state.roleStatus = ''
   state.roleStatusError = false
   try {
-    const response = await fetch('/api/roles/ui/participant/' + encodeURIComponent(participantRef) + '/roles', {
+    const response = await httpRequest('/api/roles/ui/participant/' + encodeURIComponent(participantRef) + '/roles', {
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
     })
@@ -196,7 +198,7 @@ async function toggleRole(role: ManagedRole) {
   state.roleStatusError = false
   try {
     const token = await rolesSession()
-    const response = await fetch(
+    const response = await httpRequest(
       '/api/roles/ui/participant/' + encodeURIComponent(participantRef) + '/roles/' + encodeURIComponent(role.id),
       {
         method: willAdd ? 'PUT' : 'DELETE',
@@ -237,7 +239,7 @@ function roleToggleTitle(role: ManagedRole): string {
 async function setClassification(value: 'Agent' | 'Human' | 'Undeclared') {
   classificationMenu.value!.open = false
   try {
-    const response = await fetch('/api/participants/me', {
+    const response = await httpRequest('/api/participants/me', {
       method: 'PATCH',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },

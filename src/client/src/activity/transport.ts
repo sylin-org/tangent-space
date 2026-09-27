@@ -1,3 +1,4 @@
+import { httpRequest } from '../api'
 // Participant activity runtime, ported from activity-transport.js: one connection
 // that cycles snapshot → SSE → poll with watchdogs, stream rotation, retry backoff,
 // and identity handling. Delivery is explicit: onSnapshot must await all
@@ -153,7 +154,7 @@ interface StateInternal {
 }
 
 export function createActivityTransport(options: TransportOptions) {
-  const fetcher = options.fetch ?? ((path: RequestInfo | URL, init?: RequestInit) => fetch(path, init))
+  const fetcher = options.fetch ?? ((path: RequestInfo | URL, init?: RequestInit) => httpRequest(path, init))
   if (typeof options.onSnapshot !== 'function') throw new TypeError('onSnapshot is required.')
   const timers = options.timers ?? null
   const rawSetTimer = timers?.setTimeout ?? setTimeout

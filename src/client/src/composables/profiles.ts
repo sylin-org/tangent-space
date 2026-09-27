@@ -1,3 +1,4 @@
+import { httpRequest } from '../api'
 import { reactive, watch } from 'vue'
 import type { Activity } from './activity'
 
@@ -46,7 +47,7 @@ export function createProfiles(activity: Activity) {
   function loadOwn(did: string): void {
     if (!did || ownDid === did) return
     ownDid = did
-    fetch('/api/participants/me/profile', { credentials: 'same-origin', cache: 'no-store' })
+    httpRequest('/api/participants/me/profile', { credentials: 'same-origin', cache: 'no-store' })
       .then(response => (response.ok ? response.json() : null))
       .then(profile => {
         if (ownDid === did && profile) receive(profile)

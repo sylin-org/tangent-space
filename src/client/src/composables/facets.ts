@@ -1,3 +1,4 @@
+import { httpRequest } from '../api'
 // Facet composer and renderer, ported from facets.js (ADR 0008): @-autocomplete
 // bookkeeping with client-minted byte-range facets, and the read-time renderer
 // with fresh labels.
@@ -166,7 +167,7 @@ export function facetedSegments(text: string, facets: unknown, resolved?: Record
   return segments
 }
 
-// ----- mention lookup (rooms.js mentionables) -----
+// ----- mention lookup -----
 
 const mentionCache = new Map<string, { at: number; list: MentionTarget[] }>()
 
@@ -174,7 +175,7 @@ export async function mentionables(topicKey: string, prefix?: string): Promise<M
   const cacheKey = topicKey + ':' + (prefix || '')
   const fresh = mentionCache.get(cacheKey)
   if (fresh && Date.now() - fresh.at < 30000) return fresh.list
-  const response = await fetch('/api/v1/experience/topics/' + encodeURIComponent(topicKey) + '/mentionables?prefix=' + encodeURIComponent(prefix || ''), {
+  const response = await httpRequest('/api/v1/experience/topics/' + encodeURIComponent(topicKey) + '/mentionables?prefix=' + encodeURIComponent(prefix || ''), {
     credentials: 'same-origin',
     cache: 'no-store',
     headers: { Accept: 'application/json' },

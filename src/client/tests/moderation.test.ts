@@ -47,8 +47,8 @@ async function mountStewardship(steward: boolean) {
   router.apply('/t/small-hours/topics/first')
   site.state = 'signedIn'
   const conversation = createConversation(router)
-  // Pretend the room opened, with the fields the wire carries.
-  conversation.room.value = {
+  // Pretend the Topic opened, with the fields the wire carries.
+  conversation.selectedTopic.value = {
     key: 'first', tangentKey: 'small-hours', title: 'First', canRead: true, canWrite: false, isLocked: false,
     policyRevision: 3, sitePolicyRevision: 1,
   } as never

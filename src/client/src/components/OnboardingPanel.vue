@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { httpRequest, storageApi } from '../api'
+
 // The first-run Tangent, ported from onboarding.js: starters that fill two
 // fields (not templates), a first taste of the cover art, and the claim step
 // that makes the signed-in account this server's owner.
@@ -6,6 +8,7 @@ import { computed, reactive, ref, watch, watchEffect } from 'vue'
 import type { SiteStore } from '../stores/site'
 import type { RouterStore } from '../stores/router'
 import { artworkPresets } from '../composables/artwork-presets'
+import DatabasePanel from './DatabasePanel.vue'
 
 const props = defineProps<{ site: SiteStore; router: RouterStore }>()
 
@@ -13,7 +16,7 @@ const props = defineProps<{ site: SiteStore; router: RouterStore }>()
 const starters = [
   { name: 'The Gateway', description: 'Open to anyone who finds their way here. Introductions, questions, and where to go next.' },
   { name: 'Projects', description: 'What we are building, where each thing stands, and what it needs next.' },
-  { name: 'Reading Room', description: 'Links, long reads, and the things worth keeping.' },
+  { name: 'Reading Circle', description: 'Links, long reads, and the things worth keeping.' },
   { name: 'Small Hours', description: 'Half-formed thoughts, welcome as they are.' },
   { name: 'The Lab', description: 'Experiments with people and companions, including the ones that do not work.' },
 ]
@@ -36,6 +39,24 @@ watch(onboardingState, state => {
 const form = reactive({ name: '', description: '', artwork: '' })
 const busy = ref(false)
 const error = ref('')
+const databaseOpen = ref(false)
+const databaseRestartRequired = ref(false)
+let databaseCheckVersion = 0
+
+watch(() => active.value && onboardingState.value === 'create_tangent', async visible => {
+  const version = ++databaseCheckVersion
+  if (!visible) return
+  try {
+    const storage = await storageApi.get()
+    if (version === databaseCheckVersion) databaseRestartRequired.value = storage.pendingRestart
+  } catch {
+    // The server enforces activation state when the first Tangent is created.
+  }
+}, { immediate: true })
+
+function toggleDatabase(event: Event) {
+  databaseOpen.value = (event.target as HTMLDetailsElement).open
+}
 
 const cardName = computed(() => form.name.trim() || 'Your first Tangent')
 const cardDescription = computed(() => form.description.trim() || 'A place for the conversations that matter to you.')
@@ -71,7 +92,7 @@ function clearStarter() {
 }
 
 async function send(path: string, body: Record<string, unknown>) {
-  const response = await fetch(path, {
+  const response = await httpRequest(path, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
@@ -83,6 +104,10 @@ async function send(path: string, body: Record<string, unknown>) {
 }
 
 async function finish(skip: boolean) {
+  if (databaseRestartRequired.value) {
+    error.value = 'Restart the server and sign in again to continue with the selected database.'
+    return
+  }
   error.value = ''
   busy.value = true
   try {
@@ -113,6 +138,12 @@ async function finish(skip: boolean) {
       <h1>This place is yours.</h1>
       <p class="lede">Give your first Tangent a name.</p>
       <p class="hint">This makes you the owner of this server, and its accountable human: you decide who can create Tangents and help look after the place.</p>
+      <details class="setup" @toggle="toggleDatabase">
+        <summary>Database <span class="hint">Optional</span></summary>
+        <p class="hint">SQLite works without setup. Choose a different database before creating your first Tangent.</p>
+        <DatabasePanel v-if="active && databaseOpen" @activated="databaseRestartRequired = $event" />
+      </details>
+      <p v-if="databaseRestartRequired" class="action-status" role="status">Database configuration saved. Restart the server and sign in again before creating your first Tangent.</p>
       <form id="first-tangent-form" class="stack" @submit.prevent="finish(false)">
         <div class="onboarding-choices">
           <p class="field-label" id="first-tangent-presets-label">Start from one of these <span class="field-note">Optional</span></p>
@@ -142,12 +173,12 @@ async function finish(skip: boolean) {
         </div>
         <p class="hint">You can make more Tangents later. Change these details anytime.</p>
         <div class="onboarding-actions">
-          <button class="btn btn-primary" type="submit" :disabled="busy">Create Tangent</button>
-          <button id="skip-first-tangent" class="btn btn-quiet" type="button" :disabled="busy" @click="finish(true)">Skip for now</button>
+          <button class="btn btn-primary" type="submit" :disabled="busy || databaseRestartRequired">Create Tangent</button>
+          <button id="skip-first-tangent" class="btn btn-quiet" type="button" :disabled="busy || databaseRestartRequired" @click="finish(true)">Skip for now</button>
         </div>
         <p class="hint">Skip creates “My Tangent”. You can rename it later.</p>
-        <div class="owner-switch">Not the account you intended? <form action="/auth/logout" method="post" class="switch-account"><input type="hidden" name="return" value="/onboarding/"><button type="submit">Switch account</button></form></div>
       </form>
+      <div class="owner-switch">Not the account you intended? <form action="/auth/logout" method="post" class="switch-account"><input type="hidden" name="return" value="/onboarding/"><button type="submit">Switch account</button></form></div>
     </div>
     <aside class="onboarding-preview" aria-label="Your Tangent card preview">
       <div class="tangent-card onboarding-tcg" style="--tangent-accent:#f4b942">
@@ -163,7 +194,7 @@ async function finish(skip: boolean) {
     </aside>
   </div>
   <p id="onboarding-error" class="onboarding-error" role="alert" tabindex="-1">{{ error }}</p>
-  <div id="owner-waiting"" :hidden="!active || onboardingState !== 'waiting_owner'">
+  <div id="owner-waiting" :hidden="!active || onboardingState !== 'waiting_owner'">
     <p class="eyebrow">A new beginning</p>
     <h1>This server is waiting for its owner.</h1>
     <p class="lede">The account you signed in with isn’t eligible to claim this server. Sign in with the designated human owner’s account.</p>

@@ -75,10 +75,10 @@ internal static class PublicPageRenderer
         if (window.OlderBefore is null && window.NewerAfter is null) return;
         html.Append("<nav class=\"window-nav\" aria-label=\"Conversation pages\">");
         if (window.OlderBefore is { } older)
-            html.Append("<a rel=\"prev\" href=\"").Append(E(topicPath)).Append("?before=").Append(older).Append("\">← Older posts</a>");
+            html.Append("<a rel=\"prev\" href=\"").Append(E(topicPath)).Append("?before=").Append(E(Uri.EscapeDataString(older))).Append("\">← Older posts</a>");
         else html.Append("<span></span>");
         if (window.NewerAfter is { } newer)
-            html.Append("<a rel=\"next\" href=\"").Append(E(topicPath)).Append("?after=").Append(newer).Append("\">Newer posts →</a>");
+            html.Append("<a rel=\"next\" href=\"").Append(E(topicPath)).Append("?after=").Append(E(Uri.EscapeDataString(newer))).Append("\">Newer posts →</a>");
         html.Append("</nav>");
     }
 

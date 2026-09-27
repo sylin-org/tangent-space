@@ -35,6 +35,58 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Data.Connector.Cockroach",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.CouchDb",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.Couchbase",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.DuckDb",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.DuckDb.Native",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.Firebird",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.InMemory",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.Json",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.Mongo",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.MySql",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.Postgres",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.Redis",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Data.Connector.SqlServer",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Data.Connector.Sqlite",
       "version": "1.0"
     },
@@ -51,6 +103,10 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Data.Relational.Npgsql",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Identity",
       "version": "1.0"
     },
@@ -60,6 +116,14 @@
     },
     {
       "id": "Koan.Jobs",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Redis",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Redis.Abstractions",
       "version": "1.0"
     },
     {
@@ -81,6 +145,10 @@
     {
       "id": "Koan.Web.Auth.Connector.Atproto",
       "version": "1.0"
+    },
+    {
+      "id": "Koan.ZenGarden.Contracts",
+      "version": "1.0"
     }
   ],
   "directReferences": [
@@ -91,6 +159,58 @@
     {
       "kind": "project",
       "id": "Koan.Cache.Adapter.Sqlite"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Cockroach"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.CouchDb"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Couchbase"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.DuckDb"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.DuckDb.Native"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Firebird"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.InMemory"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Json"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Mongo"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.MySql"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Postgres"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.Redis"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Data.Connector.SqlServer"
     },
     {
       "kind": "project",

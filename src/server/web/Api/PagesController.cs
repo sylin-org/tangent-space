@@ -21,8 +21,8 @@ public sealed class PagesController(IWebHostEnvironment environment, PublicConve
     }
 
     [HttpGet("/t/{tangent}/topics/{topic}")]
-    public async Task<IActionResult> PublicTopic(string tangent, string topic, [FromQuery] long? before = null,
-        [FromQuery] long? after = null, CancellationToken ct = default)
+    public async Task<IActionResult> PublicTopic(string tangent, string topic, [FromQuery] string? before = null,
+        [FromQuery] string? after = null, CancellationToken ct = default)
     {
         Response.Headers.CacheControl = "no-store";
         if (HasRejectedBearer()) return Unauthorized();
@@ -32,8 +32,8 @@ public sealed class PagesController(IWebHostEnvironment environment, PublicConve
             var window = await publicReader.ReadTopic(tangent, topic, before, after,
                 PublicConversationReader.MaximumPosts, ct);
             if (window is null) return HiddenNotFound();
-            var canonical = window.Topic.Path + (before is { } older ? $"?before={older}"
-                : after is { } newer ? $"?after={newer}" : "");
+            var canonical = window.Topic.Path + (before is { } older ? $"?before={Uri.EscapeDataString(older)}"
+                : after is { } newer ? $"?after={Uri.EscapeDataString(newer)}" : "");
             return PublicDocument(PublicPageRenderer.Topic(window, canonical));
         }
         catch (ArgumentException) { return BadRequest(); }

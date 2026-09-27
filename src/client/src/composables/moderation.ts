@@ -1,5 +1,6 @@
+import { httpRequest } from '../api'
 import { reactive, ref, watch } from 'vue'
-import type { Conversation, Room } from './conversation'
+import type { Conversation, Topic } from './conversation'
 
 // The stewardship panel and the report flow, ported from moderation.js: a
 // Topic-scoped case queue for those the Topic's capabilities name stewards,
@@ -41,7 +42,7 @@ interface DecisionBody {
 }
 
 async function request<T = unknown>(path: string, body?: unknown, method = 'GET', whole = false): Promise<T> {
-  const response = await fetch(path, {
+  const response = await httpRequest(path, {
     method,
     credentials: 'same-origin',
     cache: 'no-store',
@@ -63,7 +64,7 @@ async function request<T = unknown>(path: string, body?: unknown, method = 'GET'
 }
 
 export function createModeration(conversation: Conversation) {
-  const { room } = conversation
+  const { selectedTopic } = conversation
 
   const stewardshipAvailable = ref(false)
   const panelOpen = ref(false)
@@ -99,7 +100,7 @@ export function createModeration(conversation: Conversation) {
   let reportTarget: { messageId: string; tangentKey: string; topicKey: string } | null = null
   let reportRequestId: string | undefined
 
-  let scope: (Room & { serverRef: string }) | undefined
+  let scope: (Topic & { serverRef: string }) | undefined
   let scopeSignature = ''
   let generation = 0
 
@@ -151,8 +152,8 @@ export function createModeration(conversation: Conversation) {
     casesStatusError.value = false
   }
 
-  /** Re-evaluate the stewardship scope when the open room changes (moderation.js topic()). */
-  async function evaluateScope(value: Room | null, participantRef: string) {
+  /** Re-evaluate the stewardship scope when the open selectedTopic changes (moderation.js topic()). */
+  async function evaluateScope(value: Topic | null, participantRef: string) {
     const revisions = value ? (value as unknown as { policyRevision?: unknown; sitePolicyRevision?: unknown }) : null
     const signature = value ? `${participantRef}:${value.tangentKey}:${value.key}:${revisions?.policyRevision ?? ''}:${revisions?.sitePolicyRevision ?? ''}` : ''
     if (signature === scopeSignature) return
@@ -197,8 +198,8 @@ export function createModeration(conversation: Conversation) {
 
   /** The app wires the viewer's participant ref (moderation.js receives it per event). */
   function wireViewer(getRef: () => string) {
-    // Immediate: a room may already be open when stewardship wires up.
-    watch([room, getRef], ([value, participantRef]) => {
+    // Immediate: a selectedTopic may already be open when stewardship wires up.
+    watch([selectedTopic, getRef], ([value, participantRef]) => {
       void evaluateScope(value, participantRef)
     }, { immediate: true })
   }
@@ -368,7 +369,7 @@ export function createModeration(conversation: Conversation) {
   // --- The report flow ---
 
   function openReport(messageId: string, authorName?: string) {
-    const current = room.value
+    const current = selectedTopic.value
     if (!current?.key || !current?.tangentKey) return
     reportTarget = { messageId, tangentKey: current.tangentKey, topicKey: current.key }
     reportRequestId = crypto.randomUUID()
@@ -389,8 +390,8 @@ export function createModeration(conversation: Conversation) {
 
   async function submitReport() {
     if (!reportTarget || !reportRequestId) return
-    const roomSnapshot = room.value
-    if (!roomSnapshot) return
+    const topicSnapshot = selectedTopic.value
+    if (!topicSnapshot) return
     const statement = reportStatement.value.trim()
     if (!statement) {
       reportStatus.value = 'Describe the concern in your own words.'

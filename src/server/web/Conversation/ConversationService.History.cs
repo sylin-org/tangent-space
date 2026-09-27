@@ -21,15 +21,32 @@ public sealed partial class ConversationService
         Sort = [new SortSpec(new MemberPath(typeof(Post), [typeof(Post).GetProperty(nameof(Post.Sequence))!], typeof(long), false, -1), false)]
     };
 
-    public async Task<PostPage> History(string participantId, string topic, string? cursor, CancellationToken ct, bool fromStart = false)
+    public async Task<PostPage> History(string participantId, string topic, string? cursor, CancellationToken ct,
+        bool fromStart = false, string? afterPostId = null)
     {
         var policy = await governance.ReadPolicyAsync(participantId, topic, ct);
         {
             if (!policy.CanRead) throw new UnauthorizedAccessException("This topic's current rules do not allow reading.");
             var state = await TopicConversation.Get(topic, ct) ?? new TopicConversation { Id = topic };
-            var position = await ReadPosition.Get(ReadPosition.Key(participantId, topic), ct);
-            if (fromStart && cursor is not null) throw new ArgumentException("Choose a continuation or read from the beginning, not both.");
-            var selected = cursor is null ? new ConversationCursor(participantId, topic, fromStart ? 0 : position?.Sequence ?? 0, null, clock.GetUtcNow().AddDays(7)) : Decode(cursor, participantId, topic);
+            if (new[] { fromStart, cursor is not null, afterPostId is not null }.Count(value => value) > 1)
+                throw new ArgumentException("Choose a continuation, start, or after Post, not more than one.");
+            long? afterSequence = null;
+            if (afterPostId is not null)
+            {
+                if (afterPostId.Length > 128) throw new ArgumentException("Choose a Post in this Topic.");
+                using var fresh = EntityContext.NoCache();
+                var anchor = await Post.Get(afterPostId, ct);
+                if (anchor is null || anchor.TopicKey != topic || anchor.OfPostId is not null
+                    || anchor.Sequence <= 0 || anchor.Sequence > state.LastSequence)
+                    throw new ArgumentException("Choose a Post in this Topic.");
+                afterSequence = anchor.Sequence;
+            }
+            var position = cursor is null && !fromStart && afterSequence is null
+                ? await ReadPosition.Get(ReadPosition.Key(participantId, topic), ct) : null;
+            var selected = cursor is null
+                ? new ConversationCursor(participantId, topic, afterSequence ?? (fromStart ? 0 : position?.Sequence ?? 0),
+                    null, clock.GetUtcNow().AddDays(7))
+                : Decode(cursor, participantId, topic);
             var boundary = selected.Boundary ?? state.LastSequence;
             if (selected.After > boundary || boundary > state.LastSequence) throw new ArgumentException("The continuation no longer matches this conversation; restart the read.");
             var candidates = await Post.Query(m => m.TopicKey == topic && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, ct);

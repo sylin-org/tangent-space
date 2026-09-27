@@ -8,6 +8,7 @@ using Tangent.Activity;
 using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
+using Tangent.Access;
 
 namespace Tangent.Api;
 
@@ -18,7 +19,7 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
     private const int ResultBudget = 64 * 1024;
     private const int EnvelopeReserve = 1024;
 
-    public async Task<PublicPostWindow?> ReadTopic(string tangentId, string topicId, long? before, long? after,
+    public async Task<PublicPostWindow?> ReadTopic(string tangentId, string topicId, string? before, string? after,
         int limit, CancellationToken ct)
     {
         ValidateWindow(before, after, around: null, limit);
@@ -48,7 +49,7 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         finally { policyGate.Exit(); }
     }
 
-    internal async Task<PublicPostWindow?> ReadPostsUnderGate(PublicTopicDescription topic, long? before, long? after,
+    internal async Task<PublicPostWindow?> ReadPostsUnderGate(PublicTopicDescription topic, string? before, string? after,
         string? around, int limit, CancellationToken ct, Post? knownAnchor = null)
     {
         ValidateWindow(before, after, around, limit);
@@ -72,11 +73,13 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         }
         else
         {
+            var beforeSequence = await EdgeSequence(topic.Key, before, ct);
+            var afterSequence = await EdgeSequence(topic.Key, after, ct);
             var descending = before is not null || after is null;
             var query = MessageQuery(limit + 1, descending);
-            candidates = before is { } older
+            candidates = beforeSequence is { } older
                 ? await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence < older, query, ct)
-                : after is { } newer
+                : afterSequence is { } newer
                     ? await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence > newer, query, ct)
                     : await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null, query, ct);
             candidates = candidates.Take(limit).ToArray();
@@ -105,36 +108,47 @@ public sealed class PublicConversationReader(ParticipantDirectory directory, Pol
         }
         selected.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));
 
-        long? olderBefore = null;
-        long? newerAfter = null;
+        string? olderBefore = null;
+        string? newerAfter = null;
         if (selected.Count > 0)
         {
             var first = selected[0].Sequence;
             var last = selected[^1].Sequence;
             if ((await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence < first,
                     MessageQuery(1, descending: true), ct)).Count > 0)
-                olderBefore = first;
+                olderBefore = selected[0].Post.Id;
             if ((await Post.Query(post => post.TopicKey == topic.Key && post.OfPostId == null && post.Sequence > last,
                     MessageQuery(1, descending: false), ct)).Count > 0)
-                newerAfter = last;
+                newerAfter = selected[^1].Post.Id;
         }
         return new PublicPostWindow(topic, selected.Select(item => item.Post).ToArray(), olderBefore, newerAfter);
     }
 
-    private static void ValidateWindow(long? before, long? after, string? around, int limit)
+    private static void ValidateWindow(string? before, string? after, string? around, int limit)
     {
         if (new[] { before is not null, after is not null, around is not null }.Count(value => value) > 1)
             throw new ArgumentException("Choose before, after, or around, not more than one.");
-        if (before is <= 0 || after is < 0 || limit is < 1 or > MaximumPosts)
-            throw new ArgumentException("Use before > 0, after >= 0, and a limit from 1 to 25.");
+        if (before == "" || after == "" || limit is < 1 or > MaximumPosts)
+            throw new ArgumentException("Use a Post id for before or after, and a limit from 1 to 25.");
+    }
+
+    private static async Task<long?> EdgeSequence(string topicKey, string? postId, CancellationToken ct)
+    {
+        if (postId is null) return null;
+        if (postId.Length > 128) throw new ArgumentException("Choose a Post in this Topic.");
+        var post = await Post.Get(postId, ct);
+        if (post is null || post.TopicKey != topicKey || post.OfPostId is not null || post.Sequence <= 0)
+            throw new ArgumentException("Choose a Post in this Topic.");
+        return post.Sequence;
     }
 
     private static async Task<PublicTopicDescription?> ResolveTopicUnderGate(string tangentId, string topicId, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
         var topic = await Topic.Get(topicId, ct);
-        if (topic is null || topic.TangentKey != tangentId || !PublicTopicAccess.IsPublic(topic)) return null;
-        return await Community.Tangent.Get(tangentId, ct) is null ? null : PublicTopicDescription.From(topic);
+        if (topic is null || topic.TangentKey != tangentId) return null;
+        var tangent = await Community.Tangent.Get(tangentId, ct);
+        return PublicTopicAccess.IsPublic(topic, tangent) ? PublicTopicDescription.From(topic) : null;
     }
 
     private static QueryDefinition MessageQuery(int size, bool descending)

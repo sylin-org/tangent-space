@@ -71,11 +71,18 @@ public sealed class TangentModule : KoanModule
         services.AddMemoryCache();
         services.AddSingleton<ParticipantProfiles>();
         services.AddHostedService<ProfileCapture>();
-        services.AddSingleton<MemoryDataPersistence>();
-        services.AddHostedService(sp => sp.GetRequiredService<MemoryDataPersistence>());
         services.AddSingleton<ServerGovernance>();
+        services.AddSingleton<StorageSetup>();
         services.AddSingleton<TopicGovernance>();
         services.AddSingleton<PublicConversationReader>();
+        services.AddSingleton<LocalContentSource>();
+        services.AddHttpClient("bluesky-content", client =>
+        {
+            client.BaseAddress = new Uri("https://public.api.bsky.app");
+            client.Timeout = TimeSpan.FromSeconds(15);
+        });
+        services.AddSingleton<BlueskyContentSource>();
+        services.AddSingleton<BlueskyPublisher>();
         services.AddSingleton<TangentGovernance>();
         services.AddSingleton<ParticipantGovernance>();
         services.AddParticipation();

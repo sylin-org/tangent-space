@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { httpRequest } from '../api'
+
 // The edit-history viewer, ported from history.js: the closed disclosure under an
 // edited post. Reads the post's recorded pre-edit snapshots and renders each era
 // verbatim — the server's text, facets and timestamps; nothing is reconstructed.
@@ -71,7 +73,7 @@ async function load(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
-    const response = await fetch('/api/history/messages?set=changelog&size=' + FETCH_SIZE
+    const response = await httpRequest('/api/history/messages?set=changelog&size=' + FETCH_SIZE
       + '&filter=' + encodeURIComponent(JSON.stringify({ ofPostId: props.message.id })), {
       credentials: 'same-origin',
       cache: 'no-store',

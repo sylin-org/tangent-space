@@ -1,3 +1,4 @@
+import { httpRequest } from '../api'
 import { computed, reactive, ref, watchEffect } from 'vue'
 import { asciiScenes, sceneRenderer, type SceneRenderer } from '../atmosphere/ascii-scenes'
 import type { ServerView } from '../stores/site'
@@ -252,7 +253,7 @@ export function createAtmosphere() {
     const s = settings.value
     saving.value = true
     try {
-      const response = await fetch('/api/server', {
+      const response = await httpRequest('/api/server', {
         method: 'PATCH',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },

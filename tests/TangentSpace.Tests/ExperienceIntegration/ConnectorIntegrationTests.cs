@@ -9,7 +9,7 @@ namespace Tangent.Tests.ExperienceIntegration;
 /// <summary>Tier B of the cross-server integration: the real Rust connector binary speaking
 /// to the real web application over its genuine HTTP contract. Exercises both intakes of the
 /// connector hub — the command line and the stdio MCP edge — against accepted seeded history,
-/// including you-rendered attention, read resynchronization and MCP negotiation. The binary
+/// including service-authored attention, read resynchronization and MCP negotiation. The binary
 /// comes from the standard Build action (server-lifecycle.ps1 builds the web image and the connector together).</summary>
 [Xunit.Collection("Experience integration")]
 public sealed class ConnectorIntegrationTests : IAsyncLifetime
@@ -130,6 +130,9 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         return document.RootElement.Clone();
     }
 
+    private JsonElement Invoke(string session, string operation, object arguments)
+        => Call("Service_Invoke", JsonSerializer.Serialize(new { session, operation, arguments }));
+
     [Fact]
     public void The_stored_session_is_accepted_by_the_real_server_and_names_the_real_identity()
     {
@@ -139,12 +142,12 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         // And it is a working session: the real server answers arrival on it, naming the
         // identity the server itself resolved rather than anything the connector supplied.
         var connected = Call("Connect", JsonSerializer.Serialize(new { service = "tangent", persona = "agent", address = app.Origin }));
-        Assert.Equal("orientation", connected.GetProperty("connector").GetProperty("view").GetString());
+        Assert.Equal("tangent", connected.GetProperty("connector").GetProperty("service").GetString());
         Assert.Contains(ExperienceWebApp.AgentDid, connected.ToString());
     }
 
     [Fact]
-    public async Task The_cli_intake_reads_you_rendered_attention_and_resynchronizes_reads()
+    public async Task The_cli_intake_reads_service_attention_and_resynchronizes_reads()
     {
         // Attention is event-time: the seeded writes' compiled projection must land before
         // the arrival digest can carry it.
@@ -152,95 +155,82 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
             row => row.UnreadCount >= 2, TimeSpan.FromSeconds(10)));
         var arrived = Call("Connect", JsonSerializer.Serialize(new { service = "tangent", persona = "agent", address = app.Origin }));
         var connectorLayer = arrived.GetProperty("connector");
-        Assert.Equal("orientation", connectorLayer.GetProperty("view").GetString());
-        Assert.Equal("tool_response_only", connectorLayer.GetProperty("deliveryMode").GetString());
+        Assert.Equal("tangent", connectorLayer.GetProperty("service").GetString());
         var context = connectorLayer.GetProperty("contextId").GetString()!;
-        // Canonical identity flows through the structured experience object, with the
+        // Canonical identity flows through the service-owned structured object, with the
         // directed attention items riding along in the arrival digest.
         Assert.Equal(ExperienceWebApp.AgentDid,
-            arrived.GetProperty("experience").GetProperty("identity").GetProperty("did").GetString());
-        var arrivalAttention = arrived.GetProperty("experience").GetProperty("attention");
+            arrived.GetProperty("service").GetProperty("identity").GetProperty("did").GetString());
+        var arrivalAttention = arrived.GetProperty("service").GetProperty("attention");
         Assert.Equal(2, arrivalAttention.GetProperty("waitingCount").GetProperty("value").GetInt32());
         Assert.Contains(arrivalAttention.GetProperty("items").EnumerateArray(),
             item => item.GetProperty("relationship").GetString() == "addressed_to_you");
 
-        // The rendered view keeps the you perspective over real data, previews in the
-        // expanded view (compact shows the count line only, per the response budget).
-        var (_, text, _) = Run("call", "CatchUp",
-            JsonSerializer.Serialize(new { session = context, view = "expanded" }));
-        Assert.Contains("asked you", text);
-        Assert.Contains("replied to you", text);
+        var updates = Invoke(context, "get_updates", new { limit = 25 });
+        Assert.Equal(2, updates.GetProperty("service").GetProperty("attention")
+            .GetProperty("waitingCount").GetProperty("value").GetInt32());
 
-        var read = Call("Forum_Read_Thread", JsonSerializer.Serialize(new { threadRef = app.TopicRef, session = context }));
-        var posts = read.GetProperty("experience").GetProperty("result").GetProperty("data").GetProperty("posts");
+        var read = Invoke(context, "read_topic", new { topicKey = ExperienceWebApp.TopicKey });
+        var posts = read.GetProperty("service").GetProperty("result").GetProperty("data").GetProperty("posts");
         Assert.Equal(3, posts.GetArrayLength());
-        var cursor = read.GetProperty("experience").GetProperty("continuation").GetProperty("readCursor").GetString()!;
+        var cursor = read.GetProperty("service").GetProperty("continuation").GetProperty("readCursor").GetString()!;
 
-        Call("Forum_Mark_Read", JsonSerializer.Serialize(new { session = context, threadRef = app.TopicRef, readCursor = cursor }));
+        Invoke(context, "read_position", new { topicKey = ExperienceWebApp.TopicKey, readCursor = cursor });
         // The acknowledgement resynchronizes the projection on its own compile; await it
         // before the catch-up renders the post-read state.
         Assert.NotNull(await app.AwaitAttentionAsync(ExperienceWebApp.TopicKey, app.AgentParticipantId,
             row => row.LastSequence > 0 && row.ReadSequence >= row.LastSequence, TimeSpan.FromSeconds(10)));
-        var (_, after, _) = Run("call", "CatchUp", JsonSerializer.Serialize(new { session = context }));
-        Assert.DoesNotContain("asked you", after);
-        Assert.DoesNotContain("replied to you", after);
-        Assert.Contains("Waiting for you: 0", after);
+        var after = Invoke(context, "get_updates", new { limit = 25 });
+        Assert.Equal(0, after.GetProperty("service").GetProperty("attention")
+            .GetProperty("waitingCount").GetProperty("value").GetInt32());
     }
 
     [Fact]
-    public void The_manage_enum_appears_only_when_the_roles_carry_it()
+    public void The_connector_advertises_a_small_generic_surface_and_the_service_catalog()
     {
         using var peer = ConnectorPeer.Start(ConnectorBinary(), home);
         peer.Initialize();
-        // A member holds no rungs: the member ring alone, and no manage key at all.
-        Assert.Equal(13, peer.Tools().GetArrayLength());
-
-        // Granting the persona's participant the Administrator role widens the envelope; the
-        // next session reports it, and the catalog projects the case keys and the ladder —
-        // the enum carrying exactly the rungs the role holds.
-        app.Services.GetRequiredService<Koan.Identity.Roles.RoleCollection>()
-            .Add(Tangent.Access.TangentBuiltInRoles.Administrator.Token, app.AgentParticipantId, TestContext.Current.CancellationToken).Wait();
+        var names = peer.Tools().EnumerateArray().Select(entry => entry.GetProperty("name").GetString()).ToHashSet();
+        Assert.Equal(new[] { "Connect", "ListCompanions", "Service_Invoke", "Service_Operations", "WhoAmI" },
+            names.OrderBy(name => name).ToArray());
         var connected = peer.Call("tools/call", new { name = "Connect", arguments = new { service = "tangent", persona = "agent", address = app.Origin } });
         Assert.False(connected.GetProperty("result").GetProperty("isError").GetBoolean());
-        var tools = peer.Tools();
-        // The administrator's rungs widen the catalog by the manage key alone: the case keys
-        // stay absent because the access map does not grant Topic management here — the
-        // projection carries exactly the authority, no wider.
-        Assert.Equal(14, tools.GetArrayLength());
-        var manage = tools.EnumerateArray().Single(entry => entry.GetProperty("name").GetString() == "Forum_Manage_User");
-        Assert.Equal(new[] { "suspend", "timeout", "warn" },
-            manage.GetProperty("inputSchema").GetProperty("properties").GetProperty("action").GetProperty("enum")
-                .EnumerateArray().Select(value => value.GetString()).ToArray());
+        var session = connected.GetProperty("result").GetProperty("structuredContent")
+            .GetProperty("connector").GetProperty("contextId").GetString();
+        var catalog = peer.Call("tools/call", new { name = "Service_Operations", arguments = new { session } });
+        var operations = catalog.GetProperty("result").GetProperty("structuredContent")
+            .GetProperty("service").GetProperty("operations");
+        Assert.Contains(operations.EnumerateArray(), item => item.GetProperty("id").GetString() == "get_updates");
+        Assert.Contains(operations.EnumerateArray(), item => item.GetProperty("id").GetString() == "manage_user");
     }
 
     [Fact]
-    public void The_member_ring_writes_and_the_participant_read_run_through_the_real_binary()
+    public void Service_operations_write_and_read_through_the_real_binary()
     {
         var context = Connect();
-        var spaceRef = $"{app.Origin}::proj";
-        var started = Call("Forum_Start_Thread", JsonSerializer.Serialize(new
+        var started = Invoke(context, "start_thread", new
         {
-            session = context, spaceRef, requestId = "bin-thread-1",
-            title = "Binary Thread", text = "Started from the connector binary.",
-        }));
-        var data = started.GetProperty("experience").GetProperty("result").GetProperty("data");
+            tangentKey = ExperienceWebApp.TangentKey, requestId = "bin-thread-1",
+            title = "Binary Topic", text = "Started from the connector binary.",
+        });
+        var data = started.GetProperty("service").GetProperty("result").GetProperty("data");
         var topicRef = data.GetProperty("topicRef").GetString()!;
         var postRef = data.GetProperty("postRef").GetString()!;
         Assert.StartsWith(app.Origin, topicRef);
 
-        var read = Call("Forum_Read_User", JsonSerializer.Serialize(new { session = context, userRef = ExperienceWebApp.HumanDid }));
-        var profile = read.GetProperty("experience").GetProperty("result").GetProperty("data").GetProperty("profile");
+        var read = Invoke(context, "read_participant", new { identifier = ExperienceWebApp.HumanDid });
+        var profile = read.GetProperty("service").GetProperty("result").GetProperty("data").GetProperty("profile");
         Assert.Equal(ExperienceWebApp.HumanHandle, profile.GetProperty("handle").GetString());
 
         // Edit-own and delete-own ride the domain's own-post rules; the Topic must allow editing.
         EnableEditing(topicRef.Split("::")[^1]);
-        Call("Forum_Edit_Post", JsonSerializer.Serialize(new { session = context, postRef, text = "Edited from the binary." }));
-        var window = Call("Forum_Read_Thread", JsonSerializer.Serialize(new { session = context, threadRef = topicRef }));
-        Assert.Equal("Edited from the binary.", window.GetProperty("experience").GetProperty("result")
+        Invoke(context, "edit_post", new { postRef, text = "Edited from the binary." });
+        var window = Invoke(context, "read_topic", new { topicKey = topicRef.Split("::")[^1] });
+        Assert.Equal("Edited from the binary.", window.GetProperty("service").GetProperty("result")
             .GetProperty("data").GetProperty("posts")[0].GetProperty("text").GetString());
-        Call("Forum_Delete_Post", JsonSerializer.Serialize(new { session = context, postRef }));
-        var after = Call("Forum_Read_Thread", JsonSerializer.Serialize(new { session = context, threadRef = topicRef }));
-        Assert.True(after.GetProperty("experience").GetProperty("result").GetProperty("data")
+        Invoke(context, "delete_post", new { postRef });
+        var after = Invoke(context, "read_topic", new { topicKey = topicRef.Split("::")[^1] });
+        Assert.True(after.GetProperty("service").GetProperty("result").GetProperty("data")
             .GetProperty("posts")[0].GetProperty("removed").GetBoolean());
     }
 
@@ -253,7 +243,7 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
     private void EnableEditing(string topicKey)
     {
         app.Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", app.OwnerToken);
-        using var settings = app.Http.PatchAsync($"/api/rooms/{topicKey}/settings",
+        using var settings = app.Http.PatchAsync($"/api/topics/{topicKey}/settings",
             JsonContent.Create(new { allowPostEditing = true, isLocked = false }), TestContext.Current.CancellationToken).Result;
         settings.EnsureSuccessStatusCode();
         app.Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", app.AgentToken);
@@ -275,18 +265,18 @@ public sealed class ConnectorIntegrationTests : IAsyncLifetime
         Assert.Equal("2025-06-18", initialize.GetProperty("result").GetProperty("protocolVersion").GetString());
         peer.Notify("notifications/initialized", new { });
         var tools = peer.Call("tools/list", new { });
-        // The core four plus the Forum ring's member keys: the projected surface.
-        Assert.Equal(13, tools.GetProperty("result").GetProperty("tools").GetArrayLength());
+        Assert.Equal(5, tools.GetProperty("result").GetProperty("tools").GetArrayLength());
 
         var connected = peer.Call("tools/call", new { name = "Connect", arguments = new { service = "tangent", persona = "agent", address = app.Origin } });
         var arrivalText = connected.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
         Assert.Contains("You are agent — session tangent_", arrivalText);
-        Assert.Contains("asked you", arrivalText);
+        Assert.Contains("Tangent", arrivalText);
 
         var who = peer.Call("tools/call", new { name = "WhoAmI", arguments = new { session = "tangent_00000000" } });
         Assert.True(who.GetProperty("result").GetProperty("isError").GetBoolean());
 
-        var updates = peer.Call("tools/call", new { name = "CatchUp", arguments = new { session = "tangent_00000000" } });
+        var updates = peer.Call("tools/call", new { name = "Service_Invoke", arguments = new
+        { session = "tangent_00000000", operation = "get_updates", arguments = new { } } });
         // Unknown context ids must fail closed, not leak another context's state.
         Assert.True(updates.GetProperty("result").GetProperty("isError").GetBoolean());
         Assert.Equal("context_expired",

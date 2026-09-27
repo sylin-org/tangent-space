@@ -8,6 +8,19 @@
         "resolved": "2.7.0",
         "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
       },
+      "Apache.Arrow": {
+        "type": "Transitive",
+        "resolved": "23.0.0",
+        "contentHash": "cU4Zm7byFwnb82Ea9ZRvVnq2nJNf/TF9j+rj/MHlvu9RBYMqYtu4sJaR1JmMh3MmSIuwMafVg7PfJxPAMv9dGw==",
+        "dependencies": {
+          "Apache.Arrow.Scalars": "23.0.0"
+        }
+      },
+      "Apache.Arrow.Scalars": {
+        "type": "Transitive",
+        "resolved": "23.0.0",
+        "contentHash": "i53VmQ505ASXsStf7y29Z5qvhN6PGgFGNb6UUU7z1WmbzEgSjKQuIJkKKVbh+K5rtXRiKyr1Ah3Rmvbeb2BEHQ=="
+      },
       "CarpaNet": {
         "type": "Transitive",
         "resolved": "1.1.0-alpha.5",
@@ -21,6 +34,21 @@
           "CarpaNet": "1.1.0-alpha.5"
         }
       },
+      "CouchbaseNetClient": {
+        "type": "Transitive",
+        "resolved": "3.9.4",
+        "contentHash": "NQf7WF4peKt7cYpyvIi7HigqAEmqsyhkeLorTxWsE05/5aS5smJ4Utgq2uTdFgSJt4gU/9VF6fh+/KZ2m3WxuQ==",
+        "dependencies": {
+          "DnsClient": "1.8.0",
+          "Google.Api.CommonProtos": "2.17.0",
+          "Google.Protobuf": "3.33.2",
+          "Grpc.Net.Client": "2.71.0",
+          "Grpc.Net.ClientFactory": "2.71.0",
+          "Newtonsoft.Json": "13.0.4",
+          "Snappier": "1.3.1",
+          "System.IO.Hashing": "10.0.1"
+        }
+      },
       "Cronos": {
         "type": "Transitive",
         "resolved": "0.13.0",
@@ -30,6 +58,72 @@
         "type": "Transitive",
         "resolved": "1.8.0",
         "contentHash": "RRwtaCXkXWsx0mmsReGDqCbRLtItfUbkRJlet1FpdciVhyMGKcPd57T1+8Jki9ojHlq9fntVhXQroOOgRak8DQ=="
+      },
+      "DuckDB.NET.Bindings": {
+        "type": "Transitive",
+        "resolved": "1.5.5",
+        "contentHash": "DrQS4YgORTdmQ7ZkPosk/Wo/f3ctlBQSmz0O23BKbIc/7Tb+hgCOgYSX5Bdy2/Oqmc3t8J9Dz8Z/BQOqCfpoww=="
+      },
+      "DuckDB.NET.Bindings.Full": {
+        "type": "Transitive",
+        "resolved": "1.5.5",
+        "contentHash": "QIyg93jXN+ebHtsl3UhNmoKV+UoBlHxicycGUVY8cw/kwTGB8CrrULcLr7ngUkk5pftaPoyIHycxTgshBOalaA=="
+      },
+      "DuckDB.NET.Data": {
+        "type": "Transitive",
+        "resolved": "1.5.5",
+        "contentHash": "VerE5IRph9ui+E8Ljz1xNuErbuZMrYvfwxo+KLZmBngrpj3UVdYWXmr2FwvHRJWwuCpuk7PcouEbdhNnU5DYlQ==",
+        "dependencies": {
+          "Apache.Arrow": "23.0.0",
+          "DuckDB.NET.Bindings": "1.5.5"
+        }
+      },
+      "FirebirdSql.Data.FirebirdClient": {
+        "type": "Transitive",
+        "resolved": "10.3.4",
+        "contentHash": "lmaY+XQvnhPl1YRrY+lzTZPD88YDbllelN5RhFMrzinqSmjWpWZRE0A4AI1L2mPBNAI346Q8MHAvnJjDPd7VnQ=="
+      },
+      "Google.Api.CommonProtos": {
+        "type": "Transitive",
+        "resolved": "2.17.0",
+        "contentHash": "elfQPknFr495hm7vdy6ZlgyQh6yzZq9TU7sS35L/Fj/fqjM/mUGau9gVJLhvQEtUlPjtR80hpn/m9HvBMyCXIw==",
+        "dependencies": {
+          "Google.Protobuf": "[3.31.1, 4.0.0]"
+        }
+      },
+      "Google.Protobuf": {
+        "type": "Transitive",
+        "resolved": "3.33.2",
+        "contentHash": "vZXVbrZgBqUkP5iWQi0CS6pucIS2MQdEYPS1duWCo8fGrrt4th6HTiHfLFX2RmAWAQl1oUnzGgyDBsfq7fHQJA=="
+      },
+      "Grpc.Core.Api": {
+        "type": "Transitive",
+        "resolved": "2.71.0",
+        "contentHash": "QquqUC37yxsDzd1QaDRsH2+uuznWPTS8CVE2Yzwl3CvU4geTNkolQXoVN812M2IwT6zpv3jsZRc9ExJFNFslTg=="
+      },
+      "Grpc.Net.Client": {
+        "type": "Transitive",
+        "resolved": "2.71.0",
+        "contentHash": "U1vr20r5ngoT9nlb7wejF28EKN+taMhJsV9XtK9MkiepTZwnKxxiarriiMfCHuDAfPUm9XUjFMn/RIuJ4YY61w==",
+        "dependencies": {
+          "Grpc.Net.Common": "2.71.0"
+        }
+      },
+      "Grpc.Net.ClientFactory": {
+        "type": "Transitive",
+        "resolved": "2.71.0",
+        "contentHash": "8oPLwQLPo86fmcf9ghjCDyNsSWhtHc3CXa/AqwF8Su/pG7qAoeWWtbymsZhoNvCV9Zjzb6BDcIPKXLYt+O175g==",
+        "dependencies": {
+          "Grpc.Net.Client": "2.71.0"
+        }
+      },
+      "Grpc.Net.Common": {
+        "type": "Transitive",
+        "resolved": "2.71.0",
+        "contentHash": "v0c8R97TwRYwNXlC8GyRXwYTCNufpDfUtj9la+wUrZFzVWkFJuNAltU+c0yI3zu0jl54k7en6u2WKgZgd57r2Q==",
+        "dependencies": {
+          "Grpc.Core.Api": "2.71.0"
+        }
       },
       "Microsoft.AspNetCore.Authentication.JwtBearer": {
         "type": "Transitive",
@@ -69,6 +163,40 @@
         "type": "Transitive",
         "resolved": "10.0.2",
         "contentHash": "LG9Yll3B5aNpxv0+D47g6LiOiKBIlodhcHdQwcYzo8VeexFLGqx5ymetmA2aBRyo9cCcWsQWrFsdbsr8LvmWDw=="
+      },
+      "Microsoft.Data.SqlClient": {
+        "type": "Transitive",
+        "resolved": "7.0.2",
+        "contentHash": "zwv76lANFQQI6Gmp6ntkzMWIWVqm8Wf4Mz00AeGCk1n8HCi5afi6bNynSe18uI0xeL0n6J+Myjk9AiIsL5oSqw==",
+        "dependencies": {
+          "Microsoft.Bcl.Cryptography": "9.0.13",
+          "Microsoft.Data.SqlClient.Extensions.Abstractions": "[7.0.2, 8.0.0)",
+          "Microsoft.Data.SqlClient.Internal.Logging": "[7.0.2, 8.0.0)",
+          "Microsoft.Data.SqlClient.SNI.runtime": "[6.0.2, 7.0.0)",
+          "Microsoft.IdentityModel.JsonWebTokens": "8.16.0",
+          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "8.16.0",
+          "Microsoft.SqlServer.Server": "[1.0.0, 2.0.0)",
+          "System.Configuration.ConfigurationManager": "9.0.13",
+          "System.Security.Cryptography.Pkcs": "9.0.13"
+        }
+      },
+      "Microsoft.Data.SqlClient.Extensions.Abstractions": {
+        "type": "Transitive",
+        "resolved": "7.0.2",
+        "contentHash": "Zx7z61fG2Nc6LdDn4jA7b5Aj1ABrljkOPRE31RvVUdjF6IgbG60leDUhMCafsnWFgaheiK3iqpLe+kbf5Z5L8Q==",
+        "dependencies": {
+          "Microsoft.Data.SqlClient.Internal.Logging": "[7.0.2, 8.0.0)"
+        }
+      },
+      "Microsoft.Data.SqlClient.Internal.Logging": {
+        "type": "Transitive",
+        "resolved": "7.0.2",
+        "contentHash": "iqgYBbGSVy/DIYWjzmQOa964Kn4rs4wW5vg2IamqVK0fQqfTiILVR5hMK27XWqoyONtAZs+VxH354cPJBtSnbg=="
+      },
+      "Microsoft.Data.SqlClient.SNI.runtime": {
+        "type": "Transitive",
+        "resolved": "6.0.2",
+        "contentHash": "f+pRODTWX7Y67jXO3T5S2dIPZ9qMJNySjlZT/TKmWVNWe19N8jcWmHaqHnnchaq3gxEKv1SWVY5EFzOD06l41w=="
       },
       "Microsoft.Data.Sqlite": {
         "type": "Transitive",
@@ -140,6 +268,33 @@
           "Microsoft.IdentityModel.Logging": "8.19.2"
         }
       },
+      "Microsoft.SqlServer.Server": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "N4KeF3cpcm1PUHym1RmakkzfkEv3GRMyofVv40uXsQhCQeglr2OHNcUk2WOG51AKpGO8ynGpo9M/kFXSzghwug=="
+      },
+      "MongoDB.Bson": {
+        "type": "Transitive",
+        "resolved": "3.10.0",
+        "contentHash": "dpM9EXd3evUW7qPpSjfWshPYjbD26rxm+e32LWNDpRWBZZZo4WaO5Azy/Xro55u3IZ/8u1Z4hCZnlI72Y+/5jg=="
+      },
+      "MongoDB.Driver": {
+        "type": "Transitive",
+        "resolved": "3.10.0",
+        "contentHash": "FEX71Cjn6VFNI6RsQQjNBs7x2nqz9P+oXF0zspnNXzf9N1txhgEO4faIw5aAJknaObmD6cC6X42yiuOQHu27DA==",
+        "dependencies": {
+          "DnsClient": "1.6.1",
+          "MongoDB.Bson": "3.10.0",
+          "SharpCompress": "0.48.1",
+          "Snappier": "1.3.1",
+          "ZstdSharp.Port": "0.7.3"
+        }
+      },
+      "MySqlConnector": {
+        "type": "Transitive",
+        "resolved": "2.6.1",
+        "contentHash": "MzNSfnHWBc0Mo3zVbYxG+556zuex9obs8NYtwcPCwFahel40e49stH+osjX4k/doEHp4LT/zTtGdax4nlGWhcw=="
+      },
       "Newtonsoft.Json": {
         "type": "Transitive",
         "resolved": "13.0.4",
@@ -152,6 +307,26 @@
         "dependencies": {
           "Newtonsoft.Json": "12.0.1"
         }
+      },
+      "Npgsql": {
+        "type": "Transitive",
+        "resolved": "10.0.3",
+        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w=="
+      },
+      "RESPite": {
+        "type": "Transitive",
+        "resolved": "3.0.17",
+        "contentHash": "68slEMyRTUNLc75DruEDsEohFmFfNwkHLLtwQ46bobF+8Tl+UXMKM1kM87ihhKy6JdAqy1RrvAfvBWeLmcY9Gg=="
+      },
+      "SharpCompress": {
+        "type": "Transitive",
+        "resolved": "0.50.0",
+        "contentHash": "EzoWIzA31rb/kADwHkcmdT1rzqnT91kR/Df8X/gqd3qvXhgMbCzyKIWH6M3LTDwPIr0uLoXfX9fvThidXHBdyQ=="
+      },
+      "Snappier": {
+        "type": "Transitive",
+        "resolved": "1.3.1",
+        "contentHash": "DOdDQiO8YZ5rBtVLY+6CmR1yp9WYoJRgEEktPBrR0tEj9QO2djA/zv0O3DX0OZpEAfosbY8pytQ9tQUogwQsEA=="
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "Transitive",
@@ -180,6 +355,23 @@
           "SQLitePCLRaw.core": "2.1.11"
         }
       },
+      "StackExchange.Redis": {
+        "type": "Transitive",
+        "resolved": "3.0.17",
+        "contentHash": "ItAm9lokZ1mWsQLF3u4Yw4eb/gvkX6Rp9bLAe1KUKgKAjPkALoQwTc6jJLtBZoOv9LT7RwvSIXZZb9FF30QhOg==",
+        "dependencies": {
+          "RESPite": "3.0.17",
+          "System.IO.Hashing": "10.0.5"
+        }
+      },
+      "System.Configuration.ConfigurationManager": {
+        "type": "Transitive",
+        "resolved": "9.0.13",
+        "contentHash": "GbBrJq9S/gYpHzm7Pxx6Y5tDyfSfyxW6tlP5oiKJV38uf19Wp+GIIAnWfyL1zmNiz1+EjwVapw2WkBFvvqKQzg==",
+        "dependencies": {
+          "System.Security.Cryptography.ProtectedData": "9.0.13"
+        }
+      },
       "System.IdentityModel.Tokens.Jwt": {
         "type": "Transitive",
         "resolved": "8.19.2",
@@ -188,6 +380,26 @@
           "Microsoft.IdentityModel.JsonWebTokens": "8.19.2",
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
+      },
+      "System.IO.Hashing": {
+        "type": "Transitive",
+        "resolved": "10.0.5",
+        "contentHash": "8IBJWcCT9+e4Bmevm4T7+fQEiAh133KGiz4oiVTgJckd3Q76OFdR1falgn9lpz7+C4HJvogCDJeAa2QmvbeVtg=="
+      },
+      "System.Security.Cryptography.Pkcs": {
+        "type": "Transitive",
+        "resolved": "9.0.13",
+        "contentHash": "dxJhkuoaelvWy588wPXjShNks+ZMiSgXnN75/u+DPbER5PqKrLPDftE0BvGM7nDK/scQAVlD+gRXlCAAjWi58Q=="
+      },
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "Transitive",
+        "resolved": "9.0.13",
+        "contentHash": "t8S9IDpjJKsLpLkeBdW8cWtcPyYqrGu93Dej1RO6WwuL/lkFSqWlan3rMJfortqz1mRIh+sys2AFsSA6jWJ3Jg=="
+      },
+      "ZstdSharp.Port": {
+        "type": "Transitive",
+        "resolved": "0.7.3",
+        "contentHash": "U9Ix4l4cl58Kzz1rJzj5hoVTjmbx1qGMwzAcbv1j/d3NzrFaESIurQyg+ow4mivCgkE3S413y+U9k4WdnEIkRA=="
       },
       "Sylin.Koan.Cache": {
         "type": "Project",
@@ -247,6 +459,119 @@
           "Sylin.Koan.Data.Relational": "[1.0.0, )"
         }
       },
+      "Sylin.Koan.Data.Connector.Cockroach": {
+        "type": "Project",
+        "dependencies": {
+          "Npgsql": "[10.0.3, )",
+          "Sylin.Koan.Data.Relational.Npgsql": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.Couchbase": {
+        "type": "Project",
+        "dependencies": {
+          "CouchbaseNetClient": "[3.9.4, )",
+          "Newtonsoft.Json": "[13.0.4, )",
+          "Snappier": "[1.3.1, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.CouchDb": {
+        "type": "Project",
+        "dependencies": {
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.DuckDb": {
+        "type": "Project",
+        "dependencies": {
+          "DuckDB.NET.Data": "[1.5.5, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Analytics": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Relational": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.DuckDb.Native": {
+        "type": "Project",
+        "dependencies": {
+          "DuckDB.NET.Bindings.Full": "[1.5.5, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.Firebird": {
+        "type": "Project",
+        "dependencies": {
+          "FirebirdSql.Data.FirebirdClient": "[10.3.4, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Relational": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.InMemory": {
+        "type": "Project",
+        "dependencies": {
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.Json": {
+        "type": "Project",
+        "dependencies": {
+          "Newtonsoft.Json": "[13.0.4, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.Mongo": {
+        "type": "Project",
+        "dependencies": {
+          "MongoDB.Driver": "[3.10.0, )",
+          "SharpCompress": "[0.50.0, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.ZenGarden.Contracts": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.MySql": {
+        "type": "Project",
+        "dependencies": {
+          "MySqlConnector": "[2.6.1, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Relational": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.Postgres": {
+        "type": "Project",
+        "dependencies": {
+          "Npgsql": "[10.0.3, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Relational": "[1.0.0, )",
+          "Sylin.Koan.Data.Relational.Npgsql": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.Redis": {
+        "type": "Project",
+        "dependencies": {
+          "Newtonsoft.Json": "[13.0.4, )",
+          "StackExchange.Redis": "[3.0.17, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.Redis": "[1.0.0, )",
+          "Sylin.Koan.Redis.Abstractions": "[1.0.0, )"
+        }
+      },
       "Sylin.Koan.Data.Connector.Sqlite": {
         "type": "Project",
         "dependencies": {
@@ -254,6 +579,16 @@
           "SQLitePCLRaw.lib.e_sqlite3": "[3.53.3, )",
           "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
           "Sylin.Koan.Data.Analytics": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Relational": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Data.Connector.SqlServer": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.SqlClient": "[7.0.2, )",
+          "Newtonsoft.Json": "[13.0.4, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
           "Sylin.Koan.Data.Core": "[1.0.0, )",
           "Sylin.Koan.Data.Relational": "[1.0.0, )"
         }
@@ -281,6 +616,17 @@
           "Sylin.Koan.Data.Abstractions": "[1.0.0, )"
         }
       },
+      "Sylin.Koan.Data.Relational.Npgsql": {
+        "type": "Project",
+        "dependencies": {
+          "Newtonsoft.Json": "[13.0.4, )",
+          "Npgsql": "[10.0.3, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
+          "Sylin.Koan.Data.Core": "[1.0.0, )",
+          "Sylin.Koan.Data.Relational": "[1.0.0, )"
+        }
+      },
       "Sylin.Koan.Identity": {
         "type": "Project",
         "dependencies": {
@@ -305,6 +651,20 @@
           "Sylin.Koan.Core": "[1.0.0, )",
           "Sylin.Koan.Data.Abstractions": "[1.0.0, )",
           "Sylin.Koan.Data.Core": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Redis": {
+        "type": "Project",
+        "dependencies": {
+          "StackExchange.Redis": "[3.0.17, )",
+          "Sylin.Koan.Core": "[1.0.0, )",
+          "Sylin.Koan.Redis.Abstractions": "[1.0.0, )"
+        }
+      },
+      "Sylin.Koan.Redis.Abstractions": {
+        "type": "Project",
+        "dependencies": {
+          "StackExchange.Redis": "[3.0.17, )"
         }
       },
       "Sylin.Koan.Security.Trust": {
@@ -351,6 +711,9 @@
           "Sylin.Koan.Web.Auth": "[1.0.0, )",
           "Sylin.Koan.Web.Auth.Abstractions": "[1.0.0, )"
         }
+      },
+      "Sylin.Koan.ZenGarden.Contracts": {
+        "type": "Project"
       }
     }
   }

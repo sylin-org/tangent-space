@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The Tangent collection, ported from rooms.js renderTangents + cardContents:
+// The Tangent collection, ported from conversation renderTangents + cardContents:
 // one card per Tangent with its accent and artwork, and the settings gear for
 // those who manage it. Unread marks arrive with the activity transport.
 import { computed } from 'vue'
@@ -34,7 +34,7 @@ function validArtwork(value?: string): boolean {
 
 const cards = computed(() => props.directories.tangents as DirectoryTangent[])
 
-// The card's unread mark: the Topic activity the transport reports (rooms.js cardContents).
+// The card's unread mark: the Topic activity the transport reports.
 function unread(tangent: DirectoryTangent): { count: number; capped: boolean; replies: boolean } {
   const topics = tangent.topics ?? []
   let count = 0

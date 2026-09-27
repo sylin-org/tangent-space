@@ -50,7 +50,7 @@ public sealed class ExperienceDigest(
         var directed = new List<ExperienceAttentionItem>();
         var watched = new List<ExperienceAttentionItem>();
         var overflow = false;
-        var roomsScanned = 0;
+        var topicsScanned = 0;
         var scanLimited = false;
         for (var page = 1; page <= 4; page++)
         {
@@ -60,8 +60,8 @@ public sealed class ExperienceDigest(
             if (directory.ScanLimited) scanLimited = true;
             foreach (var topic in directory.Topics)
             {
-                if (roomsScanned >= MaximumTopics) { overflow = true; break; }
-                roomsScanned++;
+                if (topicsScanned >= MaximumTopics) { overflow = true; break; }
+                topicsScanned++;
                 if (scopeTangent is not null && topic.TangentKey != scopeTangent) continue;
                 if (scopeTopic is not null && topic.Key != scopeTopic) continue;
                 await CollectTopic(did, topic, directed, watched, ct);

@@ -1,3 +1,4 @@
+import { httpRequest } from '../api'
 import { computed, reactive, ref } from 'vue'
 import { activityCoordinator, type ActivityCoordinator } from '../activity/coordinator'
 import type { ActivitySnapshot, ActivityTopic } from '../activity/transport'
@@ -6,12 +7,12 @@ import type { Directories } from './directories'
 import type { SiteStore } from '../stores/site'
 import type { RouterStore } from '../stores/router'
 
-// The participant activity consumer, ported from rooms.js's activity half: the
+// The participant activity consumer, The
 // origin connection lives in the coordinator; this maps its snapshots onto the
 // directory marks, the elsewhere strip, the open conversation's refresh, and
 // the connection badge.
 
-export interface RoomActivity {
+export interface TopicActivity {
   unreadCount: number
   directReplies: number
   lastSequence: number
@@ -19,7 +20,7 @@ export interface RoomActivity {
   unreadCountCapped: boolean
 }
 
-const EMPTY_ACTIVITY: RoomActivity = { unreadCount: 0, directReplies: 0, lastSequence: 0, readSequence: 0, unreadCountCapped: false }
+const EMPTY_ACTIVITY: TopicActivity = { unreadCount: 0, directReplies: 0, lastSequence: 0, readSequence: 0, unreadCountCapped: false }
 
 export function createActivity(options: {
   conversation: Conversation
@@ -29,7 +30,7 @@ export function createActivity(options: {
 }) {
   const { conversation, directories, site, router } = options
 
-  const activityByRoom = reactive(new Map<string, RoomActivity>())
+  const activityByTopic = reactive(new Map<string, TopicActivity>())
   const connection = reactive({
     label: 'Connecting…',
     state: 'connecting',
@@ -43,7 +44,7 @@ export function createActivity(options: {
   let signature = ''
   let automaticRecoveries = 0
 
-  const activityFor = (key: string): RoomActivity => activityByRoom.get(key) ?? EMPTY_ACTIVITY
+  const activityFor = (key: string): TopicActivity => activityByTopic.get(key) ?? EMPTY_ACTIVITY
 
   function connectionStatus(message: string, state = connection.state): void {
     const badgeLabels: Record<string, string> = {
@@ -56,15 +57,15 @@ export function createActivity(options: {
 
   /** The open conversation refreshes when its events arrive; the directory re-marks itself reactively. */
   async function applySnapshot(snapshot: ActivitySnapshot, context: { signal?: AbortSignal; isCurrent(): boolean }): Promise<boolean> {
-    const room = conversation.room.value
-    const previousSequence = room ? activityFor(room.key).lastSequence : undefined
+    const selectedTopic = conversation.selectedTopic.value
+    const previousSequence = selectedTopic ? activityFor(selectedTopic.key).lastSequence : undefined
     const next = JSON.stringify({ topics: snapshot.topics, truncated: snapshot.topicsTruncated, reset: snapshot.resetRequired })
     const changed = next !== signature
     signature = next
-    activityByRoom.clear()
+    activityByTopic.clear()
     for (const topic of Array.isArray(snapshot.topics) ? snapshot.topics : []) {
       if (typeof topic.topicKey === 'string') {
-        activityByRoom.set(topic.topicKey, {
+        activityByTopic.set(topic.topicKey, {
           unreadCount: topic.unreadCount,
           directReplies: topic.directReplies,
           lastSequence: topic.lastSequence,
@@ -77,38 +78,38 @@ export function createActivity(options: {
       : snapshot.topicsTruncated ? 'This overview shows up to 100 visible topics.'
         : snapshot.resetRequired ? 'Earlier activity markers have been reset.' : ''
 
-    // The open room reads on; a watch/mute policy may also remove topics from
-    // activity. Absence is not an ACL result — re-read a missing open room.
-    const selected = room ? activityByRoom.get(room.key) : undefined
-    if (room?.canRead && !selected && (changed || snapshot.resetRequired)) {
-      const key = room.key
+    // The open selectedTopic reads on; a watch/mute policy may also remove topics from
+    // activity. Absence is not an ACL result — re-read a missing open selectedTopic.
+    const selected = selectedTopic ? activityByTopic.get(selectedTopic.key) : undefined
+    if (selectedTopic?.canRead && !selected && (changed || snapshot.resetRequired)) {
+      const key = selectedTopic.key
       try {
-        const current = await fetch(`/api/tangents/${encodeURIComponent(room.tangentKey)}/topics/${encodeURIComponent(key)}`, {
+        const current = await httpRequest(`/api/tangents/${encodeURIComponent(selectedTopic.tangentKey)}/topics/${encodeURIComponent(key)}`, {
           credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal: context.signal,
         })
         if (!context.isCurrent()) return false
-        if (!current.ok) throw Object.assign(new Error('room-read-failed'), { status: current.status })
+        if (!current.ok) throw Object.assign(new Error('topic-read-failed'), { status: current.status })
         const value = (await current.json()) as Record<string, unknown>
-        if (context.isCurrent() && conversation.room.value?.key === key) conversation.room.value = value as never
+        if (context.isCurrent() && conversation.selectedTopic.value?.key === key) conversation.selectedTopic.value = value as never
       } catch (error) {
         if (!context.isCurrent()) return false
         const status = (error as Error & { status?: number }).status
-        if ([401, 403, 404].includes(status ?? 0)) conversation.room.value = null
+        if ([401, 403, 404].includes(status ?? 0)) conversation.selectedTopic.value = null
         else throw error
       }
     }
 
     const shouldRefresh =
-      room &&
+      selectedTopic &&
       (snapshot.resetRequired ||
-        (Array.isArray(snapshot.events) && snapshot.events.some(event => event.topicKey === room.key)) ||
+        (Array.isArray(snapshot.events) && snapshot.events.some(event => event.topicKey === selectedTopic.key)) ||
         selected?.lastSequence !== previousSequence)
     const messageEvent =
-      Array.isArray(snapshot.events) && snapshot.events.some(event => event.topicKey === room?.key && ['PostEdited', 'PostDeleted'].includes(event.kind))
-    if ((messageEvent || snapshot.resetRequired || needsRefresh.value || (router.route.kind === 'post' && shouldRefresh)) && room?.canRead) {
+      Array.isArray(snapshot.events) && snapshot.events.some(event => event.topicKey === selectedTopic?.key && ['PostEdited', 'PostDeleted'].includes(event.kind))
+    if ((messageEvent || snapshot.resetRequired || needsRefresh.value || (router.route.kind === 'post' && shouldRefresh)) && selectedTopic?.canRead) {
       await conversation.refreshOpenHistory(false, context)
-    } else if (shouldRefresh && room.canRead && !conversation.nextCursor && conversation.resumeCursor) {
-      await conversation.historyPage(conversation.resumeCursor, undefined, room.key, false, context)
+    } else if (shouldRefresh && selectedTopic.canRead && !conversation.nextCursor && conversation.resumeCursor) {
+      await conversation.historyPage(conversation.resumeCursor, undefined, selectedTopic.key, false, context)
     }
 
     if (!context.isCurrent()) return false
@@ -117,7 +118,7 @@ export function createActivity(options: {
     }
     if (
       snapshot.resetRequired ||
-      snapshot.events?.some(event => ['TangentChanged', 'RoomChanged', 'MembershipChanged', 'ParticipantChanged'].includes(event.kind))
+      snapshot.events?.some(event => ['TangentChanged', 'TopicChanged', 'MembershipChanged', 'ParticipantChanged'].includes(event.kind))
     ) {
       await directories.loadTangents().catch(() => {})
     }
@@ -130,7 +131,7 @@ export function createActivity(options: {
     recovering.value = true
     stop()
     conversation.reset()
-    activityByRoom.clear()
+    activityByTopic.clear()
     signature = ''
     connectionStatus('Your signed-in account changed. Updating…', 'connecting')
     automaticRecoveries += 1
@@ -204,15 +205,15 @@ export function createActivity(options: {
 
   /** The elsewhere strip: other Topics with unread activity or replies to the viewer. */
   const elsewhere = computed(() => {
-    const room = conversation.room.value
+    const selectedTopic = conversation.selectedTopic.value
     return directories.tangents
       .flatMap(tangent => (tangent.topics ?? []).map(topic => ({ tangent, topic, activity: activityFor(topic.key) })))
-      .filter(entry => entry.topic.key !== room?.key && (entry.activity.unreadCount > 0 || entry.activity.directReplies > 0))
+      .filter(entry => entry.topic.key !== selectedTopic?.key && (entry.activity.unreadCount > 0 || entry.activity.directReplies > 0))
       .sort((a, b) => b.activity.directReplies - a.activity.directReplies)
   })
 
   return {
-    activityByRoom, connection, elsewhere, profileEvents, needsRefresh, recovering,
+    activityByTopic, connection, elsewhere, profileEvents, needsRefresh, recovering,
     activityFor, start, stop, setVisible, connectionStatus, setProfiles,
   }
 }

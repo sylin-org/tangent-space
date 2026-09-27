@@ -9,7 +9,7 @@ namespace Tangent.Api;
 
 [ApiController]
 [Authorize]
-[Route("api/rooms")]
+[Route("api/topics")]
 public sealed class TopicsController(TangentServer hub) : ControllerBase
 {
     private TopicGovernance topics => hub.Topics;
@@ -25,49 +25,49 @@ public sealed class TopicsController(TangentServer hub) : ControllerBase
     }
 
     [AllowAnonymous]
-    [HttpGet("{roomKey}")]
-    public async Task<IActionResult> Describe(string roomKey, CancellationToken ct)
+    [HttpGet("{topicKey}")]
+    public async Task<IActionResult> Describe(string topicKey, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         try
         {
-            var topic = await topics.Describe(ReadActor(), roomKey, ct);
+            var topic = await topics.Describe(ReadActor(), topicKey, ct);
             return topic is null ? NotFound() : Ok(topic);
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
     }
 
     [TopicMutation]
-    [HttpPut("{roomKey}/members/{targetDid}")]
-    public async Task<IActionResult> SetMembership(string roomKey, string targetDid, ChangeTopicMembershipRequest request, CancellationToken ct)
-        => Outcome(await topics.SetMembership(Actor(), roomKey, targetDid, request.Role, ct));
+    [HttpPut("{topicKey}/members/{targetDid}")]
+    public async Task<IActionResult> SetMembership(string topicKey, string targetDid, ChangeTopicMembershipRequest request, CancellationToken ct)
+        => Outcome(await topics.SetMembership(Actor(), topicKey, targetDid, request.Role, ct));
 
     [TopicMutation]
-    [HttpPut("{roomKey}/topic")]
-    public async Task<IActionResult> SetTopic(string roomKey, ChangeTopicDescriptionRequest request, CancellationToken ct)
-        => Outcome(await topics.SetTopic(Actor(), roomKey, request.Topic, ct));
+    [HttpPut("{topicKey}/topic")]
+    public async Task<IActionResult> SetTopic(string topicKey, ChangeTopicDescriptionRequest request, CancellationToken ct)
+        => Outcome(await topics.SetTopic(Actor(), topicKey, request.Topic, ct));
 
     [TopicMutation]
-    [HttpPut("{roomKey}/read-audience")]
-    public async Task<IActionResult> SetReadAudience(string roomKey, ChangeTopicReadAudienceRequest request, CancellationToken ct)
-        => Outcome(await topics.SetReadAudience(Actor(), roomKey, request.Audience, request.PublishExistingHistory, ct));
+    [HttpPut("{topicKey}/read-audience")]
+    public async Task<IActionResult> SetReadAudience(string topicKey, ChangeTopicReadAudienceRequest request, CancellationToken ct)
+        => Outcome(await topics.SetReadAudience(Actor(), topicKey, request.Audience, request.PublishExistingHistory, ct));
 
     [TopicMutation]
-    [HttpPatch("{roomKey}/settings")]
-    public async Task<IActionResult> SetSettings(string roomKey, ChangeTopicSettingsRequest request, CancellationToken ct)
-        => Outcome(await topics.SetSettings(Actor(), roomKey, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));
+    [HttpPatch("{topicKey}/settings")]
+    public async Task<IActionResult> SetSettings(string topicKey, ChangeTopicSettingsRequest request, CancellationToken ct)
+        => Outcome(await topics.SetSettings(Actor(), topicKey, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));
 
-    [HttpGet("{roomKey}/access")]
-    public async Task<IActionResult> GetAccess(string roomKey, CancellationToken ct)
+    [HttpGet("{topicKey}/access")]
+    public async Task<IActionResult> GetAccess(string topicKey, CancellationToken ct)
     {
-        try { return Ok(await topics.GetAccess(Actor(), roomKey, null, ct)); }
+        try { return Ok(await topics.GetAccess(Actor(), topicKey, null, ct)); }
         catch (TopicRuleViolation rejected) { return StatusCode(rejected.Denial == TopicDenial.NotFound ? 404 : 403, new { reason = rejected.Message }); }
     }
 
     [TopicMutation]
-    [HttpPut("{roomKey}/access")]
-    public async Task<IActionResult> SetAccess(string roomKey, AccessMap access, CancellationToken ct)
-        => Outcome(await topics.SetAccess(Actor(), roomKey, access, ct));
+    [HttpPut("{topicKey}/access")]
+    public async Task<IActionResult> SetAccess(string topicKey, AccessMap access, CancellationToken ct)
+        => Outcome(await topics.SetAccess(Actor(), topicKey, access, ct));
 
     [TopicMutation]
     [HttpPut("/api/site/participants/{targetDid}/suspension")]

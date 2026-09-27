@@ -3,11 +3,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Community;
 using Tangent.Identity;
+using Tangent.Infrastructure;
 
 namespace Tangent.Api;
 
 [ApiController, Authorize]
-public sealed class OnboardingController(TangentServer hub) : ControllerBase
+public sealed class OnboardingController(TangentServer hub, StorageSetup storage) : ControllerBase
 {
     [HttpGet("/api/participants/me/profile")]
     public async Task<IActionResult> Profile(CancellationToken ct)
@@ -20,6 +21,9 @@ public sealed class OnboardingController(TangentServer hub) : ControllerBase
     public async Task<IActionResult> Finish(FirstTangentRequest request, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
+        using var storageLease = await storage.EnterChange(ct);
+        if (storage.PendingRestart)
+            return Conflict(new { error = "Restart Tangent to apply the selected database before creating the first Tangent." });
         var participantId = ParticipationAccess.Require(User, ParticipationGrants.Manage);
         try
         {

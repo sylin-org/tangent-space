@@ -7,7 +7,7 @@ import { clearRolesSession, rolesRequest } from './roles-api'
 export type SiteStore = ReturnType<typeof useSite>
 
 // The settings page's coordination, ported from access.js (context, resource, shell),
-// roles.js (tab state and the tab/role URL contract) and rooms.js (the server form).
+// roles.js (tab state and the tab/role URL contract) and conversation (the server form).
 
 export interface SettingsDecision {
   key: string
@@ -259,7 +259,7 @@ export function createSettings(site: SiteStore, router: RouterStore) {
     }
   }
 
-  // --- The server settings form (rooms.js renderServerSettings + preview + submit) ---
+  // --- The server settings form ---
 
   const serverForm = reactive({
     name: '',

@@ -1,5 +1,6 @@
 using Koan.Web.Authorization;
 using Tangent.Community;
+using Tangent.Access;
 
 namespace Tangent.Api;
 
@@ -15,5 +16,9 @@ public sealed class PublicTopicAccess : EntityAccess<Topic>
             ? q.Where(topic => topic.ReadAudience == TopicReadAudience.Public)
             : action is AccessAction.Update or AccessAction.Delete ? q.Where(topic => false) : q;
 
-    internal static bool IsPublic(Topic topic) => topic.ReadAudience == TopicReadAudience.Public;
+    internal static bool IsPublic(Topic topic, Community.Tangent? tangent)
+        => tangent is not null && topic.ReadAudience == TopicReadAudience.Public
+            && (topic.Access ?? AccessMap.TopicDefaults())
+                .ResolveTopic(tangent.Access ?? AccessMap.TangentDefaults()).See!
+                .Contains(AccessTokens.Everyone, StringComparer.Ordinal);
 }

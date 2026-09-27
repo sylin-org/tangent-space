@@ -3,7 +3,9 @@
 function New-TangentLocalConfiguration {
     param([Parameter(Mandatory)][string]$Origin, [Parameter(Mandatory)][string]$StateDirectory, [string]$OwnerDid = '')
     if ($OwnerDid -and $OwnerDid -notmatch '^did:[a-z]+:[A-Za-z0-9._:%-]+$') { throw 'OwnerDid must be blank or a valid AT DID.' }
-    $scopes = @('atproto')
+    # Declares the maximum consent Tangent may request. Ordinary sign-in still asks
+    # for atproto alone; the Post action starts a separate explicit write challenge.
+    $scopes = @('atproto', 'repo:app.bsky.feed.post')
     $clientId = 'http://localhost?redirect_uri=' + [Uri]::EscapeDataString("$Origin/auth/atproto/callback") + '&scope=' + [Uri]::EscapeDataString(($scopes -join ' '))
     return [ordered]@{
         Logging = @{ LogLevel = @{ Default = 'Information'; 'Microsoft.AspNetCore' = 'Warning' } }

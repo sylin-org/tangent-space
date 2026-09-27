@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { httpRequest } from '../api'
+
 // The People tab, ported from people.js: everyone who has arrived on this server,
 // newest last, so an arrival holding no role is still visible.
 import { onMounted, ref, watch } from 'vue'
@@ -53,7 +55,7 @@ async function load(next = false) {
   }
   status.value = 'Loading people…'
   try {
-    const response = await fetch('/api/people?page=' + page.value, { credentials: 'same-origin' })
+    const response = await httpRequest('/api/people?page=' + page.value, { credentials: 'same-origin' })
     if (response.status === 403) {
       status.value = 'Only the server owner can see this list.'
       return

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useSite } from '../stores/site'
 import TopicDetailsPanel from './TopicDetailsPanel.vue'
 import HistoryDisclosure from './HistoryDisclosure.vue'
+import BlueskyPublishPanel from './BlueskyPublishPanel.vue'
 import type { Conversation, Message } from '../composables/conversation'
 import type { Moderation } from '../composables/moderation'
 import type { Activity } from '../composables/activity'
@@ -15,13 +16,21 @@ const props = defineProps<{ conversation: Conversation; moderation: Moderation; 
 const site = useSite()
 
 const {
-  room, messages, draft, error, loadingHistory, moreMessages, resolved,
-  send, beginReply, cancelReply, saveEdit, cancelEdit, removeMessage,
+  selectedTopic, messages, draft, error, loadingHistory, moreMessages, newMessages, resolved,
+  send, beginReply, cancelReply, saveEdit, cancelEdit, removeMessage, readMore,
 } = props.conversation
 
 const editing = ref<Message | null>(null)
 const editText = ref('')
 const replyTarget = ref<Message | null>(null)
+const deleting = ref<string | null>(null)
+const publishingPost = ref<string | null>(null)
+watch(() => selectedTopic.value?.key, () => {
+  editing.value = null
+  replyTarget.value = null
+  deleting.value = null
+  publishingPost.value = null
+})
 
 // --- The @-mention composer (facets.js) ---
 const mentionOpen = ref(false)
@@ -39,8 +48,8 @@ const composerField = ref<HTMLTextAreaElement | null>(null)
 
 function onComposerInput() {
   const textarea = composerField.value
-  if (!textarea || !room.value) return
-  sizeFacets(room.value.key, textarea.value)
+  if (!textarea || !selectedTopic.value) return
+  sizeFacets(selectedTopic.value.key, textarea.value)
   const before = textarea.value.slice(0, textarea.selectionStart ?? 0)
   const match = /(^|[\s(>])@([\w.-]*)$/.exec(before)
   if (!match) {
@@ -52,7 +61,7 @@ function onComposerInput() {
 }
 
 async function openMention(textarea: HTMLTextAreaElement, prefix: string) {
-  const topicKey = room.value?.key
+  const topicKey = selectedTopic.value?.key
   if (!topicKey) {
     closeMention()
     return
@@ -65,7 +74,7 @@ async function openMention(textarea: HTMLTextAreaElement, prefix: string) {
     if (version === lookupVersion) closeMention()
     return
   }
-  if (version !== lookupVersion || topicKey !== room.value?.key || document.activeElement !== textarea) return
+  if (version !== lookupVersion || topicKey !== selectedTopic.value?.key || document.activeElement !== textarea) return
   mentionTargets.value = list ?? []
   if (!mentionTargets.value.length) {
     closeMention()
@@ -124,7 +133,7 @@ function onComposerKeydown(event: KeyboardEvent) {
 function selectMention(index: number) {
   const textarea = composerField.value
   const entry = mentionTargets.value[index]
-  if (!textarea || !room.value || !entry) {
+  if (!textarea || !selectedTopic.value || !entry) {
     closeMention()
     return
   }
@@ -135,7 +144,7 @@ function selectMention(index: number) {
   const next = beforeKeep + insert + ' ' + after
   draft.value = next
   const caret = start + 1
-  recordFacet(room.value.key, next, tokenStart, entry, insert)
+  recordFacet(selectedTopic.value.key, next, tokenStart, entry, insert)
   closeMention()
   void textarea
   requestAnimationFrame(() => {
@@ -159,15 +168,20 @@ function onMentionBlur() {
   }, 120)
 }
 
-const canWrite = computed(() => room.value?.canWrite ?? false)
+const canWrite = computed(() => selectedTopic.value?.canWrite ?? false)
 
 
 function mayEdit(message: Message) {
   const viewer = site.site?.participant?.participantRef ?? ''
   return !message.removed && message.authorParticipantId === viewer
+    && !!message.permissions?.allowedActions.includes('editOwnPost')
 }
 function mayDelete(message: Message) {
-  return !message.removed
+  return !message.removed && !!message.permissions?.allowedActions.some(action => ['deleteOwnPost', 'removePost'].includes(action))
+}
+function mayPublish(message: Message) {
+  return !message.removed && selectedTopic.value?.readAudience === 'Public'
+    && !!site.site?.participant?.did && message.authorParticipantId === site.site.participant.participantRef
 }
 function startEdit(message: Message) {
   editing.value = message
@@ -175,7 +189,7 @@ function startEdit(message: Message) {
 }
 async function submitEdit() {
   if (!editing.value) return
-  await saveEdit(editing.value, editText.value)
+  if (!await saveEdit(editing.value, editText.value)) return
   editing.value = null
   editText.value = ''
 }
@@ -186,12 +200,13 @@ function closeEdit() {
 }
 async function deleteMessage(message: Message) {
   await removeMessage(message)
+  deleting.value = null
 }
 function startReply(message: Message) {
   replyTarget.value = message
   beginReply(message)
-  if (room.value && message.authorParticipantId !== (site.site?.participant?.participantRef ?? '')) {
-    const inserted = replyMention(room.value.key, draft.value, message.authorParticipantId, authorHandle(message))
+  if (selectedTopic.value && message.authorParticipantId !== (site.site?.participant?.participantRef ?? '')) {
+    const inserted = replyMention(selectedTopic.value.key, draft.value, message.authorParticipantId, authorHandle(message))
     if (inserted) {
       draft.value = inserted.text
       requestAnimationFrame(() => composerField.value?.setSelectionRange(inserted.caret, inserted.caret))
@@ -212,7 +227,6 @@ function authorLabel(message: Message): string {
 function closeReply() {
   replyTarget.value = null
   cancelReply()
-  draft.value = ''
 }
 async function submitPost() {
   if (!draft.value.trim()) return
@@ -225,8 +239,8 @@ async function submitPost() {
 </script>
 
 <template>
-  <p v-if="!room" class="lede">Choose a room to see its topic and current access.</p>
-  <div v-else id="room-content">
+  <p v-if="!selectedTopic" class="lede">Choose a Topic to read the conversation.</p>
+  <div v-else id="topic-content">
     <div class="conversation-toolbar">
       <p
         id="conversation-connection"
@@ -258,8 +272,8 @@ async function submitPost() {
         >Stewardship</button>
       </div>
     </div>
-    <header class="conversation-head"><p id="room-admission" class="eyebrow">{{ room.readAudience === 'Public' ? 'Publicly readable · signed-in participation' : 'Signed-in participants' }}</p>
-      <h2 id="room-title">{{ room.title }}</h2>
+    <header class="conversation-head"><p id="topic-admission" class="eyebrow">{{ selectedTopic.readAudience === 'Public' ? 'Publicly readable · signed-in participation' : 'Signed-in participants' }}</p>
+      <h2 id="topic-title">{{ selectedTopic.title }}</h2>
     </header>
     <p v-if="error" class="action-status error" role="alert">{{ error }}</p>
     <p v-if="loadingHistory" class="hint">Loading history…</p>
@@ -297,13 +311,22 @@ async function submitPost() {
           <div class="message-menu-panel">
             <button v-if="!message.removed && moderation.allowed(message, 'reportPost')" class="btn btn-quiet" type="button" @click="moderation.openReport(message.id, message.authorParticipantId)">Report post</button>
             <button v-if="mayEdit(message)" class="btn btn-quiet" type="button" @click="startEdit(message)">Edit post</button>
-            <button v-if="mayDelete(message)" class="btn btn-quiet message-danger" type="button" @click="deleteMessage(message)">Delete post</button>
+            <button v-if="mayPublish(message)" class="btn btn-quiet" type="button" @click="publishingPost = message.id">Publish to Bluesky</button>
+            <button v-if="mayDelete(message) && deleting !== message.id" class="btn btn-quiet message-danger" type="button" @click="deleting = message.id">Delete post</button>
+            <div v-if="deleting === message.id" class="stack">
+              <p>Remove this Post from the conversation?</p>
+              <button class="btn btn-quiet message-danger" type="button" @click="deleteMessage(message)">Remove Post</button>
+              <button class="btn btn-quiet" type="button" @click="deleting = null">Keep Post</button>
+            </div>
           </div>
         </details>
+        <BlueskyPublishPanel v-if="publishingPost === message.id && mayPublish(message)" :key="message.id + ':' + site.site?.participant?.did"
+          :post-id="message.id" :account-did="site.site!.participant!.did!" :account-label="site.site?.participant?.handle ? '@' + site.site.participant.handle : site.displayName"
+          @close="publishingPost = null" />
       </li>
     </ol>
     <p v-if="!messages.length" class="hint">No posts yet. Start the conversation.</p>
-    <button v-if="moreMessages" class="btn btn-quiet" type="button">Read more</button>
+    <button v-if="moreMessages || newMessages" class="btn btn-quiet" type="button" :disabled="loadingHistory" @click="readMore">{{ loadingHistory ? 'Loading…' : newMessages ? 'Read new Posts' : 'Read next page' }}</button>
     <form v-if="canWrite" class="compose" @submit.prevent="submitPost">
       <p v-if="replyTarget" class="reply-strip">Replying <button class="btn btn-quiet" type="button" @click="closeReply">Cancel reply</button></p>
       <label for="message-text">Your post</label>
