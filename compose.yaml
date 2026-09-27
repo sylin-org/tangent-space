@@ -8,6 +8,7 @@ services:
       - "127.0.0.1:5220:8080"
     environment:
       Tangent__Space__PublicOrigin: "http://127.0.0.1:5220"
+      Koan__Discovery__DisableAutomatic: "true"
       Koan__Cache__Adapters__Sqlite__DatabasePath: "/state/cache/cache.db"
       Koan__Data__Sources__Default__ConnectionString: "Data Source=/state/tangent.sqlite"
       Tangent__Storage__ConfigurationPath: "/state/storage.json"
