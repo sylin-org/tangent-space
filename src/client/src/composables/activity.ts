@@ -84,7 +84,7 @@ export function createActivity(options: {
     if (selectedTopic?.canRead && !selected && (changed || snapshot.resetRequired)) {
       const key = selectedTopic.key
       try {
-        const current = await httpRequest(`/api/tangents/${encodeURIComponent(selectedTopic.tangentKey)}/topics/${encodeURIComponent(key)}`, {
+        const current = await httpRequest(`/api/v1/tangents/${encodeURIComponent(selectedTopic.tangentKey)}/topics/${encodeURIComponent(key)}`, {
           credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal: context.signal,
         })
         if (!context.isCurrent()) return false

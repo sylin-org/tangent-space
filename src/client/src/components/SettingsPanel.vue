@@ -13,7 +13,7 @@ import ContentSourcesPanel from './ContentSourcesPanel.vue'
 
 import type { Atmosphere } from '../composables/atmosphere'
 
-const props = defineProps<{ settings: Settings; atmosphere: Atmosphere }>()
+const props = defineProps<{ settings: Settings; atmosphere: Atmosphere; expectedDid?: string }>()
 
 const {
   context, resource, shellVisible, denied, activeTab, tabsVisible, heading, breadcrumbs, contextHeading,
@@ -134,7 +134,7 @@ function onTabKeydown(event: KeyboardEvent, name: SettingsTabName) {
             <div class="settings-save"><button class="btn btn-primary">Save server settings</button><p id="settings-status" role="status">{{ serverStatus }}</p></div>
           </form>
         </details>
-        <DatabasePanel v-if="context?.kind === 'server' && serverCanManage" />
+        <DatabasePanel v-if="context?.kind === 'server' && serverCanManage" :expected-did="expectedDid || ''" />
         <ContentSourcesPanel v-if="context?.kind === 'server' && serverCanManage" />
       </section>
       <section id="settings-context-panel" class="settings-context-panel" role="tabpanel" aria-labelledby="settings-context-tab" :hidden="activeTab !== 'context'">

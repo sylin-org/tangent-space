@@ -140,7 +140,7 @@ export function createConversation(router: RouterStore) {
     loadingTopic.value = true
     try {
       const routeTangent = 'tangent' in router.route ? router.route.tangent : ''
-      const data = (await request(`/api/tangents/${encodeURIComponent(routeTangent)}/topics/${encodeURIComponent(key)}`, undefined, 'GET')).data as unknown as Topic
+      const data = (await request(`/api/v1/tangents/${encodeURIComponent(routeTangent)}/topics/${encodeURIComponent(key)}`, undefined, 'GET')).data as unknown as Topic
       if (version !== epoch) return
       selectedTopic.value = data
       restoreDraft()
@@ -209,7 +209,7 @@ export function createConversation(router: RouterStore) {
     refreshingHistory = true
     try {
       if (anchor) {
-        const result = (await request(`/api/tangents/${encodeURIComponent(anchor.tangent)}/posts/${encodeURIComponent(anchor.post)}`, undefined, 'GET', activity?.signal)).data as unknown as { window: MessagesPage }
+        const result = (await request(`/api/v1/tangents/${encodeURIComponent(anchor.tangent)}/posts/${encodeURIComponent(anchor.post)}`, undefined, 'GET', activity?.signal)).data as unknown as { window: MessagesPage }
         if (version === epoch && (!activity?.isCurrent || activity.isCurrent())) renderPage(result.window)
       } else await historyPage(currentCursor, version, key, !currentCursor, activity)
     } finally {
@@ -231,7 +231,7 @@ export function createConversation(router: RouterStore) {
     anchor = { tangent: tangentKey, post: postId }
     loadingTopic.value = true
     try {
-      const result = (await request(`/api/tangents/${encodeURIComponent(tangentKey)}/posts/${encodeURIComponent(postId)}`, undefined, 'GET')).data as unknown as { topic: Topic; window: MessagesPage }
+      const result = (await request(`/api/v1/tangents/${encodeURIComponent(tangentKey)}/posts/${encodeURIComponent(postId)}`, undefined, 'GET')).data as unknown as { topic: Topic; window: MessagesPage }
       if (version !== epoch) return
       selectedTopic.value = result.topic
       nextCursor = result.window.nextCursor

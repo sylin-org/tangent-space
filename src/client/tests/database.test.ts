@@ -9,6 +9,7 @@ it('requires a new successful test after edits and activates only the tested con
   const json = (data: unknown) => new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } })
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
+    if (path === '/api/site') return json({ participant: { did: 'did:plc:owner' } })
     if (path.endsWith('/session')) return json({ headerName: 'X-CSRF', requestToken: 'token' })
     if (path.endsWith('/test')) {
       expect(init?.headers).toMatchObject({ 'X-CSRF': 'token' })
@@ -23,7 +24,7 @@ it('requires a new successful test after edits and activates only the tested con
       id: 'sqlite', name: 'SQLite', fields: [{ name: 'path', label: 'Database path', type: 'text', required: true, secret: false }],
     }] })
   }))
-  const wrapper = mount(DatabasePanel)
+  const wrapper = mount(DatabasePanel, { props: { expectedDid: 'did:plc:owner' } })
   await flushPromises()
   const input = wrapper.get('input[name="path"]')
   await input.setValue('first.db')
@@ -36,6 +37,30 @@ it('requires a new successful test after edits and activates only the tested con
   await flushPromises()
   await wrapper.get('button.btn-primary').trigger('click')
   await flushPromises()
-  expect(activations).toEqual([{ testId: 'tested-2' }])
+  expect(activations).toEqual([{ testId: 'tested-2', expectedDid: 'did:plc:owner' }])
   expect(wrapper.text()).toContain('Restart the server')
+})
+
+it('stops a database mutation when another tab switches accounts', async () => {
+  let did = 'did:plc:owner'
+  const mutations: string[] = []
+  const json = (data: unknown) => new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } })
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (init?.method === 'POST') mutations.push(path)
+    if (path === '/api/site') return json({ participant: { did } })
+    return json({ activeProvider: 'sqlite', activeDurable: true, changeRequiresRestart: true, firstRun: true, pendingRestart: false, providers: [{
+      id: 'sqlite', name: 'SQLite', fields: [{ name: 'path', label: 'Database path', type: 'text', required: true, secret: false }],
+    }] })
+  }))
+  const wrapper = mount(DatabasePanel, { props: { expectedDid: did } })
+  await flushPromises()
+  await wrapper.get('input[name="path"]').setValue('example.db')
+  did = 'did:plc:other'
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(mutations).toEqual([])
+  expect(wrapper.emitted('identityChanged')).toHaveLength(1)
+  expect(wrapper.text()).toContain('signed-in account changed')
+  expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
 })

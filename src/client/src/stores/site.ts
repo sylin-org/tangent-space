@@ -21,6 +21,8 @@ export interface Site {
   signOut: string | null
   participant: SiteParticipant | null
   onboarding?: string
+  initialTangent?: { audience: string; audienceDescription: string; admission: string; admissionDescription: string }
+  initialTangentKey?: string | null
 }
 
 export interface ServerPermissions {
@@ -77,8 +79,11 @@ function parseSite(payload: unknown): Site | null {
   if (typeof p.name !== 'string' || p.name.length === 0) return null
   if (typeof p.established !== 'boolean') return null
   if (!isAllowedPath(p.signIn, SIGN_IN_PATH)) return null
+  const initial = p.initialTangent as Record<string, unknown> | undefined
+  const initialTangent = initial && ['audience', 'audienceDescription', 'admission', 'admissionDescription'].every(key => typeof initial[key] === 'string')
+    ? initial as unknown as Site['initialTangent'] : undefined
   if (p.participant === undefined || p.participant === null) {
-    return { name: p.name, established: p.established, signIn: p.signIn, signOut: null, participant: null, onboarding: typeof p.onboarding === 'string' ? p.onboarding : undefined }
+    return { name: p.name, established: p.established, signIn: p.signIn, signOut: null, participant: null, onboarding: typeof p.onboarding === 'string' ? p.onboarding : undefined, initialTangent }
   }
   if (typeof p.participant !== 'object') return null
   const participant = p.participant as Record<string, unknown>
@@ -100,6 +105,8 @@ function parseSite(payload: unknown): Site | null {
       joinedAt: participant.joinedAt,
     },
     onboarding: typeof p.onboarding === 'string' ? p.onboarding : undefined,
+    initialTangent,
+    initialTangentKey: typeof p.initialTangentKey === 'string' ? p.initialTangentKey : null,
   }
 }
 

@@ -34,12 +34,14 @@ it('refreshes one bounded page and leaves new Posts for an explicit continuation
 })
 
 it('isolates saved drafts by participant and retains the selected reply on publication', async () => {
+  const reads: string[] = []
   const writes: Record<string, unknown>[] = []
   vi.stubGlobal('fetch', vi.fn(async (path: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method === 'POST') {
       writes.push(JSON.parse(String(init.body)))
       return json({ state: 'accepted' })
     }
+    reads.push(String(path))
     if (String(path).includes('/posts')) return json({ messages: [], nextCursor: null, resumeCursor: 'resume', boundary: 0 })
     return json({ key: 'topic', tangentKey: 'tangent', title: 'Topic', canRead: true, canWrite: true, isLocked: false })
   }))
@@ -47,6 +49,7 @@ it('isolates saved drafts by participant and retains the selected reply on publi
   router.apply('/t/tangent/topics/topic')
   const conversation = createConversation(router)
   await conversation.choose('topic')
+  expect(reads).toContain('/api/v1/tangents/tangent/topics/topic')
   conversation.draft.value = 'Alice draft'
   await nextTick()
   conversation.reset()

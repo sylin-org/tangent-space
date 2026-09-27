@@ -12,7 +12,7 @@ using Tangent.Access;
 namespace Tangent.Spaces;
 
 public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptions<SpaceOptions> options, ParticipantDirectory directory,
-    TangentRoleAccess roleAccess, SignalBus signals)
+    TangentRoleAccess roleAccess, SignalBus signals, TangentGovernance tangents)
 {
     public async Task<ServerSettings> Read(string? actorId, CancellationToken ct)
     {
@@ -54,31 +54,9 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var participant = await Participant.Get(actorId, ct);
-            if (!HumanHostAccountability.CanClaim(participant))
-                throw new InvalidOperationException("A known agent cannot reserve human server ownership.");
-            if (space is not null && !space.IsOwner(actorId))
-                throw new InvalidOperationException("Server ownership is already claimed.");
-            var establishing = space is null;
-            if (space is null)
-            {
-                if (verifiedAtprotoDid is null)
-                    throw new UnauthorizedAccessException("Server ownership requires a verified atproto sign-in.");
-                if (await directory.ByDid(verifiedAtprotoDid, ct) is not { } holder || holder.Id != actorId)
-                    throw new UnauthorizedAccessException("The verified atproto sign-in must belong to the claiming participant.");
-                space = Space.Establish(options.Value, verifiedAtprotoDid, actorId, clock.GetUtcNow());
-            }
-            // Validate every claim prerequisite before changing either durable row. In particular,
-            // a refused ownership claim must not classify its caller as human as a side effect.
-            HumanHostAccountability.RequireDeclaration(participant!, ParticipantClassification.Human, isHostOwner: true);
-            participant!.Declare(ParticipantClassification.Human);
-            await participant.Save(ct);
-            space.HumanDeclared = true;
-            await space.Save(ct);
+            var (space, establishing) = await ClaimWithinTransaction(actorId, verifiedAtprotoDid, ct);
             // The Host and its home Tangent are established together; the owner names it during onboarding.
             if (establishing) await Community.Tangent.Home(space).Save(ct);
-            await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
             await EntityContext.Commit(ct);
             signals.Pulse();
             result = new ServerSettings(space.Name, space.WelcomeMessage, space.Motd, space.AllowAgentTangentOwnership,
@@ -87,6 +65,81 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
         finally { gate.Exit(); }
         // The Owner role projects the committed space; startup repeats the projection (TangentRoleAccess.Seed).
         return result;
+    }
+
+    /// <summary>Completes onboarding through ordered, retryable writes. Koan's deferred
+    /// transaction is not atomic; a partial claim is resumed by the same owner's next request.</summary>
+    public async Task<TangentDescription> CompleteOnboarding(string actorId, string? verifiedAtprotoDid,
+        string? expectedDid, string? name, string? description, string? artwork, bool skip, CancellationToken ct)
+    {
+        await gate.Enter(ct);
+        try
+        {
+            if (string.IsNullOrWhiteSpace(expectedDid)
+                || !string.Equals(expectedDid, verifiedAtprotoDid, StringComparison.Ordinal))
+                throw new UnauthorizedAccessException("The signed-in account changed. Return to onboarding with the current account.");
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
+            var space = await Space.Get(TangentConstants.SpaceId, ct);
+            var participant = await Participant.Get(actorId, ct);
+            if (space is not null && !space.IsOwner(actorId))
+                throw new InvalidOperationException("Server ownership is already claimed.");
+            if (!HumanHostAccountability.CanClaim(participant))
+                throw new UnauthorizedAccessException("This account cannot establish the Space.");
+            var home = space is null ? null : await Community.Tangent.Get(Community.Tangent.HomeKey, ct);
+            if (home?.SetupComplete != true)
+            {
+                // Validate all submitted content before the first owner/participant/home write.
+                Community.Tangent.ValidateOnboardingCard(name, description, artwork, skip);
+                (space, _) = await ClaimWithinTransaction(actorId, verifiedAtprotoDid, ct);
+                home ??= Community.Tangent.Home(space);
+                home.Change(actorId, skip ? "My Tangent" : name, skip ? "" : description,
+                    "Make room for the next thought.", "#f4b942", skip ? "" : artwork, clock.GetUtcNow());
+                await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId,
+                    tangentKey: home.Id, ct: ct);
+                // Completion is the final durable marker. If an earlier operation commits and
+                // a later one fails, the owner still sees create_tangent and can retry safely.
+                await home.Save(ct);
+                await EntityContext.Commit(ct);
+                signals.Pulse();
+            }
+            else
+            {
+                await EntityContext.Commit(ct);
+            }
+        }
+        finally { gate.Exit(); }
+        // A lost HTTP response can repeat this read without changing a completed card.
+        return await tangents.Describe(actorId, Community.Tangent.HomeKey, ct)
+            ?? throw new InvalidOperationException("The home Tangent is unavailable after onboarding.");
+    }
+
+    private async Task<(Space Space, bool Establishing)> ClaimWithinTransaction(
+        string actorId, string? verifiedAtprotoDid, CancellationToken ct)
+    {
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var participant = await Participant.Get(actorId, ct);
+        if (!HumanHostAccountability.CanClaim(participant))
+            throw new InvalidOperationException("A known agent cannot reserve human server ownership.");
+        if (space is not null && !space.IsOwner(actorId))
+            throw new InvalidOperationException("Server ownership is already claimed.");
+        var establishing = space is null;
+        if (space is null)
+        {
+            if (verifiedAtprotoDid is null)
+                throw new UnauthorizedAccessException("Server ownership requires a verified atproto sign-in.");
+            if (await directory.ByDid(verifiedAtprotoDid, ct) is not { } holder || holder.Id != actorId)
+                throw new UnauthorizedAccessException("The verified atproto sign-in must belong to the claiming participant.");
+            space = Space.Establish(options.Value, verifiedAtprotoDid, actorId, clock.GetUtcNow());
+        }
+        // A refused claim cannot classify the participant as a side effect.
+        HumanHostAccountability.RequireDeclaration(participant!, ParticipantClassification.Human, isHostOwner: true);
+        participant!.Declare(ParticipantClassification.Human);
+        await participant.Save(ct);
+        space.HumanDeclared = true;
+        await space.Save(ct);
+        await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, ct: ct);
+        return (space, establishing);
     }
 
     public async Task<ServerSettings> Update(string actorId, ServerSettingsPatch patch, CancellationToken ct)

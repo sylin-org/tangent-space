@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { reactive } from 'vue'
 import TangentDirectory from '../src/components/TangentDirectory.vue'
 import type { Directories } from '../src/composables/directories'
+import { createDirectories } from '../src/composables/directories'
 
 function directoriesFixture(tangents: unknown[], nextPage: number | null = null): Directories {
   return reactive({
@@ -23,6 +24,16 @@ function directoriesFixture(tangents: unknown[], nextPage: number | null = null)
 }
 
 describe('the Tangent directory', () => {
+  it('loads Topics from the versioned read route', async () => {
+    const fetch = vi.fn(async (_path: RequestInfo | URL) => new Response(JSON.stringify({ topics: [{ key: 'first', title: 'First' }], nextPage: null })))
+    vi.stubGlobal('fetch', fetch)
+    const directories = createDirectories()
+    await directories.loadTopics('home')
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/v1/tangents/home/topics')
+    expect(directories.topics.map(topic => topic.key)).toEqual(['first'])
+    vi.unstubAllGlobals()
+  })
+
   it('renders one card per Tangent with its settings gear for a manager', () => {
     const directories = directoriesFixture([
       { key: 'small-hours', name: 'Small Hours', description: 'A gentle place.', accent: '#e77a54', canManage: true },

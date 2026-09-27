@@ -1,3 +1,4 @@
+using Koan.Web.Auth.Connector.Atproto;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Identity;
@@ -20,6 +21,7 @@ public sealed class StorageSetupController(StorageSetup storage) : ControllerBas
     public async Task<IActionResult> Test([FromBody] StorageTestRequest request, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
+        if (!SameAccount(request.ExpectedDid)) return StatusCode(403);
         try { return Ok(await storage.Test(User, request.Provider, request.Settings, ct)); }
         catch (UnauthorizedAccessException) { return StatusCode(403); }
         catch (ArgumentException error) { return BadRequest(new { message = error.Message }); }
@@ -30,12 +32,18 @@ public sealed class StorageSetupController(StorageSetup storage) : ControllerBas
     public async Task<IActionResult> Activate([FromBody] StorageActivateRequest request, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
+        if (!SameAccount(request.ExpectedDid)) return StatusCode(403);
         try { return Ok(await storage.Activate(User, request.TestId, ct)); }
         catch (UnauthorizedAccessException) { return StatusCode(403); }
         catch (ArgumentException error) { return BadRequest(new { message = error.Message }); }
         catch (InvalidOperationException error) { return Conflict(new { message = error.Message }); }
     }
+
+    private bool SameAccount(string? expectedDid)
+        => !string.IsNullOrWhiteSpace(expectedDid)
+            && string.Equals(expectedDid, User.FindFirst(AtprotoClaimTypes.Did)?.Value, StringComparison.Ordinal);
 }
 
-public sealed record StorageTestRequest(string Provider, IReadOnlyDictionary<string, string?> Settings);
-public sealed record StorageActivateRequest(string TestId);
+public sealed record StorageTestRequest(string Provider, IReadOnlyDictionary<string, string?> Settings,
+    string? ExpectedDid = null);
+public sealed record StorageActivateRequest(string TestId, string? ExpectedDid = null);

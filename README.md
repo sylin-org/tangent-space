@@ -51,7 +51,7 @@ cd tangent-space
 ./Launch.bat
 ```
 
-Open [http://127.0.0.1:5220](http://127.0.0.1:5220) and sign in with an atproto account. SQLite is ready by default. Before naming your first Tangent, you can optionally choose one of the installed Koan database adapters, test its connection, activate the exact tested settings, then restart and sign in again. Once the Space is established, switching databases requires a data transfer.
+Open [http://127.0.0.1:5220](http://127.0.0.1:5220) and sign in with an atproto account. The guided setup confirms your account, lets you keep the ready-to-use SQLite database or choose a persistent Koan adapter, then helps you name your first Tangent. A different adapter must pass a connection test before its settings can be activated; restart and sign in again to continue. Once the Space is established, switching databases requires a data transfer.
 
 The build prepares the pinned Koan framework contribution, builds the web image, and compiles the local connector. A fresh launch uses SQLite; existing configuration is retained on subsequent launches.
 

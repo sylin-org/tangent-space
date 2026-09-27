@@ -1,6 +1,11 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Koan.Data.Core;
+using Koan.Data.Core.Routing;
+using Koan.Data.Abstractions.Capabilities;
+using Koan.Data.Connector.DuckDb;
+using Koan.Data.Connector.Json;
+using Koan.Data.Connector.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -13,10 +18,16 @@ namespace Tangent.Infrastructure;
 /// <summary>First-install database selection. Candidate probes never change Koan's active source.</summary>
 public sealed class StorageSetup(
     DataProviderSetup providers,
+    DataProviderCatalog catalog,
+    DefaultDataRouteAuthority activeRoute,
+    DataSourceRegistry sources,
     IConfiguration configuration,
     IWebHostEnvironment environment,
     IMemoryCache tickets,
     IOptions<SpaceOptions> spaceOptions,
+    IOptions<SqliteOptions> sqliteOptions,
+    IOptions<DuckDbOptions> duckDbOptions,
+    IOptions<JsonDataOptions> jsonOptions,
     ParticipantDirectory directory,
     ServerGovernance governance)
 {
@@ -28,6 +39,15 @@ public sealed class StorageSetup(
     private bool _pendingRestart;
 
     public bool PendingRestart => Volatile.Read(ref _pendingRestart);
+    private DataProviderCandidate? ActiveCandidate => providers.Candidates.FirstOrDefault(candidate =>
+        candidate.Id.Equals(activeRoute.Current.Adapter, StringComparison.OrdinalIgnoreCase)
+        || candidate.Aliases.Contains(activeRoute.Current.Adapter, StringComparer.OrdinalIgnoreCase));
+
+    public string? ActiveStorageIssue => ActiveCandidate is not { } candidate
+        ? "The active database adapter is not available. Configure a persistent adapter before creating the first Tangent."
+        : !HasPersistency(candidate)
+            ? "The active database adapter does not declare persistent storage support. Choose a persistent database before creating the first Tangent."
+            : ActiveFileIssue(candidate);
 
     public async Task<IDisposable> EnterChange(CancellationToken ct)
     {
@@ -40,22 +60,30 @@ public sealed class StorageSetup(
         var firstRun = await RequireOperator(principal, ct);
         return new
         {
-            activeProvider = configuration["Koan:Data:Sources:Default:Adapter"] ?? "sqlite",
-            providers = providers.Candidates.Select(candidate => new
+            activeProvider = ActiveCandidate?.Id ?? activeRoute.Current.Adapter,
+            activeDurable = ActiveStorageIssue is null,
+            activeStorageIssue = ActiveStorageIssue,
+            providers = providers.Candidates.Where(HasPersistency).Select(candidate =>
             {
-                id = candidate.Id,
-                name = IsVolatile(candidate.Id)
-                    ? candidate.DisplayName + " (temporary; data is lost on restart)"
-                    : candidate.DisplayName,
-                fields = candidate.Fields.Select(field => new
+                var reason = UnavailableReason(candidate);
+                return new
                 {
-                    name = field.Key,
-                    label = field.Label,
-                    required = field.Required && field.DefaultValue is null,
-                    secret = field.Kind == Koan.Data.Abstractions.DataProviderSetupFieldKind.Secret,
-                    type = field.Kind == Koan.Data.Abstractions.DataProviderSetupFieldKind.Integer ? "number" : "text",
-                    placeholder = field.Placeholder
-                })
+                    id = candidate.Id,
+                    name = candidate.DisplayName,
+                    availableForSetup = reason is null,
+                    unavailableReason = reason,
+                    fields = candidate.Fields.Select(field => new
+                    {
+                        name = field.Key,
+                        label = field.Label,
+                        required = (candidate.Id.Equals("json", StringComparison.OrdinalIgnoreCase)
+                            && field.Key.Equals("DirectoryPath", StringComparison.OrdinalIgnoreCase))
+                            || field.Required && field.DefaultValue is null,
+                        secret = field.Kind == Koan.Data.Abstractions.DataProviderSetupFieldKind.Secret,
+                        type = field.Kind == Koan.Data.Abstractions.DataProviderSetupFieldKind.Integer ? "number" : "text",
+                        placeholder = SetupPlaceholder(candidate.Id, field.Key, field.Placeholder)
+                    })
+                };
             }),
             changeRequiresRestart = true,
             firstRun,
@@ -72,23 +100,24 @@ public sealed class StorageSetup(
         if (PendingRestart) throw new InvalidOperationException("Restart the server before changing its database again.");
         if (settings.Count > 24 || settings.Any(item => item.Key.Length > 80 || item.Value?.Length > 16_384))
             throw new ArgumentException("Database settings are too large.");
-        if (IsVolatile(provider))
-            throw new ArgumentException("In-memory storage loses all content on restart. Choose a durable database.");
         var candidate = providers.Candidates.FirstOrDefault(item =>
             string.Equals(item.Id, provider, StringComparison.OrdinalIgnoreCase));
-        if (candidate is null || !candidate.SupportsProbe)
+        if (candidate is null)
             throw new ArgumentException("This database adapter is not available for tested setup.");
+        if (UnavailableReason(candidate) is { } reason) throw new ArgumentException(reason);
+        if (candidate.Id.Equals("json", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(settings.FirstOrDefault(item =>
+                item.Key.Equals("DirectoryPath", StringComparison.OrdinalIgnoreCase)).Value))
+            throw new ArgumentException("Choose a JSON directory inside the persistent state root.");
         var connection = settings.FirstOrDefault(item =>
             item.Key.Equals("ConnectionString", StringComparison.OrdinalIgnoreCase)).Value;
         if (candidate.Id.Equals("sqlite", StringComparison.OrdinalIgnoreCase) && connection is not null)
         {
-            var parsed = new SqliteConnectionStringBuilder(connection);
-            if (parsed.Mode == SqliteOpenMode.Memory || parsed.DataSource == ":memory:")
-                throw new ArgumentException("Choose a SQLite file path so content survives a restart.");
+            if (SqliteTargetIssue(connection) is { } issue) throw new ArgumentException(issue);
         }
         if (candidate.Id.Equals("duckdb", StringComparison.OrdinalIgnoreCase)
-            && connection?.Contains(":memory:", StringComparison.OrdinalIgnoreCase) == true)
-            throw new ArgumentException("Choose a DuckDB file path so content survives a restart.");
+            && DuckDbTargetIssue(connection) is { } duckIssue)
+            throw new ArgumentException(duckIssue);
         RequirePersistentFileTarget(candidate, settings, connection);
 
         var result = await providers.Probe(candidate.Id, settings, ct);
@@ -176,9 +205,130 @@ public sealed class StorageSetup(
         return true;
     }
 
-    private static bool IsVolatile(string provider)
-        => provider.Equals("inmemory", StringComparison.OrdinalIgnoreCase)
-            || provider.Equals("memory", StringComparison.OrdinalIgnoreCase);
+    private static bool HasPersistency(DataProviderCandidate candidate)
+        => candidate.Capabilities.Contains(DataCaps.Persistency.Id, StringComparer.Ordinal);
+
+    private string? ActiveFileIssue(DataProviderCandidate candidate)
+    {
+        if (candidate.Id is not ("sqlite" or "duckdb" or "json")) return null;
+        try
+        {
+            var source = activeRoute.Current.Source;
+            var owner = catalog.Find(candidate.Id)
+                ?? throw new InvalidOperationException("The active database adapter is no longer installed.");
+            var connection = candidate.Id switch
+            {
+                "sqlite" => AdapterConnectionResolver.ResolveRoutedConnection(configuration, sources,
+                    candidate.Id, source, sqliteOptions.Value.ConnectionString, owner),
+                "duckdb" => AdapterConnectionResolver.ResolveRoutedConnection(configuration, sources,
+                    candidate.Id, source, duckDbOptions.Value.ConnectionString, owner),
+                _ => null
+            };
+            var directory = candidate.Id == "json"
+                ? AdapterConnectionResolver.GetSourceSetting(configuration, sources, candidate.Id, source,
+                    nameof(JsonDataOptions.DirectoryPath), jsonOptions.Value.DirectoryPath, owner)
+                : null;
+            if (candidate.Id == "sqlite" && SqliteTargetIssue(connection) is { } sqliteIssue)
+                return sqliteIssue;
+            if (candidate.Id == "duckdb" && DuckDbTargetIssue(connection) is { } duckIssue)
+                return duckIssue;
+            if (_persistentRoot is null) return null;
+            if (candidate.Id == "json" && string.IsNullOrWhiteSpace(directory))
+                return "Configure the active JSON directory inside the persistent state root.";
+            if (candidate.Id != "json" && (string.IsNullOrWhiteSpace(connection) || connection == "auto"))
+                return "Configure the active database file inside the persistent state root.";
+            var settings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (directory is not null) settings["DirectoryPath"] = directory;
+            RequirePersistentFileTarget(candidate, settings, connection);
+            return null;
+        }
+        catch (ArgumentException error)
+        {
+            return error.Message;
+        }
+        catch (InvalidOperationException)
+        {
+            return "The active database target could not be resolved. Configure persistent storage before creating the first Tangent.";
+        }
+    }
+
+    private static string? SqliteTargetIssue(string? connection)
+    {
+        if (string.IsNullOrWhiteSpace(connection) || connection.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            return "Choose a SQLite file path so content survives a restart.";
+        var parsed = new SqliteConnectionStringBuilder(connection);
+        return parsed.Mode == SqliteOpenMode.Memory
+            || string.IsNullOrWhiteSpace(parsed.DataSource)
+            || parsed.DataSource.Equals(":memory:", StringComparison.OrdinalIgnoreCase)
+            || parsed.DataSource.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
+            ? "Choose a SQLite file path so content survives a restart; SQLite memory and URI targets are unavailable."
+            : null;
+    }
+
+    private static string? DuckDbTargetIssue(string? connection)
+    {
+        if (string.IsNullOrWhiteSpace(connection) || connection.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            return "Choose a DuckDB file path so content survives a restart.";
+        string? dataSource = null;
+        var memoryMode = false;
+        foreach (var segment in DuckDbSegments(connection))
+        {
+            var separator = segment.IndexOf('=');
+            if (separator <= 0) continue;
+            var key = segment[..separator].Trim();
+            var value = segment[(separator + 1)..].Trim();
+            if (key.Equals("Data Source", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("DataSource", StringComparison.OrdinalIgnoreCase)) dataSource = value;
+            if (key.Equals("Mode", StringComparison.OrdinalIgnoreCase)
+                && value.Equals("Memory", StringComparison.OrdinalIgnoreCase)) memoryMode = true;
+        }
+        return memoryMode || string.IsNullOrWhiteSpace(dataSource)
+            || dataSource.Equals(":memory:", StringComparison.OrdinalIgnoreCase)
+            ? "Choose a DuckDB file path so content survives a restart; memory mode is unavailable."
+            : null;
+    }
+
+    // Match Koan DuckDbConnections.SplitSegments: semicolons inside quoted values are not separators.
+    private static IEnumerable<string> DuckDbSegments(string connection)
+    {
+        var current = new System.Text.StringBuilder();
+        var quoted = false;
+        foreach (var character in connection)
+        {
+            if (character == '"') quoted = !quoted;
+            if (character == ';' && !quoted)
+            {
+                if (current.Length > 0) yield return current.ToString().Trim();
+                current.Clear();
+            }
+            else current.Append(character);
+        }
+        if (current.Length > 0) yield return current.ToString().Trim();
+    }
+
+    private string? UnavailableReason(DataProviderCandidate candidate)
+    {
+        if (!HasPersistency(candidate)) return "This adapter does not declare persistent storage support.";
+        if (!candidate.SupportsProbe) return "This adapter does not support a connection test, so it cannot be activated during setup.";
+        if (candidate.Id.Equals("json", StringComparison.OrdinalIgnoreCase) && _persistentRoot is null)
+            return "JSON storage needs a configured persistent state root.";
+        return null;
+    }
+
+    private string? SetupPlaceholder(string provider, string field, string? fallback)
+    {
+        if (_persistentRoot is null) return fallback;
+        if (field.Equals("ConnectionString", StringComparison.OrdinalIgnoreCase))
+        {
+            if (provider.Equals("sqlite", StringComparison.OrdinalIgnoreCase))
+                return "Data Source=" + Path.Combine(_persistentRoot, "tangent.sqlite");
+            if (provider.Equals("duckdb", StringComparison.OrdinalIgnoreCase))
+                return "Data Source=" + Path.Combine(_persistentRoot, "tangent.duckdb");
+        }
+        return provider.Equals("json", StringComparison.OrdinalIgnoreCase)
+            && field.Equals("DirectoryPath", StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(_persistentRoot, "tangent-json") : fallback;
+    }
 
     private void RequirePersistentFileTarget(DataProviderCandidate candidate,
         IReadOnlyDictionary<string, string?> settings, string? connection)
@@ -193,7 +343,7 @@ public sealed class StorageSetup(
         }
         else if (candidate.Id.Equals("duckdb", StringComparison.OrdinalIgnoreCase) && connection is not null)
         {
-            path = connection.Split(';').Select(segment => segment.Split('=', 2))
+            path = DuckDbSegments(connection).Select(segment => segment.Split('=', 2))
                 .Where(parts => parts.Length == 2 && (parts[0].Trim().Equals("Data Source", StringComparison.OrdinalIgnoreCase)
                     || parts[0].Trim().Equals("DataSource", StringComparison.OrdinalIgnoreCase)))
                 .Select(parts => parts[1].Trim()).FirstOrDefault();
@@ -203,7 +353,7 @@ public sealed class StorageSetup(
         else if (candidate.Id.Equals("json", StringComparison.OrdinalIgnoreCase))
         {
             path = settings.FirstOrDefault(item => item.Key.Equals("DirectoryPath", StringComparison.OrdinalIgnoreCase)).Value
-                ?? candidate.Fields.FirstOrDefault(field => field.Key.Equals("DirectoryPath", StringComparison.OrdinalIgnoreCase))?.DefaultValue;
+                ?? throw new ArgumentException("Choose a JSON directory inside the persistent state root.");
         }
         if (path is null) return;
         if (path.Length == 0 || path.Contains("://", StringComparison.Ordinal))

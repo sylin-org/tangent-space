@@ -45,6 +45,9 @@ public sealed class WelcomeController(IOptions<SpaceOptions> options, TangentSer
             : space.IsOwner(participantId) && home?.SetupComplete != true ? "create_tangent" : "complete";
         return Ok(new SpaceWelcome(space?.Name ?? options.Value.Name, space is not null, identity,
             TangentConstants.SignInPath, identity is null ? null : TangentConstants.SignOutPath,
-            await topics.List(participantId, 1, ct), settings, onboarding));
+            await topics.List(participantId, 1, ct), settings, onboarding,
+            new InitialTangentPolicy("Public", "Anyone can read the first Tangent and its public Topics.",
+                "Open", "Signed-in visitors can join without approval."),
+            home?.SetupComplete == true ? home.Id : null));
     }
 }

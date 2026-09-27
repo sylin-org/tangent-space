@@ -61,6 +61,10 @@ public sealed class Tangent : Entity<Tangent>
         CreatedAt = space.EstablishedAt, UpdatedAt = space.EstablishedAt, PolicyRevision = 1
     };
 
+    internal static void ValidateOnboardingCard(string? name, string? description, string? artwork, bool skip)
+        => CheckCard(skip ? "My Tangent" : name, skip ? "" : description,
+            "Make room for the next thought.", "#f4b942", skip ? "" : artwork);
+
     public void Change(string actorDid, string? name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)
     {
         if (!IsOwner(actorDid)) throw new TangentRuleViolation(TangentDenial.Forbidden, "Only the Tangent owner can change its card.");

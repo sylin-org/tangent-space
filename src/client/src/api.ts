@@ -7,14 +7,27 @@ export function httpRequest(path: RequestInfo | URL, init?: RequestInit): Promis
   return fetch(path, init)
 }
 
+export class SetupIdentityError extends Error {}
+export async function assertSetupIdentity(expectedDid: string): Promise<void> {
+  const response = await httpRequest('/api/site', { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error('Your signed-in account could not be checked. Try again when the server is available.')
+  const value = await response.json()
+  if (!expectedDid || value.participant?.did !== expectedDid)
+    throw new SetupIdentityError('Your signed-in account changed in another tab. Sign in with the account shown here, or reload to continue with your current account.')
+}
+
 export interface StorageProvider {
   id: string
   name: string
+  availableForSetup?: boolean
+  unavailableReason?: string | null
   fields: Array<{ name: string; label: string; required: boolean; secret: boolean; type: string; placeholder?: string | null }>
 }
 
 export interface StorageState {
   activeProvider: string
+  activeDurable?: boolean
+  activeStorageIssue?: string | null
   providers: StorageProvider[]
   changeRequiresRestart: boolean
   firstRun: boolean
@@ -43,10 +56,10 @@ async function storageRequest<T>(suffix = '', body?: unknown): Promise<T> {
 
 export const storageApi = {
   get: () => storageRequest<StorageState>(),
-  test: (provider: string, settings: Record<string, string>) =>
-    storageRequest<{ testId: string; provider: string; message: string }>('/test', { provider, settings }),
-  activate: (testId: string) =>
-    storageRequest<{ provider: string; restartRequired: boolean; message: string }>('/activate', { testId }),
+  test: (provider: string, settings: Record<string, string>, expectedDid: string) =>
+    storageRequest<{ testId: string; provider: string; message: string }>('/test', { provider, settings, expectedDid }),
+  activate: (testId: string, expectedDid: string) =>
+    storageRequest<{ provider: string; restartRequired: boolean; message: string }>('/activate', { testId, expectedDid }),
 }
 
 export interface ContentSourceState { id: string; status: string; read: boolean; publish: string }

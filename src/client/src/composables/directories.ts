@@ -65,7 +65,7 @@ export function createDirectories() {
   async function loadTopics(tangentKey: string, page?: number) {
     loading.value = true
     try {
-      const data = (await httpRequest(`/api/tangents/${encodeURIComponent(tangentKey)}/topics` + (page ? `?page=${encodeURIComponent(page)}` : ''), {
+      const data = (await httpRequest(`/api/v1/tangents/${encodeURIComponent(tangentKey)}/topics` + (page ? `?page=${encodeURIComponent(page)}` : ''), {
         credentials: 'same-origin', cache: 'no-store',
       }).then(r => r.ok ? r.json() : null)) as { topics?: TopicCard[]; nextPage?: number | null } | null
       if (!data) return

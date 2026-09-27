@@ -333,6 +333,71 @@ public sealed class EnrollmentTests
     }
 
     [Fact]
+    public async Task Invalid_first_tangent_does_not_claim_and_successful_retry_is_once_only()
+    {
+        const string did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+        await using var fixture = await HostFixture.StartAsync(ownerDid: "");
+        var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
+        var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
+        await arrival.Enter(did, "owner.test", CancellationToken.None);
+        var actor = await Pid(did);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => server.CompleteOnboarding(
+            actor, did, "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", "First Tangent", null, null, false, CancellationToken.None));
+        await Assert.ThrowsAsync<TangentRuleViolation>(() => server.CompleteOnboarding(
+            actor, did, did, " ", "Description", null, false, CancellationToken.None));
+        using (EntityContext.NoCache())
+        {
+            Assert.Null(await Space.Get(TangentConstants.SpaceId, CancellationToken.None));
+            Assert.Null(await global::Tangent.Community.Tangent.Get(global::Tangent.Community.Tangent.HomeKey, CancellationToken.None));
+            Assert.Equal(ParticipantClassification.Undeclared,
+                (await Participant.Get(actor, CancellationToken.None))!.Classification);
+        }
+
+        var created = await server.CompleteOnboarding(actor, did, did, "First Tangent", "Description", null,
+            false, CancellationToken.None);
+        Assert.Equal(global::Tangent.Community.Tangent.HomeKey, created.Key);
+        Assert.Equal("First Tangent", created.Name);
+        var retried = await server.CompleteOnboarding(actor, did, did, "Different name", null, null,
+            false, CancellationToken.None);
+        Assert.Equal("First Tangent", retried.Name);
+        using (EntityContext.NoCache())
+        {
+            Assert.Equal(actor, (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
+            Assert.True((await global::Tangent.Community.Tangent.Get(global::Tangent.Community.Tangent.HomeKey, CancellationToken.None))!.SetupComplete);
+        }
+    }
+
+    [Fact]
+    public async Task Persisted_owner_claim_with_missing_home_resumes_on_retry()
+    {
+        const string did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+        await using var fixture = await HostFixture.StartAsync(ownerDid: "");
+        var arrival = fixture.Host.Services.GetRequiredService<Arrival>();
+        var server = fixture.Host.Services.GetRequiredService<ServerGovernance>();
+        await arrival.Enter(did, "owner.test", CancellationToken.None);
+        var actor = await Pid(did);
+        // Claim writes the same durable owner prefix as a partial onboarding commit.
+        await server.Claim(actor, did, CancellationToken.None);
+        using (EntityContext.NoCache())
+            await (await global::Tangent.Community.Tangent.Get(
+                global::Tangent.Community.Tangent.HomeKey, CancellationToken.None))!.Remove(CancellationToken.None);
+        using (EntityContext.NoCache())
+        {
+            Assert.Equal(actor, (await Space.Get(TangentConstants.SpaceId, CancellationToken.None))!.OwnerParticipantId);
+            Assert.Null(await global::Tangent.Community.Tangent.Get(
+                global::Tangent.Community.Tangent.HomeKey, CancellationToken.None));
+        }
+
+        var result = await server.CompleteOnboarding(actor, did, did, "Recovered Tangent", null, null,
+            false, CancellationToken.None);
+        Assert.Equal("Recovered Tangent", result.Name);
+        using (EntityContext.NoCache())
+            Assert.True((await global::Tangent.Community.Tangent.Get(
+                global::Tangent.Community.Tangent.HomeKey, CancellationToken.None))!.SetupComplete);
+    }
+
+    [Fact]
     public async Task Restarting_with_another_configured_owner_DID_refuses_to_boot_the_site()
     {
         const string owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";

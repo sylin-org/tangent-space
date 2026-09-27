@@ -14,7 +14,7 @@
       <WelcomeHero :site="site" :router="router" :tangent="routeTangent" :topic="routeTopic" />
 
       <section id="settings-page" class="settings-page" :hidden="!router.isSettings" aria-labelledby="settings-title">
-        <SettingsPanel :settings="settings" :atmosphere="atmosphere" />
+        <SettingsPanel :settings="settings" :atmosphere="atmosphere" :expected-did="site.site?.participant?.did || ''" />
       </section>
 
       <section id="state-loading" :hidden="site.state !== 'loading'" aria-labelledby="loading-title">
@@ -29,14 +29,16 @@
       </section>
 
       <section id="state-anonymous" :hidden="!anonymousVisible" aria-labelledby="anonymous-title">
+        <SetupProgress v-if="onboardingSignIn" current="account" />
         <div class="onboarding-layout">
           <div class="onboarding-copy"><p class="eyebrow">A place to return to</p><h1 class="title" id="anonymous-title">{{ anonymousTitle }}</h1>
             <p class="lede" id="anonymous-copy">{{ anonymousCopy }}</p>
-            <p class="note" id="note-unestablished" :hidden="site.established">Sign in with your Atmosphere account. You’ll name your first Tangent next.</p>
+            <p class="note" id="note-unestablished" :hidden="site.established">Use the account you want to manage this Space. You’ll choose your database and name your first Tangent next.</p>
             <form id="sign-in-form" method="get" class="sign-in" :action="site.site?.signIn">
-              <input type="hidden" name="return" :value="signInReturn"><button type="submit" class="btn btn-primary" id="sign-in-button">Log in with Bluesky <span aria-hidden="true">→</span></button>
+              <input type="hidden" name="return" :value="signInReturn"><button type="submit" class="btn btn-primary" id="sign-in-button">Sign in with Bluesky <span aria-hidden="true">→</span></button>
             </form>
-            <p class="hint" id="sign-in-hint">{{ onboardingSignIn ? 'Choose your account on Bluesky. That account becomes this server’s owner.' : 'Choose your account on Bluesky. Your password stays there.' }}</p>
+            <p class="hint" id="sign-in-hint">{{ onboardingSignIn ? 'You’ll become this Space’s owner when you finish setup. Signing in does not publish anything to Bluesky.' : 'Choose your account on Bluesky. Your password stays there.' }}</p>
+            <p v-if="onboardingSignIn" class="hint sign-in-compatible">Using another AT Protocol account? Enter its handle at sign-in.</p>
           </div>
           <aside class="onboarding-preview" aria-label="A Tangent card">
             <div class="tangent-card onboarding-tcg" style="--tangent-accent:#f4b942">
@@ -82,6 +84,7 @@
       </section>
 
       <section id="place" :hidden="!placeVisible" aria-label="Topics and conversation">
+        <FirstArrival :site="site" :router="router" @start="openFirstTopic" />
         <section id="catch-up" class="catch-up" :hidden="!catchUpEntries.length || router.route.kind !== 'home' || !site.site?.participant" aria-labelledby="catch-up-title">
           <h2 id="catch-up-title">While you were away</h2>
           <ul id="catch-up-list">
@@ -116,11 +119,12 @@
         <details id="site-setup" :hidden="!siteSetupVisible" class="setup">
           <summary>Create a Topic</summary>
           <p class="hint">Start with a name and choose who can join the conversation.</p>
-          <form id="create-selectedTopic" class="stack">
+          <form id="create-selectedTopic" class="stack" @submit.prevent="createTopic" @input="autoTopicKey">
             <h2>Create a Topic</h2>
             <label>Topic name<input class="input" name="title" required maxlength="120"></label>
-            <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="first-thoughts"></label>
-            <button class="btn btn-primary" type="submit" @click.prevent="createTopic($event)">Create Topic</button>
+            <label>Address <span class="field-note">Filled from the name. You can change it before creating.</span><input class="input" name="key" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" placeholder="first-thoughts" @input="($event.target as HTMLInputElement).dataset.manual = 'true'"></label>
+            <button class="btn btn-primary" type="submit" :disabled="creatingTopic">{{ creatingTopic ? 'Creating…' : 'Create Topic' }}</button>
+            <p v-if="topicCreationError" role="alert" class="error">{{ topicCreationError }}</p>
           </form>
         </details>
         </div></details>
@@ -182,6 +186,8 @@ import ProfilePanel from './components/ProfilePanel.vue'
 import TangentEditorPanel from './components/TangentEditorPanel.vue'
 import StewardshipPanel from './components/StewardshipPanel.vue'
 import OnboardingPanel from './components/OnboardingPanel.vue'
+import SetupProgress from './components/SetupProgress.vue'
+import FirstArrival from './components/FirstArrival.vue'
 import BlueskyDirectory from './components/BlueskyDirectory.vue'
 import ReportPanel from './components/ReportPanel.vue'
 
@@ -300,13 +306,13 @@ const anonymousVisible = computed(() => authenticationRoute.value && site.state 
 // (onboarding.js show(), state sign_in).
 const onboardingState = computed(() => site.site?.onboarding || 'complete')
 const onboardingSignIn = computed(() => router.route.kind === 'onboarding' && onboardingState.value === 'sign_in')
-const onboardingVisible = computed(() => router.route.kind === 'onboarding' && site.state !== 'loading' && !['complete', 'sign_in'].includes(onboardingState.value))
+const onboardingVisible = computed(() => router.route.kind === 'onboarding' && site.state !== 'loading' && onboardingState.value !== 'sign_in')
 
 const anonymousTitle = computed(() =>
-  onboardingSignIn.value ? 'Welcome to your own Tangents.' : router.route.kind === 'sign-in' ? 'Welcome back.' : 'Conversation has a home here.')
+  onboardingSignIn.value ? 'A place for your conversations.' : router.route.kind === 'sign-in' ? 'Welcome back.' : 'Conversation has a home here.')
 const anonymousCopy = computed(() =>
-  router.route.kind === 'sign-in' || onboardingSignIn.value
-    ? 'Sign in to ' + (site.site?.name ?? 'this server') + ' with your Atmosphere account.'
+  onboardingSignIn.value ? 'Create a community for people, companions and the conversations worth keeping.' : router.route.kind === 'sign-in'
+    ? 'Sign in to ' + (site.site?.name ?? 'this Space') + ' with your Bluesky or compatible account.'
     : 'A home for your people, your companions, and the conversations you want to keep.',
 )
 
@@ -362,12 +368,22 @@ const catchUpEntries = computed(() =>
 const communitySettings = ref<HTMLDetailsElement | null>(null)
 const tangentSetup = ref<HTMLDetailsElement | null>(null)
 const createTangentForm = ref<HTMLFormElement | null>(null)
+const creatingTopic = ref(false)
+const topicCreationError = ref('')
 
 function openCreateTangent() {
   if (communitySettings.value) communitySettings.value.open = true
   if (tangentSetup.value) tangentSetup.value.open = true
   const name = createTangentForm.value?.elements.namedItem('name')
   if (name instanceof HTMLInputElement) name.focus()
+}
+
+function openFirstTopic() {
+  if (communitySettings.value) communitySettings.value.open = true
+  const setup = document.getElementById('site-setup') as HTMLDetailsElement | null
+  if (setup) setup.open = true
+  setup?.querySelector<HTMLInputElement>('input[name="title"]')?.focus()
+  setup?.scrollIntoView({ block: 'center' })
 }
 
 // pages.js derives the address from the name until the operator edits it.
@@ -411,11 +427,25 @@ async function submitCreateTangent(event: Event) {
 }
 
 async function createTopic(event: Event) {
+  if (creatingTopic.value) return
   const form = event.target as HTMLFormElement
   const body = Object.fromEntries(new FormData(form)) as { key: string; title: string }
-  if (!activeTangentKey.value) throw new Error('Choose a Tangent before starting a Topic.')
-  await directories.createTopic(activeTangentKey.value, body)
-  form.reset()
-  router.navigate('/t/' + encodeURIComponent(activeTangentKey.value) + '/topics/' + encodeURIComponent(body.key))
+  if (!activeTangentKey.value) return
+  creatingTopic.value = true
+  topicCreationError.value = ''
+  try {
+    await directories.createTopic(activeTangentKey.value, body)
+    form.reset()
+    delete (form.elements.namedItem('key') as HTMLInputElement).dataset.manual
+    router.navigate('/t/' + encodeURIComponent(activeTangentKey.value) + '/topics/' + encodeURIComponent(body.key))
+  } catch (e) { topicCreationError.value = (e as Error).message }
+  finally { creatingTopic.value = false }
+}
+
+function autoTopicKey(event: Event) {
+  const form = event.currentTarget as HTMLFormElement
+  const title = form.elements.namedItem('title') as HTMLInputElement
+  const key = form.elements.namedItem('key') as HTMLInputElement
+  if (!key.dataset.manual) key.value = slugFromName(title.value)
 }
 </script>

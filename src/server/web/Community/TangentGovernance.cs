@@ -159,35 +159,6 @@ public sealed class TangentGovernance(TimeProvider clock, PolicyGate gate,
         finally { gate.Exit(); }
     }
 
-    // One durable transition; a lost response can be retried without creating another card.
-    public async Task<TangentDescription> CompleteOnboarding(string actorId, string? name, string? description,
-        string? artwork, bool skip, CancellationToken ct)
-    {
-        await gate.Enter(ct);
-        try
-        {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var actor = await Participant.Get(actorId, ct);
-            if (space?.IsOwner(actorId) != true || actor is null || actor.IsSuspended)
-                throw new UnauthorizedAccessException();
-            var home = await Community.Tangent.Get(Community.Tangent.HomeKey, ct)
-                ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The home Tangent does not exist.");
-            if (!home.SetupComplete)
-            {
-                home.Change(actorId, skip ? "My Tangent" : name ?? "", skip ? "" : description,
-                    "Make room for the next thought.", "#f4b942", skip ? "" : artwork, clock.GetUtcNow());
-                await home.Save(ct);
-                await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId, tangentKey: home.Id, ct: ct);
-            }
-            await EntityContext.Commit(ct);
-            signals.Pulse();
-            return await DescribeForOwner(home, actorId, ct);
-        }
-        finally { gate.Exit(); }
-    }
-
     public async Task<TangentDescription> Change(string actorId, string key, string? name, string? description, string? motto,
         string? accent, string? artwork, CancellationToken ct)
     {

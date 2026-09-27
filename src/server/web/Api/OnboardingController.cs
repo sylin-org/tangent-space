@@ -24,15 +24,14 @@ public sealed class OnboardingController(TangentServer hub, StorageSetup storage
         using var storageLease = await storage.EnterChange(ct);
         if (storage.PendingRestart)
             return Conflict(new { error = "Restart Tangent to apply the selected database before creating the first Tangent." });
+        if (storage.ActiveStorageIssue is { } issue)
+            return Conflict(new { error = issue });
         var participantId = ParticipationAccess.Require(User, ParticipationGrants.Manage);
         try
         {
-            // Naming the first Tangent is the owner's declaring act. There is no separate
-            // confirmation step, so an unclaimed server is claimed by the same press: the
-            // step says whose server this becomes, and offers to switch account instead.
-            if ((await hub.Space.Read(participantId, ct)).CanClaim)
-                await hub.Space.Claim(participantId, User.FindFirst(AtprotoClaimTypes.Did)?.Value, ct);
-            return Ok(await hub.Tangents.CompleteOnboarding(participantId, request.Name, request.Description, request.Artwork, request.Skip, ct));
+            return Ok(await hub.Space.CompleteOnboarding(participantId, User.FindFirst(AtprotoClaimTypes.Did)?.Value,
+                request.ExpectedDid,
+                request.Name, request.Description, request.Artwork, request.Skip, ct));
         }
         catch (UnauthorizedAccessException) { return StatusCode(403); }
         // TangentRuleViolation is an InvalidOperationException, so it is caught first.
@@ -42,4 +41,4 @@ public sealed class OnboardingController(TangentServer hub, StorageSetup storage
 }
 
 public sealed record FirstTangentRequest(string? Name = null, string? Description = null, bool Skip = false,
-    string? Artwork = null);
+    string? Artwork = null, string? ExpectedDid = null);
