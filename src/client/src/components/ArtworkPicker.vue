@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { httpRequest } from '../api'
 
-// The cover picker, ported from artwork.js: an upload with bounded size and type,
-// a URL fallback, and the curated library filtered by mood. The picker blocks the
-// form's save handlers while an image is in flight.
+// The cover picker offers bounded uploads and a curated library filtered by mood.
+// Parent forms block saves while an image is in flight.
 import { computed, ref, watch } from 'vue'
 import { artworkPresets } from '../composables/artwork-presets'
 
@@ -11,9 +10,10 @@ const props = defineProps<{
   scope: 'server' | 'tangent'
   tangentKey?: string | null
   modelValue: string
+  disabled?: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'update:modelValue', value: string): void; (e: 'uploading', value: boolean): void }>()
+const emit = defineEmits<{ (e: 'update:modelValue', value: string): void; (e: 'uploading', value: boolean): void; (e: 'selected', value: string): void }>()
 
 const moods = ['All moods', ...new Set(artworkPresets.map(entry => entry.group))]
 const mood = ref('All moods')
@@ -24,8 +24,10 @@ const picker = ref<HTMLInputElement | null>(null)
 const url = computed(() => props.modelValue)
 
 function choose(value: string, message: string): void {
+  if (props.disabled) return
   emit('update:modelValue', value)
-  feedback.value = message
+  feedback.value = props.scope === 'server' ? '' : message
+  emit('selected', value)
 }
 
 const visiblePresets = computed(() =>
@@ -34,7 +36,7 @@ const visiblePresets = computed(() =>
 
 const selectionLabel = computed(() => {
   const selected = artworkPresets.find(entry => url.value === '/tangent-art/' + entry.slug + '.png')
-  return 'Selected: ' + (selected?.name || (url.value ? 'Custom image' : 'No artwork'))
+  return 'Selected: ' + (selected?.name || (url.value ? 'Custom image' : props.scope === 'server' ? 'No background' : 'No artwork'))
 })
 
 watch(uploading, value => emit('uploading', value))
@@ -42,7 +44,7 @@ watch(uploading, value => emit('uploading', value))
 async function onPick(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  if (!file) return
+  if (!file || props.disabled) return
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024 || !file.size) {
     feedback.value = 'Choose a PNG, JPEG, or WebP image no larger than 5 MB.'
     input.value = ''
@@ -70,7 +72,7 @@ async function onPick(event: Event): Promise<void> {
       feedback.value = 'The card changed during upload. Choose the image again to use it here.'
       return
     }
-    choose(result.url, 'Image ready. Save your changes to use it on the card.')
+    choose(result.url, 'Image ready. Save your changes to use it in this place.')
   } catch (error) {
     feedback.value = (error as Error).message
   } finally {
@@ -82,19 +84,19 @@ async function onPick(event: Event): Promise<void> {
 
 <template>
   <div class="artwork-upload">
-    <p class="artwork-legend">Choose a cover, or bring your own.</p>
+    <p class="artwork-legend">{{ scope === 'server' ? 'Choose a background, or bring your own.' : 'Choose a cover, or bring your own.' }}</p>
     <p class="artwork-current">{{ selectionLabel }}</p>
-    <label>Card artwork<input ref="picker" type="file" accept="image/png,image/jpeg,image/webp" class="input" @change="onPick"></label>
-    <p class="hint">PNG, JPEG, or WebP · up to 5 MB. Card images are public.</p>
+    <label>{{ scope === 'tangent' ? 'Community image' : 'Upload a background image' }}<input ref="picker" type="file" accept="image/png,image/jpeg,image/webp" class="input" :disabled="disabled || uploading" @change="onPick"></label>
+    <p class="hint">PNG, JPEG, or WebP · up to 5 MB. Images are public.</p>
     <p class="hint" role="status">{{ feedback }}</p>
     <details class="artwork-library">
-      <summary>Browse {{ artworkPresets.length }} covers</summary>
+      <summary>Browse {{ artworkPresets.length }} {{ scope === 'server' ? 'backgrounds' : 'covers' }}</summary>
       <label class="artwork-filter">Mood
         <select v-model="mood" class="input">
           <option v-for="group in moods" :key="group" :value="group">{{ group }}</option>
         </select>
       </label>
-      <p class="hint" role="status">{{ visiblePresets.length }} covers · Select one to preview it.</p>
+      <p class="hint" role="status">{{ visiblePresets.length }} {{ scope === 'server' ? 'backgrounds' : 'covers' }} · {{ 'Select one to preview it. Save changes to keep it.' }}</p>
       <div class="artwork-choices" aria-label="Curated artwork">
         <button
           v-for="entry in visiblePresets"
@@ -103,6 +105,7 @@ async function onPick(event: Event): Promise<void> {
           class="artwork-choice"
           :data-mood="entry.group"
           :aria-pressed="url === '/tangent-art/' + entry.slug + '.png'"
+          :disabled="disabled || uploading"
           @click="choose('/tangent-art/' + entry.slug + '.png', 'Preview updated. Save your changes to keep it.')"
         >
           <img :src="'/tangent-art/' + entry.slug + '.png'" alt="" loading="lazy">
@@ -110,6 +113,6 @@ async function onPick(event: Event): Promise<void> {
         </button>
       </div>
     </details>
-    <button type="button" class="btn btn-quiet artwork-clear" :aria-pressed="url === ''" @click="choose('', 'Preview updated.')">No artwork</button>
+    <button type="button" class="btn btn-quiet artwork-clear" :aria-pressed="url === ''" :disabled="disabled || uploading" @click="choose('', 'Preview updated.')">{{ scope === 'server' ? 'No background' : 'No artwork' }}</button>
   </div>
 </template>

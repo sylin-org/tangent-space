@@ -29,8 +29,8 @@ public sealed class ModerationCase : Entity<ModerationCase>
     public IReadOnlyList<ModerationTestimony> Testimonies { get; set; } = [];
     public IReadOnlyList<ModerationDecision> Decisions { get; set; } = [];
 
-    public static string Key(string roomKey, string messageId)
-        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"moderation-case\n{roomKey}\n{messageId}")));
+    public static string Key(string topicKey, string messageId)
+        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"moderation-case\n{topicKey}\n{messageId}")));
 }
 
 public static class ModerationCaseStates
@@ -68,7 +68,10 @@ public sealed record ModerationDecisionView(string ActorParticipantRef, string A
 
 public sealed record ModerationCaseView(ModerationCaseSummary Case,
     IReadOnlyList<ModerationTestimonyView> Testimonies, int TestimonyOffset, int? NextTestimonyOffset,
-    IReadOnlyList<ModerationDecisionView> Decisions, bool DecisionsTruncated);
+    IReadOnlyList<ModerationDecisionView> Decisions, bool DecisionsTruncated,
+    ModerationParticipantActions? ParticipantActions = null);
+
+public sealed record ModerationParticipantActions(string ParticipantRef, string DisplayName, IReadOnlyList<string> Actions);
 
 public sealed record ModerationCasePage(IReadOnlyList<ModerationCaseSummary> Cases, int Page,
     int? NextPage, bool AtLeast, bool Saturated);

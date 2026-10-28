@@ -13,8 +13,8 @@ public sealed class TopicMembership : Entity<TopicMembership>
     public DateTimeOffset ChangedAt { get; set; }
     public long PolicyRevision { get; set; }
 
-    public static string Key(string roomKey, string participantDid)
-        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(roomKey + "\n" + participantDid)));
+    public static string Key(string topicKey, string participantDid)
+        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(topicKey + "\n" + participantDid)));
 
     internal static TopicMembership Assign(Topic topic, string participantDid, TopicRole role, string actorDid, DateTimeOffset now)
         => new()

@@ -10,9 +10,9 @@ namespace Tangent.Access;
 /// See means everyone, and empty Post, Manage or Create Topics means the category's always-on
 /// permission holders alone — that table lives in <see cref="AccessMap"/>'s defaults and
 /// resolutions. The actor's role bag and its derived tokens grant; restrictions, suspension and
-/// classification bound what any grant reaches; ownership is derived from the Space, the Tangent
-/// or topic authorship, never read from a record. The transitional membership arithmetic
-/// (<c>Topic.CurrentPolicy</c>) feeds selected facts into <see cref="Decide"/> but decides nothing.
+/// classification bound what any grant reaches; ownership is derived from the Space or Tangent,
+/// never read from a role record. The current Topic policy supplies scoped membership, creator
+/// management and owner facts for <see cref="Decide"/> to combine with resolved access rules.
 /// </summary>
 public static class AccessEvaluator
 {
@@ -23,21 +23,22 @@ public static class AccessEvaluator
         bool suspended, EffectiveRestriction? restriction, ParticipantClassification classification)
     {
         var effective = (topic.Access ?? AccessMap.TopicDefaults()).ResolveTopic(tangent?.Access ?? AccessMap.TangentDefaults());
-        var ownsResource = selected.IsOwner
-            || string.Equals(topic.CreatorParticipantId, selected.ActorParticipantId, StringComparison.Ordinal);
+        var ownsResource = selected.IsOwner;
         var siteUnavailable = selected.SpacePolicyRevision <= 0;
         var missingParent = tangent is null;
         var banned = restriction is { Banned: true } && !ownsResource;
         var timedOut = restriction is { Banned: false } && !ownsResource;
         var rights = tangent?.ParticipationRights(classification) ?? (Read: false, Write: false);
-        var read = !siteUnavailable && !suspended && !missingParent && !banned && rights.Read
+        var read = selected.CanRead && !siteUnavailable && !suspended && !missingParent && !banned && rights.Read
             && (ownsResource || CanDo(effective.See, bagTokens));
-        var write = read && !timedOut && !topic.IsLocked && rights.Write
+        var write = selected.CanWrite && read && !(timedOut && restriction!.BlockPosting) && !topic.IsLocked && rights.Write
             && (ownsResource || CanDo(effective.Post, bagTokens));
         var manage = !siteUnavailable && !suspended && !missingParent && !banned && !timedOut
-            && (ownsResource || CanDo(effective.Manage, bagTokens));
+            && (ownsResource || selected.CanRead)
+            && (ownsResource || selected.Role != TopicRole.Removed)
+            && (ownsResource || selected.CanManage || CanDo(effective.Manage, bagTokens));
         var reason = siteUnavailable ? "site-unavailable" : missingParent ? "tangent-not-found" : suspended ? "suspended"
-            : banned ? "banned" : !read ? "role-required" : "allowed";
+            : banned ? "banned" : !selected.CanRead ? selected.Reason : !read ? "role-required" : "allowed";
         return selected with
         {
             IsOwner = ownsResource,

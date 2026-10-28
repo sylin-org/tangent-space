@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Sorting;
 using Koan.Data.Core;
@@ -18,20 +19,16 @@ public sealed partial class ExperienceService
     /// <summary>The internal participant profile (ADR 0008): identity card, roles across
     /// Tangents, a bounded policy-filtered window of their posts, and the viewer's permitted
     /// operational actions. Every post is scoped to Topics the viewer may read.</summary>
-    public async Task<ExperienceResponse> ParticipantProfile(ClaimsPrincipal principal, string identifier, CancellationToken ct)
+    public async Task<ResourceResult<ExperienceProfileData>> ParticipantProfile(ClaimsPrincipal principal, string identifier, CancellationToken ct)
     {
         var viewer = ParticipationAccess.Require(principal, ParticipationGrants.Read);
-        var credential = CredentialOf(principal);
-        var identity = await IdentityOf(viewer, ct);
         // Identifier resolution precedes policy: an unknown, stale, or ambiguous identifier is the
         // same honest miss regardless of form; the profile data stays keyed by the participant id.
         (Participant Participant, string MatchedForm)? resolved;
         using (EntityContext.NoCache())
             resolved = await hub.Directory.ByIdentifier(identifier, ct);
         if (resolved is not { } match || match.Participant.IsSuspended && match.Participant.Id != viewer)
-            return Problem("participant_profile", identity, ServerPlace(principal, await SiteLabel(ct)),
-                ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "No participant is registered under that identity."),
-                participantId: viewer, credential: credential, ct: ct);
+            return ResourceResult<ExperienceProfileData>.Failure(ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "No participant is registered under that identity."));
 
         var participant = match.Participant;
         var participantId = participant.Id;
@@ -64,10 +61,7 @@ public sealed partial class ExperienceService
         var window = await VisibleRecentPosts(viewer, participantId,
             profile.DisplayName ?? label ?? "Participant", ProfilePostLimit, ct);
 
-        // Permitted operational actions for this viewer, computed from real authority.
-        var actions = new List<ExperienceAction>();
-        if (self)
-            actions.Add(new("declare_self", refs.ServerRef, null, "Declare your human/agent classification"));
+        var roleManagement = new List<ExperienceProfileManagementLink>();
         using (EntityContext.NoCache())
         {
             foreach (var tangent in roles.Where(role => role.Scope == "tangent").Take(5))
@@ -76,20 +70,16 @@ public sealed partial class ExperienceService
                 var context = canAppoint ? await tangents.Describe(viewer, tangent.Key, ct) : null;
                 var protectedTarget = context?.OwnerParticipantId == participantId || roles.Any(role => role.Scope == "server" && role.Role == "owner");
                 if (canAppoint && !self && !protectedTarget && (tangent.Role != "admin" || context?.IsOwner == true))
-                    actions.Add(new("set_role", refs.Tangent(tangent.Key), null, $"Set {profile.DisplayName ?? label ?? "this participant"}'s role in {tangent.Label}"));
+                    roleManagement.Add(new(tangent.Key, $"Set {profile.DisplayName ?? label ?? "this participant"}'s role in {tangent.Label}"));
             }
         }
 
-        return await Assemble("participant_profile", ExperienceStatus.Ok, identity,
-            ServerPlace(principal, await SiteLabel(ct)),
-            new ExperienceResult(new ExperienceProfileData(
+        return ResourceResult<ExperienceProfileData>.Success(new ExperienceProfileData(
                 participantId, did, label, participant.Classification.ToString(),
                 Format(participant.JoinedAt), self, participant.IsSuspended, roles,
                 window.Posts.Select(view => view.Dto).ToList(), window.More, profile.DisplayName, profile.Description, profile.Avatar,
                 "/u/" + Uri.EscapeDataString(did ?? ParticipantIdentity.InternalValue(participantId)),
-                window.Resolved), null, null),
-            null,
-            Empty(), actions.Take(3).ToList(), null, null, viewer, credential, ct);
+                window.Resolved, roleManagement.Take(3).ToList()));
     }
 
     /// <summary>The bounded recent-posts window two readers share (the profile page and the
@@ -99,25 +89,33 @@ public sealed partial class ExperienceService
         string authorName, int limit, CancellationToken ct)
     {
         var views = new List<RecentPostView>(limit);
+        var bytes = 32 * 1024;
+        var saturated = false;
         IReadOnlyList<Post> scanned;
         using (EntityContext.NoCache())
             scanned = await Post.Query(post => post.AuthorParticipantId == participantId, RecentPosts(), ct);
         var visible = new List<Post>(limit);
         foreach (var post in scanned)
         {
-            if (views.Count >= limit) break;
+            if (views.Count >= limit) { saturated = true; break; }
             var description = await topics.Describe(viewer, post.TopicKey, ct);
             if (description is null || !description.CanRead) continue;
-            visible.Add(post);
-            views.Add(new(new ExperiencePostDto(
+            var dto = new ExperiencePostDto(
                 refs.Post(description.TangentKey, post.TopicKey, post.Id), participantId,
                 authorName, post.Removed ? "" : post.Content.Text, null,
                 refs.Origin + "/t/" + Uri.EscapeDataString(description.TangentKey) + "/" + Uri.EscapeDataString(post.Id),
                 Format(post.AcceptedAt), post.EditedAt is { } edited ? Format(edited) : null, post.Removed,
-                post.Facets), description.TangentKey, post.TopicKey));
+                post.Facets, new ExperiencePostSource("tangent",
+                    refs.Origin + "/tangents/" + description.TangentKey + "/posts/" + post.Id + "/", post.Id),
+                post.Content.Format, post.Removed ? null : PostMarkup.Html(post.Content));
+            var size = JsonSerializer.SerializeToUtf8Bytes(dto).Length + 1024;
+            if (bytes + size > WindowPlanner.ResultBudget) { saturated = true; break; }
+            bytes += size;
+            visible.Add(post);
+            views.Add(new(dto, description.TangentKey, post.TopicKey));
         }
         var resolved = await conversation.ResolveParticipants(visible, ct);
-        return new(views, views.Count >= limit, resolved);
+        return new(views, saturated || views.Count >= limit, resolved);
     }
 
     internal sealed record RecentPostWindow(IReadOnlyList<RecentPostView> Posts, bool More,

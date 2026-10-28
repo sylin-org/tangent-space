@@ -1,4 +1,7 @@
 using Koan.Data.Core;
+using Koan.Data.Abstractions;
+using Koan.Data.Abstractions.Filtering;
+using Koan.Data.Core.Sorting;
 
 namespace Tangent.Identity;
 
@@ -44,10 +47,8 @@ public static class ParticipantLookup
         {
             var supplied = identifier.Trim();
             if (supplied.StartsWith('@') && supplied.Length > 1) supplied = supplied[1..];
-            // The collision check case-folds stored labels as trimmed at comparison time; the scan
-            // keeps ambiguity detection honest across case-variant stored forms.
             string? holder = null;
-            foreach (var entry in await ParticipantIdentity.Query(value => value.Label != null, ct))
+            foreach (var entry in await Matching(Filter.Eq(nameof(ParticipantIdentity.LabelKey), supplied.ToLowerInvariant()), ct))
             {
                 if (entry.Label is not { Length: > 0 } label) continue;
                 if (!string.Equals(supplied, label.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
@@ -57,6 +58,39 @@ public static class ParticipantLookup
             participant = holder is null ? null : await Participant.Get(holder, ct);
         }
         return participant is null ? null : (participant, await TopForm(participant, ct));
+    }
+
+    /// <summary>Resolve only mention candidates present in a bounded Post, through native indexed filters.
+    /// Fetch all matching identities before deciding ambiguity; an incomplete result never grants a match.</summary>
+    internal static async Task<IReadOnlyList<ParticipantIdentity>> MentionIdentities(
+        IEnumerable<string> handles, IEnumerable<string> dids, CancellationToken ct)
+    {
+        var found = new Dictionary<string, ParticipantIdentity>(StringComparer.Ordinal);
+        foreach (var keys in handles.Select(value => value.Trim().ToLowerInvariant()).Distinct().Chunk(32))
+            foreach (var entry in await Matching(Filter.In(nameof(ParticipantIdentity.LabelKey), keys), ct))
+                found[entry.Id] = entry;
+        foreach (var values in dids.Distinct(StringComparer.Ordinal).Chunk(32))
+            foreach (var entry in await Matching(Filter.In(nameof(ParticipantIdentity.Value), values), ct))
+                found[entry.Id] = entry;
+        // A handle may live on another identity entry than its holder's perennial DID.
+        foreach (var holders in found.Values.Select(entry => entry.ParticipantId).Distinct(StringComparer.Ordinal).ToArray().Chunk(32))
+            foreach (var entry in await Matching(Filter.In(nameof(ParticipantIdentity.ParticipantId), holders), ct))
+                found[entry.Id] = entry;
+        return found.Values.ToArray();
+    }
+
+    private static async Task<IReadOnlyList<ParticipantIdentity>> Matching(Filter filter, CancellationToken ct)
+    {
+        const int maximum = 256;
+        var query = QueryDefinition.All.Where(filter) with
+        {
+            Page = 1, PageSize = maximum + 1,
+            Sort = SortSpecParser.ParseStrict<ParticipantIdentity>(nameof(ParticipantIdentity.Id))
+        };
+        var entries = await ParticipantIdentity.All(query, ct);
+        if (entries.Count > maximum)
+            throw new ArgumentException("Too many matching identity entries; narrow the participant lookup.");
+        return entries;
     }
 
     private static async Task<string> TopForm(Participant participant, CancellationToken ct)

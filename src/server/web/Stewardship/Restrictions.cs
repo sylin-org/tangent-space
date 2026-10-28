@@ -11,20 +11,20 @@ public static class Restrictions
         if (stored is null || !Enum.IsDefined(stored.Kind)) return null;
         if (stored.Kind == RestrictionKind.Ban) return new EffectiveRestriction(Banned: true);
         return stored.Kind == RestrictionKind.Timeout && stored.Until is { } until && until > now
-            ? new EffectiveRestriction(Banned: false)
+            ? new EffectiveRestriction(Banned: false, stored.BlockPosting, stored.BlockStarting)
             : null;
     }
 
     /// <summary>Combines scopes for one topic: a topic record never erases an inherited Tangent ban.</summary>
     public static EffectiveRestriction? Combine(EffectiveRestriction? topic, EffectiveRestriction? tangent)
-        => tangent is { Banned: true } ? tangent : topic is { Banned: true } ? topic : topic ?? tangent;
+        => tangent is { Banned: true } ? tangent : topic is { Banned: true } ? topic : topic is null ? tangent : tangent is null ? topic : new EffectiveRestriction(false,topic.BlockPosting || tangent.BlockPosting,topic.BlockStarting || tangent.BlockStarting);
 
     /// <summary>Restriction effective for a participant in one topic: the topic record combined with its Tangent's record.</summary>
-    public static async Task<EffectiveRestriction?> ForTopic(string did, string roomKey, string tangentKey, DateTimeOffset now, CancellationToken ct)
+    public static async Task<EffectiveRestriction?> ForTopic(string did, string topicKey, string tangentKey, DateTimeOffset now, CancellationToken ct)
     {
-        var roomScoped = Evaluate(await ScopedRestriction.Get(ScopedRestriction.Key(RestrictionScope.Topic, roomKey, did), ct), now);
+        var topicScoped = Evaluate(await ScopedRestriction.Get(ScopedRestriction.Key(RestrictionScope.Topic, topicKey, did), ct), now);
         var tangentScoped = await ForTangent(did, tangentKey, now, ct);
-        return Combine(roomScoped, tangentScoped);
+        return Combine(topicScoped, tangentScoped);
     }
 
     public static async Task<EffectiveRestriction?> ForTangent(string did, string tangentKey, DateTimeOffset now, CancellationToken ct)

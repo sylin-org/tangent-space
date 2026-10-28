@@ -9,10 +9,7 @@ using Tangent.Spaces;
 
 namespace Tangent.Api;
 
-/// <summary>Who is on this server. Until now nothing could answer that: every listing took the
-/// ids it already held, and the only source of ids was a role's member array, so a participant
-/// holding no role was invisible although their arrival was recorded (N-062). This reads the
-/// participant spine itself, which is the one place that knows everyone.</summary>
+/// <summary>A bounded directory of verified arrivals for authorized participant stewards.</summary>
 [ApiController, Authorize, Route("api/people")]
 public sealed class PeopleController(ParticipantProfiles profiles, ParticipantDirectory directory,
     TangentRoleAccess roleAccess) : ControllerBase
@@ -26,14 +23,27 @@ public sealed class PeopleController(ParticipantProfiles profiles, ParticipantDi
         CountStrategy = CountStrategy.Exact
     };
 
+    private async Task<bool> CanManage(CancellationToken ct)
+    {
+        string actor;
+        try { actor = ParticipationAccess.Require(User, ParticipationGrants.Manage); }
+        catch (UnauthorizedAccessException) { return false; }
+        return await roleAccess.CanManageParticipants(actor, ct);
+    }
+
+    [HttpGet("lookup")]
+    public async Task<IActionResult> Lookup([FromQuery]string identifier,CancellationToken ct) {
+        Response.Headers.CacheControl="no-store";using var fresh=EntityContext.NoCache();if(!await CanManage(ct))return StatusCode(403);
+        if(string.IsNullOrWhiteSpace(identifier)||identifier.Length>253)return BadRequest();var found=await directory.ByIdentifier(identifier.Trim().TrimStart('@'),ct);if(found is null)return NotFound();var participant=found.Value.Participant;var profile=await profiles.Read(participant.Id,ct);var bag=await roleAccess.Bag(participant.Id,ct);
+        return Ok(new {participant.Id,did=await directory.AtprotoDidOf(participant.Id,ct),profile.Handle,profile.Avatar,label=profile.DisplayName??profile.Handle??"Participant",participant.JoinedAt,participant.IsSuspended,classification=participant.Classification.ToString(),roles=bag.Where(token=>token.StartsWith("role:",StringComparison.Ordinal)).Select(token=>token[5..]).ToArray()});
+    }
     [HttpGet("")]
     public async Task<IActionResult> List([FromQuery] int page = 1, CancellationToken ct = default)
     {
         Response.Headers.CacheControl = "no-store";
-        // A people directory names everyone who has arrived, so it is the owner's to read.
-        if (!await SpaceOwnership.IsOwner(User, ct)) return StatusCode(403);
-        if (page is < 1 or > MaximumPage) return BadRequest(new { error = "Ask for a page between 1 and " + MaximumPage + "." });
         using var fresh = EntityContext.NoCache();
+        if (!await CanManage(ct)) return StatusCode(403);
+        if (page is < 1 or > MaximumPage) return BadRequest(new { error = "Ask for a page between 1 and " + MaximumPage + "." });
         var result = await Participant.AllWithCount(byArrival.WithPagination(page, PageSize), ct);
         var people = new List<object>(result.Items.Count);
         foreach (var participant in result.Items)

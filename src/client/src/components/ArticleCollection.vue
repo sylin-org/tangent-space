@@ -1,0 +1,11 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { articleMatches } from '../composables/directories'
+import type { ArticleFilter, Directories } from '../composables/directories'
+import ArticlePreview from './ArticlePreview.vue'
+const props=withDefaults(defineProps<{directories:Directories;tangentKey:string;signedIn:boolean;page:number;filter?:ArticleFilter}>(), {filter:()=>({month:'',author:''})})
+const visible=computed(()=>props.directories.topics.filter(topic=>articleMatches(topic,props.filter)))
+</script>
+<template>
+<section class="article-collection" aria-label="Articles"><div v-if="visible.length" class="directory-list-toolbar"><span>{{visible.length}} {{visible.length===1?'article':'articles'}}<template v-if="page>1 || directories.topicsNextPage || directories.topicsIncomplete"> on this page</template></span><span>Newest first</span></div><p v-if="filter.month || filter.author" class="hint">Filtered within this page. Choose All articles to clear.</p><p v-if="!visible.length && (filter.month || filter.author)" class="hint">No articles match on this page.</p><div class="article-rows"><ArticlePreview v-for="(topic,index) in visible" :key="topic.key" :topic="topic" :tangent-key="tangentKey" row :lead="page===1&&index===0"/></div><p v-if="directories.topicsLoading" class="hint" role="status">Loading articles…</p><p v-if="directories.topicsError" class="error" role="alert">{{directories.topicsError}} <button class="btn btn-quiet" type="button" @click="directories.loadTopics(tangentKey,page)">Retry</button></p><p v-if="!directories.topics.length&&directories.topicsLoaded&&!directories.topicsError" class="hint">No articles yet.</p><p v-if="directories.topicsIncomplete" class="directory-partial">More articles may be available. Continue to the next page or open an article’s link.</p><nav v-if="page>1||directories.topicsNextPage" class="article-page-nav" aria-label="Article pages"><a v-if="page>1" rel="prev" class="btn btn-quiet" :href="'/t/'+encodeURIComponent(tangentKey)+'/topics'+(page===2?'':'?page='+(page-1))">← Newer articles</a><a v-if="directories.topicsNextPage" rel="next" class="btn btn-quiet" :href="'/t/'+encodeURIComponent(tangentKey)+'/topics?page='+directories.topicsNextPage">Older articles →</a></nav></section>
+</template>

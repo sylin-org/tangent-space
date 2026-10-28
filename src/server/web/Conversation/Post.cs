@@ -10,6 +10,8 @@ public sealed class Post : Entity<Post>
     public long Sequence { get; set; }
     public DateTimeOffset AcceptedAt { get; set; }
     public PostContent Content { get; set; } = new("", default, null);
+    /// <summary>Normalized visible words used by bounded database search.</summary>
+    public string? SearchText { get; set; }
     public bool Removed { get; set; }
     public DateTimeOffset? RemovedAt { get; set; }
     public string? RemovedByParticipantId { get; set; }
@@ -17,6 +19,8 @@ public sealed class Post : Entity<Post>
     public PermissionView? Permissions { get; set; }
     /// <summary>The client-minted operation identity for locally written posts (ADR 0007);
     /// null for posts ingested from a source repository.</summary>
+    public string? SourceUri { get; set; }
+    public string? SourceCid { get; set; }
     public string? OperationId { get; set; }
 
     /// <summary>Structural references inside the verbatim text (ADR 0008): byte ranges bound

@@ -1,5 +1,5 @@
 import { httpRequest } from '../api'
-// Facet composer and renderer, ported from facets.js (ADR 0008): @-autocomplete
+// Facet composer and renderer: @-autocomplete
 // bookkeeping with client-minted byte-range facets, and the read-time renderer
 // with fresh labels.
 
@@ -182,7 +182,7 @@ export async function mentionables(topicKey: string, prefix?: string): Promise<M
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) throw new Error('mentionables-failed')
-  const list = (data as { result?: { data?: { targets?: MentionTarget[] } } })?.result?.data?.targets ?? []
+  const list = (data as { targets?: MentionTarget[] })?.targets ?? []
   mentionCache.set(cacheKey, { at: Date.now(), list })
   return list
 }

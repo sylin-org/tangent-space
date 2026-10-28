@@ -1,5 +1,5 @@
 // Only creative drafts and arrival hints live in browser storage; connection settings never do.
-export interface SetupDraft { name: string; description: string; artwork: string; step: 'data' | 'tangent'; submitted?: boolean; creationName?: string }
+export interface SetupDraft { name: string; description: string; artwork: string; kind?: 'discussions' | 'articles'; step: 'data' | 'tangent'; submitted?: boolean; creationName?: string }
 export interface SetupArrival { key: string; name: string }
 const key = (kind: string, did: string) => `tangent:setup:${kind}:${did}`
 function read<T>(kind: string, did: string): T | null {
@@ -21,6 +21,7 @@ export function readSetupDraft(did: string): SetupDraft | null {
   return value && typeof value.name === 'string' && value.name.length <= 120
     && typeof value.description === 'string' && value.description.length <= 1000
     && typeof value.artwork === 'string' && (value.artwork === '' || /^\/tangent-art\/[a-z0-9-]+\.png$/.test(value.artwork))
+    && (value.kind === undefined || value.kind === 'discussions' || value.kind === 'articles')
     && (value.creationName === undefined || typeof value.creationName === 'string' && value.creationName.length <= 120)
     && ['data', 'tangent'].includes(value.step) ? value : null
 }

@@ -1,0 +1,24 @@
+using Koan.Data.Abstractions;
+using Koan.Data.Core;
+using Koan.Data.Core.Sorting;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Tangent.Application;
+using Tangent.Identity;
+using Tangent.Infrastructure;
+using Tangent.Spaces;
+using Tangent.Activity;
+namespace Tangent.Api;
+[ApiController,Authorize,Route("api/space/admission")]
+public sealed class SpaceAdmissionController(PolicyGate gate,TimeProvider clock,TangentServer hub,SignalBus signals,ActivityService activity):ControllerBase {
+ private string Actor()=>ParticipationAccess.Require(User,ParticipationGrants.Read);
+ private async Task<Space> Owner(CancellationToken ct){var space=await Space.Get(TangentConstants.SpaceId,ct);var actor=Actor();if(space?.IsOwner(actor)!=true||(await Participant.Get(actor,ct))?.IsSuspended!=false)throw new UnauthorizedAccessException();return space;}
+ private async Task<string> Manager(CancellationToken ct){var actor=ParticipationAccess.Require(User,ParticipationGrants.Manage);if(!await hub.Roles.CanManageParticipants(actor,ct))throw new UnauthorizedAccessException();return actor;}
+ [HttpGet] public async Task<IActionResult> Read(CancellationToken ct){Response.Headers.CacheControl="no-store";try{using var fresh=EntityContext.NoCache();var actor=Actor();await activity.EnsureParticipantActive(actor,User.FindFirst(ParticipationConstants.CredentialClaim)?.Value,ct);var space=await Space.Get(TangentConstants.SpaceId,ct);var member=await SpaceMembership.Get(actor,ct);return Ok(new {mode=space?.Admission??"Open",admitted=await SpaceAdmission.Admitted(space,actor,ct),status=member?.Status??"none"});}catch(UnauthorizedAccessException){return Forbid();}}
+ [HttpPatch,TopicMutation(ParticipationGrants.Manage)] public async Task<IActionResult> Configure(AdmissionPatch patch,CancellationToken ct){await gate.Enter(ct);try{using var fresh=EntityContext.NoCache();var space=await Owner(ct);if(patch.Mode is not("Open" or "Approval"))return BadRequest(new {message="Choose Open or By request."});if(space.Admission!=patch.Mode){space.Admission=patch.Mode;space.AdmissionChangedAt=clock.GetUtcNow();space.PolicyRevision++;await space.Save(ct);signals.Pulse();}return Ok(new {mode=space.Admission});}catch(UnauthorizedAccessException){return Forbid();}finally{gate.Exit();}}
+ [HttpPost("join"),TopicMutation(ParticipationGrants.Read)]public async Task<IActionResult> Join(CancellationToken ct){await gate.Enter(ct);try{using var fresh=EntityContext.NoCache();var actor=Actor();var participant=await Participant.Get(actor,ct);if(participant is null||participant.IsSuspended)return Forbid();var space=await Space.Get(TangentConstants.SpaceId,ct);if(space is null)return NotFound();var member=await SpaceMembership.Get(actor,ct);if(member?.Status=="refused")return Conflict(new {message="Your request was refused. Contact the Space owner."});if(await SpaceAdmission.Admitted(space,actor,ct))return Ok(new {status="accepted"});member??=new SpaceMembership {Id=actor,RequestedAt=clock.GetUtcNow()};member.Status=space.Admission=="Open"?"accepted":"pending";await member.Save(ct);signals.Pulse();return Ok(new {status=member.Status});}catch(UnauthorizedAccessException){return Forbid();}finally{gate.Exit();}}
+ [HttpGet("requests")]public async Task<IActionResult> Requests([FromQuery]int page=1,CancellationToken ct=default){Response.Headers.CacheControl="no-store";try{using var fresh=EntityContext.NoCache();await Manager(ct);if(page is <1 or >10000)return BadRequest();var rows=await SpaceMembership.Query(row=>row.Status=="pending",new QueryDefinition {Sort=SortSpecParser.ParseStrict<SpaceMembership>("RequestedAt,Id")}.WithPagination(page,25),ct);var items=new List<object>();foreach(var row in rows){var profile=await hub.Profiles.Read(row.Id,ct);var participant=await Participant.Get(row.Id,ct);items.Add(new {id=row.Id,label=profile.DisplayName??profile.Handle??"Participant",profile.Handle,profile.Avatar,classification=participant?.Classification.ToString(),row.RequestedAt});}return Ok(new {items,nextPage=rows.Count==25?(int?)(page+1):null});}catch(UnauthorizedAccessException){return Forbid();}}
+ [HttpPost("requests/{id}"),TopicMutation(ParticipationGrants.Manage)]public async Task<IActionResult> Decide(string id,AdmissionDecision input,CancellationToken ct){await gate.Enter(ct);try{using var fresh=EntityContext.NoCache();var actor=await Manager(ct);var member=await SpaceMembership.Get(id,ct);if(member?.Status!="pending")return Conflict(new {message="This request has already been decided."});member.Status=input.Accept?"accepted":"refused";member.DecidedAt=clock.GetUtcNow();member.DecidedBy=actor;await member.Save(ct);signals.Pulse();return Ok(new {status=member.Status});}catch(UnauthorizedAccessException){return Forbid();}finally{gate.Exit();}}
+}
+public sealed record AdmissionPatch(string Mode);
+public sealed record AdmissionDecision(bool Accept);

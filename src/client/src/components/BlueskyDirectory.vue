@@ -31,8 +31,10 @@ onMounted(load)
     <nav v-if="authors.length" aria-label="Public Bluesky sources">
       <ul>
         <li v-for="author in authors" :key="author.actorDid">
-          <a :href="readingLink(author.postsUrl)">{{ author.handle ? '@' + author.handle.replace(/^@/, '') : author.actorDid }}</a>
-          <span class="hint">Refreshed <time :datetime="author.refreshedAt">{{ new Date(author.refreshedAt).toLocaleDateString() }}</time></span>
+          <a class="bluesky-author-row" :href="readingLink(author.postsUrl)">
+            <strong>{{ author.handle ? '@' + author.handle.replace(/^@/, '') : author.actorDid }}</strong>
+            <span class="hint">Refreshed <time :datetime="author.refreshedAt">{{ new Date(author.refreshedAt).toLocaleDateString() }}</time></span>
+          </a>
         </li>
       </ul>
     </nav>
@@ -44,6 +46,9 @@ onMounted(load)
 <style scoped>
 .bluesky-directory { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
 ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .75rem; }
-li { display: grid; gap: .25rem; padding: .75rem 0; overflow-wrap: anywhere; }
-a { font-weight: 600; }
+li { overflow-wrap: anywhere; }
+.bluesky-author-row { display:grid; gap:.25rem; padding:.75rem; color:inherit; text-decoration:none; border-radius:6px; }
+.bluesky-author-row:hover { background:var(--surface-soft); }
+.bluesky-author-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.bluesky-author-row strong { color:var(--accent); }
 </style>

@@ -31,7 +31,7 @@ public sealed class AccessEvaluatorTests
     /// not of the actor.</summary>
     private static TopicPolicy Draft(Topic topic, string? actor, bool isOwner = false) => new(
         topic.Id, actor, SelectedPolicyRevision: 3, SpacePolicyRevision: 1,
-        Role: null, IsOwner: isOwner, CanRead: false, CanWrite: false, CanManage: false,
+        Role: null, IsOwner: isOwner, CanRead: true, CanWrite: true, CanManage: false,
         Reason: "", EditingAllowed: topic.AllowPostEditing, Locked: topic.IsLocked);
 
     private static TopicPolicy Decide(Topic topic, Community.Tangent? tangent, string[] bag,
@@ -39,6 +39,29 @@ public sealed class AccessEvaluatorTests
         ParticipantClassification classification = ParticipantClassification.Human, bool isOwner = false)
         => AccessEvaluator.Decide(topic, tangent, Draft(topic, isOwner ? "owner-actor" : "actor-1", isOwner),
             bag, suspended, restriction, classification);
+
+    [Fact]
+    public void Scoped_admission_and_reader_bound_matching_role_grants()
+    {
+        var topic = Topic();
+        var tangent = Tangent(new AccessMap { See = ["role:member"], Post = ["role:member"], Manage = ["role:member"] });
+        var bag = new[] { "everyone", "authenticated", "role:member" };
+        var removed = Draft(topic, "actor-1") with { Role = TopicRole.Removed, CanRead = false, CanWrite = false };
+        var refused = AccessEvaluator.Decide(topic, tangent, removed, bag, false, null, ParticipantClassification.Human);
+        Assert.False(refused.CanRead);
+        Assert.False(refused.CanWrite);
+        Assert.False(refused.CanManage);
+
+        var reader = Draft(topic, "actor-1") with { Role = TopicRole.Reader, CanWrite = false };
+        var limited = AccessEvaluator.Decide(topic, tangent, reader, bag, false, null, ParticipantClassification.Human);
+        Assert.True(limited.CanRead);
+        Assert.False(limited.CanWrite);
+
+        var admitted = AccessEvaluator.Decide(topic, tangent, Draft(topic, "actor-1"), bag,
+            false, null, ParticipantClassification.Human);
+        Assert.True(admitted.CanRead);
+        Assert.True(admitted.CanWrite);
+    }
 
     [Fact]
     public void The_default_tangent_reads_to_everyone_and_writes_to_nobody_but_authority()
@@ -101,8 +124,14 @@ public sealed class AccessEvaluatorTests
         Assert.True(owner.CanRead);
 
         var creatorTopic = Topic(creator: "actor-1");
-        var creator = Decide(creatorTopic, tangent, SignedOut);
-        Assert.True(creator.CanManage, "the topic's author manages their own topic");
+        var creatorSelected = Draft(creatorTopic, "actor-1") with { CanManage = true };
+        var creator = AccessEvaluator.Decide(creatorTopic, tangent, creatorSelected, SignedOut,
+            false, null, ParticipantClassification.Human);
+        Assert.True(creator.CanManage, "an admitted creator's scoped manager grant manages their topic");
+        var removedCreator = AccessEvaluator.Decide(creatorTopic, tangent,
+            creatorSelected with { Role = TopicRole.Removed, CanRead = false, CanWrite = false, CanManage = false },
+            SignedOut, false, null, ParticipantClassification.Human);
+        Assert.False(removedCreator.CanManage, "a removed delegated creator cannot recover authority by authorship");
     }
 
     [Fact]

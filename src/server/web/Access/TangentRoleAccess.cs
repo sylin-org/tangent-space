@@ -5,7 +5,6 @@ using Tangent.Application;
 using Tangent.Identity;
 using Tangent.Spaces;
 using Tangent.Community;
-using Tangent.Community;
 using Tangent.Stewardship;
 
 namespace Tangent.Access;
@@ -21,6 +20,8 @@ public sealed class TangentRoleAccess(RoleCollection roles)
     /// <summary>The actor's authority tokens: Koan's compiled bag plus the owner derivation.</summary>
     public async Task<IReadOnlyCollection<string>> Bag(string? participantId, CancellationToken ct = default)
     {
+        var currentSpace = await Space.Get(TangentConstants.SpaceId, ct);
+        if (currentSpace is not null && participantId is not null && !await SpaceAdmission.Admitted(currentSpace, participantId, ct)) return [AccessTokens.Everyone];
         var bag = await roles.Bag(participantId, Participant.IsValidId(participantId), ct);
         var tokens = bag.Tokens.ToList();
         if (Participant.IsValidId(participantId))
@@ -33,6 +34,16 @@ public sealed class TangentRoleAccess(RoleCollection roles)
             }
         }
         return tokens;
+    }
+
+    /// <summary>Participant stewardship requires a current grant, active identity and admission.</summary>
+    public async Task<bool> CanManageParticipants(string? participantId, CancellationToken ct = default)
+    {
+        using var fresh = EntityContext.NoCache();
+        if (participantId is null || await Participant.Get(participantId, ct) is not { IsSuspended: false }) return false;
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        return await SpaceAdmission.Admitted(space, participantId, ct)
+            && CanDo([TangentPermissions.ManageParticipants], await Bag(participantId, ct));
     }
 
     /// <summary>Any-of match with the derived built-in roles resolved at the one adapter:
@@ -49,18 +60,37 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         _ => token
     };
 
+    public static IReadOnlyCollection<string> InTangent(IReadOnlyCollection<string> bag, TangentMembership? membership)
+        => bag.Contains(AccessTokens.Authenticated) && membership?.Role is TangentRole.Member or TangentRole.Admin or TangentRole.Reader
+            ? bag.Append(AccessTokens.TangentMember).ToArray() : bag;
+
     public async Task<TopicPolicy> ProjectTopic(Topic topic, Community.Tangent? tangent, TopicPolicy selected,
         bool suspended, EffectiveRestriction? restriction, ParticipantClassification classification,
         CancellationToken ct = default)
-        => AccessEvaluator.Decide(topic, tangent, selected, await Bag(selected.ActorParticipantId, ct),
-            suspended, restriction, classification);
+    {
+        var space=await Space.Get(TangentConstants.SpaceId,ct);
+        if(selected.ActorParticipantId is not null && !await SpaceAdmission.Admitted(space,selected.ActorParticipantId,ct))
+            return selected with { CanRead = !suspended && restriction is not { Banned: true } && topic.IsPubliclyReadable(tangent), CanWrite=false, CanManage=false, Reason="join-space" };
+        var membership = selected.ActorParticipantId is null || tangent is null ? null
+            : await TangentMembership.Get(TangentMembership.Key(tangent.Id, selected.ActorParticipantId), ct);
+        var bag = InTangent(await Bag(selected.ActorParticipantId, ct), membership);
+        if (topic.IsPubliclyReadable(tangent) && !suspended && restriction is not { Banned: true }
+            && selected.Role != TopicRole.Removed && membership?.Role != TangentRole.Removed)
+            selected = selected with { CanRead = true, Reason = "allowed" };
+        if (topic.MembersOnly && !selected.IsOwner && topic.CreatorParticipantId != selected.ActorParticipantId
+            && membership?.Role is not (TangentRole.Member or TangentRole.Admin or TangentRole.Reader)
+            && selected.Role is not (TopicRole.Member or TopicRole.Manager or TopicRole.Reader)
+            && !CanDo([TangentPermissions.ReadTopics], bag))
+            selected = selected with { CanRead = false, CanWrite = false, CanManage = false, Reason = "community-membership-required" };
+        return AccessEvaluator.Decide(topic,tangent,selected,bag,suspended,restriction,classification);
+    }
 
     public async Task Seed(Space? space, CancellationToken ct = default)
     {
         foreach (var seed in TangentBuiltInRoles.Defaults)
         {
             var current = await roles.Get(seed.Token, ct);
-            if (current is null || seed.Key == TangentBuiltInRoles.OwnerKey)
+            if (current is null || TangentDerivedRoleGuard.IsDerived(seed.Token))
                 await roles.Define(seed.Token, seed.Name, seed.Permissions, Metadata(seed), ct);
         }
     }
@@ -70,45 +100,58 @@ public sealed class TangentRoleAccess(RoleCollection roles)
         {
             ["purpose"] = seed.Description,
             ["color"] = seed.Color,
-            ["system"] = seed.Key == TangentBuiltInRoles.OwnerKey ? "true" : "false",
+            ["system"] = TangentDerivedRoleGuard.IsDerived(seed.Token) ? "true" : "false",
             ["selfEnrollable"] = seed.IsSelfEnrollable ? "true" : "false"
         };
 }
 
 /// <summary>
-/// The Owner role holds no members: the owner's authority derives from the Space at the bag
-/// (ADR 0013). The role exists as a definition - its display and its permissions - and this is
-/// its rule: the definition stays built-in and the role is never deleted. Every other change is
-/// refused.
+/// Derived roles follow visitor authentication and Space ownership (ADR 0013). Their definitions
+/// can be seeded, but their memberships cannot be edited or removed through role mutations.
 /// </summary>
-public static class TangentOwnerRoleGuard
+public static class TangentDerivedRoleGuard
 {
     private static int registered;
+
+    public static bool IsDerived(string roleId)
+        => roleId == TangentBuiltInRoles.Owner.Token
+            || roleId == TangentBuiltInRoles.Participant.Token
+            || roleId == "role:everyone";
 
     public static void Register()
     {
         if (Interlocked.Exchange(ref registered, 1) != 0) return;
         var lifecycle = new RoleLifecycleBuilder();
-        lifecycle.RoleChanging(ChangingDefinition).PermissionsChanging(ChangingDefinition).RoleDeleting(Deleting);
+        lifecycle.MemberAdding(ChangingMembership).MemberRemoving(ChangingMembership)
+            .RoleChanging(ChangingDefinition).PermissionsChanging(ChangingDefinition).RoleDeleting(Deleting);
     }
 
     private static ValueTask<RoleChangeDecision> ChangingDefinition(RoleChangeContext context)
-        => ValueTask.FromResult(!IsOwnerRole(context) || IsBuiltIn(context.Current) ? RoleChangeDecision.Continue() : Refused());
+        => ValueTask.FromResult(context.Previous.Id switch
+        {
+            var id when id == TangentBuiltInRoles.Owner.Token && IsBuiltIn(context.Current, TangentBuiltInRoles.Owner)
+                => RoleChangeDecision.Continue(),
+            var id when id == TangentBuiltInRoles.Participant.Token && IsBuiltIn(context.Current, TangentBuiltInRoles.Participant)
+                => RoleChangeDecision.Continue(),
+            var id when IsDerived(id) => Refused(),
+            _ => RoleChangeDecision.Continue()
+        });
+
+    private static ValueTask<RoleChangeDecision> ChangingMembership(RoleChangeContext context)
+        => ValueTask.FromResult(IsDerived(context.Previous.Id) ? Refused() : RoleChangeDecision.Continue());
 
     private static ValueTask<RoleChangeDecision> Deleting(RoleChangeContext context)
-        => ValueTask.FromResult(IsOwnerRole(context) ? Refused() : RoleChangeDecision.Continue());
+        => ValueTask.FromResult(IsDerived(context.Previous.Id) ? Refused() : RoleChangeDecision.Continue());
 
-    private static bool IsOwnerRole(RoleChangeContext context) => context.Previous.Id == TangentBuiltInRoles.Owner.Token;
-
-    private static bool IsBuiltIn(Koan.Identity.Roles.Role role)
+    private static bool IsBuiltIn(Koan.Identity.Roles.Role role, TangentRoleSeed seed)
     {
-        var metadata = TangentRoleAccess.Metadata(TangentBuiltInRoles.Owner);
-        return role.Name == TangentBuiltInRoles.Owner.Name
-            && role.Permissions.ToHashSet(StringComparer.Ordinal).SetEquals(TangentBuiltInRoles.Owner.Permissions)
+        var metadata = TangentRoleAccess.Metadata(seed);
+        return role.Name == seed.Name
+            && role.Permissions.ToHashSet(StringComparer.Ordinal).SetEquals(seed.Permissions)
             && role.Metadata.Count == metadata.Count
             && metadata.All(entry => role.Metadata.TryGetValue(entry.Key, out var value) && value == entry.Value);
     }
 
     private static RoleChangeDecision Refused()
-        => RoleChangeDecision.Veto("tangent.owner_role.protected", "The Owner role follows the server's accountable human owner.");
+        => RoleChangeDecision.Veto("tangent.derived_role.protected", "This role follows participant identity and cannot be assigned or changed here.");
 }

@@ -7,13 +7,13 @@ The single source of execution state for [EPIC-007](../EPIC-007.md). Whoever res
 | Field | Value |
 |---|---|
 | Epic status | Accepted 2026-09-15 (every recommendation); in progress |
-| Current slice | Local release assessment: durable selectable storage, service-owned connector operations, local and Bluesky content sources, and public Post-ID paging |
-| Current task | Guided first-run onboarding and persistence-capable storage selection are integrating; full suite and live verification remain pending |
-| Next action | Build the final guided frontend, run the full Tangent suite, then conduct first-install and recovery walks before public-origin OAuth/Bluesky release validation |
-| Last checkpoint | 2026-09-27 · Koan `c87c30ed2` projects adapter `DataCaps.Persistency` into provider setup; focused Koan setup 4/4 and Tangent onboarding/storage 7/7, Tangent test project build green. Guided UI is being finalized. Prior Docker Healthy in 10.3s belongs to the previous image; no Docker rebuild/restart has run for this slice. |
+| Current slice | [EPIC-008 independent Forum integration](../EPIC-008-independent-forum-integration.md), coordinated from [Companion Lobby EPIC-003](../../../../CompanionLobby/docs/epics/EPIC-003-independent-forum-integration.md). Guided onboarding, storage selection and local/Bluesky content-source work remain preserved. |
+| Current task | Replace generic server operations with ordinary resource API and secure the dedicated identity-proof exchange; concurrent cross-repo Forum implementation is tracked in the EPIC-003 ledger. |
+| Next action | Follow the EPIC-003 contract and endpoint manifest, then run the Tangent suite and independent browser/API journeys. Do not resume the former service-operations catalog or old connector realignment instructions. |
+| Last checkpoint | 2026-09-27 · EPIC-008 accepted for implementation; EPIC-003 plan and Forum contract drafted. Existing guided onboarding/storage checkpoint evidence remains below, but has not been rerun for this slice. |
 | Durability | Commits at task checkpoints are authorized (D10). Push only with Leo's authorization |
-| Waiting on | Real account sign-ins for authenticated and public-origin OAuth/Bluesky walks; these are live-release validation gates |
-| Blockers | No local-container startup blocker remains; public-origin and recovery validation have not completed |
+| Waiting on | Real account sign-ins for authenticated and public-origin OAuth/Bluesky walks; these are live validation gates, while independent implementation proceeds |
+| Blockers | None for local source work; public-origin and recovery validation have not completed |
 
 ## Resume protocol
 

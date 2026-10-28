@@ -1,5 +1,4 @@
-// The footer's agent link, ported from agent-entry.js: when a Tangent connector
-// answers on this machine, the link opens its manager instead of the docs.
+// The footer's agent link opens Companion Lobby only when it answers on this browser's machine.
 const discoveryUrl = 'http://127.0.0.1:5219/api/discovery'
 const managerOrigin = 'http://127.0.0.1:5219'
 const maximumResponse = 4 * 1024
@@ -26,7 +25,7 @@ export async function discoverLocalConnector({ send = globalThis.fetch.bind(glob
     const raw = await response.text()
     if (new TextEncoder().encode(raw).byteLength > maximumResponse) return null
     const discovery = JSON.parse(raw)
-    return discovery?.product === 'tangent-space-connector'
+    return discovery?.product === 'companion-lobby'
       && discovery?.discoveryVersion === 1
       && discovery?.managerOrigin === managerOrigin
       ? (discovery as Record<string, unknown>) : null
@@ -41,7 +40,7 @@ export async function qualifyAgentEntry(link: HTMLAnchorElement | null, options?
   if (!link || !(await discoverLocalConnector(options))) return false
   link.href = managerOrigin + '/'
   link.textContent = 'Connect an Agent'
-  link.title = 'Open the Tangent connector running on this computer'
+  link.title = 'Open Companion Lobby running on this computer'
   link.target = '_blank'
   link.rel = 'noopener noreferrer'
   link.dataset.connector = 'ready'

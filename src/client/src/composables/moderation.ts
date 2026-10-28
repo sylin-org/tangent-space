@@ -2,7 +2,7 @@ import { httpRequest } from '../api'
 import { reactive, ref, watch } from 'vue'
 import type { Conversation, Topic } from './conversation'
 
-// The stewardship panel and the report flow, ported from moderation.js: a
+// The stewardship panel and the report flow use a
 // Topic-scoped case queue for those the Topic's capabilities name stewards,
 // and the private report signal any participant may send.
 
@@ -16,6 +16,7 @@ interface CaseItem {
 }
 
 interface CaseDetail {
+  participantActions?: { participantRef: string; displayName: string; actions: string[] } | null
   case: {
     caseRef: string
     revision?: number
@@ -41,7 +42,7 @@ interface DecisionBody {
   deferredUntil?: string
 }
 
-async function request<T = unknown>(path: string, body?: unknown, method = 'GET', whole = false): Promise<T> {
+async function request<T = unknown>(path: string, body?: unknown, method = 'GET'): Promise<T> {
   const response = await httpRequest(path, {
     method,
     credentials: 'same-origin',
@@ -50,8 +51,8 @@ async function request<T = unknown>(path: string, body?: unknown, method = 'GET'
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const value = await response.json().catch(() => ({})) as Record<string, any>
-  const problem = value?.result?.problem || value?.problem
-  if (!response.ok || value?.status === 'blocked' || problem) {
+  const problem = !response.ok ? value : null
+  if (!response.ok) {
     const error = new Error(
       problem?.message || value?.message || value?.title
         || (response.status === 403 ? 'Your current role no longer permits this.' : 'This request could not be completed.'),
@@ -60,7 +61,7 @@ async function request<T = unknown>(path: string, body?: unknown, method = 'GET'
     error.code = problem?.code || value?.code
     throw error
   }
-  return (whole ? value : value?.result?.data) as T
+  return value as T
 }
 
 export function createModeration(conversation: Conversation) {
@@ -166,24 +167,23 @@ export function createModeration(conversation: Conversation) {
     clearPanel()
     if (!value?.key || !value?.tangentKey) return
     try {
-      const envelope = await request<{ place?: { serverRef?: string; allowedActions?: string[] }; capabilities?: { stewardship?: boolean } }>(
-        `${API_ROOT}/topics/${encodeURIComponent(value.key)}?limit=1`, undefined, 'GET', true,
+      const topic = await request<{ serverRef?: string; stewardship?: boolean }>(
+        `${API_ROOT}/topics/${encodeURIComponent(value.key)}?limit=1`,
       )
       if (version !== generation || signature !== scopeSignature) return
-      const serverRef = envelope?.place?.serverRef
-      const actions = envelope?.place?.allowedActions
+      const serverRef = topic?.serverRef
       let canonical: URL | undefined
       try {
         canonical = serverRef ? new URL(serverRef) : undefined
       } catch {
         canonical = undefined
       }
-      if (!canonical || !['http:', 'https:'].includes(canonical.protocol) || canonical.origin !== serverRef || !Array.isArray(actions)) {
+      if (!canonical || !['http:', 'https:'].includes(canonical.protocol) || canonical.origin !== serverRef) {
         throw new Error('The Topic response did not include a canonical server reference.')
       }
-      const steward = envelope?.capabilities?.stewardship === true && actions.includes('list_moderation_cases')
-      if (!steward) return
       scope = { ...value, serverRef }
+      const steward = topic?.stewardship === true
+      if (!steward) return
       stewardshipAvailable.value = true
       await loadCases(false)
     } catch (error) {
@@ -390,6 +390,8 @@ export function createModeration(conversation: Conversation) {
 
   async function submitReport() {
     if (!reportTarget || !reportRequestId) return
+    const target = reportTarget
+    const version = generation
     const topicSnapshot = selectedTopic.value
     if (!topicSnapshot) return
     const statement = reportStatement.value.trim()
@@ -414,10 +416,12 @@ export function createModeration(conversation: Conversation) {
         : data?.accepted ? 'Report sent privately to this Topic’s stewards.'
           : data?.caseSaturated ? 'This case reached its report limit, so your report was not added. Contact the human Host if the concern is urgent.'
             : 'Your report was not added. Please try again or contact the human Host.'
+      if (version !== generation || reportTarget !== target) return
       closeReport(true)
+      reportStatus.value = ''
       announcement.value = message
       announcementError.value = false
-      if (scope?.key === reportTarget.topicKey) await loadCases(false)
+      if (stewardshipAvailable.value && scope?.key === target.topicKey) await loadCases(false)
     } catch (error) {
       reportStatus.value = (error as Error).message
     } finally {

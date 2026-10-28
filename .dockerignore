@@ -1,7 +1,11 @@
 **
 !Dockerfile
 !global.json
+!src/
 !src/**
+!.local/
+!.local/upstream/
+!.local/upstream/koan-framework/
 !.local/upstream/koan-framework/**
 src/connector/**
 **/bin/**

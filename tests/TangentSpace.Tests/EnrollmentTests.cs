@@ -22,9 +22,6 @@ using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
 using Tangent.Identity;
-using Tangent.Identity;
-using Tangent.Identity;
-using Tangent.Identity;
 using Xunit;
 using Tangent.Spaces;
 using Tangent.Community;
@@ -39,7 +36,8 @@ namespace Tangent.Tests;
 public sealed class EnrollmentTests
 {
     private const string Origin = "http://127.0.0.1:5220";
-    private const string Audience = "did:web:localhost%3A5220";
+    private const string ServiceDid = "did:web:localhost%3A5220";
+    private const string Audience = ServiceDid + "#tangent";
     private const string OtherService = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
     private const long FixedNow = 1_800_000_000;
 
@@ -87,7 +85,7 @@ public sealed class EnrollmentTests
             {
                 ["iss"] = issuerDid,
                 ["aud"] = audience!,
-                ["lxm"] = method ?? McpAuthenticationConstants.ExchangeMethod,
+                ["lxm"] = method ?? ServiceAuthenticationConstants.ExchangeMethod,
                 ["exp"] = expiresAt ?? now + 120,
                 ["iat"] = issuedAt ?? now - 5,
                 ["jti"] = jti ?? Guid.NewGuid().ToString("n")
@@ -186,7 +184,8 @@ public sealed class EnrollmentTests
         string Proof(long expiresAt, long issuedAt)
             => "Bearer " + keys.Token(did, payloadJson: keys.DefaultPayload(did, expiresAt: expiresAt, issuedAt: issuedAt));
         Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify(Proof(FixedNow + 300, FixedNow + 30), CancellationToken.None)).Status);
-        Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify(Proof(FixedNow + 1, FixedNow - 300), CancellationToken.None)).Status);
+        Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify(Proof(FixedNow + 1, FixedNow - 299), CancellationToken.None)).Status);
+        Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(Proof(FixedNow + 1, FixedNow - 300), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(Proof(FixedNow, FixedNow - 5), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(Proof(FixedNow + 301, FixedNow - 5), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(Proof(FixedNow + 120, FixedNow - 301), CancellationToken.None)).Status);
@@ -202,9 +201,11 @@ public sealed class EnrollmentTests
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
             payloadJson: keys.DefaultPayload(did, audience: OtherService)), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
+            payloadJson: keys.DefaultPayload(did, audience: ServiceDid)), CancellationToken.None)).Status);
+        Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
             payloadJson: keys.DefaultPayload(did, method: "com.atproto.repo.createRecord")), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
-            payloadJson: keys.DefaultPayload(did, method: McpAuthenticationConstants.ExchangeMethod + "x")), CancellationToken.None)).Status);
+            payloadJson: keys.DefaultPayload(did, method: ServiceAuthenticationConstants.ExchangeMethod + "x")), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
             headerJson: """{"typ":"JWT","alg":"ES256"}"""), CancellationToken.None)).Status);
         var characters = keys.Token(did).ToCharArray();
@@ -218,10 +219,10 @@ public sealed class EnrollmentTests
         var keys = new ProofKeys();
         var did = "did:plc:mcptesthostileaaaaaaaaaa";
         var verifier = Verifier(keys, now: FixedNow);
-        var baseClaims = $$"""{"iss":"{{did}}","aud":"{{Audience}}","lxm":"{{McpAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}""";
+        var baseClaims = $$"""{"iss":"{{did}}","aud":"{{Audience}}","lxm":"{{ServiceAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}""";
         string With(string payload) => "Bearer " + keys.Token(did, payloadJson: payload);
         string WithHeader(string header) => "Bearer " + keys.Token(did, headerJson: header, payloadJson: baseClaims);
-        Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(With(baseClaims.Replace(",\"jti\"", ",\"sub\":\"did:plc:zzzzzzzzzzzzzzzzzzzzzzzz\",\"jti\"")), CancellationToken.None)).Status);
+        Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify(With(baseClaims.Replace(",\"jti\"", ",\"sub\":\"did:plc:zzzzzzzzzzzzzzzzzzzzzzzz\",\"jti\"")), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify(With(baseClaims), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(With(baseClaims.Replace("\"iss\":\"" + did + "\"", "\"iss\":\"" + did + "\",\"iss\":\"https://evil\"")), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(With(baseClaims.Replace("\"jti\":\"j1\"", "\"jti\":\"" + new string('x', 129) + "\"")), CancellationToken.None)).Status);
@@ -231,10 +232,13 @@ public sealed class EnrollmentTests
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(With(baseClaims.Replace("}", ",\"nbf\":" + (FixedNow + 1) + "}")), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(WithHeader("""{"typ":"JWT","alg":"ES256K","crit":["exp"]}"""), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(WithHeader("""{"typ":"at+jwt","alg":"ES256K"}"""), CancellationToken.None)).Status);
+        Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(WithHeader("""{"alg":"ES256K"}"""), CancellationToken.None)).Status);
+        Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(WithHeader("""{"typ":"JWT","alg":"ES256K","kid":"#other"}"""), CancellationToken.None)).Status);
+        Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify(WithHeader("""{"typ":"JWT","alg":"ES256K","kid":"#atproto"}"""), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify(WithHeader("""{"typ":"JWT"}"""), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Valid, (await verifier.Verify("bearer " + keys.Token(did, payloadJson: baseClaims), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did,
-            payloadJson: $$"""{"iss":"{{did}}","aud":["{{Audience}}"],"lxm":"{{McpAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}"""), CancellationToken.None)).Status);
+            payloadJson: $$"""{"iss":"{{did}}","aud":["{{Audience}}"],"lxm":"{{ServiceAuthenticationConstants.ExchangeMethod}}","exp":{{FixedNow + 120}},"iat":{{FixedNow - 5}},"jti":"j1"}"""), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer " + keys.Token(did, payloadJson: baseClaims) + new string('A', 8192), CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer not-a-jwt", CancellationToken.None)).Status);
         Assert.Equal(ServiceProofStatus.Invalid, (await verifier.Verify("Bearer .", CancellationToken.None)).Status);
@@ -281,16 +285,15 @@ public sealed class EnrollmentTests
     }
 
     [Fact]
-    public void Manage_grant_is_bounded_and_requires_explicit_permission()
+    public void Requested_manage_grant_is_a_transport_ceiling_not_a_role_assignment()
     {
         var participant = Participant.NewIdentifier();
         var now = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
         var grants = new[] { ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage };
-        Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(participant, "mcp", 1, grants, now));
-        var (credential, _) = ParticipantCredential.Issue(participant, "mcp", 1, grants, now, managementPermitted: true);
+        var (credential, _) = ParticipantCredential.Issue(participant, "mcp", 1, grants, now);
         Assert.Equal(grants, credential.Grants);
         Assert.Throws<ArgumentException>(() => ParticipantCredential.Issue(participant, "mcp", 1,
-            [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage, ParticipationGrants.Manage], now, true));
+            [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage, ParticipationGrants.Manage], now));
         var principal = ParticipationCredentials.Principal(credential);
         Assert.Equal(participant, ParticipationAccess.Require(principal, ParticipationGrants.Manage));
     }
@@ -491,7 +494,7 @@ public sealed class EnrollmentTests
                 .ConfigureServices(services =>
                 {
                     services.AddKoan();
-                    services.AddTangentMcpAuthentication();
+                    services.AddTangentServiceAuthentication();
                     services.AddSingleton<IServiceProofKeySource>(new FakeKeySource(keys));
                     services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment(root));
                 })
@@ -579,6 +582,38 @@ public sealed class EnrollmentTests
     }
 
     [Fact]
+    public async Task Concurrent_exchange_claims_only_one_credential()
+    {
+        await using var fixture = await HostFixture.StartAsync();
+        var did = "did:plc:mcptestconcurrentaaaaaaa";
+        var proof = Bearer(fixture.Keys, did);
+        var results = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => fixture.Exchange.Exchange(proof, null, CancellationToken.None)));
+        Assert.Single(results.Where(result => result.Status == ServiceProofExchangeStatus.Issued));
+        Assert.Equal(7, results.Count(result => result.Status == ServiceProofExchangeStatus.ReplayedProof));
+    }
+
+    [Fact]
+    public async Task A_durable_claim_without_a_credential_fails_closed()
+    {
+        await using var fixture = await HostFixture.StartAsync();
+        var did = "did:plc:mcptestclaimedaaaaaaaaaaa";
+        const string jti = "claim-before-issuance";
+        var now = DateTimeOffset.UtcNow;
+        await new ServiceProofReplayRecord
+        {
+            Id = ServiceProofReplayRecord.Key(did, jti), IssuerDid = did, Jti = jti,
+            CredentialId = "never-activated", ConsumedAt = now, ExpiresAt = now.AddMinutes(7)
+        }.Save(CancellationToken.None);
+        var proof = "Bearer " + fixture.Keys.Token(did,
+            payloadJson: fixture.Keys.DefaultPayload(did, jti: jti));
+        Assert.Equal(ServiceProofExchangeStatus.ReplayedProof,
+            (await fixture.Exchange.Exchange(proof, null, CancellationToken.None)).Status);
+        using (EntityContext.NoCache())
+            Assert.Empty(await ParticipantCredential.Query(value => value.Name == "forum-client", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Replay_and_credential_survive_a_host_restart()
     {
         var did = "did:plc:mcptestrestartaaaaaaaaaa";
@@ -586,12 +621,16 @@ public sealed class EnrollmentTests
         await using (var fixture = await HostFixture.StartAsync())
         {
             database = fixture.DatabasePath;
-            var issued = await fixture.Exchange.Exchange(Bearer(fixture.Keys, did), null, CancellationToken.None);
+            var first = fixture.Keys.Token(did, payloadJson: fixture.Keys.DefaultPayload(did, jti: "before-restart-jti"));
+            var issued = await fixture.Exchange.Exchange("Bearer " + first, null, CancellationToken.None);
             Assert.Equal(ServiceProofExchangeStatus.Issued, issued.Status);
             savedToken = issued.Issued!.Token;
         }
         await using (var fixture = await HostFixture.StartAsync(database))
         {
+            var replayed = fixture.Keys.Token(did, payloadJson: fixture.Keys.DefaultPayload(did, jti: "before-restart-jti"));
+            Assert.Equal(ServiceProofExchangeStatus.ReplayedProof,
+                (await fixture.Exchange.Exchange("Bearer " + replayed, null, CancellationToken.None)).Status);
             var token = fixture.Keys.Token(did, payloadJson: fixture.Keys.DefaultPayload(did, jti: "restart-fixed-jti"));
             Assert.Equal(ServiceProofExchangeStatus.Issued,
                 (await fixture.Exchange.Exchange("Bearer " + token, null, CancellationToken.None)).Status);
@@ -620,7 +659,7 @@ public sealed class EnrollmentTests
     }
 
     [Fact]
-    public async Task Manage_grant_is_issued_to_any_active_participant_on_explicit_request()
+    public async Task Requested_manage_grant_survives_exchange_without_assigning_a_role()
     {
         await using var fixture = await HostFixture.StartAsync();
         var request = new ServiceProofExchangeRequest
@@ -633,7 +672,7 @@ public sealed class EnrollmentTests
         Assert.Contains(ParticipationGrants.Manage, granted.Issued!.Credential.Grants);
         var principal = await fixture.Host.Services.GetRequiredService<ParticipationCredentials>()
             .Authenticate(granted.Issued.Token, CancellationToken.None);
-        Assert.Equal(await Pid(participant), ParticipationAccess.Require(principal!, ParticipationGrants.Manage));
+        Assert.Equal(granted.Issued.Credential.ParticipantId, ParticipationAccess.Require(principal!, ParticipationGrants.Manage));
         var plain = await fixture.Exchange.Exchange(Bearer(fixture.Keys, participant), null, CancellationToken.None);
         Assert.Equal(ServiceProofExchangeStatus.Issued, plain.Status);
         Assert.DoesNotContain(ParticipationGrants.Manage, plain.Issued!.Credential.Grants);
@@ -739,15 +778,16 @@ public sealed class EnrollmentTests
             new DefaultHttpContext { Request = { Headers = { Host = "evil.example" } } });
         var ok = Assert.IsType<OkObjectResult>(controller.Discover());
         var body = JsonSerializer.Serialize(ok.Value);
-        Assert.Contains("http://127.0.0.1:5220/mcp/token", body);
+        Assert.Contains("http://127.0.0.1:5220/api/v1/identity/exchange", body);
         Assert.DoesNotContain("\"endpoints\"", body);
         Assert.DoesNotContain("sourceWriteConsent", body);
-        Assert.Contains(McpAuthenticationConstants.ExchangeMethod, body);
+        Assert.Contains(ServiceAuthenticationConstants.ExchangeMethod, body);
         Assert.Contains(Audience, body);
-        Assert.Contains(McpAuthenticationConstants.Profile, body);
-        Assert.Contains(McpAuthenticationConstants.ProtocolVersion, body);
+        Assert.Contains(ServiceAuthenticationConstants.Profile, body);
+        Assert.Contains("canonicalOrigin", body);
         Assert.DoesNotContain("evil.example", body);
-        Assert.Contains("independently verifies current authority", body);
+        Assert.Contains("explicitly requested transport ceiling", body);
+        Assert.Contains("every privileged mutation verifies current domain authority", body);
         var overridden = Assert.IsType<OkObjectResult>(Discovery(ProofAudienceFor(Origin, OtherService), space).Discover());
         Assert.Contains(OtherService, JsonSerializer.Serialize(overridden.Value));
         Assert.Equal(StatusCodes.Status503ServiceUnavailable,
@@ -757,12 +797,46 @@ public sealed class EnrollmentTests
                 new SpaceOptions { PublicOrigin = invalid }).Discover()).StatusCode);
     }
 
+    [Fact]
+    public void Public_service_did_document_binds_the_advertised_audience_to_the_origin()
+    {
+        const string origin = "https://community.example";
+        var audience = ProofAudienceFor(origin);
+        var discovery = Assert.IsType<OkObjectResult>(Discovery(audience, new SpaceOptions { PublicOrigin = origin }).Discover());
+        using var profile = JsonDocument.Parse(JsonSerializer.Serialize(discovery.Value));
+        var advertised = profile.RootElement.GetProperty("serviceProof").GetProperty("audience").GetString();
+
+        var controller = DidDocument(audience, origin,
+            new DefaultHttpContext { Request = { Headers = { Host = "evil.example" } } });
+        var result = Assert.IsType<OkObjectResult>(controller.Get());
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(result.Value));
+        Assert.Equal("https://www.w3.org/ns/did/v1", document.RootElement.GetProperty("@context").GetString());
+        Assert.Equal("did:web:community.example", document.RootElement.GetProperty("id").GetString());
+        var service = Assert.Single(document.RootElement.GetProperty("service").EnumerateArray());
+        Assert.Equal(advertised, service.GetProperty("id").GetString());
+        Assert.Equal("TangentSpace", service.GetProperty("type").GetString());
+        Assert.Equal(origin, service.GetProperty("serviceEndpoint").GetString());
+        Assert.DoesNotContain("evil.example", document.RootElement.GetRawText());
+        Assert.Equal("no-store", controller.Response.Headers.CacheControl.ToString());
+    }
+
+    [Theory]
+    [InlineData(Origin, "")]
+    [InlineData("https://localhost:5220", "")]
+    [InlineData("https://192.0.2.10", "")]
+    [InlineData("https://community.example:8443", "")]
+    [InlineData("https://community.example", OtherService)]
+    [InlineData("https://community.example", "did:web:other.example")]
+    [InlineData("", "")]
+    public void A_did_document_is_available_only_for_the_owned_public_did(string origin, string configured)
+        => Assert.IsType<NotFoundResult>(DidDocument(ProofAudienceFor(origin, configured), origin).Get());
+
     [Theory]
     [InlineData("https://tangent.example", "", "did:web:tangent.example")]
     [InlineData("https://Community.Tangent.Example:8443", "", null)]
     [InlineData("https://192.0.2.10", "", null)]
-    [InlineData(Origin, "", Audience)]
-    [InlineData("http://localhost:5220", "", Audience)]
+    [InlineData(Origin, "", ServiceDid)]
+    [InlineData("http://localhost:5220", "", ServiceDid)]
     [InlineData(Origin, OtherService, OtherService)]
     [InlineData("", "", null)]
     [InlineData("http://tangent.example", "", null)]
@@ -781,6 +855,10 @@ public sealed class EnrollmentTests
     public void Only_atproto_audiences_are_accepted(string value, bool accepted)
         => Assert.Equal(accepted, ProofAudience.IsAtprotoAudience(value));
 
-    private static TangentMcpDiscoveryController Discovery(ProofAudience audience, SpaceOptions space, HttpContext? context = null)
+    private static TangentAuthDiscoveryController Discovery(ProofAudience audience, SpaceOptions space, HttpContext? context = null)
         => new(audience, Options.Create(space)) { ControllerContext = new ControllerContext { HttpContext = context ?? new DefaultHttpContext() } };
+
+    private static ServiceDidDocumentController DidDocument(ProofAudience audience, string origin, HttpContext? context = null)
+        => new(audience, Options.Create(new SpaceOptions { PublicOrigin = origin }))
+            { ControllerContext = new ControllerContext { HttpContext = context ?? new DefaultHttpContext() } };
 }

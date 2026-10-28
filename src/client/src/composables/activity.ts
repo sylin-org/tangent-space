@@ -7,7 +7,7 @@ import type { Directories } from './directories'
 import type { SiteStore } from '../stores/site'
 import type { RouterStore } from '../stores/router'
 
-// The participant activity consumer, The
+// The participant activity consumer. The
 // origin connection lives in the coordinator; this maps its snapshots onto the
 // directory marks, the elsewhere strip, the open conversation's refresh, and
 // the connection badge.
@@ -27,6 +27,8 @@ export function createActivity(options: {
   directories: Directories
   site: SiteStore
   router: RouterStore
+  onIdentityRecovered(): Promise<void>
+  onTangentChanged?(tangentKey: string): Promise<void> | void
 }) {
   const { conversation, directories, site, router } = options
 
@@ -81,20 +83,31 @@ export function createActivity(options: {
     // The open selectedTopic reads on; a watch/mute policy may also remove topics from
     // activity. Absence is not an ACL result — re-read a missing open selectedTopic.
     const selected = selectedTopic ? activityByTopic.get(selectedTopic.key) : undefined
-    if (selectedTopic?.canRead && !selected && (changed || snapshot.resetRequired)) {
+    const topicChanged = Array.isArray(snapshot.events) && snapshot.events.some(event =>
+      (event.topicKey === selectedTopic?.key && event.kind === 'TopicChanged') ||
+      (event.tangentKey === selectedTopic?.tangentKey && event.kind === 'TangentChanged'))
+    let presentationChanged = false
+    if (selectedTopic?.canRead && (topicChanged || (!selected && (changed || snapshot.resetRequired)))) {
       const key = selectedTopic.key
+      const tangentKey = selectedTopic.tangentKey
       try {
-        const current = await httpRequest(`/api/v1/tangents/${encodeURIComponent(selectedTopic.tangentKey)}/topics/${encodeURIComponent(key)}`, {
+        const current = await httpRequest(`/api/v1/tangents/${encodeURIComponent(tangentKey)}/topics/${encodeURIComponent(key)}`, {
           credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal: context.signal,
         })
         if (!context.isCurrent()) return false
         if (!current.ok) throw Object.assign(new Error('topic-read-failed'), { status: current.status })
         const value = (await current.json()) as Record<string, unknown>
-        if (context.isCurrent() && conversation.selectedTopic.value?.key === key) conversation.selectedTopic.value = value as never
+        if (context.isCurrent() && conversation.selectedTopic.value?.key === key && conversation.selectedTopic.value?.tangentKey === tangentKey) {
+          presentationChanged = conversation.selectedTopic.value.presentation !== value.presentation
+          conversation.selectedTopic.value = value as never
+        }
       } catch (error) {
         if (!context.isCurrent()) return false
         const status = (error as Error & { status?: number }).status
-        if ([401, 403, 404].includes(status ?? 0)) conversation.selectedTopic.value = null
+        if ([401, 403, 404].includes(status ?? 0)) {
+          if (conversation.selectedTopic.value?.key === key && conversation.selectedTopic.value?.tangentKey === tangentKey)
+            conversation.selectedTopic.value = null
+        }
         else throw error
       }
     }
@@ -106,8 +119,8 @@ export function createActivity(options: {
         selected?.lastSequence !== previousSequence)
     const messageEvent =
       Array.isArray(snapshot.events) && snapshot.events.some(event => event.topicKey === selectedTopic?.key && ['PostEdited', 'PostDeleted'].includes(event.kind))
-    if ((messageEvent || snapshot.resetRequired || needsRefresh.value || (router.route.kind === 'post' && shouldRefresh)) && selectedTopic?.canRead) {
-      await conversation.refreshOpenHistory(false, context)
+    if ((topicChanged || presentationChanged || messageEvent || snapshot.resetRequired || needsRefresh.value || (router.route.kind === 'post' && shouldRefresh)) && conversation.selectedTopic.value?.canRead) {
+      await conversation.refreshOpenHistory(topicChanged || presentationChanged, context)
     } else if (shouldRefresh && selectedTopic.canRead && !conversation.nextCursor && conversation.resumeCursor) {
       await conversation.historyPage(conversation.resumeCursor, undefined, selectedTopic.key, false, context)
     }
@@ -121,12 +134,21 @@ export function createActivity(options: {
       snapshot.events?.some(event => ['TangentChanged', 'TopicChanged', 'MembershipChanged', 'ParticipantChanged'].includes(event.kind))
     ) {
       await directories.loadTangents().catch(() => {})
+      const route = router.route
+      const routeTangent = 'tangent' in route ? route.tangent : null
+      if (routeTangent && (snapshot.resetRequired || snapshot.events?.some(event => event.tangentKey === routeTangent && ['TangentChanged', 'MembershipChanged'].includes(event.kind)))) {
+        await options.onTangentChanged?.(routeTangent)
+      }
+      if (route.kind === 'topics' && (snapshot.resetRequired || snapshot.events?.some(event => event.tangentKey === route.tangent && ['TangentChanged', 'TopicChanged'].includes(event.kind)))) {
+        const page = Math.max(1, Number(new URLSearchParams(window.location.search).get('page')) || 1)
+        await directories.loadTopics(route.tangent, page).catch(() => {})
+      }
     }
     return context.isCurrent()
   }
 
   /** The server pushed an identity change: re-run the welcome flow as the current identity. */
-  function reloadIdentity(): void {
+  async function reloadIdentity(): Promise<void> {
     if (recovering.value) return
     recovering.value = true
     stop()
@@ -137,9 +159,18 @@ export function createActivity(options: {
     automaticRecoveries += 1
     if (automaticRecoveries > 1) {
       connectionStatus('Your session or access needs attention. Sign in or retry to reconnect.', 'error')
+      recovering.value = false
       return
     }
-    void site.load()
+    try {
+      await site.load()
+      await options.onIdentityRecovered()
+    } catch {
+      connectionStatus('Your account changed, but this view could not reload. Retry to reconnect.', 'error')
+    } finally {
+      recovering.value = false
+      if (site.state === 'signedIn') start()
+    }
   }
 
   /** The profile stream decorates names and avatars across the page (profile-live's feed). */
@@ -147,7 +178,7 @@ export function createActivity(options: {
 
   function start(): void {
     const participantRef = site.site?.participant?.participantRef
-    if (!participantRef || recovering.value || ['sign-in', 'onboarding'].includes(router.route.kind)) return
+    if (!participantRef || site.site?.workspaceAvailable === false || recovering.value || ['sign-in', 'onboarding'].includes(router.route.kind)) return
     if (!transport) {
       transport = activityCoordinator.create({
         onSnapshot: async (snapshot, context) => {

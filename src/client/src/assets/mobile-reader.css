@@ -1,0 +1,23 @@
+.mobile-reading-header{display:none}
+.workspace-path .mobile-reader-sign-in{display:none}
+@media(max-width:719px){
+  html:has(.reader-masthead){scroll-padding-top:68px}
+  .masthead.reader-masthead{height:56px;padding:0 12px;gap:0}
+  .reader-masthead>.masthead-brand,.reader-masthead>.header-search-field,.reader-masthead>.masthead-actions{display:none}
+  .mobile-reading-header{display:flex;align-items:center;gap:8px;min-width:0;width:calc(100% - 110px)}
+  .mobile-reading-back{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:8px;color:var(--ts-text);text-decoration:none}
+  .mobile-reading-back:hover{background:var(--ts-hover)}
+  .mobile-reading-place{min-width:0;display:flex;flex-direction:column;gap:3px}
+  .mobile-reading-place>span{font:11px/1.3 var(--ts-font-mono);color:var(--ts-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mobile-reading-place>strong{font:500 15px/1.3 var(--ts-font-ui);color:var(--ts-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .workspace-path.reader-path{height:0;min-height:0;padding:0;border:0;top:56px;z-index:41;overflow:visible}
+  .reader-path>.path-elbow,.reader-path>.path-crumbs{display:none}
+  .reader-path>.path-actions{position:absolute;right:12px;bottom:6px;height:44px;display:flex;gap:2px;align-items:center}
+  .reader-path .path-index-toggle{display:none}
+  .reader-path #topic-path-actions{order:2}
+  .workspace-path.reader-path .follow-button{order:1;min-width:64px;font-size:12px;padding:0 6px}
+  .workspace-path.reader-path .mobile-reader-sign-in{display:inline-flex;align-items:center;justify-content:center;order:1;min-width:64px;min-height:44px;font-size:12px;padding:0 8px}
+  .reader-path .topic-more-menu>summary{font-size:0!important;display:grid;place-items:center;min-width:44px;min-height:44px}
+  .reader-path .topic-more-panel{top:calc(100% + 12px)}
+  .reader-path .follow-error{position:absolute;top:52px;right:0;width:260px;padding:12px;background:var(--ts-raised);border:1px solid var(--ts-line);border-radius:8px}
+}

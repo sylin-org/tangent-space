@@ -13,7 +13,8 @@ public sealed class Topic : Entity<Topic>
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public TopicReadAudience ReadAudience { get; set; }
-    public bool AllowPostEditing { get; set; }
+    public bool MembersOnly { get; set; }
+    public bool AllowPostEditing { get; set; } = true;
     public bool IsLocked { get; set; }
     public AccessMap Access { get; set; } = AccessMap.TopicDefaults();
     public string CreatorParticipantId { get; set; } = "";
@@ -88,7 +89,7 @@ public sealed class Topic : Entity<Topic>
             : !admitted ? "not-admitted" : "allowed";
         return new TopicPolicy(Id, actorDid, PolicyRevision, space?.PolicyRevision ?? 0,
             role, owner, admitted,
-            admitted && !timedOut && !IsLocked
+            admitted && !(timedOut && restriction!.BlockPosting) && !IsLocked
                 && (owner || role != TopicRole.Reader && !tangentReader && classificationWrite),
             (owner && !suspended) || (manager && !timedOut), reason,
             AllowPostEditing, IsLocked);
@@ -128,33 +129,45 @@ public sealed class Topic : Entity<Topic>
         Advance(now);
     }
 
-    public void ChangeSettings(bool allowPostEditing, bool isLocked, string? title, string? description, DateTimeOffset now)
+    public void ChangeSettings(bool? allowPostEditing, bool? isLocked, string? title, string? description, DateTimeOffset now)
     {
+        if (allowPostEditing is null && isLocked is null && title is null && description is null)
+            throw Invalid("Choose at least one Topic setting to change.");
         if (title is not null && (string.IsNullOrWhiteSpace(title) || title.Trim().Length > TopicConstants.MaximumTitleLength))
             throw Invalid("A topic title must contain 1–120 characters.");
         if (description is not null && description.Length > TopicConstants.MaximumDescriptionLength) throw Invalid("A description can contain at most 2000 characters.");
         if (title is not null) Title = title.Trim();
         if (description is not null) Description = description.Trim();
-        AllowPostEditing = allowPostEditing; IsLocked = isLocked;
+        if (allowPostEditing is { } editing) AllowPostEditing = editing;
+        if (isLocked is { } locked) IsLocked = locked;
         Advance(now);
     }
 
-    public void ChangeAccess(AccessMap access, DateTimeOffset now)
+    public void ChangeAccess(AccessMap access, DateTimeOffset now, Tangent? tangent, bool publishExistingHistory)
     {
-        try { Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTopic(); }
+        AccessMap proposed;
+        try { proposed = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTopic(); }
         catch (ArgumentException invalid) { throw Invalid(invalid.Message); }
+        PublicHistory.RequireConsent(IsPubliclyReadable(tangent),
+            PublicHistory.IsPublic(ReadAudience, proposed, tangent?.Access), publishExistingHistory);
+        Access = proposed;
         Advance(now);
     }
 
-    public void ChangeReadAudience(TopicReadAudience audience, bool publishExistingHistory, DateTimeOffset now)
+    public void ChangeReadAudience(TopicReadAudience audience, bool publishExistingHistory, DateTimeOffset now, Tangent? tangent)
     {
         if (!Enum.IsDefined(audience)) throw Invalid("Choose restricted or public reading.");
-        if (ReadAudience != TopicReadAudience.Public && audience == TopicReadAudience.Public && !publishExistingHistory)
-            throw Invalid("Confirm that the Topic's existing history will become publicly readable.");
-        if (ReadAudience == audience) return;
+        PublicHistory.RequireConsent(IsPubliclyReadable(tangent),
+            PublicHistory.IsPublic(audience, Access ?? AccessMap.TopicDefaults(), tangent?.Access), publishExistingHistory);
+        if (ReadAudience == audience && MembersOnly == (audience == TopicReadAudience.Restricted)) return;
         ReadAudience = audience;
+        MembersOnly = audience == TopicReadAudience.Restricted;
         Advance(now);
     }
+
+    public bool IsPubliclyReadable(Tangent? tangent)
+        => PublicHistory.IsPublic(ReadAudience, Access ?? AccessMap.TopicDefaults(),
+            tangent is null ? null : tangent.Access ?? AccessMap.TangentDefaults());
 
     internal static void CheckKey(string key)
     {

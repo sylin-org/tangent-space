@@ -4,6 +4,6 @@ public sealed class EnrollmentOptions
 {
     public const string Configuration = "Tangent:Enrollment";
 
-    /// <summary>A DID that replaces the proof audience derived from Tangent:Space:PublicOrigin.</summary>
+    /// <summary>The service DID; the exchange audience appends the exact #tangent fragment.</summary>
     public string ProofAudience { get; set; } = "";
 }

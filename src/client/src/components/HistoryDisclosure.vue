@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { httpRequest } from '../api'
 
-// The edit-history viewer, ported from history.js: the closed disclosure under an
+// The edit-history viewer is a closed disclosure under an
 // edited post. Reads the post's recorded pre-edit snapshots and renders each era
 // verbatim — the server's text, facets and timestamps; nothing is reconstructed.
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useSite } from '../stores/site'
-import { facetedSegments } from '../composables/facets'
-import type { Conversation, Message } from '../composables/conversation'
+import PostContent from './PostContent.vue'
+import type { Conversation, Message, PostFormat } from '../composables/conversation'
 
 const MAX_ERAS = 20
-const FETCH_SIZE = 200
 
 const props = defineProps<{ conversation: Conversation; message: Message }>()
 
@@ -23,6 +22,7 @@ const loadError = ref('')
 const restricted = ref(false)
 const eras = ref<HistoryRow[]>([])
 const truncated = ref(false)
+let generation = 0
 
 interface HistoryRow {
   id: string
@@ -30,7 +30,7 @@ interface HistoryRow {
   authorParticipantId?: string
   editedAt?: string
   acceptedAt?: string
-  content?: { text?: string }
+  content?: { text?: string; format?: PostFormat; html?: string | null }
   facets?: unknown
 }
 
@@ -41,61 +41,54 @@ function authorLabel(did?: string): string {
   return resolved.value[did]?.displayName || (handle ? '@' + handle.replace(/^@/, '') : 'Participant')
 }
 
-function eraSegments(row: HistoryRow) {
-  const text = row.content && typeof row.content.text === 'string' ? row.content.text : ''
-  return facetedSegments(text, Array.isArray(row.facets) ? row.facets : undefined, resolved.value)
-}
-
 function eraStamp(row: HistoryRow): string {
   if (row.editedAt) return 'Edited ' + new Date(row.editedAt).toLocaleString()
   return row.acceptedAt ? 'Posted ' + new Date(row.acceptedAt).toLocaleString() : 'Posted earlier'
 }
 
-/// Newest-first order by the snapshot chain; GUIDv7 ids sort lexicographically in
-/// time order, so unreferenced rows fall to the tail honestly.
-function orderRows(rows: HistoryRow[]): HistoryRow[] {
-  const byId = new Map(rows.filter(row => row && typeof row.id === 'string').map(row => [row.id, row]))
-  const referenced = new Set(rows.map(row => row?.previousChangeId).filter(Boolean))
-  const byNewest = (left: HistoryRow, right: HistoryRow) => String(right.id).localeCompare(String(left.id))
-  let head: HistoryRow | undefined = typeof props.message.changeId === 'string' ? byId.get(props.message.changeId) : undefined
-  if (!head) head = [...byId.values()].filter(row => !referenced.has(row.id)).sort(byNewest)[0]
-  const ordered: HistoryRow[] = []
-  const seen = new Set<string>()
-  for (let node: HistoryRow | undefined = head; node && !seen.has(node.id); node = node.previousChangeId ? byId.get(node.previousChangeId) : undefined) {
-    if (!node) break
-    seen.add(node.id)
-    ordered.push(node)
-  }
-  return [...ordered, ...[...byId.values()].filter(row => !seen.has(row.id)).sort(byNewest)]
-}
-
 async function load(): Promise<void> {
+  const token = ++generation
+  const postId = props.message.id
+  let next = props.message.changeId || ''
   loading.value = true
   loadError.value = ''
+  restricted.value = false
   try {
-    const response = await httpRequest('/api/history/messages?set=changelog&size=' + FETCH_SIZE
-      + '&filter=' + encodeURIComponent(JSON.stringify({ ofPostId: props.message.id })), {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-    })
-    if (!response.ok) throw Object.assign(new Error('History is unavailable.'), { status: response.status })
-    const rows = await response.json()
-    if (!Array.isArray(rows)) throw new Error('History could not be read.')
-    const ordered = orderRows(rows as HistoryRow[])
-    eras.value = ordered.slice(0, MAX_ERAS)
-    truncated.value = ordered.length > MAX_ERAS || rows.length >= FETCH_SIZE
+    const rows: HistoryRow[] = [], seen = new Set<string>()
+    do {
+      const response = await httpRequest('/api/history/messages' + (next ? '/' + encodeURIComponent(next) : '')
+        + '?set=changelog&size=1&postId=' + encodeURIComponent(postId), {
+        credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
+      })
+      if (!response.ok) throw Object.assign(new Error('History is unavailable.'), { status: response.status })
+      const value = await response.json()
+      if (token !== generation) return
+      const row = (next ? value : Array.isArray(value) ? value[0] : null) as HistoryRow | null
+      if (!row) { next = ''; break }
+      if (typeof row.id !== 'string' || seen.has(row.id)) throw new Error('History could not be read.')
+      seen.add(row.id); rows.push(row)
+      next = row.previousChangeId || ''
+    } while (next && rows.length < MAX_ERAS)
+    eras.value = rows
+    truncated.value = !!next
   } catch (error) {
+    if (token !== generation) return
     restricted.value = [401, 403].includes((error as Error & { status?: number }).status ?? 0)
     loadError.value = restricted.value
       ? 'Earlier versions aren’t available to this account.'
       : 'Earlier versions couldn’t be loaded. Your post is still here.'
   } finally {
-    loading.value = false
+    if (token === generation) loading.value = false
   }
 }
 
-function onToggle() {
+watch(() => [props.message.id, props.message.changeId, site.site?.participant?.participantRef], () => {
+  generation++; loaded.value = false; loading.value = false; eras.value = []; truncated.value = false; loadError.value = ''; restricted.value = false
+  if (open.value) { loaded.value = true; void load() }
+})
+
+function onToggle(event: Event) {
+  open.value = (event.currentTarget as HTMLDetailsElement).open
   // Lazy: the scoped fetch runs on first open only.
   if (!open.value || loaded.value) return
   loaded.value = true
@@ -121,14 +114,7 @@ function onToggle() {
             <strong class="message-author">{{ authorLabel(row.authorParticipantId) }}</strong>
             <time>{{ eraStamp(row) }}</time>
           </div>
-          <p class="message-text">
-            <template v-for="(segment, index) in eraSegments(row)" :key="index">
-              <a v-if="segment.kind === 'mention'" class="mention" :href="segment.href" :title="segment.title">{{ segment.text }}</a>
-              <span v-else-if="segment.kind === 'group'" class="mention-group" :title="segment.title">{{ segment.text }}</span>
-              <span v-else-if="segment.kind === 'tag'" class="mention-tag">{{ segment.text }}</span>
-              <template v-else>{{ segment.text }}</template>
-            </template>
-          </p>
+          <PostContent class="message-text" :text="row.content?.text ?? ''" :format="row.content?.format" :html="row.content?.html" :facets="row.facets" :resolved="resolved" />
         </div>
         <p v-if="truncated" class="hint">Showing the most recent available versions.</p>
       </template>

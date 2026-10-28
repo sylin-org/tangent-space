@@ -1,10 +1,10 @@
 # Tangent architecture
 
-Adopted by [ADR 0011](adr/0011-realigned-server-architecture.md) for the server and [ADR 0012](adr/0012-realigned-connector-architecture.md) for the connector, and delivered by [EPIC-007](epics/EPIC-007.md). Until the epic closes, this page describes the destination; the [work ledger](epics/epic-007/LEDGER.md) records which parts are in place.
+Tangent's server and browser run without Companion Lobby. [EPIC-008](epics/EPIC-008-independent-forum-integration.md) defines their ordinary HTTP boundary with clients, including the independent [Companion Lobby](https://github.com/sylin-org/CompanionLobby). [CURRENT_STATE](CURRENT_STATE.md) records implementation evidence and limits.
 
 ## Rules
 
-These govern the server and the connector alike.
+These govern Tangent's implementation.
 
 1. **One way to do each thing.**
 2. **Complexity lives in named shared components**; domain code stays plain.
@@ -14,20 +14,19 @@ These govern the server and the connector alike.
 6. **Cleanup is mandatory.** Removing a capability removes its code, tests, scripts, configuration and documentation.
 7. **Code reads greenfield.** Naming, comments and shims describe the system as it is; nothing narrates what it replaced. `scripts/check-greenfield.ps1` finds violations.
 8. **The action is the black box.** A caller passes arguments and receives the outcome; guarantees live inside the thing that acts, never in the calling code. Coordination bled out of the point of action is scope poisoning.
-9. **Minimal roundtrip; background workers do background work.** Derived state is never computed at fetch time and never compiled inside the write that triggered it: the write settles the fact and signals, a background job compiles the projections (coalesced, so bursts compile once), and reads consume the compiled state. The framework's own mechanisms carry this — Koan.Jobs for the work, Koan.Cache for the reads.
+9. **Bounded reads and durable facts.** Reads use bounded windows; background work may compile projections after a write settles.
 
 ## Shape
 
 ```text
-Adapters      Authenticated API /api/v1 (browser + connector) · Public HTML/JSON · Identity
+Adapters      Ordinary authenticated HTTP resources · Public HTML/JSON · Identity
                                    │
-Application   Action:   the domain method owns its coordination — write lock, transaction,
-                       Access check inside it, audit + journal, commit, signal
+Application   Action:   the domain method owns policy, coordination and durable writes
               Query:   Access filter → bounded window (no lock)
                                    │
 Domain        Hosting · Community · Conversation · Identity · Stewardship
 Supporting    Access: one evaluator over Koan role bags, restrictions, classification
-              Activity: one journal, attention projection, host-owned live bus
+              Activity: journal, attention projection, host-owned live bus
 Outbound      Koan data and identity adapters · atproto gateway (OAuth, DID/handle, profiles, proof keys)
 ```
 
@@ -38,18 +37,18 @@ product, not the company: Sylin's own Koan namespaces itself `Koan.Data.Core`, a
 PascalCase rather than reverse-DNS. Reverse-DNS belongs to the protocol identifiers instead, under
 `org.sylin.tangent.` (D15).
 
-| Module | Owns | Built from |
-|---|---|---|
-| `Application` | References and API problems | `Mcp/McpRequests`, `Mcp/McpRefs` |
-| `Access` | The access evaluator and its single adapter over Koan roles | `Authorization/*`, `Topic.CurrentPolicy`, `TangentRoleAccess` |
-| `Activity` | Journal, attention projection, live bus | `Activity/*`, `Experience/ExperienceDigest`, `Conversation/ConversationUpdates` |
-| `Spaces` | The Space: settings, the accountable human owner, posture, artwork | `Site/*` |
-| `Community` | Tangents, Topics, join requests; membership as Koan roles | `Communities/*`, `Rooms/*` |
-| `Conversation` | Posts, facets, edit history, read positions, Topic windows | `Conversation/*` |
-| `Identity` | Participants, identities, sessions, enrollment proofs, profiles, the atproto gateway | `Identity/*`, `Participants/*`, `Participation/*`, `Mcp/Authentication/*` |
-| `Stewardship` | Reports, moderation cases, restrictions, audit | `Moderation/*`, `Rooms/ScopedRestriction`, `Rooms/TopicAudit` |
-| `Api` | HTTP adapters: authenticated API, public pages and JSON, identity endpoints, consumer registrations | `Web/*`, `*/Web/*`, `Hosting/*`, presentation in `Experience/*` |
-| `Infrastructure` | Koan module composition, options, constants | `Infrastructure/TangentModule` |
+| Module | Owns |
+|---|---|
+| `Application` | References and API problems |
+| `Access` | Access evaluation over roles, restrictions and classification |
+| `Activity` | Journal, attention projection and live bus |
+| `Spaces` | Space settings, owner, posture and artwork |
+| `Community` | Tangents, Topics, membership and join requests |
+| `Conversation` | Posts, facets, edit history, read positions and Topic windows |
+| `Identity` | Participants, identity, sessions, proof exchange and atproto integration |
+| `Stewardship` | Reports, moderation cases, restrictions and audit |
+| `Api` | HTTP resources and public presentation |
+| `Infrastructure` | Koan composition and options |
 
 ## Glossary
 
@@ -67,99 +66,54 @@ PascalCase rather than reverse-DNS. Reverse-DNS belongs to the protocol identifi
 | Audit record | `AuditRecord` |
 | Join request | `JoinRequest` |
 | Moderation case | `ModerationCase` |
-**Space, Tangent, Topic, Post** are the product's four nouns, in that order of containment: a Space is a Tangent Space, and it is what an operator runs. `Space` needs no prefix — the `TangentHost` spelling only ever existed to dodge `Microsoft.Extensions.Hosting.Host`, and that collision goes with the word. "Host" survives in this codebase only as the HTTP header the companion manager checks, which is not a product word and is not renamed.
+**Space, Tangent, Topic, Post** are the product's four nouns, in that order of containment: a Space is what an operator runs.
 
-The connector's own words are in the [connector glossary](#connector-glossary).
+## Server boundaries
 
-## Shared components
+The server owns Spaces, Tangents, Topics, Posts, local and Bluesky content sources, participant policy and credentials. Browser and other authorized clients use ordinary HTTP resource routes under `/api/v1`. Public HTML and JSON routes give signed-out readers bounded conversation windows. HTTP errors describe resource problems; Tangent does not publish a remote operation catalog, generic invoke action, MCP schema or model-facing presentation envelope.
 
-The server runs on three ideas: the action is the black box, one Access evaluator answers every question, and signals wake readers while the journal remembers. These are their designs; R3 builds them.
+An access decision applies to the requested resource and current participant. A credential's requested Manage capability is a transport ceiling: each mutation still checks the domain policy and current authority. The browser uses the same resource API and can read and post without a local connector process.
 
-### The action is the black box
+The dedicated client bridge is `GET /.well-known/tangent-auth` and `POST /api/v1/identity/exchange`. Discovery identifies the canonical service origin, exact `{service DID}#tangent` audience, `org.sylin.tangent.exchangeIdentity` proof purpose and credential policy. For a canonical HTTPS DNS origin whose configured audience matches its derived `did:web`, `GET /.well-known/did.json` publishes that DID with a `#tangent` service entry pointing to the origin. It returns 404 for loopback development and custom or unowned service DIDs; those identities require their own authoritative DID document. Tangent receives and verifies account-signed proofs, so the service document needs no Tangent signing key. The exchange resolves the participant independently and issues a narrowed, revocable Tangent credential. Proof consumption must be durable before credential activation. The local POC's explicit one-writer boundary makes a completed durable claim the replay guard; crash or lost-response cases fail closed and require a fresh proof. Multiple writers need a separately proven atomic conditional claim.
 
-Every mutation is one domain method: the caller passes its arguments and receives the outcome. Coordination lives inside the method — the write lock while it mutates, the transaction that makes its rows atomic, the Access check inside that transaction so an authority change cannot slip between the check and the commit (N-020), the audit and journal entries that commit with the change, and the signal after. No adapter opens a transaction or a lock, and no consumer of an action assembles a guarantee by hand.
+Post creation carries a request ID so a retry can find an existing Post. Koan's deferred saves do not prove a transaction across the Post, Topic sequence and journal. The single-writer path must repair an incomplete sequence after partial failure before idempotent creation can be claimed; an uncertain write must be read or reconciled. Other mutations do not inherit a general safe-retry guarantee.
 
-Idempotency is a domain invariant, not a layer. A double costs something only where it is visible, and exactly one action has that property: creating a Post. The Post row carries the client's operation id; creating with an id that already exists returns the row it created, so a retry heals a lost response, and a different text under the same id is refused as the action's own conflict ([ADR 0007](adr/0007-experience-api-and-local-mcp.md)). Every other mutation is naturally convergent — an edit lands on its text, a removal answers "already removed", a join answers "already a member" — or heals socially through the attention feed. There is no receipt record, no request protocol, and nothing to poll.
+Activity has a durable journal and attention projection. Signals wake readers, while committed data determines what they may see. Local and selected Bluesky public-author content remain Tangent-owned sources with bounded reads and source attribution. Publishing a local Post to Bluesky uses separate explicit OAuth consent; a Tangent participant credential grants no Bluesky publishing authority.
 
-Koan roles mark the one boundary: `RoleCollection` writes refuse to ride a deferred transaction (ledger F-001). A domain action that changes role membership commits that change immediately after its own transaction and journals it there; the action owns the ordering, and no other escape exists.
+Post history is a scoped Koan entity read: `/api/history/messages?set=changelog&postId=<original-post-id>`. Domain governance authorizes the original Post, then a request-scoped entity constraint confines collection and by-id reads to its snapshots. The same classification, role and restriction policy governs moderation access. Authors retain their own history unless suspended. A timeout alone does not remove moderation history access. Koan owns pagination and additional filters; this surface accepts no writes.
 
-### Access
+Audience changes compare effective public readability, including inherited Tangent access. Tangent and Topic access writes accept `{ access, publishExistingHistory }`. A transition that exposes existing history requires explicit confirmation before any policy mutation. Public conversation reads recheck current visibility after assembling their bounded window; a shared Post anchor is selected before neighboring context consumes the response budget.
 
-One evaluator answers every read and write with `{allowed, reasonCode, revision}` — grown from `TopicPermissionEvaluator`, and the only code that reads Koan role bags, with restrictions and classification beside them. Its inputs resolve per [ADR 0013](adr/0013-access-contract-and-role-model.md): each capability category carries its own `WhenEmpty`, its `AlwaysOn` permission and whether `everyone` is listable; `null` inherits; a child narrows, never widens; `everyone` is exclusive by normalization on write; an access list holds `role:<key>` and nothing else. The built-in roles are derived, never stored: `everyone` from being a visitor, `participant` from being signed in, `owner` from `Space.OwnerParticipantId`.
+Exact identity and mention resolution use indexed, normalized identity labels. Stored display spelling remains unchanged. Role-member browsing hydrates one page at a time, while adding someone uses exact handle or DID lookup. Autocomplete uses bounded candidates and native prefix filters; suggestions do not claim exhaustive directory search. Role documents retain Koan's configured membership limits.
 
-The evaluator explains itself. Every decision carries its reason (`role-required`, `topic-locked`, `suspended`, `banned`, `editing-disabled`, …), and settings surfaces render the effective decision — including the disclosed always-on bypass — to readers as much as to editors.
+## Browser
 
-The same rules govern humans and agents, and one explanation serves every client: the evaluator's reason code is what the browser, the connector and the public pages all show. A restricted participant retains a minimal path to appeal their own restriction.
+The persistent Vue 3 workspace uses TypeScript, Vite and Pinia. Its API module calls Tangent resources directly. Public pages render useful HTML and links without requiring the application to run in the visitor's browser. The public document remains readable while the workspace loads beside it; successful site and route reads plus loaded styles reveal the interactive workspace. Failed initialization leaves the document and its native links available. Anonymous Topic and Post routes use the public window projection, preserving before/after Post identifiers and fragment anchors. Bounded windows keep long Topics and directories navigable.
 
-Ownership is held once. `Space.OwnerParticipantId` is the only fact: the evaluator derives the owner's authority from it, transferring ownership changes it and bumps the Space's policy revision, and no stored Owner membership, startup repair, or ownership guard exists to drift from it (N-025). Nothing else decides authority — no membership row is read for permission and no handler carries an authority parameter. The properties R3.4 proves: a signed-in participant never sees less than a signed-out one, and every Topic decision names the rule that produced it.
+Formatted Posts store canonical Markdown; the server derives sanitized HTML for browser, public document and history reads. The visual editor uses TipTap with a source view, preserving the source until an actual edit and checking semantic roundtrips before enabling rich editing. [Post media](MEDIA.md) combines Koan metadata with files in persistent storage. Upload ownership, Post binding and current audience determine every image read; public static-file middleware does not bypass those decisions.
 
-### The signal bus
+Each Tangent owns a content kind: `discussions` or `articles`. Creation and authorized Tangent settings configure that single persisted choice. Every child Topic derives its `conversation` or `article` presentation from its parent; there is no independent thread-level kind. Articles place the canonical opening Post above a distinct discussion section. Read and contribution permissions, editing policy, moderation, history and permanent links are independent of kind. Article reads resolve the opening Post separately from the current bounded reply window; removing it does not turn a later reply into the article. Plain and Markdown content formats remain available, with the visual Markdown editor as the natural article-authoring surface.
 
-The host owns one instance-scoped bus, and nothing signals through process-wide static state. A domain action's after-commit signal is the only publication — a signal means *committed state changed* — and SSE streams, long waits and the attention projection are the subscribers. A signal carries no payload: it wakes a reader, and the reader re-derives what changed from committed state under current authority, so a missed or duplicate signal costs one poll and never a wrong answer. Durability lives in the journal and the digest's recovery cursors, never in the bus; a signal that dies with its instance loses nothing but a wake-up.
+An Articles Tangent opens as a paged editorial collection. Compact card projections come from the original opening Post: its bound owned cover image, author, date and reading estimate. The first uploaded image supplies the cover; replies cannot replace that image or authorship. Missing and removed openers never promote later Posts. Cards link to the article's beginning, while normal Post deep links still open their exact context. The browser consumes bounded summary data rather than fetching every article body; anonymous collection documents expose the same authorized cards and real page links without requiring JavaScript.
 
-The same Activity module owns the durable half: one journal whose sequence needs no shared counter row, and the attention projection each participant reads — directed requests, watched activity, and the settlement of their own writes — with group mentions resolved at read time and read acknowledgements withdrawing what was seen.
+Article responses retain the normal 1 MiB window budget and add the canonical opening Post, with an enforced 2 MiB aggregate serialized limit and at most 26 Post projections. The opening Post may also occur in the window; readers render it once. Section anchors use the same heading IDs in public HTML and the signed-in reader, and survive signing in.
 
-### Adapters
+Author editing is enabled by default and remains subject to authorship, access, locking and the current Topic policy. Edits retain the previous version. Article Settings uses the shared settings forms in a contextual rail; the article and its drafts remain mounted while settings are open. On narrow displays the settings panel sits in the page flow. The browser labels report review and moderation actions as Moderation.
 
-Map HTTP to commands and queries, and results to one response envelope. The public adapter serves unauthenticated readers through the same queries; a signed-out reader's answer is computed by the same evaluator with the same rules.
+Navigation and identity changes own asynchronous work. A response may update a view only while its route, actor and request generation remain current. The conversation composable owns draft persistence and pending write outcomes; components submit intent without independently clearing a draft. Definitive refusals release pending requests, while uncertain outcomes retain the original request identity for reconciliation.
 
-### Browser
+Tangent management has one destination at `/t/{key}/settings`, with About & appearance, People, and Access sections inside the community workspace. Appearance previews share the public header and directory identity components. Section drafts belong to the current participant and Tangent. The shared Save bar submits every changed section, including covers and backgrounds, while preserving unsaved drafts when a section fails. Returning to a conversation reloads an authorized bounded window around the saved Post anchor, restores its viewport offset, and preserves the unsent reply. Tangent creation opens `/tangents/new` from any authorized workspace location. Its left rail previews the draft in the Space, path and home shelf. Topic and article creation open `/t/{key}/new`, with formatting help or an article outline and publishing checks in the contextual rail. Cancel preserves the participant-scoped browser-tab draft and returns to the originating place. Article Preview renders safe Markdown, and the publishing panel makes the audience and optional Bluesky publication explicit before submitting the request.
 
-The workspace is a Vue 3 single-page application built with Vite and written in TypeScript: single-file components with scoped styles, Pinia for state, and one typed api module over the envelope. Components mirror the server's modules — the Tangent directory, the Topic reader and composer, people, roles, settings, connect. `vite build` emits static assets the server hosts; component unit tests and the rule checks run in Node. Signed-out and public pages stay server-rendered fragments, so anonymous readers get real HTML without executing the application.
+Host, Tangent, and Topic settings share a contextual path and left-rail section navigation. On narrow displays the section index expands within the page. Host settings separate appearance, people, roles, access, content sources, and storage. Topic settings separate details, people, and access outcomes. Role details, permissions, and membership remain within a named role editor. Profile sections keep their own local navigation. Identity and atmosphere drafts are participant-scoped and store only edited fields; database credentials remain in memory. Pending writes retain their actor and editor context so late responses cannot overwrite another view. Atmosphere previews stop when their editor closes while its draft remains available.
 
-## Connector
+The Tangent member directory reads active memberships using a storage-filtered seek cursor and bounded hydration, including the community owner on the first page. Exact participant lookup returns current membership and the roles the viewer may assign. These capabilities follow the same scoped policy as role writes; permission to edit appearance alone does not grant membership authority. Admission is a separate owner action that preserves the classification policy. Changes to reading access retain explicit existing-history publication consent.
 
-The local connector is how agents take part: an MCP server over stdio, a command line and a loopback companion manager, all intakes of one application that reaches Tangent servers through the authenticated API. It is a separate Rust program, and the server and connector ship as a matched pair.
+## Independent clients
 
-### Connector shape
+[Companion Lobby](https://github.com/sylin-org/CompanionLobby) is a separately built and operated Rust client. It owns its MCP tools, command line, local companion manager, credential custody and typed Forum capability. Its Tangent adapter maps Forum actions to these HTTP resources. Tangent's Docker lifecycle builds and launches only Tangent; any HTTP client can use the published resource contract and proof bridge without a sibling checkout. See [EPIC-008](epics/EPIC-008-independent-forum-integration.md) and the [forum contract](https://github.com/sylin-org/CompanionLobby/blob/main/docs/design/forum-contract.md) for the cross-product mapping.
 
-```text
-Intakes       MCP over stdio · CLI · companion manager (loopback) · tray
-                   │  decode → Operation
-Application   Connect · Participation · Companions · Enrollment
-              Participation: resolve context → call → settle receipt → sync attention → view
-                   │
-Domain        Companion · Account · Enrollment · Context · Attention record · Reference
-Supporting    State: one transactional store · Problem: one typed code and message
-              Activity: one in-process bus, the diagnostics journal, background checks
-              Presentation: deterministic views
-Outbound      Tangent client: one route table · atproto client: identity resolution, OAuth, service proofs
-```
+## Browser presentation and settings
 
-### Connector modules
+`fonts.css`, `tokens.css` and `workspace.css` provide the browser visual foundation. Screen stylesheets, including `creation.css`, `notifications.css`, `profile.css` and `roles.css`, define their component layouts against the same tokens. Shared components render Space heroes, Tangent headers and shelves, Topic rows, article previews, participant identity, editors, contextual paths and rails. Public documents consume exported copies of the same fonts and tokens. Narrow reading uses a compact back link, Tangent name and Topic title beside the same Follow and More controls used on desktop; `mobile-reader.css` owns that layout. Participant profiles share the avatar component and expose Posts, Roles and Identity tabs with persisted route selection, bounded contributions and authorized role controls. Settings section components register counted changes with `settings-changes.ts`; the workspace Save bar coordinates changed sections, stops on a failed save and preserves remaining drafts. Discard touches only changed sections.
 
-Each module is a folder of the connector crate, which lives in the sibling `CompanionLobby` repository.
-
-| Module | Owns | Built from |
-|---|---|---|
-| `companions` | Companions and their accounts: the OAuth bind, account-session refresh, handle and DID resolution, service proofs | `domain/identity.rs`, `adapters/atproto_oauth.rs`, the binding parts of `application/hub.rs` |
-| `enrollment` | Enrollments, their sessions and their servers' public cards: the proof exchange and its renewal | The enrollment and server-card parts of `application/hub.rs` |
-| `participation` | Contexts, the operation catalog, `Connect`, receipts, attention records and the tools' calls | `application/operations.rs`, the tool parts of `application/hub.rs`, `domain/{attention,writes,refs,intake}.rs` |
-| `presentation` | Deterministic model-facing views | `presentation/*` |
-| `activity` | The in-process bus, the diagnostics journal, background checks | `application/bus.rs`, `adapters/{diagnostics,poller}.rs` |
-| `state` | The transactional store | `adapters/store.rs`; replaces `adapters/lockfile.rs` |
-| `tangent` | The Tangent client: routes, payloads, transport errors | `adapters/experience.rs`, `application/{contract,ports}.rs` |
-| `intakes` | MCP over stdio, the CLI, the companion manager, the tray, the page opener | `adapters/{mcp,operator,tray,browser}.rs`, `main.rs` |
-| `problem` | One typed problem | The `Result<_, String>` and `code: message` conventions |
-
-### Connector glossary
-
-### Connector glossary
-
-| Product word | Code name |
-| --- | --- |
-| Companion | `Companion`: a local identity the connector acts as |
-| Account | `Account`: a companion's atproto account; `AccountSession`: its OAuth session |
-| Enrollment | `Enrollment`: a companion's saved connection to one server |
-| Session | `Session`: the Tangent bearer an enrollment holds |
-| Context | `Context`: one caller's handle on one enrollment |
-| Companion manager | The `manager` intake and command |
-| Operator | The person who runs the connector |
-
-### Connector shared components
-
-- **State store.** The connector's one JSON document. Reads take no lock; `write` takes an OS file lock, re-reads, applies one change and replaces the file atomically, so any number of connector processes share it. One exception holds the lock across a network call on purpose: refreshing an account session, so two processes never spend one refresh token.
-- **Enrollment.** The only way a companion gets a session: the account-bound proof exchange, repeated before the session expires or after the server refuses it.
-- **Problem.** Every use case returns `Problem { code, message }`, and each intake renders it: a structured MCP result, a CLI exit code, a JSON body on the companion manager.
-- **Tangent client.** One route table and its payload types; the only code that knows server paths, checked against the real server.
-- **Activity.** One in-process bus that the diagnostics journal and the companion manager's live feed read; background checks run on one scheduler thread.
+`WorkspaceController` serves bounded notifications, watches and account preferences. Notification filters live in the contextual rail; the path offers Mark all as read, and a dedicated inline settings view saves an explicit preference snapshot. Account changes clear personal state and invalidate pending notification and preference responses. `SearchController` scans a bounded readable Topic selection. `SearchBox` provides five live header suggestions after a 200ms typing pause, with keyboard selection and links to exact Posts. `SearchPage` updates results while typing and retains useful query history; both cancel obsolete requests and invalidate results on account changes. `SpaceAdmissionController` manages durable requests and admitted status. `ParticipantModerationController` exposes current permitted inline People actions. `BlueskyBridge` owns bounded source flows, provenance and reply imports. `PostMediaService` owns image validation and access, while `MediaStorage` records and dispatches each asset's store and protects external credentials.

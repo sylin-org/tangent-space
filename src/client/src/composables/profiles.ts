@@ -1,9 +1,8 @@
 import { httpRequest } from '../api'
-import { reactive, watch } from 'vue'
+import { onScopeDispose, reactive, watch } from 'vue'
 import type { Activity } from './activity'
 
-// One decoration feed for the identities rendered on this page, ported from
-// profile-live.js to the reactive grain. Everything comes from the local server
+// One decoration feed for the identities rendered on this page. Everything comes from the local server
 // cache, never from atproto directly: the viewer's own profile is read once at
 // sign-in, rendered DIDs are subscribed on the shared activity connection (or a
 // per-tab events stream as fallback), and the server announces when a picture
@@ -26,6 +25,19 @@ export function createProfiles(activity: Activity) {
   let ownDid = ''
   let watched: string[] = []
   let fallbackStream: EventSource | null = null
+  let fallbackSignature = ''
+  let wired = false
+  let disposed = false
+
+  function closeFallback(): void {
+    fallbackStream?.close()
+    fallbackStream = null
+    fallbackSignature = ''
+  }
+
+  const syncTransport = () => { if (!disposed) sync(watched) }
+  // The coordinator announces readiness before its caller stores the adapter.
+  const onLiveReady = () => queueMicrotask(syncTransport)
 
   function receive(profile: ProfileSnapshot | unknown): void {
     const p = profile as ProfileSnapshot
@@ -35,6 +47,10 @@ export function createProfiles(activity: Activity) {
 
   /** The activity connection's profile frames feed this store (tangent:profile-stream). */
   function wire(): void {
+    if (wired) return
+    wired = true
+    window.addEventListener('tangent:live-ready', onLiveReady)
+    document.addEventListener('visibilitychange', syncTransport)
     watch(activity.profileEvents, values => {
       for (const value of values) {
         const p = value as unknown as ProfileSnapshot
@@ -59,21 +75,16 @@ export function createProfiles(activity: Activity) {
   function sync(dids: string[]): void {
     const next = [...new Set(dids.filter(value => typeof value === 'string' && value.length <= 256 && value.startsWith('did:')))].sort().slice(0, MAX_WATCHED)
     const signature = next.join('|')
-    if (signature === watchedSignature()) return
     watched = next
     const multiplexed = activity.setProfiles(next)
-    if (multiplexed) {
-      fallbackStream?.close()
-      fallbackStream = null
+    if (multiplexed || document.hidden || !next.length) {
+      closeFallback()
       return
     }
+    if (fallbackStream && signature === fallbackSignature) return
     // The single-tab transport cannot multiplex profiles; keep a per-tab events stream.
     const wanted = signature
-    if (fallbackStream) fallbackStream.close()
-    if (!next.length) {
-      fallbackStream = null
-      return
-    }
+    closeFallback()
     const query = new URLSearchParams()
     next.forEach(did => query.append('did', did))
     const stream = new EventSource('/api/profile-cache/events?' + query)
@@ -86,11 +97,15 @@ export function createProfiles(activity: Activity) {
       }
     })
     fallbackStream = stream
+    fallbackSignature = signature
   }
 
-  function watchedSignature(): string {
-    return watched.join('|')
-  }
+  onScopeDispose(() => {
+    disposed = true
+    window.removeEventListener('tangent:live-ready', onLiveReady)
+    document.removeEventListener('visibilitychange', syncTransport)
+    closeFallback()
+  })
 
   function snapshotOf(did: string | null | undefined): ProfileSnapshot | undefined {
     return did ? snapshots.get(did) : undefined

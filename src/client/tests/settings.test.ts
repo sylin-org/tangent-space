@@ -27,7 +27,7 @@ function stubFetch() {
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
     if (url.startsWith('/api/roles/ui/descriptor')) return json(descriptor)
     if (url.startsWith('/api/identity/roles?pageSize')) return json(rolePage)
-    if (url.startsWith('/api/roles/ui/search')) return json([])
+    if (url.startsWith('/api/roles/ui/search')) return json({ items: [], page: 1, nextPage: null, totalMembers: 0 })
     if (url.startsWith('/api/server/access')) return json({ selected: { see: ['everyone'], createTangents: ['role:moderator'], manage: [] }, effective: { see: ['everyone'], createTangents: ['role:moderator'], manage: [] } })
     if (url.startsWith('/api/identity/roles?page=1')) return json({ items: rolePage.items, totalCount: 2 })
     throw new Error('unexpected fetch ' + url)
@@ -46,7 +46,8 @@ describe('the settings page coordination', () => {
     expect(settings.requestedTab('tangent')).toBe('context')
     window.history.replaceState(null, '', '/settings?tab=people')
     expect(settings.requestedTab('server')).toBe('people')
-    expect(settings.requestedTab('tangent')).toBe('context')
+    expect(settings.requestedTab('tangent')).toBe('people')
+    expect(settings.requestedTab('topic')).toBe('context')
     window.history.replaceState(null, '', '/settings?tab=access')
     expect(settings.requestedTab('tangent')).toBe('access')
   })
@@ -81,10 +82,10 @@ describe('the roles tab', () => {
   })
 
   it('lists the roles and opens the editor for a chosen one', async () => {
-    const settings = { activeTab: ref<'roles' | 'people' | 'server' | 'access' | 'context'>('roles') }
+    const settings = { activeTab: ref<'roles' | 'people' | 'server' | 'access' | 'context'>('roles'), actorKey: ref('owner') }
     const wrapper = mount(RolesPanel, { props: { settings: settings as never }, global: { plugins: [createPinia()] } })
     await flushPromises()
-    expect(wrapper.text()).toContain('Showing 2 of 2')
+    expect(wrapper.findAll('.role-directory-row')).toHaveLength(2)
     expect(wrapper.text()).toContain('Moderator')
     expect(wrapper.text()).toContain('Owner')
     const row = wrapper.findAll('.role-directory-row').find(node => node.text().includes('Moderator'))!
@@ -96,7 +97,7 @@ describe('the roles tab', () => {
   })
 
   it('marks a built-in role as managed and disabled', async () => {
-    const settings = { activeTab: ref('roles') }
+    const settings = { activeTab: ref('roles'), actorKey: ref('owner') }
     const wrapper = mount(RolesPanel, { props: { settings: settings as never }, global: { plugins: [createPinia()] } })
     await flushPromises()
     const row = wrapper.findAll('.role-directory-row').find(node => node.text().includes('Owner'))!
@@ -104,6 +105,34 @@ describe('the roles tab', () => {
     await flushPromises()
     expect(wrapper.find('#role-managed').attributes('hidden')).toBeUndefined()
     expect((wrapper.find('#role-name').element as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it('uses server member totals and pages rather than counting the visible batch', async () => {
+    const base = stubFetch()
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.startsWith('/api/roles/ui/search')) {
+        const page = Number(new URL(url, 'http://localhost').searchParams.get('page'))
+        return new Response(JSON.stringify({
+          items: [{ id: 'participant-' + page, displayName: 'Member ' + page, inRole: true }],
+          page, nextPage: page === 1 ? 2 : null, totalMembers: 120,
+        }))
+      }
+      return base(input)
+    })
+    vi.stubGlobal('fetch', fetch)
+    const settings = { activeTab: ref('roles'), actorKey: ref('owner') }
+    const wrapper = mount(RolesPanel, { props: { settings: settings as never }, global: { plugins: [createPinia()] } })
+    await flushPromises()
+    await wrapper.findAll('.role-directory-row').find(node => node.text().includes('Moderator'))!.trigger('click')
+    await wrapper.find('[data-role-editor-tab="members"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#role-members-heading-count').text()).toBe('120')
+    expect(wrapper.find('#role-members').text()).toContain('Member 1')
+    await wrapper.find('.role-member-pages button:last-child').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#role-members').text()).toContain('Member 2')
+    expect(wrapper.find('#role-members-heading-count').text()).toBe('120')
   })
 })
 

@@ -1,8 +1,8 @@
 # Tangent Space Docker lifecycle test suite. Plain PowerShell; no Pester required.
 # Wipe behavior is exercised against disposable scratch trees under
 # <repo>/.local/docker/lifecycle-test-* only. The production .local/docker/site directory and
-# the running application container are never touched: every docker invocation is captured by
-# an injected command runner, and every launch scenario runs in a child process.
+# the running application container are never touched: Docker invocations are captured by
+# an injected command runner.
 [CmdletBinding()]
 param([switch]$KeepScratch)
 $ErrorActionPreference = 'Stop'
@@ -122,11 +122,13 @@ try {
     Assert-That ($absentResult.status -eq 'absent') 'Wiping an absent target reports absent without failing'
     Assert-That ($script:RecordedRuns.Count -eq 4) 'An absent-target wipe still stopped and removed the tangent service'
 
-    # Sections 7 and 8 (launch and build dispatch against a mocked Docker) were deleted in
-    # R1.15: they asserted that a development script calls docker with the strings it calls
-    # docker with. What remains guards the one thing that can go irreversibly wrong here —
-    # a wipe resolving outside its allowed root, through `..`, a junction, or the repository
-    # itself. When Wipe.bat stops taking a target at all, even these become unnecessary.
+    # Build is a product boundary: it must work with only the Tangent checkout and run no
+    # sibling toolchain. The injected runner records every external build command.
+    $script:RecordedRuns.Clear()
+    $TangentLifecycleSkipMain = $false
+    . (Join-Path $repoRoot 'scripts/server-lifecycle.ps1') -Action Build -FrameworkPreparer { param($root) } -CommandRunner $recordingRunner | Out-Null
+    Assert-That ($script:RecordedRuns.Count -eq 1) 'Build runs exactly one external command'
+    Assert-That ($script:RecordedRuns[0] -eq 'docker compose build tangent') 'Build targets only the Tangent image'
 
     Write-Output ''
     Write-Output "Lifecycle test summary: $($script:PassedCount) passed, $($script:FailedCount) failed."

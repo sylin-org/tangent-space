@@ -1,9 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using Koan.Data.Core.Model;
+using Koan.Data.Abstractions.Annotations;
 
 namespace Tangent.Community;
 
+[Index(Fields = [nameof(TangentKey), nameof(Id)])]
+[Index(Fields = [nameof(TangentKey), nameof(Role), nameof(Id)])]
 public sealed class TangentMembership : Entity<TangentMembership>
 {
     public string TangentKey { get; set; } = "";

@@ -8,12 +8,11 @@ namespace Tangent.Conversation;
 
 public sealed partial class ConversationService
 {
-    /// <summary>An author's edit or removal, or a moderator's removal, applied in one policy pass.
-    /// Idempotency lives in the operation receipt registry at the adapter, not here: the same
-    /// request replays its recorded result there, and a divergent one is a conflict before this
-    /// method runs. The pre-edit snapshot rides the changelog partition either way.</summary>
-    public async Task<PostChangeResult> ChangePost(string participantId, string roomKey, string messageId, string? text,
-        bool delete, CancellationToken ct, IReadOnlyList<PostFacet>? facets = null)
+    /// <summary>An author's edit or removal, or a moderator's removal, applied under current policy.
+    /// These writes have no general replay guarantee. A client that loses the response must read
+    /// current state before deciding whether another mutation is appropriate.</summary>
+    public async Task<PostChangeResult> ChangePost(string participantId, string topicKey, string messageId, string? text,
+        bool delete, CancellationToken ct, IReadOnlyList<PostFacet>? facets = null, string? format = null)
     {
         if (string.IsNullOrWhiteSpace(messageId))
             throw new ArgumentException("A post ID is required.");
@@ -22,20 +21,28 @@ public sealed partial class ConversationService
             if (text is null) throw new ArgumentException("Text is required for an edit.");
             PostContent.CheckText(text);
             PostFacets.Check(text, facets);
+            if (format is not null) PostContent.CheckFormat(format);
         }
         else if (facets is { Count: > 0 }) throw new ArgumentException("A removal cannot carry facets.");
         await writes.WaitAsync(ct);
         try
         {
-            var result = await governance.WithinAcceptanceAsync(participantId, roomKey, async (policy, token) =>
+            var result = await governance.WithinAcceptanceAsync(participantId, topicKey, async (policy, token) =>
             {
-                var current = await ReadPostForChange(policy, roomKey, messageId, token);
+                var current = await ReadPostForChange(policy, topicKey, messageId, token);
                 RequirePostChange(policy, current, delete);
+                var nextFormat = PostContent.CheckFormat(format ?? current.Content.Format);
+                if (!delete && nextFormat == PostContent.Markdown)
+                {
+                    if (facets is { Count: > 0 }) throw new ArgumentException("Markdown posts cannot carry text facets.");
+                }
+                if (!delete) WindowPlanner.CheckContent(text!, nextFormat);
+                if (!delete) await media.ValidateReferences(participantId, topicKey, current.Id, text!, nextFormat, token);
                 string state, detail;
                 if (delete && current.AuthorParticipantId != participantId)
                 {
                     await SnapshotChange(current, token);
-                    current.Removed = true; current.Content = new PostContent("", current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.Removed = true; current.Content = current.Content with { Text = "" };
                     current.RemovedAt = clock.GetUtcNow(); current.RemovedByParticipantId = participantId;
                     // The words are gone; their byte ranges are meaningless on a removed row.
                     current.Facets = null;
@@ -45,7 +52,7 @@ public sealed partial class ConversationService
                 {
                     await SnapshotChange(current, token);
                     current.Removed = true;
-                    current.Content = new PostContent("", current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.Content = current.Content with { Text = "" };
                     current.RemovedAt = clock.GetUtcNow();
                     current.RemovedByParticipantId = participantId;
                     current.Facets = null;
@@ -56,18 +63,19 @@ public sealed partial class ConversationService
                     // D2a: provided facets ride the new version; absent facets re-detect
                     // deterministically. The pre-edit structure rides its snapshot.
                     await SnapshotChange(current, token);
-                    current.Content = new PostContent(text!, current.Content.CreatedAt, current.Content.ReplyTo);
+                    current.Content = current.Content with { Text = text!, Format = nextFormat };
                     current.EditedAt = clock.GetUtcNow();
-                    current.Facets = facets;
+                    current.Facets = nextFormat == PostContent.Markdown ? Array.Empty<PostFacet>() : facets;
                     state = "accepted"; detail = "post-edited";
                 }
                 await current.Save(token);
-                var topic = await Topic.Get(roomKey, token);
+                if (!delete) await media.BindReferences(participantId, topicKey, current.Id, text!, nextFormat, token);
+                var topic = await Topic.Get(topicKey, token);
                 await ActivityJournal.AppendInTransaction(delete ? ActivityKind.PostDeleted : ActivityKind.PostEdited,
-                    roomKey, participantId, current.AuthorParticipantId, topic?.TangentKey, current.Sequence, clock.GetUtcNow(), token);
+                    topicKey, participantId, current.AuthorParticipantId, topic?.TangentKey, current.Sequence, clock.GetUtcNow(), token);
                 return new PostChangeResult(state, messageId, detail);
             }, ct);
-            signals.Pulse(roomKey);
+            signals.Pulse(topicKey);
             signals.Pulse();
             return result;
         }
@@ -76,10 +84,9 @@ public sealed partial class ConversationService
 
     /// <summary>Mint the pre-edit snapshot into the changelog partition and advance the live row's
     /// ChangeId pointer. Snapshots are write-once: this method is the only writer into the partition,
-    /// every snapshot carries a fresh GUIDv7 identity, and an absence guard refuses any replay of a
-    /// used identity. Must run inside the caller's governance transaction so the snapshot, the live
-    /// mutation and the activity journal commit together or not at all — a failure between the snapshot
-    /// write and the live save rolls the transaction back.</summary>
+    /// every snapshot carries a fresh GUIDv7 identity, and an absence guard refuses a used identity.
+    /// Koan's deferred write sequence may fail partway through, so this snapshot is audit evidence
+    /// when present rather than an atomic rollback promise.</summary>
     private static async Task SnapshotChange(Post live, CancellationToken token)
     {
         var snapshot = new Post

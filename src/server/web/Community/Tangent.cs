@@ -17,6 +17,7 @@ public sealed class Tangent : Entity<Tangent>
     public string Motto { get; set; } = "";
     public string Accent { get; set; } = "";
     public string Artwork { get; set; } = "";
+    public string Kind { get; set; } = TangentKind.Discussions;
     public string OwnerParticipantId { get; set; } = "";
     public bool OpenToSignedIn { get; set; }
     public AccessMap Access { get; set; } = AccessMap.TangentDefaults();
@@ -44,14 +45,14 @@ public sealed class Tangent : Entity<Tangent>
     }
 
     internal static Tangent CreateForAuthorizedActor(Space space, string actorDid, string ownerDid, string key,
-        string name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now)
+        string name, string? description, string? motto, string? accent, string? artwork, DateTimeOffset now, string? kind = null)
     {
         if (!space.IsOwner(ownerDid) || !Participant.IsValidId(actorDid))
             throw new TangentRuleViolation(TangentDenial.Forbidden, "The server owner must authorize Tangent creation.");
         CheckKey(key); CheckCard(name, description, motto, accent, artwork);
         return new Tangent { Id = key, Name = name.Trim(), Description = Clean(description), Motto = Clean(motto),
             Accent = Clean(accent), Artwork = Clean(artwork), OwnerParticipantId = actorDid, CreatedAt = now, UpdatedAt = now,
-            PolicyRevision = 1, SetupComplete = true };
+            PolicyRevision = 1, SetupComplete = true, Kind = TangentKind.Check(kind) };
     }
 
     /// <summary>The first Tangent, established with the Host and named by its owner during onboarding.</summary>
@@ -76,21 +77,27 @@ public sealed class Tangent : Entity<Tangent>
 
     /// <summary>Internal: the governance layer vetted the administrator's authority before this call.</summary>
     internal void ChangeAuthorized(string? name, string? description, string? motto,
-        string? accent, string? artwork, DateTimeOffset now)
+        string? accent, string? artwork, DateTimeOffset now, string? kind = null)
     {
         CheckCard(name ?? Name, description ?? Description, motto ?? Motto, accent ?? Accent, artwork ?? Artwork);
         Name = (name ?? Name).Trim(); Description = Clean(description ?? Description); Motto = Clean(motto ?? Motto);
         Accent = Clean(accent ?? Accent); Artwork = Clean(artwork ?? Artwork); UpdatedAt = now; PolicyRevision = checked(PolicyRevision + 1); SetupComplete = true;
+        Kind = TangentKind.Check(kind ?? Kind);
     }
 
     public bool IsOwner(string? participantId) => string.Equals(OwnerParticipantId, participantId, StringComparison.Ordinal);
 
     public void ChangeAccess(AccessMap access, DateTimeOffset now)
     {
-        try { Access = (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTangent(); }
-        catch (ArgumentException invalid) { throw Invalid(invalid.Message); }
+        Access = NormalizeAccess(access);
         UpdatedAt = now;
         PolicyRevision = checked(PolicyRevision + 1);
+    }
+
+    internal static AccessMap NormalizeAccess(AccessMap access)
+    {
+        try { return (access ?? throw new ArgumentNullException(nameof(access))).NormalizeForTangent(); }
+        catch (ArgumentException invalid) { throw Invalid(invalid.Message); }
     }
 
     /// <summary>The one admission the stored open and approval bits express together.</summary>

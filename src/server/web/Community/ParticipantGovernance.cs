@@ -4,7 +4,6 @@ using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
 using Tangent.Stewardship;
-using Tangent.Activity;
 using Tangent.Spaces;
 
 namespace Tangent.Community;
@@ -17,7 +16,7 @@ namespace Tangent.Community;
 ///
 /// The operations live in this type's other files: Membership, Admission, Restrictions, Watches and
 /// Classification. They are partial files rather than separate services because the substrate below is
-/// shared by all of them, and it is a hand-rolled command pipeline that R3.3 replaces with the real one.
+/// shared by all of them. Mutations own their policy check, durable writes and journal entry.
 /// </summary>
 public sealed partial class ParticipantGovernance(TimeProvider clock, PolicyGate gate, TopicGovernance topics,
     ParticipantDirectory directory, SignalBus signals)
@@ -28,43 +27,35 @@ public sealed partial class ParticipantGovernance(TimeProvider clock, PolicyGate
     /// journals; scoped restrictions and suspension always answer false so saved private administration
     /// data is not replayed to a participant who just lost authority.
     /// </summary>
-    public async Task<bool> CanAdminister(string actorId, string tangentKey, string? roomKey, CancellationToken ct)
+    public async Task<bool> CanAdminister(string actorId, string tangentKey, string? topicKey, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tangentKey);
         if (!Participant.IsValidId(actorId))
             throw new TangentRuleViolation(TangentDenial.InvalidInput, "A verified participant is required.");
-        await gate.Enter(ct);
-        try
+        using var fresh = EntityContext.NoCache();
+        var now = clock.GetUtcNow();
+        var participant = await Participant.Get(actorId, ct);
+        if (participant is null || participant.IsSuspended || !await SpaceAdmission.Admitted(await Space.Get(TangentConstants.SpaceId,ct),actorId,ct)) { return false; }
+        if (!string.IsNullOrWhiteSpace(topicKey))
         {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var now = clock.GetUtcNow();
-            var participant = await Participant.Get(actorId, ct);
-            if (participant is null || participant.IsSuspended) { await EntityContext.Commit(ct); return false; }
-            if (!string.IsNullOrWhiteSpace(roomKey))
-            {
-                var space = await Space.Get(TangentConstants.SpaceId, ct);
-                var topic = await Topic.Get(roomKey, ct);
-                if (topic is null || topic.TangentKey != tangentKey) { await EntityContext.Commit(ct); return false; }
-                var membership = await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
-                var tangent = await Community.Tangent.Get(tangentKey, ct);
-                var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-                var restriction = await Restrictions.ForTopic(actorId, topic.Id, tangentKey, now, ct);
-                var policy = topic.CurrentPolicy(space, actorId, membership, participant.IsSuspended, tangent, tangentMembership,
-                    participant.Classification, restriction);
-                await EntityContext.Commit(ct);
-                return policy.CanManage;
-            }
-            var target = await Community.Tangent.Get(tangentKey, ct);
-            if (target is null) { await EntityContext.Commit(ct); return false; }
-            var steward = (target.IsOwner(actorId) || await IsServerOwner(actorId, ct))
-                || await TangentMembership.Get(TangentMembership.Key(tangentKey, actorId), ct) is { Role: TangentRole.Admin };
-            // Scoped restrictions apply to administration as well; owners are never restriction targets.
-            var restricted = await Restrictions.ForTangent(actorId, tangentKey, now, ct) is not null;
-            await EntityContext.Commit(ct);
-            return steward && !restricted;
+            var space = await Space.Get(TangentConstants.SpaceId, ct);
+            var topic = await Topic.Get(topicKey, ct);
+            if (topic is null || topic.TangentKey != tangentKey) { return false; }
+            var membership = await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
+            var tangent = await Community.Tangent.Get(tangentKey, ct);
+            var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
+            var restriction = await Restrictions.ForTopic(actorId, topic.Id, tangentKey, now, ct);
+            var policy = topic.CurrentPolicy(space, actorId, membership, participant.IsSuspended, tangent, tangentMembership,
+                participant.Classification, restriction);
+            return policy.CanManage;
         }
-        finally { gate.Exit(); }
+        var target = await Community.Tangent.Get(tangentKey, ct);
+        if (target is null) { return false; }
+        var steward = (target.IsOwner(actorId) || await IsServerOwner(actorId, ct))
+            || await TangentMembership.Get(TangentMembership.Key(tangentKey, actorId), ct) is { Role: TangentRole.Admin };
+        // Scoped restrictions apply to administration as well; owners are never restriction targets.
+        var restricted = await Restrictions.ForTangent(actorId, tangentKey, now, ct) is not null;
+        return steward && !restricted;
     }
 
     private async Task<(Tangent Tangent, TangentMembership? Membership, Participant Participant)> LoadTangentContext(
@@ -76,8 +67,8 @@ public sealed partial class ParticipantGovernance(TimeProvider clock, PolicyGate
             ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested Tangent does not exist.");
         var membership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
         var participant = await Participant.Get(actorId, ct);
-        if (participant is null || participant.IsSuspended)
-            throw new TangentRuleViolation(TangentDenial.Forbidden, "Joining and governing require an active verified arrival.");
+        if (participant is null || participant.IsSuspended || !await SpaceAdmission.Admitted(await Space.Get(TangentConstants.SpaceId,ct),actorId,ct))
+            throw new TangentRuleViolation(TangentDenial.Forbidden, "Join the Space before joining or governing a Tangent.");
         return (tangent, membership, participant);
     }
 
@@ -114,10 +105,10 @@ public sealed partial class ParticipantGovernance(TimeProvider clock, PolicyGate
             throw new TangentRuleViolation(TangentDenial.Forbidden, "A scoped restriction currently denies this administration.");
     }
 
-    private async Task<(Topic Topic, TopicPolicy Policy)> TopicWithPolicy(string actorId, string roomKey, string? expectedTangentKey, CancellationToken ct)
+    private async Task<(Topic Topic, TopicPolicy Policy)> TopicWithPolicy(string actorId, string topicKey, string? expectedTangentKey, CancellationToken ct)
     {
         var space = await Space.Get(TangentConstants.SpaceId, ct);
-        var topic = await Topic.Get(roomKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested topic does not exist.");
+        var topic = await Topic.Get(topicKey, ct) ?? throw new TangentRuleViolation(TangentDenial.NotFound, "The requested topic does not exist.");
         if (expectedTangentKey is not null && topic.TangentKey != expectedTangentKey)
             throw new TangentRuleViolation(TangentDenial.InvalidInput, "The topic does not belong to this Tangent.");
         var participant = await Participant.Get(actorId, ct);

@@ -10,5 +10,7 @@ internal static class HumanHostAccountability
     public static void RequireDeclaration(Participant participant, ParticipantClassification classification, bool isHostOwner)
     {
         if (!Enum.IsDefined(classification)) throw new InvalidOperationException("Unknown participant classification.");
+        if (isHostOwner && classification != ParticipantClassification.Human)
+            throw new InvalidOperationException("The Host owner must remain declared Human. Agents may own Tangents and Topics or receive delegated stewardship.");
     }
 }

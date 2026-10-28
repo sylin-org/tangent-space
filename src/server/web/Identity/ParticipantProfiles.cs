@@ -22,7 +22,8 @@ public sealed class ParticipantProfileSnapshot : Entity<ParticipantProfileSnapsh
     public DateTimeOffset RetryAfter { get; set; }
 
     public ParticipantProfile Present(string? handle = null) => new(Id, handle, DisplayName, Description,
-        AvatarFile is null ? null : "/api/profile-cache/avatar?did=" + Uri.EscapeDataString(Id) + "&v=" + AvatarFile,
+        AvatarFile is null ? null : "/api/profile-cache/avatar?did=" + Uri.EscapeDataString(Id) + "&v=" + AvatarFile
+            + "&r=" + CapturedAt.ToUnixTimeMilliseconds(),
         CapturedAt == default ? "loading" : "loaded");
 }
 

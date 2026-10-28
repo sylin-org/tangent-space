@@ -8,6 +8,8 @@ namespace Tangent.Identity;
 /// on the composite key (kind + separator + value). The internal identity value is derived from
 /// the participant id and minted at creation; it is never written independently.</summary>
 [Index(Fields = [nameof(ParticipantId), nameof(Id)])]
+[Index(Fields = [nameof(LabelKey), nameof(Id)])]
+[Index(Fields = [nameof(Value), nameof(Id)])]
 public sealed class ParticipantIdentity : Entity<ParticipantIdentity>
 {
     public const string AtprotoKind = "atproto";
@@ -20,6 +22,8 @@ public sealed class ParticipantIdentity : Entity<ParticipantIdentity>
     /// <summary>Current label for the identity: the handle for atproto and connector-created
     /// local entries; null for internal entries.</summary>
     public string? Label { get; set; }
+    /// <summary>Persisted canonical search key; display spelling remains in Label.</summary>
+    public string? LabelKey => string.IsNullOrWhiteSpace(Label) ? null : Label.Trim().ToLowerInvariant();
     public string ParticipantId { get; set; } = "";
     public DateTimeOffset AddedAt { get; set; }
 

@@ -19,7 +19,7 @@ namespace Tangent.Conversation;
 /// Bluesky repository after separate account consent. A deterministic remote record key makes
 /// a retry after a lost response converge on the same record.</summary>
 public sealed class BlueskyPublisher(AtprotoSessions sessions, BlueskyContentSource source,
-    ConversationService conversation, PolicyGate acceptance, TimeProvider clock)
+    ConversationService conversation, PolicyGate acceptance, TimeProvider clock, References references)
 {
     public const string WriteScope = "repo:app.bsky.feed.post";
     private readonly SemaphoreSlim gate = new(1, 1);
@@ -63,7 +63,11 @@ public sealed class BlueskyPublisher(AtprotoSessions sessions, BlueskyContentSou
                 if (topic is null || !PublicTopicAccess.IsPublic(topic, tangent))
                     throw new UnauthorizedAccessException("Make the Topic publicly readable before publishing this Post.");
             }
-            var text = post.Content.Text;
+            var topicForPreview = await Topic.Get(post.TopicKey, publishCt);
+            var articleUrl = sourceUrl(topicForPreview!, post);
+            var tangentForPreview = topicForPreview is null ? null : await Community.Tangent.Get(topicForPreview.TangentKey, publishCt);
+            var text = tangentForPreview?.Kind == TangentKind.Articles
+                ? topicForPreview!.Title + "\n\n" + articleUrl : PostMarkup.PlainText(post.Content);
             if (new StringInfo(text).LengthInTextElements > 300 || Encoding.UTF8.GetByteCount(text) > 3000)
                 throw new ArgumentException("Bluesky Posts must fit within 300 characters and 3000 UTF-8 bytes.");
             var digest = Hash(text);
@@ -116,6 +120,8 @@ public sealed class BlueskyPublisher(AtprotoSessions sessions, BlueskyContentSou
         }
         finally { gate.Release(); }
     }
+
+    private string sourceUrl(Topic topic, Post post) => references.Origin + "/t/" + Uri.EscapeDataString(topic.TangentKey) + "/topics/" + Uri.EscapeDataString(topic.Id);
 
     internal static async Task<(string Uri, string Cid, DateTimeOffset CreatedAt)> EnsureRemoteRecord(
         Func<Task<HttpResponseMessage>> create, Func<Task<HttpResponseMessage>> get,

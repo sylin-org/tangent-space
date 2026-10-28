@@ -1,21 +1,25 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Options;
 using Koan.Data.Core;
 using Tangent.Identity;
 using Tangent.Community;
 using Tangent.Access;
 using Tangent.Conversation;
+using Tangent.Activity;
 using Xunit;
 
 namespace Tangent.Tests.ExperienceIntegration;
 
-/// <summary>The connector matched pair, server side: the ladder widens steward envelopes and
-/// answers through one management endpoint; the member-ring writes and the participant read
-/// speak the shapes the sibling connector's grammar waits for. These tests run the real HTTP
-/// contract the connector binary exercises in <see cref="ConnectorIntegrationTests"/>.</summary>
+/// <summary>Exercises the ordinary HTTP resource API used by authorized browser and Forum clients.</summary>
 [Xunit.Collection("Experience integration")]
 public sealed class ConnectorWireTests
 {
@@ -28,35 +32,237 @@ public sealed class ConnectorWireTests
     private static void UseToken(HttpClient http, string token)
         => http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+    private static void AssertPlainResource(JsonElement body)
+    {
+        foreach (var field in new[] { "experienceVersion", "operation", "result", "snapshot", "actions",
+            "text", "structuredContent", "isError" })
+            Assert.False(body.TryGetProperty(field, out _), $"Resource response exposed {field}: {body}");
+    }
+
     [Fact]
-    public async Task Server_catalog_invokes_the_same_authorized_experience_and_requires_retry_identity()
+    public async Task Resource_routes_return_plain_data_and_the_operation_catalog_is_absent()
     {
         await using var app = await ExperienceWebApp.StartAsync();
         UseToken(app.Http, app.AgentToken);
         using var catalog = await app.Http.GetAsync("/api/v1/experience/operations", TestContext.Current.CancellationToken);
-        catalog.EnsureSuccessStatusCode();
-        var operations = (await ReadAsync(catalog)).GetProperty("operations");
-        var read = operations.EnumerateArray().Single(item => item.GetProperty("id").GetString() == "read_topic");
-        Assert.True(read.TryGetProperty("inputSchema", out var schema), read.ToString());
-        Assert.True(schema.TryGetProperty("type", out var schemaType), schema.ToString());
-        Assert.Equal("object", schemaType.GetString());
-        Assert.True(schema.TryGetProperty("required", out var required), schema.ToString());
-        Assert.Contains(required.EnumerateArray(),
-            item => item.GetString() == "topicKey");
+        Assert.Equal(HttpStatusCode.NotFound, catalog.StatusCode);
+        using var read = await app.Http.GetAsync("/api/v1/experience/topics/proj-z?limit=2", TestContext.Current.CancellationToken);
+        read.EnsureSuccessStatusCode();
+        var result = await ReadAsync(read);
+        Assert.True(result.TryGetProperty("posts", out var posts));
+        Assert.True(posts.GetArrayLength() <= 2);
+        Assert.False(result.TryGetProperty("structuredContent", out _));
+        Assert.False(result.TryGetProperty("operation", out _));
 
-        using var invoked = await app.Http.PostAsJsonAsync("/api/v1/experience/operations/read_topic",
-            new { topicKey = ExperienceWebApp.TopicKey, limit = 2 }, TestContext.Current.CancellationToken);
-        Assert.True(invoked.IsSuccessStatusCode, await invoked.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-        var result = await ReadAsync(invoked);
-        Assert.False(result.GetProperty("isError").GetBoolean());
-        Assert.Equal("ok", result.GetProperty("status").GetString());
-        Assert.Contains("Post(s)", result.GetProperty("text").GetString());
-        Assert.Equal("read_topic", result.GetProperty("structuredContent").GetProperty("operation").GetString());
-
-        using var missingRetryId = await app.Http.PostAsJsonAsync("/api/v1/experience/operations/create_post",
-            new { topicKey = ExperienceWebApp.TopicKey, text = "This must not be posted." }, TestContext.Current.CancellationToken);
+        using var missingRetryId = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts",
+            new { text = "This must not be posted." }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, missingRetryId.StatusCode);
         Assert.Equal("requestId", (await ReadAsync(missingRetryId)).GetProperty("field").GetString());
+    }
+
+    [Fact]
+    public async Task Role_grants_cannot_override_topic_or_tangent_membership_limits()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.AgentToken);
+        var topics = app.Services.GetRequiredService<TopicGovernance>();
+        var tangents = app.Services.GetRequiredService<TangentGovernance>();
+        var ct = TestContext.Current.CancellationToken;
+        const string delegatedTopic = "delegated-creator-boundary";
+        await tangents.CreateTopic(app.AgentParticipantId, ExperienceWebApp.TangentKey,
+            delegatedTopic, "Delegated creator boundary", "Scoped creator authority", ct);
+        Assert.True((await topics.ReadPolicyAsync(app.AgentParticipantId, delegatedTopic, ct)).CanManage);
+        await topics.SetMembership(app.OwnerParticipantId, delegatedTopic,
+            app.AgentParticipantId, TopicRole.Removed, ct);
+        var removedCreator = await topics.ReadPolicyAsync(app.AgentParticipantId, delegatedTopic, ct);
+        Assert.False(removedCreator.CanRead);
+        Assert.False(removedCreator.CanManage);
+
+        async Task AssertAccess(HttpStatusCode readStatus, HttpStatusCode postStatus, string requestId)
+        {
+            using var read = await app.Http.GetAsync("/api/v1/experience/topics/proj-z", ct);
+            Assert.Equal(readStatus, read.StatusCode);
+            using var post = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts",
+                new { requestId, text = "A scoped policy must bound my server role." }, ct);
+            Assert.Equal(postStatus, post.StatusCode);
+        }
+
+        await AssertAccess(HttpStatusCode.OK, HttpStatusCode.OK, "policy-member-allowed");
+        await topics.SetMembership(app.OwnerParticipantId, ExperienceWebApp.TopicKey,
+            app.AgentParticipantId, TopicRole.Reader, ct);
+        await AssertAccess(HttpStatusCode.OK, HttpStatusCode.Forbidden, "policy-topic-reader");
+        await topics.SetMembership(app.OwnerParticipantId, ExperienceWebApp.TopicKey,
+            app.AgentParticipantId, TopicRole.Removed, ct);
+        await AssertAccess(HttpStatusCode.Forbidden, HttpStatusCode.Forbidden, "policy-topic-removed");
+        await topics.SetMembership(app.OwnerParticipantId, ExperienceWebApp.TopicKey,
+            app.AgentParticipantId, TopicRole.Member, ct);
+        await tangents.SetAccess(app.OwnerParticipantId, ExperienceWebApp.TangentKey,
+            new AccessMap { See = ["role:member"], Post = ["role:member"],
+                Manage = ["role:member"], CreateTopics = ["role:member"] }, ct);
+        await tangents.SetMembership(app.OwnerParticipantId, ExperienceWebApp.TangentKey,
+            ExperienceWebApp.AgentDid, TangentRole.Removed, ct);
+        await AssertAccess(HttpStatusCode.Forbidden, HttpStatusCode.Forbidden, "policy-tangent-removed");
+        using var scoped = await app.Http.GetAsync("/api/v1/experience?scopeRef=" +
+            Uri.EscapeDataString($"{app.Origin}::{ExperienceWebApp.TangentKey}"), ct);
+        Assert.Equal(HttpStatusCode.Forbidden, scoped.StatusCode);
+        var (credential, manageToken) = ParticipantCredential.Issue(app.AgentParticipantId,
+            "Removed member with server role", 1,
+            [ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage], DateTimeOffset.UtcNow);
+        using (EntityContext.NoCache()) await credential.Save(ct);
+        UseToken(app.Http, manageToken);
+        using var card = await app.Http.GetAsync("/api/v1/tangents/proj", ct);
+        card.EnsureSuccessStatusCode(); // Tangent cards remain discoverable.
+        Assert.False((await ReadAsync(card)).GetProperty("canManage").GetBoolean());
+        using var access = await app.Http.GetAsync("/api/v1/tangents/proj/access", ct);
+        Assert.Equal(HttpStatusCode.Forbidden, access.StatusCode);
+        using var change = await app.Http.PatchAsJsonAsync("/api/v1/tangents/proj",
+            new { description = "A removed actor cannot change the card." }, ct);
+        Assert.Equal(HttpStatusCode.Forbidden, change.StatusCode);
+        using var createTopic = await app.Http.PostAsJsonAsync("/api/v1/tangents/proj/topics",
+            new { key = "removed-cannot-create", title = "Denied", topic = "" }, ct);
+        Assert.Equal(HttpStatusCode.Forbidden, createTopic.StatusCode);
+    }
+
+    [Fact]
+    public async Task Arrival_exposes_current_grants_and_management_facts()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.AgentToken);
+        using var participant = await app.Http.GetAsync("/api/v1/experience", TestContext.Current.CancellationToken);
+        participant.EnsureSuccessStatusCode();
+        var ordinary = await ReadAsync(participant);
+        var ordinaryAuthority = ordinary.GetProperty("authority");
+        Assert.True(ordinaryAuthority.GetProperty("canRead").GetBoolean());
+        Assert.True(ordinaryAuthority.GetProperty("canPost").GetBoolean());
+        Assert.False(ordinaryAuthority.GetProperty("canManage").GetBoolean());
+        Assert.False(ordinaryAuthority.GetProperty("canStewardScope").GetBoolean());
+        Assert.False(ordinaryAuthority.GetProperty("management").GetProperty("canWarn").GetBoolean());
+        Assert.False(ordinary.GetProperty("place").TryGetProperty("allowedActions", out _));
+
+        UseToken(app.Http, app.OwnerToken);
+        using var owner = await app.Http.GetAsync("/api/v1/experience", TestContext.Current.CancellationToken);
+        owner.EnsureSuccessStatusCode();
+        var current = await ReadAsync(owner);
+        Assert.Equal("owner", current.GetProperty("place").GetProperty("role").GetString());
+        Assert.True(current.GetProperty("authority").GetProperty("canManage").GetBoolean());
+        Assert.False(current.GetProperty("authority").GetProperty("canStewardScope").GetBoolean());
+        Assert.True(current.GetProperty("authority").GetProperty("management").GetProperty("canWarn").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Conversation_history_has_no_second_post_or_read_position_write_route()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.AgentToken);
+        using var post = await app.Http.PostAsJsonAsync("/api/topics/proj-z/posts",
+            new { operationId = "duplicate-route", text = "This must not be posted." },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, post.StatusCode);
+        using var acknowledge = await app.Http.PostAsJsonAsync("/api/topics/proj-z/read-position",
+            new { cursor = "invalid" }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, acknowledge.StatusCode);
+    }
+
+    [Fact]
+    public async Task Bearer_credential_cannot_open_or_write_the_cookie_role_editor()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.OwnerToken);
+        using var session = await app.Http.GetAsync("/api/roles/ui/session", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, session.StatusCode);
+        using var change = new HttpRequestMessage(HttpMethod.Put,
+            $"/api/roles/ui/participant/{app.HumanParticipantId}/roles/role:member");
+        change.Headers.TryAddWithoutValidation("RequestVerificationToken", "harvested-browser-token");
+        using var denied = await app.Http.SendAsync(change, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+    }
+
+    [Fact]
+    public async Task Canonical_post_write_rejects_cross_origin_cookie_and_accepts_bearer()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ParticipationConstants.ParticipantClaim, app.AgentParticipantId)], "browser"));
+        var cookieScheme = Koan.Web.Auth.Extensions.AuthenticationExtensions.CookieScheme;
+        var options = app.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(cookieScheme);
+        var cookie = options.Cookie.Name + "=" + options.TicketDataFormat.Protect(
+            new AuthenticationTicket(principal, cookieScheme));
+        Assert.NotEmpty(cookie);
+        using var browser = new HttpClient { BaseAddress = new Uri(app.Origin) };
+        using var crossOrigin = new HttpRequestMessage(HttpMethod.Post, "/api/v1/experience/topics/proj-z/posts")
+        {
+            Content = JsonContent.Create(new { requestId = "cross-origin-cookie-post", text = "Must not land." })
+        };
+        crossOrigin.Headers.TryAddWithoutValidation("Cookie", cookie);
+        crossOrigin.Headers.TryAddWithoutValidation("Origin", "https://unrelated.example");
+        using var rejected = await browser.SendAsync(crossOrigin, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
+
+        UseToken(app.Http, app.AgentToken);
+        using var accepted = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts",
+            new { requestId = "same-route-bearer-post", text = "Bearer grant and Topic policy permit this." },
+            TestContext.Current.CancellationToken);
+        accepted.EnsureSuccessStatusCode();
+    }
+
+    [Theory]
+    [InlineData("?checkpoint=invalid")]
+    [InlineData("?pageCursor=invalid&checkpoint=invalid")]
+    public async Task Invalid_digest_continuations_do_not_restart_at_the_newest_page(string query)
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.AgentToken);
+        using var response = await app.Http.GetAsync("/api/v1/experience/updates" + query,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("cursor_expired", (await ReadAsync(response)).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task History_continuation_cursor_is_a_bad_read_position_request()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.AgentToken);
+        var protector = app.Services.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cursor.v1");
+        var continuation = protector.Protect(JsonSerializer.Serialize(new ConversationCursor(
+            app.AgentParticipantId, "proj-z", 1, 3, DateTimeOffset.UtcNow.AddDays(1))));
+
+        using var rejected = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/read-position",
+            new { readCursor = continuation }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Equal("invalid_arguments", (await ReadAsync(rejected)).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Forum_reads_writes_moderation_sources_and_problems_use_plain_resource_bodies()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.OwnerToken);
+        var paths = new[]
+        {
+            "/api/v1/experience?scopeRef=", "/api/v1/experience/tangents",
+            "/api/v1/experience/tangents/proj/topics", "/api/v1/experience/topics/proj-z?limit=2",
+            "/api/v1/experience/updates", "/api/v1/experience/participants/" + ExperienceWebApp.AgentDid,
+            "/api/participants/" + ExperienceWebApp.AgentDid + "/profile",
+            "/api/v1/experience/topics/proj-z/moderation/cases?page=1",
+            "/api/v1/content/sources"
+        };
+        foreach (var path in paths)
+        {
+            using var response = await app.Http.GetAsync(path, TestContext.Current.CancellationToken);
+            response.EnsureSuccessStatusCode();
+            AssertPlainResource(await ReadAsync(response));
+        }
+        using var created = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts",
+            new { requestId = "plain-resource-post", text = "A plain response." }, TestContext.Current.CancellationToken);
+        created.EnsureSuccessStatusCode();
+        AssertPlainResource(await ReadAsync(created));
+        using var invalid = await app.Http.GetAsync("/api/v1/experience/topics/proj-z?cursor=invalid",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        var problem = await ReadAsync(invalid);
+        AssertPlainResource(problem);
+        Assert.Equal("cursor_expired", problem.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -179,16 +385,15 @@ public sealed class ConnectorWireTests
         document.EnsureSuccessStatusCode();
         Assert.Contains("Bluesky post 3", await document.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         UseToken(app.Http, app.AgentToken);
-        using var throughCompanion = await app.Http.PostAsJsonAsync(
-            "/api/v1/experience/operations/read_bluesky_posts",
-            new { actorDid = did, limit = 2 }, TestContext.Current.CancellationToken);
+        using var throughCompanion = await app.Http.GetAsync(
+            "/api/v1/content/bluesky/posts?actorDid=" + Uri.EscapeDataString(did) + "&limit=2",
+            TestContext.Current.CancellationToken);
         throughCompanion.EnsureSuccessStatusCode();
         var invoked = await ReadAsync(throughCompanion);
-        Assert.Equal("ok", invoked.GetProperty("status").GetString());
-        Assert.Equal(2, invoked.GetProperty("structuredContent").GetProperty("posts").GetArrayLength());
+        Assert.Equal(2, invoked.GetProperty("posts").GetArrayLength());
         using var ownerOnly = await app.Http.PostAsJsonAsync(
-            "/api/v1/experience/operations/refresh_bluesky_author",
-            new { actor = did }, TestContext.Current.CancellationToken);
+            "/api/v1/content/bluesky/authors/" + Uri.EscapeDataString(did) + "/refresh",
+            new { }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, ownerOnly.StatusCode);
         Assert.Equal(3, requests); // discovery and no-JS page use stored projection only
     }
@@ -418,24 +623,22 @@ public sealed class ConnectorWireTests
     }
 
     [Fact]
-    public async Task Steward_envelopes_offer_exactly_the_rungs_the_roles_carry()
+    public async Task Topic_read_shows_current_stewardship_without_an_operation_list()
     {
         await using var app = await ExperienceWebApp.StartAsync();
         UseToken(app.Http, app.AgentToken);
         using var member = await app.Http.GetAsync("/api/v1/experience/topics/proj-z", TestContext.Current.CancellationToken);
         member.EnsureSuccessStatusCode();
-        var memberActions = (await ReadAsync(member)).GetProperty("place").GetProperty("allowedActions");
-        Assert.DoesNotContain(memberActions.EnumerateArray(), action => action.GetString() == "warn_user");
-        Assert.DoesNotContain(memberActions.EnumerateArray(), action => action.GetString() == "list_moderation_cases");
+        var memberTopic = await ReadAsync(member);
+        Assert.False(memberTopic.GetProperty("stewardship").GetBoolean());
+        Assert.False(memberTopic.TryGetProperty("actions", out _));
 
         UseToken(app.Http, app.OwnerToken);
         using var owner = await app.Http.GetAsync("/api/v1/experience/topics/proj-z", TestContext.Current.CancellationToken);
         owner.EnsureSuccessStatusCode();
         var document = await ReadAsync(owner);
-        Assert.True(document.GetProperty("capabilities").GetProperty("stewardship").GetBoolean());
-        var rungs = document.GetProperty("place").GetProperty("allowedActions").EnumerateArray()
-            .Select(action => action.GetString()).Where(action => action is not null).ToHashSet();
-        Assert.Superset(new HashSet<string> { "warn_user", "timeout_user", "suspend_user", "ban_user", "assign_roles" }, rungs!);
+        Assert.True(document.GetProperty("stewardship").GetBoolean());
+        Assert.False(document.TryGetProperty("actions", out _));
     }
 
     [Fact]
@@ -450,7 +653,7 @@ public sealed class ConnectorWireTests
             new { action = "warn", reason = "Please keep the tone collegial." }, TestContext.Current.CancellationToken))
         {
             Assert.Equal(HttpStatusCode.OK, warn.StatusCode);
-            var data = (await ReadAsync(warn)).GetProperty("result").GetProperty("data");
+            var data = (await ReadAsync(warn));
             Assert.Equal("warn", data.GetProperty("action").GetString());
             Assert.Equal(app.HumanParticipantId, data.GetProperty("userRef").GetString());
         }
@@ -462,7 +665,7 @@ public sealed class ConnectorWireTests
             new { action = "timeout", reason = "Cool off.", durationSeconds = 3600, caseRef }, TestContext.Current.CancellationToken))
         {
             Assert.Equal(HttpStatusCode.OK, timeout.StatusCode);
-            var data = (await ReadAsync(timeout)).GetProperty("result").GetProperty("data");
+            var data = (await ReadAsync(timeout));
             Assert.True(data.GetProperty("until").GetDateTimeOffset() > DateTimeOffset.UtcNow);
             Assert.EndsWith("::proj", data.GetProperty("tangentRef").GetString());
         }
@@ -487,6 +690,130 @@ public sealed class ConnectorWireTests
         {
             Assert.Equal(HttpStatusCode.Forbidden, member.StatusCode);
         }
+    }
+
+    [Fact]
+    public async Task An_owner_read_only_credential_cannot_manage_people_or_apply_decisions()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.OwnerToken);
+        var caseRef = await ReportHumanPostAsOwner(app);
+        var (credential, token) = ParticipantCredential.Issue(app.OwnerParticipantId, "Read only owner", 1,
+            [ParticipationGrants.Read], DateTimeOffset.UtcNow);
+        using (EntityContext.NoCache())
+            await credential.Save(TestContext.Current.CancellationToken);
+        UseToken(app.Http, token);
+        using var arrival = await app.Http.GetAsync("/api/v1/experience", TestContext.Current.CancellationToken);
+        arrival.EnsureSuccessStatusCode();
+        Assert.False((await ReadAsync(arrival)).GetProperty("authority").GetProperty("canManage").GetBoolean());
+        using var topic = await app.Http.GetAsync("/api/v1/experience/topics/proj-z", TestContext.Current.CancellationToken);
+        topic.EnsureSuccessStatusCode();
+        Assert.False((await ReadAsync(topic)).GetProperty("stewardship").GetBoolean());
+        using var manage = await app.Http.PostAsJsonAsync(
+            $"/api/v1/experience/moderation/users/{app.HumanParticipantId}/management",
+            new { action = "suspend", reason = "Must require manage grant." }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, manage.StatusCode);
+        var caseId = caseRef.Split("::")[^1];
+        using var decide = await app.Http.PostAsJsonAsync($"/api/v1/experience/moderation/cases/{caseId}/actions",
+            new { requestId = "read-only-decision-1", action = "dismiss", summary = "Must require manage grant.",
+                expectedCaseRevision = 1, expectedSubjectRevision = "unavailable" }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, decide.StatusCode);
+    }
+
+    [Fact]
+    public async Task Scoped_topic_steward_with_manage_grant_can_decide_while_ordinary_manager_grant_cannot()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.OwnerToken);
+        var caseRef = await ReportHumanPostAsOwner(app);
+        var caseId = caseRef.Split("::")[^1]["case_".Length..];
+        var governance = app.Services.GetRequiredService<TopicGovernance>();
+        await app.Services.GetRequiredService<TangentGovernance>().CreateTopic(app.OwnerParticipantId,
+            ExperienceWebApp.TangentKey, "proj-other", "Other Topic", "Outside this stewardship scope",
+            TestContext.Current.CancellationToken);
+        await governance.SetMembership(app.OwnerParticipantId, ExperienceWebApp.TopicKey,
+            app.AgentParticipantId, TopicRole.Manager, TestContext.Current.CancellationToken);
+        var (stewardCredential, stewardToken) = ParticipantCredential.Issue(app.AgentParticipantId,
+            "Scoped steward", 1, [ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage],
+            DateTimeOffset.UtcNow);
+        var (ordinaryCredential, ordinaryToken) = ParticipantCredential.Issue(app.HumanParticipantId,
+            "Ordinary participant with transport grant", 1,
+            [ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage], DateTimeOffset.UtcNow);
+        using (EntityContext.NoCache())
+        {
+            await stewardCredential.Save(TestContext.Current.CancellationToken);
+            await ordinaryCredential.Save(TestContext.Current.CancellationToken);
+        }
+
+        UseToken(app.Http, ordinaryToken);
+        using var ordinaryArrival = await app.Http.GetAsync("/api/v1/experience", TestContext.Current.CancellationToken);
+        ordinaryArrival.EnsureSuccessStatusCode();
+        var ordinaryAuthority = (await ReadAsync(ordinaryArrival)).GetProperty("authority");
+        Assert.True(ordinaryAuthority.GetProperty("canManage").GetBoolean());
+        Assert.False(ordinaryAuthority.GetProperty("canStewardScope").GetBoolean());
+        Assert.False(ordinaryAuthority.GetProperty("management").GetProperty("canWarn").GetBoolean());
+        using var ordinaryDecision = await app.Http.PostAsJsonAsync($"/api/v1/experience/moderation/cases/{caseId}/actions",
+            new { requestId = "ordinary-decision", action = "escalate", summary = "Outside my remit.",
+                expectedCaseRevision = 1, expectedSubjectRevision = "unknown" }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, ordinaryDecision.StatusCode);
+        using var ordinaryManagement = await app.Http.PostAsJsonAsync(
+            $"/api/v1/experience/moderation/users/{app.AgentParticipantId}/management",
+            new { action = "warn", reason = "No domain role." }, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, ordinaryManagement.StatusCode);
+        using var ordinaryRemoval = await app.Http.DeleteAsync("/api/v1/experience/posts/m-agent-q1",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, ordinaryRemoval.StatusCode);
+
+        UseToken(app.Http, stewardToken);
+        using var stewardArrival = await app.Http.GetAsync("/api/v1/experience", TestContext.Current.CancellationToken);
+        stewardArrival.EnsureSuccessStatusCode();
+        var stewardAuthority = (await ReadAsync(stewardArrival)).GetProperty("authority");
+        Assert.True(stewardAuthority.GetProperty("canManage").GetBoolean());
+        Assert.False(stewardAuthority.GetProperty("canStewardScope").GetBoolean());
+        Assert.False(stewardAuthority.GetProperty("management").GetProperty("canWarn").GetBoolean());
+        using var scopedArrival = await app.Http.GetAsync("/api/v1/experience?scopeRef=" +
+            Uri.EscapeDataString(app.TopicRef), TestContext.Current.CancellationToken);
+        scopedArrival.EnsureSuccessStatusCode();
+        Assert.True((await ReadAsync(scopedArrival)).GetProperty("authority").GetProperty("canStewardScope").GetBoolean());
+        using var siblingAccess = await app.Http.GetAsync("/api/v1/tangents/proj/topics/proj-other/access",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, siblingAccess.StatusCode);
+        using var parentAccess = await app.Http.GetAsync("/api/v1/tangents/proj/access",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, parentAccess.StatusCode);
+        using var topic = await app.Http.GetAsync("/api/v1/experience/topics/proj-z", TestContext.Current.CancellationToken);
+        topic.EnsureSuccessStatusCode();
+        Assert.True((await ReadAsync(topic)).GetProperty("stewardship").GetBoolean());
+        using var read = await app.Http.GetAsync($"/api/v1/experience/moderation/cases/{caseId}",
+            TestContext.Current.CancellationToken);
+        read.EnsureSuccessStatusCode();
+        var caseData = (await ReadAsync(read)).GetProperty("case");
+        using var decision = await app.Http.PostAsJsonAsync($"/api/v1/experience/moderation/cases/{caseId}/actions",
+            new { requestId = "scoped-decision", action = "escalate", summary = "Needs host attention.",
+                expectedCaseRevision = caseData.GetProperty("revision").GetInt64(),
+                expectedSubjectRevision = caseData.GetProperty("subjectRevision").GetString() },
+            TestContext.Current.CancellationToken);
+        decision.EnsureSuccessStatusCode();
+        Assert.Equal("escalated", (await ReadAsync(decision)).GetProperty("case").GetProperty("state").GetString());
+        using var removal = await app.Http.DeleteAsync("/api/v1/experience/posts/m-leo-r1",
+            TestContext.Current.CancellationToken);
+        removal.EnsureSuccessStatusCode();
+        var removedRef = (await ReadAsync(removal)).GetProperty("postRef").GetString();
+        Assert.EndsWith("::m-leo-r1", removedRef);
+        using var again = await app.Http.DeleteAsync("/api/v1/experience/posts/m-leo-r1",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        using var history = await app.Http.GetAsync("/api/v1/experience/topics/proj-z",
+            TestContext.Current.CancellationToken);
+        history.EnsureSuccessStatusCode();
+        Assert.True((await ReadAsync(history)).GetProperty("posts").EnumerateArray()
+            .Single(post => post.GetProperty("ref").GetString() == removedRef)
+            .GetProperty("removed").GetBoolean());
+        await governance.SetMembership(app.OwnerParticipantId, ExperienceWebApp.TopicKey,
+            app.AgentParticipantId, TopicRole.Removed, TestContext.Current.CancellationToken);
+        using var revokedAccess = await app.Http.GetAsync("/api/v1/tangents/proj/topics/proj-z/access",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Forbidden, revokedAccess.StatusCode);
     }
 
     [Fact]
@@ -547,16 +874,21 @@ public sealed class ConnectorWireTests
         var body = new { requestId = "thread-replay-1", title = "Connector Threads", text = "Starting a thread from the wire." };
         using var first = await app.Http.PostAsJsonAsync("/api/v1/experience/tangents/proj/topics", body, TestContext.Current.CancellationToken);
         first.EnsureSuccessStatusCode();
-        var data = (await ReadAsync(first)).GetProperty("result").GetProperty("data");
+        var data = (await ReadAsync(first));
         var topicRef = data.GetProperty("topicRef").GetString()!;
         var postRef = data.GetProperty("postRef").GetString()!;
 
         using var replay = await app.Http.PostAsJsonAsync("/api/v1/experience/tangents/proj/topics", body, TestContext.Current.CancellationToken);
         replay.EnsureSuccessStatusCode();
-        Assert.Equal(topicRef, (await ReadAsync(replay)).GetProperty("result").GetProperty("data").GetProperty("topicRef").GetString());
+        Assert.Equal(topicRef, (await ReadAsync(replay)).GetProperty("topicRef").GetString());
+
+        using var changedTitle = await app.Http.PostAsJsonAsync("/api/v1/experience/tangents/proj/topics",
+            new { requestId = "thread-replay-1", title = "A different title", text = "Starting a thread from the wire." },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Conflict, changedTitle.StatusCode);
 
         var window = await ReadTopic(app.Http, topicRef);
-        var windowPosts = window.GetProperty("result").GetProperty("data").GetProperty("posts");
+        var windowPosts = window.GetProperty("posts");
         Assert.Equal(1, windowPosts.GetArrayLength());
         Assert.Equal(postRef, windowPosts[0].GetProperty("ref").GetString());
     }
@@ -565,30 +897,15 @@ public sealed class ConnectorWireTests
     public async Task An_author_edits_and_deletes_own_posts_through_the_wire()
     {
         await using var app = await ExperienceWebApp.StartAsync();
-        UseToken(app.Http, app.OwnerToken);
-        using (var settings = await app.Http.PatchAsync("/api/topics/proj-z/settings",
-            JsonContent.Create(new { allowPostEditing = true, isLocked = false }), TestContext.Current.CancellationToken))
-        {
-            settings.EnsureSuccessStatusCode();
-        }
         UseToken(app.Http, app.AgentToken);
         var started = await app.Http.PostAsJsonAsync("/api/v1/experience/tangents/proj/topics",
             new { requestId = "thread-edit-1", title = "Edit Path", text = "Original words." }, TestContext.Current.CancellationToken);
         started.EnsureSuccessStatusCode();
-        var startedData = (await ReadAsync(started)).GetProperty("result").GetProperty("data");
+        var startedData = (await ReadAsync(started));
         var topicRef = startedData.GetProperty("topicRef").GetString()!;
         var topicKey = topicRef.Split("::")[^1];
         var postRef = startedData.GetProperty("postRef").GetString()!;
         var postId = postRef.Split("::")[^1];
-
-        // The author may edit only where the Topic allows it; the new thread starts closed.
-        UseToken(app.Http, app.OwnerToken);
-        using (var settings = await app.Http.PatchAsync($"/api/topics/{topicKey}/settings",
-            JsonContent.Create(new { allowPostEditing = true, isLocked = false }), TestContext.Current.CancellationToken))
-        {
-            settings.EnsureSuccessStatusCode();
-        }
-        UseToken(app.Http, app.AgentToken);
 
         using (var edit = await app.Http.PatchAsync($"/api/v1/experience/posts/{postId}",
             JsonContent.Create(new { text = "Revised words." }), TestContext.Current.CancellationToken))
@@ -596,7 +913,7 @@ public sealed class ConnectorWireTests
             edit.EnsureSuccessStatusCode();
         }
         var window = await ReadTopic(app.Http, topicRef);
-        var edited = window.GetProperty("result").GetProperty("data").GetProperty("posts")[0];
+        var edited = window.GetProperty("posts")[0];
         Assert.Equal("Revised words.", edited.GetProperty("text").GetString());
         Assert.NotNull(edited.GetProperty("editedAt"));
 
@@ -605,7 +922,7 @@ public sealed class ConnectorWireTests
             delete.EnsureSuccessStatusCode();
         }
         var after = await ReadTopic(app.Http, topicRef);
-        Assert.True(after.GetProperty("result").GetProperty("data").GetProperty("posts")[0].GetProperty("removed").GetBoolean());
+        Assert.True(after.GetProperty("posts")[0].GetProperty("removed").GetBoolean());
     }
 
     [Fact]
@@ -616,7 +933,7 @@ public sealed class ConnectorWireTests
         using var response = await app.Http.GetAsync(
             $"/api/v1/experience/participants/{ExperienceWebApp.HumanDid}", TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
-        var data = (await ReadAsync(response)).GetProperty("result").GetProperty("data");
+        var data = (await ReadAsync(response));
         Assert.Equal("leo.experience.test", data.GetProperty("profile").GetProperty("handle").GetString());
         Assert.True(data.GetProperty("recentPosts").GetArrayLength() >= 1);
         Assert.All(data.GetProperty("recentPosts").EnumerateArray(), post => Assert.False(post.GetProperty("removed").GetBoolean()));
@@ -630,7 +947,7 @@ public sealed class ConnectorWireTests
         var started = await app.Http.PostAsJsonAsync("/api/v1/experience/tangents/proj/topics",
             new { requestId = "thread-settle-1", title = "Settlement", text = "A write that must settle." }, TestContext.Current.CancellationToken);
         started.EnsureSuccessStatusCode();
-        var topicRef = (await ReadAsync(started)).GetProperty("result").GetProperty("data").GetProperty("topicRef").GetString()!;
+        var topicRef = (await ReadAsync(started)).GetProperty("topicRef").GetString()!;
         var topicKey = topicRef.Split("::")[^1];
 
         // The compiled projection appears a moment after the accepted write; the settlement
@@ -648,7 +965,7 @@ public sealed class ConnectorWireTests
 
         using var window = await app.Http.GetAsync($"/api/v1/experience/topics/{topicKey}", TestContext.Current.CancellationToken);
         window.EnsureSuccessStatusCode();
-        var readCursor = (await ReadAsync(window)).GetProperty("continuation").GetProperty("readCursor").GetString()!;
+        var readCursor = (await ReadAsync(window)).GetProperty("readCursor").GetString()!;
         using var acknowledge = await app.Http.PostAsJsonAsync($"/api/v1/experience/topics/{topicKey}/read-position",
             new { readCursor }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, acknowledge.StatusCode);
@@ -675,15 +992,81 @@ public sealed class ConnectorWireTests
         var body = new { requestId = "post-once-1", text = "Exactly once." };
         using var first = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts", body, TestContext.Current.CancellationToken);
         first.EnsureSuccessStatusCode();
-        var postRef = (await ReadAsync(first)).GetProperty("result").GetProperty("data").GetProperty("postRef").GetString()!;
+        var postRef = (await ReadAsync(first)).GetProperty("postRef").GetString()!;
 
         using var replay = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts", body, TestContext.Current.CancellationToken);
         replay.EnsureSuccessStatusCode();
-        Assert.Equal(postRef, (await ReadAsync(replay)).GetProperty("result").GetProperty("data").GetProperty("postRef").GetString());
+        Assert.Equal(postRef, (await ReadAsync(replay)).GetProperty("postRef").GetString());
 
         using var divergent = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts",
             new { requestId = "post-once-1", text = "Different words, same id." }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Conflict, divergent.StatusCode);
+    }
+
+    [Fact]
+    public async Task Explicit_empty_facets_survive_create_and_matching_retry()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.AgentToken);
+        var body = new { requestId = "post-empty-facets-1", text = "@leo.experience.test thanks.", facets = Array.Empty<object>() };
+        using var first = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts", body,
+            TestContext.Current.CancellationToken);
+        first.EnsureSuccessStatusCode();
+        var postRef = (await ReadAsync(first)).GetProperty("postRef").GetString()!;
+        using (EntityContext.NoCache())
+        {
+            var post = await Post.Get(postRef.Split("::")[^1], TestContext.Current.CancellationToken);
+            Assert.NotNull(post);
+            Assert.NotNull(post.Facets);
+            Assert.Empty(post.Facets);
+        }
+        using var replay = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts", body,
+            TestContext.Current.CancellationToken);
+        replay.EnsureSuccessStatusCode();
+        Assert.Equal(postRef, (await ReadAsync(replay)).GetProperty("postRef").GetString());
+    }
+
+    [Fact]
+    public async Task A_retry_repairs_a_post_saved_before_its_sequence_and_journal()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        UseToken(app.Http, app.AgentToken);
+        const string requestId = "post-partial-repair-1";
+        const string words = "@leo.experience.test please recover this accepted Post.";
+        long sequence;
+        string postId;
+        using (EntityContext.NoCache())
+        {
+            var state = await TopicConversation.Get(ExperienceWebApp.TopicKey, TestContext.Current.CancellationToken);
+            sequence = (state?.LastSequence ?? 0) + 1;
+            var now = DateTimeOffset.UtcNow;
+            var orphan = new Post
+            {
+                Id = Guid.CreateVersion7().ToString("n"), TopicKey = ExperienceWebApp.TopicKey,
+                AuthorParticipantId = app.AgentParticipantId, Sequence = sequence, AcceptedAt = now,
+                Content = new PostContent(words, now, null), OperationId = requestId,
+                Facets = await PostFacets.Effective(words, null, TestContext.Current.CancellationToken)
+            };
+            postId = orphan.Id;
+            await orphan.Save(TestContext.Current.CancellationToken);
+            var mentioned = (await ParticipantIdentity.Get(ParticipantIdentity.AtprotoKey(ExperienceWebApp.HumanDid),
+                TestContext.Current.CancellationToken))!;
+            mentioned.Relabel("renamed.experience.test");
+            await mentioned.Save(TestContext.Current.CancellationToken);
+        }
+        using var replay = await app.Http.PostAsJsonAsync("/api/v1/experience/topics/proj-z/posts",
+            new { requestId, text = words }, TestContext.Current.CancellationToken);
+        replay.EnsureSuccessStatusCode();
+        Assert.EndsWith("::" + postId, (await ReadAsync(replay)).GetProperty("postRef").GetString());
+        using (EntityContext.NoCache())
+        {
+            var state = await TopicConversation.Get(ExperienceWebApp.TopicKey, TestContext.Current.CancellationToken);
+            Assert.True(state?.LastSequence >= sequence);
+            var journal = await ActivityJournal.Query(entry => entry.Kind == ActivityKind.PostAccepted
+                && entry.TopicKey == ExperienceWebApp.TopicKey && entry.PostSequence == sequence
+                && entry.ActorParticipantId == app.AgentParticipantId, TestContext.Current.CancellationToken);
+            Assert.Single(journal);
+        }
     }
 
     private static async Task<JsonElement> ReadTopic(HttpClient http, string topicRef)
@@ -705,7 +1088,7 @@ public sealed class ConnectorWireTests
         using var cases = await app.Http.GetAsync("/api/v1/experience/topics/proj-z/moderation/cases", TestContext.Current.CancellationToken);
         cases.EnsureSuccessStatusCode();
         var list = await ReadAsync(cases);
-        return list.GetProperty("result").GetProperty("data").GetProperty("cases")[0].GetProperty("caseRef").GetString()!;
+        return list.GetProperty("cases")[0].GetProperty("caseRef").GetString()!;
     }
 
     private static async Task<(string Token, string CredentialId)> IssueHumanCredential(ExperienceWebApp app)

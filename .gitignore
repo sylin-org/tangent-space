@@ -1,5 +1,6 @@
 # Disposable integration networks, upstream checkouts, and private runtime state.
 .local/
+.dream-loop/
 .env
 .env.*
 !.env.example

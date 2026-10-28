@@ -92,7 +92,7 @@ public sealed class AccessMap
     private static string[] Narrow(string[]? local, string[]? parent, string alwaysOn, string? fallsTo = null)
     {
         var tokens = local is null && parent is null ? new[] { fallsTo ?? alwaysOn }
-            : local is null ? parent
+            : local is null ? parent ?? []
             : parent is null ? local
             : local.Intersect(parent, StringComparer.Ordinal).ToArray();
         return AccessCriteria.With(tokens.Length == 0 ? [alwaysOn] : tokens, alwaysOn);
@@ -127,6 +127,7 @@ public static class AccessTokens
 {
     public const string Everyone = "everyone";
     public const string Authenticated = "authenticated";
+    public const string TangentMember = "tangent:member";
 }
 
 /// <summary>A pure any-of token match. Persistence, inheritance and cache work happen before this call.</summary>
@@ -143,7 +144,7 @@ public static partial class AccessCriteria
             .ToArray();
         if (normalized.Length > MaximumTokens)
             throw new ArgumentException($"An access decision can contain at most {MaximumTokens} tokens.");
-        var invalid = normalized.FirstOrDefault(token => token is not (AccessTokens.Everyone or AccessTokens.Authenticated)
+        var invalid = normalized.FirstOrDefault(token => token is not (AccessTokens.Everyone or AccessTokens.Authenticated or AccessTokens.TangentMember)
             && !QualifiedToken().IsMatch(token));
         if (invalid is not null)
             throw new ArgumentException($"'{invalid}' is not an access token. Use everyone, authenticated, role:<key>, or global:<permission>.");

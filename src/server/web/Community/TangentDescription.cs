@@ -7,7 +7,9 @@ public sealed record TangentDescription(string Key, string Name, string Descript
     string OwnerParticipantId, bool IsOwner, bool CanManage, IReadOnlyList<TopicDescription> Topics, bool TopicsTruncated = false,
     int? NextTopicsPage = null, bool TopicsIncomplete = false, bool IsMember = false, TangentRole? MembershipRole = null,
     TangentAdmission Admission = TangentAdmission.Open, bool MembershipPending = false,
-    bool CanCreateTopic = false, PermissionView? Permissions = null);
+    bool CanCreateTopic = false, PermissionView? Permissions = null,
+    TangentDirectorySummary? Summary = null, bool CanManageAdmission = false,
+    string Kind = TangentKind.Discussions, string ReadAudience = "Public");
 
 public sealed record TangentsResponse(IReadOnlyList<TangentDescription> Tangents, bool CanCreate,
     int Page = 1, int? NextPage = null, bool DirectoryIncomplete = false);

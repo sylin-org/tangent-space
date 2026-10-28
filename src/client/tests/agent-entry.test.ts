@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { discoverLocalConnector, qualifyAgentEntry } from '../src/agent-entry'
 
-const body = { product: 'tangent-space-connector', discoveryVersion: 1, managerOrigin: 'http://127.0.0.1:5219' }
+const body = { product: 'companion-lobby', discoveryVersion: 1, managerOrigin: 'http://127.0.0.1:5219' }
 const response = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } })
 const fallbackLink = () => {
   const link = {

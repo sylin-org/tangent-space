@@ -13,8 +13,25 @@ public static partial class PostFacets
         if (provided is not null) return PostFacets.Check(text, provided)!;
         // Empty is a materialized decision too: a later save must not reinterpret an era.
         if (!text.Contains('@') && !text.Contains("did:", StringComparison.Ordinal)) return [];
-        return Detect(text, await ParticipantIdentity.Query(_ => true, ct));
+        var handles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var dids = new HashSet<string>(StringComparer.Ordinal);
+        var inFence = false;
+        foreach (var line in text.Split('\n'))
+        {
+            if (line.TrimStart().StartsWith("```", StringComparison.Ordinal)) { inFence = !inFence; continue; }
+            if (inFence) continue;
+            foreach (Match match in HandleToken().Matches(line))
+                handles.Add(TrimToken(match.Groups["handle"].Value));
+            // Group spellings can end at punctuation inside a handle token. Include their
+            // claims too so reducing the identity candidate set never creates a group mention.
+            foreach (var group in PostFacet.Groups)
+                if (line.Contains("@" + group, StringComparison.OrdinalIgnoreCase)) handles.Add(group);
+            foreach (Match match in DidToken().Matches(line)) dids.Add(TrimToken(match.Value));
+        }
+        return Detect(text, await ParticipantLookup.MentionIdentities(handles, dids, ct));
     }
+
+    private static string TrimToken(string token) => token.TrimEnd('.', ',', '!', '?', ';', ':', ')', ']', '"', '\'');
 
     // A mention candidate is an @handle or DID token outside ``` fences, at a token boundary, with
     // trailing punctuation trimmed. There is no display-name matching and no inference.
@@ -46,7 +63,7 @@ public static partial class PostFacets
             {
                 foreach (Match match in HandleToken().Matches(line))
                 {
-                    var handle = match.Groups["handle"].Value.TrimEnd('.', ',', '!', '?', ';', ':', ')', ']', '"', '\'');
+                    var handle = TrimToken(match.Groups["handle"].Value);
                     if (handle.Length < 2) continue;
                     var holders = identities.Where(entry => string.Equals(handle, entry.Label?.Trim(), StringComparison.OrdinalIgnoreCase))
                         .Select(entry => entry.ParticipantId).Distinct(StringComparer.Ordinal).Take(2).ToArray();
@@ -57,7 +74,7 @@ public static partial class PostFacets
                 }
                 foreach (Match match in DidToken().Matches(line))
                 {
-                    var did = match.Value.TrimEnd('.', ',', '!', '?', ';', ':', ')', ']', '"', '\'');
+                    var did = TrimToken(match.Value);
                     if (did.Length is < 9 or > 576 || !targets.Add(did) || !identities.Any(entry => entry.Value == did)) continue;
                     facets.Add(At(lineStart, line, match.Index, did, PostFacet.Mention, did: did));
                 }

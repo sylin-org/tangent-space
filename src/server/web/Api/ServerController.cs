@@ -14,9 +14,19 @@ public sealed class ServerController(TangentServer hub) : ControllerBase
     [AllowAnonymous, HttpGet("/api/server")]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
-        string? participantId = null;
-        if (User.Identity?.IsAuthenticated == true) participantId = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
-        return Ok(await governance.Read(participantId, ct));
+        Response.Headers.CacheControl = "no-store";
+        try
+        {
+            string? participantId = null;
+            if (User.Identity?.IsAuthenticated == true) participantId = ParticipationAccess.Require(User, ParticipationGrants.Welcome);
+            var settings = await governance.Read(participantId, ct);
+            return Ok(settings with
+            {
+                CanManageParticipants = settings.CanManageParticipants
+                    && (!ParticipationAccess.UsesCredential(User) || User.HasClaim(ParticipationConstants.GrantClaim, ParticipationGrants.Manage))
+            });
+        }
+        catch (UnauthorizedAccessException) { return StatusCode(403); }
     }
 
     [HttpPatch("/api/server"), TopicMutation]

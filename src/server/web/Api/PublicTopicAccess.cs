@@ -17,8 +17,5 @@ public sealed class PublicTopicAccess : EntityAccess<Topic>
             : action is AccessAction.Update or AccessAction.Delete ? q.Where(topic => false) : q;
 
     internal static bool IsPublic(Topic topic, Community.Tangent? tangent)
-        => tangent is not null && topic.ReadAudience == TopicReadAudience.Public
-            && (topic.Access ?? AccessMap.TopicDefaults())
-                .ResolveTopic(tangent.Access ?? AccessMap.TangentDefaults()).See!
-                .Contains(AccessTokens.Everyone, StringComparer.Ordinal);
+        => topic.IsPubliclyReadable(tangent);
 }

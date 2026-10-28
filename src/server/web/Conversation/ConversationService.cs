@@ -6,11 +6,13 @@ using Tangent.Identity;
 using Tangent.Community;
 using Tangent.Stewardship;
 using Tangent.Activity;
+using Tangent.Media;
+using Tangent.Access;
 
 namespace Tangent.Conversation;
 
 public sealed partial class ConversationService(TopicGovernance governance, TimeProvider clock, IDataProtectionProvider protection,
-    ParticipantDirectory directory, ParticipantProfiles profiles, SignalBus signals) : IDisposable
+    ParticipantDirectory directory, ParticipantProfiles profiles, SignalBus signals, PostMediaService media) : IDisposable
 {
     private readonly SemaphoreSlim writes = new(1, 1);
     private readonly IDataProtector cursors = protection.CreateProtector("Cursor.v1");
@@ -23,6 +25,19 @@ public sealed partial class ConversationService(TopicGovernance governance, Time
     }
 
     public void Dispose() => writes.Dispose();
+
+    /// <summary>The first committed original Post stays the article opening, including its tombstone.
+    /// A missing opening is never replaced by a later reply.</summary>
+    private static async Task<Post?> OpeningPost(string topicKey, TopicPolicy policy, CancellationToken ct)
+    {
+        var topic = await Topic.Get(topicKey, ct);
+        if (topic is null || (await Community.Tangent.Get(topic.TangentKey, ct))?.Kind != TangentKind.Articles) return null;
+        var first = (await Post.Query(post => post.TopicKey == topicKey && post.OfPostId == null
+            && post.Sequence == 1, SequenceQuery(1), ct)).FirstOrDefault();
+        if (first is null || first.Content.ReplyTo is not null) return null;
+        first.Permissions = Permissions.Post(policy, first.AuthorParticipantId, first.Removed);
+        return first;
+    }
 
     /// <summary>Read-time resolution for every author and facet-referenced participant in a
     /// page (ADR 0008): fresh labels for stable identity values, bounded to distinct targets.

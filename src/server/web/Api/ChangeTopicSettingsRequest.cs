@@ -1,3 +1,4 @@
 namespace Tangent.Api;
 
-public sealed record ChangeTopicSettingsRequest(bool AllowPostEditing, bool IsLocked, string? Title = null, string? Topic = null);
+public sealed record ChangeTopicSettingsRequest(bool? AllowPostEditing = null, bool? IsLocked = null,
+    string? Title = null, string? Topic = null);

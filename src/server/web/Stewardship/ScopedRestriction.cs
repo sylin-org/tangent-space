@@ -15,6 +15,8 @@ public sealed class ScopedRestriction : Entity<ScopedRestriction>
     public RestrictionScope Scope { get; set; }
     public string ScopeKey { get; set; } = "";
     public string ParticipantId { get; set; } = "";
+    public bool BlockPosting { get; set; } = true;
+    public bool BlockStarting { get; set; } = true;
     public RestrictionKind Kind { get; set; }
     public DateTimeOffset? Until { get; set; }
     public string Reason { get; set; } = "";

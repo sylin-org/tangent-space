@@ -14,11 +14,11 @@ public sealed partial class ConversationService
 
     /// <summary>Call inside the current-policy callback so both authority and the row are fresh.
     /// Keep read authorization ahead of lookup, including when recovering a terminal receipt.</summary>
-    private static async Task<Post> ReadPostForChange(TopicPolicy policy, string roomKey, string messageId, CancellationToken ct)
+    private static async Task<Post> ReadPostForChange(TopicPolicy policy, string topicKey, string messageId, CancellationToken ct)
     {
         RequireTopicCapability(policy, TopicCapability.Read, "This topic's current rules do not allow changing posts.");
         var current = await Post.Get(messageId, ct);
-        if (current is null || current.TopicKey != roomKey) throw new ArgumentException("Choose a post in this topic.");
+        if (current is null || current.TopicKey != topicKey) throw new ArgumentException("Choose a post in this topic.");
         return current;
     }
 

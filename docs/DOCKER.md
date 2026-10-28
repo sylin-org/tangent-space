@@ -10,7 +10,7 @@ docker compose stop tangent
 docker compose up -d --wait tangent
 ```
 
-For code changes, run `Build.bat`, then `Launch.bat` (or `./scripts/start-docker.ps1 -Build`). The build publishes for Linux inside the pinned .NET SDK image; the runtime image contains the published output and a curl health check. The build context excludes private application state, OAuth files and keys. SourceLink is disabled for the source archive build, which excludes Git internals; the pinned Koan contribution and base image identify the source.
+For code changes, run `Build.bat`, then `Launch.bat` (or `./scripts/start-docker.ps1 -Build`). The image build installs client dependencies from `package-lock.json`, typechecks and builds the browser workspace, then publishes the server for Linux inside the pinned .NET SDK image. Node and the .NET SDK run inside build stages; neither is required on the host. The runtime image contains the published output and a curl health check. The build context excludes private application state, OAuth files and keys. SourceLink is disabled for the source archive build, which excludes Git internals; the pinned Koan contribution and base images identify the source.
 
 `Launch.bat` creates a missing configuration with an unclaimed owner, public AT sign-in and durable SQLite under `/state`. Ordinary sign-in requests only the `atproto` identity scope. Publishing a selected Post to Bluesky starts a separate consent request for `repo:app.bsky.feed.post`. An existing `appsettings.json` is retained byte-for-byte. Older local configurations that declare only `atproto` in both the provider `Scopes` and localhost `ClientId` query must be updated together before the separate publishing consent can work. The public origin comes from `Tangent__Space__PublicOrigin` in `compose.yaml`.
 
@@ -24,7 +24,7 @@ The Linux Data Protection key ring is persisted without an additional XML key en
 
 ## Build, launch and reset
 
-- `Build.bat`: prepares the pinned Koan contribution, builds the Tangent image and compiles the local connector. It does not stop the running app.
+- `Build.bat`: prepares the pinned Koan contribution and builds the Tangent image. It does not stop the running app. [Companion Lobby](https://github.com/sylin-org/CompanionLobby) has its own build and lifecycle.
 - `Launch.bat`: creates a missing configuration, preserves an existing one byte-for-byte, and starts only the Tangent service. Add `-Build` to rebuild first.
 - `Wipe.bat`: prints the resolved state directory and requires typing `WIPE`. It stops and removes only the app container, then deletes `.local/docker/site`: configuration, SQLite and journals, OAuth state and Data Protection keys. `Wipe.bat -WhatIf` previews the operation; `-Force` skips the prompt for scripts. Backups are retained.
 
@@ -34,7 +34,7 @@ After a wipe, run Build and Launch. A blank `OwnerDid` lets the first verified a
 
 Sign-in resolves identities through the public `https://plc.directory`. Missing or unresolvable identifiers return a sanitized retry page. On an unclaimed server with a blank `OwnerDid`, a verified sign-in opens owner confirmation; an explicit `OwnerDid` reserves it for that account.
 
-Run `pwsh -File scripts/test-server-lifecycle.ps1` for isolated safety and configuration-preservation checks. It uses disposable scratch paths and mocked Docker commands, never your current app state.
+Run `pwsh -File scripts/test-server-lifecycle.ps1` for isolated wipe safety and Tangent-only build checks. It uses disposable scratch paths and mocked Docker commands, never your current app state.
 
 ## Backup and restore
 
@@ -51,6 +51,8 @@ These scripts snapshot only `/state`. With a selected external provider, they pr
 
 ## Public deployment configuration
 
-The Compose port and generated OAuth client are loopback-only development defaults. For a public DNS name such as `https://tangent.example`, terminate HTTPS at a reverse proxy and set `Tangent__Space__PublicOrigin=https://tangent.example` (the canonical origin, without a trailing path). Configure `Koan:Web:Auth:Providers:atproto:ClientId` as `https://tangent.example/.well-known/oauth-client-metadata`, with provider `Scopes` containing `atproto` and `repo:app.bsky.feed.post`. Koan serves that metadata route and derives callback `https://tangent.example/auth/atproto/callback`; both must be reachable over the public origin. The development `http://localhost?...` ClientId is invalid outside Development and must not be carried into a public deployment. Replacing the ClientId invalidates existing local AT sessions, so users must sign in again.
+The Compose port and generated OAuth client are loopback-only development defaults. For a public DNS name such as `https://tangent.example`, terminate HTTPS at a reverse proxy and set `Tangent__Space__PublicOrigin=https://tangent.example` (the canonical origin, without a trailing path). Configure `Koan:Web:Auth:Providers:atproto:ClientId` as `https://tangent.example/auth/atproto/client-metadata.json`, with provider `Scopes` containing `atproto` and `repo:app.bsky.feed.post`. Koan serves that metadata route and derives callback `https://tangent.example/auth/atproto/callback`; both must be reachable over the public origin. The development `http://localhost?...` ClientId is invalid outside Development and must not be carried into a public deployment. Replacing the ClientId invalidates existing local AT sessions, so users must sign in again.
 
-Keep the app bound to loopback behind the proxy or an equivalent private network path. Test DNS, HTTPS metadata, callback, and explicit Bluesky publishing consent from a real browser before opening access. The repository does not include a public deployment topology or tested external-provider backup plan.
+Keep the app bound to loopback behind the proxy or an equivalent private network path. Set `Tangent__Proxy__KnownProxy` to the immediate proxy's stable IP and `AllowedHosts` to the public hostname. The proxy must preserve the public Host header and forward the original scheme in `X-Forwarded-Proto`; Tangent accepts that header only from the configured peer. A container health check must send the public Host header when host filtering is enabled. Redirect HTTP to HTTPS at the public edge and exercise an authenticated browser write, since successful reads or sign-in alone do not verify proxy handling.
+
+Test DNS, HTTPS metadata, callback, and explicit Bluesky publishing consent from a real browser before opening access. Keep installation-specific deployment plans and configuration in an ignored local directory. The repository does not include a tested external-provider backup plan.

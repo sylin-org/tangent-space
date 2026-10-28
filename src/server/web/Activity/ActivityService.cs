@@ -7,8 +7,6 @@ using Microsoft.AspNetCore.DataProtection;
 using Tangent.Conversation;
 using Tangent.Community;
 using Tangent.Identity;
-using Tangent.Identity;
-using Tangent.Community;
 using Tangent.Stewardship;
 
 namespace Tangent.Activity;
@@ -134,19 +132,19 @@ public sealed class ActivityService(TopicGovernance governance, TangentGovernanc
     /// <summary>One topic's attention for the viewer, read from the compiled projection. The
     /// row is the only source of numbers: absent means no attention is known, so the topic
     /// contributes nothing to the overview until a compile lands.</summary>
-    private async Task<ActivityTopic?> TopicActivity(string participantId, string roomKey, CancellationToken ct)
+    private async Task<ActivityTopic?> TopicActivity(string participantId, string topicKey, CancellationToken ct)
     {
-        var policy = await governance.ReadPolicyAsync(participantId, roomKey, ct);
+        var policy = await governance.ReadPolicyAsync(participantId, topicKey, ct);
     if (!policy.CanRead) return null;
-    var topic = await Topic.Get(roomKey, ct);
+    var topic = await Topic.Get(topicKey, ct);
         if (topic is null) return null;
-        var attention = await TopicAttention.Get(TopicAttention.IdOf(roomKey, participantId), ct);
+        var attention = await TopicAttention.Get(TopicAttention.IdOf(topicKey, participantId), ct);
         if (attention is null) return null;
         // Null-safe: an absent watch record (the common case) simply means All.
-        var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, roomKey), ct),
+        var mode = AttentionRules.Effective(await WatchSetting.Get(WatchSetting.Key(participantId, topicKey), ct),
             await TangentWatchSetting.Get(TangentWatchSetting.Key(participantId, topic.TangentKey), ct));
         if (!AttentionRules.DeliversTopic(mode)) return null;
-        return new ActivityTopic(roomKey, topic.TangentKey,
+        return new ActivityTopic(topicKey, topic.TangentKey,
             AttentionRules.AttentionUnread(mode, attention.UnreadCount, attention.DirectReplies),
             attention.UnreadCount >= MaximumUnread,
             Math.Min(attention.DirectReplies, MaximumUnread),

@@ -1,6 +1,4 @@
-using Koan.Data.Abstractions;
 using Koan.Data.Core;
-using Koan.Data.Core.Sorting;
 using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
@@ -8,56 +6,31 @@ using Tangent.Spaces;
 using Tangent.Activity;
 using Tangent.Access;
 using Tangent.Stewardship;
+using Tangent.Conversation;
 
 namespace Tangent.Community;
 
 /// <summary>Register once as a singleton; policy and acceptance share the host's arrival gate.</summary>
 public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, ParticipantDirectory directory,
-    TangentRoleAccess roleAccess, SignalBus signals)
+    TangentRoleAccess roleAccess, SignalBus signals, TangentGovernance tangents)
 {
-    private static readonly QueryDefinition directoryQuery = new QueryDefinition
-    {
-        Sort = SortSpecParser.ParseStrict<Topic>(nameof(Topic.Id)),
-        CountStrategy = CountStrategy.Exact
-    };
-
     public async Task<TopicListing> List(string? actorId, int page, CancellationToken ct)
     {
         if (page is < 1 or > TopicConstants.MaximumPage)
             throw new TopicRuleViolation(TopicDenial.InvalidInput, "Choose a topic page between 1 and 10000.");
-        await gate.Enter(ct);
-        try
-        {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var participant = actorId is null ? null : await Participant.Get(actorId, ct);
-            var result = await Topic.AllWithCount(directoryQuery.WithPagination(page, TopicConstants.PageSize), ct);
-            var now = clock.GetUtcNow();
-            var descriptions = new List<TopicDescription>(result.Items.Count);
-            foreach (var topic in result.Items)
-            {
-                var membership = actorId is null ? null : await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
-                var tangent = await Community.Tangent.Get(topic.TangentKey, ct);
-                var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-                var restriction = actorId is null ? null : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, now, ct);
-                var policy = await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
-                    participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-                // A directory must not become an oracle for restricted topic names.
-                if (policy.CanRead || policy.CanManage) descriptions.Add(TopicDescription.From(topic, policy));
-            }
-            await EntityContext.Commit(ct);
-            return new TopicListing(descriptions, page, result.HasNextPage ? page + 1 : null, clock.GetUtcNow());
-        }
-        finally { gate.Exit(); }
+        var result = await tangents.ListTopicDirectory(actorId, null, page, ct);
+        return new TopicListing(result.Topics, page, result.NextPage, clock.GetUtcNow(), result.ScanLimited);
     }
 
-    public async Task<TopicDescription?> Describe(string? actorId, string roomKey, CancellationToken ct)
+    public async Task<TopicDescription?> Describe(string? actorId, string topicKey, CancellationToken ct)
     {
-        var read = await ReadAsync(actorId, roomKey, ct);
-        return read.Topic is null || (!read.Policy.CanRead && !read.Policy.CanManage)
+        var read = await ReadAsync(actorId, topicKey, ct);
+        var policy = actorId is null && read.Topic?.IsPubliclyReadable(read.Tangent) == true
+            ? read.Policy with { CanRead = true, Reason = "allowed" }
+            : read.Policy;
+        return read.Topic is null || (!policy.CanRead && !policy.CanManage)
             ? null
-            : TopicDescription.From(read.Topic, read.Policy);
+            : TopicDescription.From(read.Topic, policy, read.Tangent);
     }
 
     /// <summary>Bounded actor-filtered topic directory for one Tangent.</summary>
@@ -65,32 +38,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
     {
         if (page is < 1 or > TopicConstants.MaximumPage)
             throw new TopicRuleViolation(TopicDenial.InvalidInput, "Choose a topic page between 1 and 10000.");
-        await gate.Enter(ct);
-        try
-        {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var participant = actorId is null ? null : await Participant.Get(actorId, ct);
-            var tangent = await Community.Tangent.Get(tangentKey, ct);
-            if (tangent is null || participant?.IsSuspended == true) return new TangentTopicDirectory([], page, null);
-            var tangentMembership = actorId is null ? null : await TangentMembership.Get(TangentMembership.Key(tangentKey, actorId), ct);
-            var topics = await Topic.QueryWithCount(topic => topic.TangentKey == tangentKey,
-                directoryQuery.WithPagination(page, TopicConstants.PageSize), ct);
-            var now = clock.GetUtcNow();
-            var descriptions = new List<TopicDescription>(topics.Items.Count);
-            foreach (var topic in topics.Items)
-            {
-                var membership = actorId is null ? null : await TopicMembership.Get(TopicMembership.Key(topic.Id, actorId), ct);
-                var restriction = actorId is null ? null : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, now, ct);
-                var policy = await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, false, tangent, tangentMembership,
-                    participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-                if (policy.CanRead || policy.CanManage) descriptions.Add(TopicDescription.From(topic, policy));
-            }
-            await EntityContext.Commit(ct);
-            return new TangentTopicDirectory(descriptions, page, topics.HasNextPage ? page + 1 : null);
-        }
-        finally { gate.Exit(); }
+        return await tangents.ListTopicDirectory(actorId, tangentKey, page, ct);
     }
 
     public async Task<TopicAdministrationResult> SetSuspension(string actorId, string targetIdentifier, bool suspended, CancellationToken ct)
@@ -131,16 +79,60 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
         finally { gate.Exit(); }
     }
 
-    public Task<TopicAdministrationResult> SetMembership(string actorId, string roomKey, string targetIdentifier, TopicRole role, CancellationToken ct)
-        => Administer(actorId, roomKey, targetIdentifier, TopicAdministration.SetMembership, role,
+    public Task<TopicAdministrationResult> SetMembership(string actorId, string topicKey, string targetIdentifier, TopicRole role, CancellationToken ct)
+        => Administer(actorId, topicKey, targetIdentifier, TopicAdministration.SetMembership, role,
             (space, topic, actor, targetId, target, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
                 return new Change(current, current.ChangeMembership(actorId, targetId!, target, role, now, tangent, tangentMembership));
             }, ct);
 
-    public Task<TopicAdministrationResult> SetTopic(string actorId, string roomKey, string description, CancellationToken ct)
-        => Administer(actorId, roomKey, null, TopicAdministration.SetTopic, null,
+    public async Task<TopicMembershipPreview> PreviewMembership(string actorId, string topicKey, string tangentKey,
+        string targetIdentifier, TopicRole role, CancellationToken ct)
+    {
+        if (!Enum.IsDefined(role))
+            throw new TopicRuleViolation(TopicDenial.InvalidInput, "Choose a Topic membership role.");
+        using var fresh = EntityContext.NoCache();
+        var topic = await Topic.Get(topicKey, ct);
+        if (topic is null || topic.TangentKey != tangentKey)
+            throw new TopicRuleViolation(TopicDenial.NotFound, "The requested Topic does not exist in this Tangent.");
+        var actorPolicy = await ReadPolicyAsync(actorId, topicKey, ct);
+        if (!actorPolicy.CanManage)
+            throw new TopicRuleViolation(TopicDenial.Forbidden, "Only a Topic administrator can preview participation here.");
+        var participant = (await directory.ByIdentifier(targetIdentifier, ct))?.Participant
+            ?? throw new TopicRuleViolation(TopicDenial.NotFound, "This person must first arrive on this Host with a verified account.");
+        var tangent = await Community.Tangent.Get(tangentKey, ct)
+            ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The Tangent no longer exists.");
+        if (tangent.IsOwner(participant.Id))
+            throw new TopicRuleViolation(TopicDenial.Forbidden, "The Tangent owner’s membership cannot be changed here.");
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var tangentMembership = await TangentMembership.Get(TangentMembership.Key(tangentKey, participant.Id), ct);
+        var proposed = TopicMembership.Assign(topic, participant.Id, role, actorId, clock.GetUtcNow());
+        var restriction = await Restrictions.ForTopic(participant.Id, topicKey, tangentKey, clock.GetUtcNow(), ct);
+        var selected = topic.CurrentPolicy(space, participant.Id, proposed, participant.IsSuspended,
+            tangent, tangentMembership, participant.Classification, restriction);
+        var effective = await Project(topic, tangent, selected, participant, restriction, ct);
+        var obstacle = effective.CanRead ? null : effective.Reason switch
+        {
+            "community-membership-required" or "not-admitted" => "This person is not admitted to the Tangent. Admit them there first; a Topic role cannot widen Tangent admission.",
+            "participation-policy" => "The Tangent’s participation policy does not admit this person’s classification. Change that Tangent policy first.",
+            "suspended" => "This person is suspended from the Host. Restore their account before granting access.",
+            "banned" => "A current restriction prevents this person from reading this conversation.",
+            "removed" => "Removing Topic access prevents this account from participating here.",
+            "role-required" => "The inherited Tangent or Topic access rule still prevents reading. Review Who can read in advanced rules.",
+            _ => "The current Host, Tangent, or Topic policy prevents reading."
+        };
+        if (obstacle is null && !effective.CanWrite && role is TopicRole.Member or TopicRole.Manager)
+            obstacle = topic.IsLocked ? "This conversation is locked to new Posts. Unlock it before this person can reply."
+                : tangentMembership?.Role == TangentRole.Reader
+                    ? "The Tangent’s participation or inherited posting rule still prevents replies. Review Who can reply in advanced rules."
+                    : "The inherited Tangent or Topic posting rule still prevents replies. Review Who can reply in advanced rules.";
+        return new TopicMembershipPreview(participant.Id, await directory.BestLabel(participant.Id, ct), role,
+            effective.CanRead, effective.CanWrite, effective.CanManage, obstacle);
+    }
+
+    public Task<TopicAdministrationResult> SetTopic(string actorId, string topicKey, string description, CancellationToken ct)
+        => Administer(actorId, topicKey, null, TopicAdministration.SetTopic, null,
             (space, topic, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
@@ -148,19 +140,19 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 return new Change(current);
             }, ct);
 
-    public Task<TopicAdministrationResult> SetReadAudience(string actorId, string roomKey, TopicReadAudience audience,
+    public Task<TopicAdministrationResult> SetReadAudience(string actorId, string topicKey, TopicReadAudience audience,
         bool publishExistingHistory, CancellationToken ct)
-        => Administer(actorId, roomKey, null, TopicAdministration.SetReadAudience, null,
+        => Administer(actorId, topicKey, null, TopicAdministration.SetReadAudience, null,
             (space, topic, _, _, _, tangent, _, now) =>
             {
                 var current = RequireTopic(topic);
-                current.ChangeReadAudience(audience, publishExistingHistory, now);
+                current.ChangeReadAudience(audience, publishExistingHistory, now, tangent);
                 return new Change(current);
             }, ct, audience, publishExistingHistory);
 
-    public Task<TopicAdministrationResult> SetSettings(string actorId, string roomKey, bool allowPostEditing, bool isLocked,
+    public Task<TopicAdministrationResult> SetSettings(string actorId, string topicKey, bool? allowPostEditing, bool? isLocked,
         string? title, string? description, CancellationToken ct)
-        => Administer(actorId, roomKey, null, TopicAdministration.SetSettings, null,
+        => Administer(actorId, topicKey, null, TopicAdministration.SetSettings, null,
             (space, topic, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
@@ -168,48 +160,42 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
                 return new Change(current);
             }, ct);
 
-    public async Task<AccessMapView> GetAccess(string actorId, string roomKey, string? expectedTangentKey, CancellationToken ct)
+    public async Task<AccessMapView> GetAccess(string actorId, string topicKey, string? expectedTangentKey, CancellationToken ct)
     {
-        await gate.Enter(ct);
-        try
-        {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var topic = await Topic.Get(roomKey, ct)
-                ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The requested Topic does not exist.");
-            if (expectedTangentKey is not null && topic.TangentKey != expectedTangentKey)
-                throw new TopicRuleViolation(TopicDenial.NotFound, "The requested Topic does not exist in this Tangent.");
-            var participant = await Participant.Get(actorId, ct);
-            var membership = await TopicMembership.Get(TopicMembership.Key(roomKey, actorId), ct);
-            var tangent = await Community.Tangent.Get(topic.TangentKey, ct)
-                ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The Topic's Tangent does not exist.");
-            var tangentMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
-            var restriction = await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, clock.GetUtcNow(), ct);
-            var policy = await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent,
-                tangentMembership, participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-            if (!policy.CanManage)
-                throw new TopicRuleViolation(TopicDenial.Forbidden, "Only a Topic administrator can inspect its access settings.");
-            var selected = (topic.Access ?? AccessMap.TopicDefaults()).NormalizeForTopic();
-            var parent = tangent.Access ?? AccessMap.TangentDefaults();
-            var inherited = new List<string>(3);
-            if (selected.See is null) inherited.Add("see");
-            if (selected.Post is null) inherited.Add("post");
-            if (selected.Manage is null) inherited.Add("manage");
-            await EntityContext.Commit(ct);
-            return new AccessMapView(selected, selected.ResolveTopic(parent), inherited, parent.ResolveTangent());
-        }
-        finally { gate.Exit(); }
+        using var fresh = EntityContext.NoCache();
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var topic = await Topic.Get(topicKey, ct)
+            ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The requested Topic does not exist.");
+        if (expectedTangentKey is not null && topic.TangentKey != expectedTangentKey)
+            throw new TopicRuleViolation(TopicDenial.NotFound, "The requested Topic does not exist in this Tangent.");
+        var participant = await Participant.Get(actorId, ct);
+        var membership = await TopicMembership.Get(TopicMembership.Key(topicKey, actorId), ct);
+        var tangent = await Community.Tangent.Get(topic.TangentKey, ct)
+            ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The Topic's Tangent does not exist.");
+        var tangentMembership = await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
+        var restriction = await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, clock.GetUtcNow(), ct);
+        var policy = await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent,
+            tangentMembership, participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
+        if (!policy.CanManage)
+            throw new TopicRuleViolation(TopicDenial.Forbidden, "Only a Topic administrator can inspect its access settings.");
+        var selected = (topic.Access ?? AccessMap.TopicDefaults()).NormalizeForTopic();
+        var parent = tangent.Access ?? AccessMap.TangentDefaults();
+        var inherited = new List<string>(3);
+        if (selected.See is null) inherited.Add("see");
+        if (selected.Post is null) inherited.Add("post");
+        if (selected.Manage is null) inherited.Add("manage");
+        return new AccessMapView(selected, selected.ResolveTopic(parent), inherited, parent.ResolveTangent());
     }
 
-    public Task<TopicAdministrationResult> SetAccess(string actorId, string roomKey, AccessMap access, CancellationToken ct)
-        => Administer(actorId, roomKey, null, TopicAdministration.SetAccess, null,
+    public Task<TopicAdministrationResult> SetAccess(string actorId, string topicKey, AccessMap access, CancellationToken ct,
+        bool publishExistingHistory = false)
+        => Administer(actorId, topicKey, null, TopicAdministration.SetAccess, null,
             (space, topic, actor, _, _, tangent, tangentMembership, now) =>
             {
                 var current = RequireTopic(topic);
-                current.ChangeAccess(access, now);
+                current.ChangeAccess(access, now, tangent, publishExistingHistory);
                 return new Change(current);
-            }, ct);
+            }, ct, publishExistingHistory: publishExistingHistory);
 
     /// <summary>One projected policy with the entities it was read from. Lock-free.</summary>
     public sealed record TopicReadContext(TopicPolicy Policy, Topic? Topic, Tangent? Tangent);
@@ -219,28 +205,44 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
     /// change surfaces on the next read; nothing here may save.
     /// A denied snapshot still carries the selected revisions.
     /// </summary>
-    public async Task<TopicReadContext> ReadAsync(string? actorId, string roomKey, CancellationToken ct)
+    public Task<TopicReadContext> ReadAsync(string? actorId, string topicKey, CancellationToken ct)
+        => ReadContext(actorId, topicKey, ignoreTimeout: false, ct);
+
+    /// <summary>Authors retain their own history unless suspended. Moderation history follows
+    /// current effective Topic authority; a timeout pauses actions, not this read.</summary>
+    public async Task<bool> CanReadHistory(string actorId, Post post, CancellationToken ct)
+    {
+        using var fresh = EntityContext.NoCache();
+        var participant = await Participant.Get(actorId, ct);
+        if (participant is null || participant.IsSuspended) return false;
+        if (post.AuthorParticipantId == actorId) return true;
+        var current = await ReadContext(actorId, post.TopicKey, ignoreTimeout: true, ct);
+        return current.Policy.CanRead && current.Policy.CanManage;
+    }
+
+    private async Task<TopicReadContext> ReadContext(string? actorId, string topicKey, bool ignoreTimeout, CancellationToken ct)
     {
         using var fresh = EntityContext.NoCache();
         var space = await Space.Get(TangentConstants.SpaceId, ct);
-        var topic = await Topic.Get(roomKey, ct);
+        var topic = await Topic.Get(topicKey, ct);
         var membership = topic is null || actorId is null ? null
-            : await TopicMembership.Get(TopicMembership.Key(roomKey, actorId), ct);
+            : await TopicMembership.Get(TopicMembership.Key(topicKey, actorId), ct);
         var participant = actorId is null ? null : await Participant.Get(actorId, ct);
         var tangent = topic is null ? null : await Community.Tangent.Get(topic.TangentKey, ct);
         var tangentMembership = actorId is null || tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
         var restriction = topic is null || actorId is null ? null
             : await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, clock.GetUtcNow(), ct);
+        if (ignoreTimeout && restriction is { Banned: false }) restriction = null;
         var policy = topic is null ? null : await Project(topic, tangent, topic.CurrentPolicy(space, actorId, membership, participant?.IsSuspended == true, tangent, tangentMembership,
             participant?.Classification ?? ParticipantClassification.Undeclared, restriction), participant, restriction, ct);
-        policy ??= new TopicPolicy(roomKey, actorId, 0, space?.PolicyRevision ?? 0,
-                null, false, false, false, false, "room-not-found");
+        policy ??= new TopicPolicy(topicKey, actorId, 0, space?.PolicyRevision ?? 0,
+                null, false, false, false, false, "topic-not-found");
         return new TopicReadContext(policy, topic, tangent);
     }
 
     /// <summary>Current authority for a read that needs nothing but the decision.</summary>
-    public async Task<TopicPolicy> ReadPolicyAsync(string? actorId, string roomKey, CancellationToken ct)
-        => (await ReadAsync(actorId, roomKey, ct)).Policy;
+    public async Task<TopicPolicy> ReadPolicyAsync(string? actorId, string topicKey, CancellationToken ct)
+        => (await ReadAsync(actorId, topicKey, ct)).Policy;
 
     /// <summary>
     /// The acceptance envelope for mutations: the write gate, one transaction, and the
@@ -248,7 +250,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
     /// Do not call PDS/network services, nest a transaction, or reenter TopicGovernance/Arrival inside the callback.
     /// A denied snapshot still carries the selected revisions.
     /// </summary>
-    public async Task<T> WithinAcceptanceAsync<T>(string? actorId, string roomKey,
+    public async Task<T> WithinAcceptanceAsync<T>(string? actorId, string topicKey,
         Func<TopicPolicy, CancellationToken, Task<T>> operation, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -257,7 +259,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var read = await ReadAsync(actorId, roomKey, ct);
+            var read = await ReadAsync(actorId, topicKey, ct);
             var result = await operation(read.Policy, ct);
             await EntityContext.Commit(ct);
             return result;
@@ -265,7 +267,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
         finally { gate.Exit(); }
     }
 
-    private async Task<TopicAdministrationResult> Administer(string actorId, string roomKey, string? targetIdentifier,
+    private async Task<TopicAdministrationResult> Administer(string actorId, string topicKey, string? targetIdentifier,
         TopicAdministration operation, TopicRole? requestedRole,
         Func<Space?, Topic?, TopicMembership?, string?, TopicMembership?, Tangent?, TangentMembership?, DateTimeOffset, Change> apply,
         CancellationToken ct, TopicReadAudience? requestedReadAudience = null, bool? publishExistingHistory = null)
@@ -287,18 +289,19 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             TopicRuleViolation? denial = null;
             try
             {
-                Topic.CheckKey(roomKey);
-                topic = await Topic.Get(roomKey, ct);
+                Topic.CheckKey(topicKey);
+                topic = await Topic.Get(topicKey, ct);
                 var actorParticipant = await Participant.Get(actorId, ct);
+                if (!await SpaceAdmission.Admitted(space, actorId, ct)) throw new TopicRuleViolation(TopicDenial.Forbidden, "Join this Space before administering topics.");
                 if (actorParticipant?.IsSuspended == true)
                     throw new TopicRuleViolation(TopicDenial.Forbidden, "A suspended participant cannot administer topics.");
                 // Scoped restrictions apply to administration as well as conversation: a banned or timed-out
                 // participant cannot administer here. Owners are never restriction targets.
                 if (topic is not null && await Restrictions.ForTopic(actorId, topic.Id, topic.TangentKey, now, ct) is not null)
                     throw new TopicRuleViolation(TopicDenial.Forbidden, "A scoped restriction currently denies this administration.");
-                var actor = topic is null ? null : await TopicMembership.Get(TopicMembership.Key(roomKey, actorId), ct);
+                var actor = topic is null ? null : await TopicMembership.Get(TopicMembership.Key(topicKey, actorId), ct);
                 var target = topic is null || targetId is null ? null
-                    : await TopicMembership.Get(TopicMembership.Key(roomKey, targetId), ct);
+                    : await TopicMembership.Get(TopicMembership.Key(topicKey, targetId), ct);
                 var tangent = topic is null ? null : await Community.Tangent.Get(topic.TangentKey, ct);
                 var tangentMembership = tangent is null ? null : await TangentMembership.Get(TangentMembership.Key(tangent.Id, actorId), ct);
                 if (topic is not null)
@@ -316,7 +319,8 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             }
             catch (TopicRuleViolation rejected) { denial = rejected; }
 
-            // Policy errors are ordinary audited denials. Persistence failures propagate and roll back everything.
+            // Policy errors are audited denials. Persistence failures propagate; Koan's deferred
+            // writes do not promise an atomic rollback across the Topic, membership and journal.
             if (change is not null)
             {
                 topic = change.Topic;
@@ -327,7 +331,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             }
             var audit = new TopicAudit
             {
-                ActorParticipantId = actorId, TopicKey = roomKey, TargetParticipantId = targetId, Operation = operation,
+                ActorParticipantId = actorId, TopicKey = topicKey, TargetParticipantId = targetId, Operation = operation,
                 RequestedRole = requestedRole, RequestedReadAudience = requestedReadAudience,
                 PublishExistingHistory = publishExistingHistory, Accepted = denial is null, Denial = denial?.Denial,
                 Reason = denial?.Message ?? "Accepted.", SelectedPolicyRevision = topic?.PolicyRevision ?? 0,
@@ -336,7 +340,7 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
             await audit.Save(ct);
             await EntityContext.Commit(ct);
             if (change is not null) signals.Pulse();
-            result = new TopicAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, roomKey,
+            result = new TopicAdministrationResult(audit.Accepted, audit.Denial, audit.Reason, topicKey,
                 audit.SelectedPolicyRevision, audit.Id);
         }
         finally { gate.Exit(); }
@@ -353,3 +357,6 @@ public sealed class TopicGovernance(TimeProvider clock, PolicyGate gate, Partici
 
     private sealed record Change(Topic Topic, TopicMembership? Membership = null);
 }
+
+public sealed record TopicMembershipPreview(string ParticipantId, string Label, TopicRole Role, bool CanRead,
+    bool CanReply, bool CanManage, string? Obstacle);

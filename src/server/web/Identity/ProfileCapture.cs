@@ -48,6 +48,8 @@ public sealed partial class ProfileCapture(ParticipantProfiles profiles, Atproto
     private async Task Capture(string did, CancellationToken ct)
     {
         var old = await profiles.Cached(did, ct);
+        var oldAvatarMissing = old.AvatarFile is not null
+            && !File.Exists(Path.Combine(MediaDirectory(environment), old.AvatarFile));
         var document = await sessions.ResolveDid(did, ct);
         var pds = document.PdsEndpoint?.TrimEnd('/') ?? throw new InvalidDataException();
         using var request = new HttpRequestMessage(HttpMethod.Get, pds + "/xrpc/com.atproto.repo.getRecord?repo="
@@ -93,9 +95,10 @@ public sealed partial class ProfileCapture(ParticipantProfiles profiles, Atproto
         }
         var snapshot = new ParticipantProfileSnapshot { Id = did, DisplayName = Text("displayName", 640),
             Description = Text("description", 2560), AvatarFile = filename, AvatarCid = cid,
-            CapturedAt = clock.GetUtcNow(), RetryAfter = clock.GetUtcNow().AddHours(6) };
+            CapturedAt = clock.GetUtcNow(), RetryAfter = clock.GetUtcNow().Add(filename is null ? TimeSpan.FromMinutes(15) : TimeSpan.FromHours(6)) };
         var changed = old.CapturedAt == default || old.DisplayName != snapshot.DisplayName
-            || old.Description != snapshot.Description || old.AvatarFile != snapshot.AvatarFile;
+            || old.Description != snapshot.Description || old.AvatarFile != snapshot.AvatarFile
+            || oldAvatarMissing && filename is not null;
         await profiles.Store(snapshot, changed, ct);
 
         var isAgent = HasAgentIndicators(value, snapshot.Description);

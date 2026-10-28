@@ -11,6 +11,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@tiptap/extension-bubble-menu": "^3.31.3",
+    "@tiptap/extension-floating-menu": "^3.31.3",
+    "@tiptap/extension-image": "^3.31.3",
+    "@tiptap/markdown": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
+    "@tiptap/vue-3": "^3.31.3",
+    "marked": "^17.0.6",
     "pinia": "^2.3.1",
     "vue": "^3.5.43"
   },

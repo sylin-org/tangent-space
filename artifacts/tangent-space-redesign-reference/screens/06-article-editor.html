@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-default-theme="light" data-accent="gold">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06 · Article editor, publishing · Tangent Space reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&amp;family=Schibsted+Grotesk:ital,wght@0,400..700;1,400..700&amp;display=swap">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="viewer.css">
+<script src="viewer.js"></script>
+</head>
+<body>
+<nav class="ref-bar" aria-label="Reference viewer">
+<a class="ref-link" href="index.html">← All screens</a>
+<span class="ref-title"><b>06 · Article editor, publishing</b><span>1440 × 960 · Writing</span></span>
+<span class="ref-grow"></span>
+<div class="ref-seg" role="group" aria-label="Theme"><button type="button" data-set-theme="system">System</button><button type="button" data-set-theme="light">Light</button><button type="button" data-set-theme="dark">Dark</button></div>
+<label class="ref-accent">Space accent <select id="ref-accent"><option value="gold">Gold</option><option value="jade">Jade</option><option value="iris">Iris</option><option value="copper">Copper</option></select></label>
+<a class="ref-link ref-step" href="05-new-topic.html" aria-label="Previous screen">‹</a><a class="ref-link ref-step" href="07-new-tangent.html" aria-label="Next screen">›</a>
+</nav>
+<main class="ref-stage">
+<div style="width: 1440px; height: 960px; position: relative; box-sizing: border-box; display: flex; flex-direction: column; background: var(--ts-page); color: var(--ts-text); font-family: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.5; overflow: hidden">
+
+<header style="height: 60px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 32px; background: var(--ts-surface); border-bottom: 1px solid var(--ts-line)">
+<a href="#" style="flex-shrink: 0; display: flex; align-items: center; gap: 12px; color: var(--ts-text); text-decoration: none">
+<img src="assets/space-mark-kintsugi.png" alt="" style="width: 28px; height: 28px; border-radius: 7px; object-fit: cover; display: block">
+<span style="font-family: 'Newsreader', Georgia, serif; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap">Kintsugi Architecture</span>
+</a>
+<label style="margin-left: 28px; width: 380px; height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; border: 1px solid var(--ts-line); border-radius: 9px; background: var(--ts-page); color: var(--ts-text-3)">
+<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13.2 13.2L17 17"></path></svg>
+<input type="search" aria-label="Search Kintsugi Architecture" placeholder="Search Kintsugi Architecture" style="flex-grow: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 14px; outline: none">
+<kbd style="height: 22px; min-width: 22px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0 6px; border: 1px solid var(--ts-line); border-radius: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-3)">/</kbd>
+</label>
+<div style="flex-grow: 1"></div>
+<a href="#" style="height: 38px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: var(--ts-text-2); text-decoration: none; font-size: 14px; font-weight: 500">Following</a>
+<button type="button" aria-label="Notifications" style="width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 9px; background: transparent; color: var(--ts-text-2); cursor: pointer">
+<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 1.5h-13z"></path><path d="M8.3 17.2a1.9 1.9 0 0 0 3.4 0"></path></svg>
+</button>
+<button type="button" aria-haspopup="menu" style="height: 38px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; border: 1px solid var(--ts-line); border-radius: 9px; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"></path></svg>New<svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="stroke: var(--ts-text-3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg></button>
+<button type="button" aria-label="Account menu, Leo Botinelly" aria-haspopup="menu" style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 4px; border: 0; border-radius: 22px; background: transparent; color: var(--ts-text-3); cursor: pointer">
+<img src="assets/avatar-leo-botinelly.png" alt="" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: block">
+<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
+</button>
+</header>
+
+<nav aria-label="You are here" style="position: relative; height: 48px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 32px; border-bottom: 1px solid var(--ts-line); font-family: 'IBM Plex Mono', monospace; font-size: 13px">
+<span aria-hidden="true" style="position: absolute; left: 45.5px; top: -15px; width: 20px; height: 39px; box-sizing: border-box; border-left: 1px solid var(--ts-connector); border-bottom: 1px solid var(--ts-connector); border-bottom-left-radius: 10px"></span>
+<button type="button" aria-haspopup="menu" aria-label="Articles About Everything, switch Tangent" style="height: 32px; margin-left: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">
+<span style="width: 18px; height: 18px; flex-shrink: 0; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column"><img src="assets/cover-blueprint-exchange.png" alt="" style="width: 18px; height: 16px; object-fit: cover; display: block"><span style="height: 2px; background: var(--ts-tangent-amber)"></span></span>
+Articles About Everything
+<svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="stroke: var(--ts-text-3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
+</button>
+<span aria-hidden="true" style="color: var(--ts-text-3)">/</span>
+<span aria-current="page" style="max-width: 360px; padding: 0 6px; color: var(--ts-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">MCP 2026-07-28: The Kid Looks Adorable in a Tuxedo</span>
+<span style="height: 20px; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; border: 1px dashed var(--ts-connector); border-radius: 4px; font-family: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ts-text-3)">Draft</span>
+<span style="flex-grow: 1"></span>
+<div style="display: flex; align-items: center; gap: 8px; font-family: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif">
+<span role="status" style="display: flex; align-items: center; gap: 6px; margin-right: 6px; font-size: 12.5px; color: var(--ts-text-3)"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"></path></svg>Saved 8:52 AM</span>
+<button type="button" style="height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--ts-line); border-radius: 8px; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 10s2.8-5.5 7.5-5.5 7.5 5.5 7.5 5.5-2.8 5.5-7.5 5.5S2.5 10 2.5 10z"></path><circle cx="10" cy="10" r="2.3"></circle></svg>Preview</button>
+<button type="button" aria-haspopup="dialog" aria-expanded="true" aria-controls="publish-panel" style="height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 13px; border: 0; border-radius: 8px; background: var(--ts-accent); color: var(--ts-on-accent); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 0 0 3px var(--ts-accent-soft)">Publish<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12l4-4 4 4"></path></svg></button>
+</div>
+</nav>
+
+<div style="flex-grow: 1; min-height: 0; display: flex; justify-content: center">
+<div style="width: 952px; display: flex; gap: 56px">
+
+<nav aria-label="Outline" style="width: 216px; flex-shrink: 0; padding-top: 40px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ts-text-3)">Outline</div>
+<ol style="list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; border-left: 1px solid var(--ts-line)">
+<li><a href="#" aria-current="location" style="margin-left: -1px; display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 14px; border-left: 2px solid var(--ts-accent); color: var(--ts-text); text-decoration: none; font-family: 'Newsreader', Georgia, serif; font-size: 15px; font-weight: 500"><span style="width: 10px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ts-accent)">1</span>The draft</a></li>
+<li><a href="#" style="margin-left: -1px; display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 14px; border-left: 2px solid transparent; color: var(--ts-text-2); text-decoration: none; font-family: 'Newsreader', Georgia, serif; font-size: 15px"><span style="width: 10px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ts-text-3)">2</span>Born at home</a></li>
+<li><a href="#" style="margin-left: -1px; display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 14px; border-left: 2px solid transparent; color: var(--ts-text-2); text-decoration: none; font-family: 'Newsreader', Georgia, serif; font-size: 15px"><span style="width: 10px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ts-text-3)">3</span>What grew up</a></li>
+<li><a href="#" style="margin-left: -1px; display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 14px; border-left: 2px solid transparent; color: var(--ts-text-2); text-decoration: none; font-family: 'Newsreader', Georgia, serif; font-size: 15px"><span style="width: 10px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ts-text-3)">4</span>The scene</a></li>
+<li><a href="#" style="margin-left: -1px; display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 14px; border-left: 2px solid transparent; color: var(--ts-text-2); text-decoration: none; font-family: 'Newsreader', Georgia, serif; font-size: 15px"><span style="width: 10px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ts-text-3)">5</span>In defense of the crack</a></li>
+<li><a href="#" style="margin-left: -1px; display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 14px; border-left: 2px solid transparent; color: var(--ts-text-2); text-decoration: none; font-family: 'Newsreader', Georgia, serif; font-size: 15px"><span style="width: 10px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ts-text-3)">6</span>What the crack deserves</a></li>
+</ol>
+<div style="margin-top: 16px; font-size: 12.5px; color: var(--ts-text-3)">1,612 words · 7 min read</div>
+
+<div style="margin-top: 30px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ts-text-3)">Before publishing</div>
+<ul style="list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+<li style="display: flex; align-items: center; gap: 9px; color: var(--ts-text-2)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"></path></svg>Title and cover</li>
+<li style="display: flex; align-items: center; gap: 9px; color: var(--ts-text-2)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"></path></svg>Links work</li>
+<li style="display: flex; align-items: flex-start; gap: 9px; color: var(--ts-text)"><span aria-hidden="true" style="width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ts-accent); color: var(--ts-on-accent); font-size: 11px; font-weight: 800">!</span><span style="display: flex; flex-direction: column; line-height: 1.35"><span style="font-weight: 600">The cover has no description</span><a href="#desc" style="margin-top: 2px; color: var(--ts-accent); font-size: 12.5px; font-weight: 600">Describe it</a></span></li>
+</ul>
+</nav>
+
+<div style="width: 680px; flex-shrink: 0; min-height: 0; overflow: hidden; padding-top: 36px">
+<div role="textbox" aria-label="Title" style="font-family: 'Newsreader', Georgia, serif; font-size: 46px; font-weight: 500; line-height: 1.06; letter-spacing: -0.022em; color: var(--ts-text)">MCP 2026-07-28: The Kid Looks Adorable in a Tuxedo</div>
+<div role="textbox" aria-label="Subtitle, optional" style="margin-top: 10px; font-family: 'Newsreader', Georgia, serif; font-style: italic; font-size: 20px; line-height: 1.4; color: var(--ts-text-3)">Add a subtitle</div>
+
+<figure style="margin: 26px 0 0">
+<div style="position: relative; border-radius: 6px; overflow: hidden">
+<img src="assets/article-mcp-suit.jpg" alt="" style="width: 680px; height: 250px; object-fit: cover; object-position: 50% 42%; display: block">
+<span style="position: absolute; left: 12px; top: 12px; height: 26px; display: flex; align-items: center; padding: 0 9px; border-radius: 6px; background: rgba(17, 16, 14, 0.74); color: #f3eee3; font-size: 11.5px; font-weight: 600">Cover · shown in lists and link previews</span>
+<span style="position: absolute; right: 12px; top: 12px; display: flex; gap: 6px">
+<button type="button" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: rgba(17, 16, 14, 0.74); color: #f3eee3; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer">Replace</button>
+<button type="button" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: rgba(17, 16, 14, 0.74); color: #f3eee3; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer">Remove</button>
+</span>
+</div>
+<figcaption style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px">
+<label id="desc" style="height: 34px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px dashed var(--ts-accent-line); border-radius: 8px; background: transparent; color: var(--ts-text-2)">
+<span style="flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--ts-accent)">Description</span>
+<input type="text" placeholder="What’s in the picture, for people who can’t see it" style="flex-grow: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 13px; outline: none">
+</label>
+<span style="font-family: 'Newsreader', Georgia, serif; font-style: italic; font-size: 15px; line-height: 1.5; color: var(--ts-text-2)">A real suit, properly made, in a very small size. The tie is knotted correctly; the sleeves are optimistic.</span>
+<span style="font-size: 12px; color: var(--ts-text-3)">Photo by Marko Milivojevic, via <span style="text-decoration: underline; text-underline-offset: 3px">Pixnio</span>, CC0</span>
+</figcaption>
+</figure>
+
+<div role="textbox" aria-multiline="true" aria-label="Article" style="margin-top: 30px; font-family: 'Newsreader', Georgia, serif; font-size: 19px; line-height: 1.65; color: var(--ts-text)">
+<h2 style="margin: 0 0 12px; font-size: 30px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em">The draft</h2>
+<p style="margin: 0 0 20px; font-size: 22px; line-height: 1.45; font-style: italic; color: var(--ts-text-2)"><span style="color: var(--ts-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px">The new MCP revision</span> landed a few days ago, and you know what? It’s a pretty good read.</p>
+<p style="margin: 0">If you run infrastructure for a living, you’d have enjoyed it too, because this revision is the moment agent plumbing became <span style="position: relative; display: inline-block"><em style="background: var(--ts-selection); box-shadow: 0 0 0 2px var(--ts-selection)">boring</em><span role="toolbar" aria-label="Format selection" style="position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 9px; background: var(--ts-text); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); font-family: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif; font-style: normal; line-height: 1">
+<button type="button" aria-label="Bold" aria-pressed="false" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--ts-page); font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer">B</button>
+<button type="button" aria-label="Italic" aria-pressed="true" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: var(--ts-toolbar-on); color: var(--ts-page); font-family: 'Newsreader', Georgia, serif; font-size: 16px; font-style: italic; font-weight: 600; cursor: pointer">I</button>
+<button type="button" aria-label="Link" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--ts-page); cursor: pointer"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8.6 11.4l2.8-2.8"></path><path d="M10.9 6.7l1.3-1.3a3.1 3.1 0 0 1 4.4 4.4l-1.3 1.3"></path><path d="M9.1 13.3l-1.3 1.3a3.1 3.1 0 0 1-4.4-4.4l1.3-1.3"></path></svg></button>
+<span aria-hidden="true" style="width: 1px; height: 18px; margin: 0 3px; background: var(--ts-text-3)"></span>
+<button type="button" aria-label="Heading" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--ts-page); font-family: 'Newsreader', Georgia, serif; font-size: 16px; font-weight: 700; cursor: pointer">H</button>
+<button type="button" aria-label="Quote" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--ts-page); font-family: 'Newsreader', Georgia, serif; font-size: 22px; font-weight: 600; cursor: pointer">“</button>
+<button type="button" aria-label="Code" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--ts-page); cursor: pointer"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6l-4 4 4 4"></path><path d="M13 6l4 4-4 4"></path></svg></button>
+</span></span> - and I mean that as the highest compliment I can pay as a professional. So let’s talk about it - where this thing came from, what grew up last week, and then about the crack.</p>
+<h2 style="margin: 40px 0 12px; font-size: 30px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em">Born at home</h2>
+<p style="margin: 0">A quick step back, for anyone who’s been nodding along politely: MCP (<span style="color: var(--ts-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px">the Model Context Protocol</span>) is the plug standard for AI agents.</p>
+</div>
+</div>
+
+</div>
+</div>
+
+<section id="publish-panel" role="dialog" aria-labelledby="publish-title" style="position: absolute; top: 114px; right: 32px; width: 376px; box-sizing: border-box; padding: 18px; border: 1px solid var(--ts-line); border-radius: 12px; background: var(--ts-raised); box-shadow: 0 18px 48px rgba(20, 16, 10, 0.18), 0 2px 6px rgba(20, 16, 10, 0.08)">
+<span aria-hidden="true" style="position: absolute; top: -6px; right: 34px; width: 10px; height: 10px; box-sizing: border-box; border-left: 1px solid var(--ts-line); border-top: 1px solid var(--ts-line); background: var(--ts-raised); transform: rotate(45deg)"></span>
+<h2 id="publish-title" style="margin: 0; font-size: 16px; font-weight: 700; line-height: 1.3">Publish to Articles About Everything</h2>
+
+<fieldset style="margin: 16px 0 0; padding: 0; border: 0; min-width: 0">
+<legend style="padding: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ts-text-3)">Who can read</legend>
+<label style="margin-top: 10px; display: flex; gap: 12px; padding: 12px; border: 1px solid var(--ts-accent-line); border-radius: 10px; background: var(--ts-accent-soft); cursor: pointer">
+<input type="radio" name="audience" checked style="width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ts-accent)">
+<span style="display: flex; flex-direction: column; gap: 2px; line-height: 1.35">
+<span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="M3 10h14"></path><path d="M10 3c2.2 2 3.2 4.4 3.2 7s-1 5-3.2 7c-2.2-2-3.2-4.4-3.2-7s1-5 3.2-7z"></path></svg>Public<span style="font-size: 12px; font-weight: 500; color: var(--ts-text-3)">· inherited from the Tangent</span></span>
+<span style="font-size: 12.5px; color: var(--ts-text-2)">Anyone on the web can read it.</span>
+</span>
+</label>
+<label style="margin-top: 8px; display: flex; gap: 12px; padding: 12px; border: 1px solid var(--ts-line); border-radius: 10px; cursor: pointer">
+<input type="radio" name="audience" style="width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ts-accent)">
+<span style="display: flex; flex-direction: column; gap: 2px; line-height: 1.35">
+<span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600"><svg width="13" height="13" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M13 5.4A11 11 0 1 0 19 5.4"></path><circle cx="16" cy="17" r="4" fill="currentColor" stroke="none"></circle></svg>Admitted</span>
+<span style="font-size: 12.5px; color: var(--ts-text-2)">Only people admitted to this Tangent. Can’t go to Bluesky.</span>
+</span>
+</label>
+</fieldset>
+
+<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--ts-line)">
+<label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer">
+<input type="checkbox" checked style="width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ts-accent)">
+<span style="display: flex; flex-direction: column; gap: 2px; line-height: 1.35"><span style="font-size: 14px; font-weight: 600">Also post to Bluesky</span><span style="font-size: 12.5px; color: var(--ts-text-2)">A link to the article, as @leo.sylin.org</span></span>
+</label>
+<div aria-label="Bluesky preview" style="margin: 12px 0 0 26px; display: flex; border: 1px solid var(--ts-line); border-radius: 10px; overflow: hidden; background: var(--ts-surface)">
+<img src="assets/article-mcp-suit.jpg" alt="" style="width: 78px; height: 78px; flex-shrink: 0; object-fit: cover; display: block">
+<span style="min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 12px; line-height: 1.3"><span style="font-size: 13px; font-weight: 600">MCP 2026-07-28: The Kid Looks Adorable in a Tuxedo</span><span style="font-size: 11.5px; color: var(--ts-text-3)">tangent.sylin.org</span></span>
+</div>
+</div>
+
+<div style="margin-top: 18px; display: flex; align-items: center; justify-content: flex-end; gap: 8px">
+<button type="button" style="height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--ts-text-2); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Cancel</button>
+<button type="button" style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--ts-accent); color: var(--ts-on-accent); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Publish</button>
+</div>
+</section>
+
+</div>
+</main>
+</body>
+</html>

@@ -3,7 +3,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Tangent.Community;
-using Tangent.Community;
 using Tangent.Stewardship;
 using Tangent.Spaces;
 

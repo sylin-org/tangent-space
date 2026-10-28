@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Tangent.Identity;
 
-/// <summary>The inbound MCP proof-exchange endpoint. Accepts only a short-lived AT service-auth JWT
+/// <summary>The identity proof-exchange endpoint. Accepts only a short-lived AT service-auth JWT
 /// in the Authorization header; account credentials never appear in model tool arguments or this body.</summary>
-[ApiController, AllowAnonymous, Route(McpAuthenticationConstants.TokenRoute), RequestSizeLimit(8192)]
+[ApiController, AllowAnonymous, Route(ServiceAuthenticationConstants.TokenRoute), RequestSizeLimit(8192)]
 public sealed class ServiceProofTokenController(ServiceProofExchange exchange, ILogger<ServiceProofTokenController> logger) : ControllerBase
 {
     [HttpPost]
@@ -20,14 +20,14 @@ public sealed class ServiceProofTokenController(ServiceProofExchange exchange, I
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception error)
         {
-            logger.LogError(error, "MCP proof exchange failed unexpectedly: {FailureType}", error.GetType().Name);
+            logger.LogError(error, "Service proof exchange failed unexpectedly: {FailureType}", error.GetType().Name);
             return StatusCode(StatusCodes.Status500InternalServerError, new { error = "exchange_failed" });
         }
         return result.Status switch
         {
             ServiceProofExchangeStatus.Issued => Ok(new
             {
-                profile = McpAuthenticationConstants.Profile,
+                profile = ServiceAuthenticationConstants.Profile,
                 credential = result.Issued!.Credential,
                 token = result.Issued.Token
             }),

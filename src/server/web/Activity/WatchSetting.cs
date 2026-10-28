@@ -17,15 +17,15 @@ public sealed class WatchSetting : Entity<WatchSetting>
 
     // Namespaced so topic watch state can never collide with read positions or Tangent-wide defaults,
     // even when a topic and a Tangent share the same key.
-    public static string Key(string participantDid, string roomKey)
-        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("watch\n" + participantDid + "\n" + roomKey)));
+    public static string Key(string participantDid, string topicKey)
+        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("watch\n" + participantDid + "\n" + topicKey)));
 
-    public static WatchSetting Choose(string participantDid, string roomKey, WatchMode mode, string actorDid, DateTimeOffset now)
+    public static WatchSetting Choose(string participantDid, string topicKey, WatchMode mode, string actorDid, DateTimeOffset now)
     {
         if (!Enum.IsDefined(mode)) throw new InvalidOperationException("Choose all, replies, or none.");
         return new WatchSetting
         {
-            Id = Key(participantDid, roomKey), ParticipantId = participantDid, TopicKey = roomKey,
+            Id = Key(participantDid, topicKey), ParticipantId = participantDid, TopicKey = topicKey,
             Mode = mode, ChangedByParticipantId = actorDid, ChangedAt = now
         };
     }

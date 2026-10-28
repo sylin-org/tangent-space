@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Koan.Jobs;
 using Tangent.Activity;
 using Tangent.Infrastructure;
 using Tangent.Application;
@@ -10,20 +11,22 @@ namespace Tangent.Community;
 public sealed partial class ParticipantGovernance
 {
     /// <summary>Personal interest only: never joins, never changes admission, never touches read positions or access.</summary>
-    public async Task<WatchResult> SetWatch(string actorId, string roomKey, WatchMode mode, CancellationToken ct)
+    public async Task<WatchResult> SetWatch(string actorId, string topicKey, WatchMode mode, CancellationToken ct)
     {
         await gate.Enter(ct);
         try
         {
             using var fresh = EntityContext.NoCache();
             using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var (topic, policy) = await TopicWithPolicy(actorId, roomKey, null, ct);
+            var read = await topics.ReadAsync(actorId, topicKey, ct);
+            var policy = read.Policy;
             if (!policy.CanRead)
                 throw new TangentRuleViolation(TangentDenial.Forbidden, "Watch state needs read access to the topic.");
-            var setting = WatchSetting.Choose(actorId, roomKey, mode, actorId, clock.GetUtcNow());
+            var setting = WatchSetting.Choose(actorId, topicKey, mode, actorId, clock.GetUtcNow());
             await setting.Save(ct);
+            await new CompileTopicAttention { Id = topicKey, TopicKey = topicKey }.Job.Submit(action: "", ct);
             await EntityContext.Commit(ct);
-            return new WatchResult(roomKey, setting.Mode);
+            return new WatchResult(topicKey, setting.Mode);
         }
         finally { gate.Exit(); }
     }

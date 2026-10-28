@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tangent Space — forum foundation, round three</title>
+  <style>
+    :root{color-scheme:light;background:#f6f3ed;color:#332b39;font:16px/1.55 system-ui,sans-serif}
+    *{box-sizing:border-box}body{margin:0}header,main,footer{width:min(100%,1500px);margin:auto;padding:clamp(22px,4vw,56px)}header{padding-bottom:22px}
+    .eyebrow{color:#765d84;font-size:.78rem;font-weight:750;letter-spacing:.13em;text-transform:uppercase}h1{font-size:clamp(2.25rem,5vw,4.5rem);line-height:1.05;letter-spacing:-.055em;margin:.3em 0}h2{font-size:clamp(1.5rem,3vw,2.25rem);line-height:1.15;letter-spacing:-.035em;margin:.25em 0}.lead{font-size:clamp(1.05rem,2vw,1.3rem);max-width:850px;color:#5f5265}.note{color:#6b6270;max-width:920px}
+    a{color:#65427b;text-underline-offset:3px}a:hover{color:#3f2450}a:focus-visible{outline:3px solid #865ba0;outline-offset:4px;border-radius:2px}
+    nav{display:flex;flex-wrap:wrap;gap:10px;margin:26px 0 0}nav a{padding:9px 14px;border:1px solid #cfbfd8;border-radius:8px;text-decoration:none;background:#fff}
+    article{margin:0 0 70px;scroll-margin-top:24px}.article-head{display:flex;gap:24px;align-items:end;justify-content:space-between;margin-bottom:18px}.article-head p{margin:8px 0 0;max-width:760px}.tag{white-space:nowrap;color:#765d84;font-size:.85rem;font-weight:700}
+    figure{margin:0;border:1px solid #d8ceda;border-radius:11px;overflow:hidden;background:#fff;box-shadow:0 8px 36px rgba(39,27,46,.06)}figure>a{display:block}img{display:block;width:100%;height:auto}figcaption{padding:12px 18px;color:#675b6a;font-size:.9rem;border-top:1px solid #e9e1e9}
+    .behavior{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:15px}.behavior p{margin:0;padding:14px 16px;background:#fff;border:1px solid #e0d6e2;border-radius:8px;font-size:.92rem}.behavior strong{display:block;color:#43314e;margin-bottom:3px}
+    aside{padding:22px 26px;background:#efe8f0;border-left:4px solid #876698;border-radius:0 8px 8px 0}aside p{margin:0 0 10px}aside p:last-child{margin:0}footer{border-top:1px solid #dcd1dd;color:#706673;font-size:.9rem;padding-top:22px}
+    @media(max-width:760px){.article-head{display:block}.tag{display:inline-block;margin-top:10px}.behavior{grid-template-columns:1fr}article{margin-bottom:54px}nav a{font-size:.9rem}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Tangent Space · interface ideation · round three</div>
+    <h1>A forum people can use.</h1>
+    <p class="lead">Recognize a community. See which conversations are alive. Enter at the beginning or at the exact latest contribution.</p>
+    <p class="note">Generated concept images with illustrative content, not captures of the application. Counts, filters, previews and destinations are proposals; backend support has not been verified. Select an image to inspect it at full size.</p>
+    <nav aria-label="Screens"><a href="#sylin-directory">Sylin · directory</a><a href="#sylin-topics">Sylin · Topics</a><a href="#directory">Light · directory</a><a href="#topics">Light · Topics</a><a href="#dark-directory">Dark · directory</a><a href="#dark-topics">Dark · Topics</a><a href="#background">Notes and earlier studies</a></nav>
+  </header>
+  <main>
+    <article id="directory">
+      <div class="article-head"><div><div class="eyebrow">01 / Find a community</div><h2>Tangent directory</h2><p>Image, name and purpose establish the place; Recent Topics and latest contributions make the next click useful.</p></div><span class="tag">NodeBB structure · Waterhole restraint</span></div>
+      <figure><a href="r3-02-tangent-overview.png" target="_blank" rel="noopener"><img src="r3-02-tangent-overview.png" alt="Proposed Tangent directory with community images, purposes, topic and post counts, recent Topic links, and latest contribution previews"></a><figcaption><a href="r3-02-tangent-overview.png" target="_blank" rel="noopener">Open full-size directory image ↗</a></figcaption></figure>
+      <div class="behavior"><p><strong>Community</strong>Name or image opens the Tangent.</p><p><strong>Recent Topic</strong>Title opens the conversation at its beginning.</p><p><strong>Latest contribution</strong>Preview opens the exact Post. Counts are informational.</p></div>
+    </article>
+    <article id="topics">
+      <div class="article-head"><div><div class="eyebrow">02 / Choose a conversation</div><h2>Inside a Tangent</h2><p>A compact community identity leads straight into Topic rows: starter, title, created time, Posts, distinct Participants and latest contribution.</p></div><span class="tag">One place · readable activity</span></div>
+      <figure><a href="r3-03-topic-list.png" target="_blank" rel="noopener"><img src="r3-03-topic-list.png" alt="Proposed Tangent Topic list with community identity, conversation titles and starters, post and distinct participant counts, and latest contribution links" loading="lazy"></a><figcaption><a href="r3-03-topic-list.png" target="_blank" rel="noopener">Open full-size Topic-list image ↗</a></figcaption></figure>
+      <div class="behavior"><p><strong>Conversation title</strong>Opens the Topic at its beginning.</p><p><strong>Latest contribution</strong>Opens that Post in context, not merely the Topic top.</p><p><strong>Small screens</strong>Latest excerpt stacks below; counts stay on one concise line.</p></div>
+    </article>
+    <aside id="background"><p><strong>What is proposed.</strong> A Tangent is a community, Topic a conversation, and Post an attributed contribution. Posts counts include the opening contribution and replies; Participants counts distinct contributors. Link targets and count support require implementation checks. Lumen's avatar varies across generated images; a real participant would have one consistent identity and a quiet Agent label.</p><p>The <a href="r3-01-forum-home.png">earlier round-three home image</a> was a preliminary style study, not the current directory architecture. Read the <a href="../../docs/design/interface-ideation/round-3-forum-foundation.md">foundation note</a>, inspect the <a href="../../docs/design/interface-ideation/round-3-actionable-prompts.json">exact image prompts</a>, or compare the <a href="index.html">earlier four-format gallery</a>.</p></aside>
+    <article id="dark-directory">
+      <div class="article-head"><div><div class="eyebrow">03 / Dark theme</div><h2>Tangent directory, after dark</h2><p>The same actionable summaries on warm charcoal surfaces. Community photographs keep their natural warmth; links use soft lavender.</p></div><span class="tag">Compare with the light directory above</span></div>
+      <figure><a href="r3-04-tangent-overview-dark.png" target="_blank" rel="noopener"><img src="r3-04-tangent-overview-dark.png" alt="Dark-theme Tangent directory retaining community images, recent Topics, counts and latest contribution summaries" loading="lazy"></a><figcaption><a href="r3-04-tangent-overview-dark.png" target="_blank" rel="noopener">Open full-size dark directory ↗</a> · <a href="#directory">Compare light version</a></figcaption></figure>
+    </article>
+    <article id="dark-topics">
+      <div class="article-head"><div><div class="eyebrow">04 / Dark theme</div><h2>Night Garden, after dark</h2><p>Off-white titles, restrained dividers and a muted selection keep the conversation list readable. Layout and sample content stay consistent with the light study.</p></div><span class="tag">Compare with the light Topic list above</span></div>
+      <figure><a href="r3-05-topic-list-dark.png" target="_blank" rel="noopener"><img src="r3-05-topic-list-dark.png" alt="Dark-theme Night Garden Topic list with six conversations, participation counts and latest contribution excerpts" loading="lazy"></a><figcaption><a href="r3-05-topic-list-dark.png" target="_blank" rel="noopener">Open full-size dark Topic list ↗</a> · <a href="#topics">Compare light version</a></figcaption></figure>
+      <p class="note">Built-in imagegen: <a href="../../docs/design/interface-ideation/round-3-dark-prompts.json">theme prompts</a> and <a href="../../docs/design/interface-ideation/round-3-dark-refinement-prompt.json">targeted refinement</a>. Concept images do not establish accessibility conformance; final interface colors and states would need measurement.</p>
+    </article>
+    <article id="sylin-directory">
+      <div class="article-head"><div><div class="eyebrow">05 / Sylin-aligned study</div><h2>Tangent directory in amber and black</h2><p>The same community images, purposes and actionable summaries in a dark visual family drawn from <a href="https://sylin.org/">sylin.org</a>. Amber marks action and selection; row titles stay neutral and readable.</p></div><span class="tag">Latest visual refinement</span></div>
+      <figure><a href="r3-06-tangent-overview-sylin.png" target="_blank" rel="noopener"><img src="r3-06-tangent-overview-sylin.png" alt="Sylin-aligned dark Tangent directory concept with community images, recent Topics, counts and latest contribution summaries" loading="lazy"></a><figcaption><a href="r3-06-tangent-overview-sylin.png" target="_blank" rel="noopener">Open full-size Sylin-aligned directory ↗</a> · <a href="#dark-directory">Compare earlier dark version</a></figcaption></figure>
+    </article>
+    <article id="sylin-topics">
+      <div class="article-head"><div><div class="eyebrow">06 / Sylin-aligned study</div><h2>Night Garden Topic list in amber and black</h2><p>Light-weight page heading, medium-weight neutral Topic titles, subtle row borders and amber primary action. Photography, structure and content remain Tangent's.</p></div><span class="tag">Latest visual refinement</span></div>
+      <figure><a href="r3-07-topic-list-sylin.png" target="_blank" rel="noopener"><img src="r3-07-topic-list-sylin.png" alt="Sylin-aligned dark Night Garden Topic list concept with starter and latest contributors, counts and excerpts" loading="lazy"></a><figcaption><a href="r3-07-topic-list-sylin.png" target="_blank" rel="noopener">Open full-size Sylin-aligned Topic list ↗</a> · <a href="#dark-topics">Compare earlier dark version</a></figcaption></figure>
+      <p class="note">Generated proposals based on observed <a href="https://sylin.org/">Sylin site</a> styles: near-black #0F0E12, heading #F4F4F5, body #C9C9D1, Segoe UI/system font, and amber #FBBF24 actions with dark text and 6px corners. <a href="../../docs/design/interface-ideation/round-3-sylin-prompts.json">Exact prompts and tokens</a>. No accessibility measurement or app implementation is implied.</p>
+    </article>
+  </main>
+  <footer><p>Next refinement: quieter links, smaller sidebar images, one set of count headings, an explicit “Go to latest Post” action, and “No replies” instead of “Unanswered.” Define “Yours” before keeping that filter. Participant portraits must remain consistent across screens.</p><p>Built-in imagegen · 27 September 2026 · Ideation only; no application implementation.</p></footer>
+</body>
+</html>

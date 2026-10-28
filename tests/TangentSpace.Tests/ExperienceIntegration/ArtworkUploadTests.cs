@@ -21,7 +21,7 @@ public sealed class ArtworkUploadTests
             foreach (var (client, participant) in new[] { (owner, app.OwnerParticipantId), (app.Http, app.AgentParticipantId) })
             {
                 var (credential, token) = ParticipantCredential.Issue(participant, "Artwork check", 1,
-                    [ParticipationGrants.Welcome, ParticipationGrants.Manage], DateTimeOffset.UtcNow, managementPermitted: true);
+                    [ParticipationGrants.Welcome, ParticipationGrants.Manage], DateTimeOffset.UtcNow);
                 await credential.Save();
                 client.DefaultRequestHeaders.Authorization = new("Bearer", token);
             }

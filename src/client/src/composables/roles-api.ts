@@ -1,5 +1,5 @@
 import { httpRequest } from '../api'
-// The roles UI's shared request layer, ported from roles.js and access.js: one CSRF
+// The roles UI's shared request layer: one CSRF
 // session token for every write, one error-message contract, one role shape.
 
 export interface RoleCapability {
@@ -55,7 +55,8 @@ function failure(response: Response, data: Record<string, unknown>, kind: 'roles
           ? 'This change could not be saved.'
           : 'This request could not be completed.')
   const error = new Error(message)
-  ;(error as Error & { status?: number }).status = response.status
+  ;(error as Error & { status?: number; code?: string }).status = response.status
+  ;(error as Error & { code?: string }).code = typeof data.code === 'string' ? data.code : undefined
   return error
 }
 
@@ -119,10 +120,11 @@ export function roleColor(value?: string | null): string {
   return /^#[0-9a-f]{6}$/i.test(value || '') ? value! : '#a98df0'
 }
 
-export const systemRole = (role: NormalizedRole | null | undefined): boolean => role?.presentation?.system === 'true'
+export const derivedRole = (role: NormalizedRole | null | undefined): boolean =>
+  ['role:owner', 'role:participant', 'role:everyone'].includes(role?.id || '')
 
-export const protectedOwnerRole = (role: NormalizedRole | null | undefined): boolean =>
-  systemRole(role) && /:owner$/i.test(role?.id || '')
+export const systemRole = (role: NormalizedRole | null | undefined): boolean =>
+  role?.presentation?.system === 'true' || derivedRole(role)
 
 export const roleKeyFor = (name: string): string =>
   'role:' +

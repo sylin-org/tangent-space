@@ -17,6 +17,7 @@ export interface SiteParticipant {
 export interface Site {
   name: string
   established: boolean
+  workspaceAvailable?: boolean
   signIn: string
   signOut: string | null
   participant: SiteParticipant | null
@@ -34,12 +35,15 @@ export interface ServerPermissions {
 export interface ServerView {
   name?: string
   byline?: string
+  markImageUrl?: string
+  accent?: string
   coverImageUrl?: string
   welcomeMessage?: string
   motd?: string
   allowAgentTangentOwnership?: boolean
   role?: string
   canManage?: boolean
+  canManageParticipants?: boolean
   permissions?: ServerPermissions | Array<{ role?: string; scope?: string; allowedActions?: string[] }>
   backgroundScene?: string
   backgroundColor?: string
@@ -83,7 +87,7 @@ function parseSite(payload: unknown): Site | null {
   const initialTangent = initial && ['audience', 'audienceDescription', 'admission', 'admissionDescription'].every(key => typeof initial[key] === 'string')
     ? initial as unknown as Site['initialTangent'] : undefined
   if (p.participant === undefined || p.participant === null) {
-    return { name: p.name, established: p.established, signIn: p.signIn, signOut: null, participant: null, onboarding: typeof p.onboarding === 'string' ? p.onboarding : undefined, initialTangent }
+    return { name: p.name, established: p.established, workspaceAvailable: p.workspaceAvailable !== false, signIn: p.signIn, signOut: null, participant: null, onboarding: typeof p.onboarding === 'string' ? p.onboarding : undefined, initialTangent }
   }
   if (typeof p.participant !== 'object') return null
   const participant = p.participant as Record<string, unknown>
@@ -94,6 +98,7 @@ function parseSite(payload: unknown): Site | null {
   return {
     name: p.name,
     established: p.established,
+    workspaceAvailable: p.workspaceAvailable !== false,
     signIn: p.signIn,
     signOut: isAllowedPath(p.signOut, SIGN_OUT_PATH) ? p.signOut : null,
     participant: {
@@ -113,8 +118,11 @@ function parseSite(payload: unknown): Site | null {
 export const useSite = defineStore('site', {
   state: () => ({
     state: 'loading' as SiteState,
+    authorizationFailure: null as 401 | 403 | null,
     site: null as Site | null,
     server: null as ServerView | null,
+    siteLoadVersion: 0,
+    serverLoadVersion: 0,
     announcement: '',
   }),
   getters: {
@@ -128,6 +136,8 @@ export const useSite = defineStore('site', {
   },
   actions: {
     async load() {
+      const loadVersion = ++this.siteLoadVersion
+      this.authorizationFailure = null
       this.state = 'loading'
       this.announcement = 'Loading the welcome.'
       try {
@@ -136,9 +146,14 @@ export const useSite = defineStore('site', {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
         })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status })
         const site = parseSite(await response.json())
         if (!site) throw new Error('Unexpected site payload')
+        if (loadVersion !== this.siteLoadVersion) return
+        if (this.site?.participant?.participantRef !== site.participant?.participantRef || site.workspaceAvailable === false) {
+          this.server = null
+          this.serverLoadVersion++
+        }
         this.site = site
         if (!site.established && useRouter().route.kind === 'home') {
           location.replace('/onboarding/')
@@ -146,13 +161,32 @@ export const useSite = defineStore('site', {
         }
         this.state = site.participant ? 'signedIn' : 'anonymous'
         this.announcement = site.participant ? 'You are signed in.' : 'Welcome. Sign in with your AT account to take part.'
-      } catch {
+        if (site.workspaceAvailable === false) return
+        const actor = site.participant?.participantRef ?? ''
+        const refresh = this.loadServer()
+        const serverVersion = this.serverLoadVersion
+        await refresh.catch(() => {
+          if (loadVersion === this.siteLoadVersion && serverVersion === this.serverLoadVersion
+            && actor === (this.site?.participant?.participantRef ?? '')) this.server = null
+        })
+      } catch (error) {
+        if (loadVersion !== this.siteLoadVersion) return
+        const status = (error as { status?: number }).status
+        if (status === 401 || status === 403) {
+          this.authorizationFailure = status
+          this.site = null
+          this.serverLoadVersion++
+        }
         this.state = 'error'
-        this.announcement = 'The welcome could not be loaded.'
+        this.server = null
+        this.announcement = this.authorizationFailure
+          ? 'Your current account or session cannot open this Space.' : 'The welcome could not be loaded.'
       }
     },
     /** The server's own details. Throws when the read fails. */
     async loadServer() {
+      const actor = this.site?.participant?.participantRef ?? ''
+      const version = ++this.serverLoadVersion
       const response = await httpRequest('/api/server', {
         credentials: 'same-origin',
         headers: { Accept: 'application/json' },
@@ -160,8 +194,10 @@ export const useSite = defineStore('site', {
       })
       const value = await response.json().catch(() => null)
       if (!response.ok || !value || typeof value !== 'object' || Array.isArray(value)) {
+        if (version === this.serverLoadVersion && actor === (this.site?.participant?.participantRef ?? '')) this.server = null
         throw new Error('Server settings could not be read.')
       }
+      if (version !== this.serverLoadVersion || actor !== (this.site?.participant?.participantRef ?? '')) return
       this.server = value
     },
   },

@@ -1,0 +1,19 @@
+<script setup lang="ts">
+import {ref,watch} from 'vue'
+import {rolesRequest} from '../composables/roles-api'
+import {registerSettingsChange} from '../composables/settings-changes'
+const props=defineProps<{actorKey:string;owner?:boolean;canReview?:boolean;active?:boolean;requestsOnly?:boolean}>()
+const mode=ref('Open'),saved=ref('Open'),admitted=ref(true),status=ref('none'),busy=ref(false),error=ref('')
+const requests=ref<{id:string;label:string;handle?:string;classification?:string}[]>([]),nextPage=ref<number|null>(null)
+let generation=0
+async function load(){const token=++generation;try{const data=await rolesRequest<{mode:string;admitted:boolean;status:string}>('/api/space/admission');if(token!==generation)return;mode.value=saved.value=data.mode;admitted.value=data.admitted;status.value=data.status;if((props.owner||props.canReview)&&props.active)await loadRequests()}catch(e){if(token===generation)error.value=(e as Error).message}}
+async function loadRequests(page=1){try{const data=await rolesRequest<{items:typeof requests.value;nextPage:number|null}>('/api/space/admission/requests?page='+page);requests.value=data.items;nextPage.value=data.nextPage}catch(e){error.value=(e as Error).message}}
+async function save(){const submitted=mode.value,token=generation;busy.value=true;error.value='';try{await rolesRequest('/api/space/admission',{method:'PATCH',body:{mode:submitted}});if(token===generation)saved.value=submitted}catch(e){if(token===generation)error.value=(e as Error).message}finally{if(token===generation)busy.value=false}}
+async function join(){busy.value=true;try{const data=await rolesRequest<{status:string}>('/api/space/admission/join',{method:'POST',body:{}});status.value=data.status;admitted.value=data.status==='accepted'}catch(e){error.value=(e as Error).message}finally{busy.value=false}}
+async function decide(id:string,accept:boolean){busy.value=true;try{await rolesRequest('/api/space/admission/requests/'+encodeURIComponent(id),{method:'POST',body:{accept}});await loadRequests()}catch(e){error.value=(e as Error).message}finally{busy.value=false}}
+watch(()=>props.actorKey,()=>{if(props.actorKey)void load()}, {immediate:true})
+watch(()=>props.active,value=>{if(value&&(props.owner||props.canReview))void loadRequests()})
+registerSettingsChange({label:'Joining the Space',count:()=>props.owner&&!props.requestsOnly&&mode.value!==saved.value?1:0,busy:()=>busy.value,save,discard:()=>{mode.value=saved.value},status:()=>error.value})
+</script>
+<template><section v-if="owner || canReview" class="space-joining"><template v-if="owner && !requestsOnly"><h3>Joining the Space</h3><p class="hint">Current participants keep their access. By request applies to new arrivals; public reading stays open.</p><div class="choice-row"><label><input v-model="mode" :disabled="busy" type="radio" value="Open"> Open</label><label><input v-model="mode" :disabled="busy" type="radio" value="Approval"> By request</label></div></template><template v-if="active"><h3 v-if="requests.length">Waiting to join</h3><div v-for="person in requests" :key="person.id" class="joining-request"><span>{{person.label}} <span v-if="person.classification === 'Agent'" class="agent-badge">Agent</span></span><button class="btn" :disabled="busy" @click="decide(person.id,true)">Admit</button><button class="btn" :disabled="busy" @click="decide(person.id,false)">Refuse</button></div><button v-if="nextPage" class="btn" @click="loadRequests(nextPage)">Next requests →</button></template></section><section v-else-if="!admitted" class="space-join-notice"><p>{{status==='pending'?'Your request to join is waiting for the Space owner.':status==='refused'?'Your request was refused. Contact the Space owner.':'Ask to join this Space before contributing.'}}</p><button v-if="status==='none'" class="btn btn-primary" :disabled="busy" @click="join">Request to join</button></section><p v-if="error" class="error" role="alert">{{error}}</p></template>
+

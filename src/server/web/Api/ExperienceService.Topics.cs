@@ -10,132 +10,97 @@ using Tangent.Stewardship;
 
 namespace Tangent.Api;
 
-/// <summary>The member-ring writes the connector's grammar has been waiting for. Authority is
-/// the domain's own: topic creation answers to the Tangent's access map, post changes to the
-/// Topic's own-post and moderator rules; these methods route the job and report what happened.
-/// requestId stays the idempotency key; a replay answers the recorded outcome, a different
-/// action under the same id a conflict.</summary>
+/// <summary>Topic and Post resource actions use the domain's current permission decisions.</summary>
 public sealed partial class ExperienceService
 {
-    /// <summary>Start a thread: create the Topic and its opening Post in one job. The topic key
-    /// is minted from the title plus a short hash of the requestId, so a retry after a lost
-    /// response lands on the same Topic instead of a duplicate.</summary>
-    public async Task<ExperienceResponse> StartThread(ClaimsPrincipal principal, string tangentKey,
-        string requestId, string title, string text, CancellationToken ct)
+    /// <summary>Start a Topic and its opening Post under a stable request identity. A partial
+    /// Topic-only save can resume; a changed title or opening Post under that identity conflicts.</summary>
+    public async Task<ResourceResult<ExperienceThreadData>> StartThread(ClaimsPrincipal principal, string tangentKey,
+        string requestId, string title, string text, CancellationToken ct, string? format = null, string? audience = null, string? subtitle = null)
     {
         var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Post);
-        var credential = CredentialOf(principal);
-        var identity = await IdentityOf(participantId, ct);
         TangentDescription? tangent;
         using (EntityContext.NoCache())
             tangent = await tangents.Describe(participantId, tangentKey, ct);
         if (tangent is null)
-            return Problem("start_thread", identity, ServerPlace(principal, await SiteLabel(ct)),
-                ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Tangent is not visible to your account."),
-                participantId: participantId, credential: credential, ct: ct);
+            return ResourceResult<ExperienceThreadData>.Failure(ExperienceProblem.Of(ExperienceProblemCodes.PermissionDenied, "That Tangent is not visible to your account."));
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > Community.TopicConstants.MaximumTitleLength)
             throw new ArgumentException("A thread title must contain 1–120 characters.", nameof(title));
+        if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128
+            || requestId.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_'))
+            throw new RequestArgumentException("requestId", "Use 1–128 letters, digits, hyphens or underscores.");
         PostContent.CheckText(text);
+        var contentFormat = PostContent.CheckFormat(format);
+        WindowPlanner.CheckContent(text, contentFormat);
+        TopicReadAudience? selectedAudience = audience switch { null => null, "Public" => TopicReadAudience.Public, "Restricted" => TopicReadAudience.Restricted, _ => throw new ArgumentException("Choose Public or Admitted.") };
         var cleanTitle = title.Trim();
-        // The topic key is minted from the title plus a hash of the requestId, so a retry after
-        // a lost response lands on the same Topic; the opening post carries the requestId as its
-        // operation id, so the same job replays its post instead of doubling it.
-        var topicKey = MintTopicKey(cleanTitle, requestId);
+        var cleanSubtitle = subtitle?.Trim() ?? "";
+        if (cleanSubtitle.Length > 240) throw new ArgumentException("A subtitle must fit within 240 characters.", nameof(subtitle));
+        var topicKey = MintTopicKey(participantId, tangentKey, requestId);
         try
         {
-            await tangents.CreateTopic(participantId, tangentKey, topicKey, cleanTitle, null, ct);
+            await tangents.CreateTopic(participantId, tangentKey, topicKey, cleanTitle, cleanSubtitle, ct, selectedAudience);
         }
         catch (TangentRuleViolation violated) when (violated.Denial == TangentDenial.AlreadyExists)
         {
-            // The deterministic key exists because this job's earlier attempt created it; the
-            // opening post below replays through its operation id.
+            using var fresh = EntityContext.NoCache();
+            var existing = await Topic.Get(topicKey, ct);
+            if (existing is null || existing.TangentKey != tangentKey
+                || existing.CreatorParticipantId != participantId || existing.Title != cleanTitle || existing.Description != cleanSubtitle
+                || selectedAudience is { } expectedAudience && existing.ReadAudience != expectedAudience)
+                throw new OperationConflictException(requestId);
         }
         catch (TangentRuleViolation violated) when (violated.Denial is TangentDenial.Forbidden or TangentDenial.NotFound)
         {
             throw new UnauthorizedAccessException(violated.Message);
         }
-        var post = await conversation.CreatePost(participantId, topicKey, new PostCreateRequest(requestId, text), ct);
+        var post = await conversation.CreatePost(participantId, topicKey, new PostCreateRequest(requestId, text, Format: format), ct);
         var topicRef = refs.Topic(tangentKey, topicKey);
         var data = new ExperienceThreadData(topicRef, refs.Tangent(tangentKey),
             refs.Post(tangentKey, topicKey, post.Id), cleanTitle,
             refs.Origin + "/tangents/" + tangentKey + "/posts/" + post.Id + "/");
-        var place = await TopicPlaceOf(principal, participantId, tangentKey, topicKey, ct);
-        return await Assemble("start_thread", ExperienceStatus.Ok, identity, place,
-            new ExperienceResult(data, new ExperienceReceipt(requestId, "completed", topicRef, null), null),
-            (await digest.Page(participantId, credential, null, tangentKey, topicKey, 3, ct)).Attention,
-            Empty(), [new(ExperienceActionNames.ReadTopic, topicRef, refs.Post(tangentKey, topicKey, post.Id), "Open the new thread")],
-            null, CapabilitiesOf(place), participantId, credential, ct);
+        return ResourceResult<ExperienceThreadData>.Success(data with { RequestId = requestId });
     }
 
-    public Task<ExperienceResponse> EditPost(ClaimsPrincipal principal, string postRef, string text, CancellationToken ct)
-        => ChangePost(principal, postRef, text, delete: false, "edit_post", ct);
+    public Task<ResourceResult<ExperiencePostData>> EditPost(ClaimsPrincipal principal, string postId, string text, CancellationToken ct, string? format = null)
+        => ChangePost(principal, postId, text, delete: false, ct, format);
 
-    public Task<ExperienceResponse> DeletePost(ClaimsPrincipal principal, string postRef, CancellationToken ct)
-        => ChangePost(principal, postRef, text: null, delete: true, "delete_post", ct);
+    public Task<ResourceResult<ExperiencePostData>> DeletePost(ClaimsPrincipal principal, string postId, CancellationToken ct)
+        => ChangePost(principal, postId, text: null, delete: true, ct, format: null);
 
-    /// <summary>The connector sends a bare Post id; full references from this server's own
-    /// envelopes resolve the same way. An edit converges on its text; a removal of a removed
-    /// post answers "already removed" — no request protocol is needed to make that safe.</summary>
-    private async Task<ExperienceResponse> ChangePost(ClaimsPrincipal principal, string postRef, string? text,
-        bool delete, string operation, CancellationToken ct)
+    /// <summary>Edits and removals require read reconciliation after an uncertain outcome.</summary>
+    private async Task<ResourceResult<ExperiencePostData>> ChangePost(ClaimsPrincipal principal, string postId, string? text,
+        bool delete, CancellationToken ct, string? format)
     {
-        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Post);
-        var credential = CredentialOf(principal);
-        var identity = await IdentityOf(participantId, ct);
+        var participantId = ParticipationAccess.Require(principal, ParticipationGrants.Read);
         if (!delete) PostContent.CheckText(text!);
-        var target = await ResolvePostRef(postRef, ct);
-        await conversation.ChangePost(participantId, target.TopicKey, target.PostId, text, delete, ct);
-        var fullRef = refs.Post(target.TangentKey, target.TopicKey, target.PostId);
+        if (string.IsNullOrWhiteSpace(postId) || postId.Length > 64
+            || postId.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-'))
+            throw new RequestArgumentException("postId", "Choose a Post returned by this server.");
+        Post stored;
+        Topic topic;
+        using (EntityContext.NoCache())
+        {
+            stored = await Post.Get(postId, ct)
+                ?? throw new RequestArgumentException("postId", "Choose a Post returned by this server.");
+            topic = await Topic.Get(stored.TopicKey, ct)
+                ?? throw new RequestArgumentException("postId", "Choose a Post in an existing Topic.");
+            ParticipationAccess.Require(principal,
+                stored.AuthorParticipantId == participantId ? ParticipationGrants.Post : ParticipationGrants.Manage);
+        }
+        await conversation.ChangePost(participantId, topic.Id, postId, text, delete, ct, format: format);
+        var fullRef = refs.Post(topic.TangentKey, topic.Id, postId);
         var data = new ExperiencePostData(fullRef, null,
-            refs.Origin + "/tangents/" + target.TangentKey + "/posts/" + target.PostId + "/");
-        var place = await TopicPlaceOf(principal, participantId, target.TangentKey, target.TopicKey, ct);
-        return await Assemble(operation, ExperienceStatus.Ok, identity, place,
-            new ExperienceResult(data, null, null),
-            (await digest.Page(participantId, credential, null, target.TangentKey, target.TopicKey, 3, ct)).Attention,
-            Empty(), [new(ExperienceActionNames.ReadTopic, refs.Topic(target.TangentKey, target.TopicKey), fullRef, "Open the Topic")],
-            null, CapabilitiesOf(place), participantId, credential, ct);
+            refs.Origin + "/tangents/" + topic.TangentKey + "/posts/" + postId + "/");
+        return ResourceResult<ExperiencePostData>.Success(data);
     }
 
-    private async Task<(string TangentKey, string TopicKey, string PostId)> ResolvePostRef(string value, CancellationToken ct)
+    /// <summary>The key depends on caller, Tangent and request ID only, so a changed title cannot
+    /// allocate a second Topic for one request identity.</summary>
+    private static string MintTopicKey(string participantId, string tangentKey, string requestId)
     {
-        if (refs.ParsePost(value) is { } parsed) return parsed;
-        // A bare Post id: look the row up and derive its Topic.
-        if (value.Length is >= 1 and <= 64 && value.All(character =>
-                char.IsAsciiLetterOrDigit(character) || character == '-'))
-        {
-            Post? post;
-            using (EntityContext.NoCache())
-                post = await Post.Get(value, ct);
-            if (post is not null)
-            {
-                Topic? topic;
-                using (EntityContext.NoCache())
-                    topic = await Topic.Get(post.TopicKey, ct);
-                if (topic is not null) return (topic.TangentKey, topic.Id, post.Id);
-            }
-        }
-        throw new RequestArgumentException("postRef", "Copy a Post reference returned by this server.");
-    }
-
-    /// <summary>A stable key minted from the title and the request id: lowercase run of the
-    /// title's letters and digits, bounded, suffixed with a short hash so two threads with one
-    /// title stay distinct and one job replays onto its own Topic.</summary>
-    private static string MintTopicKey(string title, string requestId)
-    {
-        var slug = new StringBuilder(title.Length);
-        foreach (var raw in title.ToLowerInvariant())
-        {
-            var character = char.IsAsciiLetterOrDigit(raw) ? raw : '-';
-            if (character == '-' && (slug.Length == 0 || slug[^1] == '-')) continue;
-            slug.Append(character);
-        }
-        while (slug.Length > 0 && slug[^1] == '-') slug.Length--;
-        if (slug.Length == 0) slug.Append("thread");
-        var suffix = Convert.ToHexStringLower(
-            SHA256.HashData(Encoding.UTF8.GetBytes(requestId)))[..8];
-        var body = slug.Length > Community.TopicConstants.MaximumKeyLength - suffix.Length - 1
-            ? slug.ToString(0, Community.TopicConstants.MaximumKeyLength - suffix.Length - 1).TrimEnd('-')
-            : slug.ToString();
-        return $"{body}-{suffix}";
+        var hash = Convert.ToHexStringLower(SHA256.HashData(
+            Encoding.UTF8.GetBytes(participantId + "\n" + tangentKey + "\n" + requestId)));
+        return "thread-" + hash[..24];
     }
 }

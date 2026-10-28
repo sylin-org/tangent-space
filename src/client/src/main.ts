@@ -1,15 +1,14 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
+import { preparePublicWorkspace } from './public-workspace'
 
-// The workspace's stylesheets, in the vanilla head's order (the cascade matters).
-import './assets/app.css'
-import './assets/topics.css'
-import './assets/onboarding.css'
-import './assets/pages.css'
-import './assets/landing.css'
-import './assets/access.css'
-import './assets/moderation.css'
-import './assets/atmosphere.css'
+// Stylesheets load in cascade order.
+import './assets/fonts.css'
+import './assets/tokens.css'
+import '../../server/web/wwwroot/article-media.css'
+import './assets/workspace.css'
+import './assets/creation.css'
 
+preparePublicWorkspace()
 createApp(App).use(createPinia()).mount('#app')

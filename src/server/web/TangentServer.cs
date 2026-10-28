@@ -1,11 +1,9 @@
 using Tangent.Activity;
 using Tangent.Community;
 using Tangent.Api;
-using Tangent.Community;
 using Tangent.Stewardship;
 using Tangent.Spaces;
 using Tangent.Conversation;
-using Tangent.Activity;
 using Tangent.Identity;
 using Tangent.Access;
 

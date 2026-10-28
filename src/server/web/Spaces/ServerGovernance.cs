@@ -4,7 +4,6 @@ using Tangent.Community;
 using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
-using Tangent.Community;
 using Tangent.Stewardship;
 using Microsoft.Extensions.Options;
 using Tangent.Access;
@@ -16,29 +15,23 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
 {
     public async Task<ServerSettings> Read(string? actorId, CancellationToken ct)
     {
-        await gate.Enter(ct);
-        try
-        {
-            using var fresh = EntityContext.NoCache();
-            var space = await Space.Get(TangentConstants.SpaceId, ct);
-            var owner = space?.IsOwner(actorId) == true;
-            var participant = actorId is null ? null : await Participant.Get(actorId, ct);
-            var bag = await roleAccess.Bag(actorId, ct);
-            if (space is not null && !TangentRoleAccess.CanDo((space.Access ?? AccessMap.ServerDefaults()).ResolveServer().See, bag))
-                throw new UnauthorizedAccessException("This server is not available to the current participant.");
-            var canCreate = await CanCreateTangent(space, participant, ct);
-            var canManage = participant?.IsSuspended != true && space is not null
-                && TangentRoleAccess.CanDo((space.Access ?? AccessMap.ServerDefaults()).ResolveServer().Manage, bag);
-            var declared = space is not null && (space.HumanDeclared || !string.IsNullOrWhiteSpace(space.OwnerParticipantId));
-            // First ownership is claimable only by the configured DID's current holder (or anyone when unconfigured).
-            var configured = string.IsNullOrWhiteSpace(options.Value.OwnerDid)
-                || actorId is not null && await directory.ByDid(options.Value.OwnerDid, ct) is { } pinned && pinned.Id == actorId;
-            await EntityContext.Commit(ct);
-            return new ServerSettings(space?.Name ?? "", space?.WelcomeMessage ?? "", space?.Motd ?? "",
-                space?.AllowAgentTangentOwnership ?? false,
-                space?.OwnerParticipantId ?? "", canManage, !declared && HumanHostAccountability.CanClaim(participant) && configured, Permissions.Server(owner, canCreate), space?.Byline ?? "", space?.CoverImageUrl ?? "", space?.BackgroundScene ?? "galaxy", space?.BackgroundColor ?? "", space?.BackgroundIntensity ?? 35, space?.BackgroundMotion ?? true, space?.BackgroundMouseSpotlight ?? true);
-        }
-        finally { gate.Exit(); }
+        using var fresh = EntityContext.NoCache();
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var owner = space?.IsOwner(actorId) == true;
+        var participant = actorId is null ? null : await Participant.Get(actorId, ct);
+        var bag = await roleAccess.Bag(actorId, ct);
+        if (space is not null && !TangentRoleAccess.CanDo((space.Access ?? AccessMap.ServerDefaults()).ResolveServer().See, bag))
+            throw new UnauthorizedAccessException("This server is not available to the current participant.");
+        var canCreate = await CanCreateTangent(space, participant, ct);
+        var canManage = participant?.IsSuspended != true && space is not null
+            && TangentRoleAccess.CanDo((space.Access ?? AccessMap.ServerDefaults()).ResolveServer().Manage, bag);
+        var declared = space is not null && (space.HumanDeclared || !string.IsNullOrWhiteSpace(space.OwnerParticipantId));
+        // First ownership is claimable only by the configured DID's current holder (or anyone when unconfigured).
+        var configured = string.IsNullOrWhiteSpace(options.Value.OwnerDid)
+            || actorId is not null && await directory.ByDid(options.Value.OwnerDid, ct) is { } pinned && pinned.Id == actorId;
+        return new ServerSettings(space?.Name ?? "", space?.WelcomeMessage ?? "", space?.Motd ?? "",
+            space?.AllowAgentTangentOwnership ?? false,
+            space?.OwnerParticipantId ?? "", canManage, !declared && HumanHostAccountability.CanClaim(participant) && configured, Permissions.Server(owner, canCreate), space?.Byline ?? "", space?.CoverImageUrl ?? "", space?.BackgroundScene ?? "galaxy", space?.BackgroundColor ?? "", space?.BackgroundIntensity ?? 35, space?.BackgroundMotion ?? true, space?.BackgroundMouseSpotlight ?? true, space?.MarkImageUrl ?? "", space?.Accent ?? "gold", CanManageParticipants: await roleAccess.CanManageParticipants(actorId, ct));
     }
 
     /// <summary>Ownership claim. Establishment is the atproto gate: the verified sign-in DID must
@@ -60,7 +53,7 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await EntityContext.Commit(ct);
             signals.Pulse();
             result = new ServerSettings(space.Name, space.WelcomeMessage, space.Motd, space.AllowAgentTangentOwnership,
-                space.OwnerParticipantId, true, false, Permissions.Server(true), space.Byline, space.CoverImageUrl, space.BackgroundScene, space.BackgroundColor, space.BackgroundIntensity, space.BackgroundMotion, space.BackgroundMouseSpotlight);
+                space.OwnerParticipantId, true, false, Permissions.Server(true), space.Byline, space.CoverImageUrl, space.BackgroundScene, space.BackgroundColor, space.BackgroundIntensity, space.BackgroundMotion, space.BackgroundMouseSpotlight, space.MarkImageUrl, space.Accent, CanManageParticipants: true);
         }
         finally { gate.Exit(); }
         // The Owner role projects the committed space; startup repeats the projection (TangentRoleAccess.Seed).
@@ -70,7 +63,8 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
     /// <summary>Completes onboarding through ordered, retryable writes. Koan's deferred
     /// transaction is not atomic; a partial claim is resumed by the same owner's next request.</summary>
     public async Task<TangentDescription> CompleteOnboarding(string actorId, string? verifiedAtprotoDid,
-        string? expectedDid, string? name, string? description, string? artwork, bool skip, CancellationToken ct)
+        string? expectedDid, string? name, string? description, string? artwork, bool skip, CancellationToken ct,
+        string? kind = null)
     {
         await gate.Enter(ct);
         try
@@ -91,10 +85,12 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             {
                 // Validate all submitted content before the first owner/participant/home write.
                 Community.Tangent.ValidateOnboardingCard(name, description, artwork, skip);
+                var selectedKind = TangentKind.Check(kind);
                 (space, _) = await ClaimWithinTransaction(actorId, verifiedAtprotoDid, ct);
                 home ??= Community.Tangent.Home(space);
                 home.Change(actorId, skip ? "My Tangent" : name, skip ? "" : description,
                     "Make room for the next thought.", "#f4b942", skip ? "" : artwork, clock.GetUtcNow());
+                home.Kind = selectedKind;
                 await ActivityJournal.AppendInTransaction(ActivityKind.TangentChanged, "", actorId,
                     tangentKey: home.Id, ct: ct);
                 // Completion is the final durable marker. If an earlier operation commits and
@@ -149,6 +145,10 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             throw new InvalidOperationException("Use a server name of 1-120 characters and welcome/MOTD text up to 4096 characters.");
         if (patch.CoverImageUrl is { Length: > 0 } image && !ValidCover(image))
             throw new InvalidOperationException("Use a local image path or an HTTPS image URL.");
+        if (patch.MarkImageUrl is { Length: > 0 } mark && !ValidCover(mark))
+            throw new InvalidOperationException("Use a local image path or an HTTPS image URL for the mark.");
+        if (patch.Accent is not null && patch.Accent is not ("gold" or "jade" or "iris" or "copper"))
+            throw new InvalidOperationException("Choose gold, jade, iris or copper.");
         if (patch.BackgroundScene is not null && patch.BackgroundScene is not ("galaxy" or "synapses" or "aurora" or "tides" or "orrery" or "mycelium" or "rain" or "nebula" or "none"))
             throw new InvalidOperationException("BackgroundScene must be one of galaxy, synapses, aurora, tides, orrery, mycelium, rain, nebula, none.");
         if (patch.BackgroundColor is { Length: > 0 } color && (color.Length != 7 || !System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$")))
@@ -170,6 +170,8 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             if (patch.WelcomeMessage is not null) space.WelcomeMessage = patch.WelcomeMessage;
             if (patch.Byline is not null) space.Byline = patch.Byline.Trim();
             if (patch.CoverImageUrl is not null) space.CoverImageUrl = patch.CoverImageUrl.Trim();
+            if (patch.MarkImageUrl is not null) space.MarkImageUrl = patch.MarkImageUrl.Trim();
+            if (patch.Accent is not null) space.Accent = patch.Accent;
             if (patch.Motd is not null) space.Motd = patch.Motd;
             if (patch.AllowAgentTangentOwnership is not null) space.AllowAgentTangentOwnership = patch.AllowAgentTangentOwnership.Value;
             if (patch.BackgroundScene is not null) space.BackgroundScene = patch.BackgroundScene;
@@ -183,28 +185,22 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
             await EntityContext.Commit(ct);
             signals.Pulse();
             return new ServerSettings(space.Name, space.WelcomeMessage, space.Motd, space.AllowAgentTangentOwnership,
-                space.OwnerParticipantId, true, false, Permissions.Server(space.IsOwner(actorId)), space.Byline, space.CoverImageUrl, space.BackgroundScene, space.BackgroundColor, space.BackgroundIntensity, space.BackgroundMotion, space.BackgroundMouseSpotlight);
+                space.OwnerParticipantId, true, false, Permissions.Server(space.IsOwner(actorId)), space.Byline, space.CoverImageUrl, space.BackgroundScene, space.BackgroundColor, space.BackgroundIntensity, space.BackgroundMotion, space.BackgroundMouseSpotlight, space.MarkImageUrl, space.Accent, CanManageParticipants: await roleAccess.CanManageParticipants(actorId, ct));
         }
         finally { gate.Exit(); }
     }
 
     public async Task<AccessMapView> GetAccess(string actorId, CancellationToken ct)
     {
-        await gate.Enter(ct);
-        try
-        {
-            using var fresh = EntityContext.NoCache();
-            var space = await Space.Get(TangentConstants.SpaceId, ct)
-                ?? throw new InvalidOperationException("The server has not been claimed.");
-            var participant = await Participant.Get(actorId, ct);
-            var bag = await roleAccess.Bag(actorId, ct);
-            if (participant?.IsSuspended == true || !TangentRoleAccess.CanDo((space.Access ?? AccessMap.ServerDefaults()).ResolveServer().Manage, bag))
-                throw new UnauthorizedAccessException("The current role cannot inspect server access settings.");
-            var selected = (space.Access ?? AccessMap.ServerDefaults()).NormalizeForServer();
-            await EntityContext.Commit(ct);
-            return new AccessMapView(selected, selected.ResolveServer(), []);
-        }
-        finally { gate.Exit(); }
+        using var fresh = EntityContext.NoCache();
+        var space = await Space.Get(TangentConstants.SpaceId, ct)
+            ?? throw new InvalidOperationException("The server has not been claimed.");
+        var participant = await Participant.Get(actorId, ct);
+        var bag = await roleAccess.Bag(actorId, ct);
+        if (participant?.IsSuspended == true || !TangentRoleAccess.CanDo((space.Access ?? AccessMap.ServerDefaults()).ResolveServer().Manage, bag))
+            throw new UnauthorizedAccessException("The current role cannot inspect server access settings.");
+        var selected = (space.Access ?? AccessMap.ServerDefaults()).NormalizeForServer();
+        return new AccessMapView(selected, selected.ResolveServer(), []);
     }
 
     public async Task<AccessMapView> SetAccess(string actorId, AccessMap access, CancellationToken ct)
@@ -267,7 +263,9 @@ public sealed class ServerGovernance(TimeProvider clock, PolicyGate gate, IOptio
 public sealed record ServerSettings(string Name, string WelcomeMessage, string Motd,
     bool AllowAgentTangentOwnership, string OwnerParticipantId, bool CanManage, bool CanClaim,
     PermissionView? Permissions = null, string Byline = "", string CoverImageUrl = "",
-    string BackgroundScene = "galaxy", string BackgroundColor = "", int BackgroundIntensity = 35, bool BackgroundMotion = true, bool BackgroundMouseSpotlight = true);
+    string BackgroundScene = "galaxy", string BackgroundColor = "", int BackgroundIntensity = 35, bool BackgroundMotion = true, bool BackgroundMouseSpotlight = true,
+    string MarkImageUrl = "", string Accent = "gold", bool CanManageParticipants = false);
 public sealed record ServerSettingsPatch(string? Name = null, string? WelcomeMessage = null, string? Motd = null,
     bool? AllowAgentTangentOwnership = null, string? Byline = null, string? CoverImageUrl = null,
-    string? BackgroundScene = null, string? BackgroundColor = null, int? BackgroundIntensity = null, bool? BackgroundMotion = null, bool? BackgroundMouseSpotlight = null);
+    string? BackgroundScene = null, string? BackgroundColor = null, int? BackgroundIntensity = null, bool? BackgroundMotion = null, bool? BackgroundMouseSpotlight = null,
+    string? MarkImageUrl = null, string? Accent = null);

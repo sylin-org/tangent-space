@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Koan.Identity;
 using Koan.Identity.Web.Initialization;
+using Koan.Web.Hosting;
 using Tangent.Application;
 using Tangent.Access;
 using Tangent.Spaces;
@@ -18,10 +19,6 @@ using Tangent.Stewardship;
 using Tangent.Identity;
 using Tangent.Conversation;
 using Tangent.Activity;
-using Tangent.Community;
-using Tangent.Activity;
-using Tangent.Identity;
-using Tangent.Stewardship;
 using Tangent.Api;
 
 namespace Tangent.Infrastructure;
@@ -37,12 +34,14 @@ public sealed class TangentModule : KoanModule
 
     public override void Register(IServiceCollection services)
     {
-        TangentOwnerRoleGuard.Register();
+        TangentDerivedRoleGuard.Register();
         Post.Lifecycle.BeforeUpsert(async context =>
         {
             var post = context.Current;
+            post.SearchText = post.Removed ? "" : PostMarkup.PlainText(post.Content).ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(Koan.Data.Core.EntityContext.Current?.Partition)
-                && !post.Removed && post.OfPostId is null && post.Facets is null)
+                && !post.Removed && post.OfPostId is null && post.Facets is null
+                && post.Content.Format != PostContent.Markdown)
                 post.Facets = await PostFacets.Effective(post.Content.Text, null, context.CancellationToken);
             return context.Proceed();
         });
@@ -54,7 +53,7 @@ public sealed class TangentModule : KoanModule
             .ValidateOnStart();
         services.AddOptions<EnrollmentOptions>().BindConfiguration(EnrollmentOptions.Configuration)
             .Validate(o => string.IsNullOrWhiteSpace(o.ProofAudience) || ProofAudience.IsAtprotoAudience(o.ProofAudience),
-                "Tangent:Enrollment:ProofAudience must be blank, to derive it from Tangent:Space:PublicOrigin, or an atproto audience: a did:plc, or a did:web of a hostname with a port only for localhost.")
+                "Tangent:Enrollment:ProofAudience must be blank to derive the service DID, or an atproto service DID: did:plc or did:web of a hostname, with a port only for localhost. The proof audience adds #tangent.")
             .ValidateOnStart();
         services.AddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
@@ -62,6 +61,7 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<TangentIdentityActorAccessor>();
         services.Replace(ServiceDescriptor.Singleton<IIdentityActorAccessor>(provider => provider.GetRequiredService<TangentIdentityActorAccessor>()));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IClaimsTransformation, HostOwnerClaimsTransformation>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TrustedProxyPipelineContributor>());
         services.AddSingleton<TangentRoleAccess>();
         services.AddSingleton<PolicyGate>();
         services.AddSingleton<Arrival>();
@@ -74,7 +74,9 @@ public sealed class TangentModule : KoanModule
         services.AddSingleton<ServerGovernance>();
         services.AddSingleton<StorageSetup>();
         services.AddSingleton<TopicGovernance>();
+        services.AddScoped<PostHistoryScope>();
         services.AddSingleton<PublicConversationReader>();
+        services.AddSingleton<DirectorySummaryReader>();
         services.AddSingleton<LocalContentSource>();
         services.AddHttpClient("bluesky-content", client =>
         {
@@ -82,13 +84,18 @@ public sealed class TangentModule : KoanModule
             client.Timeout = TimeSpan.FromSeconds(15);
         });
         services.AddSingleton<BlueskyContentSource>();
+        services.AddSingleton<BlueskyBridge>();
+        services.AddHostedService<BlueskyBridgeWorker>();
         services.AddSingleton<BlueskyPublisher>();
         services.AddSingleton<TangentGovernance>();
         services.AddSingleton<ParticipantGovernance>();
+        services.AddSingleton<TangentMemberDirectory>();
         services.AddParticipation();
-        services.AddTangentMcpAuthentication();
+        services.AddTangentServiceAuthentication();
         services.AddSingleton<References>();
         services.AddSingleton<ConversationService>();
+        services.AddSingleton<Tangent.Media.MediaStorage>();
+        services.AddSingleton<Tangent.Media.PostMediaService>();
         services.AddSingleton<ActivityService>();
         services.AddSingleton<LiveSessions>();
         services.AddSingleton<SignalBus>();
@@ -108,6 +115,7 @@ public sealed class TangentModule : KoanModule
         await services.GetRequiredService<TangentRoleAccess>().Seed(
             await Space.Get(TangentConstants.SpaceId, ct), ct);
         await services.GetRequiredService<Arrival>().CheckConfiguration(ct);
+        await PostSearch.Prepare(ct);
     }
 
     public override void Report(ProvenanceModuleWriter module, IConfiguration cfg, IHostEnvironment env)

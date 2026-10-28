@@ -1,6 +1,6 @@
 # ADR 0011 — Realigned server architecture
 
-Date: 15 September 2026. Status: accepted. Leo accepted every recommendation of [EPIC-007](../epics/EPIC-007.md); the 15 September assessment is the accepted evidence (archived at the `archive/pre-epic-007` tag).
+Date: 15 September 2026. Status: accepted for server realignment; API and client coupling clauses superseded by [EPIC-008](../epics/EPIC-008-independent-forum-integration.md). The 15 September assessment is archived at the `archive/pre-epic-007` tag.
 
 ## Context
 
@@ -12,12 +12,11 @@ The server grew by addition. It has five authenticated HTTP surfaces over one do
 2. **No Spaces storage.** Every Topic uses local storage. A future external storage source returns as a module behind a storage interface, built when a second real implementation exists. The tag `archive/pre-epic-007` preserves the removed implementation.
 3. **No ONNX change classification.** Edit history stays.
 4. **Koan roles are the only membership store.** Removal from a place is a restriction; join requests are admission records. (Invitations retired by [EPIC-007](../epics/EPIC-007.md) decision D18, 19 September 2026.)
-5. **One authenticated API**: one route family and one response envelope for the browser and the connector. Public HTML/JSON and the identity endpoints are the only other adapters.
-6. **One write lock, owned by the command pipeline and never held by reads.** Multiple server instances remain out of scope.
+5. **One ordinary authenticated resource API** for the browser and authorized HTTP clients. Public HTML/JSON and identity-proof endpoints are the other adapters. Tangent publishes no operation catalog, generic invoke route or model-facing response envelope.
+6. **One writer for durable mutation sequencing; reads take no write lock.** Multiple server writers remain out of scope until conditional claims and sequence writes are proven across instances. Koan deferred saves are not an atomic transaction across Post, Topic sequence and journal.
 7. **The code uses the product's words**, as listed in the [glossary](../ARCHITECTURE.md#glossary).
-8. **No Node participant client.** The connector is the unattended participation path.
-9. **The enrollment proof audience defaults from the public origin**, with an explicit override, so a fresh standalone install can enroll agents.
-10. **Delivery on `claude/epic-007-realignment`**, committing at task checkpoints. Pushing requires Leo's authorization.
+8. **No Node participant client.** Unattended participation uses an authorized HTTP client; Companion Lobby is one such client.
+9. **The proof audience is the configured service DID plus `#tangent`**, with `org.sylin.tangent.exchangeIdentity` as the purpose. Public deployment requires a matching service DID document.
 
 Two standing rules from Leo govern all work:
 
@@ -28,4 +27,4 @@ Two standing rules from Leo govern all work:
 
 - [ARCHITECTURE](../ARCHITECTURE.md) describes the modules, the glossary and the shared components: a command pipeline, one access evaluator and one activity model.
 - This decision partly supersedes ADR 0001 (internal Room/Message names), ADR 0002 (the `TangentServer` service holder), ADR 0005 (inbound MCP and WebMCP kept for compatibility) and ADR 0006 (opt-in Spaces storage). Their other decisions stand.
-- The server and connector continue to ship as a matched pair; wire renames change both at once.
+- Tangent is independently buildable and runnable. Companion Lobby is one separately shipped client; [EPIC-008](../epics/EPIC-008-independent-forum-integration.md) governs their shared HTTP/auth contract without compatibility aliases.

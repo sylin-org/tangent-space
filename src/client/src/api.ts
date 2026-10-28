@@ -1,6 +1,6 @@
 /**
  * The only fetch layer in the workspace (D19). Every server call goes through here,
- * typed against the experience envelope. Never add fetch outside this module.
+ * typed against resource responses. Never add fetch outside this module.
  */
 
 export function httpRequest(path: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -169,17 +169,7 @@ export interface Problem {
   retryable: boolean
 }
 
-export interface Envelope<T> {
-  experienceVersion: string
-  operation: string
-  status: 'ok' | 'pending' | 'blocked' | 'error'
-  identity: Identity | null
-  place: Place | null
-  result: { data: T | null; problem: Problem | null }
-  attention: { waitingCount: { value: number; atLeast: boolean } }
-}
-
-export class EnvelopeError extends Error {
+export class ApiError extends Error {
   readonly problem: Problem
   constructor(problem: Problem) {
     super(problem.message)
@@ -187,7 +177,7 @@ export class EnvelopeError extends Error {
   }
 }
 
-async function call<T>(path: string, init?: RequestInit): Promise<Envelope<T>> {
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await httpRequest(base + path, {
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
@@ -195,17 +185,13 @@ async function call<T>(path: string, init?: RequestInit): Promise<Envelope<T>> {
   })
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new EnvelopeError({
+    throw new ApiError({
       code: body?.code ?? `http_${response.status}`,
       message: body?.message ?? `The server answered HTTP ${response.status}.`,
       retryable: response.status >= 500,
     })
   }
-  const envelope = (await response.json()) as Envelope<T>
-  if (envelope.status === 'blocked' && envelope.result.problem) {
-    throw new EnvelopeError(envelope.result.problem)
-  }
-  return envelope
+  return await response.json() as T
 }
 
 export const api = {

@@ -8,7 +8,12 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.103.4" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="[2.7.0]" />
+    <PackageReference Include="Markdig" Version="[1.4.0]" />
+    <PackageReference Include="HtmlSanitizer" Version="[9.2.1039]" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Jobs/Koan.Jobs.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Cache/Koan.Cache.csproj" />

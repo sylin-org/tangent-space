@@ -7,12 +7,13 @@ using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
 using Tangent.Spaces;
+using CookieAuthentication = Koan.Web.Auth.Extensions.AuthenticationExtensions;
 
 namespace Tangent.Access;
 
 /// <summary>Browser helpers for the server-role editor: CSRF intent, member search, and participant role assignment.</summary>
 [ApiController]
-[Authorize]
+[Authorize(AuthenticationSchemes = CookieAuthentication.CookieScheme)]
 [Route("api/roles/ui")]
 public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirectory directory,
     ParticipantProfiles profiles, RoleCollection roles) : ControllerBase
@@ -43,71 +44,53 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
     }
 
     [HttpGet("search")]
-    public async Task<ActionResult<object>> Search([FromQuery] string role, [FromQuery] string? query, CancellationToken ct)
+    public async Task<ActionResult<object>> Search([FromQuery] string role, [FromQuery] string? query,
+        CancellationToken ct, [FromQuery] int page = 1)
     {
         if (!await SpaceOwnership.IsOwner(User, ct)) return Forbid();
         if (string.IsNullOrWhiteSpace(role)) return BadRequest(new { error = "Specify a role to search." });
-
+        if (page is < 1 or > 10000) return BadRequest(new { error = "Choose a member page between 1 and 10000." });
+        if (query?.Length > 253) return BadRequest(new { error = "Enter a handle or DID of at most 253 characters." });
+        Response.Headers.CacheControl = "no-store";
         var roleKey = role.StartsWith("role:", StringComparison.Ordinal) ? role : $"role:{role}";
         var targetRole = await roles.Get(roleKey, ct);
         if (targetRole is null) return NotFound(new { error = "Role not found." });
 
-        var memberIds = targetRole.Members.ToHashSet(StringComparer.Ordinal);
-
         using var fresh = EntityContext.NoCache();
-        var allParticipants = await Participant.All(ct);
-
-        var list = new List<(Participant Participant, ParticipantProfile Profile, string? Did, bool InRole)>(allParticipants.Count);
-        foreach (var p in allParticipants)
-        {
-            var profile = await profiles.Read(p.Id, ct);
-            var did = await directory.AtprotoDidOf(p.Id, ct);
-            var inRole = memberIds.Contains(p.Id);
-            list.Add((p, profile, did, inRole));
-        }
-
+        var memberIds = targetRole.Members.ToHashSet(StringComparer.Ordinal);
+        var selected = new List<Participant>(ParticipantWindow);
+        int? nextPage = null;
         if (string.IsNullOrWhiteSpace(query))
         {
-            var membersOnly = list
-                .Where(x => x.InRole)
-                .OrderBy(x => x.Profile.DisplayName ?? x.Profile.Handle ?? x.Participant.Id, StringComparer.OrdinalIgnoreCase)
-                .Select(x => new
-                {
-                    id = x.Participant.Id,
-                    displayName = x.Profile.DisplayName,
-                    handle = x.Profile.Handle,
-                    avatar = x.Profile.Avatar,
-                    label = x.Profile.DisplayName ?? x.Profile.Handle ?? "Participant",
-                    did = x.Did,
-                    inRole = true
-                });
-            return Ok(membersOnly);
+            // Koan owns the role's membership document. Bound profile hydration to this page;
+            // membership size is not inferred from the number of hydrated profiles returned.
+            var ids = memberIds.Order(StringComparer.Ordinal).Skip((page - 1) * ParticipantWindow)
+                .Take(ParticipantWindow + 1).ToArray();
+            nextPage = ids.Length > ParticipantWindow ? page + 1 : null;
+            foreach (var id in ids.Take(ParticipantWindow))
+                if (await Participant.Get(id, ct) is { } participant) selected.Add(participant);
         }
-
-        var q = query.Trim();
-        var matches = list.Where(x =>
-            (x.Profile.DisplayName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
-            (x.Profile.Handle?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
-            (x.Did?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
-            x.Participant.Id.Contains(q, StringComparison.OrdinalIgnoreCase)
-        );
-
-        var sorted = matches
-            .OrderByDescending(x => x.InRole)
-            .ThenBy(x => x.Profile.DisplayName ?? x.Profile.Handle ?? x.Participant.Id, StringComparer.OrdinalIgnoreCase)
-            .Take(ParticipantWindow)
-            .Select(x => new
+        else
+        {
+            try
             {
-                id = x.Participant.Id,
-                displayName = x.Profile.DisplayName,
-                handle = x.Profile.Handle,
-                avatar = x.Profile.Avatar,
-                label = x.Profile.DisplayName ?? x.Profile.Handle ?? "Participant",
-                did = x.Did,
-                inRole = x.InRole
+                if (await ParticipantLookup.TryResolveByIdentifier(query.Trim(), ct) is { } resolved)
+                    selected.Add(resolved.Participant);
+            }
+            catch (ArgumentException invalid) { return BadRequest(new { error = invalid.Message }); }
+        }
+        var items = new List<object>(selected.Count);
+        foreach (var participant in selected)
+        {
+            var profile = await profiles.Read(participant.Id, ct);
+            items.Add(new
+            {
+                id = participant.Id, displayName = profile.DisplayName, handle = profile.Handle,
+                avatar = profile.Avatar, label = profile.DisplayName ?? profile.Handle ?? "Participant",
+                did = await directory.AtprotoDidOf(participant.Id, ct), inRole = memberIds.Contains(participant.Id)
             });
-
-        return Ok(sorted);
+        }
+        return Ok(new { items, page, nextPage, totalMembers = memberIds.Count });
     }
 
     [HttpGet("participant/{id}/roles")]
@@ -122,6 +105,8 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
         var currentParticipantId = User.FindFirst(ParticipationConstants.ParticipantClaim)?.Value;
         var isSelf = !string.IsNullOrEmpty(currentParticipantId) && currentParticipantId == id;
         var isOwner = await SpaceOwnership.IsOwner(User, ct);
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var participantIsOwner = space?.IsOwner(id) == true;
 
         var allRoles = await Koan.Identity.Roles.Role.All(ct);
         var roleList = allRoles
@@ -129,9 +114,10 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
             .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .Select(r =>
             {
-                var isSelfEnrollable = r.Metadata.TryGetValue("selfEnrollable", out var se) && se == "true";
-                var isProtected = r.Id == TangentBuiltInRoles.Owner.Token;
-                var isMember = r.Members.Contains(id);
+                var isProtected = TangentDerivedRoleGuard.IsDerived(r.Id);
+                var isSelfEnrollable = !isProtected && r.Metadata.TryGetValue("selfEnrollable", out var se) && se == "true";
+                var isMember = r.Id == TangentBuiltInRoles.Owner.Token ? participantIsOwner
+                    : r.Id == TangentBuiltInRoles.Participant.Token || r.Id == "role:everyone" || r.Members.Contains(id);
                 var canToggle = isOwner ? !isProtected : (isSelf && isSelfEnrollable);
                 return new
                 {
@@ -169,11 +155,14 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
         var isOwner = await SpaceOwnership.IsOwner(User, ct);
         if (!isOwner && !isSelf) return Forbid();
 
+        if (TangentDerivedRoleGuard.IsDerived(roleId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Derived roles cannot be granted or removed." });
+
         var role = await roles.Get(roleId, ct);
         if (role is null) return NotFound(new { error = "Role not found." });
 
-        if (role.Id == TangentBuiltInRoles.Owner.Token)
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Owner role cannot be granted here." });
+        if (TangentDerivedRoleGuard.IsDerived(role.Id))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Derived roles cannot be granted or removed." });
 
         var isSelfEnrollable = role.Metadata.TryGetValue("selfEnrollable", out var se) && se == "true";
         if (!isOwner && (!isSelf || !isSelfEnrollable))
@@ -202,11 +191,14 @@ public sealed class RoleUiController(IAntiforgery antiforgery, ParticipantDirect
         var isOwner = await SpaceOwnership.IsOwner(User, ct);
         if (!isOwner && !isSelf) return Forbid();
 
+        if (TangentDerivedRoleGuard.IsDerived(roleId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Derived roles cannot be granted or removed." });
+
         var role = await roles.Get(roleId, ct);
         if (role is null) return NotFound(new { error = "Role not found." });
 
-        if (role.Id == TangentBuiltInRoles.Owner.Token)
-            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Owner role cannot be removed here." });
+        if (TangentDerivedRoleGuard.IsDerived(role.Id))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Derived roles cannot be granted or removed." });
 
         var isSelfEnrollable = role.Metadata.TryGetValue("selfEnrollable", out var se) && se == "true";
         if (!isOwner && (!isSelf || !isSelfEnrollable))

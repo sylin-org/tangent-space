@@ -7,9 +7,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Tangent.Community;
 using Tangent.Conversation;
 using Tangent.Identity;
-using Tangent.Identity;
 using Tangent.Application;
-using Tangent.Community;
 using Tangent.Stewardship;
 using Tangent.Api;
 using Tangent.Spaces;
@@ -35,57 +33,68 @@ public sealed class ExperienceDigest(
 
     private readonly IDataProtector cursorProtector = protection.CreateProtector("Community.Tangent.Experience.DigestCursor.v1");
 
-    public sealed record Digest(
-        ExperienceAttention Attention, IReadOnlyList<ExperienceAction> FollowUps);
+    public sealed record DigestCursor(string ParticipantId, string? ScopeTangent, string? ScopeTopic, int Offset, DateTimeOffset ExpiresAt, string? Filter = null, string? Selection = null, string? Arrivals = null);
 
-    public sealed record DigestCursor(string ParticipantId, string? ScopeTangent, string? ScopeTopic, int Offset, DateTimeOffset ExpiresAt);
+    public sealed record NotificationFilter(bool Replies, bool Mentions, bool Following);
 
     /// <summary>Computes one digest page for the participant. The checkpoint is the offset-zero
     /// cursor for recovery; the page cursor continues this page sequence only.</summary>
-    public async Task<Digest> Page(string did, string? credentialId, DigestCursor? cursor, string? scopeTangent,
-        string? scopeTopic, int limit, CancellationToken ct)
+    public async Task<ExperienceAttention> Page(string did, string? credentialId, DigestCursor? cursor, string? scopeTangent,
+        string? scopeTopic, int limit, CancellationToken ct, NotificationFilter? notifications = null)
     {
         await EnsureActive(did, credentialId, ct);
         var offset = cursor?.Offset ?? 0;
         var directed = new List<ExperienceAttentionItem>();
         var watched = new List<ExperienceAttentionItem>();
-        var overflow = false;
-        var topicsScanned = 0;
-        var scanLimited = false;
-        for (var page = 1; page <= 4; page++)
+        var incomplete = false;
+        if (scopeTopic is not null)
         {
-            TangentTopicDirectory directory;
-            using (EntityContext.NoCache())
-                directory = await tangents.ListAuthorizedTopics(did, page, ct);
-            if (directory.ScanLimited) scanLimited = true;
-            foreach (var topic in directory.Topics)
+            using var fresh = EntityContext.NoCache();
+            var topic = await hub.Topics.Describe(did, scopeTopic, ct);
+            if (topic?.CanRead == true && (scopeTangent is null || topic.TangentKey == scopeTangent))
+                incomplete = await CollectTopic(did, topic, directed, watched, ct, notifications);
+        }
+        else
+        {
+            var topicsScanned = 0;
+            for (var page = 1; page <= 4; page++)
             {
-                if (topicsScanned >= MaximumTopics) { overflow = true; break; }
-                topicsScanned++;
-                if (scopeTangent is not null && topic.TangentKey != scopeTangent) continue;
-                if (scopeTopic is not null && topic.Key != scopeTopic) continue;
-                await CollectTopic(did, topic, directed, watched, ct);
+                TangentTopicDirectory directory;
+                using (EntityContext.NoCache())
+                    directory = scopeTangent is null
+                        ? await tangents.ListAuthorizedTopics(did, page, ct)
+                        : await hub.Topics.ListForTangent(did, scopeTangent, page, ct);
+                incomplete |= directory.ScanLimited;
+                foreach (var topic in directory.Topics)
+                {
+                    if (topicsScanned >= MaximumTopics) { incomplete = true; break; }
+                    topicsScanned++;
+                    incomplete |= await CollectTopic(did, topic, directed, watched, ct, notifications);
+                }
+                if (directory.NextPage is null) break;
+                if (topicsScanned >= MaximumTopics || page == 4) { incomplete = true; break; }
             }
-            if (directory.NextPage is null || overflow) break;
         }
         directed.Sort(DirectOrder);
         watched.Sort(DirectOrder);
+        var selection = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            JsonSerializer.Serialize(directed.Concat(watched).Select(item => new { item.Ref, item.Kind,
+                item.ActorRef, item.ScopeRef, item.SourceRef, item.SourceRevision, item.Relationship, item.Excerpt, item.State })))));
+        if (cursor?.Selection is { } expected && expected != selection)
+            throw new ArgumentException("This attention selection changed. Start a new read without a cursor.");
+        if (cursor is { Offset: > 0, Selection: null })
+            throw new ArgumentException("This attention page has expired. Start a new read without a cursor.");
         var waiting = directed.Count;
         var activity = watched.Count;
         var chosen = directed.Concat(watched).Skip(offset).Take(limit).ToList();
         var more = directed.Count + watched.Count > offset + chosen.Count;
-        var partial = overflow || scanLimited;
         var revision = await HeadRevision(ct);
         var asOf = Timestamp();
         var attention = new ExperienceAttention(revision, asOf,
-            new(Math.Min(waiting, MaximumDirectedCount), waiting > MaximumDirectedCount),
-            new(Math.Min(activity, MaximumActivityCount), activity > MaximumActivityCount),
-            chosen, more, DetailsIncluded: false);
-        var followUps = directed.Skip(offset).Take(3)
-            .Select(item => new ExperienceAction(ExperienceActionNames.ReadTopic, item.ScopeRef,
-                item.SourceRef, $"Read {item.ActorName ?? "a participant"}'s request"))
-            .ToList();
-        return new(attention, followUps);
+            new(incomplete ? null : Math.Min(waiting, MaximumDirectedCount), incomplete || waiting > MaximumDirectedCount),
+            new(incomplete ? null : Math.Min(activity, MaximumActivityCount), incomplete || activity > MaximumActivityCount),
+            chosen, more, DetailsIncluded: false, Incomplete: incomplete) { Selection = selection };
+        return attention;
     }
 
     private async Task EnsureActive(string participantId, string? credentialId, CancellationToken ct)
@@ -105,36 +114,38 @@ public sealed class ExperienceDigest(
     /// the compiled row carries the viewer's attention numbers, and the watch filter applies at
     /// read time from two point reads. Items rebuild from a bounded unread window only when the
     /// compiled window is non-empty, so cost follows item count.</summary>
-    private async Task CollectTopic(string did, TopicDescription topic, List<ExperienceAttentionItem> directed,
-        List<ExperienceAttentionItem> watched, CancellationToken ct)
+    private async Task<bool> CollectTopic(string did, TopicDescription topic, List<ExperienceAttentionItem> directed,
+        List<ExperienceAttentionItem> watched, CancellationToken ct, NotificationFilter? notifications)
     {
-        if (!topic.CanRead) return;
+        if (!topic.CanRead) return false;
         var attention = await TopicAttention.Get(TopicAttention.IdOf(topic.Key, did), ct);
-        if (attention is null) return;
-        var mode = AttentionRules.Effective(
-            await WatchSetting.Get(WatchSetting.Key(did, topic.Key), ct),
-            await TangentWatchSetting.Get(TangentWatchSetting.Key(did, topic.TangentKey), ct));
-        if (!AttentionRules.DeliversTopic(mode)) return;
-        if (attention.LastSequence <= attention.ReadSequence) return;
+        if (attention is null) return false;
+        var watch = await WatchSetting.Get(WatchSetting.Key(did, topic.Key), ct);
+        var tangentWatch = await TangentWatchSetting.Get(TangentWatchSetting.Key(did, topic.TangentKey), ct);
+        var mode = AttentionRules.Effective(watch, tangentWatch);
+        var explicitlyFollowing = watch is { Mode: not WatchMode.None }
+            || watch is null && tangentWatch is { Mode: not WatchMode.None };
+        if (!AttentionRules.DeliversTopic(mode)) return false;
+        if (attention.LastSequence <= attention.ReadSequence) return false;
         {
             var recipientDid = await hub.Directory.AtprotoDidOf(did, ct);
-            var unread = (await Post.Query(
-            post => post.TopicKey == topic.Key && post.Sequence > attention.ReadSequence, UnreadWindow, ct))
-            .OrderBy(post => post.Sequence).ToList();
+            var window = await Post.Query(
+                post => post.TopicKey == topic.Key && post.Sequence > attention.ReadSequence, UnreadWindow, ct);
+            var incomplete = window.Count > MaximumUnread;
+            var unread = window.Take(MaximumUnread).OrderBy(post => post.Sequence).ToList();
             var handles = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var (author, label) in await hub.Directory.LabelsFor(
                  unread.Select(post => post.AuthorParticipantId).Distinct(StringComparer.Ordinal), ct))
             handles[author] = label;
-            var addressedPosts = new HashSet<string>(StringComparer.Ordinal);
             foreach (var post in unread)
             {
-            // The actor's own writes settle into their inbox — read mail about what you
+            // The actor's own writes settle into their inbox â€” read mail about what you
             // posted, so the author sees the double post and can reconcile it with the
             // delete key it already holds. Settlement rides the Topic's watch: a
             // watched-out Topic delivers nothing.
             if (post.AuthorParticipantId == did)
             {
-                if (!post.Removed)
+                if (!post.Removed && notifications is null)
                     watched.Add(Item(did, topic, topic.TangentKey, post, "write_settlement", null,
                         handles.GetValueOrDefault(did)));
                 continue;
@@ -148,8 +159,7 @@ public sealed class ExperienceDigest(
                 if (parent is not null && parent.TopicKey == topic.Key
                     && AttentionRules.IsDirectReply(post, parent, did))
                 {
-                    addressedPosts.Add(post.Id);
-                    directed.Add(Item(did, topic, topic.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
+                    if (notifications?.Replies != false) directed.Add(Item(did, topic, topic.TangentKey, post, "direct_reply", "replies_to_you", authorHandle));
                     continue;
                 }
             }
@@ -159,8 +169,7 @@ public sealed class ExperienceDigest(
             if (facets.Any(facet => recipientDid is not null && facet.References(recipientDid)
                     || facet.References(ParticipantIdentity.InternalValue(did))))
             {
-                addressedPosts.Add(post.Id);
-                directed.Add(Item(did, topic, topic.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                if (notifications?.Mentions != false) directed.Add(Item(did, topic, topic.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                 continue;
             }
             // Group mentions expand to current holders of the scoped roles: the group is
@@ -170,14 +179,23 @@ public sealed class ExperienceDigest(
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (groups.Count > 0 && post.AuthorParticipantId != did && await HoldsAnyRole(did, topic.TangentKey, groups, ct))
             {
-                addressedPosts.Add(post.Id);
-                directed.Add(Item(did, topic, topic.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
+                if (notifications?.Mentions != false) directed.Add(Item(did, topic, topic.TangentKey, post, "direct_mention", "addressed_to_you", authorHandle));
                 continue;
             }
-            if (mode != WatchMode.Replies)
+            if (mode != WatchMode.Replies && (notifications is null || notifications.Following && explicitlyFollowing))
                 watched.Add(Item(did, topic, topic.TangentKey, post, "watched_activity", null, authorHandle));
         }
-    }
+            using var fresh = EntityContext.NoCache();
+            var current = await hub.Topics.Describe(did, topic.Key, ct);
+            if (current?.CanRead != true || current.TangentKey != topic.TangentKey)
+            {
+                var scope = refs.Topic(topic.TangentKey, topic.Key);
+                directed.RemoveAll(item => item.ScopeRef == scope);
+                watched.RemoveAll(item => item.ScopeRef == scope);
+                return false;
+            }
+            return incomplete;
+        }
     }
 
     /// <summary>Whether the recipient currently holds any of the mentioned role groups in
@@ -204,12 +222,12 @@ public sealed class ExperienceDigest(
         => new("att:" + topic.Key + ":" + post.Id, kind, post.AuthorParticipantId,
             string.IsNullOrEmpty(authorHandle) ? null : authorHandle, did,
             refs.Topic(tangentKey, topic.Key), refs.Post(tangentKey, topic.Key, post.Id),
-            relationship, Preview(post.Content.Text, 160),
+            relationship, Preview(PostMarkup.PlainText(post.Content), 160),
             "seq:" + post.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "pending");
 
     internal static string Preview(string value, int limit)
-        => value.Length <= limit ? value : value[..(char.IsHighSurrogate(value[limit - 2]) ? limit - 2 : limit - 1)] + "…";
+        => value.Length <= limit ? value : value[..(char.IsHighSurrogate(value[limit - 2]) ? limit - 2 : limit - 1)] + "â€¦";
 
     public async Task<string> HeadRevision(CancellationToken ct)
         => "att:" + (await ActivityJournal.LatestSequence(ct)).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -218,7 +236,7 @@ public sealed class ExperienceDigest(
 
     public string Encode(DigestCursor cursor) => cursorProtector.Protect(JsonSerializer.Serialize(cursor));
 
-    public DigestCursor? Decode(string? value, string participantId, string? scopeTangent, string? scopeTopic)
+    public DigestCursor? Decode(string? value, string participantId, string? scopeTangent, string? scopeTopic, string? filter = null)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         try
@@ -227,7 +245,7 @@ public sealed class ExperienceDigest(
             var cursor = JsonSerializer.Deserialize<DigestCursor>(cursorProtector.Unprotect(value));
             return cursor is null || cursor.ParticipantId != participantId || cursor.Offset < 0 || cursor.Offset > 100_000
                 || cursor.ExpiresAt <= clock.GetUtcNow()
-                || cursor.ScopeTangent != scopeTangent || cursor.ScopeTopic != scopeTopic ? null : cursor;
+                || cursor.ScopeTangent != scopeTangent || cursor.ScopeTopic != scopeTopic || cursor.Filter != filter ? null : cursor;
         }
         catch (Exception error) when (error is CryptographicException or JsonException or ArgumentException)
         {

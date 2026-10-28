@@ -8,7 +8,6 @@ using Tangent.Conversation;
 using Tangent.Activity;
 using Tangent.Infrastructure;
 using Tangent.Application;
-using Tangent.Application;
 using Tangent.Community;
 using Tangent.Spaces;
 
@@ -28,21 +27,21 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         Sort = SortSpecParser.ParseStrict<ModerationCase>(nameof(ModerationCase.FirstReportedAt))
     };
 
-    public Task<ModerationReportResult> Report(string actorId, string roomKey, string messageId,
+    public Task<ModerationReportResult> Report(string actorId, string topicKey, string messageId,
         string operationId, string reasonCode, string statement, CancellationToken ct)
     {
         CheckOperation(operationId);
         CheckReasonCode(reasonCode);
         CheckText(statement, nameof(statement), ModerationCase.MaximumStatementLength);
-        return topics.WithinAcceptanceAsync(actorId, roomKey, async (policy, token) =>
+        return topics.WithinAcceptanceAsync(actorId, topicKey, async (policy, token) =>
         {
             var post = await Post.Get(messageId, token);
-            if (post is null || post.TopicKey != roomKey)
+            if (post is null || post.TopicKey != topicKey)
                 throw new ArgumentException("Choose a Post in this Topic.", nameof(messageId));
             Require(AccessEvaluator.Evaluate(policy, TopicCapability.Read),
                 "The current Topic rules do not allow reporting this Post.");
             var now = clock.GetUtcNow();
-            var id = ModerationCase.Key(roomKey, messageId);
+            var id = ModerationCase.Key(topicKey, messageId);
             var current = await ModerationCase.Get(id, token);
             var subjectRevision = SubjectRevision(post);
             var replay = current?.Testimonies.FirstOrDefault(item => item.OperationId == operationId);
@@ -57,11 +56,11 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
                 post.AuthorParticipantId, post.Removed), "The current Topic rules do not allow reporting this Post.");
             if (current is null)
             {
-                var topic = await Topic.Get(roomKey, token)
+                var topic = await Topic.Get(topicKey, token)
                     ?? throw new ArgumentException("Choose a Post in this Topic.", nameof(messageId));
                 current = new ModerationCase
                 {
-                    Id = id, TangentKey = topic.TangentKey, TopicKey = roomKey,
+                    Id = id, TangentKey = topic.TangentKey, TopicKey = topicKey,
                     SubjectMessageId = messageId, SubjectParticipantId = post.AuthorParticipantId,
                     FirstReportedAt = now, UpdatedAt = now
                 };
@@ -88,16 +87,16 @@ public sealed class ModerationCaseService(TopicGovernance topics, References ref
         }, ct);
     }
 
-    public async Task<ModerationCasePage> List(string actorId, string roomKey, int page, CancellationToken ct)
+    public async Task<ModerationCasePage> List(string actorId, string topicKey, int page, CancellationToken ct)
     {
         if (page is < 1 or > MaximumPage)
             throw new ArgumentException("Choose a case page between 1 and 10000.", nameof(page));
-        var policy = await topics.ReadPolicyAsync(actorId, roomKey, ct);
+        var policy = await topics.ReadPolicyAsync(actorId, topicKey, ct);
         {
             RequireSteward(policy);
-            var selected = (await ModerationCase.Query(item => item.TopicKey == roomKey,
+            var selected = (await ModerationCase.Query(item => item.TopicKey == topicKey,
                 queue.WithPagination(page, PageSize).WithCountStrategy(null), ct)).ToList();
-            var hasNext = page < MaximumPage && selected.Count == PageSize && (await ModerationCase.Query(item => item.TopicKey == roomKey,
+            var hasNext = page < MaximumPage && selected.Count == PageSize && (await ModerationCase.Query(item => item.TopicKey == topicKey,
                 queue.WithPagination(page + 1, PageSize).WithCountStrategy(null), ct)).Count > 0;
             var summaries = new List<ModerationCaseSummary>(selected.Count);
             foreach (var item in selected)

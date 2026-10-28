@@ -12,7 +12,7 @@ namespace Tangent.Api;
 
 /// <summary>An unlisted direct-read mount. Koan constrains the row; this controller only narrows its route and projection.</summary>
 [ApiController, AllowAnonymous, Route("api/v1/public/tangents/{tangentId}/topics")]
-public sealed class PublicTopicsController(PublicConversationReader reader, PolicyGate policyGate) : EntityController<Topic, string>
+public sealed class PublicTopicsController(PublicConversationReader reader) : EntityController<Topic, string>
 {
     protected override QueryOptions BuildOptions()
     {
@@ -22,9 +22,6 @@ public sealed class PublicTopicsController(PublicConversationReader reader, Poli
         return options;
     }
 
-    protected override ObjectResult PrepareResponse(object? content)
-        => base.PrepareResponse(content is Topic topic ? PublicTopicDescription.From(topic) : content);
-
     [HttpGet("{id}")]
     public override async Task<IActionResult> GetById(string id, CancellationToken ct)
     {
@@ -32,11 +29,12 @@ public sealed class PublicTopicsController(PublicConversationReader reader, Poli
         var response = await base.GetById(id, ct);
         if (response is NotFoundResult || response is ObjectResult { StatusCode: StatusCodes.Status404NotFound })
             return HiddenNotFound();
-        if (response is not ObjectResult { Value: PublicTopicDescription topic }) return response;
+        if (response is not ObjectResult { Value: Topic }) return response;
         using var fresh = EntityContext.NoCache();
         Topic? stored = await Topic.Get(id, ct);
-        var tangent = await Community.Tangent.Get(topic.TangentKey, ct);
-        return stored is not null && PublicTopicAccess.IsPublic(stored, tangent) ? response : HiddenNotFound();
+        var tangent = stored is null ? null : await Community.Tangent.Get(stored.TangentKey, ct);
+        return stored is not null && PublicTopicAccess.IsPublic(stored, tangent)
+            ? Ok(PublicTopicDescription.From(stored, tangent!, await Tangent.Spaces.Space.Get(TangentConstants.SpaceId,ct))) : HiddenNotFound();
     }
 
     [HttpGet("{id}/posts")]
@@ -44,20 +42,15 @@ public sealed class PublicTopicsController(PublicConversationReader reader, Poli
         [FromQuery] string? around = null, [FromQuery] int limit = PublicConversationReader.MaximumPosts,
         CancellationToken ct = default)
     {
-        await policyGate.Enter(ct);
+        // Resolve through Koan first: failed credentials must win before query validation or data work.
+        var topicResponse = await GetById(id, ct);
+        if (topicResponse is not ObjectResult { Value: PublicTopicDescription topic }) return topicResponse;
         try
         {
-            // Resolve through Koan first: failed credentials must win before caller query validation or data work.
-            var topicResponse = await GetById(id, ct);
-            if (topicResponse is not ObjectResult { Value: PublicTopicDescription topic }) return topicResponse;
-            try
-            {
-                var window = await reader.ReadPostsUnderGate(topic, before, after, around, limit, ct);
-                return window is null ? HiddenNotFound() : Ok(window);
-            }
-            catch (ArgumentException error) { return BadRequest(new { reason = error.Message }); }
+            var window = await reader.ReadPosts(topic, before, after, around, limit, ct);
+            return window is null ? HiddenNotFound() : Ok(window);
         }
-        finally { policyGate.Exit(); }
+        catch (ArgumentException error) { return BadRequest(new { reason = error.Message }); }
     }
 
     [HttpGet("")]

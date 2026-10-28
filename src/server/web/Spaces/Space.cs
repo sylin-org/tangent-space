@@ -20,6 +20,10 @@ public sealed class Space : Entity<Space>
     public string WelcomeMessage { get; set; } = "";
     public string Byline { get; set; } = "";
     public string CoverImageUrl { get; set; } = "";
+    public string MarkImageUrl { get; set; } = "";
+    public string Accent { get; set; } = "gold";
+    public string Admission { get; set; } = "Open";
+    public DateTimeOffset AdmissionChangedAt { get; set; }
     public string Motd { get; set; } = "";
     public bool AllowAgentTangentOwnership { get; set; }
     public bool HumanDeclared { get; set; }

@@ -12,6 +12,44 @@ namespace Tangent.Tests.ExperienceIntegration;
 public sealed class AccessSettingsTests
 {
     [Fact]
+    public async Task Topic_settings_patch_preserves_fields_owned_by_other_sections()
+    {
+        await using var app = await ExperienceWebApp.StartAsync();
+        app.Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", app.OwnerToken);
+        var settingsPath = $"/api/v1/tangents/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}/settings";
+        var topicPath = $"/api/v1/tangents/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}";
+
+        using (var participation = await app.Http.PatchAsync(settingsPath,
+            JsonContent.Create(new { allowPostEditing = true, isLocked = true }), TestContext.Current.CancellationToken))
+            participation.EnsureSuccessStatusCode();
+        using (var details = await app.Http.PatchAsync(settingsPath,
+            JsonContent.Create(new { title = "A revised Topic", topic = "A revised description" }), TestContext.Current.CancellationToken))
+            details.EnsureSuccessStatusCode();
+        using (var read = await app.Http.GetAsync(topicPath, TestContext.Current.CancellationToken))
+        {
+            read.EnsureSuccessStatusCode();
+            using var document = JsonDocument.Parse(await read.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            Assert.Equal("A revised Topic", document.RootElement.GetProperty("title").GetString());
+            Assert.Equal("A revised description", document.RootElement.GetProperty("topic").GetString());
+            Assert.True(document.RootElement.GetProperty("allowPostEditing").GetBoolean());
+            Assert.True(document.RootElement.GetProperty("isLocked").GetBoolean());
+        }
+
+        using (var participation = await app.Http.PatchAsync(settingsPath,
+            JsonContent.Create(new { isLocked = false }), TestContext.Current.CancellationToken))
+            participation.EnsureSuccessStatusCode();
+        using (var read = await app.Http.GetAsync(topicPath, TestContext.Current.CancellationToken))
+        {
+            read.EnsureSuccessStatusCode();
+            using var document = JsonDocument.Parse(await read.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            Assert.Equal("A revised Topic", document.RootElement.GetProperty("title").GetString());
+            Assert.Equal("A revised description", document.RootElement.GetProperty("topic").GetString());
+            Assert.True(document.RootElement.GetProperty("allowPostEditing").GetBoolean());
+            Assert.False(document.RootElement.GetProperty("isLocked").GetBoolean());
+        }
+    }
+
+    [Fact]
     public async Task Owner_can_set_then_restore_a_topic_access_map_without_policy_versions()
     {
         await using var app = await ExperienceWebApp.StartAsync();
@@ -19,7 +57,7 @@ public sealed class AccessSettingsTests
 
         var path = $"/api/v1/tangents/{ExperienceWebApp.TangentKey}/topics/{ExperienceWebApp.TopicKey}/access";
         using var replace = await app.Http.PutAsJsonAsync(path,
-            new { see = new[] { "role:secret_club" }, post = new[] { "role:secret_club" }, manage = Array.Empty<string>() },
+            new { access = new { see = new[] { "role:secret_club" }, post = new[] { "role:secret_club" }, manage = Array.Empty<string>() }, publishExistingHistory = false },
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, replace.StatusCode);
         using (var document = JsonDocument.Parse(await replace.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
@@ -30,7 +68,7 @@ public sealed class AccessSettingsTests
         }
 
         using var reset = await app.Http.PutAsJsonAsync(path,
-            new { see = (string[]?)null, post = (string[]?)null, manage = (string[]?)null },
+            new { access = new { see = (string[]?)null, post = (string[]?)null, manage = (string[]?)null }, publishExistingHistory = false },
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
         using var resetDocument = JsonDocument.Parse(await reset.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
@@ -58,15 +96,16 @@ public sealed class AccessSettingsTests
                 .Single(role => role.GetProperty("id").GetString() == "role:owner");
             Assert.Empty(owner.GetProperty("members").EnumerateArray());
         }
-        // The derivation is observable at the wire: the owner's arrival projects every ladder
-        // rung without any stored membership naming them.
+        // The owner's current management authority is visible without a stored Owner membership.
         using (var arrival = await app.Http.GetAsync("/api/v1/experience", TestContext.Current.CancellationToken))
         {
             arrival.EnsureSuccessStatusCode();
             using var arrivalDocument = JsonDocument.Parse(await arrival.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-            var actions = arrivalDocument.RootElement.GetProperty("place").GetProperty("allowedActions").EnumerateArray()
-                .Select(value => value.GetString()).ToHashSet();
-            Assert.Superset(new HashSet<string> { "warn_user", "timeout_user", "suspend_user", "ban_user", "assign_roles" }, actions!);
+            var authority = arrivalDocument.RootElement.GetProperty("authority");
+            Assert.True(authority.GetProperty("canManage").GetBoolean());
+            var management = authority.GetProperty("management");
+            foreach (var fact in new[] { "canWarn", "canTimeout", "canSuspend", "canBan", "canAssignRoles" })
+                Assert.True(management.GetProperty(fact).GetBoolean());
         }
 
         const string rolePath = "/api/identity/roles/role:test-gardeners";
@@ -94,24 +133,17 @@ public sealed class AccessSettingsTests
     }
 
     [Fact]
-    public async Task Role_editor_support_endpoints_are_available_in_the_real_application_host()
+    public async Task Role_editor_support_endpoints_require_a_browser_cookie()
     {
         await using var app = await ExperienceWebApp.StartAsync();
         app.Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", app.OwnerToken);
 
         using var descriptor = await app.Http.GetAsync("/api/roles/ui/descriptor",
             TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, descriptor.StatusCode);
-        using (var document = JsonDocument.Parse(await descriptor.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
-            Assert.NotEmpty(document.RootElement.GetProperty("capabilities").EnumerateArray());
+        Assert.Equal(HttpStatusCode.Unauthorized, descriptor.StatusCode);
 
         using var session = await app.Http.GetAsync("/api/roles/ui/session",
             TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, session.StatusCode);
-        using (var document = JsonDocument.Parse(await session.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
-        {
-            Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("requestToken").GetString()));
-            Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("headerName").GetString()));
-        }
+        Assert.Equal(HttpStatusCode.Unauthorized, session.StatusCode);
     }
 }

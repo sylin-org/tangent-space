@@ -14,22 +14,23 @@ namespace Tangent.Api;
 [ApiController]
 [Authorize]
 [Route("api/v1/tangents")]
-public sealed class VersionedTangentsController(TangentServer hub) : ControllerBase
+public sealed class VersionedTangentsController(TangentServer hub, DirectorySummaryReader summaries,
+    TangentMemberDirectory members) : ControllerBase
 {
     [AllowAnonymous]
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int topicPage = 1, CancellationToken ct = default)
-        => await Read(async actor => await hub.Tangents.List(actor, page, topicPage, ct));
+        => await Read(async actor => await summaries.ListTangents(actor, page, topicPage, ct));
 
     [AllowAnonymous]
     [HttpGet("{tangentId}")]
     public async Task<IActionResult> Get(string tangentId, CancellationToken ct)
-        => await Read(async actor => await hub.Tangents.Describe(actor, tangentId, ct));
+        => await Read(async actor => await summaries.DescribeTangent(actor, tangentId, ct));
 
     [AllowAnonymous]
     [HttpGet("{tangentId}/topics")]
     public async Task<IActionResult> Topics(string tangentId, [FromQuery] int page = 1, CancellationToken ct = default)
-        => await Read(async actor => await hub.Topics.ListForTangent(actor, tangentId, page, ct));
+        => await Read(async actor => await summaries.ListTopics(actor, tangentId, page, ct));
 
     [AllowAnonymous]
     [HttpGet("{tangentId}/topics/{topicId}")]
@@ -39,8 +40,8 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         try
         {
             var actor = ReadActor();
-            var topic = await hub.Topics.Describe(actor, topicId, ct);
-            return topic is null || topic.TangentKey != tangentId ? NotFound() : Ok(topic);
+            var topic = await summaries.DescribeTopic(actor, tangentId, topicId, ct);
+            return topic is null ? NotFound() : Ok(topic);
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
     }
@@ -49,56 +50,79 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
     [HttpPost]
     public Task<IActionResult> Create(CreateTangentRequest request, CancellationToken ct)
         => Execute(actor => hub.Tangents.Create(actor, request.Key, request.Name, request.Description, request.Motto,
-            request.Accent, request.Artwork, ct), created: true);
+            request.Accent, request.Artwork, ct, kind: request.Kind, readAudience: request.ReadAudience), created: true, grant: ParticipationGrants.Post);
 
     [TopicMutation(ParticipationGrants.Post)]
     [HttpPost("{tangentId}/topics")]
     public Task<IActionResult> CreateTopic(string tangentId, CreateTangentTopicRequest request, CancellationToken ct)
-        => Execute(actor => hub.Tangents.CreateTopic(actor, tangentId, request.Key, request.Title, request.Topic, ct), created: true);
+        => Execute(actor => hub.Tangents.CreateTopic(actor, tangentId, request.Key, request.Title, request.Topic, ct),
+            created: true, grant: ParticipationGrants.Post);
 
     [TopicMutation]
     [HttpPatch("{tangentId}")]
     public Task<IActionResult> Change(string tangentId, ChangeTangentRequest request, CancellationToken ct)
         => Execute(actor => hub.Tangents.Change(actor, tangentId, request.Name, request.Description, request.Motto,
-            request.Accent, request.Artwork, ct));
+            request.Accent, request.Artwork, ct, request.Kind));
 
     [HttpGet("{tangentId}/access")]
     public Task<IActionResult> GetAccess(string tangentId, CancellationToken ct)
         => Execute(actor => hub.Tangents.GetAccess(actor, tangentId, ct));
 
+    [HttpGet("{tangentId}/members")]
+    public Task<IActionResult> Members(string tangentId, [FromQuery] string? cursor, CancellationToken ct)
+        => Execute(actor => members.List(actor, tangentId, cursor, ct));
+
+    [HttpGet("{tangentId}/membership-preview")]
+    public Task<IActionResult> PreviewTangentMembership(string tangentId, [FromQuery] string identifier, CancellationToken ct)
+        => Execute(actor => members.Preview(actor, tangentId, identifier, ct));
+
+    [TopicMutation]
+    [HttpPut("{tangentId}/admission")]
+    public Task<IActionResult> SetAdmission(string tangentId, ChangeTangentAdmissionRequest request, CancellationToken ct)
+        => Execute(actor => hub.Participants.SetAdmission(actor, tangentId, request.Admission, ct));
+
     [TopicMutation]
     [HttpPut("{tangentId}/access")]
-    public Task<IActionResult> SetAccess(string tangentId, AccessMap access, CancellationToken ct)
-        => Execute(actor => hub.Tangents.SetAccess(actor, tangentId, access, ct));
+    public Task<IActionResult> SetAccess(string tangentId, ChangeAccessRequest request, CancellationToken ct)
+        => Execute(actor => hub.Tangents.SetAccess(actor, tangentId, request.Access, ct, request.PublishExistingHistory));
 
     [HttpGet("{tangentId}/topics/{topicId}/access")]
     public async Task<IActionResult> GetTopicAccess(string tangentId, string topicId, CancellationToken ct)
     {
         try { return Ok(await hub.Topics.GetAccess(Actor(), topicId, tangentId, ct)); }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
     }
 
     [TopicMutation]
     [HttpPut("{tangentId}/topics/{topicId}/access")]
-    public async Task<IActionResult> SetTopicAccess(string tangentId, string topicId, AccessMap access, CancellationToken ct)
+    public async Task<IActionResult> SetTopicAccess(string tangentId, string topicId, ChangeAccessRequest request, CancellationToken ct)
     {
         try
         {
             var actor = Actor();
             await hub.Topics.GetAccess(actor, topicId, tangentId, ct);
-            var result = await hub.Topics.SetAccess(actor, topicId, access, ct);
+            var result = await hub.Topics.SetAccess(actor, topicId, request.Access, ct, request.PublishExistingHistory);
             return result.Accepted
                 ? Ok(await hub.Topics.GetAccess(actor, topicId, tangentId, ct))
                 : Outcome(result);
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
+    }
+
+    [HttpGet("{tangentId}/topics/{topicId}/membership-preview")]
+    public async Task<IActionResult> PreviewMembership(string tangentId, string topicId,
+        [FromQuery] string identifier, [FromQuery] TopicRole role, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        try { return Ok(await hub.Topics.PreviewMembership(Actor(), topicId, tangentId, identifier, role, ct)); }
+        catch (UnauthorizedAccessException) { return Unauthorized(); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
     }
 
     [TopicMutation]
     [HttpPatch("{tangentId}/topics/{topicId}/settings")]
-    [HttpPatch("{tangentId}/topics/{topicId}")]
     public async Task<IActionResult> ChangeTopic(string tangentId, string topicId, ChangeTopicSettingsRequest request, CancellationToken ct)
     {
         try
@@ -109,7 +133,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
             return Outcome(await hub.Topics.SetSettings(actor, topicId, request.AllowPostEditing, request.IsLocked, request.Title, request.Topic, ct));
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
     }
 
     [TopicMutation]
@@ -126,7 +150,7 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
                 request.PublishExistingHistory, ct));
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
     }
 
     [AllowAnonymous]
@@ -146,12 +170,12 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
             var description = await hub.Topics.Describe(actor, post.TopicKey, ct);
             if (description is null || description.TangentKey != tangentId) return NotFound();
             var window = await hub.Posts.ReadWindow(actor, post.TopicKey, null, postId, 25, ct);
-            return Ok(new { topic = description, window });
+            return Ok(new { topic = description, window = PostReadProjection.Of(window) });
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         catch (ArgumentException rejected) { return BadRequest(new { reason = rejected.Message }); }
         catch (TangentRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
-        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
     }
 
     private async Task<IActionResult> Read<T>(Func<string?, Task<T>> operation)
@@ -165,19 +189,21 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
         }
         catch (UnauthorizedAccessException) { return Unauthorized(); }
         catch (TangentRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
-        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
     }
 
-    private async Task<IActionResult> Execute<T>(Func<string, Task<T>> operation, bool created = false)
+    private async Task<IActionResult> Execute<T>(Func<string, Task<T>> operation, bool created = false,
+        string grant = ParticipationGrants.Manage)
     {
         Response.Headers.CacheControl = "no-store";
         try
         {
-            var actor = Actor();
+            var actor = ParticipationAccess.Require(User, grant);
             return created ? StatusCode(StatusCodes.Status201Created, await operation(actor)) : Ok(await operation(actor));
         }
+        catch (UnauthorizedAccessException) { return StatusCode(StatusCodes.Status403Forbidden); }
         catch (TangentRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
-        catch (TopicRuleViolation rejected) { return StatusCode(Status(rejected.Denial), new { reason = rejected.Message, denial = rejected.Denial }); }
+        catch (TopicRuleViolation rejected) { return TopicProblem(rejected); }
     }
 
     private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);
@@ -200,7 +226,16 @@ public sealed class VersionedTangentsController(TangentServer hub) : ControllerB
     };
 
     private static IActionResult Outcome(TopicAdministrationResult result)
-        => result.Accepted ? new OkObjectResult(result) : new ObjectResult(result) { StatusCode = Status(result.Denial) };
+        => result.Accepted ? new OkObjectResult(result)
+            : result.Denial == TopicDenial.HistoryPublicationRequired ? PublicationRequired(result.Reason)
+            : new ObjectResult(result) { StatusCode = Status(result.Denial) };
+
+    private static IActionResult TopicProblem(TopicRuleViolation problem)
+        => problem.Denial == TopicDenial.HistoryPublicationRequired ? PublicationRequired(problem.Message)
+            : new ObjectResult(new { reason = problem.Message, denial = problem.Denial }) { StatusCode = Status(problem.Denial) };
+
+    private static IActionResult PublicationRequired(string reason)
+        => new BadRequestObjectResult(new { code = "history_publication_required", reason });
 
     private static int Status(TopicDenial? denial) => denial is { } value ? Status(value) : 400;
 }

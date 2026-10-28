@@ -4,6 +4,7 @@
 // decision flow.
 import { computed, watchEffect } from 'vue'
 import type { Moderation } from '../composables/moderation'
+import CaseParticipantActions from './CaseParticipantActions.vue'
 
 const props = defineProps<{ moderation: Moderation }>()
 
@@ -52,7 +53,7 @@ function testimonyNavOffset(delta: number): number {
 </script>
 
 <template>
-  <p class="stewardship-intro">Reports are signals, not verdicts. Review each participant’s account and the reported Post, then defer or involve the accountable human Host.</p>
+  <p class="stewardship-intro">Review reports about Posts in this conversation. Reports are signals, not verdicts; read each account and the reported Post before deciding what to do or involving the human Host.</p>
   <div class="stewardship-tools">
     <button id="stewardship-refresh" class="btn btn-quiet" type="button" :disabled="m.refreshing.value" @click="m.loadCases(false)">Refresh</button>
     <span id="stewardship-status" class="hint" role="status" aria-live="polite" :class="{ error: m.casesStatusError.value }">{{ m.casesStatus.value }}</span>
@@ -109,6 +110,9 @@ function testimonyNavOffset(delta: number): number {
       <p v-if="!actionable" class="moderation-terminal">
         {{ m.detail.value.case.state === 'escalated' ? 'The accountable human Host now owns the next step.' : 'This case cannot be changed from your current role or Post revision.' }}
       </p>
+      <CaseParticipantActions v-if="m.detail.value.case.subjectAvailable !== false && m.detail.value.participantActions?.actions.length"
+        :case-ref="m.detail.value.case.caseRef" :participant="m.detail.value.participantActions"
+        @changed="m.openCase(m.detail.value.case.caseRef, m.detail.value.testimonyOffset ?? 0)" />
     </div>
     <form id="moderation-decision" class="moderation-decision" :hidden="!actionable || m.previewVisible.value" @submit.prevent="m.previewDecision">
       <h3 id="moderation-detail-title">Choose the next step</h3>

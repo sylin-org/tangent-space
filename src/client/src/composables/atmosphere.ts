@@ -3,9 +3,8 @@ import { computed, reactive, ref, watchEffect } from 'vue'
 import { asciiScenes, sceneRenderer, type SceneRenderer } from '../atmosphere/ascii-scenes'
 import type { ServerView } from '../stores/site'
 
-// The server's atmosphere layer, ported from atmosphere.js: one ASCII canvas
-// behind the whole page, configured from the server's own settings. Unsaved
-// choices exist only while the editor in Server settings is open.
+// The server's atmosphere layer previews an actor-scoped draft while its editor
+// is open. Closing the editor restores the saved backdrop and keeps the draft.
 
 export interface AtmosphereSettings {
   scene: string
@@ -51,6 +50,8 @@ let lastFrame = 0
 let time = 47
 let interval = 1000 / 15
 let previewWidth = 0
+let backgroundWidth = 0
+let backgroundHeight = 0
 const pointer = { x: 0, y: 0, active: false }
 let pointerDirty = false
 
@@ -63,10 +64,37 @@ export function createAtmosphere() {
   const panelOpen = ref(false)
   const saving = ref(false)
   const statusMessage = ref('Choose the atmosphere everyone sees here. Changes stay in preview until saved.')
+  const statusError = ref(false)
   const canManage = ref(false)
   let participantRef = ''
+  let saveGeneration = 0
 
-  const settings = computed<AtmosphereSettings>(() => draft.value ?? serverSettings.value)
+  const settings = computed<AtmosphereSettings>(() => panelOpen.value && draft.value ? draft.value : serverSettings.value)
+  const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== JSON.stringify(serverSettings.value))
+
+  function draftKey(): string {
+    return `tangent:atmosphere-draft:${encodeURIComponent(participantRef)}`
+  }
+
+  function persistDraft(): void {
+    if (!participantRef) return
+    try {
+      if (!dirty.value || !draft.value) sessionStorage.removeItem(draftKey())
+      else sessionStorage.setItem(draftKey(), JSON.stringify(Object.fromEntries(
+        (Object.keys(serverSettings.value) as (keyof AtmosphereSettings)[])
+          .filter(field => draft.value![field] !== serverSettings.value[field])
+          .map(field => [field, draft.value![field]]),
+      )))
+    } catch { /* Preview remains usable without browser storage. */ }
+  }
+
+  function restoreDraft(): void {
+    if (!participantRef) return
+    try {
+      const stored = sessionStorage.getItem(draftKey())
+      draft.value = stored ? { ...serverSettings.value, ...sanitize(JSON.parse(stored)) } : null
+    } catch { draft.value = null }
+  }
 
   function moving(): boolean {
     const s = settings.value
@@ -82,9 +110,17 @@ export function createAtmosphere() {
     canvas.setAttribute('aria-hidden', 'true')
     document.body.prepend(canvas)
     background = sceneRenderer(canvas)
-    resize()
+    const placeCanvas = () => {
+      const hero = document.querySelector('.space-hero:not(.space-hero-preview)')
+      canvas.hidden = !hero
+      if (hero && canvas.parentElement !== hero) hero.prepend(canvas)
+      else if (!hero && canvas.parentElement !== document.body) document.body.prepend(canvas)
+      if (resize()) restart()
+    }
+    placeCanvas()
+    new MutationObserver(placeCanvas).observe(document.body, { childList: true, subtree: true })
 
-    // The page-shell decoration (atmosphere.js update()).
+    // The welcome illustration follows the saved atmosphere and editor preview.
     watchEffect(() => {
       const s = settings.value
       document.body.classList.toggle('atmosphere-on', s.scene !== 'none' && s.intensity > 0)
@@ -125,8 +161,14 @@ export function createAtmosphere() {
     draw()
   }
 
-  function resize(): void {
-    background?.resize(window.innerWidth, window.innerHeight)
+  function resize(): boolean {
+    const hero = document.querySelector('.space-hero:not(.space-hero-preview)')
+    const box = hero?.getBoundingClientRect()
+    if (!box?.width || !box.height || (box.width === backgroundWidth && box.height === backgroundHeight)) return false
+    backgroundWidth = box.width
+    backgroundHeight = box.height
+    background?.resize(box.width, box.height)
+    return true
   }
 
   function paintPreview(canvas: HTMLCanvasElement): void {
@@ -150,7 +192,9 @@ export function createAtmosphere() {
       s.mouseSpotlight && pointer.active && !forced?.matches && s.scene !== 'none' && s.intensity > 0
         ? { x: pointer.x, y: pointer.y, radius: Math.max(180, Math.min(420, Math.min(window.innerWidth, window.innerHeight) * 0.26)) }
         : undefined
-    background?.draw(s.scene, time, s.color, { opacity: (s.intensity / 100) * 0.85, spotlight })
+    const hero = document.querySelector('.space-hero:not(.space-hero-preview)')?.getBoundingClientRect()
+    const heroSpotlight = spotlight && hero ? { ...spotlight, x: spotlight.x - hero.left, y: spotlight.y - hero.top } : undefined
+    if (hero) background?.draw(s.scene, time, s.color, { opacity: (s.intensity / 100) * 0.85, spotlight: heroSpotlight })
     const preview = document.getElementById('atmosphere-preview') as HTMLCanvasElement | null
     if (panelOpen.value && previewPainter && previewWidth > 0 && preview) {
       const box = preview.getBoundingClientRect()
@@ -204,54 +248,68 @@ export function createAtmosphere() {
     pointerFrame()
   }
 
-  /** Live server values (atmosphere.js configure). */
+  /** Apply current server settings and isolate previews by signed-in actor. */
   function configure(server: ServerView | null, participant: { participantRef: string } | null): void {
     const changedActor = participantRef !== (participant?.participantRef ?? '')
+    const previouslyAuthorized = canManage.value
     serverSettings.value = fromServer(server)
     participantRef = participant?.participantRef ?? ''
     canManage.value = server?.canManage === true && !!participantRef
     if (changedActor || !canManage.value) {
+      saveGeneration++
+      saving.value = false
       draft.value = null
       close()
+      statusError.value = false
+      statusMessage.value = ''
+      if (canManage.value) restoreDraft()
     }
+    else if (!previouslyAuthorized) restoreDraft()
     restart()
   }
 
   function change(patch: Partial<AtmosphereSettings>): void {
     if (!canManage.value || !panelOpen.value || saving.value) return
     draft.value = { ...settings.value, ...sanitize(patch) }
+    persistDraft()
     restart()
+    statusError.value = false
     statusMessage.value = 'Previewing your changes. Save when it feels right.'
   }
 
   function open(): void {
     if (!canManage.value) return
     if (panelOpen.value) return
-    draft.value = { ...serverSettings.value }
+    draft.value ??= { ...serverSettings.value }
     panelOpen.value = true
     restart()
-    statusMessage.value = 'Choose the atmosphere everyone sees here. Changes stay in preview until saved.'
+    statusMessage.value = dirty.value ? 'Your unsaved atmosphere is ready to preview.' : 'Preview changes here, then save them for everyone.'
   }
 
   function close(): void {
     if (!panelOpen.value) return
     panelOpen.value = false
-    draft.value = null
     previewWidth = 0
     restart()
   }
 
   function resetPreview(): void {
+    if (saving.value) return
     draft.value = { ...serverSettings.value }
+    persistDraft()
     restart()
+    statusError.value = false
     statusMessage.value = 'Preview restored to the saved atmosphere.'
   }
 
   async function save(): Promise<void> {
-    if (!canManage.value || saving.value) return
+    if (!canManage.value || !draft.value || !dirty.value || saving.value) return
     const actor = participantRef
-    const s = settings.value
+    const generation = ++saveGeneration
+    const s = { ...draft.value }
     saving.value = true
+    statusError.value = false
+    statusMessage.value = 'Saving atmosphere…'
     try {
       const response = await httpRequest('/api/server', {
         method: 'PATCH',
@@ -267,20 +325,23 @@ export function createAtmosphere() {
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error((result as Record<string, string>).error || (result as Record<string, string>).reason || 'The atmosphere could not be saved. Try again.')
-      if (participantRef !== actor) return
+      if (generation !== saveGeneration || participantRef !== actor) return
       serverSettings.value = fromServer(result as ServerView)
       draft.value = panelOpen.value ? { ...serverSettings.value } : null
+      persistDraft()
       restart()
-      statusMessage.value = 'A new atmosphere. Everyone arriving here will see it.'
+      statusMessage.value = 'Atmosphere saved.'
     } catch (error) {
+      if (generation !== saveGeneration || participantRef !== actor) return
+      statusError.value = true
       statusMessage.value = (error as Error).message
     } finally {
-      saving.value = false
+      if (generation === saveGeneration) saving.value = false
     }
   }
 
   return reactive({
-    settings, serverSettings, draft, panelOpen, saving, statusMessage, canManage,
+    settings, serverSettings, draft, panelOpen, saving, statusMessage, statusError, canManage, dirty,
     install, configure, change, open, close, resetPreview, save,
     paintPreview, paintThumb, restart,
   })

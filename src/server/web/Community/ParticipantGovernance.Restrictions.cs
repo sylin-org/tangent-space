@@ -11,8 +11,8 @@ namespace Tangent.Community;
 public sealed partial class ParticipantGovernance
 {
     /// <summary>Scoped timeout/ban/lift. Expiry is checked at evaluation; this never touches global space suspension.</summary>
-    public async Task<RestrictionResult> SetRestriction(string actorId, string tangentKey, string? roomKey, string targetIdentifier,
-        RestrictionKind kind, DateTimeOffset? until, string reason, CancellationToken ct)
+    public async Task<RestrictionResult> SetRestriction(string actorId, string tangentKey, string? topicKey, string targetIdentifier,
+        RestrictionKind kind, DateTimeOffset? until, string reason, CancellationToken ct, bool blockPosting = true, bool blockStarting = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
         await gate.Enter(ct);
@@ -38,18 +38,18 @@ public sealed partial class ParticipantGovernance
             TopicAudit? audit = null;
             try
             {
-                if (actor.IsSuspended) throw new TopicRuleViolation(TopicDenial.Forbidden, "A suspended participant cannot moderate.");
+                if (!await SpaceAdmission.Admitted(space,actorId,ct) || actor.IsSuspended) throw new TopicRuleViolation(TopicDenial.Forbidden, "A suspended participant cannot moderate.");
                 // A restricted moderator cannot impose restrictions; the topic path enforces this through CanManage.
-                if (string.IsNullOrWhiteSpace(roomKey))
+                if (string.IsNullOrWhiteSpace(topicKey))
                     await RequireUnrestricted(actorId, tangentKey, now, ct);
                 // Higher authority is protected: never the space owner, the Tangent owner, or the acting moderator.
                 if (targetId == actorId || space?.IsOwner(targetId) == true || tangent.IsOwner(targetId))
                     throw new TopicRuleViolation(TopicDenial.Forbidden, "Restrictions cannot target the owner or a higher authority.");
-                if (!string.IsNullOrWhiteSpace(roomKey))
+                if (!string.IsNullOrWhiteSpace(topicKey))
                 {
                     scope = RestrictionScope.Topic;
-                    scopeKey = roomKey;
-                    topic = await Topic.Get(roomKey, ct) ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The requested topic does not exist.");
+                    scopeKey = topicKey;
+                    topic = await Topic.Get(topicKey, ct) ?? throw new TopicRuleViolation(TopicDenial.NotFound, "The requested topic does not exist.");
                     if (topic.TangentKey != tangentKey)
                         throw new TopicRuleViolation(TopicDenial.InvalidInput, "The topic does not belong to this Tangent.");
                     selectedRevision = topic.PolicyRevision;
@@ -64,12 +64,13 @@ public sealed partial class ParticipantGovernance
                 else if (!(tangent.IsOwner(actorId) || await IsServerOwner(actorId, ct)) && actorMembership?.Role != TangentRole.Admin)
                     throw new TopicRuleViolation(TopicDenial.Forbidden, "Only the Tangent owner or a Tangent administrator can restrict at this scope.");
                 var stored = ScopedRestriction.Impose(scope, scopeKey, targetId, kind, until, reason, actorId, now);
+                if(kind==RestrictionKind.Timeout){if(!blockPosting&&!blockStarting)throw new TopicRuleViolation(TopicDenial.InvalidInput,"Choose what this time out restricts.");stored.BlockPosting=blockPosting;stored.BlockStarting=blockStarting;}
                 await stored.Save(ct);
-                await ActivityJournal.AppendInTransaction(ActivityKind.RestrictionChanged, roomKey ?? "", actorId, targetId,
+                await ActivityJournal.AppendInTransaction(ActivityKind.RestrictionChanged, topicKey ?? "", actorId, targetId,
                     tangentKey: tangent.Id, ct: ct);
                 audit = new TopicAudit
                 {
-                    ActorParticipantId = actorId, TopicKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
+                    ActorParticipantId = actorId, TopicKey = topicKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
                     Accepted = true, Reason = stored.Reason, SelectedPolicyRevision = selectedRevision,
                     SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
                 };
@@ -81,7 +82,7 @@ public sealed partial class ParticipantGovernance
             catch (TopicRuleViolation rejected) { denial = rejected; }
             audit = new TopicAudit
             {
-                ActorParticipantId = actorId, TopicKey = roomKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
+                ActorParticipantId = actorId, TopicKey = topicKey ?? "", TargetParticipantId = targetId, Operation = TopicAdministration.SetRestriction,
                 Accepted = false, Denial = denial!.Denial, Reason = denial.Message,
                 SelectedPolicyRevision = selectedRevision, SpacePolicyRevision = space?.PolicyRevision ?? 0, OccurredAt = now
             };
@@ -100,35 +101,28 @@ public sealed partial class ParticipantGovernance
     }
 
     /// <summary>Current stored moderation record; a participant may inspect their own, stewards any at their scope.</summary>
-    public async Task<RestrictionResult?> GetRestriction(string actorId, string tangentKey, string? roomKey, string targetIdentifier, CancellationToken ct)
+    public async Task<RestrictionResult?> GetRestriction(string actorId, string tangentKey, string? topicKey, string targetIdentifier, CancellationToken ct)
     {
-        await gate.Enter(ct);
-        try
+        using var fresh = EntityContext.NoCache();
+        var scope = string.IsNullOrWhiteSpace(topicKey) ? RestrictionScope.Tangent : RestrictionScope.Topic;
+        var scopeKey = scope == RestrictionScope.Topic ? topicKey! : tangentKey;
+        var targetId = (await directory.ByIdentifier(targetIdentifier, ct))?.Participant.Id;
+        var stored = targetId is null ? null : await ScopedRestriction.Get(ScopedRestriction.Key(scope, scopeKey, targetId), ct);
+        if (stored is null) { return null; }
+        if (actorId != stored.ParticipantId)
         {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var scope = string.IsNullOrWhiteSpace(roomKey) ? RestrictionScope.Tangent : RestrictionScope.Topic;
-            var scopeKey = scope == RestrictionScope.Topic ? roomKey! : tangentKey;
-            var targetId = (await directory.ByIdentifier(targetIdentifier, ct))?.Participant.Id;
-            var stored = targetId is null ? null : await ScopedRestriction.Get(ScopedRestriction.Key(scope, scopeKey, targetId), ct);
-            if (stored is null) { await EntityContext.Commit(ct); return null; }
-            if (actorId != stored.ParticipantId)
+            if (scope == RestrictionScope.Tangent)
             {
-                if (scope == RestrictionScope.Tangent)
-                {
-                    var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
-                    await RequireSteward(tangent, actorId, actorMembership, "inspect restrictions", ct);
-                }
-                else
-                {
-                    var (_, policy) = await TopicWithPolicy(actorId, scopeKey, tangentKey, ct);
-                    if (!policy.CanManage)
-                        throw new TangentRuleViolation(TangentDenial.Forbidden, "Only topic managers can inspect topic restrictions.");
-                }
+                var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
+                await RequireSteward(tangent, actorId, actorMembership, "inspect restrictions", ct);
             }
-            await EntityContext.Commit(ct);
-            return new RestrictionResult(scope, scopeKey, stored.ParticipantId, stored.Kind, stored.Until, stored.Reason, "");
+            else
+            {
+                var (_, policy) = await TopicWithPolicy(actorId, scopeKey, tangentKey, ct);
+                if (!policy.CanManage)
+                    throw new TangentRuleViolation(TangentDenial.Forbidden, "Only topic managers can inspect topic restrictions.");
+            }
         }
-        finally { gate.Exit(); }
+        return new RestrictionResult(scope, scopeKey, stored.ParticipantId, stored.Kind, stored.Until, stored.Reason, "");
     }
 }

@@ -1,19 +1,11 @@
-# Tangent Space server lifecycle engine. Two servers live under src/server:
-#   web       — the .NET/Koan Tangent web+experience server; runs as the Docker container.
-#   connector — the Rust local connector (the sibling CompanionLobby checkout); a host-run
-#   binary, no container.
-# Every action applies to all servers where it is meaningful:
+# Tangent Space server lifecycle engine. Actions apply to the Tangent Docker service.
 # Wipe: stop/remove only the Compose tangent service, then clear one validated state
 #   directory under <repo>/.local/docker. Interactive use requires typing WIPE; -Force
 #   is the internal/script path and -WhatIf performs a dry run that touches nothing.
-#   The connector keeps no server-side state: its local state belongs to the operator
-#   (TANGENT_CONNECTOR_HOME) and is never touched here.
-# Build: verify the pinned framework contribution, then docker compose build tangent
-#   (web) and cargo build --release (connector). No stop and no wipe.
+# Build: verify the pinned framework contribution, then docker compose build tangent.
+#   No stop and no wipe.
 # Launch: delegate to scripts/start-docker.ps1 (retain or create the configuration, then
-#   start only Tangent). The connector is launched by its hosts (agent applications run
-#   `companion-lobby serve`; operators use the CLI), so launch reports its binary path
-#   instead of starting a process.
+#   start Tangent).
 [CmdletBinding()]
 param(
     [ValidateSet('Wipe', 'Build', 'Launch')][string]$Action,
@@ -158,26 +150,6 @@ function Invoke-TangentDockerBuild {
     Write-Output 'Built the Tangent image. Nothing was stopped or removed.'
 }
 
-# Build the connector: a release binary from the sibling CompanionLobby checkout. Kept
-# separate from the web image build so lifecycle tests can drive the web path with mocks.
-function Invoke-ConnectorBuild {
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$RepoRoot, [scriptblock]$CommandRunner)
-    $runner = if ($CommandRunner) { $CommandRunner } else { $script:DefaultTangentCommandRunner }
-    $connector = Join-Path (Split-Path -Parent $RepoRoot) 'CompanionLobby'
-    if (-not (Test-Path -LiteralPath (Join-Path $connector 'Cargo.toml'))) {
-        throw "The connector workspace is missing: $connector (a sibling checkout of github.com/sylin-org/CompanionLobby)"
-    }
-    $cargo = Get-Command cargo -ErrorAction SilentlyContinue
-    if (-not $cargo) { throw 'cargo (Rust) is required to build the connector: install the Rust toolchain or add it to PATH.' }
-    $previous = Get-Location
-    Set-Location -LiteralPath $connector
-    try { & $runner @('cargo', 'build', '--release') }
-    finally { Set-Location -LiteralPath $previous.Path }
-    $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'companion-lobby.exe' } else { 'companion-lobby' }
-    Write-Output "Built the connector: $(Join-Path $connector "target/release/$binary")"
-}
-
 # Entry point. Tests dot-source this file with $TangentLifecycleSkipMain set and call the
 # functions above directly; the dispatcher below then never runs.
 if (-not ($TangentLifecycleSkipMain -or $global:TangentLifecycleSkipMain)) {
@@ -189,21 +161,16 @@ if (-not ($TangentLifecycleSkipMain -or $global:TangentLifecycleSkipMain)) {
             $result = Invoke-TangentWipe -AllowedRoot $allowedRoot -RepoRoot $repoRoot -Force:$Force -CommandRunner $CommandRunner -Prompt $Prompt -WhatIf:$WhatIf
             if ($result.status -in @('wiped', 'absent')) {
                 Write-Output 'A fresh site is configured on the next launch; use Launch.bat (or scripts/start-docker.ps1).'
-                Write-Output 'The connector keeps no server-side state; operator-local connector state is untouched.'
             }
         }
         'Build' {
             Invoke-TangentDockerBuild -RepoRoot $repoRoot -CommandRunner $CommandRunner -FrameworkPreparer $FrameworkPreparer
-            Invoke-ConnectorBuild -RepoRoot $repoRoot -CommandRunner $CommandRunner
         }
         'Launch' {
             $launchArguments = @{ Build = [bool]$Build }
             if ($CommandRunner) { $launchArguments.CommandRunner = $CommandRunner }
             & (Join-Path $repoRoot 'scripts/start-docker.ps1') @launchArguments
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $binary = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'companion-lobby.exe' } else { 'companion-lobby' }
-            $lobby = Join-Path (Split-Path -Parent $repoRoot) 'CompanionLobby'
-            Write-Output "The connector is host-run, not containerized: agent hosts start it via 'companion-lobby serve' (see the CompanionLobby README). Expected binary after Build: $(Join-Path $lobby "target/release/$binary")"
         }
     }
 }

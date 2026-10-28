@@ -4,7 +4,6 @@ using CarpaNet.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Identity;
-using Tangent.Identity;
 
 namespace Tangent.Api;
 

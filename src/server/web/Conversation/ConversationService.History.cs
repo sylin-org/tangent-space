@@ -51,12 +51,12 @@ public sealed partial class ConversationService
             if (selected.After > boundary || boundary > state.LastSequence) throw new ArgumentException("The continuation no longer matches this conversation; restart the read.");
             var candidates = await Post.Query(m => m.TopicKey == topic && m.Sequence > selected.After && m.Sequence <= boundary, HistoryWindow, ct);
             var posts = new List<Post>();
-            var bytes = 4096; // Envelope and protected continuations stay inside the overall 128 KiB budget.
+            var bytes = 32 * 1024; // Envelope, author labels and protected continuations.
             foreach (var post in candidates.Take(20))
             {
                 post.Permissions = Permissions.Post(policy, post.AuthorParticipantId, post.Removed);
-                var size = JsonSerializer.SerializeToUtf8Bytes(post).Length;
-                if (bytes + size > 128 * 1024) break;
+                var size = JsonSerializer.SerializeToUtf8Bytes(PostReadProjection.Of(post)).Length + 1024;
+                if (bytes + size > WindowPlanner.ResultBudget) break;
                 posts.Add(post); bytes += size;
             }
             var after = posts.Count == 0 ? selected.After : posts[^1].Sequence;
@@ -70,12 +70,21 @@ public sealed partial class ConversationService
                      .Where(pair => pair.Value is { Length: > 0 and <= 253 }))
             {
                 var handleBytes = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, string> { [author] = label }).Length;
-                if (bytes + handleBytes > 128 * 1024) continue;
+                if (bytes + handleBytes > WindowPlanner.ResultBudget) continue;
                 handles[author] = label;
                 bytes += handleBytes;
             }
-            return new PostPage(posts, next, resume, boundary, handles,
-                await ResolveParticipants(posts, ct));
+            var opening = await OpeningPost(topic, policy, ct);
+            if (opening is not null && !handles.ContainsKey(opening.AuthorParticipantId))
+            {
+                var label = await directory.LabelsFor([opening.AuthorParticipantId], ct);
+                if (label.GetValueOrDefault(opening.AuthorParticipantId) is { Length: > 0 and <= 253 } handle)
+                    handles[opening.AuthorParticipantId] = handle;
+            }
+            var page = new PostPage(posts, next, resume, boundary, handles,
+                await ResolveParticipants(posts.Concat(opening is null ? [] : [opening]).ToArray(), ct), opening);
+            if (opening is not null) WindowPlanner.CheckArticleResponse(PostReadProjection.Of(page));
+            return page;
         }
     }
 

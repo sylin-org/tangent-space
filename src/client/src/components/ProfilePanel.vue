@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { httpRequest } from '../api'
 
-// The participant profile, ported from profile.js (ADR 0008): identity card,
-// roles, recent posts, and the viewer's permitted actions — all served by the
-// experience API. Facet-aware post text lands with the facets unit.
+// The profile shows durable identity, visible contributions and permitted role actions.
 import { computed, onMounted, onScopeDispose, reactive, ref, watch } from 'vue'
 import type { SiteStore } from '../stores/site'
 import type { RouterStore } from '../stores/router'
 import { rolesSession } from '../composables/roles-api'
+import PostContent from './PostContent.vue'
+import ParticipantAvatar from './ParticipantAvatar.vue'
+import type { PostFormat } from '../composables/conversation'
 
 const props = defineProps<{ site: SiteStore; router: RouterStore }>()
 
@@ -21,6 +22,8 @@ interface ProfilePost {
   createdAt: string
   url?: string
   text: string
+  format?: PostFormat
+  html?: string | null
   removed?: boolean
   facets?: unknown
 }
@@ -39,12 +42,7 @@ interface ProfileData {
   roles?: ProfileRole[]
   posts?: ProfilePost[]
   morePosts?: boolean
-}
-
-interface ProfileEnvelope {
-  status?: string
-  result?: { data?: ProfileData }
-  actions?: Array<{ name: string; label: string; targetRef?: string }>
+  roleManagement?: Array<{ tangentKey: string; label: string }>
 }
 
 interface ManagedRole {
@@ -59,11 +57,18 @@ interface ManagedRole {
 }
 
 const data = ref<ProfileData | null>(null)
-const envelope = ref<ProfileEnvelope | null>(null)
+const classificationBusy = ref(false)
+const classificationError = ref('')
+const roleBusy = ref('')
 const failedMessage = ref('')
 const loading = ref(false)
 const activeTab = ref('posts')
 let revision = 0
+const viewer = () => props.site.site?.participant?.participantRef ?? ''
+function currentProfile(version: number, participantRef: string, actor: string): boolean {
+  return version === revision && data.value?.participantRef === participantRef
+    && viewer() === actor && props.router.route.kind === 'participant'
+}
 
 const state = reactive({
   roleItems: [] as ManagedRole[],
@@ -73,6 +78,7 @@ const state = reactive({
 
 const name = computed(() => (data.value && (data.value.displayName || data.value.handle)) || (failedMessage.value ? 'Profile unavailable' : 'Getting acquainted…'))
 const cleanHandle = computed(() => (data.value?.handle || '').replace(/^@/, ''))
+const isHostOwner = computed(() => data.value?.self === true && props.site.site?.participant?.isOwner === true)
 const classification = computed(() => String(data.value?.classification || 'undeclared').toLowerCase())
 const identityClassification = computed(() => {
   if (!data.value) return ''
@@ -89,7 +95,7 @@ const joinedLine = computed(() => {
 
 function formatRoleLabel(role: ProfileRole): string {
   if (role.scope === 'server') {
-    if (role.role === 'owner') return 'Server Owner'
+    if (role.role === 'owner') return 'Space owner'
     if (role.role === 'participant') return 'Participant'
     if (role.role === 'administrator') return 'Administrator'
     return role.role.charAt(0).toUpperCase() + role.role.slice(1)
@@ -108,12 +114,12 @@ const isSelfViewer = computed(() => data.value?.self === true)
 const ownerViewer = computed(() => props.site.site?.participant?.isOwner === true)
 
 const setRoleActions = computed(() =>
-  (envelope.value?.actions ?? [])
-    .filter(action => action.name === 'set_role' && action.targetRef && data.value?.did)
+  (data.value?.roleManagement ?? [])
+    .filter(action => action.tangentKey && data.value?.did)
     .map(action => {
-      const key = action.targetRef!.split('::')[1]
+      const key = action.tangentKey
       return key
-        ? { label: action.label, href: '/t/' + encodeURIComponent(key) + '/topics?participant=' + encodeURIComponent(data.value!.did!) + '#tangent-members' }
+        ? { label: action.label, href: '/t/' + encodeURIComponent(key) + '/settings?tab=people&participant=' + encodeURIComponent(data.value!.did!) }
         : null
     })
     .filter((entry): entry is { label: string; href: string } => entry !== null),
@@ -123,36 +129,37 @@ async function show() {
   const version = ++revision
   const current = props.router.route
   if (current.kind !== 'participant') return
+  const actor = viewer()
   loading.value = true
   failedMessage.value = ''
+  classificationError.value = ''
+  classificationBusy.value = false
+  roleBusy.value = ''
+  state.roleItems = []
+  state.roleStatus = ''
   data.value = null
-  envelope.value = null
-  document.title = 'Participant · Tangent'
-  activeTab.value = new URL(window.location.href).searchParams.get('tab') || 'posts'
+  document.title = 'Participant · Tangent Space'
+  profileTab(new URL(window.location.href).searchParams.get('tab') || 'posts', false)
   try {
     const response = await httpRequest('/api/participants/' + encodeURIComponent(current.identifier) + '/profile', {
       headers: { accept: 'application/json' },
       credentials: 'same-origin',
     })
-    if (version !== revision) return
+    if (version !== revision || viewer() !== actor || props.router.route.kind !== 'participant' || props.router.route.identifier !== current.identifier) return
     if (!response.ok) throw Object.assign(new Error('Profile request failed'), { status: response.status })
-    const payload = (await response.json()) as ProfileEnvelope
-    if (payload?.status === 'blocked') {
-      fail('No participant is visible under that address.')
-      return
-    }
-    if (!payload?.result?.data) {
+    const payload = (await response.json()) as ProfileData
+    if (version !== revision || viewer() !== actor || props.router.route.kind !== 'participant' || props.router.route.identifier !== current.identifier) return
+    if (!payload?.participantRef) {
       fail('The profile could not be loaded.')
       return
     }
-    envelope.value = payload
-    data.value = payload.result.data ?? null
+    data.value = payload
     const canonical = '/u/' + encodeURIComponent(data.value!.handle || data.value!.did || 'tangent:local:' + data.value!.participantRef)
-    if (canonical !== window.location.pathname) props.router.canonicalize(canonical)
-    document.title = name.value + ' · Tangent'
-    void loadManagedRoles()
+    if (canonical !== window.location.pathname) props.router.canonicalize(canonical + window.location.search + window.location.hash)
+    document.title = name.value + ' · Tangent Space'
+    void loadManagedRoles(version)
   } catch (error) {
-    if (version !== revision) return
+    if (version !== revision || viewer() !== actor || props.router.route.kind !== 'participant' || props.router.route.identifier !== current.identifier) return
     const status = (error as Error & { status?: number }).status
     fail(status === 403 || status === 404 ? 'No participant is visible under that address.' : 'The profile could not be loaded.')
   } finally {
@@ -163,13 +170,13 @@ async function show() {
 function fail(message: string) {
   failedMessage.value = message
   data.value = null
-  envelope.value = null
   state.roleItems = []
-  document.title = 'Profile unavailable · Tangent'
+  document.title = 'Profile unavailable · Tangent Space'
 }
 
-async function loadManagedRoles() {
+async function loadManagedRoles(version = revision) {
   const participantRef = data.value?.participantRef
+  const actor = viewer()
   if (!participantRef || !props.site.site?.participant) {
     state.roleItems = []
     return
@@ -181,9 +188,12 @@ async function loadManagedRoles() {
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
     })
+    if (!currentProfile(version, participantRef, actor)) return
     if (!response.ok) throw new Error('Could not load roles.')
-    state.roleItems = (await response.json()) as ManagedRole[]
+    const roles = (await response.json()) as ManagedRole[]
+    if (currentProfile(version, participantRef, actor)) state.roleItems = roles
   } catch (error) {
+    if (!currentProfile(version, participantRef, actor)) return
     state.roleStatus = (error as Error).message
     state.roleStatusError = true
     state.roleItems = []
@@ -192,12 +202,16 @@ async function loadManagedRoles() {
 
 async function toggleRole(role: ManagedRole) {
   const participantRef = data.value?.participantRef
-  if (!participantRef) return
+  if (!participantRef || roleBusy.value) return
+  const version = revision
+  const actor = viewer()
   const willAdd = !role.isMember
+  roleBusy.value = role.id
   state.roleStatus = ''
   state.roleStatusError = false
   try {
     const token = await rolesSession()
+    if (!currentProfile(version, participantRef, actor)) return
     const response = await httpRequest(
       '/api/roles/ui/participant/' + encodeURIComponent(participantRef) + '/roles/' + encodeURIComponent(role.id),
       {
@@ -210,6 +224,7 @@ async function toggleRole(role: ManagedRole) {
       const errData = await response.json().catch(() => ({}))
       throw new Error((errData as Record<string, string>).message || (errData as Record<string, string>).error || 'Failed to update role membership.')
     }
+    if (!currentProfile(version, participantRef, actor) || !state.roleItems.includes(role)) return
     role.isMember = willAdd
     state.roleStatus = willAdd
       ? (isSelfViewer.value && !ownerViewer.value ? `Joined ${role.name}.` : `${role.name} role granted.`)
@@ -221,9 +236,10 @@ async function toggleRole(role: ManagedRole) {
     if (willAdd) without.push({ scope: 'server', role: roleKey, label: 'This server' })
     if (data.value) data.value.roles = without
   } catch (error) {
+    if (!currentProfile(version, participantRef, actor)) return
     state.roleStatus = (error as Error).message
     state.roleStatusError = true
-  }
+  } finally { if (currentProfile(version, participantRef, actor)) roleBusy.value = '' }
 }
 
 function roleToggleLabel(role: ManagedRole): string {
@@ -237,6 +253,12 @@ function roleToggleTitle(role: ManagedRole): string {
 }
 
 async function setClassification(value: 'Agent' | 'Human' | 'Undeclared') {
+  if (classificationBusy.value) return
+  const version = revision
+  const principal = data.value?.participantRef
+  classificationBusy.value = true
+  classificationError.value = ''
+  const actor = viewer()
   classificationMenu.value!.open = false
   try {
     const response = await httpRequest('/api/participants/me', {
@@ -246,10 +268,10 @@ async function setClassification(value: 'Agent' | 'Human' | 'Undeclared') {
       body: JSON.stringify({ classification: value }),
     })
     if (!response.ok) throw new Error('Could not update classification')
-    await show()
+    if (principal && currentProfile(version, principal, actor)) await show()
   } catch {
-    // The badge stays as it was; a reload shows the stored value.
-  }
+    if (principal && currentProfile(version, principal, actor)) classificationError.value = 'Your badge could not be saved. Try again.'
+  } finally { if (principal && currentProfile(version, principal, actor)) classificationBusy.value = false }
 }
 
 const classificationMenu = ref<HTMLDetailsElement | null>(null)
@@ -295,11 +317,6 @@ function postHref(post: ProfilePost): string {
   }
 }
 
-function avatarFallback(event: Event) {
-  // A broken avatar falls back to the letter.
-  (event.target as HTMLImageElement).remove()
-}
-
 function onPopstate() {
   if (props.router.route.kind === 'participant') {
     profileTab(new URL(window.location.href).searchParams.get('tab') || 'posts', false)
@@ -312,6 +329,9 @@ watch(() => props.router.route, () => {
 
 watch(() => props.site.state, stateNow => {
   if (stateNow !== 'loading') void show()
+})
+watch(() => props.site.site?.participant?.participantRef, () => {
+  if (props.site.state !== 'loading') void show()
 })
 
 onMounted(() => {
@@ -327,36 +347,33 @@ onScopeDispose(() => {
 </script>
 
 <template>
-  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span aria-current="page">Participant</span></nav>
+  <div class="profile-workspace" :aria-busy="loading">
   <header class="profile-card">
-    <div id="profile-avatar" class="profile-avatar" aria-hidden="true">
-      <img v-if="data?.avatar && data.avatar.startsWith('/api/profile-cache/avatar?')" :src="data.avatar" alt="" referrerpolicy="no-referrer" @error="avatarFallback">
-      <template v-else>{{ name.slice(0, 1).toUpperCase() }}</template>
-    </div>
+    <ParticipantAvatar id="profile-avatar" class="profile-avatar" :participant="data || { displayName: name }" />
     <div class="profile-intro">
-      <p class="eyebrow">Around the table</p>
+      <p class="eyebrow">PARTICIPANT</p>
       <h1 id="profile-name" tabindex="-1">{{ name }}</h1>
       <p id="profile-handle" class="profile-handle">
-        <a v-if="cleanHandle" class="profile-handle-link" :href="'https://bsky.app/profile/' + encodeURIComponent(cleanHandle)" target="_blank" rel="noopener noreferrer" title="View on Bluesky"><span class="profile-handle-butterfly">🦋</span>@{{ cleanHandle }}</a>
+        <a v-if="cleanHandle" class="profile-handle-link" :href="'https://bsky.app/profile/' + encodeURIComponent(cleanHandle)" target="_blank" rel="noopener noreferrer" title="View on Bluesky">@{{ cleanHandle }}</a>
         <template v-else-if="data">An account in this community</template>
       </p>
       <p id="profile-description" class="profile-description" :hidden="!data?.description">{{ data?.description }}</p>
       <div id="profile-pills" class="profile-pills">
         <span id="profile-classification">
-          <details v-if="data?.self" ref="classificationMenu" class="profile-classification-menu">
-            <summary class="profile-classification-badge" :class="classification === 'agent' ? 'agent' : classification === 'human' ? 'human' : 'undeclared'" title="Change how your account is identified">
-              <span class="badge-text">{{ classification === 'agent' ? '🤖 Agent' : classification === 'human' ? '👤 Human' : '+ Add badge' }}</span>
+          <details v-if="data?.self && !isHostOwner" ref="classificationMenu" class="profile-classification-menu">
+            <summary class="profile-classification-badge" :class="classification === 'agent' ? 'agent' : classification === 'human' ? 'human' : 'undeclared'" :aria-disabled="classificationBusy" title="Change how your account is identified">
+              <span class="badge-text">{{ classification === 'agent' ? 'Agent' : classification === 'human' ? 'Person' : '+ Add badge' }}</span>
               <span class="badge-caret"> ▾</span>
             </summary>
             <div class="profile-classification-popover">
-              <button v-for="opt in (['Agent', 'Human', 'Undeclared'] as const)" :key="opt" type="button" class="profile-classification-option" :class="{ active: opt.toLowerCase() === classification }" @click="setClassification(opt)">
-                {{ opt === 'Agent' ? '🤖 Agent' : opt === 'Human' ? '👤 Human' : 'Hide badge' }}
+              <button v-for="opt in (['Agent', 'Human', 'Undeclared'] as const)" :key="opt" type="button" class="profile-classification-option" :class="{ active: opt.toLowerCase() === classification }" :disabled="classificationBusy" @click="setClassification(opt)">
+                {{ opt === 'Agent' ? 'Agent' : opt === 'Human' ? 'Person' : 'Hide badge' }}
               </button>
             </div>
           </details>
           <template v-else-if="data">
-            <span v-if="classification === 'agent'" class="profile-classification-badge agent">🤖 Agent</span>
-            <span v-else-if="classification === 'human'" class="profile-classification-badge human">👤 Human</span>
+            <span v-if="classification === 'agent'" class="profile-classification-badge agent">Agent</span>
+            <span v-else-if="classification === 'human'" class="profile-classification-badge human">Person</span>
           </template>
         </span>
         <div id="profile-roles" class="profile-roles">
@@ -366,10 +383,12 @@ onScopeDispose(() => {
           </template>
         </div>
       </div>
+      <p v-if="isHostOwner" class="hint">The Space owner remains a person. This account keeps its Person badge while it owns this Space.</p>
+      <p v-if="classificationError" class="profile-feedback error" role="status">{{ classificationError }}</p>
       <p id="profile-joined" class="hint">{{ joinedLine }}</p>
     </div>
   </header>
-  <div id="profile-actions" class="profile-actions">
+  <div v-if="failedMessage || setRoleActions.length" id="profile-actions" class="profile-actions">
     <button v-if="failedMessage" class="btn btn-quiet" type="button" @click="show">Try again</button>
     <template v-else>
       <a v-for="action in setRoleActions" :key="action.href" class="btn btn-quiet" :href="action.href">{{ action.label }}</a>
@@ -377,24 +396,26 @@ onScopeDispose(() => {
   </div>
   <div id="profile-shell" class="profile-shell">
     <nav class="profile-tabs" role="tablist" aria-label="Participant profile">
-      <button id="profile-posts-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-posts-panel" :aria-selected="activeTab === 'posts'" data-profile-tab="posts" @click="profileTab('posts')" @keydown="onTabKeydown($event, 'posts')"><span aria-hidden="true">&#9670;</span><span><strong>Posts</strong><small>Recent contributions</small></span></button>
-      <button id="profile-roles-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-roles-panel" :aria-selected="activeTab === 'roles'" data-profile-tab="roles" @click="profileTab('roles')" @keydown="onTabKeydown($event, 'roles')"><span aria-hidden="true">&#9672;</span><span><strong>Roles</strong><small>Groups and permissions</small></span></button>
-      <button id="profile-identity-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-identity-panel" :aria-selected="activeTab === 'identity'" data-profile-tab="identity" @click="profileTab('identity')" @keydown="onTabKeydown($event, 'identity')"><span aria-hidden="true">&#9673;</span><span><strong>Identity</strong><small>Account and DID</small></span></button>
+      <button id="profile-posts-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-posts-panel" :aria-selected="activeTab === 'posts'" :tabindex="activeTab === 'posts' ? 0 : -1" data-profile-tab="posts" @click="profileTab('posts')" @keydown="onTabKeydown($event, 'posts')">Posts</button>
+      <button id="profile-roles-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-roles-panel" :aria-selected="activeTab === 'roles'" :tabindex="activeTab === 'roles' ? 0 : -1" data-profile-tab="roles" @click="profileTab('roles')" @keydown="onTabKeydown($event, 'roles')">Roles</button>
+      <button id="profile-identity-tab" class="profile-tab" type="button" role="tab" aria-controls="profile-identity-panel" :aria-selected="activeTab === 'identity'" :tabindex="activeTab === 'identity' ? 0 : -1" data-profile-tab="identity" @click="profileTab('identity')" @keydown="onTabKeydown($event, 'identity')">Identity</button>
     </nav>
     <div class="profile-tab-content">
       <section id="profile-posts-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-posts-tab" :hidden="activeTab !== 'posts'">
-        <header class="profile-panel-heading"><div><p class="eyebrow">CONVERSATION</p><h3>Recent posts</h3><p class="hint">Contributions by this participant across the server.</p></div></header>
+        <header class="profile-panel-heading"><div><h3>Recent posts</h3><p class="hint">Contributions you can read in this Space.</p></div></header>
         <div class="profile-panel-body">
           <ul id="profile-posts" class="profile-posts">
-            <li v-if="!data" class="hint"></li>
+            <li v-if="!data" class="hint">{{ loading ? 'Loading recent posts…' : failedMessage }}</li>
             <template v-else>
               <li v-for="(post, index) in data.posts ?? []" :key="index" class="profile-post">
-                <div class="profile-post-byline">
-                  {{ new Date(post.createdAt).toLocaleString() }}
-                  <a :href="postHref(post)">Open in Topic</a>
-                </div>
+                <a class="profile-post-link" :href="postHref(post)">
+                  <div class="profile-post-byline">
+                    <time :datetime="post.createdAt">{{ new Date(post.createdAt).toLocaleString() }}</time>
+                    <span>Open in Topic →</span>
+                  </div>
+                </a>
                 <p v-if="post.removed" class="profile-post-text">This post was removed.</p>
-                <p v-else class="profile-post-text">{{ post.text }}</p>
+                <PostContent v-else class="profile-post-text" :text="post.text" :format="post.format" :html="post.html" :facets="post.facets" />
               </li>
               <li v-if="!(data.posts ?? []).length" class="hint">No visible posts yet.</li>
               <li v-if="data.morePosts" class="hint">Showing recent posts only.</li>
@@ -403,13 +424,13 @@ onScopeDispose(() => {
         </div>
       </section>
       <section id="profile-roles-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-roles-tab" :hidden="activeTab !== 'roles'">
-        <header class="profile-panel-heading"><div><p class="eyebrow">AROUND THE TABLE</p><h3>Server groups and roles</h3><p class="hint">Roles shape visibility, permissions, and group participation.</p></div></header>
+        <header class="profile-panel-heading"><div><h3>Roles in this Space</h3><p class="hint">Roles shape visibility, permissions, and group participation.</p></div></header>
         <div class="profile-panel-body">
           <div id="profile-role-management" class="profile-role-management">
-            <p v-if="!site.site?.participant" class="hint">Server roles assigned to this participant are shown in their profile header. Sign in to view and manage roles.</p>
+            <p v-if="!site.site?.participant" class="hint">Space roles assigned to this participant are shown in their profile header. Sign in to view and manage roles.</p>
             <template v-else-if="data?.participantRef">
               <div class="profile-role-list">
-                <p v-if="!visibleManagedRoles.length" class="hint">No visible server roles.</p>
+                <p v-if="!visibleManagedRoles.length" class="hint">No visible roles in this Space.</p>
                 <div v-for="role in visibleManagedRoles" :key="role.id" class="profile-role-row" :style="{ '--role-color': role.color || '#a98df0' }">
                   <span class="role-list-dot"></span>
                   <div class="profile-role-info">
@@ -425,11 +446,12 @@ onScopeDispose(() => {
                       v-if="role.canToggle"
                       type="button"
                       :class="role.isMember ? 'btn btn-quiet profile-role-toggle in-role' : 'btn btn-primary profile-role-toggle'"
+                      :disabled="!!roleBusy"
                       :title="roleToggleTitle(role)"
                       :aria-label="roleToggleTitle(role)"
                       @click="toggleRole(role)"
-                    >{{ roleToggleLabel(role) }}</button>
-                    <span v-else-if="role.isMember" class="profile-role-badge">Assigned</span>
+                    >{{ roleBusy === role.id ? 'Saving…' : roleToggleLabel(role) }}</button>
+                    <span v-else-if="role.isMember" class="profile-role-badge">{{ role.isProtected ? 'Automatic' : 'Assigned' }}</span>
                   </div>
                 </div>
               </div>
@@ -439,18 +461,18 @@ onScopeDispose(() => {
         </div>
       </section>
       <section id="profile-identity-panel" class="profile-panel" role="tabpanel" aria-labelledby="profile-identity-tab" :hidden="activeTab !== 'identity'">
-        <header class="profile-panel-heading"><div><p class="eyebrow">ACCOUNT</p><h3>Account identity</h3><p class="hint">Cryptographic identifier and account details.</p></div></header>
+        <header class="profile-panel-heading"><div><h3>Account identity</h3><p class="hint">A persistent identity that stays with this participant across their contributions.</p></div></header>
         <div class="profile-panel-body">
-          <div class="profile-identity-details">
-            <label><span>Decentralized Identifier (DID)</span><code id="profile-did" class="did">{{ data?.did || '—' }}</code></label>
-            <label><span>Handle</span><code id="profile-identity-handle" class="did">
-              <a v-if="cleanHandle" class="profile-handle-link" :href="'https://bsky.app/profile/' + encodeURIComponent(cleanHandle)" target="_blank" rel="noopener noreferrer" title="View on Bluesky"><span class="profile-handle-butterfly">🦋</span>@{{ cleanHandle }}</a>
-              <template v-else>—</template>
-            </code></label>
-            <label><span>Account type</span><span id="profile-identity-classification" class="hint">{{ identityClassification }}</span></label>
-          </div>
+          <dl class="profile-identity-details">
+            <div><dt>Decentralized identifier</dt><dd><code id="profile-did" class="did">{{ data?.did || '—' }}</code></dd></div>
+            <div><dt>Handle</dt><dd id="profile-identity-handle"><a v-if="cleanHandle" class="profile-handle-link" :href="'https://bsky.app/profile/' + encodeURIComponent(cleanHandle)" target="_blank" rel="noopener noreferrer" title="View on Bluesky">@{{ cleanHandle }} <span aria-hidden="true">↗</span></a><template v-else>—</template></dd></div>
+            <div><dt>Account type</dt><dd id="profile-identity-classification">{{ identityClassification }}</dd></div>
+          </dl>
         </div>
       </section>
     </div>
   </div>
+  </div>
 </template>
+
+<style src="../assets/profile.css"></style>

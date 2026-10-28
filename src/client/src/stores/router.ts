@@ -1,12 +1,16 @@
 import { defineStore } from 'pinia'
 
-// The workspace router, ported from spa-router.js: one parser for the workspace's
-// paths, in-app navigation for same-origin links, popstate for the browser's back
-// button. Route-driven panel loads live with the panels that own them.
+// The workspace router parses its paths, handles eligible same-origin links and
+// browser history, and leaves route data loading to the panels that own it.
 
 export type WorkspaceRoute =
   | { kind: 'home' }
+  | { kind: 'following' }
+  | { kind: 'notifications' }
+  | { kind: 'search' }
   | { kind: 'tangents' }
+  | { kind: 'new-tangent' }
+  | { kind: 'new-topic'; tangent: string }
   | { kind: 'settings' }
   | { kind: 'participant'; identifier: string }
   | { kind: 'tangent-settings'; tangent: string }
@@ -14,12 +18,11 @@ export type WorkspaceRoute =
   | { kind: 'topic'; tangent: string; topic: string }
   | { kind: 'topic-settings'; tangent: string; topic: string }
   | { kind: 'post'; tangent: string; post: string }
-  // Full page loads in the vanilla router: the app never client-navigates into them.
+  // Authentication routes load as full documents.
   | { kind: 'sign-in' }
   | { kind: 'onboarding' }
 
-// The build hosts the workspace under a fixed base (/app today, / at the swap);
-// routes are always parsed relative to it.
+// Workspace routes are parsed relative to the build's configured base.
 const BASE = import.meta.env.BASE_URL
 
 function decodeSegment(value: string): string | null {
@@ -35,11 +38,14 @@ function decodeSegment(value: string): string | null {
 export function parseWorkspaceRoute(pathname: string): WorkspaceRoute | null {
   const parts = pathname.split('/').filter(Boolean).map(decodeSegment)
   if (parts.some(value => value == null)) return null
+  if (parts.length === 1 && ['following', 'notifications', 'search'].includes(parts[0]!)) return { kind: parts[0] as 'following' | 'notifications' | 'search' }
   if (parts.length === 0) return { kind: 'home' }
+  if (parts.length === 2 && parts[0] === 'tangents' && parts[1] === 'new') return { kind: 'new-tangent' }
   if (parts.length === 1 && parts[0] === 'tangents') return { kind: 'tangents' }
   if (parts.length === 1 && parts[0] === 'settings') return { kind: 'settings' }
   if (parts.length === 2 && parts[0] === 'u') return { kind: 'participant', identifier: parts[1]! }
   if (parts[0] !== 't' || !parts[1]) return null
+  if (parts.length === 3 && parts[2] === 'new') return { kind: 'new-topic', tangent: parts[1] }
   if (parts.length === 3 && parts[2] === 'settings') return { kind: 'tangent-settings', tangent: parts[1] }
   if (parts[2] === 'topics') {
     if (parts.length === 3) return { kind: 'topics', tangent: parts[1] }
@@ -97,8 +103,16 @@ export const useRouter = defineStore('router', {
       const nextPath = baseHref(destination.pathname)
       const nextHref = nextPath + destination.search + destination.hash
       if (nextHref === window.location.pathname + window.location.search + window.location.hash) return true
+      const previous = this.route
       window.history[replace ? 'replaceState' : 'pushState']({ tangentRoute: nextHref }, '', nextHref)
-      return this.apply(nextPath)
+      const applied = this.apply(nextPath)
+      const kind = this.route.kind
+      const keepingArticlePosition = (kind === 'topic-settings' && (previous.kind === 'topic' || previous.kind === 'post'))
+        || (previous.kind === 'topic-settings' && (kind === 'topic' || kind === 'post'))
+      if (applied && !keepingArticlePosition && typeof window.requestAnimationFrame === 'function' && (kind === 'home' || kind === 'tangents' || kind === 'new-tangent' || kind === 'new-topic' || kind === 'topics' || kind === 'topic' || kind === 'settings' || kind === 'topic-settings' || kind === 'tangent-settings' || kind === 'participant')) {
+        window.requestAnimationFrame(() => window.scrollTo(0, 0))
+      }
+      return applied
     },
     /** Point history at a route's canonical URL when a resource answers under another. */
     canonicalize(href: string): boolean {
@@ -115,16 +129,18 @@ export const useRouter = defineStore('router', {
       return true
     },
     /** Install the document-level listeners once. */
-    bind() {
+    bind(shouldIntercept: (route: WorkspaceRoute) => boolean = () => true) {
       window.addEventListener('popstate', () => {
         this.apply(window.location.pathname)
       })
       document.addEventListener('click', (event: MouseEvent) => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
         const anchor = (event.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-        if (!anchor || anchor.target || anchor.hasAttribute('download')) return
+        if (!anchor || anchor.target || anchor.hasAttribute('download') || anchor.closest('#public-document')) return
         const destination = workspaceDestination(anchor.href, window.location.origin)
         if (!destination) return
+        const route = parseWorkspaceRoute(destination.pathname)
+        if (!route || !shouldIntercept(route)) return
         if (
           destination.pathname === window.location.pathname &&
           destination.search === window.location.search &&

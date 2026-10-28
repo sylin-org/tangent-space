@@ -4,15 +4,16 @@ using Tangent.Spaces;
 
 namespace Tangent.Identity;
 
-/// <summary>The DID that enrollment proofs must name as their audience: the configured
+/// <summary>The service DID and its #tangent audience: the configured
 /// Tangent:Enrollment:ProofAudience, or a did:web derived from the public origin within atproto's
 /// did:web profile, which admits a hostname and allows a port only for localhost. A loopback origin
 /// derives did:web:localhost with its port; a hostname on its default port derives did:web of that
 /// host; an IP literal or any other port derives nothing and needs a configured audience. Tangent
-/// verifies its proofs itself, so the did:web never needs to resolve.</summary>
+/// verifies its proofs itself. Public service metadata must advertise the matching service DID.</summary>
 public sealed partial class ProofAudience(IOptions<EnrollmentOptions> enrollment, IOptions<SpaceOptions> space)
 {
-    public string? Value => From(enrollment.Value.ProofAudience, space.Value.PublicOrigin);
+    public string? Value => From(enrollment.Value.ProofAudience, space.Value.PublicOrigin) is { } did
+        ? did + "#tangent" : null;
 
     public static string? From(string? configured, string? publicOrigin)
     {

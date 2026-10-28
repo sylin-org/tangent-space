@@ -1,56 +1,46 @@
-using System.Text.Json;
-
 namespace Tangent.Api;
 
-/// <summary>Canonical experience response contract (v1). Application objects, not JSON-RPC
-/// posts; camelCase on the wire through <see cref="Json"/>. Counts that cannot be
-/// determined are null, never zero.</summary>
-public sealed record ExperienceResponse(
-    string ExperienceVersion, string Operation, string Status,
-    ExperienceSnapshot Snapshot, ExperienceIdentity? Identity, ExperiencePlace Place,
-    ExperienceResult Result, ExperienceAttention Attention, ExperienceContinuation Continuation,
-    IReadOnlyList<ExperienceAction> Actions, ExperienceOrientation? Orientation,
-    ExperienceCapabilities? Capabilities = null)
+/// <summary>A resource read or write and its policy outcome. The HTTP layer maps the
+/// outcome to a status code; each successful endpoint has its own concrete DTO.</summary>
+public sealed record ResourceResult<T>(T? Data, ExperienceProblem? Problem = null, bool Pending = false)
 {
-    public const string Version = "1.0";
-}
-
-public static class ExperienceJson
-{
-    public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    public static ResourceResult<T> Success(T data) => new(data);
+    public static ResourceResult<T> Accepted(T data) => new(data, Pending: true);
+    public static ResourceResult<T> Failure(ExperienceProblem problem) => new(default, problem);
 }
 
 /// <summary>Freshness is observational: a later event may always exist.</summary>
-public sealed record ExperienceSnapshot(string Revision, string AsOf, string Coverage);
 
 /// <summary>Canonical acting participant, keyed by the GUID participant reference. Null only for
 /// an explicitly anonymous view; Did is present only while an atproto identity is held.</summary>
 public sealed record ExperienceIdentity(string ParticipantRef, string? Did, string DisplayName, string? Handle);
 
-/// <summary>Where the participant is and what domain actions current policy permits here.</summary>
-public sealed record ExperiencePlace(string? ServerRef, string? TangentRef, string? TopicRef,
-    string Label, string Role, IReadOnlyList<string> AllowedActions);
+public sealed record ExperiencePlace(string ServerRef, string Label, string Role);
 
-public sealed record ExperienceResult(object? Data, ExperienceReceipt? Receipt, ExperienceProblem? Problem);
+/// <summary>Transport grants, current Topic stewardship when scopeRef names a Topic,
+/// and independent global participant-management facts. Every action checks current
+/// resource policy when it runs.</summary>
+public sealed record ExperienceAuthority(bool CanRead, bool CanPost, bool CanManage, bool CanStewardScope,
+    ExperienceManagementAuthority Management);
 
-public sealed record ExperienceReceipt(string RequestId, string State, string? ResultRef, int? RetryAfterSeconds);
+public sealed record ExperienceManagementAuthority(bool CanWarn, bool CanTimeout,
+    bool CanSuspend, bool CanBan, bool CanAssignRoles)
+{
+    public bool HasAny() => CanWarn || CanTimeout || CanSuspend || CanBan || CanAssignRoles;
+}
+
 
 public sealed record ExperienceProblem(string Code, string Message, string? Field, bool Retryable)
 {
     private static readonly IReadOnlyDictionary<string, bool> RetryableCodes = new Dictionary<string, bool>
     {
-        ["companion_unavailable"] = false,
         ["context_expired"] = false,
-        ["needs_operator_connection"] = true,
         ["not_admitted"] = false,
-        ["approval_pending"] = true,
         ["permission_denied"] = false,
         ["cursor_expired"] = false,
         ["request_conflict"] = false,
         ["unreachable"] = true,
-        ["invalid_arguments"] = false,
-        ["unsupported_operation"] = false,
-        ["receipt_expired"] = false
+        ["invalid_arguments"] = false
     };
 
     public static ExperienceProblem Of(string code, string message, string? field = null)
@@ -61,101 +51,72 @@ public sealed record ExperienceProblem(string Code, string Message, string? Fiel
 /// requests plus bounded watched activity; the connector renders perspective and depth.</summary>
 public sealed record ExperienceAttention(string Revision, string AsOf,
     ExperienceCount WaitingCount, ExperienceCount NewActivityCount,
-    IReadOnlyList<ExperienceAttentionItem> Items, bool More, bool DetailsIncluded);
+    IReadOnlyList<ExperienceAttentionItem> Items, bool More, bool DetailsIncluded, bool Incomplete = false)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Selection { get; init; }
+}
 
-/// <summary>Value is null when the count is unknown; atLeast marks an overflow cap.</summary>
+/// <summary>Value is null when the count is unknown; atLeast marks an overflow cap or incomplete coverage.</summary>
 public sealed record ExperienceCount(int? Value, bool AtLeast);
 
 public sealed record ExperienceAttentionItem(string Ref, string Kind, string ActorRef, string? ActorName,
     string RecipientRef, string ScopeRef, string SourceRef, string? Relationship, string Excerpt,
     string SourceRevision, string State);
 
-public sealed record ExperienceContinuation(string? ActivityCheckpoint, string? ActivityPageCursor,
-    string? HistoryOlderCursor, string? HistoryNewerCursor, string? ReadCursor, string? DirectoryCursor);
 
-public sealed record ExperienceAction(string Name, string TargetRef, string? AroundPostRef, string Label);
-
-public sealed record ExperienceOrientation(string? Purpose, IReadOnlyList<string> Rules, string? Brief);
-
-/// <summary>Server experience capabilities advertised at arrival. A different namespace from
-/// MCP host capabilities; the two must never be confused.</summary>
-public sealed record ExperienceCapabilities(bool Attention, bool Coordination, bool Stewardship = false);
 
 public static class ExperienceProblemCodes
 {
-    public const string NeedsOperatorConnection = "needs_operator_connection";
     public const string NotAdmitted = "not_admitted";
-    public const string ApprovalPending = "approval_pending";
     public const string PermissionDenied = "permission_denied";
     public const string CursorExpired = "cursor_expired";
     public const string RequestConflict = "request_conflict";
     public const string Unreachable = "unreachable";
     public const string InvalidArguments = "invalid_arguments";
-    public const string UnsupportedOperation = "unsupported_operation";
-    public const string ReceiptExpired = "receipt_expired";
     public const string ModerationConflict = "moderation_conflict";
-}
-
-public static class ExperienceStatus
-{
-    public const string Ok = "ok";
-    public const string Pending = "pending";
-    public const string Blocked = "blocked";
-    public const string Error = "error";
-}
-
-public static class ExperienceActionNames
-{
-    public const string ReadTopic = "read_topic";
-    public const string CreatePost = "create_post";
-    public const string MarkRead = "mark_read";
-    public const string SetWatch = "set_watch";
-    public const string ListTopics = "list_topics";
-    public const string ListTangents = "list_tangents";
-    public const string JoinTangent = "join_tangent";
-    public const string LeaveTangent = "leave_tangent";
-    public const string GetOperation = "get_operation";
-    public const string GetUpdates = "get_updates";
-    public const string ReportPost = "report_post";
-    public const string ListModerationCases = "list_moderation_cases";
-    public const string ReadModerationCase = "read_moderation_case";
-    public const string PreviewModerationAction = "preview_moderation_action";
-    public const string ApplyModerationAction = "apply_moderation_action";
-    public const string WarnUser = "warn_user";
-    public const string TimeoutUser = "timeout_user";
-    public const string SuspendUser = "suspend_user";
-    public const string BanUser = "ban_user";
-    public const string AssignRoles = "assign_roles";
 }
 
 // ---------- Result data payloads ----------
 
-public sealed record ExperienceArrivalData(IReadOnlyList<ExperienceTangentDto> Tangents, string? Continuation);
+public sealed record ExperienceArrivalData(IReadOnlyList<ExperienceTangentDto> Tangents, string? Continuation,
+    ExperienceIdentity Identity, ExperiencePlace Place, ExperienceAuthority Authority, ExperienceAttention Attention);
 
 public sealed record ExperienceTangentsData(IReadOnlyList<ExperienceTangentDto> Tangents, string? Continuation);
 
 public sealed record ExperienceTangentDto(string TangentRef, string Name, string Description, string Membership,
-    string Admission, bool CanJoin, bool HasReadableTopics, bool HasWritableTopics);
+    string Admission, bool CanJoin, bool HasReadableTopics, bool HasWritableTopics,
+    string Kind = Community.TangentKind.Discussions);
 
 public sealed record ExperienceTopicsData(IReadOnlyList<ExperienceTopicDto> Topics, string? Continuation);
 
 public sealed record ExperienceTopicDto(string TopicRef, string Title, string Topic, bool CanRead, bool CanWrite,
-    bool IsLocked, bool AllowPostEditing);
+    bool IsLocked, bool AllowPostEditing, string Presentation = Community.TopicPresentation.Conversation);
 
 public sealed record ExperienceTopicData(string Title, string Brief, IReadOnlyList<ExperiencePostDto> Posts, string Position,
-    IReadOnlyDictionary<string, ExperienceResolution>? Resolved = null);
+    IReadOnlyDictionary<string, ExperienceResolution>? Resolved = null,
+    bool IsLocked = false, bool AllowPostEditing = true,
+    string? HistoryOlderCursor = null, string? HistoryNewerCursor = null, string? ReadCursor = null,
+    string? ServerRef = null, string? TangentRef = null, string? TopicRef = null,
+    bool CanWrite = false, bool Stewardship = false,
+    string Presentation = Community.TopicPresentation.Conversation, ExperiencePostDto? OpeningPost = null);
 
 public sealed record ExperiencePostDto(string Ref, string AuthorRef, string AuthorName, string Text, string? ReplyTo,
     string Url, string CreatedAt, string? EditedAt, bool Removed,
-    IReadOnlyList<Conversation.PostFacet>? Facets = null);
+    IReadOnlyList<Conversation.PostFacet>? Facets = null, ExperiencePostSource? Source = null,
+    string Format = Conversation.PostContent.Plain, string? Html = null);
+
+public sealed record ExperiencePostSource(string Service, string Uri, string RecordId);
 
 /// <summary>Read-time label for a facet-bound identity (ADR 0008): fresh from the participant table.</summary>
 public sealed record ExperienceResolution(string? Handle, string? DisplayName, string Classification,
     string? Avatar = null, string? ProfileUrl = null);
 
-public sealed record ExperienceUpdatesData(string ScopeRef);
+public sealed record ExperienceUpdatesData(string ScopeRef, ExperienceAttention Attention,
+    string ActivityCheckpoint, string? ActivityPageCursor);
 
-public sealed record ExperiencePostData(string? PostRef, ExperienceSource? Source, string? Url);
+public sealed record ExperiencePostData(string? PostRef, ExperienceSource? Source, string? Url,
+    string? RequestId = null);
 
 /// <summary>A reporter-safe acknowledgement. Moderation case identity, state, testimony totals,
 /// steward decisions and escalation ownership are deliberately not disclosed to reporters.</summary>
@@ -175,7 +136,10 @@ public sealed record ExperienceProfileData(string ParticipantRef, string? Did, s
     string JoinedAt, bool Self, bool Suspended, IReadOnlyList<ExperienceProfileRole> Roles,
     IReadOnlyList<ExperiencePostDto> Posts, bool MorePosts,
     string? DisplayName = null, string? Description = null, string? Avatar = null, string? ProfileUrl = null,
-    IReadOnlyDictionary<string, Conversation.ParticipantResolution>? Resolved = null);
+    IReadOnlyDictionary<string, Conversation.ParticipantResolution>? Resolved = null,
+    IReadOnlyList<ExperienceProfileManagementLink>? RoleManagement = null);
+
+public sealed record ExperienceProfileManagementLink(string TangentKey, string Label);
 
 public sealed record ExperienceProfileRole(string Scope, string Key, string Label, string Role);
 
@@ -189,12 +153,14 @@ public sealed record ExperienceUserManagementData(string UserRef, string Action,
     string? Role = null, DateTimeOffset? Until = null, string? TangentRef = null, string? CaseRef = null);
 
 /// <summary>A thread started through one job: the Topic and its opening Post.</summary>
-public sealed record ExperienceThreadData(string TopicRef, string TangentRef, string PostRef, string Title, string Url);
+public sealed record ExperienceThreadData(string TopicRef, string TangentRef, string PostRef, string Title, string Url,
+    string? RequestId = null);
 
 /// <summary>The participant read for a companion: an identity card and a bounded, read-filtered
 /// window of their recent Posts — the contextualization instrument.</summary>
 public sealed record ExperienceReadUserData(ExperienceReadUserProfile Profile,
-    IReadOnlyList<ExperiencePostDto> RecentPosts, IReadOnlyDictionary<string, Conversation.ParticipantResolution>? Resolved = null);
+    IReadOnlyList<ExperiencePostDto> RecentPosts, bool MorePosts,
+    IReadOnlyDictionary<string, Conversation.ParticipantResolution>? Resolved = null);
 
 public sealed record ExperienceReadUserProfile(string ParticipantRef, string? Did, string? Handle,
     string DisplayName, string Classification, string? Description, string? Avatar, string ProfileUrl);

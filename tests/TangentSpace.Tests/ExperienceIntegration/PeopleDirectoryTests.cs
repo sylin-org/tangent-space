@@ -43,7 +43,7 @@ public sealed class PeopleDirectoryTests
     }
 
     [Fact]
-    public async Task Only_the_owner_can_read_the_directory()
+    public async Task Ordinary_participants_cannot_read_the_directory()
     {
         await using var app = await ExperienceWebApp.StartAsync();
         app.Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", app.AgentToken);

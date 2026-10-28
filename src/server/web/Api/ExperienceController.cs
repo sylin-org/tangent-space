@@ -1,6 +1,4 @@
 using System.Security.Claims;
-using System.Text.Json;
-using Koan.Data.Core;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Application;
@@ -8,127 +6,17 @@ using Tangent.Activity;
 using Tangent.Conversation;
 using Tangent.Identity;
 using Tangent.Stewardship;
-using Tangent.Infrastructure;
-using Tangent.Spaces;
 
 namespace Tangent.Api;
 
-/// <summary>The versioned experience API. Both adapters enter through the shared request
+/// <summary>The versioned forum resource API. Both clients enter through the shared request
 /// identity scheme: an Authorization header selects the participant credential (never a cookie
-/// fallback), its absence selects the browser session. Private responses are never cacheable;
-/// application outcomes arrive as ok/pending/blocked bodies and transport failures as problem
-/// objects with matching status codes.</summary>
+/// fallback), its absence selects the browser session. Private responses are never cacheable.</summary>
 [ApiController]
 [Authorize]
 [Route("api/v1/experience")]
-public sealed class ExperienceController(ExperienceService experience, LocalContentSource local,
-    BlueskyContentSource bluesky) : ControllerBase
+public sealed class ExperienceController(ExperienceService experience) : ControllerBase
 {
-    [HttpGet("operations")]
-    public IActionResult Operations()
-    {
-        Response.Headers.CacheControl = "no-store";
-        try
-        {
-            ParticipationAccess.Require(User, ParticipationGrants.Read);
-            return Ok(new { version = ExperienceResponse.Version, operations = ExperienceOperations.Catalog });
-        }
-        catch (UnauthorizedAccessException) { return Forbid(); }
-    }
-
-    [HttpPost("operations/{id}"), ConversationMutation, RequestSizeLimit(16384)]
-    public Task<IActionResult> Invoke(string id, CancellationToken ct)
-        => ExperienceOperations.IsSourceOperation(id) ? InvokeSource(id, ct) : Read(async principal =>
-        {
-            try
-            {
-                using var body = await JsonDocument.ParseAsync(Request.Body, cancellationToken: ct);
-                return await ExperienceOperations.Invoke(experience, principal, id, body.RootElement, ct);
-            }
-            catch (JsonException) { throw new RequestArgumentException("arguments", "Provide a JSON object of operation arguments."); }
-        }, present: true);
-
-    private async Task<IActionResult> InvokeSource(string id, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        try
-        {
-            var participant = ParticipationAccess.Require(User, ParticipationGrants.Read);
-            using var body = await JsonDocument.ParseAsync(Request.Body, cancellationToken: ct);
-            var args = body.RootElement;
-            if (args.ValueKind != JsonValueKind.Object)
-                throw new RequestArgumentException("arguments", "Provide a JSON object of operation arguments.");
-            string? Value(string field)
-            {
-                if (!args.TryGetProperty(field, out var value) || value.ValueKind == JsonValueKind.Null) return null;
-                return value.ValueKind == JsonValueKind.String ? value.GetString()
-                    : throw new RequestArgumentException(field, "Use a string.");
-            }
-            string Required(string field) => Value(field) is { Length: > 0 } value ? value
-                : throw new RequestArgumentException(field, "This argument is required.");
-            int Limit()
-            {
-                if (!args.TryGetProperty("limit", out var value)) return 25;
-                if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var limit)
-                    || limit is < 1 or > 25)
-                    throw new RequestArgumentException("limit", "Choose 1 to 25 items.");
-                return limit;
-            }
-            object? data;
-            string text;
-            switch (id)
-            {
-                case "list_content_sources":
-                    data = new { sources = new object[]
-                    {
-                        new { id = local.Key, status = "ready", read = true, publish = "local" },
-                        new { id = bluesky.Key, status = "read_ready", read = true, publish = "account_consent_required" }
-                    } };
-                    text = "Tangent can read local Topics and selected public Bluesky authors. Bluesky publishing requires separate browser consent.";
-                    break;
-                case "list_bluesky_authors":
-                    var authors = await bluesky.Authors(Limit(), ct);
-                    data = new { authors };
-                    text = authors.Count == 0 ? "No Bluesky authors have been selected yet."
-                        : "Stored Bluesky authors: " + string.Join(", ", authors.Select(author =>
-                            author.Handle.Length > 0 ? author.Handle : author.ActorDid));
-                    break;
-                case "read_bluesky_posts":
-                    var page = await bluesky.Read(new ContentQuery(null, null, Required("actorDid"),
-                        Value("before"), Value("after"), Limit()), ct);
-                    if (page is null) return Ok(new { text = "This Bluesky author has not been selected for import.",
-                        structuredContent = (object?)null, status = "blocked", isError = true });
-                    data = page;
-                    text = page.Posts.Count == 0 ? "No stored Bluesky Posts in this window."
-                        : string.Join(" ", page.Posts.Take(3).Select(post => post.Author + ": "
-                            + (post.Text.Length > 100 ? post.Text[..100] + "…" : post.Text)))
-                            + $" ({page.Posts.Count} Post(s) in this window.)";
-                    break;
-                case "refresh_bluesky_author":
-                    using (EntityContext.NoCache())
-                    {
-                        var space = await Space.Get(TangentConstants.SpaceId, ct);
-                        if (space?.IsOwner(participant) != true) return Forbid();
-                    }
-                    var result = await bluesky.Refresh(Required("actor"), ct);
-                    data = result;
-                    text = $"Imported {result.Imported} Post(s) from {result.ActorDid}. "
-                        + (result.Backfill == "complete" ? "The current feed is complete."
-                            : "Refresh again to continue the bounded import.");
-                    break;
-                default:
-                    throw new RequestArgumentException("operation", "This operation is not available.");
-            }
-            return Ok(new { text, structuredContent = data, status = "ok", isError = false });
-        }
-        catch (JsonException) { return Problem(ExperienceProblem.Of("invalid_arguments", "Provide a JSON object of operation arguments."), 400); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
-        catch (RequestArgumentException error) { return Problem(ExperienceProblem.Of("invalid_arguments", error.Message, error.Field), 400); }
-        catch (ArgumentException error) { return Problem(ExperienceProblem.Of("invalid_arguments", error.Message), 400); }
-        catch (HttpRequestException) { return StatusCode(502, new { text = "Bluesky could not be reached. Retry the same operation.",
-            structuredContent = (object?)null, status = "error", isError = true }); }
-    }
-
     [HttpGet]
     public Task<IActionResult> Arrive([FromQuery] string? scopeRef, CancellationToken ct)
         => Read(principal => experience.Arrive(principal, scopeRef, ct));
@@ -159,19 +47,21 @@ public sealed class ExperienceController(ExperienceService experience, LocalCont
 
     [HttpPost("topics/{topicKey}/posts")]
     public Task<IActionResult> CreatePost(string topicKey, [FromBody] ExperienceCreatePostRequest request, CancellationToken ct)
-        => Mutate(principal => experience.CreatePost(principal, topicKey, request.RequestId, request.Text, request.ReplyTo, request.Facets, ct));
+        => Mutate(principal => experience.CreatePost(principal, topicKey,
+            RequiredRequestId(request.RequestId), request.Text, request.ReplyTo, request.Facets, ct, request.Format));
 
     [HttpPost("tangents/{tangentKey}/topics")]
     public Task<IActionResult> StartThread(string tangentKey, [FromBody] ExperienceStartThreadRequest request, CancellationToken ct)
-        => Mutate(principal => experience.StartThread(principal, tangentKey, request.RequestId, request.Title, request.Text, ct));
+        => Mutate(principal => experience.StartThread(principal, tangentKey,
+            RequiredRequestId(request.RequestId), request.Title, request.Text, ct, request.Format, request.Audience, request.Subtitle));
 
-    [HttpPatch("posts/{postRef}")]
-    public Task<IActionResult> EditPost(string postRef, [FromBody] ExperienceEditPostRequest request, CancellationToken ct)
-        => Mutate(principal => experience.EditPost(principal, postRef, request.Text, ct));
+    [HttpPatch("posts/{postId}")]
+    public Task<IActionResult> EditPost(string postId, [FromBody] ExperienceEditPostRequest request, CancellationToken ct)
+        => Mutate(principal => experience.EditPost(principal, postId, request.Text, ct, request.Format));
 
-    [HttpDelete("posts/{postRef}")]
-    public Task<IActionResult> DeletePost(string postRef, CancellationToken ct)
-        => Mutate(principal => experience.DeletePost(principal, postRef, ct));
+    [HttpDelete("posts/{postId}")]
+    public Task<IActionResult> DeletePost(string postId, CancellationToken ct)
+        => Mutate(principal => experience.DeletePost(principal, postId, ct));
 
     [HttpGet("participants/{*identifier}")]
     public Task<IActionResult> Participant(string identifier, CancellationToken ct)
@@ -226,17 +116,15 @@ public sealed class ExperienceController(ExperienceService experience, LocalCont
     public Task<IActionResult> Profile(string identifier, CancellationToken ct)
         => Read(principal => experience.ParticipantProfile(principal, identifier, ct));
 
-    private async Task<IActionResult> Read(Func<ClaimsPrincipal, Task<ExperienceResponse>> operation, bool present = false)
+    private async Task<IActionResult> Read<T>(Func<ClaimsPrincipal, Task<ResourceResult<T>>> operation)
     {
         Response.Headers.CacheControl = "no-store";
         try
         {
             var response = await operation(User);
-            return present
-                ? Ok(new { text = ExperienceOperations.Present(response), structuredContent = response,
-                    status = response.Status,
-                    isError = response.Status is ExperienceStatus.Blocked or ExperienceStatus.Error })
-                : Ok(response);
+            if (response.Problem is { } problem)
+                return Problem(problem, problem.Code is ExperienceProblemCodes.CursorExpired or ExperienceProblemCodes.InvalidArguments ? 400 : 403);
+            return response.Pending ? StatusCode(202, response.Data) : Ok(response.Data);
         }
         catch (UnauthorizedAccessException)
         {
@@ -262,7 +150,29 @@ public sealed class ExperienceController(ExperienceService experience, LocalCont
         }
     }
 
-    private Task<IActionResult> Mutate(Func<ClaimsPrincipal, Task<ExperienceResponse>> operation) => Read(operation);
+    private Task<IActionResult> Mutate<T>(Func<ClaimsPrincipal, Task<ResourceResult<T>>> operation)
+    {
+        var request = Request;
+        if (!HttpMethods.IsDelete(request.Method)
+            && !string.Equals(request.ContentType?.Split(';', 2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult<IActionResult>(StatusCode(415, new { reason = "Use application/json." }));
+        if (request.Headers.ContainsKey("Authorization"))
+        {
+            if (!ParticipationAccess.UsesCredential(User))
+                return Task.FromResult<IActionResult>(Forbid());
+        }
+        else if (User.Identity?.IsAuthenticated != true
+            || string.IsNullOrWhiteSpace(User.FindFirst(ParticipationConstants.ParticipantClaim)?.Value))
+            return Task.FromResult<IActionResult>(Unauthorized());
+        else if (request.Headers.Origin.Count != 1
+            || !TopicMutationAttribute.IsSameOrigin(request.Headers.Origin[0], request.Scheme, request.Host.Value))
+            return Task.FromResult<IActionResult>(StatusCode(403, new { reason = "Writes must come from this space's origin." }));
+        return Read(operation);
+    }
+
+    private static string RequiredRequestId(string? value)
+        => !string.IsNullOrWhiteSpace(value) ? value
+            : throw new RequestArgumentException("requestId", "Provide a stable request ID for this write.");
 
     private IActionResult Problem(ExperienceProblem problem, int status)
         => StatusCode(status, new { problem.Code, problem.Message, problem.Field, problem.Retryable });
@@ -270,7 +180,7 @@ public sealed class ExperienceController(ExperienceService experience, LocalCont
 }
 
 public sealed record ExperienceCreatePostRequest(string RequestId, string Text, string? ReplyTo,
-    IReadOnlyList<Conversation.PostFacet>? Facets = null);
+    IReadOnlyList<Conversation.PostFacet>? Facets = null, string? Format = null);
 
 public sealed record ExperienceReadPositionRequest(string ReadCursor);
 
@@ -286,9 +196,9 @@ public sealed record ExperienceModerationPreviewRequest(string Action, string Su
 public sealed record ExperienceModerationActionRequest(string RequestId, string Action, string Summary,
     DateTimeOffset? DeferredUntil, long ExpectedCaseRevision, string ExpectedSubjectRevision);
 
-public sealed record ExperienceStartThreadRequest(string RequestId, string Title, string Text);
+public sealed record ExperienceStartThreadRequest(string RequestId, string Title, string Text, string? Format = null, string? Audience = null, string? Subtitle = null);
 
-public sealed record ExperienceEditPostRequest(string Text);
+public sealed record ExperienceEditPostRequest(string Text, string? Format = null);
 
 public sealed record ExperienceManageUserRequest(string Action, string Reason, long? DurationSeconds = null,
     string? Role = null, string? CaseRef = null);

@@ -73,6 +73,7 @@ public sealed partial class ConversationService
 
             var posts = WindowPlanner.Select(rows, anchorIndex, limit);
             foreach (var post in posts) post.Permissions = Permissions.Post(policy, post.AuthorParticipantId, post.Removed);
+            var opening = await OpeningPost(topicKey, policy, ct);
             string? older = null, newer = null, readCursor = null;
             if (posts.Count > 0)
             {
@@ -89,10 +90,13 @@ public sealed partial class ConversationService
             }
             var handles = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var (author, handle) in await directory.LabelsFor(
-                     posts.Select(m => m.AuthorParticipantId).Distinct(StringComparer.Ordinal), ct))
+                     posts.Concat(opening is null ? [] : [opening]).Select(m => m.AuthorParticipantId)
+                         .Distinct(StringComparer.Ordinal), ct))
                 if (handle is { Length: > 0 and <= 253 }) handles[author] = handle;
-        return new TopicWindow(posts, older, newer, readCursor, position,
-            handles, await ResolveParticipants(posts, ct));
+        var window = new TopicWindow(posts, older, newer, readCursor, position,
+            handles, await ResolveParticipants(posts.Concat(opening is null ? [] : [opening]).ToArray(), ct), opening);
+        if (opening is not null) WindowPlanner.CheckArticleResponse(PostReadProjection.Of(window));
+        return window;
     }
 
     private static QueryDefinition SequenceQuery(int size, bool descending = false)

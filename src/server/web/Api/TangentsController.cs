@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Tangent.Identity;
 using Tangent.Community;
 using Tangent.Stewardship;
-using Tangent.Access;
 
 namespace Tangent.Api;
 
@@ -13,50 +12,10 @@ namespace Tangent.Api;
 [Route("api/tangents")]
 public sealed class TangentsController(TangentServer hub) : ControllerBase
 {
-    private TangentGovernance tangents => hub.Tangents;
-
-    [AllowAnonymous]
-    [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int topicPage = 1, CancellationToken ct = default)
-    {
-        Response.Headers.CacheControl = "no-store";
-        try
-        {
-            var actor = ReadActor();
-            return Ok(await tangents.List(actor, page, topicPage, ct));
-        }
-        catch (UnauthorizedAccessException) { return Unauthorized(); }
-        catch (TangentRuleViolation rejected) { return BadRequest(new { reason = rejected.Message }); }
-    }
-
-    [TopicMutation(ParticipationGrants.Post)]
-    [HttpPost]
-    public Task<IActionResult> Create(CreateTangentRequest request, CancellationToken ct)
-        => Execute(actor => tangents.Create(actor, request.Key, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct), created: true);
-
-    [TopicMutation]
-    [HttpPatch("{tangentKey}")]
-    public Task<IActionResult> Change(string tangentKey, ChangeTangentRequest request, CancellationToken ct)
-        => Execute(actor => tangents.Change(actor, tangentKey, request.Name, request.Description, request.Motto, request.Accent, request.Artwork, ct));
-
-    [HttpGet("{tangentKey}/access")]
-    public Task<IActionResult> GetAccess(string tangentKey, CancellationToken ct)
-        => Execute(actor => tangents.GetAccess(actor, tangentKey, ct));
-
-    [TopicMutation]
-    [HttpPut("{tangentKey}/access")]
-    public Task<IActionResult> SetAccess(string tangentKey, AccessMap access, CancellationToken ct)
-        => Execute(actor => tangents.SetAccess(actor, tangentKey, access, ct));
-
-    [TopicMutation(ParticipationGrants.Post)]
-    [HttpPost("{tangentKey}/topics")]
-    public Task<IActionResult> CreateTopic(string tangentKey, CreateTangentTopicRequest request, CancellationToken ct)
-        => Execute(actor => tangents.CreateTopic(actor, tangentKey, request.Key, request.Title, request.Topic, ct));
-
     [TopicMutation]
     [HttpPut("{tangentKey}/members/{targetDid}")]
     public Task<IActionResult> SetMembership(string tangentKey, string targetDid, ChangeTangentMembershipRequest request, CancellationToken ct)
-        => Execute(actor => tangents.SetMembership(actor, tangentKey, targetDid, request.Role, ct));
+        => Execute(actor => hub.Tangents.SetMembership(actor, tangentKey, targetDid, request.Role, ct));
 
     [TopicMutation]
     [HttpPut("{tangentKey}/roles/{targetIdentifier}")]
@@ -65,20 +24,13 @@ public sealed class TangentsController(TangentServer hub) : ControllerBase
 
     private string Actor() => ParticipationAccess.Require(User, ParticipationGrants.Manage);
 
-    private string? ReadActor()
-    {
-        if (User.Identity?.IsAuthenticated == true) return ParticipationAccess.Require(User, ParticipationGrants.Read);
-        if (Request.Headers.ContainsKey("Authorization")) throw new UnauthorizedAccessException();
-        return null;
-    }
-
-    private async Task<IActionResult> Execute<T>(Func<string, Task<T>> operation, bool created = false)
+    private async Task<IActionResult> Execute<T>(Func<string, Task<T>> operation)
     {
         Response.Headers.CacheControl = "no-store";
         try
         {
             var actor = Actor();
-            return created ? StatusCode(StatusCodes.Status201Created, await operation(actor)) : Ok(await operation(actor));
+            return Ok(await operation(actor));
         }
         catch (TangentRuleViolation denied) { return StatusCode(denied.Denial switch
         {

@@ -59,7 +59,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
 
     public IServiceProvider Services => app.Services;
 
-    public static async Task<ExperienceWebApp> StartAsync()
+    public static async Task<ExperienceWebApp> StartAsync(string? publicOrigin = null, string? knownProxy = null, JobMode jobMode = JobMode.Inline)
     {
         // Koan caches data-source configuration statically; reset so this fixture's temp
         // database neither inherits nor leaks into another fixture's host.
@@ -78,14 +78,16 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         {
             ["Tangent:Space:Name"] = "Experience Integration Space",
             ["Tangent:Space:OwnerDid"] = OwnerDid,
-            ["Tangent:Space:PublicOrigin"] = origin,
+            ["Tangent:Space:PublicOrigin"] = publicOrigin ?? origin,
+            ["Tangent:Proxy:KnownProxy"] = knownProxy,
+            ["AllowedHosts"] = publicOrigin is null ? null : new Uri(publicOrigin).Host,
             ["Koan:Data:Sources:Default:Adapter"] = "sqlite",
             ["Koan:Data:Sources:Default:ConnectionString"] = $"Data Source={Path.Combine(root, "space.sqlite")}",
             ["Koan:Data:Sqlite:ConnectionString"] = $"Data Source={Path.Combine(root, "space.sqlite")}",
             ["Koan:Cache:Adapters:Sqlite:DatabasePath"] = Path.Combine(root, "cache.db"),
         });
         builder.Services.AddKoan();
-        builder.Services.AddKoanJobs(o => o.Mode = Koan.Jobs.JobMode.Inline);
+        builder.Services.AddKoanJobs(o => o.Mode = jobMode);
         // The test host's entry assembly is this test project; add the application's
         // controllers explicitly so route discovery matches the deployed app.
         builder.Services.AddControllers().AddApplicationPart(typeof(Program).Assembly);
@@ -100,18 +102,20 @@ public sealed class ExperienceWebApp : IAsyncDisposable
             AgentParticipantId = agentParticipant,
             HumanParticipantId = humanParticipant
         };
-        await fixture.WaitUntilReady();
+        await fixture.WaitUntilReady(publicOrigin is null ? null : new Uri(publicOrigin).Host);
         return fixture;
     }
 
-    private async Task WaitUntilReady()
+    private async Task WaitUntilReady(string? requestHost)
     {
         using var anonymous = new HttpClient();
         for (var attempt = 0; attempt < 50; attempt++)
         {
             try
             {
-                var response = await anonymous.GetAsync(Origin + "/health/ready");
+                using var request = new HttpRequestMessage(HttpMethod.Get, Origin + "/health/ready");
+                request.Headers.Host = requestHost;
+                using var response = await anonymous.SendAsync(request);
                 if (response.StatusCode == HttpStatusCode.OK) return;
             }
             catch (HttpRequestException)
@@ -145,7 +149,8 @@ public sealed class ExperienceWebApp : IAsyncDisposable
                 }
                 else
                 {
-                    var participant = await Participant.Get(atproto.ParticipantId)!;
+                    var participant = await Participant.Get(atproto.ParticipantId)
+                        ?? throw new InvalidOperationException("The seeded identity has no participant.");
                     participant.Return(atproto, now);
                     atproto.Relabel(handle);
                     await participant.Save();
@@ -187,8 +192,7 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         var (credential, token) = ParticipantCredential.Issue(AgentParticipant, "Experience integration agent", 1,
             [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post], now);
         var (ownerCredential, ownerToken) = ParticipantCredential.Issue(OwnerParticipant, "Experience integration owner", 1,
-            [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage], now,
-            managementPermitted: true);
+            [ParticipationGrants.Welcome, ParticipationGrants.Read, ParticipationGrants.Post, ParticipationGrants.Manage], now);
         using (EntityContext.NoCache())
         {
             await credential.Save();
@@ -197,21 +201,21 @@ public sealed class ExperienceWebApp : IAsyncDisposable
         return (token, credential.Id, ownerToken, OwnerParticipant, AgentParticipant, HumanParticipant);
     }
 
-    internal static async Task<string> Accept(string roomKey, string authorId, string recordKey, long sequence,
+    internal static async Task<string> Accept(string topicKey, string authorId, string recordKey, long sequence,
         DateTimeOffset acceptedAt, string text, string? replyTo)
     {
         var post = new Post
         {
-            Id = "m-" + recordKey, TopicKey = roomKey, AuthorParticipantId = authorId, Sequence = sequence,
+            Id = "m-" + recordKey, TopicKey = topicKey, AuthorParticipantId = authorId, Sequence = sequence,
             AcceptedAt = acceptedAt, Content = new PostContent(text, acceptedAt, replyTo),
         };
         using var context = EntityContext.NoCache();
         await post.Save();
-        var conversation = await TopicConversation.Get(roomKey) ?? new TopicConversation { Id = roomKey };
+        var conversation = await TopicConversation.Get(topicKey) ?? new TopicConversation { Id = topicKey };
         conversation.LastSequence = Math.Max(conversation.LastSequence, sequence);
         await conversation.Save();
         // The acceptance path journals the write, which is what signals the attention compile.
-        await ActivityJournal.AppendInTransaction(ActivityKind.PostAccepted, roomKey, authorId,
+        await ActivityJournal.AppendInTransaction(ActivityKind.PostAccepted, topicKey, authorId,
             messageSequence: sequence, occurredAt: acceptedAt);
         return post.Id;
     }

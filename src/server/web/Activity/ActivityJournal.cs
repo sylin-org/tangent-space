@@ -42,11 +42,11 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
         return latest?.Sequence ?? 0;
     }
 
-    public static async Task<ActivityJournal> AppendInTransaction(ActivityKind kind, string roomKey,
+    public static async Task<ActivityJournal> AppendInTransaction(ActivityKind kind, string topicKey,
         string? actorDid = null, string? targetDid = null, string? tangentKey = null,
         long? messageSequence = null, DateTimeOffset? occurredAt = null, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(roomKey);
+        ArgumentNullException.ThrowIfNull(topicKey);
         await AppendGate.WaitAsync(ct);
         try
         {
@@ -60,7 +60,7 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
                 Id = Guid.CreateVersion7().ToString("N"),
                 Sequence = sequence,
                 Kind = kind,
-                TopicKey = roomKey,
+                TopicKey = topicKey,
                 TangentKey = string.IsNullOrWhiteSpace(tangentKey) ? "home" : tangentKey,
                 ActorParticipantId = actorDid,
                 TargetParticipantId = targetDid,
@@ -69,7 +69,7 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
             };
             await entry.Save(ct);
             lastAssigned = sequence;
-            await SignalCompile(roomKey, ct);
+            await SignalCompile(topicKey, ct);
             return entry;
         }
         finally { AppendGate.Release(); }
@@ -79,19 +79,19 @@ public sealed class ActivityJournal : Entity<ActivityJournal>
     /// compile's ledger row enlists in the caller's transaction and commits atomically with the
     /// journal entry, and the worker wakes on commit. A signal that cannot be accepted costs
     /// one stale projection until the topic's next event — it never fails the append.</summary>
-    private static async Task SignalCompile(string roomKey, CancellationToken ct)
+    private static async Task SignalCompile(string topicKey, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(roomKey)) return;
+        if (string.IsNullOrEmpty(topicKey)) return;
         try
         {
-            var compile = new CompileTopicAttention { Id = roomKey, TopicKey = roomKey };
+            var compile = new CompileTopicAttention { Id = topicKey, TopicKey = topicKey };
             await compile.Job.Submit(action: "", ct);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             var factory = AppHost.Current?.GetService(typeof(ILoggerFactory)) as ILoggerFactory;
             (factory ?? NullLoggerFactory.Instance).CreateLogger(typeof(ActivityJournal))
-                .LogWarning(error, "The attention compile signal for {TopicKey} was not accepted; the compiled projection stays on its previous state until the next event.", roomKey);
+                .LogWarning(error, "The attention compile signal for {TopicKey} was not accepted; the compiled projection stays on its previous state until the next event.", topicKey);
         }
     }
 }

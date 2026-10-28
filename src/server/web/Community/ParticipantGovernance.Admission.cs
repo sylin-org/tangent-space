@@ -17,23 +17,29 @@ public sealed partial class ParticipantGovernance
     /// <summary>Pending admission requests are durable and inspectable by the Tangent's stewards.</summary>
     public async Task<IReadOnlyList<TangentJoinRequestSummary>> ListJoinRequests(string actorId, string tangentKey, CancellationToken ct)
     {
-        await gate.Enter(ct);
-        try
-        {
-            using var fresh = EntityContext.NoCache();
-            using var transaction = EntityContext.Transaction(TopicConstants.AcceptanceTransaction);
-            var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
-            await RequireSteward(tangent, actorId, actorMembership, "inspect admission requests", ct);
-            await RequireUnrestricted(actorId, tangentKey, clock.GetUtcNow(), ct);
-            var listed = (await TangentJoinRequest.Query(value => value.TangentKey == tangentKey,
-                joinRequests.WithPagination(1, MaximumAdministrationList), ct))
-                .Select(request => new TangentJoinRequestSummary(request.Id, request.TangentKey, request.ParticipantId,
-                    request.RequestedAt, request.DecidedAt is not null, request.Accepted))
-                .ToArray();
-            await EntityContext.Commit(ct);
-            return listed;
-        }
-        finally { gate.Exit(); }
+        using var fresh = EntityContext.NoCache();
+        var (tangent, actorMembership, _) = await LoadTangentContext(actorId, tangentKey, ct);
+        await RequireSteward(tangent, actorId, actorMembership, "inspect admission requests", ct);
+        await RequireUnrestricted(actorId, tangentKey, clock.GetUtcNow(), ct);
+        var listed = (await TangentJoinRequest.Query(value => value.TangentKey == tangentKey,
+            joinRequests.WithPagination(1, MaximumAdministrationList), ct))
+            .Select(request => new TangentJoinRequestSummary(request.Id, request.TangentKey, request.ParticipantId,
+                request.RequestedAt, request.DecidedAt is not null, request.Accepted))
+            .ToArray();
+        return listed;
+    }
+
+    public async Task<IReadOnlyList<TangentJoinRequestSummary>> PendingJoinRequests(string actorId, string tangentKey, int page, CancellationToken ct)
+    {
+        if (page is < 1 or > 10000) throw new ArgumentException("Choose a valid requests page.");
+        using var fresh = EntityContext.NoCache();
+        var (tangent, membership, _) = await LoadTangentContext(actorId, tangentKey, ct);
+        await RequireSteward(tangent, actorId, membership, "inspect admission requests", ct);
+        await RequireUnrestricted(actorId, tangentKey, clock.GetUtcNow(), ct);
+        return (await TangentJoinRequest.Query(value => value.TangentKey == tangentKey && value.DecidedAt == null,
+            joinRequests.WithPagination(page, 25), ct))
+            .Select(request => new TangentJoinRequestSummary(request.Id, request.TangentKey, request.ParticipantId,
+                request.RequestedAt, false, null)).ToArray();
     }
 
     public async Task<TangentJoinRequestDecision> DecideJoinRequest(string actorId, string requestId, bool accept, CancellationToken ct)
@@ -86,6 +92,27 @@ public sealed partial class ParticipantGovernance
             using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
             var (tangent, _, _) = await LoadTangentContext(actorId, tangentKey, ct);
             tangent.ChangeParticipationPolicy(actorId, admission, preset, undeclared, clock.GetUtcNow());
+            await tangent.Save(ct);
+            await Journal(ActivityKind.TangentChanged, actorId, null, tangentKey, ct);
+            await EntityContext.Commit(ct);
+            signals.Pulse();
+            return new TangentPolicyResult(tangent.Id, tangent.EffectiveAdmission, tangent.ParticipationPreset,
+                tangent.UndeclaredAccess, tangent.PolicyRevision);
+        }
+        finally { gate.Exit(); }
+    }
+
+    /// <summary>Change only admission while preserving the Tangent's classification policy.</summary>
+    public async Task<TangentPolicyResult> SetAdmission(string actorId, string tangentKey, TangentAdmission admission, CancellationToken ct)
+    {
+        await gate.Enter(ct);
+        try
+        {
+            using var fresh = EntityContext.NoCache();
+            using var transaction = EntityContext.Transaction(TopicConstants.AdministrationTransaction);
+            var (tangent, _, _) = await LoadTangentContext(actorId, tangentKey, ct);
+            tangent.ChangeParticipationPolicy(actorId, admission, tangent.ParticipationPreset,
+                tangent.UndeclaredAccess, clock.GetUtcNow());
             await tangent.Save(ct);
             await Journal(ActivityKind.TangentChanged, actorId, null, tangentKey, ct);
             await EntityContext.Commit(ct);

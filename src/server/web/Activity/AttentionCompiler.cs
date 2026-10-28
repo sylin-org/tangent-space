@@ -110,7 +110,7 @@ internal static class AttentionCompiler
     }
 
     /// <summary>Everyone whose own policy could deliver this Topic: tangent members, topic
-    /// members, the tangent owner, the space owner and the topic creator.</summary>
+    /// members, explicit followers, the tangent owner, the space owner and the topic creator.</summary>
     private static async Task<IReadOnlyList<string>> CandidateReaders(Space? space, Community.Tangent? tangent,
         Topic topic, CancellationToken ct)
     {
@@ -123,6 +123,20 @@ internal static class AttentionCompiler
         }
         foreach (var membership in await TopicMembership.Query(m => m.TopicKey == topic.Id, ct))
             readers.Add(membership.ParticipantId);
+        for (var page = 1; ; page++)
+        {
+            var watches = await WatchSetting.Query(watch => watch.TopicKey == topic.Id,
+                Window<WatchSetting>(nameof(WatchSetting.Id), 100).WithPagination(page, 100), ct);
+            foreach (var watch in watches) readers.Add(watch.ParticipantId);
+            if (watches.Count < 100) break;
+        }
+        for (var page = 1; ; page++)
+        {
+            var watches = await TangentWatchSetting.Query(watch => watch.TangentKey == topic.TangentKey,
+                Window<TangentWatchSetting>(nameof(TangentWatchSetting.Id), 100).WithPagination(page, 100), ct);
+            foreach (var watch in watches) readers.Add(watch.ParticipantId);
+            if (watches.Count < 100) break;
+        }
         if (space?.OwnerParticipantId is { } owner && owner.Length > 0) readers.Add(owner);
         if (!string.IsNullOrEmpty(topic.CreatorParticipantId)) readers.Add(topic.CreatorParticipantId);
         return [.. readers];

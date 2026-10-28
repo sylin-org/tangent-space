@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Identity;
-using Tangent.Identity;
 using Xunit;
 
 namespace Tangent.Tests.ExperienceIntegration;

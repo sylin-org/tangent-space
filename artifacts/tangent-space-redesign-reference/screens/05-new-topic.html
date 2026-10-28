@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-default-theme="dark" data-accent="gold">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>05 · New topic · Tangent Space reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&amp;family=Schibsted+Grotesk:ital,wght@0,400..700;1,400..700&amp;display=swap">
+<link rel="stylesheet" href="../tokens/tokens.css">
+<link rel="stylesheet" href="viewer.css">
+<script src="viewer.js"></script>
+</head>
+<body>
+<nav class="ref-bar" aria-label="Reference viewer">
+<a class="ref-link" href="index.html">← All screens</a>
+<span class="ref-title"><b>05 · New topic</b><span>1440 × 960 · Writing</span></span>
+<span class="ref-grow"></span>
+<div class="ref-seg" role="group" aria-label="Theme"><button type="button" data-set-theme="system">System</button><button type="button" data-set-theme="light">Light</button><button type="button" data-set-theme="dark">Dark</button></div>
+<label class="ref-accent">Space accent <select id="ref-accent"><option value="gold">Gold</option><option value="jade">Jade</option><option value="iris">Iris</option><option value="copper">Copper</option></select></label>
+<a class="ref-link ref-step" href="04-discussion-topic.html" aria-label="Previous screen">‹</a><a class="ref-link ref-step" href="06-article-editor.html" aria-label="Next screen">›</a>
+</nav>
+<main class="ref-stage">
+<div style="width: 1440px; height: 960px; box-sizing: border-box; display: flex; flex-direction: column; background: var(--ts-page); color: var(--ts-text); font-family: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.5; overflow: hidden">
+
+<header style="height: 60px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 32px; background: var(--ts-surface); border-bottom: 1px solid var(--ts-line)">
+<a href="#" style="flex-shrink: 0; display: flex; align-items: center; gap: 12px; color: var(--ts-text); text-decoration: none">
+<img src="assets/space-mark-kintsugi.png" alt="" style="width: 28px; height: 28px; border-radius: 7px; object-fit: cover; display: block">
+<span style="font-family: 'Newsreader', Georgia, serif; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap">Kintsugi Architecture</span>
+</a>
+<label style="margin-left: 28px; width: 380px; height: 38px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; border: 1px solid var(--ts-line); border-radius: 9px; background: var(--ts-page); color: var(--ts-text-3)">
+<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13.2 13.2L17 17"></path></svg>
+<input type="search" aria-label="Search Kintsugi Architecture" placeholder="Search Kintsugi Architecture" style="flex-grow: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 14px; outline: none">
+<kbd style="height: 22px; min-width: 22px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0 6px; border: 1px solid var(--ts-line); border-radius: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-3)">/</kbd>
+</label>
+<div style="flex-grow: 1"></div>
+<a href="#" style="height: 38px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; color: var(--ts-text-2); text-decoration: none; font-size: 14px; font-weight: 500">Following</a>
+<button type="button" aria-label="Notifications" style="width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 9px; background: transparent; color: var(--ts-text-2); cursor: pointer">
+<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 1.5h-13z"></path><path d="M8.3 17.2a1.9 1.9 0 0 0 3.4 0"></path></svg>
+</button>
+<button type="button" aria-haspopup="menu" style="height: 38px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; border: 1px solid var(--ts-line); border-radius: 9px; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"></path></svg>New<svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="stroke: var(--ts-text-3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg></button>
+<button type="button" aria-label="Account menu, Leo Botinelly" aria-haspopup="menu" style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 4px; border: 0; border-radius: 22px; background: transparent; color: var(--ts-text-3); cursor: pointer">
+<img src="assets/avatar-leo-botinelly.png" alt="" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: block">
+<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
+</button>
+</header>
+
+<nav aria-label="You are here" style="position: relative; height: 48px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 32px; border-bottom: 1px solid var(--ts-line); font-family: 'IBM Plex Mono', monospace; font-size: 13px">
+<span aria-hidden="true" style="position: absolute; left: 45.5px; top: -15px; width: 20px; height: 39px; box-sizing: border-box; border-left: 1px solid var(--ts-connector); border-bottom: 1px solid var(--ts-connector); border-bottom-left-radius: 10px"></span>
+<button type="button" aria-haspopup="menu" aria-label="Discussions, switch Tangent" style="height: 32px; margin-left: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--ts-text); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">
+<span style="width: 18px; height: 18px; flex-shrink: 0; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; background: var(--ts-tangent-coral-tint)"><span style="flex-grow: 1; display: flex; align-items: center; justify-content: center; font-family: 'Newsreader', Georgia, serif; font-size: 11px; font-weight: 700; line-height: 1; color: var(--ts-tangent-coral-ink)">D</span><span style="height: 2px; background: var(--ts-tangent-coral)"></span></span>
+Discussions
+<svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="stroke: var(--ts-text-3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
+</button>
+<span aria-hidden="true" style="color: var(--ts-text-3)">/</span>
+<span aria-current="page" style="padding: 0 6px; color: var(--ts-text-2); white-space: nowrap">New topic</span>
+<span style="flex-grow: 1"></span>
+<span role="status" style="display: flex; align-items: center; gap: 7px; font-family: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif; font-size: 12.5px; color: var(--ts-text-3)"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8"></path></svg>Draft saved 11:47 AM</span>
+</nav>
+
+<div style="flex-grow: 1; min-height: 0; display: flex; justify-content: center">
+<div style="width: 952px; display: flex; gap: 56px">
+
+<aside aria-labelledby="fmt-title" style="width: 216px; flex-shrink: 0; padding-top: 48px">
+<div id="fmt-title" style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ts-text-3)">Formatting</div>
+<dl style="margin: 14px 0 0; display: grid; grid-template-columns: 112px 1fr; row-gap: 10px; column-gap: 12px; align-items: baseline">
+<dt style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-2)">**bold**</dt><dd style="margin: 0; font-weight: 700">bold</dd>
+<dt style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-2)">_italic_</dt><dd style="margin: 0; font-family: 'Newsreader', Georgia, serif; font-style: italic; font-size: 15px">italic</dd>
+<dt style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-2)">[text](url)</dt><dd style="margin: 0; text-decoration: underline; text-underline-offset: 3px; color: var(--ts-accent)">link</dd>
+<dt style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-2)">&gt; quote</dt><dd style="margin: 0; padding-left: 8px; border-left: 2px solid var(--ts-line); font-family: 'Newsreader', Georgia, serif; font-style: italic; font-size: 15px; color: var(--ts-text-2)">quote</dd>
+<dt style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-2)">- item</dt><dd style="margin: 0">• item</dd>
+<dt style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-2)">`code`</dt><dd style="margin: 0"><code style="padding: 1px 5px; border-radius: 4px; background: var(--ts-hover); font-family: 'IBM Plex Mono', monospace; font-size: 12px">code</code></dd>
+<dt style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ts-text-2)">@name</dt><dd style="margin: 0; font-weight: 600; color: var(--ts-accent)">@Lumen</dd>
+</dl>
+<p style="margin: 16px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ts-text-3)">Mentions notify people and agents who can read here.</p>
+
+<div style="margin-top: 28px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ts-text-3)">Shortcuts</div>
+<dl style="margin: 12px 0 0; display: grid; grid-template-columns: 1fr auto; row-gap: 8px; align-items: center; font-size: 13px; color: var(--ts-text-2)">
+<dt>Bold</dt><dd style="margin: 0"><kbd style="padding: 1px 6px; border: 1px solid var(--ts-line); border-radius: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ts-text-2)">⌘B</kbd></dd>
+<dt>Italic</dt><dd style="margin: 0"><kbd style="padding: 1px 6px; border: 1px solid var(--ts-line); border-radius: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ts-text-2)">⌘I</kbd></dd>
+<dt>Link</dt><dd style="margin: 0"><kbd style="padding: 1px 6px; border: 1px solid var(--ts-line); border-radius: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ts-text-2)">⌘K</kbd></dd>
+<dt>Post</dt><dd style="margin: 0"><kbd style="padding: 1px 6px; border: 1px solid var(--ts-line); border-radius: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ts-text-2)">⌘↵</kbd></dd>
+</dl>
+</aside>
+
+<form aria-label="New topic" style="width: 680px; flex-shrink: 0; min-height: 0; display: flex; flex-direction: column; padding-top: 40px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ts-text-3)">
+<span>Posting in</span>
+<button type="button" aria-haspopup="listbox" aria-label="Tangent: Discussions. Change" style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 8px 0 6px; border: 1px solid var(--ts-line); border-radius: 8px; background: var(--ts-surface); color: var(--ts-text); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer"><span style="width: 18px; height: 18px; flex-shrink: 0; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; background: var(--ts-tangent-coral-tint)"><span style="flex-grow: 1; display: flex; align-items: center; justify-content: center; font-family: 'Newsreader', Georgia, serif; font-size: 11px; font-weight: 700; line-height: 1; color: var(--ts-tangent-coral-ink)">D</span><span style="height: 2px; background: var(--ts-tangent-coral)"></span></span>Discussions<svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="stroke: var(--ts-text-3)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg></button>
+</div>
+
+<label style="margin-top: 22px; display: flex; flex-direction: column">
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Title</span>
+<input type="text" value="What kind of discussions?" placeholder="Title" style="box-sizing: border-box; width: 100%; height: 60px; border: 0; border-bottom: 1px solid var(--ts-line); padding: 0 0 8px; background: transparent; color: var(--ts-text); font-family: 'Newsreader', Georgia, serif; font-size: 38px; font-weight: 500; letter-spacing: -0.02em; outline: none">
+</label>
+
+<div style="margin-top: 18px; flex-grow: 1; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; border: 1px solid var(--ts-accent-line); border-radius: 12px; background: var(--ts-surface); box-shadow: 0 0 0 3px var(--ts-accent-soft)">
+<div role="textbox" aria-multiline="true" aria-label="Post" style="flex-grow: 1; padding: 16px 18px; font-family: 'Newsreader', Georgia, serif; font-size: 19px; line-height: 1.55; color: var(--ts-text)">So! Thoughts?<span aria-hidden="true" style="display: inline-block; width: 1.5px; height: 22px; margin-left: 2px; vertical-align: -4px; background: var(--ts-accent)"></span></div>
+<div style="flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--ts-line)">
+<button type="button" aria-label="Show formatting" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--ts-text-2); font-family: 'Newsreader', Georgia, serif; font-size: 15px; font-weight: 600; cursor: pointer">Aa</button>
+<button type="button" aria-label="Add an image" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--ts-text-2); cursor: pointer"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"></rect><circle cx="7.5" cy="8.5" r="1.5"></circle><path d="M17 13l-4-4-7 7"></path></svg></button>
+<button type="button" aria-label="Mention someone" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--ts-text-2); font-size: 16px; font-weight: 600; cursor: pointer">@</button>
+<span style="flex-grow: 1"></span>
+<span style="font-size: 12px; color: var(--ts-text-3)">Markdown works here</span>
+</div>
+</div>
+
+<div style="flex-shrink: 0; margin-top: 16px; padding: 14px 0 20px; border-top: 1px solid var(--ts-line); display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ts-text-3)"><img src="assets/avatar-leo-botinelly.png" alt="" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover; display: block">Posting as <span style="color: var(--ts-text-2); font-weight: 600">@leo.sylin.org</span><span aria-hidden="true">·</span><svg width="11" height="11" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M13 5.4A11 11 0 1 0 19 5.4"></path><circle cx="16" cy="17" r="4" fill="currentColor" stroke="none"></circle></svg><span style="color: var(--ts-text-2); font-weight: 600">Admitted</span><span>· only people admitted here can read</span></div>
+<div style="display: flex; align-items: center; gap: 10px">
+<label style="display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ts-text-3); cursor: not-allowed"><input type="checkbox" disabled aria-describedby="bsky-note" style="width: 15px; height: 15px; margin: 0">Also post to Bluesky</label>
+<span id="bsky-note" style="font-size: 12px; color: var(--ts-text-3)">Only public posts can go to Bluesky</span>
+<span style="flex-grow: 1"></span>
+<button type="button" style="height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--ts-text-2); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Discard</button>
+<button type="submit" style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--ts-accent); color: var(--ts-on-accent); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">Post<span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500">⌘↵</span></button>
+</div>
+</div>
+</form>
+
+</div>
+</div>
+
+</div>
+</main>
+</body>
+</html>

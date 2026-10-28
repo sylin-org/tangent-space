@@ -29,6 +29,6 @@ internal sealed class ParticipantAuthenticationHandler(IOptionsMonitor<Authentic
     protected override Task HandleForbiddenAsync(AuthenticationProperties properties)
     {
         Response.StatusCode = StatusCodes.Status403Forbidden;
-        return Response.WriteAsJsonAsync(new { error = "participant_operation_denied" });
+        return Response.WriteAsJsonAsync(new { code = "permission_denied", message = "This account cannot perform that action here." });
     }
 }

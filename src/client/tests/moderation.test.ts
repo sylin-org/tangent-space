@@ -10,31 +10,27 @@ import StewardshipPanel from '../src/components/StewardshipPanel.vue'
 
 const serverRef = 'http://server.example'
 
-function topicEnvelope(steward: boolean) {
+function topicResource(steward: boolean) {
   return {
-    place: { serverRef, allowedActions: steward ? ['list_moderation_cases', 'preview_moderation_action', 'apply_moderation_action'] : ['read'] },
-    capabilities: { stewardship: steward },
+    serverRef, stewardship: steward,
   }
 }
 
 const casesPage = {
-  result: {
-    data: {
       cases: [
         { caseRef: `${serverRef}::small-hours::first::case_${'a'.repeat(64)}`, state: 'open', testimonyCount: 2, firstReportedAt: new Date(Date.now() - 3600000).toISOString() },
         { caseRef: 'garbage', state: 'open', testimonyCount: 0 },
       ],
       nextPage: null,
-    },
-  },
 }
 
 function stubFetch(steward: boolean) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    if (url.includes('?limit=1')) return json(topicEnvelope(steward))
+    if (url.includes('?limit=1')) return json(topicResource(steward))
     if (url.includes('/moderation/cases?page=')) return json(casesPage)
+    if (url.endsWith('/reports')) return json({ accepted: true })
     throw new Error('unexpected fetch ' + url)
   })
 }
@@ -76,5 +72,22 @@ describe('the stewardship panel', () => {
     const { moderation } = await mountStewardship(false)
     expect(moderation.stewardshipAvailable.value).toBe(false)
     expect(moderation.cases.value.length).toBe(0)
+  })
+
+  it('lets an ordinary participant send a report without reading the private case queue', async () => {
+    const { moderation } = await mountStewardship(false)
+    moderation.openReport('post-42', 'Another participant')
+    moderation.reportStatement.value = 'This post shares someone else’s private information.'
+    await moderation.submitReport()
+    expect(moderation.reportVisible.value).toBe(false)
+    expect(moderation.announcement.value).toBe('Report sent privately to this Topic’s stewards.')
+    expect(moderation.reportStatus.value).toBe('')
+    const requests = vi.mocked(fetch).mock.calls
+    const report = requests.find(([url]) => String(url).endsWith('/reports'))
+    expect(JSON.parse(String(report?.[1]?.body))).toMatchObject({
+      postRef: `${serverRef}::small-hours::first::post-42`,
+      statement: 'This post shares someone else’s private information.',
+    })
+    expect(requests.some(([url]) => String(url).includes('/moderation/cases'))).toBe(false)
   })
 })

@@ -31,7 +31,7 @@ public sealed class OnboardingController(TangentServer hub, StorageSetup storage
         {
             return Ok(await hub.Space.CompleteOnboarding(participantId, User.FindFirst(AtprotoClaimTypes.Did)?.Value,
                 request.ExpectedDid,
-                request.Name, request.Description, request.Artwork, request.Skip, ct));
+                request.Name, request.Description, request.Artwork, request.Skip, ct, request.Kind));
         }
         catch (UnauthorizedAccessException) { return StatusCode(403); }
         // TangentRuleViolation is an InvalidOperationException, so it is caught first.
@@ -41,4 +41,4 @@ public sealed class OnboardingController(TangentServer hub, StorageSetup storage
 }
 
 public sealed record FirstTangentRequest(string? Name = null, string? Description = null, bool Skip = false,
-    string? Artwork = null, string? ExpectedDid = null);
+    string? Artwork = null, string? ExpectedDid = null, string? Kind = null);

@@ -105,11 +105,11 @@ onMounted(load)
     <template v-if="state">
       <div v-if="guided && !restartRequired && !choosing" class="database-ready">
         <span class="database-emblem" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><ellipse cx="16" cy="7" rx="10" ry="4"/><path d="M6 7v9c0 2.2 4.5 4 10 4s10-1.8 10-4V7M6 16v9c0 2.2 4.5 4 10 4s10-1.8 10-4v-9"/></svg></span>
-        <div><p class="database-ready-label">Configured for this Space <span class="database-status">{{ state.activeDurable === false ? 'Needs a durable database' : 'Ready to use' }}</span></p><h2>{{ activeName }}</h2><p v-if="state.activeDurable === false" role="alert">{{ state.activeStorageIssue || 'Choose a durable database before creating your Space.' }}</p><p v-else>Already configured on this server.<br>No connection details needed.</p></div>
+        <div><p class="database-ready-label">Storage for this Host <span class="database-status">{{ state.activeDurable === false ? 'Needs a durable database' : 'Ready to use' }}</span></p><h2>{{ activeName }}</h2><p v-if="state.activeDurable === false" role="alert">{{ state.activeStorageIssue || 'Choose durable storage before creating your first Tangent.' }}</p><p v-else>Already configured on this Host.<br>No connection details needed.</p></div>
         <span v-if="state.activeDurable !== false" class="database-selected" aria-label="Selected">✓</span>
       </div>
       <p v-else-if="!guided">Active database: <strong>{{ activeName }}</strong></p>
-      <div v-if="guided && restartRequired" class="database-restart" role="status"><span class="setup-summary-label">Choice saved</span><h2>One restart, then you’re ready.</h2><p>Restart Tangent to apply your database choice. Then sign in again with the same account to finish setting up your Space.</p><p class="hint">Your name and artwork draft stays in this browser tab. Database credentials are never saved in the browser.</p><button class="btn btn-primary" type="button" :disabled="pending !== null" @click="load">{{ pending === 'load' ? 'Checking…' : 'Check server' }}</button><a class="btn btn-quiet" href="/sign-in/?return=%2Fonboarding%2F">Sign in again</a></div>
+      <div v-if="guided && restartRequired" class="database-restart" role="status"><span class="setup-summary-label">Choice saved</span><h2>One restart, then you’re ready.</h2><p>Restart this Host to apply your database choice. Then sign in again with the same account to finish your first Tangent.</p><p class="hint">Your name and artwork draft stays in this browser tab. Database credentials are never saved in the browser.</p><button class="btn btn-primary" type="button" :disabled="pending !== null" @click="load">{{ pending === 'load' ? 'Checking…' : 'Check Host' }}</button><a class="btn btn-quiet" href="/sign-in/?return=%2Fonboarding%2F">Sign in again</a></div>
       <p v-if="!state.firstRun" class="hint">Database setup is complete. Moving this Space to another database requires transferring its existing data.</p>
       <div v-if="guided && !restartRequired && !choosing" class="database-next"><button class="btn btn-primary" type="button" :disabled="pending !== null || failed || accountChanged || state.activeDurable === false" @click="emit('continue')">Continue with {{ activeName }} <span aria-hidden="true">→</span></button><button v-if="state.firstRun" class="btn btn-quiet" type="button" :disabled="accountChanged" @click="openChoices">{{ state.activeDurable === false ? 'Choose a durable database' : 'Choose another database' }}</button></div>
       <form v-if="state.firstRun && !restartRequired && choosing" class="stack database-custom" @submit.prevent="testConnection">
@@ -148,7 +148,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-.database-panel { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
 fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .database-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 input, select { width: 100%; min-width: 0; }

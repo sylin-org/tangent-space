@@ -85,9 +85,9 @@ public sealed partial class ParticipantGovernance
     }
 
     /// <summary>Exact-scope role change. Topic scope delegates to the audited topic membership guards.</summary>
-    public async Task<RoleChangeResult> SetRole(string actorId, string tangentKey, string? roomKey, string targetIdentifier, ParticipantRole role, CancellationToken ct)
+    public async Task<RoleChangeResult> SetRole(string actorId, string tangentKey, string? topicKey, string targetIdentifier, ParticipantRole role, CancellationToken ct)
     {
-        if (!string.IsNullOrWhiteSpace(roomKey)) return new RoleChangeResult(null, await SetTopicRole(actorId, tangentKey, roomKey, targetIdentifier, role, ct));
+        if (!string.IsNullOrWhiteSpace(topicKey)) return new RoleChangeResult(null, await SetTopicRole(actorId, tangentKey, topicKey, targetIdentifier, role, ct));
         await gate.Enter(ct);
         try
         {
@@ -115,11 +115,11 @@ public sealed partial class ParticipantGovernance
         finally { gate.Exit(); }
     }
 
-    private async Task<TopicAdministrationResult> SetTopicRole(string actorId, string tangentKey, string roomKey, string targetIdentifier, ParticipantRole role, CancellationToken ct)
+    private async Task<TopicAdministrationResult> SetTopicRole(string actorId, string tangentKey, string topicKey, string targetIdentifier, ParticipantRole role, CancellationToken ct)
     {
         // Scope is exact: the audited topic guards reject cross-scope changes; verify the topic belongs to the Tangent first.
         // This path runs before this service enters its own gate, so TopicGovernance can take it freely.
-        var described = await topics.Describe(actorId, roomKey, ct);
+        var described = await topics.Describe(actorId, topicKey, ct);
         if (described is null) throw new TangentRuleViolation(TangentDenial.NotFound, "The requested topic does not exist.");
         if (described.TangentKey != tangentKey)
             throw new TangentRuleViolation(TangentDenial.InvalidInput, "The topic does not belong to this Tangent.");
@@ -131,7 +131,7 @@ public sealed partial class ParticipantGovernance
         };
         try
         {
-            var result = await topics.SetMembership(actorId, roomKey, targetIdentifier, mapped, ct);
+            var result = await topics.SetMembership(actorId, topicKey, targetIdentifier, mapped, ct);
             if (!result.Accepted) throw new TopicRuleViolation(result.Denial ?? TopicDenial.Forbidden, result.Reason);
             return result;
         }

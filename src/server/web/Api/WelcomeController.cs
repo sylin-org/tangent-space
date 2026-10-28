@@ -7,8 +7,6 @@ using Microsoft.Extensions.Options;
 using Tangent.Infrastructure;
 using Tangent.Application;
 using Tangent.Identity;
-using Tangent.Identity;
-using Tangent.Community;
 using Tangent.Stewardship;
 using Tangent.Spaces;
 
@@ -38,7 +36,20 @@ public sealed class WelcomeController(IOptions<SpaceOptions> options, TangentSer
         var identity = participant is null ? null : new ParticipantWelcome(participant.Id,
             await hub.Directory.AtprotoDidOf(participant.Id, ct), await hub.Directory.LabelOf(participant.Id, ct),
             space?.IsOwner(participant.Id) == true, participant.JoinedAt);
-        var settings = await server.Read(participantId, ct);
+        ServerSettings settings;
+        try { settings = await server.Read(participantId, ct); }
+        catch (UnauthorizedAccessException)
+        {
+            return Ok(new SpaceWelcome("Tangent Space", space is not null, identity,
+                TangentConstants.SignInPath, identity is null ? null : TangentConstants.SignOutPath,
+                new TopicListing([], 1, null, DateTimeOffset.UtcNow),
+                Onboarding: identity is null ? "sign_in" : "complete", WorkspaceAvailable: false));
+        }
+        settings = settings with
+        {
+            CanManageParticipants = settings.CanManageParticipants
+                && (!ParticipationAccess.UsesCredential(User) || User.HasClaim(ParticipationConstants.GrantClaim, ParticipationGrants.Manage))
+        };
         var home = space?.IsOwner(participantId) == true ? await Community.Tangent.Get(Community.Tangent.HomeKey, ct) : null;
         var onboarding = space is null
             ? identity is null ? "sign_in" : settings.CanClaim ? "create_tangent" : "waiting_owner"

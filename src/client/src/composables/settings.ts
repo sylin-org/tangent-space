@@ -6,8 +6,7 @@ import { clearRolesSession, rolesRequest } from './roles-api'
 
 export type SiteStore = ReturnType<typeof useSite>
 
-// The settings page's coordination, ported from access.js (context, resource, shell),
-// roles.js (tab state and the tab/role URL contract) and conversation (the server form).
+// The settings page coordinates context, resource, tabs, roles, and server identity.
 
 export interface SettingsDecision {
   key: string
@@ -29,11 +28,14 @@ export interface SettingsContext {
 
 export interface TangentView {
   key: string
+  kind?: 'discussions' | 'articles'
   name?: string
   description?: string
   motto?: string
   accent?: string
   artwork?: string
+  admission?: 'Open' | 'Approval'
+  canManageAdmission?: boolean
   canManage?: boolean
   isOwner?: boolean
 }
@@ -42,10 +44,13 @@ export interface TopicView {
   tangentKey: string
   key: string
   title?: string
+  presentation?: 'conversation' | 'article'
   topic?: string
   allowPostEditing?: boolean
   isLocked?: boolean
   canManage?: boolean
+  readAudience?: string
+  publiclyReadable?: boolean
 }
 
 export interface SettingsResource {
@@ -57,57 +62,56 @@ export interface SettingsResource {
   topic?: TopicView
 }
 
-export type SettingsTabName = 'server' | 'context' | 'roles' | 'access' | 'people'
+export type SettingsTabName = 'server' | 'appearance' | 'context' | 'roles' | 'access' | 'people' | 'sources' | 'storage'
 
 export function createSettings(site: SiteStore, router: RouterStore) {
   const context = shallowRef<SettingsContext | null>(null)
   const resource = shallowRef<SettingsResource | null>(null)
   const shellVisible = ref(false)
+  const peopleOnly = computed(() => context.value?.kind === 'server' && site.server?.canManage !== true && site.server?.canManageParticipants === true)
+  const actorKey = computed(() => site.site?.participant?.participantRef || '')
+  const loadedActor = ref('')
+  const loading = ref(false)
+  const pageKind = ref<SettingsContext['kind']>('server')
   const denied = ref('')
   const activeTab = ref<SettingsTabName>('server')
   const tabsVisible = reactive({ server: true, context: false, roles: true, access: true, people: true })
   const heading = reactive({
-    title: 'Server settings',
+    title: 'Space settings',
     eyebrow: 'MAKE YOURSELF AT HOME',
     intro: 'Name your place, set the mood, and decide who can help.',
   })
   const breadcrumbs = ref<Array<{ label: string; href: string | null }>>([
     { label: 'Home', href: '/' },
-    { label: 'Server settings', href: null },
+    { label: 'Space settings', href: null },
   ])
-  const contextHeading = reactive({ label: 'Tangent', kicker: 'TANGENT', name: 'Loading…', copy: '' })
   const accessBadge = ref('')
   const accessIntro = ref('Choose who can discover this place and what they may do here.')
   const serverStatus = ref('')
-  const contextStatus = ref('')
-  const contextStatusError = ref(false)
   let openToken = 0
 
-  const contextSignature = (c: SettingsContext | null): string =>
-    c ? [c.kind, c.tangent, c.topic].filter(Boolean).join(':') : ''
-
-  // Which tab the URL asks for, or the one this context opens on (roles.js requestedTab).
+  // The URL selects a tab when that tab belongs to the current settings scope.
   function requestedTab(contextKind: SettingsContext['kind']): SettingsTabName {
     const requested = new URL(window.location.href).searchParams.get('tab')
     const fallback: SettingsTabName = contextKind === 'server' ? 'server' : 'context'
     if (!requested) return fallback
     if (requested === 'access') return 'access'
-    // Roles and People describe the server itself, so they mean nothing in a Tangent or Topic.
-    return contextKind === 'server' && ['roles', 'people'].includes(requested) ? (requested as SettingsTabName) : fallback
+    if (requested === 'people' && contextKind === 'tangent') return 'people'
+    return contextKind === 'server' && ['appearance', 'roles', 'people', 'sources', 'storage'].includes(requested) ? (requested as SettingsTabName) : fallback
   }
 
   function contextFor(route: WorkspaceRoute): SettingsContext | null {
     if (route.kind === 'settings') {
       return {
         kind: 'server',
-        title: 'Server settings',
+        title: 'Space settings',
         eyebrow: 'MAKE YOURSELF AT HOME',
         intro: 'Name your place, shape its roles, and decide who can enter.',
         accessPath: '/api/server/access',
         decisions: [
-          { key: 'see', label: 'Who can enter', description: 'Choose who can discover and open this server.', bypass: 'Owner and roles with See every server can always enter.' },
+          { key: 'see', label: 'Who can enter', description: 'Choose who can discover and open this Space.', bypass: 'The Owner and roles with permission to read this Space can always enter.' },
           { key: 'createTangents', label: 'Who can create Tangents', description: 'Choose who may start a new Tangent here.', bypass: 'Owner and roles with Create Tangents anywhere can always create one.' },
-          { key: 'manage', label: 'Who can manage', description: 'Choose who may change server settings and access.', bypass: 'The Owner can always manage this server.' },
+          { key: 'manage', label: 'Who can manage', description: 'Choose who may change Space settings and access.', bypass: 'The Owner can always manage this Space.' },
         ],
       }
     }
@@ -152,7 +156,7 @@ export function createSettings(site: SiteStore, router: RouterStore) {
         name: site.server?.name || site.site?.name || 'Tangent Space',
         description: site.server?.welcomeMessage || '',
         open: '/',
-        canManage: site.site?.participant?.isOwner === true,
+        canManage: site.site?.participant != null && (site.server?.canManage === true || site.server?.canManageParticipants === true),
       }
     }
     const tangent = await rolesRequest<TangentView>('/api/v1/tangents/' + encodeURIComponent(c.tangent!), { scope: 'access' })
@@ -197,36 +201,40 @@ export function createSettings(site: SiteStore, router: RouterStore) {
     }
     crumbs.push({ label: c.title, href: null })
     breadcrumbs.value = crumbs
-    contextHeading.label = c.kind === 'topic' ? 'Topic' : 'Tangent'
-    contextHeading.kicker = c.kind.toUpperCase()
-    contextHeading.name = r.name
-    contextHeading.copy = r.description || (c.kind === 'topic' ? 'A shared conversation.' : 'A place for conversation.')
     tabsVisible.server = c.kind === 'server'
     tabsVisible.roles = c.kind === 'server'
     tabsVisible.context = c.kind !== 'server'
     tabsVisible.access = true
-    accessBadge.value = c.kind === 'server' ? 'Server' : r.name + ' · ' + (c.kind === 'topic' ? 'Topic' : 'Tangent')
+    accessBadge.value = c.kind === 'server' ? 'Space' : r.name + ' · ' + (c.kind === 'topic' ? 'Topic' : 'Tangent')
     accessIntro.value = c.kind === 'topic'
       ? 'Choose local roles, or keep a field inherited from this Tangent.'
-      : 'Use the server roles people already understand. Global stewards keep their built-in authority.'
-    fillContextForm(c, r)
+      : 'Use the Space roles people already understand. Global stewards keep their built-in authority.'
   }
 
-  /** Everything a route change or identity change does to the settings page (access.js openFor). */
+  /** Load the authorized settings scope for the current route and participant. */
   async function open() {
     const token = ++openToken
     const c = contextFor(router.route)
     if (!c) return
+    const openingActor = actorKey.value
+    loadedActor.value = ''
+    context.value = null
+    resource.value = null
+    pageKind.value = c.kind
+    heading.title = c.title
+    heading.eyebrow = c.eyebrow
+    heading.intro = c.intro
+    shellVisible.value = false
+    loading.value = true
     denied.value = ''
     clearRolesSession()
     if (!site.site?.participant) {
       shellVisible.value = false
       context.value = null
       resource.value = null
+      loading.value = false
       return
     }
-    // The owner check lands before anything loads, so the shell never flashes.
-    if (c.kind === 'server') shellVisible.value = site.site.participant.isOwner === true
     try {
       if (c.kind === 'server') await site.loadServer()
       if (token !== openToken) return
@@ -234,19 +242,24 @@ export function createSettings(site: SiteStore, router: RouterStore) {
       if (token !== openToken) return
       if (!r.canManage) throw new Error('Your current role cannot change settings here.')
       configureShell(c, r)
+      loadedActor.value = openingActor
       shellVisible.value = true
+      loading.value = false
       settingsTab(requestedTab(c.kind), false)
-      document.title = c.title + ' · ' + r.name + ' · Tangent Space'
+      document.title = (c.kind === 'topic' && r.topic?.presentation === 'article' ? 'Article Settings' : c.title)
+        + (r.name === 'Tangent Space' ? '' : ' · ' + r.name) + ' · Tangent Space'
     } catch (error) {
       if (token !== openToken) return
       shellVisible.value = false
       context.value = null
       denied.value = (error as Error).message || 'These settings are not available.'
+      loading.value = false
     }
   }
 
   function settingsTab(name: string, updateUrl = true) {
-    if (!['server', 'context', 'roles', 'access', 'people'].includes(name)) name = 'server'
+    if (!['server', 'appearance', 'context', 'roles', 'access', 'people', 'sources', 'storage'].includes(name)) name = 'server'
+    if (peopleOnly.value) name = 'people'
     activeTab.value = name as SettingsTabName
     if (updateUrl) {
       const url = new URL(window.location.href)
@@ -255,9 +268,18 @@ export function createSettings(site: SiteStore, router: RouterStore) {
         url.searchParams.delete('tab')
         url.searchParams.delete('role')
       }
+      if (name !== 'people') url.searchParams.delete('participant')
       window.history.replaceState({ ...(window.history.state || {}), tangentRoleEditor: false }, '', url.pathname + url.search + url.hash)
     }
   }
+
+  watch([() => site.server?.canManage, () => site.server?.canManageParticipants], () => {
+    if (context.value?.kind !== 'server' || !shellVisible.value) return
+    if (site.server?.canManage !== true && site.server?.canManageParticipants !== true) {
+      shellVisible.value = false
+      denied.value = 'Your current access does not allow Space settings.'
+    } else if (peopleOnly.value) settingsTab('people')
+  })
 
   // --- The server settings form ---
 
@@ -265,38 +287,85 @@ export function createSettings(site: SiteStore, router: RouterStore) {
     name: '',
     byline: '',
     coverImageUrl: '',
+    markImageUrl: '',
+    accent: 'gold',
     welcomeMessage: '',
     motd: '',
     allowAgentTangentOwnership: false,
   })
+  type ServerIdentity = typeof serverForm
+  const serverSaved = ref<ServerIdentity>({ ...serverForm })
+  const serverSaving = ref(false)
+  const serverUploading = ref(false)
+  const serverStorageAvailable = ref(false)
+  const serverDirty = computed(() => (Object.keys(serverSaved.value) as (keyof ServerIdentity)[])
+    .some(field => serverForm[field] !== serverSaved.value[field]))
+  let serverFormActor = ''
+  let serverSaveToken = 0
+  let serverHydrating = false
+  const serverDraftKey = (actor: string) => `tangent:host-settings:${encodeURIComponent(actor)}:identity`
+  const snapshotServer = (s: ServerView): ServerIdentity => ({
+    name: s.name || '', byline: s.byline || '', coverImageUrl: s.coverImageUrl || '',
+    markImageUrl: s.markImageUrl || '', accent: s.accent || 'gold',
+    welcomeMessage: s.welcomeMessage || '', motd: s.motd || '',
+    allowAgentTangentOwnership: s.allowAgentTangentOwnership === true,
+  })
+  function changedServerFields(): Partial<ServerIdentity> {
+    return Object.fromEntries((Object.keys(serverSaved.value) as (keyof ServerIdentity)[])
+      .filter(field => serverForm[field] !== serverSaved.value[field])
+      .map(field => [field, serverForm[field]]))
+  }
+  function persistServerDraft() {
+    if (serverHydrating || !actorKey.value) return
+    try {
+      const changed = changedServerFields()
+      if (Object.keys(changed).length) sessionStorage.setItem(serverDraftKey(actorKey.value), JSON.stringify(changed))
+      else sessionStorage.removeItem(serverDraftKey(actorKey.value))
+      serverStorageAvailable.value = true
+    } catch { serverStorageAvailable.value = false }
+  }
 
   function fillServerForm() {
     const s: ServerView | null = site.server
-    if (!s) return
-    serverForm.name = s.name || ''
-    serverForm.byline = s.byline || ''
-    serverForm.coverImageUrl = s.coverImageUrl || ''
-    serverForm.welcomeMessage = s.welcomeMessage || ''
-    serverForm.motd = s.motd || ''
-    serverForm.allowAgentTangentOwnership = s.allowAgentTangentOwnership === true
+    const actor = actorKey.value
+    if (!s || !actor) return
+    serverHydrating = true
+    const changed = actor === serverFormActor ? changedServerFields() : {} as Partial<ServerIdentity>
+    serverFormActor = actor
+    serverSaved.value = snapshotServer(s)
+    Object.assign(serverForm, serverSaved.value)
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(serverDraftKey(actor)) || 'null') as Partial<ServerIdentity> | null
+      if (stored && typeof stored === 'object') {
+        for (const field of Object.keys(serverSaved.value) as (keyof ServerIdentity)[]) {
+          if (typeof stored[field] === typeof serverSaved.value[field]) (changed as Record<string, unknown>)[field] = stored[field]
+        }
+      }
+      serverStorageAvailable.value = true
+    } catch { serverStorageAvailable.value = false }
+    Object.assign(serverForm, changed)
+    serverHydrating = false
+    persistServerDraft()
   }
 
-  watch(() => site.server, fillServerForm, { immediate: true })
+  watch([() => site.server, actorKey], () => {
+    serverSaveToken++
+    serverSaving.value = false
+    fillServerForm()
+  }, { immediate: true })
+  watch(serverForm, () => {
+    if (serverHydrating) return
+    serverStatus.value = ''
+    persistServerDraft()
+  }, { deep: true, flush: 'sync' })
 
-  const serverAllowedActions = computed<string[]>(() => {
-    const permissions = site.server?.permissions
-    return permissions && !Array.isArray(permissions) ? (permissions.allowedActions ?? []) : []
-  })
-
-  const serverCanManage = computed(
-    () => site.site?.participant?.isOwner === true || serverAllowedActions.value.includes('manageServer') || serverAllowedActions.value.includes('editServer'),
-  )
+  const serverCanManage = computed(() => site.site?.participant != null && site.server?.canManage === true)
 
   const serverRoleSummary = computed(() => {
     const permissions = site.server?.permissions
     if (!permissions || Array.isArray(permissions)) return ''
     const labels: Record<string, string> = {
-      read: 'read', reply: 'reply', manageServer: 'manage this server', createTangent: 'create Tangents',
+      read: 'read', reply: 'reply', manageServer: 'manage this Space', createTangent: 'create Tangents',
       manageTangent: 'manage this Tangent', createTopic: 'create Topics', manageTopic: 'manage this Topic',
       manageParticipants: 'manage participants', editOwnPost: 'edit your posts', deleteOwnPost: 'delete your posts',
       removePost: 'remove posts', reportPost: 'report posts',
@@ -318,97 +387,38 @@ export function createSettings(site: SiteStore, router: RouterStore) {
   })
 
   async function saveServer() {
-    serverStatus.value = ''
+    if (!serverCanManage.value || !serverDirty.value || serverSaving.value || serverUploading.value || !actorKey.value) return
+    if (!serverForm.name.trim()) { serverStatus.value = 'Give this Space a name.'; return }
+    const submitted = changedServerFields()
+    const actor = actorKey.value
+    const token = ++serverSaveToken
+    serverSaving.value = true
+    serverStatus.value = 'Saving…'
     try {
-      await rolesRequest('/api/server', { method: 'PATCH', body: { ...serverForm }, scope: 'access' })
-    } catch (error) {
-      if ((error as Error & { status?: number }).status === 403) {
-        serverStatus.value = 'Your account can no longer change these settings.'
-        window.location.assign('/')
-        return
-      }
-      serverStatus.value = 'Settings could not be saved. Please try again.'
-      return
-    }
-    try {
+      await rolesRequest('/api/server', { method: 'PATCH', body: submitted, scope: 'access' })
+      if (token !== serverSaveToken || actor !== actorKey.value) return
+      serverSaved.value = { ...serverSaved.value, ...submitted }
+      persistServerDraft()
+      serverStatus.value = serverDirty.value ? 'Earlier changes saved. New edits remain unsaved.' : 'Space details saved.'
       await site.loadServer()
-    } catch {
-      serverStatus.value = 'Server settings could not be read.'
-      return
-    }
-    serverStatus.value = 'Server settings saved.'
-  }
-
-  // --- The context editor (access.js renderContextEditor + submit) ---
-
-  const contextForm = reactive({
-    name: '', description: '', motto: '', accent: '#f4b942', artwork: '',
-    title: '', topic: '', allowPostEditing: false, isLocked: false,
-  })
-
-  function fillContextForm(c: SettingsContext, r: SettingsResource) {
-    if (c.kind === 'tangent' && r.tangent) {
-      contextForm.name = r.tangent.name || ''
-      contextForm.description = r.tangent.description || ''
-      contextForm.motto = r.tangent.motto || ''
-      contextForm.accent = r.tangent.accent || '#f4b942'
-      contextForm.artwork = r.tangent.artwork || ''
-    } else if (c.kind === 'topic' && r.topic) {
-      contextForm.title = r.topic.title || ''
-      contextForm.topic = r.topic.topic || ''
-      contextForm.allowPostEditing = r.topic.allowPostEditing === true
-      contextForm.isLocked = r.topic.isLocked === true
-    }
-  }
-
-  async function saveContext() {
-    const c = context.value
-    if (!c || c.kind === 'server') return
-    contextStatus.value = 'Saving…'
-    contextStatusError.value = false
-    try {
-      const body =
-        c.kind === 'tangent'
-          ? {
-              name: contextForm.name.trim(),
-              description: contextForm.description.trim(),
-              motto: contextForm.motto.trim(),
-              accent: contextForm.accent,
-              artwork: contextForm.artwork.trim(),
-            }
-          : {
-              title: contextForm.title.trim(),
-              topic: contextForm.topic.trim(),
-              allowPostEditing: contextForm.allowPostEditing,
-              isLocked: contextForm.isLocked,
-            }
-      const path =
-        c.kind === 'tangent'
-          ? '/api/v1/tangents/' + encodeURIComponent(c.tangent!)
-          : '/api/v1/tangents/' + encodeURIComponent(c.tangent!) + '/topics/' + encodeURIComponent(c.topic!) + '/settings'
-      await rolesRequest(path, { method: 'PATCH', body, scope: 'access' })
-      if (contextSignature(c) !== contextSignature(contextFor(router.route))) return
-      const r = resource.value
-      if (r) {
-        r.name = (body as { name?: string; title?: string }).name || (body as { title?: string }).title || r.name
-        r.description = (body as { description?: string; topic?: string }).description ?? (body as { topic?: string }).topic ?? r.description
-        if (c.kind === 'tangent' && r.tangent) Object.assign(r.tangent, body)
-        if (c.kind === 'topic' && r.topic) Object.assign(r.topic, body)
-        contextHeading.name = r.name
-        contextHeading.copy = r.description || (c.kind === 'topic' ? 'A shared conversation.' : 'A place for conversation.')
-      }
-      contextStatus.value = (c.kind === 'topic' ? 'Topic' : 'Tangent') + ' details saved.'
     } catch (error) {
-      contextStatus.value = (error as Error).message
-      contextStatusError.value = true
+      if (token === serverSaveToken && actor === actorKey.value) serverStatus.value = (error as Error).message || 'Space details could not be saved.'
+    } finally {
+      if (token === serverSaveToken) serverSaving.value = false
     }
+  }
+  function discardServer() {
+    if (serverSaving.value || serverUploading.value) return
+    Object.assign(serverForm, serverSaved.value)
+    persistServerDraft()
+    serverStatus.value = ''
   }
 
   return {
-    context, resource, shellVisible, denied, activeTab, tabsVisible, heading, breadcrumbs,
-    contextHeading, accessBadge, accessIntro,
-    serverForm, serverCanManage, serverRoleSummary, serverPermissionsSummary, cardImageUrl, serverStatus, saveServer,
-    contextForm, contextStatus, contextStatusError, saveContext,
+    context, resource, peopleOnly, actorKey, loadedActor, shellVisible, loading, pageKind, denied, activeTab, tabsVisible, heading, breadcrumbs,
+    accessBadge, accessIntro,
+    serverForm, serverSaved, serverDirty, serverSaving, serverUploading, serverStorageAvailable,
+    serverCanManage, serverRoleSummary, serverPermissionsSummary, cardImageUrl, serverStatus, saveServer, discardServer,
     requestedTab, contextFor, settingsTab,
     open,
   }

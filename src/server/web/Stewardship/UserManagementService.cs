@@ -20,7 +20,7 @@ namespace Tangent.Stewardship;
 /// permissions as its action enum; the enforcement lives only here.
 /// </summary>
 public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, ParticipantDirectory directory,
-    TangentRoleAccess roleAccess, RoleCollection roles, References refs, SignalBus signals)
+    TangentRoleAccess roleAccess, RoleCollection roles, References refs, SignalBus signals, TopicGovernance topics)
 {
     public const int MaximumReasonLength = 2000;
     public static readonly TimeSpan MaximumTimeout = TimeSpan.FromDays(30);
@@ -29,6 +29,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
     public const string Warn = "warn";
     public const string Timeout = "timeout";
     public const string Suspend = "suspend";
+    public const string Restore = "restore";
     public const string Ban = "ban";
     public const string AddRole = "add_role";
     public const string RemoveRole = "remove_role";
@@ -41,8 +42,8 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(actorId);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetIdentifier);
-        if (action is not (Warn or Timeout or Suspend or Ban or AddRole or RemoveRole))
-            throw new ArgumentException("Choose warn, timeout, suspend, ban, add_role, or remove_role.", nameof(action));
+        if (action is not (Warn or Timeout or Suspend or Restore or Ban or AddRole or RemoveRole))
+            throw new ArgumentException("Choose warn, timeout, suspend, restore, ban, add_role, or remove_role.", nameof(action));
         CheckReason(reason);
         await gate.Enter(ct);
         try
@@ -64,7 +65,7 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
             {
                 Warn => await WarnParticipant(actorId, target.Id, reason, bag, now, ct),
                 Timeout or Ban => await Restrict(actorId, target.Id, action, reason, durationSeconds, caseRef, bag, now, ct),
-                Suspend => await SuspendParticipant(actorId, target.Id, reason, space, bag, now, ct),
+                Suspend or Restore => await SuspendParticipant(actorId, target.Id, reason, space, bag, now, ct, action == Suspend),
                 _ => await AssignRole(actorId, target.Id, action, reason, role, bag, now, ct)
             };
             return outcome;
@@ -107,6 +108,12 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
         var parsedCase = refs.ParseCase(caseRef) ?? throw new ArgumentException(
             "Copy the moderation case reference this action follows; a restriction binds where its evidence lives.", nameof(caseRef));
         var tangentKey = parsedCase.TangentKey;
+        var evidence = await ModerationCase.Get(parsedCase.CaseId, ct);
+        if (evidence is null || evidence.TangentKey != tangentKey || evidence.TopicKey != parsedCase.TopicKey
+            || evidence.SubjectParticipantId != targetId)
+            throw new ArgumentException("Choose an existing case about this participant in this Tangent.", nameof(caseRef));
+        if (!(await ActionsForCase(actorId, evidence, ct)).Contains(action))
+            throw new UnauthorizedAccessException("The current case and participant permissions do not permit this action.");
         DateTimeOffset? until = null;
         if (action == Timeout)
         {
@@ -133,22 +140,41 @@ public sealed class UserManagementService(TimeProvider clock, PolicyGate gate, P
         }, ct);
     }
 
+    public async Task<IReadOnlyList<string>> ActionsForCase(string actorId, ModerationCase evidence, CancellationToken ct)
+    {
+        var space = await Space.Get(TangentConstants.SpaceId, ct);
+        var tangent = await Community.Tangent.Get(evidence.TangentKey, ct);
+        var actor = await Participant.Get(actorId, ct);
+        if (actor?.IsSuspended != false || !await SpaceAdmission.Admitted(space, actorId, ct)
+            || actorId == evidence.SubjectParticipantId || space?.IsOwner(evidence.SubjectParticipantId) == true
+            || tangent is null || tangent.IsOwner(evidence.SubjectParticipantId)
+            || await Restrictions.ForTangent(actorId, evidence.TangentKey, clock.GetUtcNow(), ct) is not null)
+            return [];
+        var policy = await topics.ReadPolicyAsync(actorId, evidence.TopicKey, ct);
+        if (!policy.CanRead || !policy.CanManage) return [];
+        var bag = await roleAccess.Bag(actorId, ct);
+        var actions = new List<string>();
+        if (TangentRoleAccess.CanDo([TangentPermissions.TimeoutUsers], bag)) actions.Add(Timeout);
+        if (TangentRoleAccess.CanDo([TangentPermissions.BanUsers], bag)) actions.Add(Ban);
+        return actions;
+    }
+
     private async Task<Outcome> SuspendParticipant(string actorId, string targetId, string reason,
-        Space space, IReadOnlyCollection<string> bag, DateTimeOffset now, CancellationToken ct)
+        Space space, IReadOnlyCollection<string> bag, DateTimeOffset now, CancellationToken ct, bool suspended)
     {
         RequireRung(TangentPermissions.ManageParticipants, bag);
         return await Coordinate(async () =>
         {
             var participant = await Participant.Get(targetId, ct)
                 ?? throw new ArgumentException("That participant has not arrived on this server yet.");
-            participant.IsSuspended = true;
+            participant.IsSuspended = suspended;
             space.PolicyRevision = checked(space.PolicyRevision + 1);
             await participant.Save(ct);
             await space.Save(ct);
             await ActivityJournal.AppendInTransaction(ActivityKind.ParticipantChanged, "", actorId, targetId, ct: ct);
             var audit = await Audit(actorId, targetId, TopicAdministration.SetSuspension, true, reason, now, ct,
                 revision: space.PolicyRevision);
-            return new Outcome(Suspend, targetId, reason, null, null, null, null, audit.Id);
+            return new Outcome(suspended ? Suspend : Restore, targetId, reason, null, null, null, null, audit.Id);
         }, ct);
     }
 
