@@ -1,0 +1,3 @@
+# Proof of concept
+
+This folder is the Tangent Space proof of concept of September 2026, kept as a harvest source for the tree at the repository root and nothing else. Its verdicts, unit by unit, are in [docs/HARVEST.md](../docs/HARVEST.md); its decisions are [ADRs 0001–0013](../docs/adr/), and [ADR 0014](../docs/adr/0014-tangent-beside-your-site.md) names which of them the root tree inherits. The paths in here are not fixed for this location: build or run it from the tag `poc/2026-10-28`, where it stood at the repository root. When the harvest map has no unconsumed item, this folder and the map are deleted in one commit, and the tag remains the archive.
