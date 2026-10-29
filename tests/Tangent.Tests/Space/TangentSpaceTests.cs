@@ -30,7 +30,7 @@ public sealed class TangentSpaceTests
         var row = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
 
         Assert.NotNull(row);
-        Assert.Equal("https://tangent.example/Field Notes", row.BaseUrl);
+        Assert.Equal("https://tangent.example/Field%20Notes", row.BaseUrl);
         Assert.Equal(row.BaseUrl, tangentSpace.Options.BaseUrl);
     }
 

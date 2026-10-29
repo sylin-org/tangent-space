@@ -1,0 +1,9 @@
+@using Tangent.Space
+<main>
+    <h1>@Model.Name</h1>
+    <p><a href="@Model.BaseUrl">@Model.BaseUrl</a></p>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public Door Model { get; set; } = default!;
+}

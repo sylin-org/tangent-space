@@ -3,17 +3,21 @@ using Koan.Core;
 using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
+using Koan.Web.Extensions;
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent;
 
 /// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder,
-/// the request pipeline, and the first start.</summary>
+/// the request pipeline, the HTML projection, and the first start.</summary>
 public sealed class TangentModule : KoanModule
 {
     public override void Register(IServiceCollection services)
@@ -25,6 +29,8 @@ public sealed class TangentModule : KoanModule
             })
             .Validate(options => TangentSpaceOptions.TryParseBaseUrl(options.BaseUrl, out _),
                 "Tangent:BaseUrl must be an absolute http or https URL: scheme, host and an optional path.")
+            .Validate(options => !TangentSpaceOptions.EncodesSeparator(options.BaseUrl),
+                "Tangent:BaseUrl must not encode a path separator (%2F): write the path as plain segments.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
                 "Tangent:DataFolder must name a folder.")
             .Validate(options => options.TrustedProxy is null || IPAddress.TryParse(options.TrustedProxy, out _),
@@ -41,6 +47,22 @@ public sealed class TangentModule : KoanModule
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TrustedProxyPipelineContributor>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, BaseUrlPipelineContributor>());
+
+        // The HTML projection: each resource type names its component; the formatter goes first so a request
+        // without a preference reads a page, and every other type keeps Koan's JSON.
+        services.AddScoped<HtmlRenderer>();
+        services.AddSingleton(new ResourceComponents()
+            .Add<Door, DoorView>(door => door.Name, door => door.Version)
+            .Add<Problem, ProblemView>(problem => problem.Title));
+        services.AddSingleton<HtmlFormatter>();
+        services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
+        {
+            mvc.OutputFormatters.Insert(0, html);
+            mvc.RespectBrowserAcceptHeader = true;
+            mvc.Filters.Add<ETagFilter>();
+        });
+        services.WithExceptionHandler();
+        services.AddExceptionHandler(handler => handler.ExceptionHandler = ProblemExceptionHandler.Answer);
     }
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)
