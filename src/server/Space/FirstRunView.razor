@@ -72,7 +72,7 @@
                         {
                             <p class="field-failure" id="first-run-code-failure">@codeFailure</p>
                         }
-                        <p class="first-run-note" id="first-run-code-note">This Tangent Space wrote it to its log when it started, on the line that begins “Setup code”. It changes at every start until the place is set up.</p>
+                        <p class="first-run-note" id="first-run-code-note">This Tangent Space wrote it to its log as a warning when it started, on the line that begins “Setup code”; it changes at every start until the place is set up. Or set <code>@FirstRun.OperatorSetting</code> to your DID and restart, and no code is asked.</p>
                     </div>
                 }
                 <div class="field">
@@ -187,7 +187,7 @@
                 }
                 else
                 {
-                    <text>Setting it up takes the setup code this Tangent Space wrote to its log when it started.</text>
+                    <text>Setting it up takes the setup code this Tangent Space wrote to its log when it started, or <code>@FirstRun.OperatorSetting</code> set to your DID and a restart.</text>
                 }
             </p>
         }

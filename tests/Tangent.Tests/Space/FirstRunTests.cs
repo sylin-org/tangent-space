@@ -60,7 +60,7 @@ public sealed partial class FirstRunTests
             Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Set up this Tangent Space</h1>", html);
             Assert.Contains($"<form class=\"sign-in-form\" method=\"get\" action=\"{BaseUrl}/auth/atproto/challenge\" data-island=\"submitting\">", html);
             Assert.Contains("<span class=\"panel-head-name\">New Tangent Space</span>", html);
-            Assert.Contains("Setting it up takes the setup code this Tangent Space wrote to its log when it started.", html);
+            Assert.Contains("Setting it up takes the setup code this Tangent Space wrote to its log when it started, or <code>Tangent:Operator</code> set to your DID and a restart.", html);
             Assert.Equal(TangentSpace.Unnamed, json.RootElement.GetProperty("name").GetString());
             Assert.Equal(BaseUrl, json.RootElement.GetProperty("baseUrl").GetString());
             Assert.Equal(TangentModule.BaseUrlKey, json.RootElement.GetProperty("setting").GetString());
@@ -190,6 +190,65 @@ public sealed partial class FirstRunTests
     }
 
     [Fact]
+    public async Task The_setup_code_reaches_a_log_that_keeps_only_warnings()
+    {
+        var lines = new ConcurrentQueue<string>();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Logging:LogLevel:Default"] = "Warning" },
+            services => services.AddSingleton<ILoggerProvider>(new Lines(lines)), Cancellation);
+
+        var logged = Assert.Single(lines, line => line.StartsWith("Setup code ", StringComparison.Ordinal));
+
+        Assert.Matches("^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$", SetupCodeLine().Match(logged).Groups["code"].Value);
+        Assert.DoesNotContain(lines, line => line.StartsWith("Tangent Space at ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_form_kept_open_past_first_run_is_refused_as_already_set_up_for_the_operator_and_answers_missing_to_anyone_else()
+    {
+        var lines = new ConcurrentQueue<string>();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(),
+            services => services.AddSingleton<ILoggerProvider>(new Lines(lines)), Cancellation);
+        var code = SetupCodeLine().Match(Assert.Single(lines, line => line.StartsWith("Setup code ", StringComparison.Ordinal))).Groups["code"].Value;
+        using var leo = new Browser(tangentSpace);
+        using var ada = new Browser(tangentSpace);
+        using var leoIn = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example");
+        using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
+        var leoForm = await leo.Token("/first-run", Cancellation);
+        var adaForm = await ada.Token("/first-run", Cancellation);
+        using var established = await leo.SetUp("Field notes", Cancellation, code: code);
+        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
+        var events = await Event.Count.Exact(Cancellation);
+
+        using var operatorAgain = await Stale(leo, leoForm, "Leo's other place", code, "application/json");
+        using var operatorPage = await Stale(leo, leoForm, "Leo's other place", code, "text/html");
+        using var participant = await Stale(ada, adaForm, "Ada's place", code, "application/json");
+        using var visitor = await tangentSpace.Client.PostAsync("/first-run",
+            new FormUrlEncodedContent(new Dictionary<string, string> { ["name"] = "Anyone's place" }), Cancellation);
+        using var problem = JsonDocument.Parse(await operatorAgain.Content.ReadAsStringAsync(Cancellation));
+
+        Assert.Equal(HttpStatusCode.Conflict, operatorAgain.StatusCode);
+        Assert.Equal("application/problem+json", operatorAgain.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("Already set up", problem.RootElement.GetProperty("title").GetString());
+        Assert.Equal($"{Establish.AlreadyEstablished} Its pointers are at {BaseUrl}/first-run.", problem.RootElement.GetProperty("detail").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, operatorPage.StatusCode);
+        Assert.Contains($"{BaseUrl}/first-run", await operatorPage.Content.ReadAsStringAsync(Cancellation));
+        Assert.Equal(HttpStatusCode.NotFound, participant.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, visitor.StatusCode);
+        Assert.Equal(("Field notes", Leo), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId));
+        Assert.Equal(events, await Event.Count.Exact(Cancellation));
+    }
+
+    /// <summary>Posts a first-run form the browser kept open, with the token it carried then.</summary>
+    private static async Task<HttpResponseMessage> Stale(Browser browser, Dictionary<string, string> token, string name, string code, string mediaType)
+    {
+        var fields = new Dictionary<string, string>(token) { ["name"] = name, ["proprietor"] = "me", ["accountable"] = "yes", ["code"] = code };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/first-run") { Content = new FormUrlEncodedContent(fields) };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(mediaType));
+        return await browser.Client.SendAsync(request, Cancellation);
+    }
+
+    [Fact]
     public async Task A_form_without_the_operators_statement_is_refused_inline_and_writes_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(PinnedToLeo), ct: Cancellation);
@@ -273,6 +332,7 @@ public sealed partial class FirstRunTests
             Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
             Assert.Contains("<link rel=\"tangent\" href=\"https://second.example/notes\">", pointers);
             Assert.Contains("location /notes/ {", pointers);
+            Assert.Contains($"proxy_pass http://127.0.0.1:{second.Client.BaseAddress!.Port};", pointers);
             Assert.DoesNotContain("first.example", pointers);
         }
         finally
@@ -389,6 +449,18 @@ public sealed partial class FirstRunTests
         Assert.Contains("location = /notes {", path[3].Text);
         Assert.Contains("return 308 /notes/;", path[3].Text);
         Assert.Contains("www.example.com", path[3].Where);
+    }
+
+    [Fact]
+    public void The_proxy_rule_passes_to_the_address_the_server_listens_on()
+    {
+        Assert.Equal("http://127.0.0.1:6000", Pointers.Upstream(["http://localhost:6000"]));
+        Assert.Equal("http://127.0.0.1:8080", Pointers.Upstream(["https://tangent.example:8443", "http://[::]:8080"]));
+        Assert.Equal("http://127.0.0.1:7000", Pointers.Upstream(["http://+:7000"]));
+        Assert.Equal("http://10.0.0.5:7000", Pointers.Upstream(["http://10.0.0.5:7000"]));
+        Assert.Equal(Pointers.FixedUpstream, Pointers.Upstream([]));
+        Assert.Contains("proxy_pass http://127.0.0.1:6000;",
+            Assert.Single(Pointers.For("https://www.example.com/notes", Pointers.Upstream(["http://localhost:6000"])), pointer => pointer.Kind == Pointers.Proxy).Text);
     }
 
     [Fact]

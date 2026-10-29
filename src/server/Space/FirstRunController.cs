@@ -4,6 +4,8 @@ using Koan.Web.Auth.Connector.Atproto;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Tangent.Access;
@@ -18,11 +20,12 @@ namespace Tangent.Space;
 /// person whose DID <c>Tangent:Operator</c> names, or, with none named, whoever types the setup code the server wrote
 /// to its log at this start. Posting the form, with its antiforgery token, sends <see cref="Establish"/>; once it
 /// commits the operator joins the administrator role and reads the site's pointers here. After that only the operator
-/// and the proprietor find anything at this address. Every other page of the tree answers this resource until the
-/// place is established (<see cref="FirstRunGate"/>).</summary>
+/// and the proprietor find anything at this address, and a form posted to it is refused as already set up before
+/// anything else is asked; to everyone else it answers as a missing resource. Every other page of the tree answers
+/// this resource until the place is established (<see cref="FirstRunGate"/>).</summary>
 [AnswersBeforeFirstRun]
 public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, SetupCode setupCode,
-    WriteLoop writer, IAntiforgery antiforgery, RoleCollection roles, ILogger<FirstRunController> logger) : ControllerBase
+    WriteLoop writer, IAntiforgery antiforgery, RoleCollection roles, IServer server, ILogger<FirstRunController> logger) : ControllerBase
 {
     /// <summary>The page's path under the base URL.</summary>
     public const string Path = "/first-run";
@@ -38,12 +41,11 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
     {
         Response.Headers.CacheControl = "no-store";
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return await Answer(HttpContext, baseUrl, options.Value, setupCode, ct);
-        var personId = PersonId(User);
-        if (personId is null || personId != space.OperatorId && personId != space.ProprietorId)
-            return new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
+        if (!Theirs(space)) return NotHere();
+        var listening = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
         return new ObjectResult(Place(baseUrl, space.Name, null) with
         {
-            Pointers = Pointers.For(Configured(baseUrl)),
+            Pointers = Pointers.For(Configured(baseUrl), Pointers.Upstream(listening)),
             Reader = await ReaderOf(User, baseUrl, ct)
         });
     }
@@ -53,6 +55,11 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         [FromForm] string? accountable, [FromForm] string? code, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
+        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is { } established)
+            return Theirs(established)
+                ? new Problem(StatusCodes.Status409Conflict, "Already set up",
+                    $"{Establish.AlreadyEstablished} Its pointers are at {Configured(baseUrl) + Path}.").ToResult()
+                : NotHere();
         if (PersonId(User) is not { } personId)
             return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Setting up the Tangent Space needs a signed-in person.", Capabilities.SignIn).ToResult();
         try
@@ -103,7 +110,8 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
                 Response.Headers.Location = baseUrl.PathBase + Path;
                 return StatusCode(StatusCodes.Status303SeeOther);
             case Outcome<TangentSpace>.Refused { Reason: Establish.AlreadyEstablished } refused:
-                return new Problem(StatusCodes.Status409Conflict, "Already set up", refused.Reason).ToResult();
+                return new Problem(StatusCodes.Status409Conflict, "Already set up",
+                    $"{refused.Reason} Its pointers are at {Configured(baseUrl) + Path}.").ToResult();
             case Outcome<TangentSpace>.Refused { Reason: TangentSpace.NameRule } refused:
                 return await Again(sent with { NameFailure = refused.Reason });
             case Outcome<TangentSpace>.Refused refused when named is not null && refused.Reason == Establish.NoParticipant(named):
@@ -137,6 +145,15 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
             return new ObjectResult(place with { Waiting = new FirstRunWaiting(Handle(http.User)) });
         return new ObjectResult(place with { Form = Form(http, baseUrl, pinned is null && setupCode.Required) });
     }
+
+    /// <summary>Whether the signed-in person is the established place's operator or proprietor, the two who find first
+    /// run once it is done.</summary>
+    private bool Theirs(TangentSpace space)
+        => PersonId(User) is { } personId && (personId == space.OperatorId || personId == space.ProprietorId);
+
+    /// <summary>What first run answers anyone else once the place is established: a missing resource's answer.</summary>
+    private static IActionResult NotHere()
+        => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
 
     /// <summary>The form again, keeping what was sent, with the reason it was refused.</summary>
     private async Task<IActionResult> Again(FirstRunForm form)

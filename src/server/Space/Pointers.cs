@@ -14,10 +14,32 @@ public static class Pointers
     public const string Txt = "txt";
     public const string Proxy = "proxy";
 
-    /// <summary>The port the proxy rule passes to: the one Tangent listens on unless its operator names another.</summary>
-    private const string Upstream = "http://127.0.0.1:5220";
+    /// <summary>Where the proxy rule passes to when the server's own addresses are not known: the port Tangent listens
+    /// on unless its operator names another.</summary>
+    public const string FixedUpstream = "http://127.0.0.1:5220";
 
-    public static IReadOnlyList<Pointer> For(string baseUrl)
+    /// <summary>The address a reverse proxy on the same machine reaches the server at: the first http address it listens
+    /// on, a wildcard or loopback host written as 127.0.0.1 and the port kept; <see cref="FixedUpstream"/> when it
+    /// listens on none it reports.</summary>
+    public static string Upstream(IEnumerable<string> listening)
+    {
+        foreach (var address in listening)
+        {
+            if (!address.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) continue;
+            var authority = address["http://".Length..].Split('/', 2)[0];
+            var colon = authority.LastIndexOf(':');
+            if (colon < 0 || !int.TryParse(authority[(colon + 1)..], out var port)) continue;
+            var host = authority[..colon];
+            var local = host is "+" or "*" or "0.0.0.0" or "[::]" or "[::1]" or "localhost" || host.StartsWith("127.", StringComparison.Ordinal);
+            return $"http://{(local ? "127.0.0.1" : host)}:{port}";
+        }
+
+        return FixedUpstream;
+    }
+
+    /// <summary>The pointers for <paramref name="baseUrl"/>; the proxy rule, where there is one, passes to
+    /// <paramref name="upstream"/>.</summary>
+    public static IReadOnlyList<Pointer> For(string baseUrl, string upstream = FixedUpstream)
     {
         var address = new Uri(baseUrl);
         var site = SiteHost(address.Host);
@@ -27,7 +49,7 @@ public static class Pointers
             new(WellKnown, $"Served at {address.Scheme}://{site}/.well-known/tangent as plain text, this one line.", baseUrl),
             new(Txt, $"A TXT record named _tangent.{site} in your DNS.", $"_tangent.{site}. IN TXT \"{baseUrl}\"")
         ];
-        if (address.AbsolutePath != "/") pointers.Add(ProxyRule(address));
+        if (address.AbsolutePath != "/") pointers.Add(ProxyRule(address, upstream));
         return pointers;
     }
 
@@ -45,13 +67,13 @@ public static class Pointers
     /// matches the decoded path, written as an nginx string; the redirect names the encoded path. nginx reads
     /// <c>$</c> in a redirect as a variable and has no escape for it, so a path holding one, or a control character,
     /// gets no rule, only the reason.</summary>
-    private static Pointer ProxyRule(Uri address)
+    private static Pointer ProxyRule(Uri address, string upstream)
     {
         var encoded = address.AbsolutePath;
         var path = Uri.UnescapeDataString(encoded);
         if (path.Contains('$') || path.Any(char.IsControl))
             return new Pointer(Proxy,
-                $"nginx cannot express the path {path} safely, since it reads $ as a variable; pass {path}/ unchanged to {Upstream} on your reverse proxy by hand, with X-Forwarded-Proto and X-Forwarded-For, and list the proxy’s address under Koan:Web:TrustedProxies.",
+                $"nginx cannot express the path {path} safely, since it reads $ as a variable; pass {path}/ unchanged to {upstream} on your reverse proxy by hand, with X-Forwarded-Proto and X-Forwarded-For, and list the proxy’s address under Koan:Web:TrustedProxies.",
                 "");
         return new Pointer(Proxy,
             $"In the server block for {address.Authority} on your reverse proxy; then list the proxy’s address under Koan:Web:TrustedProxies.",
@@ -60,7 +82,7 @@ public static class Pointers
                 return 308 {{Nginx(encoded + "/")}};
             }
             location {{Nginx(path + "/")}} {
-                proxy_pass {{Upstream}};
+                proxy_pass {{upstream}};
                 proxy_set_header X-Forwarded-Proto $scheme;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             }

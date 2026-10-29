@@ -5,7 +5,8 @@ using Tangent.Access;
 namespace Tangent.Space;
 
 /// <summary>What every start makes sure of about first run. An unestablished place with no operator configured draws
-/// a new setup code and writes it to the log once. An established place refuses to start under a configured operator
+/// a new setup code and writes it to the log once, as a warning, since the operator must act on it and ordinary
+/// production filters keep warnings. An established place refuses to start under a configured operator
 /// other than the one it was established with, since changing the setting never transfers the place; and its operator
 /// is a member of the administrator role, which the start restores when a first run's own add never landed.</summary>
 public static class FirstRunStart
@@ -18,7 +19,7 @@ public static class FirstRunStart
         if (space is null)
         {
             if (configured is null)
-                logger.LogInformation(
+                logger.LogWarning(
                     "Setup code {SetupCode}: type it on the first-run page to set up this Tangent Space; it changes at every start until then, and setting {Setting} to your DID replaces it",
                     services.GetRequiredService<SetupCode>().Draw(), FirstRun.OperatorSetting);
             return;
