@@ -308,12 +308,16 @@ public static class Backup
                 return;
             }
             catch (Exception failure) when (attempt < MoveAttempts && Directory.Exists(from)
-                && failure is UnauthorizedAccessException or IOException { HResult: SharingViolation or LockViolation })
+                && failure is UnauthorizedAccessException or IOException { HResult: SharingViolation or LockViolation or AccessDenied })
             {
                 Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(1000, MovePause.TotalMilliseconds * (1 << (attempt - 1)))));
             }
         }
     }
+
+    /// <summary>What Directory.Move reports, as an <see cref="IOException"/> rather than an
+    /// <see cref="UnauthorizedAccessException"/>, when another process briefly holds a file inside the folder.</summary>
+    private const int AccessDenied = unchecked((int)0x80070005);
 
     private const int SharingViolation = unchecked((int)0x80070020);
     private const int LockViolation = unchecked((int)0x80070021);
