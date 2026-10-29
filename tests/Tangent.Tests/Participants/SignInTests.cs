@@ -60,10 +60,10 @@ public sealed class SignInTests
     [Theory]
     [InlineData("handle_unresolved", true, "No AT Protocol account answers to this handle. Check its spelling and continue.")]
     [InlineData("provider_unreachable", false, "Your account’s provider couldn’t be reached. Continue to try again in a moment.")]
-    [InlineData("access_denied", false, "The sign-in was declined on your provider’s page. Continue to try again.")]
-    [InlineData("callback_mismatch", false, "The sign-in came back without the request it began with. Continue to start again.")]
-    [InlineData("sign_in_failed", false, "Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.")]
-    [InlineData("<b>provider said</b>", false, "Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.")]
+    [InlineData("access_denied", false, "The sign‑in was declined on your provider’s page. Continue to try again.")]
+    [InlineData("callback_mismatch", false, "The sign‑in came back without the request it began with. Continue to start again.")]
+    [InlineData("sign_in_failed", false, "Your provider didn’t confirm the sign‑in. Continue, then approve it there.")]
+    [InlineData("<b>provider said</b>", false, "Your provider didn’t confirm the sign‑in. Continue, then approve it there.")]
     public async Task Each_failure_code_renders_its_words_inline_and_keeps_the_typed_handle(string code, bool ofHandle, string words)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
@@ -108,7 +108,7 @@ public sealed class SignInTests
         Assert.Equal(HttpStatusCode.Redirect, challenged.StatusCode);
         Assert.Equal(landing + "&error=access_denied", refused.Headers.Location!.OriginalString);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("role=\"alert\">The sign-in was declined on your provider’s page. Continue to try again.</p>", html);
+        Assert.Contains("role=\"alert\">The sign‑in was declined on your provider’s page. Continue to try again.</p>", html);
         Assert.Contains("value=\"ada.bsky.social\"", html);
         Assert.Equal(0, await Participant.Count.Exact(Cancellation));
     }
