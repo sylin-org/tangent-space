@@ -12,7 +12,9 @@ pwsh scripts/tangent.ps1 <verb> [options], from any directory.
                              folder; the data folder is created beside the executable on the
                              first start.
   launch [-Port <port>]      Starts the published executable, or `dotnet run` when nothing is
-                             published, on port 5220 or the one given, and waits until
+                             published, on port 5220 or the one given, answering at
+                             http://localhost:<port> unless the environment's
+                             Koan__Web__ApplicationUrl names the base URL, and waits until
                              /health/live answers. Output goes to .local/launch/.
   stop                       Ends the Tangent Space this script launched: a clean stop on Linux and
                              macOS, a hard stop on Windows, which SQLite's journal recovers from
@@ -131,31 +133,45 @@ switch ($Verb) {
         if ($running) { throw "The Tangent Space is already running (process $($running.Id)); stop it first." }
         if (Test-Live $Port) { throw "Something already answers on port $Port; choose another with -Port." }
         New-Item -ItemType Directory -Force -Path $launchFolder | Out-Null
-        $urls = "--urls=http://localhost:$Port"
         $executable = Get-PublishedExecutable
-        # On Windows a child whose output is redirected still inherits every inheritable handle of this process,
-        # among them the pipe a caller reads this script through; the server would hold that pipe open for its
-        # whole life and the caller would wait for it. This process's own output handles are therefore made
-        # non-inheritable before the server starts; the server's output goes only to its two files.
-        if ($IsWindows) {
-            Add-Type -Namespace Tangent -Name StandardHandles -MemberDefinition @'
-[DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);
-[DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
-'@
-            foreach ($standardHandle in -11, -12) {
-                [Tangent.StandardHandles]::SetHandleInformation([Tangent.StandardHandles]::GetStdHandle($standardHandle), 1, 0) | Out-Null
-            }
-        }
+        # The server listens on the port and, unless the operator's environment names the base URL, answers at it.
+        $arguments = @("--urls=http://localhost:$Port")
+        if (-not $env:Koan__Web__ApplicationUrl) { $arguments += "--Koan:Web:ApplicationUrl=http://localhost:$Port" }
         $start = @{
             RedirectStandardOutput = Join-Path $launchFolder 'tangent.log'
             RedirectStandardError = Join-Path $launchFolder 'tangent.error.log'
             PassThru = $true
         }
         if ($IsWindows) { $start.WindowStyle = 'Hidden' }
-        $process = if ($executable) {
-            Start-Process -FilePath $executable -ArgumentList $urls -WorkingDirectory (Split-Path -Parent $executable) @start
-        } else {
-            Start-Process -FilePath 'dotnet' -ArgumentList 'run', '--no-launch-profile', '--project', "`"$serverProject`"", '--', $urls -WorkingDirectory $root @start
+        # On Windows a child whose output is redirected still inherits every inheritable handle of this process,
+        # among them the pipe a caller reads this script through; the server would hold that pipe open for its
+        # whole life and the caller would wait for it. This process's own output handles are therefore
+        # non-inheritable while the server starts, and as they were afterwards, so the server's output goes only
+        # to its two files and this process keeps showing the output of what it runs next.
+        $restore = @()
+        if ($IsWindows) {
+            Add-Type -Namespace Tangent -Name StandardHandles -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll", SetLastError = true)] public static extern bool GetHandleInformation(IntPtr hObject, out uint lpdwFlags);
+[DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
+'@
+            foreach ($standardHandle in -11, -12) {
+                $handle = [Tangent.StandardHandles]::GetStdHandle($standardHandle)
+                $flags = [uint32]0
+                if ([Tangent.StandardHandles]::GetHandleInformation($handle, [ref]$flags) -and ($flags -band 1)) {
+                    [Tangent.StandardHandles]::SetHandleInformation($handle, 1, 0) | Out-Null
+                    $restore += $handle
+                }
+            }
+        }
+        try {
+            $process = if ($executable) {
+                Start-Process -FilePath $executable -ArgumentList $arguments -WorkingDirectory (Split-Path -Parent $executable) @start
+            } else {
+                Start-Process -FilePath 'dotnet' -ArgumentList (@('run', '--no-launch-profile', '--project', "`"$serverProject`"", '--') + $arguments) -WorkingDirectory $root @start
+            }
+        } finally {
+            foreach ($handle in $restore) { [Tangent.StandardHandles]::SetHandleInformation($handle, 1, 1) | Out-Null }
         }
         "$($process.Id) $($process.StartTime.ToUniversalTime().Ticks)" | Set-Content -LiteralPath $pidFile
         $deadline = [DateTime]::UtcNow.AddSeconds(180)
