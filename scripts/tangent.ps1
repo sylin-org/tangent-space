@@ -13,9 +13,12 @@ pwsh scripts/tangent.ps1 <verb> [options], from any directory.
                              first start.
   launch [-Port <port>]      Starts the published executable, or `dotnet run` when nothing is
                              published, on port 5220 or the one given, answering at
-                             http://localhost:<port> unless the environment's
+                             http://127.0.0.1:<port> unless the environment's
                              Koan__Web__ApplicationUrl names the base URL, and waits until
                              /health/live answers. Output goes to .local/launch/.
+                             It runs in Development unless the environment names another, since
+                             atproto sign-in at a loopback http address exists only in Development,
+                             and answers at 127.0.0.1, where atproto's loopback client returns.
   stop                       Ends the Tangent Space this script launched: a clean stop on Linux and
                              macOS, a hard stop on Windows, which SQLite's journal recovers from
                              at the next start or backup.
@@ -136,7 +139,11 @@ switch ($Verb) {
         $executable = Get-PublishedExecutable
         # The server listens on the port and, unless the operator's environment names the base URL, answers at it.
         $arguments = @("--urls=http://localhost:$Port")
-        if (-not $env:Koan__Web__ApplicationUrl) { $arguments += "--Koan:Web:ApplicationUrl=http://localhost:$Port" }
+        # atproto's loopback client returns to 127.0.0.1, so the place answers there and the sign-in's cookies match.
+        $address = if ($env:Koan__Web__ApplicationUrl) { $env:Koan__Web__ApplicationUrl } else { "http://127.0.0.1:$Port" }
+        if (-not $env:Koan__Web__ApplicationUrl) { $arguments += "--Koan:Web:ApplicationUrl=$address" }
+        # atproto's loopback client exists only in Development; outside it sign-in needs an https base URL.
+        if (-not $env:ASPNETCORE_ENVIRONMENT -and -not $env:DOTNET_ENVIRONMENT) { $env:ASPNETCORE_ENVIRONMENT = 'Development' }
         $start = @{
             RedirectStandardOutput = Join-Path $launchFolder 'tangent.log'
             RedirectStandardError = Join-Path $launchFolder 'tangent.error.log'
@@ -183,7 +190,7 @@ switch ($Verb) {
             Start-Sleep -Milliseconds 500
         }
         $what = if ($executable) { $executable } else { 'dotnet run' }
-        Write-Output "Tangent Space at http://localhost:$Port/ (process $($process.Id), $what). Output in $launchFolder."
+        Write-Output "Tangent Space at $address/ (process $($process.Id), $what). Output in $launchFolder."
     }
     'stop' {
         $process = Get-LaunchedProcess

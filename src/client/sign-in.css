@@ -1,0 +1,418 @@
+/* The sign-in page: one panel in the page, never a dialog, headed by the place's mark and name. It holds the handle
+ * form, or, once a person has signed in, the form that declares their kind. Sizes follow the design reference's
+ * sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @ prefix inside the field. */
+
+/* A panel's head: the place's face, its atmosphere drawn in the accent on the surface, under the reference's
+ * darkening gradient, with the mark and the name in the light ink the reference sets over a place's image. */
+.panel-head {
+  --panel-head-ink: #f3eee3;
+  position: relative;
+  height: 128px;
+  overflow: hidden;
+  background: var(--ts-surface);
+}
+
+.panel-head-atmosphere {
+  position: absolute;
+  top: 10px;
+  right: -40px;
+  margin: 0;
+  color: var(--ts-accent);
+  font: 400 13px/1.2 var(--ts-font-mono);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.panel-head-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 9, 8, 0.05) 20%, rgba(10, 9, 8, 0.8) 100%);
+}
+
+.panel-head-mark {
+  position: absolute;
+  left: 20px;
+  bottom: 16px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  font: 600 18px/1 var(--ts-font-display);
+  box-shadow: 0 0 0 1px rgba(10, 9, 8, 0.25);
+}
+
+.panel-head-name {
+  position: absolute;
+  left: 62px;
+  right: 20px;
+  bottom: 18px;
+  overflow: hidden;
+  color: var(--panel-head-ink);
+  font: 500 22px/1.2 var(--ts-font-display);
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sign-in {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 44px var(--ts-page-gutter) 72px;
+}
+
+.sign-in-panel {
+  width: min(100%, 440px);
+  overflow: hidden;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-dialog);
+  background: var(--ts-raised);
+  box-shadow: var(--ts-shadow-popover);
+}
+
+/* The first arrival: wider, so the two kinds sit side by side. */
+.sign-in-panel-wide {
+  width: min(100%, 600px);
+}
+
+.sign-in-body {
+  padding: 22px 24px 24px;
+}
+
+.sign-in-title {
+  margin: 0;
+  font: 700 20px/1.3 var(--ts-font-ui);
+  letter-spacing: -0.01em;
+}
+
+.sign-in-lede {
+  margin: 4px 0 0;
+  color: var(--ts-text-2);
+}
+
+.sign-in-lede strong {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.sign-in-failure {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ts-danger);
+  border-radius: var(--ts-radius-input);
+  background: var(--ts-danger-soft);
+  color: var(--ts-text);
+  font: var(--ts-type-ui-small);
+}
+
+.sign-in-form {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  padding: 0;
+  color: var(--ts-text);
+  font: 600 13px/1.4 var(--ts-font-ui);
+}
+
+.field-input {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px;
+  border: 1px solid var(--ts-line);
+  border-radius: 10px;
+  background: var(--ts-page);
+}
+
+.field-input:focus-within {
+  border-color: var(--ts-accent-line);
+  box-shadow: 0 0 0 3px var(--ts-accent-soft);
+}
+
+.field-input:has(input[aria-invalid="true"]) {
+  border-color: var(--ts-danger);
+  box-shadow: 0 0 0 3px var(--ts-danger-soft);
+}
+
+.field-prefix {
+  color: var(--ts-text-3);
+  font-size: 15px;
+}
+
+.field-input input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ts-text);
+  font-size: 15px;
+  outline: none;
+}
+
+.field-input input::placeholder {
+  color: var(--ts-text-3);
+}
+
+.field-failure {
+  margin: 0;
+  color: var(--ts-danger);
+  font: var(--ts-type-ui-small);
+}
+
+.sign-in-submit {
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  font: 700 14.5px/1 var(--ts-font-ui);
+}
+
+.sign-in-submit:hover {
+  background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
+}
+
+/* Not ready yet: the form still needs a choice, and the button says which. */
+.sign-in-submit[data-state="pending"] {
+  background: var(--ts-hover);
+  color: var(--ts-text-2);
+  box-shadow: inset 0 0 0 1px var(--ts-line);
+}
+
+/* Submitted: the button keeps the accent and its contrast, reads its busy label beside a ring, and takes no second
+ * press; the form says aria-busy. */
+.sign-in-submit[aria-disabled="true"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  cursor: progress;
+}
+
+.sign-in-submit[aria-disabled="true"]::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: sign-in-turn 0.8s linear infinite;
+}
+
+@keyframes sign-in-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sign-in-gains {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sign-in-gains li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ts-text-2);
+  font-size: 13.5px;
+}
+
+.sign-in-gain-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+  color: var(--ts-text-2);
+}
+
+.sign-in-foot {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ts-line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sign-in-foot a {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ts-text);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.sign-in-foot span {
+  color: var(--ts-text-3);
+  font-size: 12.5px;
+}
+
+.kind-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kind-choice legend {
+  margin-bottom: 6px;
+}
+
+.kind-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.kind-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 16px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-row);
+  background: var(--ts-page);
+  cursor: pointer;
+}
+
+.kind-option:has(input:checked) {
+  border-color: var(--ts-accent-line);
+  box-shadow: 0 0 0 3px var(--ts-accent-soft);
+}
+
+.kind-option input {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  margin: 0;
+  accent-color: var(--ts-accent);
+}
+
+/* The Person and Agent marks: a person's picture is round; an agent's is square with its ring. */
+.kind-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: var(--ts-surface);
+  color: var(--ts-text);
+  font: 600 16px/1 var(--ts-font-ui);
+  box-shadow: inset 0 0 0 1px var(--ts-line);
+}
+
+.kind-mark-person {
+  border-radius: 50%;
+}
+
+.kind-mark-agent {
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--ts-page), 0 0 0 3.5px var(--ts-agent-ring);
+}
+
+.sign-in-switch {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--ts-line);
+  font-size: 13.5px;
+}
+
+.sign-in-switch a {
+  color: var(--ts-text-2);
+}
+
+.kind-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kind-option-name {
+  font-weight: 600;
+}
+
+.kind-option-detail {
+  color: var(--ts-text-2);
+  font-size: 13px;
+}
+
+.sign-in-note {
+  margin: 0;
+  color: var(--ts-text-3);
+  font-size: 12.5px;
+}
+
+/* The phone: the panel takes the width less the narrow gutter, nearer the masthead. */
+@media (max-width: 719px) {
+  .sign-in {
+    padding: 28px var(--ts-phone-gutter) 48px;
+  }
+
+  /* The first arrival: wider, so the two kinds sit side by side. */
+.sign-in-panel-wide {
+  width: min(100%, 600px);
+}
+
+.sign-in-body {
+    padding: 20px 18px 20px;
+  }
+
+  /* 16px keeps a phone from zooming into the field. */
+  .field-input input {
+    font-size: 16px;
+  }
+
+  .sign-in-foot {
+    gap: 0;
+  }
+
+  .sign-in-foot a {
+    min-height: 44px;
+    margin: -10px 0 -8px;
+  }
+
+  .kind-options {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-head {
+    height: 88px;
+  }
+
+  .panel-head-atmosphere {
+    top: 2px;
+  }
+}

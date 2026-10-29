@@ -11,6 +11,10 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Communication",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Core",
       "version": "1.0"
     },
@@ -43,11 +47,27 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Jobs",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Security.Trust",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Web",
       "version": "1.0"
     },
     {
+      "id": "Koan.Web.Auth",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Web.Auth.Abstractions",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Web.Auth.Connector.Atproto",
       "version": "1.0"
     }
   ],
@@ -62,7 +82,15 @@
     },
     {
       "kind": "project",
+      "id": "Koan.Jobs"
+    },
+    {
+      "kind": "project",
       "id": "Koan.Web"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Web.Auth.Connector.Atproto"
     }
   ]
 }

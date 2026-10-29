@@ -23,15 +23,22 @@ public static class Backup
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     /// <summary>The database and the files SQLite keeps beside it, whose content leaves through <c>VACUUM INTO</c>,
-    /// and the running mark, which belongs to the process that wrote it.</summary>
+    /// and the files that belong to the running process: its mark, and the lock Koan's atproto connector holds on its
+    /// session folder.</summary>
     private static readonly string[] NotCopied =
     [
         TangentSpaceOptions.DatabaseFile,
         TangentSpaceOptions.DatabaseFile + "-journal",
         TangentSpaceOptions.DatabaseFile + "-wal",
         TangentSpaceOptions.DatabaseFile + "-shm",
-        RunningMark.FileName
+        RunningMark.FileName,
+        Path.Combine(Participants.ParticipantsComposition.SessionFolder, "owner.lock")
     ];
+
+    /// <summary>How often a file another process holds is tried before the backup reports it, and how long apart.</summary>
+    private const int HeldAttempts = 5;
+
+    private static readonly TimeSpan HeldPause = TimeSpan.FromMilliseconds(100);
 
     /// <summary>Backs up <paramref name="dataFolder"/> into a new timestamped folder under
     /// <paramref name="destination"/> and returns its path. Safe while the Tangent Space runs: the database is
@@ -91,13 +98,7 @@ public static class Backup
         }
 
         foreach (var relative in files.Where(relative => !NotCopied.Contains(relative, StringComparer.OrdinalIgnoreCase)))
-        {
-            var copy = Path.Combine(partial, relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
-            using var source = new FileStream(Path.Combine(dataFolder, relative), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var written = new FileStream(copy, FileMode.CreateNew, FileAccess.Write);
-            source.CopyTo(written);
-        }
+            Copy(dataFolder, relative, partial);
 
         var manifest = new BackupManifest(
             Format,
@@ -110,6 +111,42 @@ public static class Backup
                 Environment.Version.ToString()),
             OrdinaryFiles(partial).Select(relative => Describe(partial, relative)).ToList());
         File.WriteAllText(Path.Combine(partial, ManifestFile), JsonSerializer.Serialize(manifest, Json));
+    }
+
+    /// <summary>Copies one file of a live data folder as it is. A file gone since the folder was listed — a key the
+    /// running process wrote through a temporary file it then renamed — is left out, and so is absent from the
+    /// manifest, which names what the backup holds. A file another process holds is tried again briefly and then
+    /// reported by name.</summary>
+    private static void Copy(string dataFolder, string relative, string partial)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            FileStream source;
+            try
+            {
+                source = new FileStream(Path.Combine(dataFolder, relative), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            }
+            catch (Exception gone) when (gone is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return;
+            }
+            catch (IOException held)
+            {
+                if (attempt == HeldAttempts)
+                    throw new LifecycleRefusal($"{relative} in the data folder is held by another process and could not be copied: {held.Message}");
+                Thread.Sleep(HeldPause);
+                continue;
+            }
+
+            using (source)
+            {
+                var copy = Path.Combine(partial, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+                using var written = new FileStream(copy, FileMode.CreateNew, FileAccess.Write);
+                source.CopyTo(written);
+            }
+            return;
+        }
     }
 
     /// <summary>Puts the backup at <paramref name="backupFolder"/> into <paramref name="dataFolder"/>. An absent or

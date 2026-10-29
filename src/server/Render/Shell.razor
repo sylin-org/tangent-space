@@ -1,6 +1,8 @@
 @* The page around one resource's component: the stylesheet and the two scripts every page loads, absolute from
    the base URL. The theme script blocks in <head> so the saved appearance applies before the first paint; the
-   page script is a module, deferred by nature, that mounts the islands once the document is parsed. *@
+   page script is a module, deferred by nature, that mounts the islands once the document is parsed. A resource
+   that names a frame is drawn inside it: the masthead with the place's mark and name, the path bar whose elbow
+   hangs from the mark, and the footer with the appearance a visitor can choose. *@
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,7 +14,68 @@
     <script type="module" src="@(BaseUrl)/tangent.js"></script>
 </head>
 <body>
-@ChildContent
+@if (Frame is { } frame)
+{
+    <header class="masthead">
+        <a class="masthead-place" href="@frame.Door">
+            <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
+            <span class="masthead-name">@frame.Place</span>
+        </a>
+        @if (frame.Who is { } who)
+        {
+            <div class="masthead-actions">
+                <span class="masthead-who">
+                    @if (who.Avatar is { } avatar)
+                    {
+                        <img class="who-mark" src="@avatar" alt="">
+                    }
+                    else
+                    {
+                        <span class="who-mark" aria-hidden="true">@who.Initial</span>
+                    }
+                    <span class="who-handle">@("@" + who.Handle)</span>
+                </span>
+            </div>
+        }
+    </header>
+    <nav class="path-bar" aria-label="You are here">
+        <span class="path-elbow" aria-hidden="true"></span>
+        <ol class="path-crumbs">
+            @for (var index = 0; index < frame.Crumbs.Count; index++)
+            {
+                var crumb = frame.Crumbs[index];
+                var last = index == frame.Crumbs.Count - 1;
+                <li class="path-crumb">
+                    @if (last)
+                    {
+                        <span aria-current="page" class="@(frame.Crumbs.Count == 1 ? "path-current path-only" : "path-current")">@crumb.Label</span>
+                    }
+                    else
+                    {
+                        <a href="@crumb.Address">@crumb.Label</a>
+                        <span class="path-separator" aria-hidden="true">/</span>
+                    }
+                </li>
+            }
+        </ol>
+    </nav>
+    @ChildContent
+    <footer class="footer">
+        <span class="footer-powered">Powered by Tangent Space</span>
+        <div class="footer-end appearance" data-island="appearance">
+            <span id="appearance-label">Appearance</span>
+            <div class="segmented" role="group" aria-labelledby="appearance-label">
+                <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+                <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+                <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+            </div>
+        </div>
+    </footer>
+}
+else
+{
+    @ChildContent
+}
 </body>
 </html>
 
@@ -20,6 +83,8 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
 
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
+
+    [Parameter] public Frame? Frame { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

@@ -10,8 +10,8 @@ import { chromium, type Browser } from 'playwright'
 import { storageKey } from '../appearance.ts'
 import { interrupted, onInterrupt } from './interrupt.ts'
 import { referencePackage, renderReference } from './reference.ts'
-import { captureThemes, nearestReadings, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
-import { doorOf, resolveServer, startTangentSpace, statedBaseUrl } from './server.ts'
+import { capturePersona, captureThemes, nearestReadings, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
+import { doorOf, forward, resolveServer, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
 
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const viewportHeight: Record<Width, number> = { 1440: 960, 1024: 768, 390: 844 }
@@ -100,7 +100,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
       const args = tangentSpace ? [`--host-resolver-rules=MAP ${baseUrl.host} ${tangentSpace.listening.host}`] : []
       const { browser, close } = await launch(args)
       try {
-        for (const state of states) await captureState(browser, pageBase, baseUrl, screen.path, state)
+        for (const state of states) await captureState(browser, pageBase, baseUrl, screen.path, state, tangentSpace?.listening)
       } finally {
         await close()
       }
@@ -115,7 +115,10 @@ async function captureScreen(screen: Screen): Promise<string[]> {
   ]
 }
 
-async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path: string, state: State): Promise<void> {
+// A started Tangent Space answers the browser's requests to its base URL through its loopback address
+// (`listening`); one already running is asked for where --url says.
+async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path: string, state: State, listening?: URL): Promise<void> {
+  if (state.signedIn && !listening) throw new Error(`The ${state.name} state signs in through the test connector; capture it without --url.`)
   const target = new URL(pageBase.pathname.replace(/\/$/, '') + path, pageBase)
   for (const [key, value] of Object.entries(state.query ?? {})) target.searchParams.set(key, value)
   const tangentSpace = new Set([pageBase.origin, baseUrl.origin])
@@ -131,9 +134,19 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
         // The theme a participant chose, for pages that restore it, besides the device's colour scheme.
         await context.addInitScript(([key, value]) => localStorage.setItem(key, value), [storageKey, theme] as const)
         // Only the Tangent Space answers; anything else the page asks for is refused, so nothing else is fetched.
-        await context.route('**/*', (route) =>
-          tangentSpace.has(new URL(route.request().url()).origin) ? route.fallback() : route.abort('blockedbyclient'),
-        )
+        await context.route('**/*', async (route) => {
+          const request = route.request()
+          const url = new URL(request.url())
+          if (!tangentSpace.has(url.origin)) return route.abort('blockedbyclient')
+          if (state.cancel && url.pathname === pageBase.pathname.replace(/\/$/, '') + state.cancel) return route.abort('aborted')
+          if (!listening) return route.fallback()
+          const answered = await forward(listening, url, request.method(), await request.allHeaders(), request.postDataBuffer() ?? undefined)
+          return route.fulfill(answered)
+        })
+        if (state.signedIn && listening) {
+          const session = await signIn(listening, capturePersona)
+          await context.addCookies([...session].map(([name, value]) => ({ name, value, domain: baseUrl.hostname, path: '/', httpOnly: true })))
+        }
         const page = await context.newPage()
         let opened: string | undefined
         page.on('dialog', (dialog) => {
