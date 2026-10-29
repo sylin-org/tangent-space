@@ -161,7 +161,8 @@ Koan jobs, each a reader that writes through the writer: profile capture, handle
 
 ```
 src/server/
-  Space/          TangentSpace row, first run, tangent.json, llms.txt, did.json, consent page
+  Space/          TangentSpace row, first run, tangent.json, llms.txt, did.json
+  Delegates/      the delegated agent door: Koan's OAuth server composed, the shared client, a bearer read as its person, the consent page
   Tangents/       Tangent, overwrites, the Tangent page and settings
   Posts/          Post, Markdown, slugs, topic queries, windows, media references
   Participants/   Participant facet, standing, profile cache job, the proof bridge, profile page

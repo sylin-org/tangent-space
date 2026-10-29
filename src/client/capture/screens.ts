@@ -62,6 +62,9 @@ export interface Screen {
   states: readonly State[]
 }
 
+// The consent screen's Tangent Space: Koan's server lets its code look-ups through as often as a capture asks.
+const consentSettings = { 'Koan:Web:Auth:Server:UserCodeVerificationRateLimitPerMinute': '1000' } as const
+
 // A screen's name is its name in docs/FEATURES.md "Screens", lowercase, with hyphens between words:
 // "Tangent Space settings (general)" is tangent-space-settings-general. The door's two screens are the
 // door's states.
@@ -109,6 +112,20 @@ export const screens: Readonly<Record<string, Screen>> = {
         click: '.sign-in-submit',
       },
       { name: 'established', place: 'persona', signedIn: true },
+    ],
+  },
+  // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the
+  // request the shared client waits with under the seeded code; a code no request waits under, said under its field;
+  // and where the person lands once they have decided. Every look-up of a code counts against the rate limit, raised
+  // so every width and theme reaches the page.
+  consent: {
+    path: '/consent',
+    placeName: 'Lantern Works',
+    states: [
+      { name: 'code', seed: 'consent', signedIn: true, settings: consentSettings },
+      { name: 'request', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'BCDF-GHJK' } },
+      { name: 'code-error', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'ZZZZ-ZZZZ' } },
+      { name: 'done', seed: 'consent', signedIn: true, settings: consentSettings, path: '/consent/done' },
     ],
   },
   // A discussions Tangent and an articles Tangent, populated and empty, read by the persona, a member with some
