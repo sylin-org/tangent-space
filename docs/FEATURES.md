@@ -8,7 +8,7 @@ Status: `todo` · `doing` · `done`. Everything is `todo` on 28 October 2026.
 
 | Brief | Koan home | Needed by |
 | --- | --- | --- |
-| 1 · SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL | `Koan.Data.Connector.Sqlite`, `Koan.Web` | slice 0 |
+| 1 · SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL | `Koan.Data.Connector.Sqlite`, `Koan.Web` | slice 0; in the pin since Koan `7ba505e49` |
 | 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1 (Tangent composes its own step beside Koan's facts until then) |
 | 3 · atproto content: records, blobs, resolution, AppView reads; service-auth verification; `did:web` on the issuer keys | `Koan.Web.Auth.Connector.Atproto`, Trust, Auth.Server — names assigned by Koan | slice 3 and the bridge in slice 8 |
 | 4 · Lexical search over entity fields | `Koan.Data` | slice 6 |
@@ -23,7 +23,7 @@ The tree boots, serves one page both ways, and every rule has a check.
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Server skeleton: `Sylin.Koan.App`, SQLite in WAL with immediate write transactions, fixed port, trusted-proxy pipeline, base URL under a path prefix, health | — | `TrustedProxyPipelineContributor` (harvest) | brief 1 | S | done |
+| Server skeleton: `Sylin.Koan.App`, SQLite in WAL with immediate write transactions, fixed port, the base URL under a path prefix and declared proxies from `Koan:Web`, health | — | — | `Koan.Web`, `Koan.Data.Connector.Sqlite` | S | done |
 | The writer: one queue, one loop, one transaction per command, sequences from high-water marks; the Koan transaction proven inside a loop | — | `ConversationService.Writes` ordering (harvest) | `EntityContext.Transaction` | M | todo |
 | The HTML projection: one DTO rendered through a Razor component or as JSON by `Accept`; fragments by header | — | `PublicPageRenderer` (harvest) | lift later | M | done |
 | Island bootstrap: `data-island` mounting into server HTML, one bundle, one event stream per page, fragment patch | — | `public-fragment.js` (harvest) | — | S | done |
