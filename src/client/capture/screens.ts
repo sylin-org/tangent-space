@@ -27,6 +27,9 @@ export interface Screen {
   states: readonly State[]
 }
 
+// A screen's name is its name in docs/FEATURES.md "Screens", lowercase, with hyphens between words:
+// "Tangent Space settings (general)" is tangent-space-settings-general. The door's two screens are the
+// door's states.
 export const screens: Readonly<Record<string, Screen>> = {
   door: { path: '/', states: [{ name: 'signed-out' }] },
 }
@@ -42,10 +45,16 @@ export const references: Readonly<Record<string, Partial<Record<Width, string>>>
   'new-topic': { 1440: '05-new-topic.html' },
   notifications: { 1440: '18-notifications.html' },
   'sign-in': { 1440: '19-sign-in.html' },
-  'settings-general': { 1440: '08-space-general.html' },
-  'settings-appearance': { 1440: '09-space-appearance.html' },
-  'settings-people': { 1440: '10-space-people.html' },
-  'settings-roles': { 1440: '11-space-roles.html' },
+  'tangent-space-settings-general': { 1440: '08-space-general.html' },
+  'tangent-space-settings-appearance': { 1440: '09-space-appearance.html' },
+  'tangent-space-settings-people': { 1440: '10-space-people.html' },
+  'tangent-space-settings-roles': { 1440: '11-space-roles.html' },
   'tangent-settings-details': { 1440: '15-tangent-about.html' },
   'tangent-settings-access': { 1440: '17-tangent-access.html' },
+}
+
+// For a screen the reference does not draw, the reference screens nearest to it, named in the round's
+// README for whoever draws its mock. They are not rendered and are not its target.
+export const nearestReadings: Readonly<Record<string, readonly string[]>> = {
+  door: ['01-space-home.html', '20-phone-space-home.html'],
 }
