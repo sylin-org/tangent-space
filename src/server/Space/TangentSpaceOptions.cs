@@ -21,7 +21,7 @@ public sealed class TangentSpaceOptions
     public string? TrustedProxy { get; set; }
 
     /// <summary>The base URL's path without its trailing slash; empty when the base URL has no path.</summary>
-    public string BasePath => TryParseBaseUrl(BaseUrl, out var baseUrl)
+    public string BasePath() => TryParseBaseUrl(BaseUrl, out var baseUrl)
         ? baseUrl.AbsolutePath.TrimEnd('/')
         : throw new InvalidOperationException("Tangent:BaseUrl is not an absolute http or https URL.");
 

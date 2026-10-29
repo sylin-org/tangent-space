@@ -12,7 +12,7 @@ public sealed class BaseUrlPipelineContributor(IOptions<TangentSpaceOptions> opt
 
     public void Configure(IApplicationBuilder app)
     {
-        var basePath = new PathString(options.Value.BasePath);
+        var basePath = new PathString(options.Value.BasePath());
         if (!basePath.HasValue) return;
         app.UsePathBase(basePath);
         app.Use((context, next) =>
