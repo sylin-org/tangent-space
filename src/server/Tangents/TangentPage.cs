@@ -72,9 +72,9 @@ public sealed partial record TangentPage(
     /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there.</summary>
     public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount);
 
-    /// <summary>The signed-in participant reading the page: the name to show, their handle, the highest role they
-    /// hold where they hold one, their avatar, and where they sign out, coming back to this page.</summary>
-    public sealed record Reader(string Name, string Handle, string? Role, string? Avatar, string SignOut);
+    /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
+    /// they hold where they hold one, their avatar, and where they sign out, coming back to this page.</summary>
+    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are
     /// written for among it, so the same page for the same reader on the same day answers the same tag, and a new

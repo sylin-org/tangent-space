@@ -39,8 +39,16 @@
                                 <span class="who-handle">@("@" + who.Handle + (who.Role is { } role ? " · " + role : ""))</span>
                             </span>
                         </div>
+                        <div class="account-appearance appearance" data-island="appearance">
+                            <span class="account-appearance-label" id="account-appearance-label">@Icon(AppearanceIcon)Appearance</span>
+                            <div class="segmented" role="group" aria-labelledby="account-appearance-label">
+                                <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+                                <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+                                <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+                            </div>
+                        </div>
                         <ul class="account-items">
-                            <li><a class="account-item" href="@who.SignOut">Sign out</a></li>
+                            <li><a class="account-item" href="@who.SignOut">@Icon(SignOutIcon)Sign out</a></li>
                         </ul>
                     </div>
                 </details>
@@ -79,10 +87,15 @@
                                                     <span class="switcher-item-name">@item.Name</span>
                                                     <span class="switcher-item-detail">@item.Detail</span>
                                                 </span>
+                                                @if (item.Current)
+                                                {
+                                                    <span class="switcher-check">@Icon(CheckIcon)<span class="visually-hidden">Current</span></span>
+                                                }
                                             </a>
                                         </li>
                                     }
                                 </ul>
+                                <a class="switcher-all" href="@switcher.All">@Icon(AllIcon)All Tangents</a>
                             </div>
                         </details>
                     }
@@ -128,10 +141,19 @@ else
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    /// <summary>A participant's mark in the masthead: their avatar, or the first letter of their name.</summary>
+    private const string AppearanceIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
+    private const string SignOutIcon = "<path d=\"M8 4.5H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3\"></path><path d=\"M12.5 6.5L16 10l-3.5 3.5\"></path><path d=\"M16 10H8\"></path>";
+    private const string CheckIcon = "<path d=\"M5 10.5l3.2 3.2L15 7\"></path>";
+    private const string AllIcon = "<rect x=\"3.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"3.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect>";
+
+    /// <summary>A menu item's 16px icon, drawn in the text's colour and hidden from assistive technology.</summary>
+    private static RenderFragment Icon(string paths) => builder => builder.AddMarkupContent(0,
+        "<svg class=\"menu-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" + paths + "</svg>");
+
+    /// <summary>A participant's mark in the masthead: their avatar, or two letters of their handle on their own tint.</summary>
     private static RenderFragment Mark(Who who) => builder =>
     {
-        if (who.Avatar is { } avatar)
+        if (Monogram.Avatar(who.Avatar) is { } avatar)
         {
             builder.OpenElement(0, "img");
             builder.AddAttribute(1, "class", "who-mark");
@@ -142,9 +164,9 @@ else
         }
 
         builder.OpenElement(4, "span");
-        builder.AddAttribute(5, "class", "who-mark");
+        builder.AddAttribute(5, "class", "who-mark tone-" + Monogram.Tone(who.Id));
         builder.AddAttribute(6, "aria-hidden", "true");
-        builder.AddContent(7, who.Initial);
+        builder.AddContent(7, Monogram.Letters(who.Handle));
         builder.CloseElement();
     };
 }
