@@ -126,9 +126,9 @@ export const screens: Readonly<Record<string, Screen>> = {
   },
   // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the
   // request the shared client waits with under the seeded code; a code no request waits under, said under its field;
-  // a code a self-registered client asked for, refused under its field; and where the person lands once they have
-  // decided. Every look-up of a code counts against the rate limit, raised
-  // so every width and theme reaches the page.
+  // a code a self-registered client asked for, refused under its field; and the done page reached without a decision
+  // of the persona's to show. Every look-up of a code counts against the rate limit, raised so every width and theme
+  // reaches the page.
   consent: {
     path: '/consent',
     placeName: 'Lantern Works',

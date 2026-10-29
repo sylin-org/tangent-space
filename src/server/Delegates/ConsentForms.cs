@@ -1,29 +1,32 @@
 using Koan.Web.Auth.Server.Controllers;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Tangent.Render;
 
 namespace Tangent.Delegates;
 
-/// <summary>Only a person's session decides anything on Koan's authorization server: a request to its authorize
-/// endpoint or its request endpoint that carries a bearer token is refused here before Koan sees it, so a delegate can
-/// neither approve, deny, read a request nor reach a consent the person remembered for another client. The consent
-/// page's approve and deny then answer to the same rule as every form post (<see cref="FormToken.Validate"/>).</summary>
+/// <summary>Koan's approve and deny, which the consent page's forms post to, always take the form's antiforgery token.
+/// Koan decides them by the person's session cookie alone, an ambient credential, and asks for no token itself; so a
+/// post without the page's token is refused here before Koan sees it, whatever bearer the request also carries, since a
+/// bearer never decides there and so never stands in for the token.</summary>
 public sealed class ConsentForms : IAsyncAuthorizationFilter
 {
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         if (context.ActionDescriptor is not ControllerActionDescriptor action
             || action.ControllerTypeInfo.AsType() != typeof(OAuthServerController)
-            || action.ActionName is not (nameof(OAuthServerController.Authorize) or nameof(OAuthServerController.GetRequest)
-                or nameof(OAuthServerController.Approve) or nameof(OAuthServerController.Deny)))
+            || action.ActionName is not (nameof(OAuthServerController.Approve) or nameof(OAuthServerController.Deny)))
             return;
 
-        if (DelegateIdentity.CarriesBearer(context.HttpContext))
-            context.Result = ConsentController.NotByDelegate().ToResult();
-        else if (action.ActionName is nameof(OAuthServerController.Approve) or nameof(OAuthServerController.Deny)
-                 && !await FormToken.Validate(context.HttpContext))
+        try
+        {
+            await context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context.HttpContext);
+        }
+        catch (AntiforgeryValidationException)
+        {
             context.Result = new Problem(StatusCodes.Status400BadRequest, "Open the form again",
                 "This form’s token is missing or has expired, so nothing was approved or denied.").ToResult();
+        }
     }
 }

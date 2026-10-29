@@ -52,7 +52,8 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
     }
 
     /// <summary>Two requests waiting under fixed codes for an hour, Koan's own rows saved as its server saves them: one
-    /// by the shared client, which the page shows, and one by a self-registered client, which it refuses.</summary>
+    /// by the shared client, which the page shows, and one by a self-registered client Koan does not allow the Device
+    /// flow, which it refuses.</summary>
     private async Task ConsentScreen(CancellationToken ct)
     {
         await Waiting("capture-consent-device", ConsentCode, DelegateClient.Id, ct);
