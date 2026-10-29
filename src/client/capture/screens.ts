@@ -29,8 +29,13 @@ export interface State {
   fill?: Readonly<Record<string, string>>
   /** Radio buttons or checkboxes checked once the page has settled, before any click. */
   check?: readonly string[]
+  /** Reloaded once the fields are filled, before any click, so the state is what the page keeps of them. */
+  reload?: boolean
   /** A selector clicked once the page has settled; the state is what the click shows in the page. */
   click?: string
+  /** A selector the page shows once the click is answered, for a click the page answers in place or by a navigation
+   *  it starts itself; awaited before the network settles. */
+  waitFor?: string
   /** The rows the Tangent Space holds, by the name of a seed the capture host writes before any page opens
    *  (src/server/Capture). States with the same seed and settings share one Tangent Space. */
   seed?: string
@@ -140,18 +145,27 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'done', seed: 'consent', signedIn: true, settings: consentSettings, path: '/consent/done' },
     ],
   },
-  // The form that starts a Topic in the discussions Tangent: empty for the persona, a member; sent with a body of
-  // nothing but spaces, refused under the body; and as a visitor reads it, who is told to sign in.
+  // The form that starts a Topic in the discussions Tangent, the composer on it: empty for the persona, a member; her
+  // words typed, then the page opened again, which brings them back; sent with a body of nothing but spaces, refused
+  // above the fields; and as a visitor reads it, who is told to sign in.
   'new-topic': {
     path: '/t/discussions/new',
     states: [
       { name: 'empty', seed: 'write', signedIn: true },
+      {
+        name: 'restored',
+        seed: 'write',
+        signedIn: true,
+        fill: { '#new-topic-title': 'A weekly link and a question', '#new-topic-body': 'One link each, one question each, on Fridays.' },
+        reload: true,
+      },
       {
         name: 'refused',
         seed: 'write',
         signedIn: true,
         fill: { '#new-topic-title': 'A weekly link and a question', '#new-topic-body': '   ' },
         click: '.post-form-submit',
+        waitFor: 'form[data-composer="refused"]',
       },
       { name: 'visitor', seed: 'write' },
     ],
@@ -182,10 +196,13 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },
     ],
   },
-  // A short Topic whose replies answer one another, read by the persona up to its first reply, and as a visitor
-  // reads it; a long Topic of more replies than two windows, opened at the persona's first unread with the older
-  // window a cursor away; the same Topic at the address of its fortieth reply, marked in the middle of its window; a
-  // Topic with a reply a moderator removed; and a Topic without replies.
+  // A short Topic whose replies answer one another, read by the persona up to its first reply, with the composer empty
+  // under it, and as a visitor reads it, told to sign in to reply; a long Topic of more replies than two windows,
+  // opened at the persona's first unread with the older window a cursor away; the same Topic at the address of its
+  // fortieth reply, marked in the middle of its window, the composer replying to it; a Topic with a reply a moderator
+  // removed; and a Topic without replies. Then the composer: her reply typed and the page opened again, which brings
+  // it back; a reply of nothing but spaces, refused above the field; a locked Topic, whose gate she reads instead; and
+  // last, since it writes, a reply sent through the composer, which lands on the reply's address.
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
     states: [
@@ -195,6 +212,32 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'anchored', seed: 'topic', signedIn: true, path: '/t/discussions/notes-from-the-repair-workshop/3mwdfsj6d226g' },
       { name: 'tombstone', seed: 'topic', signedIn: true, path: '/t/discussions/is-a-visible-repair-a-better-repair' },
       { name: 'empty-replies', seed: 'topic', signedIn: true, path: '/t/discussions/a-quiet-question' },
+      {
+        name: 'composer-restored',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/a-quiet-question',
+        fill: { '#reply-body': 'Mornings, before anyone else is in.' },
+        reload: true,
+      },
+      {
+        name: 'composer-refused',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/a-quiet-question',
+        fill: { '#reply-body': '   ' },
+        click: '.post-form-submit',
+        waitFor: 'form[data-composer="refused"]',
+      },
+      { name: 'locked', seed: 'topic-locked', signedIn: true, path: '/t/discussions/the-kiln-schedule-is-settled' },
+      {
+        name: 'replied',
+        seed: 'topic',
+        signedIn: true,
+        fill: { '#reply-body': 'Fridays it is. I’ll bring a link about glue.' },
+        click: '.post-form-submit',
+        waitFor: 'article.post.is-anchor',
+      },
     ],
   },
 }

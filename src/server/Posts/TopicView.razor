@@ -2,8 +2,8 @@
 @using global::Tangent.Render
 @* The Topic page: the rail with the way back to the Tangent and the replies this window holds; then the title with
    any pin or lock, when it started and how many replies it has, the root, and one window of replies in order, with
-   the way to the older window above them and to the newer below. A Topic without replies says so in one sentence; a
-   locked Topic says it takes no new replies; a visitor is shown where to sign in to reply. Zeros are said in words. *@
+   the way to the older window above them and to the newer below, and where the reader replies or why they may not. A
+   Topic without replies says so in one sentence. Zeros are said in words. *@
 <div class="layout layout-reading topic-layout">
     <aside class="rail" aria-label="In this Tangent">
         <h2 class="rail-heading">@Model.Tangent.Name</h2>
@@ -74,14 +74,7 @@
                 </nav>
             }
         </section>
-        @if (Model.Locked)
-        {
-            <p class="topic-closed">This topic is locked; it takes no new replies.</p>
-        }
-        else if (Model.SignIn is { } signIn && Model.Gate == global::Tangent.Access.Capabilities.SignIn)
-        {
-            <p class="topic-closed"><a href="@signIn">Sign in to reply</a></p>
-        }
+        <ReplyForm Model="@Model" />
     </main>
 </div>
 

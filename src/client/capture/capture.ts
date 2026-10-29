@@ -180,8 +180,10 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
           if (value === setupCodeFill && !setupCode) throw new Error(`The ${state.name} state types the setup code, and the server logged none.`)
           await page.fill(selector, value === setupCodeFill ? setupCode! : value)
         }
+        if (state.reload) await page.reload({ waitUntil: 'networkidle' })
         if (state.click) {
           await page.click(state.click)
+          if (state.waitFor) await page.waitForSelector(state.waitFor, { timeout: 15_000 })
           await page.waitForLoadState('networkidle')
         }
         await page.evaluate(() => document.fonts.ready.then(() => undefined))

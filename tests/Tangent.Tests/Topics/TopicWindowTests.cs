@@ -332,7 +332,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
             Assert.Equal(Capabilities.Locked, json.RootElement.GetProperty("gate").GetString());
         }
 
-        Assert.Contains("This topic is locked; it takes no new replies.", await Html(browser.Client, $"/t/{Workshop}/a-removal"));
+        Assert.Contains(PostWrites.Sentence(Capabilities.Locked), await Html(browser.Client, $"/t/{Workshop}/a-removal"));
     }
 
     [Fact]
