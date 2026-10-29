@@ -83,7 +83,7 @@ public sealed class TangentModule : KoanModule
             await space.Save(ct);
         }
 
-        await Roles.Seed(services.GetRequiredService<RoleCollection>(), space?.Audience ?? Audience.Public, ct);
+        await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 

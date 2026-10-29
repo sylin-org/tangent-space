@@ -7,10 +7,11 @@ namespace Tangent.Posts;
 
 /// <summary>Replies in a Topic: a Post carrying the root's Tangent and Topic and the Topic's next sequence, the root's
 /// counters and last activity moved in the same commit, and <see cref="EventKind.PostCreated"/> appended with them.
-/// The parent is the root unless a Post of this Topic is named. The author holds <see cref="Bit.Post"/> on the Topic,
-/// which no one does on a locked or removed one, or the command is refused with the gate word. Idempotent by Id: the
-/// same Id with the same request answers with the existing Post; a different Topic, parent, body or author is a
-/// conflict.</summary>
+/// The parent is the root unless a Post of this Topic is named. The Topic exists for the author, who holds
+/// <see cref="Bit.View"/> in its Tangent, or the command answers that no Topic has the Id; the author holds
+/// <see cref="Bit.Post"/> on the Topic, which no one does on a locked or removed one, or is refused with the gate
+/// word. Idempotent by Id: the same Id with the same request answers with the existing Post; a different Topic,
+/// parent, body or author is a conflict.</summary>
 public sealed record Reply(
     string Id,
     string TopicId,
@@ -24,6 +25,10 @@ public sealed record Reply(
 
     public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
     {
+        if (await Post.Get(TopicId, ct) is not { } root) return new Outcome<Post>.Refused(NoTopic);
+        var capabilities = await Capabilities.Load(AuthorId, root.TangentId, root, ct);
+        if (!capabilities.Exists) return new Outcome<Post>.Refused(NoTopic);
+
         if (await Post.Get(Id, ct) is { } existing)
         {
             return Same(existing)
@@ -31,8 +36,6 @@ public sealed record Reply(
                 : new Outcome<Post>.Conflict($"Post '{Id}' already exists with a different body.");
         }
 
-        if (await Post.Get(TopicId, ct) is not { } root) return new Outcome<Post>.Refused(NoTopic);
-        var capabilities = await Capabilities.Load(AuthorId, root.TangentId, root, ct);
         if (capabilities.Gate(Bit.Post) is { } gate) return new Outcome<Post>.Refused(gate);
         var parentId = ParentId ?? root.Id;
         if (parentId != root.Id && (await Post.Get(parentId, ct))?.TopicId != root.Id) return new Outcome<Post>.Refused(NoParent);

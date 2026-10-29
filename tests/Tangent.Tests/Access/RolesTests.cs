@@ -1,7 +1,6 @@
 using Koan.Identity.Roles;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using Tangent.Space;
 using Xunit;
 
 namespace Tangent.Access;
@@ -20,7 +19,8 @@ public sealed class RolesTests
             await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder), ct: Cancellation))
             {
                 Assert.Equal(4, await Role.Count.Exact(Cancellation));
-                Assert.Equal(Bit.View, await BitsOf(Roles.Everyone));
+                // Everyone holds no bit of its own: a public place gives everyone View through its audience.
+                Assert.Empty((await Role.Get(Roles.Everyone, Cancellation))!.Permissions);
                 Assert.Equal(Roles.MemberBits, await BitsOf(Roles.Member));
                 Assert.Equal(Roles.ModeratorBits, await BitsOf(Roles.Moderator));
                 Assert.Equal(Bit.Administrator, await BitsOf(Roles.Administrator));
@@ -29,6 +29,7 @@ public sealed class RolesTests
 
                 var roles = first.Services.GetRequiredService<RoleCollection>();
                 await roles.SetPermissions(Roles.Member, Bits.Tokens(Roles.MemberBits | Bit.Moderate), Cancellation);
+                await roles.SetPermissions(Roles.Everyone, Bits.Tokens(Bit.Post), Cancellation);
                 await roles.Delete(Roles.Moderator, Cancellation);
             }
 
@@ -36,6 +37,7 @@ public sealed class RolesTests
 
             Assert.Equal(4, await Role.Count.Exact(Cancellation));
             Assert.Equal(Roles.MemberBits | Bit.Moderate, await BitsOf(Roles.Member));
+            Assert.Equal(Bit.Post, await BitsOf(Roles.Everyone));
             Assert.Equal(Roles.ModeratorBits, await BitsOf(Roles.Moderator));
         }
         finally
@@ -43,21 +45,6 @@ public sealed class RolesTests
             SqliteConnection.ClearAllPools();
             if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
         }
-    }
-
-    [Fact]
-    public async Task Everyone_is_seeded_with_view_on_a_public_place_and_nothing_on_a_private_one()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
-        Assert.True(await roles.Delete(Roles.Everyone, Cancellation));
-
-        await Roles.Seed(roles, Audience.Private, Cancellation);
-
-        var everyone = await Role.Get(Roles.Everyone, Cancellation);
-        Assert.NotNull(everyone);
-        Assert.Empty(everyone.Permissions);
-        Assert.Equal(4, await Role.Count.Exact(Cancellation));
     }
 
     private static async Task<Bit> BitsOf(string roleId) => Bits.InTokens((await Role.Get(roleId, Cancellation))!.Permissions);

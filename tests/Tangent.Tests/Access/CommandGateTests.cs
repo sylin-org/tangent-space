@@ -9,7 +9,8 @@ using Xunit;
 
 namespace Tangent.Access;
 
-/// <summary>The writer's commands ask for the verb they need and refuse with the gate word, writing nothing.</summary>
+/// <summary>The writer's commands ask for the verb they need and refuse with the gate word, writing nothing; what
+/// the actor may not View does not exist for them, and the answer is the one a missing resource gets.</summary>
 public sealed class CommandGateTests
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
@@ -76,7 +77,7 @@ public sealed class CommandGateTests
     }
 
     [Fact]
-    public async Task A_visitor_a_timed_out_and_an_applied_participant_are_refused_with_their_standings_word()
+    public async Task A_visitor_a_timed_out_and_an_applied_participant_are_refused_with_their_standings_word_and_a_banned_one_finds_no_tangent()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
@@ -93,12 +94,12 @@ public sealed class CommandGateTests
         Assert.Equal(Capabilities.SignIn, Assert.IsType<Outcome<Post>.Refused>(visitor).Reason);
         Assert.Equal(Capabilities.TimedOut, Assert.IsType<Outcome<Post>.Refused>(timedOut).Reason);
         Assert.Equal(Capabilities.Apply, Assert.IsType<Outcome<Post>.Refused>(applied).Reason);
-        Assert.Equal(Capabilities.Banned, Assert.IsType<Outcome<Post>.Refused>(banned).Reason);
+        Assert.Equal(StartTopic.NoTangent, Assert.IsType<Outcome<Post>.Refused>(banned).Reason);
         Assert.Equal(0, await Post.Count.Exact(Cancellation));
     }
 
     [Fact]
-    public async Task A_topic_in_a_tangent_that_does_not_exist_is_refused_and_one_in_a_tangent_the_member_cannot_see_is_refused_naming_everyone()
+    public async Task A_tangent_that_does_not_exist_and_one_the_member_may_not_view_get_the_same_answer()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
@@ -109,7 +110,69 @@ public sealed class CommandGateTests
         var unseen = await writer.Send(new StartTopic(Tids.Mint(), "off-the-record", "Hello", "Anyone?", "leo"), Cancellation);
 
         Assert.Equal(StartTopic.NoTangent, Assert.IsType<Outcome<Post>.Refused>(nowhere).Reason);
-        Assert.Equal(Capabilities.Denied(Overwrite.Everyone, Bit.View), Assert.IsType<Outcome<Post>.Refused>(unseen).Reason);
+        Assert.Equal(StartTopic.NoTangent, Assert.IsType<Outcome<Post>.Refused>(unseen).Reason);
         Assert.Equal(0, await Post.Count.Exact(Cancellation));
+    }
+
+    [Fact]
+    public async Task A_banned_participant_and_a_visitor_on_a_private_place_get_one_answer_for_an_existing_and_a_missing_resource()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        Assert.NotNull(space);
+        space.Audience = Audience.Private;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Member], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "ban", [Roles.Member], Standing.Banned, Cancellation);
+        var topicId = Tids.Mint();
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(topicId, Workshop, "Here", "Among members.", "leo"), Cancellation));
+        var missingTopic = Tids.Mint();
+
+        foreach (var actor in new[] { "ban", "nobody" })
+        {
+            var existingTopic = await writer.Send(new Reply(Tids.Mint(), topicId, "Still?", actor), Cancellation);
+            var noTopic = await writer.Send(new Reply(Tids.Mint(), missingTopic, "Still?", actor), Cancellation);
+            var existingTangent = await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Hello", "Anyone?", actor), Cancellation);
+            var noTangent = await writer.Send(new StartTopic(Tids.Mint(), "nowhere", "Hello", "Anyone?", actor), Cancellation);
+            var place = await writer.Send(new CreateTangent(Workshop, "Other", "", PostKind.Topic, 1, Audience.Public, actor), Cancellation);
+
+            Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(existingTopic).Reason);
+            Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(noTopic).Reason);
+            Assert.Equal(StartTopic.NoTangent, Assert.IsType<Outcome<Post>.Refused>(existingTangent).Reason);
+            Assert.Equal(StartTopic.NoTangent, Assert.IsType<Outcome<Post>.Refused>(noTangent).Reason);
+            Assert.Equal(CreateTangent.NoPlace, Assert.IsType<Outcome<Tangents.Tangent>.Refused>(place).Reason);
+        }
+
+        Assert.Equal(1, await Post.Count.Exact(Cancellation));
+        Assert.Equal(1, await Tangents.Tangent.Count.Exact(Cancellation));
+    }
+
+    [Fact]
+    public async Task A_replay_of_a_committed_command_by_an_actor_who_has_since_lost_view_answers_absent_not_done()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var leo = await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
+        var at = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        var createTangent = new CreateTangent(Workshop, "The workshop", "", PostKind.Topic, 1, Audience.Public, "leo", at);
+        var startTopic = new StartTopic(Tids.Mint(), Workshop, "Here", "Words.", "leo", At: at);
+        var reply = new Reply(Tids.Mint(), startTopic.Id, "More.", "leo", At: at);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(createTangent, Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(startTopic, Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(reply, Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(reply, Cancellation));
+        leo.Standing = Standing.Banned;
+        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(leo), Cancellation));
+
+        var tangentAgain = await writer.Send(createTangent, Cancellation);
+        var topicAgain = await writer.Send(startTopic, Cancellation);
+        var replyAgain = await writer.Send(reply, Cancellation);
+
+        Assert.Equal(CreateTangent.NoPlace, Assert.IsType<Outcome<Tangents.Tangent>.Refused>(tangentAgain).Reason);
+        Assert.Equal(StartTopic.NoTangent, Assert.IsType<Outcome<Post>.Refused>(topicAgain).Reason);
+        Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(replyAgain).Reason);
+        Assert.Equal(3, await Event.Count.Exact(Cancellation));
     }
 }
