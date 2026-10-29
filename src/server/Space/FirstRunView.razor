@@ -1,10 +1,11 @@
 @using Tangent.Render
 @* First run: one panel in the page, headed by the place's mark and name. Before sign-in it holds the handle form, the
    field focused, and says who may set the place up; signed in as someone who may, the form that takes the setup code
-   where one is asked for, names the place, shows the base URL with where it is configured, says whose place it is and
-   takes the operator's statement that they answer for it; signed in as anyone else, who may; once established, the
-   pointers the site places, each ready to copy. A refusal of the form as a whole shows above it; one of a field,
-   under that field. *@
+   where one is asked for, names the place, shows the base URL, says whose place it is and takes the operator's
+   statement that they answer for it; signed in as anyone else, who may and the way to another account; once
+   established, the pointers the site places, each ready to copy. Every hint is one sentence; the routes through
+   configuration wait behind one disclosure. A refusal of the form as a whole shows above it; one of a field, under
+   that field, which takes the focus. *@
 <main class="sign-in first-run">
     <section class="@PanelClass" aria-labelledby="first-run-title">
         <PanelHead Frame="@Frame(Model)" />
@@ -12,7 +13,7 @@
         @if (Model.Pointers is { } pointers)
         {
             <h1 id="first-run-title" class="sign-in-title">@Model.Name is ready</h1>
-            <p class="sign-in-lede">It answers at <a href="@Model.Door">@Model.BaseUrl</a>. Point your site at it in any one of these ways, whichever you can place.</p>
+            <p class="sign-in-lede">It answers at <a href="@Model.Door">@Model.BaseUrl</a>; place any one of these on your site.</p>
             <ol class="first-run-pointers">
                 @for (var index = 0; index < pointers.Count; index++)
                 {
@@ -41,15 +42,16 @@
         }
         else if (Model.Form is { } form)
         {
-            <h1 id="first-run-title" class="sign-in-title">Set up your Tangent Space</h1>
+            var focus = Focus(form);
+            <h1 id="first-run-title" class="sign-in-title">Set up this Tangent Space</h1>
             <p class="sign-in-lede">
                 @if (form.Handle.Length > 0)
                 {
-                    <text>You’re signed in as <strong>@("@" + form.Handle)</strong>. Name the place and say whose it is; you’ll answer for it.</text>
+                    <text>You’re signed in as <strong>@("@" + form.Handle)</strong>: name the place, say whose it is, and answer for it.</text>
                 }
                 else
                 {
-                    <text>You’re signed in. Name the place and say whose it is; you’ll answer for it.</text>
+                    <text>You’re signed in: name the place, say whose it is, and answer for it.</text>
                 }
             </p>
             @if (form.Failure is { } failure)
@@ -63,8 +65,8 @@
                     <div class="field">
                         <label class="field-label" for="first-run-code">Setup code</label>
                         <span class="field-input first-run-code">
-                            <input id="first-run-code" name="code" type="text" required autofocus autocomplete="off" autocapitalize="characters"
-                                   spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="40"
+                            <input id="first-run-code" name="code" type="text" required autofocus="@(focus == "first-run-code")" autocomplete="off"
+                                   autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="40"
                                    aria-invalid="@(form.CodeFailure is null ? "false" : "true")"
                                    aria-describedby="@(form.CodeFailure is null ? "first-run-code-note" : "first-run-code-failure first-run-code-note")">
                         </span>
@@ -72,13 +74,13 @@
                         {
                             <p class="field-failure" id="first-run-code-failure">@codeFailure</p>
                         }
-                        <p class="first-run-note" id="first-run-code-note">This Tangent Space wrote it to its log as a warning when it started, on the line that begins “Setup code”; it changes at every start until the place is set up. Or set <code>@FirstRun.OperatorSetting</code> to your DID and restart, and no code is asked.</p>
+                        <p class="first-run-note" id="first-run-code-note">Copy it from the “Setup code” line of this Tangent Space’s log; each start writes a new one.</p>
                     </div>
                 }
                 <div class="field">
                     <label class="field-label" for="first-run-name">Name</label>
                     <span class="field-input">
-                        <input id="first-run-name" name="name" type="text" required maxlength="@TangentSpace.NameLimit" autofocus="@(!form.AsksCode)"
+                        <input id="first-run-name" name="name" type="text" required maxlength="@TangentSpace.NameLimit" autofocus="@(focus == "first-run-name")"
                                autocomplete="off" placeholder="Field notes" value="@form.Name"
                                aria-invalid="@(form.NameFailure is null ? "false" : "true")"
                                aria-describedby="@(form.NameFailure is null ? "first-run-name-note" : "first-run-name-failure first-run-name-note")">
@@ -87,21 +89,22 @@
                     {
                         <p class="field-failure" id="first-run-name-failure">@nameFailure</p>
                     }
-                    <p class="first-run-note" id="first-run-name-note">At the top of every page, and what agents read first.</p>
+                    <p class="first-run-note" id="first-run-name-note">Shown at the top of every page, and the first thing agents read.</p>
                 </div>
                 <div class="field">
                     <span class="field-label" id="first-run-address-label">Base URL</span>
                     <span class="first-run-address" aria-labelledby="first-run-address-label">@Model.BaseUrl</span>
-                    <p class="first-run-note">Where this Tangent Space answers. It is configuration: change <code>@Model.Setting</code> in appsettings.json, or the <code>@Model.Setting.Replace(":", "__")</code> environment variable, and restart.</p>
+                    <p class="first-run-note">Where this Tangent Space answers, as its configuration says.</p>
                 </div>
-                <fieldset class="first-run-choice first-run-proprietor" aria-describedby="first-run-proprietor-note">
+                <ConfigurationRoutes Setting="@Model.Setting" AsksCode="@form.AsksCode" />
+                <fieldset class="first-run-choice first-run-proprietor" aria-describedby="@(form.ProprietorFailure is null ? "first-run-proprietor-note" : null)">
                     <legend class="field-label">Whose place is it?</legend>
                     <div class="first-run-options">
                         <label class="first-run-option" data-proprietor="me">
                             <span class="first-run-mark first-run-mark-me" aria-hidden="true">@Initial(form.Handle)</span>
                             <span class="first-run-option-text">
                                 <span class="first-run-option-name">Mine</span>
-                                <span class="first-run-option-detail">@(form.Handle.Length > 0 ? "@" + form.Handle + " is its proprietor; your name fronts it." : "You are its proprietor; your name fronts it.")</span>
+                                <span class="first-run-option-detail">@(form.Handle.Length > 0 ? "@" + form.Handle + " is its proprietor, and your name fronts it." : "You are its proprietor, and your name fronts it.")</span>
                             </span>
                             <input type="radio" name="proprietor" value="@FirstRunForm.Me" checked="@(form.Proprietor == FirstRunForm.Me)">
                         </label>
@@ -118,7 +121,7 @@
                         <label class="field-label" for="first-run-handle">Their handle</label>
                         <span class="field-input">
                             <span class="field-prefix" aria-hidden="true">@@</span>
-                            <input id="first-run-handle" name="handle" type="text" maxlength="@Participants.SignIn.HandleLimit"
+                            <input id="first-run-handle" name="handle" type="text" maxlength="@Participants.SignIn.HandleLimit" autofocus="@(focus == "first-run-handle")"
                                    autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="studio.example.com"
                                    value="@form.ProprietorHandle" aria-invalid="@(form.ProprietorFailure is null ? "false" : "true")"
                                    aria-describedby="@(form.ProprietorFailure is null ? null : "first-run-handle-failure")">
@@ -128,13 +131,17 @@
                             <p class="field-failure" id="first-run-handle-failure">@proprietorFailure</p>
                         }
                     </div>
-                    <p class="first-run-note" id="first-run-proprietor-note">The proprietor’s voice fronts the place. Only a participant can be named, so they sign in here once first.</p>
+                    @if (form.ProprietorFailure is null)
+                    {
+                        <p class="first-run-note" id="first-run-proprietor-note">Only someone who has signed in here can be named.</p>
+                    }
                 </fieldset>
                 <div class="first-run-operator">
                     <span class="field-label">Operator</span>
                     <label class="first-run-accountable">
                         <input type="checkbox" id="first-run-accountable" name="accountable" value="@FirstRunController.Affirmed" required
-                               checked="@form.Accountable" aria-invalid="@(form.AccountableFailure is null ? "false" : "true")"
+                               checked="@form.Accountable" autofocus="@(focus == "first-run-accountable")"
+                               aria-invalid="@(form.AccountableFailure is null ? "false" : "true")"
                                aria-describedby="@(form.AccountableFailure is null ? "first-run-accountable-note" : "first-run-accountable-failure first-run-accountable-note")">
                         <span class="first-run-operator-text">I’m a person, <strong>@(form.Handle.Length > 0 ? "@" + form.Handle : "signed in here")</strong>, and I answer for this place as its operator.</span>
                     </label>
@@ -142,31 +149,48 @@
                     {
                         <p class="field-failure" id="first-run-accountable-failure">@accountableFailure</p>
                     }
-                    <p class="first-run-note" id="first-run-accountable-note">An operator is always a person; you’ll hold every permission here.</p>
+                    <p class="first-run-note" id="first-run-accountable-note">You’ll hold every permission here.</p>
                 </div>
-                <button type="submit" class="sign-in-submit" data-busy-label="Setting up…">Set up the Tangent Space</button>
+                <button type="submit" class="sign-in-submit" data-busy-label="Setting up…">Set up this Tangent Space</button>
             </form>
         }
         else if (Model.Waiting is { } waiting)
         {
-            <h1 id="first-run-title" class="sign-in-title">Waiting for its operator</h1>
+            <h1 id="first-run-title" class="sign-in-title">This Tangent Space waits for its operator</h1>
             <p class="sign-in-lede">
                 @if (waiting.Handle.Length > 0)
                 {
-                    <text>You’re signed in as <strong>@("@" + waiting.Handle)</strong>, and this Tangent Space isn’t set up yet.</text>
+                    <text>You’re signed in as <strong>@("@" + waiting.Handle)</strong>, and it isn’t set up yet.</text>
                 }
                 else
                 {
-                    <text>You’re signed in, and this Tangent Space isn’t set up yet.</text>
+                    <text>You’re signed in, and it isn’t set up yet.</text>
                 }
             </p>
-            <p class="first-run-rule">Only the person whose DID is <code>@Model.Operator</code> can set it up: its configuration names them in <code>@FirstRun.OperatorSetting</code>.</p>
-            <p class="first-run-note">If that is you, sign in with that account.</p>
+            <p class="first-run-rule">
+                Only
+                @if (waiting.OperatorHandle is { } operatorHandle)
+                {
+                    <strong>@("@" + operatorHandle)</strong> <span class="first-run-did">(<code>@Model.Operator</code>)</span>
+                }
+                else
+                {
+                    <code>@Model.Operator</code>
+                }
+                can set it up.
+            </p>
+            @if (Model.Reader is { } reader)
+            {
+                <p class="first-run-onward">
+                    <a class="first-run-switch" href="@reader.SignOut">Use another account</a>
+                </p>
+            }
+            <p class="first-run-note first-run-first">If that is you, sign in with that account.</p>
         }
         else
         {
             <h1 id="first-run-title" class="sign-in-title">Set up this Tangent Space</h1>
-            <p class="sign-in-lede">Sign in with the account that will run it. You’ll name the place, say whose it is, and answer for it.</p>
+            <p class="sign-in-lede">Sign in with the account that will run it, and you’ll name the place, say whose it is, and answer for it.</p>
             <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()" data-island="submitting">
                 <div class="field">
                     <label class="field-label" for="first-run-sign-in-handle">Handle</label>
@@ -180,16 +204,15 @@
                 <input type="hidden" name="return" value="@Model.ChallengeReturn()">
                 <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
             </form>
-            <p class="first-run-note first-run-first">
-                @if (Model.Operator is { } pinned)
-                {
-                    <text>Only the person whose DID is <code>@pinned</code> can set it up: its configuration names them in <code>@FirstRun.OperatorSetting</code>.</text>
-                }
-                else
-                {
-                    <text>Setting it up takes the setup code this Tangent Space wrote to its log when it started, or <code>@FirstRun.OperatorSetting</code> set to your DID and a restart.</text>
-                }
-            </p>
+            @if (Model.Operator is { } pinned)
+            {
+                <p class="first-run-note first-run-first">Only the person whose DID is <code>@pinned</code> can set it up.</p>
+            }
+            else
+            {
+                <p class="first-run-note first-run-first">Setting it up asks for the setup code from this Tangent Space’s log.</p>
+                <ConfigurationRoutes AsksCode="true" />
+            }
         }
         </div>
     </section>
@@ -199,12 +222,22 @@
     [Parameter, EditorRequired] public FirstRun Model { get; set; } = default!;
 
     /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and the account of
-    /// whoever is signed in, which is also their way out when the place is not theirs to set up.</summary>
+    /// whoever is signed in.</summary>
     public static Frame Frame(FirstRun firstRun)
         => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Ready")],
             firstRun.Reader is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null);
 
     private string PanelClass => Model.Challenge is not null || Model.Waiting is not null ? "sign-in-panel" : "sign-in-panel first-run-panel";
+
+    /// <summary>The field the page opens on: the first one a refusal concerns, in the form's order, else the first
+    /// field there is.</summary>
+    private static string Focus(FirstRunForm form)
+        => form.CodeFailure is not null ? "first-run-code"
+            : form.NameFailure is not null ? "first-run-name"
+            : form.ProprietorFailure is not null ? "first-run-handle"
+            : form.AccountableFailure is not null ? "first-run-accountable"
+            : form.AsksCode ? "first-run-code"
+            : "first-run-name";
 
     private static string Title(Pointer pointer) => pointer.Kind switch
     {

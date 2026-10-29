@@ -60,7 +60,9 @@ public sealed partial class FirstRunTests
             Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Set up this Tangent Space</h1>", html);
             Assert.Contains($"<form class=\"sign-in-form\" method=\"get\" action=\"{BaseUrl}/auth/atproto/challenge\" data-island=\"submitting\">", html);
             Assert.Contains("<span class=\"panel-head-name\">New Tangent Space</span>", html);
-            Assert.Contains("Setting it up takes the setup code this Tangent Space wrote to its log when it started, or <code>Tangent:Operator</code> set to your DID and a restart.", html);
+            Assert.Contains("Setting it up asks for the setup code from this Tangent Space’s log.", html);
+            Assert.Contains("<summary>Set it in configuration instead</summary>", html);
+            Assert.Contains("Set <code>Tangent:Operator</code> to your DID and restart, and no setup code is asked.", html);
             Assert.Equal(TangentSpace.Unnamed, json.RootElement.GetProperty("name").GetString());
             Assert.Equal(BaseUrl, json.RootElement.GetProperty("baseUrl").GetString());
             Assert.Equal(TangentModule.BaseUrlKey, json.RootElement.GetProperty("setting").GetString());
@@ -131,6 +133,10 @@ public sealed partial class FirstRunTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(PinnedToLeo), ct: Cancellation);
         using var ada = new Browser(tangentSpace);
         using var signedIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
+        using var unknown = await ada.Follow(HttpMethod.Get, "/", Cancellation);
+        var beforeLeo = await unknown.Content.ReadAsStringAsync(Cancellation);
+        using var leo = new Browser(tangentSpace);
+        using var leoIn = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example");
 
         using var page = await ada.Follow(HttpMethod.Get, "/", Cancellation);
         var html = await page.Content.ReadAsStringAsync(Cancellation);
@@ -140,8 +146,10 @@ public sealed partial class FirstRunTests
         using var json = JsonDocument.Parse(await answered.Content.ReadAsStringAsync(Cancellation));
 
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("Waiting for its operator", html);
-        Assert.Contains($"Only the person whose DID is <code>{Leo}</code> can set it up", html);
+        Assert.Contains("This Tangent Space waits for its operator", html);
+        Assert.Matches($@"Only\s+<code>{Leo}</code>\s+can set it up\.", beforeLeo);
+        Assert.Matches($@"Only\s+<strong>@leo\.example</strong> <span class=""first-run-did"">\(<code>{Leo}</code>\)</span>\s+can set it up\.", html);
+        Assert.Equal("leo.example", json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString());
         Assert.DoesNotContain("<form", html);
         Assert.DoesNotContain("__RequestVerificationToken", html);
         Assert.Equal(Leo, json.RootElement.GetProperty("operator").GetString());
@@ -151,6 +159,7 @@ public sealed partial class FirstRunTests
         var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
         Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
         Assert.Contains($"<a class=\"account-item\" href=\"{WebUtility.HtmlEncode(signOut)}\">", html);
+        Assert.Contains($"<a class=\"first-run-switch\" href=\"{WebUtility.HtmlEncode(signOut)}\">Use another account</a>", html);
         Assert.Contains("</svg>Sign out</a>", html);
         Assert.False(json.RootElement.TryGetProperty("form", out _));
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
@@ -181,6 +190,7 @@ public sealed partial class FirstRunTests
         Assert.Contains("id=\"first-run-code-failure\">Write the setup code from this Tangent Space’s log.</p>", WebUtility.HtmlDecode(await missing.Content.ReadAsStringAsync(Cancellation)));
         Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
         Assert.Contains("id=\"first-run-code-failure\">That is not the setup code", wrongPage);
+        Assert.Matches("<input id=\"first-run-code\"[^>]* autofocus", wrongPage);
         Assert.DoesNotContain("AAAA-BBBB-CCCC-DDDD", wrongPage);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
 
@@ -374,8 +384,12 @@ public sealed partial class FirstRunTests
         var refused = await nobody.Content.ReadAsStringAsync(Cancellation);
 
         Assert.Equal(HttpStatusCode.BadRequest, nobody.StatusCode);
-        Assert.Contains($"<p class=\"field-failure\" id=\"first-run-handle-failure\">{WebUtility.HtmlEncode(Establish.NoParticipant("nobody.example"))}", refused);
+        Assert.Contains($"<p class=\"field-failure\" id=\"first-run-handle-failure\">{WebUtility.HtmlEncode(Establish.NoParticipant("nobody.example").TrimEnd('.'))}; they sign in here once before they can be named.</p>", refused);
         Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\"", refused);
+        // The page opens on the field in error, and the standing hint gives way to the error that says the same.
+        Assert.Matches("<input id=\"first-run-handle\"[^>]* autofocus", refused);
+        Assert.DoesNotMatch("<input id=\"first-run-name\"[^>]* autofocus", refused);
+        Assert.DoesNotContain("first-run-proprietor-note", refused);
         Assert.Contains("value=\"Field notes\"", refused);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
         Assert.Equal(events, await Event.Count.Exact(Cancellation));

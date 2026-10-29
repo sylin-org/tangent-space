@@ -1,7 +1,8 @@
 /* First run: the sign-in page's panel, wider once someone is signed in, holding the form that names the place and,
  * once it is established, the pointers the site places. Fields follow the design reference's settings screen: 13px
- * labels, 44px fields, 12.5px notes; a value that is configuration rather than a field reads in the mono face on the
- * surface; snippets read in the mono face on the page colour, each with its copy button. */
+ * labels, 44px fields, 12.5px notes; prose inside the card holds to a reading measure; a value that is configuration
+ * rather than a field reads in the mono face on the surface; snippets read in the mono face on the page colour, each
+ * with its copy button. */
 
 .first-run-panel {
   width: min(100%, 640px);
@@ -9,6 +10,15 @@
 
 .first-run-form {
   gap: 20px;
+}
+
+/* A reading measure for every sentence inside the card. */
+.first-run .sign-in-lede,
+.first-run-note,
+.first-run-rule,
+.first-run-pointer-where,
+.first-run-configuration li {
+  max-width: 68ch;
 }
 
 .first-run-form .field {
@@ -47,7 +57,8 @@
   font-size: 12.5px;
 }
 
-/* Whose place it is: two cards side by side, the chosen one ringed in the accent. */
+/* Whose place it is: two cards side by side. The chosen one takes the accent's border and its soft fill, never a
+ * ring, so a choice never reads as focus; focus is the outline the keyboard brings. */
 .first-run-choice {
   margin: 0;
   padding: 0;
@@ -81,8 +92,17 @@
 }
 
 .first-run-option:has(input:checked) {
-  border-color: var(--ts-accent-line);
-  box-shadow: 0 0 0 3px var(--ts-accent-soft);
+  border-color: var(--ts-accent);
+  background: var(--ts-accent-soft);
+}
+
+.first-run-option:has(input:focus-visible) {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 3px;
+}
+
+.first-run-option input:focus-visible {
+  outline: none;
 }
 
 .first-run-option input {
@@ -171,9 +191,73 @@
 }
 
 .first-run-rule {
-  margin: 16px 0 8px;
+  margin: 16px 0 0;
   color: var(--ts-text-2);
   font-size: 13.5px;
+}
+
+.first-run-rule strong {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.first-run-did {
+  color: var(--ts-text-3);
+}
+
+/* The way through configuration: a disclosure in the page, its summary read as a quiet link. */
+.first-run-configuration {
+  margin: -8px 0 0;
+  color: var(--ts-text-2);
+  font-size: 12.5px;
+}
+
+.first-run-first + .first-run-configuration {
+  margin-top: 8px;
+}
+
+.first-run-configuration summary {
+  width: fit-content;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ts-text-2);
+  font-weight: 600;
+  list-style: none;
+}
+
+.first-run-configuration summary::-webkit-details-marker {
+  display: none;
+}
+
+.first-run-configuration summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+
+.first-run-configuration[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.first-run-configuration ul {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.first-run-configuration code {
+  font-family: var(--ts-font-mono);
+  font-size: 12px;
+  color: var(--ts-text);
+  overflow-wrap: anywhere;
 }
 
 .first-run-rule code,
@@ -250,6 +334,11 @@
   background: var(--ts-hover);
 }
 
+/* The code element would take the browser's own monospace; it reads the snippet's face instead. */
+.first-run-snippet code {
+  font: inherit;
+}
+
 .first-run-snippet {
   margin: 0;
   padding: 12px 14px;
@@ -283,6 +372,23 @@
   background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
 }
 
+/* Another account: the waiting card's next step, beside the frame's account menu. */
+.first-run-switch {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ts-line);
+  border-radius: 10px;
+  color: var(--ts-text);
+  font: 600 14px/1 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.first-run-switch:hover {
+  background: var(--ts-hover);
+}
+
 @media (max-width: 719px) {
   .first-run-options {
     grid-template-columns: 1fr;
@@ -290,6 +396,11 @@
 
   .first-run-pointer {
     padding: 12px 12px 14px;
+  }
+
+  .first-run-copy {
+    height: 44px;
+    min-width: 44px;
   }
 
   /* On a phone a snippet wraps rather than scrolls, so all of it shows before it is copied. */
