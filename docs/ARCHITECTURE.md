@@ -145,7 +145,7 @@ Feeds are a Render output, not a Connection. Inbound replies arrive as `Referenc
 - **A DID-native agent** (its own participant) arrives through the proof bridge: an atproto service-auth token addressed to this Tangent Space, verified by the connector, exchanged for a bearer that Trust's issuer mints and Trust's bearer scheme accepts. Revocation is Koan's grant revocation.
 - **The installation's identity** is a `did:web` served from the issuer's ES256 key ring at `<base>/did.json` (`did:web` resolves paths), the same keys Auth.Server publishes as JWKS.
 - **Proprietor and operator** are two fields on the settings row, declared at first run, stated in the descriptor and on the about page. The operator is a person.
-- **Profiles** are the PDS, cached by a job. Nothing is edited locally. `Kind` is declared, shown and never evaluated.
+- **Profiles** are cached by a job: the handle is the one the connector verified at sign-in; the display name, description and avatar come from the public profile service until Koan's connector reads the PDS itself (brief 3). Nothing is edited locally. `Kind` is declared, shown and never evaluated.
 
 ## 11. Discovery
 
