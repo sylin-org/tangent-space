@@ -24,7 +24,8 @@ export interface State {
   /** How the place stands: established through first run by the capture operator before the page opens (the
    *  default), not established yet, or established by the capture persona, who is then its operator. */
   place?: 'established' | 'unestablished' | 'persona'
-  /** Fields filled once the page has settled and the checks are made, by selector, before any click. */
+  /** Fields filled once the page has settled and the checks are made, by selector, before any click; the value
+   *  setupCodeFill types the setup code this run's server wrote to its log. */
   fill?: Readonly<Record<string, string>>
   /** Radio buttons or checkboxes checked once the page has settled, before any click. */
   check?: readonly string[]
@@ -48,6 +49,9 @@ export const capturePersona = { name: 'ada', did: 'did:plc:capture4persona', han
 // name they give it.
 export const captureOperator = { name: 'leo', did: 'did:plc:capture4operator', handle: 'leo.bsky.social' } as const
 export const capturePlaceName = 'Tangent Space'
+
+// The fill value that stands for the setup code the capture host logged at its start.
+export const setupCodeFill = '{setup code}'
 
 export interface Screen {
   /** The path under the base URL, starting with a slash. */
@@ -78,8 +82,8 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // Before anyone signs in; signed in where the configuration names someone else as operator; signed in, the
-  // form with its setup code field before anything is written, and refused for a wrong setup code; where the
-  // configuration names the persona, the form refused for a proprietor handle no participant has; and established,
+  // form with its setup code field before anything is written, and refused for a wrong setup code; the form refused
+  // for a proprietor handle no participant has, its setup code accepted; and established,
   // the site's pointers for its operator, under the name the persona gave the place.
   'first-run': {
     path: '/first-run',
@@ -100,9 +104,8 @@ export const screens: Readonly<Record<string, Screen>> = {
         name: 'form-error',
         place: 'unestablished',
         signedIn: true,
-        settings: { 'Tangent:Operator': capturePersona.did },
         check: ['#first-run-someone', '#first-run-accountable'],
-        fill: { '#first-run-name': 'Field notes', '#first-run-handle': 'studio.example' },
+        fill: { '#first-run-code': setupCodeFill, '#first-run-name': 'Field notes', '#first-run-handle': 'studio.example' },
         click: '.sign-in-submit',
       },
       { name: 'established', place: 'persona', signedIn: true },

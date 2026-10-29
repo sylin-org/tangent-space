@@ -60,7 +60,12 @@
             }
             <form class="sign-in-form first-run-form" method="post" action="@form.Action" data-island="submitting">
                 <FormTokenField Token="@form.Token" />
-                @if (form.AsksCode)
+                @if (form.AsksCode && form.CodeAccepted)
+                {
+                    <input type="hidden" name="code" value="@form.Code">
+                    <p class="first-run-accepted" id="first-run-code-accepted"><span class="first-run-accepted-mark" aria-hidden="true"></span>Setup code accepted.</p>
+                }
+                else if (form.AsksCode)
                 {
                     <div class="field">
                         <label class="field-label" for="first-run-code">Setup code</label>
@@ -137,7 +142,7 @@
                     }
                 </fieldset>
                 <div class="first-run-operator">
-                    <span class="field-label">Operator</span>
+                    <span class="field-label" id="first-run-operator-label">Operator</span>
                     <label class="first-run-accountable">
                         <input type="checkbox" id="first-run-accountable" name="accountable" value="@FirstRunController.Affirmed" required
                                checked="@form.Accountable" autofocus="@(focus == "first-run-accountable")"
@@ -179,13 +184,13 @@
                 }
                 can set it up.
             </p>
+            <p class="first-run-note first-run-first">If that is you, sign in with that account.</p>
             @if (Model.Reader is { } reader)
             {
                 <p class="first-run-onward">
                     <a class="first-run-switch" href="@reader.SignOut">Use another account</a>
                 </p>
             }
-            <p class="first-run-note first-run-first">If that is you, sign in with that account.</p>
         }
         else
         {
@@ -224,7 +229,7 @@
     /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and the account of
     /// whoever is signed in.</summary>
     public static Frame Frame(FirstRun firstRun)
-        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Pointers")],
+        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "First run" : "Pointers")],
             firstRun.Reader is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null);
 
     private string PanelClass => Model.Challenge is not null || Model.Waiting is not null ? "sign-in-panel" : "sign-in-panel first-run-panel";
@@ -236,7 +241,7 @@
             : form.NameFailure is not null ? "first-run-name"
             : form.ProprietorFailure is not null ? "first-run-handle"
             : form.AccountableFailure is not null ? "first-run-accountable"
-            : form.AsksCode ? "first-run-code"
+            : form.AsksCode && !form.CodeAccepted ? "first-run-code"
             : "first-run-name";
 
     private static string Title(Pointer pointer) => pointer.Kind switch

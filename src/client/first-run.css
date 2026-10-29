@@ -26,6 +26,40 @@
   gap: 6px;
 }
 
+.first-run .field-failure + .first-run-note {
+  margin-top: 4px;
+}
+
+/* The accepted setup code: one line in place of its field, marked done. */
+.first-run-accepted {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+}
+
+.first-run-accepted-mark {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ts-accent);
+}
+
+.first-run-accepted-mark::after {
+  content: "";
+  width: 7px;
+  height: 4px;
+  margin-top: -2px;
+  border-left: 1.5px solid var(--ts-on-accent);
+  border-bottom: 1.5px solid var(--ts-on-accent);
+  transform: rotate(-45deg);
+}
+
 .first-run-address,
 .first-run-snippet {
   font-family: var(--ts-font-mono);
@@ -48,13 +82,19 @@
   white-space: nowrap;
 }
 
+/* On the first-run panel a field's edge is one step up the ramp, so it shows on the raised panel in both themes;
+ * focus and refusal keep the looks the shared field gives them. */
+.first-run .field-input:not(:focus-within):not(:has(input[aria-invalid="true"])) {
+  border-color: var(--ts-connector);
+}
+
 /* The base URL: shown, not edited; it reads as configuration. */
 .first-run-address {
   min-height: 44px;
   display: flex;
   align-items: center;
   padding: 10px 12px;
-  border: 1px dashed var(--ts-line);
+  border: 1px dashed var(--ts-connector);
   border-radius: 10px;
   background: var(--ts-surface);
   color: var(--ts-text);
@@ -99,9 +139,9 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 14px 16px;
-  border: 1px solid var(--ts-line);
+  border: 1.5px solid var(--ts-connector);
   border-radius: var(--ts-radius-row);
-  background: var(--ts-page);
+  background: transparent;
   cursor: pointer;
 }
 
@@ -186,8 +226,9 @@
 }
 
 .first-run-accountable {
+  min-height: 32px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   cursor: pointer;
 }
@@ -196,7 +237,7 @@
   width: 16px;
   height: 16px;
   flex: none;
-  margin: 2px 0 0;
+  margin: 0;
   accent-color: var(--ts-accent);
 }
 
@@ -233,10 +274,10 @@
 
 .first-run-configuration summary {
   width: fit-content;
-  min-height: 24px;
+  min-height: 32px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--ts-text-2);
   font-weight: 600;
   list-style: none;
@@ -248,10 +289,11 @@
 
 .first-run-configuration summary::before {
   content: "";
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
+  width: 8px;
+  height: 8px;
+  margin-left: 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
   transform: rotate(-45deg);
   transition: transform 0.15s;
 }
@@ -406,6 +448,10 @@
   }
 
   .first-run-configuration summary {
+    min-height: 44px;
+  }
+
+  .first-run-accountable {
     min-height: 44px;
   }
 
