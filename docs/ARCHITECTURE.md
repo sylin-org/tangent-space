@@ -154,7 +154,7 @@ Pointers live on the site, since `/.well-known/` belongs to an origin: `<link re
 
 ## 12. Background work
 
-Koan jobs, each a reader that writes through the writer: profile capture, handle resolution, connection dispatch, reference polling, media processing, archive rendering, backup (`VACUUM INTO` into the folder, then copy). Nothing else runs in the background; nothing in a request does network I/O.
+Koan jobs, each a reader that writes through the writer: profile capture, handle resolution, connection dispatch, reference polling, media processing, archive rendering. Backup and restore are verbs of the executable, not jobs: `Tangent.Server backup` takes a `VACUUM INTO` snapshot of the data folder with a hashed manifest, and `restore` puts one back, refusing a folder a running Tangent Space has marked. Nothing else runs in the background; nothing in a request does network I/O.
 
 ## 13. Folders
 
