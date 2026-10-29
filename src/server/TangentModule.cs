@@ -1,5 +1,6 @@
 using System.Net;
 using Koan.Core;
+using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
 using Koan.Web.Hosting;
@@ -17,8 +18,7 @@ public sealed class TangentModule : KoanModule
 {
     public override void Register(IServiceCollection services)
     {
-        services.AddOptions<TangentSpaceOptions>()
-            .BindConfiguration(TangentSpaceOptions.Configuration)
+        services.AddKoanOptions<TangentSpaceOptions>(TangentSpaceOptions.Configuration)
             .Validate(options => TangentSpaceOptions.TryParseBaseUrl(options.BaseUrl, out _),
                 "Tangent:BaseUrl must be an absolute http or https URL: scheme, host and an optional path.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
@@ -29,8 +29,7 @@ public sealed class TangentModule : KoanModule
                 || (TangentSpaceOptions.TryParseBaseUrl(options.BaseUrl, out var baseUrl)
                     && baseUrl.Scheme == Uri.UriSchemeHttps
                     && string.Equals(configuration["AllowedHosts"], baseUrl.Host, StringComparison.OrdinalIgnoreCase)),
-                "A trusted proxy requires an https Tangent:BaseUrl and AllowedHosts equal to its host name.")
-            .ValidateOnStart();
+                "A trusted proxy requires an https Tangent:BaseUrl and AllowedHosts equal to its host name.");
 
         services.AddOptions<SqliteOptions>()
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((sqlite, tangent, environment) =>
