@@ -1,0 +1,41 @@
+using Tangent.Render;
+
+namespace Tangent.Posts;
+
+/// <summary>The form that edits a Post, with its inline removal, one resource both ways. It names the Post, its
+/// address, its Tangent and its Topic; <see cref="Action"/> takes <c>body</c>, <c>title</c> on a root, and
+/// <c>version</c>, the <see cref="Version"/> the editor read; <see cref="RemoveAction"/> removes the Post. Both post
+/// <see cref="Token"/>, the form's antiforgery token. <see cref="Can"/> is what the reader holds on the Post;
+/// <see cref="Gate"/> is why they may not edit it and <see cref="RemoveGate"/> why they may not remove it, each null
+/// when they may. A tombstone is <see cref="Removed"/> and holds no body. After a refusal the form keeps what was
+/// sent and says why; after an edit made from another version it holds the current text and version, and the words
+/// that were not saved in <see cref="SentTitle"/> and <see cref="SentBody"/>.</summary>
+public sealed record EditPage(
+    string Id,
+    string Address,
+    string Tangent,
+    string TangentName,
+    string TangentAddress,
+    string TopicTitle,
+    string TopicAddress,
+    bool Root,
+    string? Title,
+    string Body,
+    long Version,
+    bool Removed,
+    string Action,
+    string RemoveAction,
+    FormToken Token,
+    IReadOnlyList<string> Can,
+    string? Gate,
+    string? RemoveGate,
+    string? SignIn,
+    string Place,
+    string Door,
+    Who? Who,
+    string? Failure = null,
+    string? FailureGate = null,
+    string? TitleFailure = null,
+    string? BodyFailure = null,
+    string? SentTitle = null,
+    string? SentBody = null);

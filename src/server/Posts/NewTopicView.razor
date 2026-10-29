@@ -1,0 +1,85 @@
+@using global::Tangent.Render
+@* The form that starts a Topic: one panel in the page, saying which Tangent it posts in, with a title and a body. The
+   Post's Id rides in a hidden field, minted when the page was rendered, so a form sent twice starts one Topic. A reader
+   who may not start a Topic here reads why above the form, whose fields are read-only and which has no button, and a
+   visitor the way to sign in; a refusal of a field shows under that field, which takes the focus, and any other above
+   the form. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="new-topic-heading">
+        <div class="sign-in-body">
+            <p class="post-form-where">Posting in <a href="@Model.TangentAddress">@Model.TangentName</a></p>
+            <h1 id="new-topic-heading" class="sign-in-title">@(Article ? "New article" : "New topic")</h1>
+            @if (Model.Gate is { } gate)
+            {
+                <p class="sign-in-failure" id="new-topic-failure" role="alert" data-gate="@gate">
+                    @if (Model.SignIn is { } signIn)
+                    {
+                        @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                    }
+                    else
+                    {
+                        @PostWrites.Sentence(gate)
+                    }
+                </p>
+            }
+            else if (Model.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="new-topic-failure" role="alert">@failure</p>
+            }
+            <form class="sign-in-form" method="post" action="@Model.Action" data-island="submitting">
+                <FormTokenField Token="@Model.Token" />
+                <input type="hidden" name="@PostWrites.IdField" value="@Model.Id">
+                <div class="field">
+                    <label class="field-label" for="new-topic-title">Title</label>
+                    <span class="field-input">
+                        <input id="new-topic-title" name="@PostWrites.TitleField" type="text" required maxlength="@Post.TitleLimit" autocomplete="off"
+                               autofocus="@(Model.Gate is null && Focus == "new-topic-title")" readonly="@(Model.Gate is not null)" value="@Model.Title"
+                               aria-invalid="@(Model.TitleFailure is null ? "false" : "true")"
+                               aria-describedby="@(Model.TitleFailure is null ? null : "new-topic-title-failure")">
+                    </span>
+                    @if (Model.TitleFailure is { } titleFailure)
+                    {
+                        <p class="field-failure" id="new-topic-title-failure">@titleFailure</p>
+                    }
+                </div>
+                <div class="field">
+                    <label class="field-label" for="new-topic-body">@(Article ? "Article" : "Post")</label>
+                    <textarea class="post-form-body" id="new-topic-body" name="@PostWrites.BodyField" rows="12" required
+                              autofocus="@(Model.Gate is null && Focus == "new-topic-body")" readonly="@(Model.Gate is not null)"
+                              aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
+                              aria-describedby="@(Model.BodyFailure is null ? null : "new-topic-body-failure")">@Model.Body</textarea>
+                    @if (Model.BodyFailure is { } bodyFailure)
+                    {
+                        <p class="field-failure" id="new-topic-body-failure">@bodyFailure</p>
+                    }
+                </div>
+                @if (Model.Gate is null)
+                {
+                    <div class="post-form-actions">
+                        @if (Model.Who is { } who)
+                        {
+                            <span class="post-form-as">Posting as <strong>@("@" + who.Handle)</strong></span>
+                        }
+                        <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Posting…">Post</button>
+                    </div>
+                }
+            </form>
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public NewTopicPage Model { get; set; } = default!;
+
+    private bool Article => Model.Kind == PostWrites.Word(PostKind.Article);
+
+    /// <summary>The field the page opens on: the first one a refusal concerns, else the title.</summary>
+    private string Focus => Model.TitleFailure is null && Model.BodyFailure is not null ? "new-topic-body" : "new-topic-title";
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent and the form as crumbs; and who reads,
+    /// or where a visitor signs in.</summary>
+    public static Frame Frame(NewTopicPage page)
+        => new(page.Place, page.Door,
+            [new Crumb(page.TangentName, page.TangentAddress), new Crumb(page.Kind == PostWrites.Word(PostKind.Article) ? "New article" : "New topic")],
+            page.Who, page.SignIn);
+}
