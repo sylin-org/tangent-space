@@ -1,5 +1,5 @@
 import { defineComponent, type PropType } from 'vue'
-import { draftKey, draftsUnder, mintTid, postScope, readDraft, reconcile, send, writeDraft, type Draft, type Settled } from '../composer'
+import { draftKey, draftsUnder, mintTid, postScope, readDraft, reconcile, send, sentKey, writeDraft, type Draft, type Settled } from '../composer'
 
 // What the composer does beyond the page, replaceable where it is tested: where a confirmed Post is shown, and how long
 // a send or a check waits for its answer before its outcome counts as uncertain.
@@ -16,14 +16,15 @@ type Phase = 'ready' | 'sending' | 'checking' | 'missing' | 'uncertain' | 'refus
 // does. Only the person's own submit sends it, as JSON to the form's action with the form's token and its TID. A
 // refusal is said inline above the fields.
 //
-// A send whose outcome is not known — no answer, a timeout, a failure on the way, a reload while it was on its way —
-// keeps its TID and its words, which take no typing until a GET of the Post's address for that TID (locate + TID) says
-// whether it was posted: found, the draft is cleared and the Post shown; not found, the words are the person's again
-// and sending them goes under the same TID. A conflict on that TID can only mean an earlier send of it landed, so it
-// is checked the same way and never answered with a new TID. On arrival the composer checks every draft of its scope,
-// and of the scopes under it, that was sent without an answer before it offers anything else. A reply form gives each
-// Post of the page a Reply action that points the form at it. Without script the form posts and is sent on as the
-// server answers.
+// A send's words are kept beside the scope's draft, by their TID, from the moment they leave until they are settled,
+// so typing in another tab never writes over them. A send whose outcome is not known — no answer, a timeout, a failure
+// on the way, a reload while it was on its way — keeps its TID and its words, which take no typing until a GET of the
+// Post's address for that TID (locate + TID) says whether it was posted: found, they are cleared and the Post shown;
+// not found, the words are the person's again, back in the scope's draft unless another tab's words are there, and
+// sending them goes under the same TID. A conflict on that TID can only mean an earlier send of it landed, so it is
+// checked the same way and never answered with a new TID. On arrival the composer checks every send of its scope, and
+// of the scopes under it, that had no answer before it offers anything else. A reply form gives each Post of the page
+// a Reply action that points the form at it. Without script the form posts and is sent on as the server answers.
 export const composer = defineComponent({
   name: 'ComposerIsland',
   props: {
@@ -54,8 +55,11 @@ export const composer = defineComponent({
     form.prepend(status)
 
     let phase: Phase = 'ready'
-    const scope = () => (parent?.value ? postScope(props.scope, parent.value) : props.scope)
-    const key = () => draftKey(props.participant, scope())
+    const scopeOf = (post: string | null | undefined) => (post ? postScope(props.scope, post) : props.scope)
+    // The scope's draft, where typed words are kept.
+    const key = () => draftKey(props.participant, scopeOf(parent?.value))
+    // Where the words the form holds are kept: the scope's draft, or, once sent, beside it by their TID.
+    let home = key()
     const current = (sent: boolean): Draft => ({
       id: id.value,
       body: body.value,
@@ -100,24 +104,46 @@ export const composer = defineComponent({
       link.href = shown ? `#${post}` : `${props.locate ?? ''}${encodeURIComponent(post)}`
     }
 
+    // Takes up words kept under a key: the form shows them, and keeps them there while they are unsent.
+    function takeUp(entry: { key: string; draft: Draft }) {
+      point(entry.draft.parent ?? null)
+      apply(entry.draft)
+      home = entry.key
+    }
+
+    // Unsent words go back to the scope's draft, unless another tab's words are there; then they stay beside it by
+    // their TID, still found on arrival.
+    function keep(draft: Draft) {
+      const own = key()
+      const there = home === own ? null : readDraft(own)
+      if (home !== own && (!there || there.id === draft.id || (there.body === '' && !there.title))) {
+        writeDraft(home, null)
+        home = own
+      }
+      writeDraft(home, draft)
+    }
+
     function settle(answer: Settled, conflicted = false) {
       switch (answer.kind) {
-        case 'posted':
-          writeDraft(key(), null)
+        case 'posted': {
+          writeDraft(home, null)
+          if (readDraft(key())?.id === id!.value) writeDraft(key(), null)
+          home = key()
           show('posted', conflicted ? `Your ${props.noun} was already posted, with the words first sent. Opening it…` : `Posted. Opening your ${props.noun}…`)
           composing.show(answer.address)
           return
+        }
         case 'refused':
-          writeDraft(key(), current(false))
+          keep(current(false))
           show('refused', answer.message)
           return
         case 'missing':
           if (conflicted) return settle({ kind: 'uncertain' })
-          writeDraft(key(), current(false))
+          keep(current(false))
           show('missing', `Your ${props.noun} wasn’t posted. Send it again: it carries the same id, so it can post only once.`, 'Send again')
           return
         case 'uncertain':
-          writeDraft(key(), current(true))
+          writeDraft(home, current(true))
           if (props.locate)
             show('uncertain', `The Tangent Space didn’t answer, so it isn’t known whether your ${props.noun} was posted. Your words are kept as they were sent; check before anything else.`, 'Check again')
           else
@@ -133,8 +159,15 @@ export const composer = defineComponent({
     }
 
     async function submit() {
-      // The draft says it was sent before the request leaves, so a reload while it is on its way checks first.
-      writeDraft(key(), current(true))
+      // The words leave for their own place, by TID, before the request does, so a reload while they are on their way
+      // checks them first and no other tab's typing writes over them.
+      const sending = current(true)
+      const away = sentKey(key(), sending.id)
+      writeDraft(away, sending)
+      if (home !== away) {
+        if (readDraft(home)?.id === sending.id) writeDraft(home, null)
+        home = away
+      }
       const fields = new URLSearchParams()
       for (const [name, value] of new FormData(form)) if (typeof value === 'string') fields.append(name, value)
       show('sending')
@@ -145,15 +178,20 @@ export const composer = defineComponent({
       settle(answer)
     }
 
-    // Every draft of this scope and those under it that was sent without an answer is checked before anything else is
-    // offered: one found is shown; otherwise the form takes the first still not known, or else the first not posted.
+    // Every send of this scope and those under it that had no answer is checked before anything else is offered: one
+    // found is shown; otherwise the form takes the first still not known, or else the first not posted, and a send
+    // found not posted earlier is offered when nothing else is.
     async function recover() {
-      const sent = draftsUnder(props.participant, props.scope).filter((entry) => entry.draft.sent)
-      if (sent.length === 0) return
-      const first = sent[0]
+      const entries = draftsUnder(props.participant, props.scope)
+      const sent = entries.filter((entry) => entry.draft.sent)
+      const parked = entries.filter((entry) => !entry.draft.sent && entry.key.includes(':sent:'))
+      if (sent.length === 0) {
+        if (parked.length === 0) return
+        takeUp(parked[0])
+        return settle({ kind: 'missing' })
+      }
       if (!props.locate) {
-        point(first.draft.parent ?? null)
-        apply(first.draft)
+        takeUp(sent[0])
         return settle({ kind: 'uncertain' })
       }
       show('checking', `Checking whether your ${props.noun} was posted…`)
@@ -161,16 +199,15 @@ export const composer = defineComponent({
       for (const entry of sent) {
         const answer = await reconcile(props.locate + encodeURIComponent(entry.draft.id), entry.draft.id, composing.timeout)
         if (answer.kind === 'posted') {
-          point(entry.draft.parent ?? null)
-          apply(entry.draft)
+          takeUp(entry)
           return settle(answer)
         }
-        if (answer.kind === 'missing') writeDraft(entry.key, { ...entry.draft, sent: false })
         answers.push({ ...entry, answer })
       }
       const shown = answers.find((entry) => entry.answer.kind === 'uncertain') ?? answers[0]
-      point(shown.draft.parent ?? null)
-      apply(shown.draft)
+      for (const entry of answers)
+        if (entry !== shown && entry.answer.kind === 'missing') writeDraft(entry.key, { ...entry.draft, sent: false })
+      takeUp(shown)
       settle(shown.answer)
     }
 
@@ -182,19 +219,29 @@ export const composer = defineComponent({
     })
 
     form.addEventListener('input', () => {
-      if (settled()) writeDraft(key(), current(false))
+      if (settled()) writeDraft(home, current(false))
     })
 
-    // Points a reply form at a Post, or back at the Topic: the draft for that scope comes back — checked first, if it
-    // was sent without an answer — or an empty one with a TID of its own.
+    // Points a reply form at a Post, or back at the Topic: a send of that scope that had no answer comes back checked
+    // first, then one found not posted, then the scope's draft, or an empty one with a TID of its own.
     function replyTo(post: string | null, author: string) {
       if (!parent || !settled()) return
       point(post, author)
+      const here = draftsUnder(props.participant, scopeOf(post)).filter((entry) => (entry.draft.parent ?? null) === post)
+      const unanswered = here.find((entry) => entry.draft.sent)
+      const parkedHere = here.find((entry) => !entry.draft.sent && entry.key.includes(':sent:'))
       const draft = readDraft(key())
+      home = key()
       apply(draft ?? { id: mintTid(), body: '', sent: false })
       show('ready')
       body!.focus()
-      if (draft?.sent) void check()
+      if (unanswered) {
+        takeUp(unanswered)
+        void check()
+      } else if (parkedHere) {
+        takeUp(parkedHere)
+        settle({ kind: 'missing' })
+      }
     }
 
     if (parent && replyingTo) {
@@ -224,11 +271,12 @@ export const composer = defineComponent({
     // A page restored from the back-forward cache after its Post was confirmed starts a new one.
     window.addEventListener('pageshow', (event) => {
       if (!event.persisted || phase !== 'posted') return
+      home = key()
       apply({ id: mintTid(), body: '', sent: false })
       show('ready')
     })
 
-    const draft = readDraft(key())
+    const draft = readDraft(home)
     if (draft && !draft.sent) apply(draft)
     show('ready')
     void recover()

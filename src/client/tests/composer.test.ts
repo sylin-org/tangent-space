@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { draftKey, isTid, mintTid } from '../composer'
+import { draftKey, isTid, mintTid, sentKey } from '../composer'
 import { mountIslands } from '../islands'
 import { composing } from '../islands/composer'
 
@@ -166,7 +166,9 @@ test('a submit sends the form as JSON is answered, and clears the draft only onc
   expect(page.form.getAttribute('aria-busy')).toBe('true')
   expect(page.body.readOnly).toBe(true)
   expect(page.button.textContent).toBe('Posting…')
-  expect(stored()).toEqual({ id: servedId, body: 'I light mine at six.', sent: true })
+  // The words wait beside the scope's draft, by TID, until the answer comes.
+  expect(stored(sentKey(topicKey, servedId))).toEqual({ id: servedId, body: 'I light mine at six.', sent: true })
+  expect(localStorage.getItem(topicKey)).toBeNull()
 
   answer(json(201, { id: servedId, address: `${topic}/${servedId}` }))
 
@@ -306,7 +308,7 @@ test('a reload mid-send of a reply to a Post finds that draft from the Topic’s
   type(first.body, 'To Leo, before the reload.')
   submit(first.form)
   await vi.waitFor(() => expect(first.form.dataset.composer).toBe('uncertain'))
-  expect(stored(draftKey(participant, `topic:${rootId}:post:${replyId}`))).toMatchObject({ id: sentId, sent: true, parent: replyId })
+  expect(stored(sentKey(draftKey(participant, `topic:${rootId}:post:${replyId}`), sentId))).toMatchObject({ id: sentId, sent: true, parent: replyId })
 
   // The reload: the Topic's address, whose form answers the Topic. Not found, the reply is offered again as it was.
   fetched.mockResolvedValueOnce(missing())
@@ -328,6 +330,43 @@ test('a reload mid-send of a reply to a Post finds that draft from the Topic’s
   await vi.waitFor(() => expect(shown).toHaveBeenCalledWith(`${topic}/${sentId}`))
   expect(localStorage.getItem(draftKey(participant, `topic:${rootId}:post:${replyId}`))).toBeNull()
   expect(posts()).toHaveLength(1)
+})
+
+test('typing in another tab never writes over a send that had no answer, and the reload checks that send', async () => {
+  const tabA = replyPage()
+  const tabB = document.createElement('div')
+  tabB.innerHTML = tabA.form.outerHTML.replace(servedId, '3mwyyyyyyyy22').replace(/<p class="composer-status"[^>]*><\/p>/, '')
+  document.body.append(tabB)
+  mountIslands(tabB)
+  const bBody = tabB.querySelector('textarea')!
+
+  fetched.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  type(tabA.body, 'Sent from A.')
+  submit(tabA.form)
+  await vi.waitFor(() => expect(tabA.form.dataset.composer).toBe('uncertain'))
+  type(bBody, 'B')
+
+  expect(stored()).toEqual({ id: '3mwyyyyyyyy22', body: 'B', sent: false })
+  expect(stored(sentKey(topicKey, servedId))).toEqual({ id: servedId, body: 'Sent from A.', sent: true })
+
+  // A reloads: its send is checked first; not found, it is offered again with its TID, and B's words stay.
+  fetched.mockResolvedValueOnce(missing())
+  const reloaded = replyPage('3mwzzzzzzzz22')
+
+  await vi.waitFor(() => expect(reloaded.form.dataset.composer).toBe('missing'))
+  expect(fetched.mock.calls.at(-1)![0]).toBe(`${topic}/${servedId}`)
+  expect((reloaded.id.value + ' ' + reloaded.body.value)).toBe(`${servedId} Sent from A.`)
+  expect(stored()).toEqual({ id: '3mwyyyyyyyy22', body: 'B', sent: false })
+  expect(stored(sentKey(topicKey, servedId))).toEqual({ id: servedId, body: 'Sent from A.', sent: false })
+
+  // Sent again and confirmed, A's words are cleared and B's still stand.
+  fetched.mockResolvedValueOnce(json(201, { address: `${topic}/${servedId}` }))
+  submit(reloaded.form)
+
+  await vi.waitFor(() => expect(shown).toHaveBeenCalledWith(`${topic}/${servedId}`))
+  expect(localStorage.getItem(sentKey(topicKey, servedId))).toBeNull()
+  expect(stored()).toEqual({ id: '3mwyyyyyyyy22', body: 'B', sent: false })
+  expect(posts().map((call) => sentFields(call).id)).toEqual([servedId, servedId])
 })
 
 test('pointing the form at a Post whose draft was sent without an answer checks it before offering it', async () => {
@@ -359,7 +398,7 @@ test('a new Topic whose send got no answer is checked by its TID, and its words 
   expect(page.button.textContent).toBe('Check again')
   expect(page.body.readOnly).toBe(true)
   expect(page.title!.readOnly).toBe(true)
-  expect(stored(key)).toEqual({ id: servedId, title: 'Wicks', body: 'Cotton or hemp?', sent: true })
+  expect(stored(sentKey(key, servedId))).toEqual({ id: servedId, title: 'Wicks', body: 'Cotton or hemp?', sent: true })
 
   // The first send landed: the check finds the Topic its TID names, after the redirect to its slug.
   const landed = found(servedId)

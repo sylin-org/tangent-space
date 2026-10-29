@@ -58,17 +58,22 @@ export function postScope(topicScope: string, post: string): string {
   return `${topicScope}:post:${post}`
 }
 
+// Where the words of one send are kept from the moment it leaves until it is settled: beside the scope's draft, by
+// its TID, so another tab typing in the same scope never writes over a send that has had no answer.
+export function sentKey(key: string, id: string): string {
+  return `${key}:sent:${id}`
+}
+
 // Every draft a participant keeps in a scope and in the scopes under it — a Topic's own and those of replies to its
-// Posts — by key, the scope's own first. Without storage there are none.
+// Posts — with every send kept beside them, by key, the scope's own draft first. Without storage there are none.
 export function draftsUnder(participant: string, scope: string): { key: string; draft: Draft }[] {
   const own = draftKey(participant, scope)
-  const under = own + ':post:'
   const keys: string[] = []
   try {
     const storage = store()
     for (let index = 0; storage && index < storage.length; index++) {
       const key = storage.key(index)
-      if (key === own || key?.startsWith(under)) keys.push(key!)
+      if (key === own || key?.startsWith(own + ':post:') || key?.startsWith(own + ':sent:')) keys.push(key!)
     }
   } catch {
     return []
