@@ -114,11 +114,13 @@ h3 {
   top: 12px;
 }
 
-/* The masthead: sticky at the top, the mark and the name on the left, actions on the right. */
+/* The masthead: sticky at the top, the mark and the name on the left, actions on the right.
+ * It sits under the path bar so the elbow can reach up to the mark, and rises above it while one of
+ * its menus is open. */
 .masthead {
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: 30;
   height: var(--ts-header-height);
   padding: 0 var(--ts-page-gutter);
   display: flex;
@@ -126,6 +128,10 @@ h3 {
   gap: 12px;
   background: var(--ts-surface);
   border-bottom: 1px solid var(--ts-line);
+}
+
+.masthead:has([open], [aria-expanded="true"]) {
+  z-index: 50;
 }
 
 .masthead-actions {
@@ -139,7 +145,7 @@ h3 {
 .path-bar {
   position: sticky;
   top: var(--ts-header-height);
-  z-index: 30;
+  z-index: 40;
   height: var(--ts-pathbar-height);
   padding: 0 var(--ts-page-gutter);
   display: flex;

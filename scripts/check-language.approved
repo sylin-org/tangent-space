@@ -1,1 +1,3 @@
 # Exact phrases the lead has approved for the language check: a line holding one is matched with the phrase removed.
+# The design reference's own note inside the verbatim copy src/client/tests/reference/tokens.json, kept blob-identical for the token parity test.
+Owner gold
