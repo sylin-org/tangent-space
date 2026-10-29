@@ -106,6 +106,19 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         {
             try
             {
+                // A start that fails midway has started some of the host: the writer may be loading its marks on a
+                // pooled connection. Stopping first lets every started service end and the connector clear its
+                // pools, so the folder can go.
+                using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                try
+                {
+                    await application.StopAsync(stopping.Token);
+                }
+                catch (Exception)
+                {
+                    // The host reports the start failure; a stop that fails on a half-started host adds nothing.
+                }
+
                 await application.DisposeAsync();
                 Directory.Delete(folder, recursive: true);
             }
