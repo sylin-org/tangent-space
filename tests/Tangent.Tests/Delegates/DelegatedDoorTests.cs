@@ -69,6 +69,7 @@ public sealed class DelegatedDoorTests
             var shared = await OAuthClient.Get(DelegateClient.Id, Cancellation);
             Assert.NotNull(shared);
             Assert.Equal((false, null, 0), (shared.IsDynamic, shared.ExpiresUtc, shared.RedirectUris.Count));
+            Assert.Equal([OAuthGrantTypes.DeviceCode], shared.GrantTypes);
             Assert.Equal(1, await OAuthClient.Count.Exact(Cancellation));
             using var developmentToken = await tangentSpace.Client.GetAsync("/oauth/dev-token", Cancellation);
             Assert.Equal(HttpStatusCode.NotFound, developmentToken.StatusCode);
@@ -164,9 +165,17 @@ public sealed class DelegatedDoorTests
 
         using var approved = await Decide(browser, device, "approve");
         Assert.Equal(HttpStatusCode.Redirect, approved.StatusCode);
-        Assert.Equal(BaseUrl + "/consent/done", approved.Headers.Location?.ToString());
-        var done = await Html(browser, "/consent/done");
-        Assert.Contains("If you approved, go back to the device or agent: it acts as you here now.", done);
+        Assert.StartsWith(BaseUrl + "/consent/done?outcome=", approved.Headers.Location?.ToString());
+        var done = await Html(browser, approved.Headers.Location!.PathAndQuery);
+        Assert.Contains("<h1 id=\"consent-title\" class=\"sign-in-title\">You approved the agent</h1>", done);
+        Assert.Contains("Go back to the device or agent: it acts as you here now.", done);
+
+        // The done page says only what Koan wrote for this person: a plain address, a forged outcome and the genuine one
+        // read by a visitor show nothing decided.
+        Assert.Contains("class=\"sign-in-title\">Nothing to show</h1>", await Html(browser, "/consent/done"));
+        Assert.Contains("class=\"sign-in-title\">Nothing to show</h1>", await Html(browser, "/consent/done?outcome=Approved"));
+        using (var visitor = new Browser(tangentSpace))
+            Assert.Contains("class=\"sign-in-title\">Nothing to show</h1>", await Html(visitor, approved.Headers.Location!.PathAndQuery));
 
         using var granted = await Poll(tangentSpace, device);
         using var body = JsonDocument.Parse(await granted.Content.ReadAsStringAsync(Cancellation));
@@ -175,6 +184,40 @@ public sealed class DelegatedDoorTests
         Assert.Equal("Bearer", body.RootElement.GetProperty("token_type").GetString());
         Assert.Equal(900, body.RootElement.GetProperty("expires_in").GetInt32());
         Assert.True(body.RootElement.TryGetProperty("refresh_token", out _));
+    }
+
+    [Fact]
+    public async Task Under_a_base_url_with_a_path_the_consent_page_and_sign_in_return_with_the_path_and_the_person_decides_there()
+    {
+        const string underPath = "https://www.example.com/notes";
+        await using var notes = await TangentSpaceFixture.StartAsync(TestConnector((TangentModule.BaseUrlKey, underPath)), ct: Cancellation);
+        await Place(notes);
+        using var device = await Json(notes.Client, "/notes/oauth/device", Form(("client_id", DelegateClient.Id), ("resource", underPath)));
+        var code = device.RootElement.GetProperty("user_code").GetString()!;
+        var consent = "/notes" + AtCode(code);
+
+        // The visitor is sent to sign in with the consent page, base path and code, as where to come back to.
+        using var browser = new Browser(notes);
+        using (var visitor = await browser.Client.GetAsync(consent, Cancellation))
+            Assert.Equal(underPath + "/sign-in?return=" + Uri.EscapeDataString(consent), visitor.Headers.Location?.ToString());
+
+        // The sign-in page hands the connector a return under the base path, which Koan keeps (SEC-0029).
+        using var signIn = await Json(notes.Client, "/notes/sign-in?return=" + Uri.EscapeDataString(consent));
+        var comeBack = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
+            new Uri(signIn.RootElement.GetProperty("challenge").GetString()!).Query)["return"].ToString();
+        Assert.Equal("/notes/sign-in?return=" + Uri.EscapeDataString(consent), comeBack);
+        using var arrived = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example", under: "/notes", comeBack: comeBack);
+        var page = await arrived.Content.ReadAsStringAsync(Cancellation);
+
+        Assert.Equal(HttpStatusCode.OK, arrived.StatusCode);
+        Assert.Equal(consent, arrived.RequestMessage!.RequestUri!.PathAndQuery);
+        Assert.Contains($"The device or agent that showed you the code <strong>{code}</strong> asks to act as you in Field notes.", page);
+        Assert.Contains($"action=\"{underPath}/oauth/request/{code.Replace("-", "")}/approve\"", page);
+
+        using var approved = await browser.Client.PostAsync("/notes/oauth/request/" + code.Replace("-", "") + "/approve",
+            new FormUrlEncodedContent(await browser.Token(consent, Cancellation)), Cancellation);
+        Assert.StartsWith(underPath + "/consent/done?outcome=", approved.Headers.Location?.ToString());
+        Assert.Contains("class=\"sign-in-title\">You approved the agent</h1>", await Html(browser, approved.Headers.Location!.PathAndQuery));
     }
 
     [Fact]
@@ -201,10 +244,17 @@ public sealed class DelegatedDoorTests
         // the person.
         var elsewhere = tangentSpace.Services.GetRequiredService<IIssuer>().Issue(
             new TrustClaims { Subject = Leo }, TimeSpan.FromMinutes(5), audience: "https://elsewhere.example");
-        var foreign = await Answer(tangentSpace.Client, "/t/studio", bearer: elsewhere);
-        Assert.Equal((HttpStatusCode.Unauthorized, "Token not accepted"), (foreign.Status, foreign.Title));
+        using (var foreign = new HttpRequestMessage(HttpMethod.Get, "/t/studio") { Headers = { Authorization = new AuthenticationHeaderValue("Bearer", elsewhere) } })
+        {
+            foreign.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var refused = await tangentSpace.Client.SendAsync(foreign, Cancellation);
+            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+            Assert.Equal("Bearer error=\"invalid_token\"", refused.Headers.WwwAuthenticate.ToString());
+            Assert.Equal("", await refused.Content.ReadAsStringAsync(Cancellation));
+        }
 
-        // A delegate cannot decide for the person: neither the consent page nor Koan's approve takes its token.
+        // A delegate cannot decide for the person: the consent page refuses its token, and Koan's approve, deciding by
+        // the session alone, finds nobody signed in.
         var another = await Device(tangentSpace);
         var page = await Answer(tangentSpace.Client, AtCode(another.Code), bearer: token);
         using var approve = new HttpRequestMessage(HttpMethod.Post, "/oauth/request/" + another.Code.Replace("-", "") + "/approve")
@@ -214,7 +264,8 @@ public sealed class DelegatedDoorTests
         };
         using var approval = await tangentSpace.Client.SendAsync(approve, Cancellation);
         Assert.Equal(HttpStatusCode.Forbidden, page.Status);
-        Assert.Equal(HttpStatusCode.Forbidden, approval.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, approval.StatusCode);
+        Assert.Equal("login_required", await ErrorOf(approval));
         using var stillPending = await Poll(tangentSpace, another);
         Assert.Equal("authorization_pending", await Error(stillPending));
     }
@@ -229,7 +280,12 @@ public sealed class DelegatedDoorTests
 
         var denied = await Device(tangentSpace);
         using (var deny = await Decide(browser, denied, "deny"))
-            Assert.Equal(BaseUrl + "/consent/done", deny.Headers.Location?.ToString());
+        {
+            Assert.StartsWith(BaseUrl + "/consent/done?outcome=", deny.Headers.Location?.ToString());
+            var done = await Html(browser, deny.Headers.Location!.PathAndQuery);
+            Assert.Contains("<h1 id=\"consent-title\" class=\"sign-in-title\">You denied the agent</h1>", done);
+            Assert.Contains("It was told no and holds nothing.", done);
+        }
         using (var poll = await Poll(tangentSpace, denied))
             Assert.Equal("access_denied", await Error(poll));
 
@@ -329,31 +385,52 @@ public sealed class DelegatedDoorTests
     }
 
     [Fact]
-    public async Task A_code_a_self_registered_client_asked_for_is_refused_under_its_field_with_no_name_it_chose_and_no_approval()
+    public async Task A_self_registered_client_is_refused_the_device_flow_so_no_code_it_asked_for_reaches_the_consent_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
         await Place(tangentSpace);
-        var impostor = await Register(tangentSpace, "Field notes official app", "http://127.0.0.1:1/cb");
-        using var device = await Json(tangentSpace.Client, "/oauth/device", Form(("client_id", impostor), ("resource", BaseUrl)));
-        var complete = device.RootElement.GetProperty("verification_uri_complete").GetString()!;
-        using var browser = new Browser(tangentSpace);
-        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+        using var registered = await Json(tangentSpace.Client, "/oauth/register",
+            JsonContent("{\"client_name\":\"Field notes official app\",\"redirect_uris\":[\"http://127.0.0.1:1/cb\"],\"grant_types\":[\"" + DeviceGrant + "\"]}"),
+            HttpStatusCode.Created);
+        var impostor = registered.RootElement.GetProperty("client_id").GetString()!;
+        var devices = await DeviceCode.Count.Exact(Cancellation);
 
-        var refused = await Answer(browser.Client, new Uri(complete).PathAndQuery, html: true);
-        var page = WebUtility.HtmlDecode(refused.Body);
+        using var device = await tangentSpace.Client.PostAsync("/oauth/device", Form(("client_id", impostor), ("resource", BaseUrl)), Cancellation);
 
-        Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
-        Assert.Contains("id=\"consent-code-failure\">This code was not issued for this Tangent Space’s device door, so it can’t be approved here.</p>", page);
-        Assert.DoesNotContain("Field notes official app", page);
-        Assert.DoesNotContain("/approve", page);
-        Assert.DoesNotContain("/deny", page);
-        using var poll = await tangentSpace.Client.PostAsync("/oauth/token", Form(("grant_type", DeviceGrant),
-            ("device_code", device.RootElement.GetProperty("device_code").GetString()!), ("client_id", impostor)), Cancellation);
-        Assert.Equal("authorization_pending", await Error(poll));
+        Assert.Equal(["authorization_code"], Strings(registered.RootElement.GetProperty("grant_types")));
+        Assert.Equal("unauthorized_client", await Error(device));
+        Assert.Equal(devices, await DeviceCode.Count.Exact(Cancellation));
+        // The shared client is the only one allowed the Device flow, so every code the consent page finds is its.
+        Assert.Equal([DelegateClient.Id], (await OAuthClient.All(Cancellation)).Where(client => client.AllowsGrant(DeviceGrant)).Select(client => client.Id));
     }
 
     [Fact]
-    public async Task A_bearer_never_reaches_the_authorize_or_request_endpoints_so_a_remembered_consent_issues_no_code_to_a_delegate()
+    public async Task A_delegate_client_row_without_the_device_flow_is_given_it_at_the_next_start()
+    {
+        var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
+        try
+        {
+            await using (var first = await TangentSpaceFixture.StartAsync(TestConnector(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
+            {
+                var row = (await OAuthClient.Get(DelegateClient.Id, Cancellation))!;
+                row.GrantTypes = [];
+                await row.Save(Cancellation);
+                Assert.False((await OAuthClient.Get(DelegateClient.Id, Cancellation))!.AllowsGrant(DeviceGrant));
+            }
+
+            await using var restarted = await TangentSpaceFixture.StartAsync(TestConnector(("Tangent:DataFolder", dataFolder)), ct: Cancellation);
+            Assert.Equal([OAuthGrantTypes.DeviceCode], (await OAuthClient.Get(DelegateClient.Id, Cancellation))!.GrantTypes);
+            Assert.Equal(BaseUrl + "/consent", (await Device(restarted)).VerificationUri);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_bearer_decides_nothing_at_the_authorize_or_request_endpoints_so_a_remembered_consent_issues_no_code_to_a_delegate()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
         await Place(tangentSpace);
@@ -387,10 +464,15 @@ public sealed class DelegatedDoorTests
         using var request = await agent.GetAsync("/oauth/request/" + another.Code.Replace("-", ""), Cancellation);
         using var deny = await agent.PostAsync("/oauth/request/" + another.Code.Replace("-", "") + "/deny", Form(("unused", "")), Cancellation);
 
-        Assert.Equal(HttpStatusCode.Forbidden, authorize.StatusCode);
-        Assert.Null(authorize.Headers.Location);
-        Assert.Equal(HttpStatusCode.Forbidden, request.StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, deny.StatusCode);
+        // Koan reads only the person's session there: the remembered consent sends the delegate to the consent page
+        // instead of to its client, the request reads as nobody signed in, and the denial needs the person.
+        Assert.Equal(HttpStatusCode.Redirect, authorize.StatusCode);
+        Assert.StartsWith(BaseUrl + "/consent?rid=", new Uri(new Uri(BaseUrl), authorize.Headers.Location!).AbsoluteUri);
+        Assert.Equal(HttpStatusCode.OK, request.StatusCode);
+        using (var projection = JsonDocument.Parse(await request.Content.ReadAsStringAsync(Cancellation)))
+            Assert.False(projection.RootElement.GetProperty("user").GetProperty("loggedIn").GetBoolean());
+        Assert.Equal(HttpStatusCode.Unauthorized, deny.StatusCode);
+        Assert.Equal("login_required", await ErrorOf(deny));
         Assert.Equal(codes, await AuthorizationCode.Count.Exact(Cancellation));
         using var poll = await Poll(tangentSpace, another);
         Assert.Equal("authorization_pending", await Error(poll));
@@ -542,6 +624,13 @@ public sealed class DelegatedDoorTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
         Assert.False(body.RootElement.TryGetProperty("access_token", out _));
+        return body.RootElement.GetProperty("error").GetString()!;
+    }
+
+    /// <summary>The OAuth error an answer of any status carries.</summary>
+    private static async Task<string> ErrorOf(HttpResponseMessage response)
+    {
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
         return body.RootElement.GetProperty("error").GetString()!;
     }
 

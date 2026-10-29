@@ -29,11 +29,13 @@ public sealed partial class Browser : IDisposable
     /// <summary>Signs in through Koan's test connector as a persona whose subject is <paramref name="did"/>, coming back
     /// to the sign-in page, and answers with where the redirects ended. A <paramref name="handle"/> reaches the
     /// sign-in as the verified handle claim the atproto connector carries; <paramref name="under"/> is the base URL's
-    /// path, when it has one.</summary>
-    public async Task<HttpResponseMessage> SignIn(string name, string did, CancellationToken ct, string? handle = null, string under = "")
+    /// path, when it has one; <paramref name="comeBack"/> is where the challenge returns, the sign-in page sending the
+    /// person on to the door unless it is given.</summary>
+    public async Task<HttpResponseMessage> SignIn(string name, string did, CancellationToken ct, string? handle = null, string under = "",
+        string? comeBack = null)
     {
         _jar.Add(_address, new Cookie(PersonaCookie, Uri.EscapeDataString(name + "|" + did)) { Path = "/" });
-        return await Follow(HttpMethod.Get, under + "/auth/test/challenge?return=" + Uri.EscapeDataString(under + "/sign-in?return=" + under + "/"), ct,
+        return await Follow(HttpMethod.Get, under + "/auth/test/challenge?return=" + Uri.EscapeDataString(comeBack ?? under + "/sign-in?return=" + under + "/"), ct,
             rewrite: target => handle is not null && target.AbsolutePath.EndsWith(Authorize, StringComparison.Ordinal)
                 ? new Uri(target + "&claim." + Uri.EscapeDataString("atproto:handle") + "=" + Uri.EscapeDataString(handle))
                 : target);

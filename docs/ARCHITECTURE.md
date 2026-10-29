@@ -25,8 +25,8 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 | The canonical base URL, served under its path and nothing outside it; trusted proxies for one hop | `Sylin.Koan.Web` (`Koan:Web:ApplicationUrl`, `Koan:Web:TrustedProxies`) | every absolute link, the pointers and the descriptor; the reverse proxy's scheme |
 | Durable person, external identities, sessions, audit, erasure | `Sylin.Koan.Identity` · `Sylin.Koan.Identity.Web` | the participant spine; the atproto DID as the person's external identity |
 | Roles with permissions, members and cached bags; per-resource overwrites resolved in Discord's order, cached per resource; effective access composed from contributors; the access explainer and its deciding fact | `Sylin.Koan.Identity` | the Discord role model's roles and bags; a Tangent's overwrites and their resolution; the deciding overwrite a gate names |
-| atproto sign-in and authorized sessions | `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | sign-in; record and blob operations under a participant's session |
-| OAuth 2.1 authorization server: code with PKCE, Device flow, loopback DCR, consent seam, revocable grants, persisted ES256 keys | `Sylin.Koan.Web.Auth.Server` | the delegated agent door; the installation's signing keys |
+| atproto sign-in and authorized sessions; the resource edge that authenticates a request carrying a bearer by that bearer alone, for the base URL, as the person who approved it | `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | sign-in; record and blob operations under a participant's session; a delegate read as its person on every page (`Koan:Web:Auth:ResourceServer:Enabled`) |
+| OAuth 2.1 authorization server: code with PKCE, the Device flow for the clients allowed it, loopback DCR, the consent seam in process (`ConsentPage`: the pending request, where approve and deny post, and the outcome the done page reads), decisions by the person's session alone, revocable grants, persisted ES256 keys | `Sylin.Koan.Web.Auth.Server` | the delegated agent door: the shared client, the consent and done pages' lookups; the installation's signing keys |
 | ES256 issuer, JWKS, inbound bearer scheme | `Sylin.Koan.Security.Trust` | credentials minted by the proof bridge; bearer validation |
 | Content-addressed media, lazy pipelines, recipes | `Sylin.Koan.Media.Core` · `Sylin.Koan.Media.Web` on `Sylin.Koan.Storage.Connector.Local` | every image a Post references; covers; derivatives |
 | Social cards | `Sylin.Koan.Web.OpenGraph` | link previews for articles and topics |
@@ -140,7 +140,7 @@ Feeds are a Render output, not a Connection. Inbound replies arrive as `Referenc
 ## 10. Identity
 
 - **Sign-in** is atproto OAuth through Koan's connector; Koan's reconciler turns the DID into a durable person with the DID as its external identity. The `Participant` row is Tangent's facet on that person, created at the first sign-in by Tangent's sign-in hook through the writer, with no question asked.
-- **A delegated agent** ("my agent acts as me") is an OAuth client of the Tangent Space through `Koan.Web.Auth.Server`: Companion Lobby registers as a loopback client and runs the code flow; any other client, local or remote, uses the Device flow against a pre-registered public client. The person approves on the consent page Tangent provides. All clients are public; there are no client secrets.
+- **A delegated agent** ("my agent acts as me") is an OAuth client of the Tangent Space through `Koan.Web.Auth.Server`: Companion Lobby registers as a loopback client and runs the code flow; any other client, local or remote, uses the Device flow against a pre-registered public client, the only client allowed it. The person approves on the consent page Tangent provides, which renders what Koan's `ConsentPage` finds and posts to Koan's approve and deny under the one form-token rule; the done page says what Koan recorded that the person decided. Koan decides authorize, approve and deny by the person's session alone, never by a bearer. Koan's resource edge reads a delegate's bearer as the person on every page, accepts only a token issued for the base URL, and answers any other with 401 `Bearer error="invalid_token"`. All clients are public; there are no client secrets.
 - **A DID-native agent** (its own participant) arrives through the proof bridge: an atproto service-auth token addressed to this Tangent Space, verified by the connector, exchanged for a bearer that Trust's issuer mints and Trust's bearer scheme accepts. Revocation is Koan's grant revocation.
 - **The installation's identity** is a `did:web` served from the issuer's ES256 key ring at `<base>/did.json` (`did:web` resolves paths), the same keys Auth.Server publishes as JWKS.
 - **Proprietor and operator** are two fields on the settings row, declared at first run, stated in the descriptor and on the about page. The operator is a person.
@@ -161,7 +161,7 @@ Koan jobs, each a reader that writes through the writer: profile capture, handle
 ```
 src/server/
   Space/          TangentSpace row, first run, tangent.json, llms.txt, did.json
-  Delegates/      the delegated agent door: Koan's OAuth server composed, the shared client, a bearer read as its person, the consent page
+  Delegates/      the delegated agent door: Koan's OAuth server and resource edge composed, the shared client, the consent and done pages
   Tangents/       Tangent, overwrites, the Tangent page and settings
   Posts/          Post, Markdown, slugs, topic queries, windows, media references
   Participants/   Participant facet, standing, profile cache job, the proof bridge, profile page
