@@ -1,8 +1,8 @@
 @using System.Globalization
 @using global::Tangent.Render
-@* The seen control at the end of a Topic's window, while what the page shows reaches past the reader's checkpoint: a
-   button that moves the checkpoint through the window's last sequence. The seen island posts it by itself once the
-   end of the window has been on screen. *@
+@* The seen control at the end of a Topic's window, while the window continues from the reader's checkpoint and
+   reaches past it: a button that moves the checkpoint through the window's last sequence. The seen island posts it by
+   itself once the end of the window has been on screen. *@
 @if (Model is { } seen)
 {
     <form class="topic-seen" method="post" action="@seen.Action" data-island="seen">

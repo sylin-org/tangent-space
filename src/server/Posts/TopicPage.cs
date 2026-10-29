@@ -12,7 +12,8 @@ namespace Tangent.Posts;
 /// <see cref="Anchor"/> is the Post the window was opened around, where its address named one. <see cref="Can"/> is what
 /// the reader holds on the Topic — <c>Post</c> among it when they may reply — and <see cref="Gate"/> the one reason they
 /// may not, where they may not. For a signed-in reader, <see cref="Seen"/> is the form that moves their checkpoint on
-/// the Topic through what the page shows, present while that reaches past it, and <see cref="Watching"/> the form that
+/// the Topic through what the page shows, present while the window continues from that checkpoint and reaches past
+/// it, so the page never offers to skip a reply it did not show, and <see cref="Watching"/> the form that
 /// sets or clears their watch flag on it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for.</summary>
@@ -76,8 +77,9 @@ public sealed record TopicPage(
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so the same window for
-    /// the same reader on the same day answers the same tag, and a reply, an edit, a removal, a changed <c>can</c> or a
-    /// new day changes it.</summary>
+    /// a visitor on the same day answers the same tag, and a reply, an edit, a removal, a changed <c>can</c> or a new day
+    /// changes it. A signed-in reader's page carries their forms with a new antiforgery token every time, so its version
+    /// never repeats and it is never answered as unchanged.</summary>
     public static long Version(TopicPage page)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;
 }

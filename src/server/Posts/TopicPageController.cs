@@ -93,9 +93,14 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + (anchor is null ? "" : "/" + anchor.Id));
         var space = rows.Space;
         // A signed-in reader's page carries their forms with a fresh antiforgery token, so it is never stored or
-        // revalidated. The window shows the root and its replies through its last, the root alone when it holds none.
+        // revalidated. The page shows the root and the window's replies through its last, the root alone when it holds
+        // none. The seen form is offered only for a window that continues from what the reader has seen — its first
+        // reply at most one past their checkpoint, or past the root it shows — so the page never offers to skip a reply
+        // it did not show.
         var token = reader is null ? null : FormToken.For(HttpContext);
+        var seenSeq = seen?.Seq ?? Checkpoint.Nothing;
         var shownThrough = window.Replies.Count == 0 ? 0 : window.High;
+        var continues = window.Low <= Math.Max(seenSeq, 0) + 1;
         if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
         return Ok(new TopicPage(
             root.Id,
@@ -109,7 +114,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             root.ReplyCount,
             topicCan.Can,
             topicCan.Gate(Bit.Post),
-            token is not null && shownThrough > (seen?.Seq ?? Checkpoint.Nothing)
+            token is not null && continues && shownThrough > seenSeq
                 ? new TopicSeen(address + "/" + CheckpointController.SeenSegment, shownThrough, token)
                 : null,
             token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, seen?.Watch ?? false, token),

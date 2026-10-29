@@ -85,6 +85,45 @@ public sealed class SeenAndWatchTests
     }
 
     [Fact]
+    public async Task A_window_opened_past_a_gap_offers_no_seen_form_and_reading_from_the_first_unread_to_the_end_moves_the_checkpoint_to_the_last_reply()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        var replies = new List<Post>();
+        for (var reply = 1; reply <= 60; reply++) replies.Add(await Replied(writer, root, Mo, "Reply number " + reply + "."));
+        using var bea = await SignedIn(tangentSpace, Bea);
+        var seenPath = TopicPath(root) + "/" + CheckpointController.SeenSegment;
+        await Form(bea, TopicPath(root), seenPath, new Dictionary<string, string> { ["through"] = "10" });
+        Assert.Equal((long?)10, await SeenThrough(Bea, root));
+
+        var anchored = await Send(bea.Client, HttpMethod.Get, PostPath(root, replies[49]), json: true);
+        Assert.Equal(HttpStatusCode.OK, anchored.Status);
+        Assert.True(anchored.Json.GetProperty("from").GetInt64() > 11, "The window around the fiftieth reply leaves a gap after the checkpoint.");
+        Assert.False(anchored.Json.TryGetProperty("seen", out _));
+        Assert.DoesNotContain("Mark seen", (await Send(bea.Client, HttpMethod.Get, PostPath(root, replies[49]))).Body);
+        Assert.Equal((long?)10, await SeenThrough(Bea, root));
+
+        if (anchored.Json.TryGetProperty("newer", out var newer))
+            Assert.False((await Send(bea.Client, HttpMethod.Get, newer.GetString()![BaseUrl.Length..], json: true)).Json.TryGetProperty("seen", out _));
+
+        using var ada = await SignedIn(tangentSpace, Ada);
+        Assert.False((await Send(ada.Client, HttpMethod.Get, PostPath(root, replies[49]), json: true)).Json.TryGetProperty("seen", out _));
+        Assert.Null(await SeenThrough(Ada, root));
+
+        for (var turn = 0; turn < 10 && await SeenThrough(Bea, root) < 60; turn++)
+        {
+            var page = (await Send(bea.Client, HttpMethod.Get, TopicPath(root), json: true)).Json;
+            var seen = page.GetProperty("seen");
+            Assert.Equal((await SeenThrough(Bea, root))!.Value + 1, page.GetProperty("from").GetInt64());
+            var posted = await Form(bea, TopicPath(root), seenPath, new Dictionary<string, string> { ["through"] = seen.GetProperty("through").GetInt64().ToString(System.Globalization.CultureInfo.InvariantCulture) });
+            Assert.Equal(HttpStatusCode.SeeOther, posted.Status);
+        }
+
+        Assert.Equal((long?)60, await SeenThrough(Bea, root));
+    }
+
+    [Fact]
     public async Task A_mention_added_by_editing_a_post_the_reader_already_read_is_listed_on_the_door()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
