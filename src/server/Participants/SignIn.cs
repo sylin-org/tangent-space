@@ -22,7 +22,8 @@ public sealed record SignIn(
     public const int HandleLimit = 253;
 
     /// <summary>What each of Koan's sign-in failure codes says on the page: a failure of the handle shows under the
-    /// field, every other one above the form.</summary>
+    /// field, every other one above the form. "Sign-in" is written with a non-breaking hyphen, so it never breaks across
+    /// lines.</summary>
     private static readonly Dictionary<string, (string Words, bool OfHandle)> Failures = new(StringComparer.Ordinal)
     {
         [SignInFailureReturn.Code(SignInFailure.HandleUnresolved)] =
@@ -30,11 +31,11 @@ public sealed record SignIn(
         [SignInFailureReturn.Code(SignInFailure.ProviderUnreachable)] =
             ("Your account’s provider couldn’t be reached. Continue to try again in a moment.", false),
         [SignInFailureReturn.Code(SignInFailure.AccessDenied)] =
-            ("The sign-in was declined on your provider’s page. Continue to try again.", false),
+            ("The sign‑in was declined on your provider’s page. Continue to try again.", false),
         [SignInFailureReturn.Code(SignInFailure.CallbackMismatch)] =
-            ("The sign-in came back without the request it began with. Continue to start again.", false),
+            ("The sign‑in came back without the request it began with. Continue to start again.", false),
         [SignInFailureReturn.Code(SignInFailure.Failed)] =
-            ("Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.", false)
+            ("Your provider didn’t confirm the sign‑in. Continue, then approve it there.", false)
     };
 
     /// <summary>The page for a visitor after the failure Koan's code names, in words, keeping <paramref name="handle"/>
