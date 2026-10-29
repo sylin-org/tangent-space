@@ -1,7 +1,8 @@
 namespace Tangent.Writer;
 
 /// <summary>What a sender receives for its command: the result, a refusal with its reason, a conflict, or the
-/// failure. Only <see cref="Done"/> follows a commit; every other outcome leaves no row behind.</summary>
+/// failure. Only <see cref="Done"/> follows a commit; every other outcome leaves no row of the command's transaction
+/// behind.</summary>
 public abstract record Outcome<TResult>
 {
     private Outcome() { }

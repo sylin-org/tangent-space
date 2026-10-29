@@ -2,9 +2,9 @@ using Koan.Identity.Roles;
 
 namespace Tangent.Access;
 
-/// <summary>What a role or an overwrite holds. On a Koan role a bit is the permission token <c>global:</c> followed by
-/// its name, which Koan compiles into the member's bag; in an overwrite's allow or deny it is the name alone.
-/// <see cref="Administrator"/> implies all.</summary>
+/// <summary>What a role or an overwrite holds. On a Koan role and in a Koan overwrite's allow or deny, a bit is the
+/// permission token <c>global:</c> followed by its name, except <see cref="Administrator"/>, which is Koan's
+/// <see cref="RoleTokens.Administrator"/>: a role alone grants it, and it implies all.</summary>
 [Flags]
 public enum Bit
 {
@@ -37,37 +37,26 @@ public static class Bits
         Bit.ManageTangent, Bit.ManageRoles, Bit.ManageStanding, Bit.ManageSpace, Bit.Administrator
     ];
 
-    private static readonly Dictionary<string, Bit> ByName = Each.ToDictionary(bit => bit.ToString(), StringComparer.Ordinal);
+    private static readonly Dictionary<string, Bit> ByToken = Each.ToDictionary(Token, StringComparer.Ordinal);
 
-    /// <summary>The permission token a Koan role holds for this one bit.</summary>
-    public static string Token(Bit bit) => RoleTokens.GlobalPrefix + bit;
+    /// <summary>The permission token a Koan role or overwrite holds for this one bit.</summary>
+    public static string Token(Bit bit) => bit == Bit.Administrator ? RoleTokens.Administrator : RoleTokens.GlobalPrefix + bit;
 
-    /// <summary>The permission tokens a Koan role holds for these bits.</summary>
-    public static IReadOnlyList<string> Tokens(Bit bits) => Names(bits).Select(name => RoleTokens.GlobalPrefix + name).ToList();
+    /// <summary>The permission tokens a Koan role or overwrite holds for these bits.</summary>
+    public static IReadOnlyList<string> Tokens(Bit bits) => Each.Where(bit => bits.HasFlag(bit)).Select(Token).ToList();
 
     /// <summary>The names of these bits, in order.</summary>
     public static IReadOnlyList<string> Names(Bit bits) => Each.Where(bit => bits.HasFlag(bit)).Select(bit => bit.ToString()).ToList();
 
-    /// <summary>The bits these names spell; a name that is not a bit counts for nothing.</summary>
-    public static Bit Named(IEnumerable<string> names)
+    /// <summary>The bits among permission tokens: each token that is a bit's; every other token counts for nothing.</summary>
+    public static Bit InTokens(IEnumerable<string> tokens)
     {
         var bits = Bit.None;
-        foreach (var name in names)
+        foreach (var token in tokens)
         {
-            if (ByName.TryGetValue(name, out var bit)) bits |= bit;
+            if (ByToken.TryGetValue(token, out var bit)) bits |= bit;
         }
 
         return bits;
     }
-
-    /// <summary>The bits among a bag's tokens: each <c>global:</c> token that names one; every other token counts for
-    /// nothing.</summary>
-    public static Bit InTokens(IEnumerable<string> tokens) =>
-        Named(tokens.Where(token => token.StartsWith(RoleTokens.GlobalPrefix, StringComparison.Ordinal))
-            .Select(token => token[RoleTokens.GlobalPrefix.Length..]));
-
-    /// <summary>Whether a bag token is a role's id: not <c>everyone</c>, not <c>authenticated</c>, not a permission.</summary>
-    public static bool IsRoleId(string token) =>
-        token != RoleTokens.Everyone && token != RoleTokens.Authenticated
-        && !token.StartsWith(RoleTokens.GlobalPrefix, StringComparison.Ordinal);
 }

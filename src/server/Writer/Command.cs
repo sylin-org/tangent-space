@@ -4,6 +4,14 @@ namespace Tangent.Writer;
 /// creates; the writer mints none. It runs against the store and nothing else: no network, no lock.</summary>
 public interface ICommand<TResult>
 {
+    /// <summary>Runs on the loop in the command's turn, before its transaction opens, so no other command runs between
+    /// it and <see cref="Run"/>: for a change Koan commits at once and refuses inside a transaction, such as an
+    /// overwrite on its <c>RoleCollection</c>, that must already hold when the command commits. What it writes is
+    /// durable at once and stays when the command is then refused or fails, so it writes only what is harmless without
+    /// the command's rows. A <see cref="Refusal"/> it throws reaches the sender as the refused outcome and any other
+    /// throw as the failure; either way the command does not run. Most commands have nothing to write here.</summary>
+    Task Prepare(CancellationToken ct) => Task.CompletedTask;
+
     /// <summary>Runs inside the writer's transaction and returns the outcome. A <see cref="Refusal"/> an entity throws
     /// reaches the sender as the refused outcome; any other throw is the failure. Nothing it saves is durable until
     /// the writer commits, and nothing it saves is visible to it before then either.</summary>

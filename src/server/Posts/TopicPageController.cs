@@ -1,8 +1,5 @@
 using System.Globalization;
 using System.Security.Claims;
-using Koan.Core.Hosting.App;
-using Koan.Data.Abstractions;
-using Koan.Identity.Roles;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -22,8 +19,8 @@ namespace Tangent.Posts;
 /// <see cref="After"/> name the window on either side by sequence. At a Post's address the window opens around that
 /// Post, marked; at the root's own address, from the start, the root marked. Reading moves no checkpoint. A reader without <see cref="Bit.View"/> on the Tangent receives its gate,
 /// and one for whom the Tangent is absent — or an address no Topic or Post of this Topic answers — receives what an
-/// address with nothing at it receives. Every read is bounded and keyed: the rows capability is computed from, once for
-/// the page; the Tangent; the root by slug; the anchor by Id; at most two ranges of the window index; the reader's
+/// address with nothing at it receives. Every read is bounded and keyed: the Tangent; the rows capability is computed
+/// from, once for the page; the root by slug; the anchor by Id; at most two ranges of the window index; the reader's
 /// checkpoint on the Topic; and the people on the page.</summary>
 public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
@@ -54,10 +51,12 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     private async Task<IActionResult> Read(string tangent, string topic, string? postId, string? before, string? after, CancellationToken ct)
     {
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
-        var rows = await Rows(personId, tangent, ct);
+        // The Tangent's row is read before its overwrites: a Tangent found here committed after its audience was written.
+        var inTangent = await Tangents.Tangent.Get(tangent, ct);
+        var rows = await Capabilities.LoadRows(personId, tangent, ct);
         var place = rows.For(null);
         if (!place.Exists) return Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
-        if (await Tangents.Tangent.Get(tangent, ct) is not { } tangentRow) return Gated(Capabilities.Absent);
+        if (inTangent is not { } tangentRow) return Gated(Capabilities.Absent);
         if (!Slug.IsValid(topic) || await TopicWindow.Topic(tangentRow.Id, topic, ct) is not { } root) return Gated(Capabilities.Absent);
 
         Post? anchor = null;
@@ -123,7 +122,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, and where it is
     /// edited where they may edit or remove it.</summary>
-    private static TopicPage.Post Shown(Post post, Post root, string topicAddress, ReaderRows rows,
+    private static TopicPage.Post Shown(Post post, Post root, string topicAddress, Capabilities.Rows rows,
         IReadOnlyDictionary<string, TangentPage.Author> people, Checkpoint? seen, Participant? reader)
     {
         var address = topicAddress + "/" + Uri.EscapeDataString(post.Id);
@@ -190,33 +189,6 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     {
         var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
         return (participant.Profile.DisplayName is { Length: > 0 } name ? name : handle, handle);
-    }
-
-    /// <summary>The rows what the reader holds is computed from, read once for the page, each bounded: the participant,
-    /// Koan's bag for them with the <see cref="Roles.Everyone"/> role's own permissions beside it, the settings row,
-    /// and the Tangent's overwrites for the subjects the bag names — the reads <see cref="Capabilities.Load"/> makes,
-    /// so that <see cref="Capabilities.For"/> answers for the Topic and every Post of the window without a read per
-    /// Post.</summary>
-    private sealed record ReaderRows(Participant? Participant, IReadOnlyList<string> Tokens, TangentSpace Space,
-        IReadOnlyList<Overwrite> Overwrites, DateTimeOffset Now)
-    {
-        public Capabilities For(Post? post, Post? root = null) => Capabilities.For(Participant, Tokens, Space, Overwrites, Now, post, root);
-    }
-
-    private static async Task<ReaderRows> Rows(string? personId, string tangentId, CancellationToken ct)
-    {
-        var participant = string.IsNullOrWhiteSpace(personId) ? null : await Participant.Get(personId, ct);
-        var roles = AppHost.GetRequiredService<RoleCollection>(nameof(TopicPageController));
-        var bag = await roles.Bag(participant?.Id, authenticated: participant is not null, ct);
-        var everyone = await roles.Get(Roles.Everyone, ct);
-        IReadOnlyList<string> tokens = everyone is null ? bag.Tokens.ToList() : [.. bag.Tokens, .. everyone.Permissions];
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
-        var subjects = bag.Tokens.Where(Bits.IsRoleId).Append(Overwrite.Everyone).ToList();
-        if (participant is not null) subjects.Add(participant.Id);
-        var overwrites = await Overwrite.Query(
-            overwrite => overwrite.TangentId == tangentId && subjects.Contains(overwrite.SubjectId),
-            new QueryDefinition { Page = 1, PageSize = subjects.Count }, ct);
-        return new ReaderRows(participant, tokens, space, overwrites, DateTimeOffset.UtcNow);
     }
 
     private string Configured() => baseUrl.Configured

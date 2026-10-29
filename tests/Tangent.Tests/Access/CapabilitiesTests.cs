@@ -9,7 +9,7 @@ namespace Tangent.Access;
 
 /// <summary>The capability table, enumerated: Discord's cases on one Tangent, standing, what a reader may not View,
 /// state and authorship, the gate words in their precedence, and the explanation that names the deciding overwrite.
-/// Every row is the pure function over values; no Tangent Space runs.</summary>
+/// Every row is the pure function over values, Koan's overwrite rows among them; no Tangent Space runs.</summary>
 public sealed class CapabilitiesTests
 {
     private const string Workshop = "the-workshop";
@@ -37,14 +37,26 @@ public sealed class CapabilitiesTests
 
     private static List<string> Moderator() => Bag(Roles.ModeratorBits, Roles.Member, Roles.Moderator);
 
-    private static Overwrite Over(string subject, Bit allow = Bit.None, Bit deny = Bit.None) => new()
+    /// <summary>Koan's overwrite on the Workshop for a role — everyone among them — or a participant.</summary>
+    private static PermissionOverwrite Over(string subject, Bit allow = Bit.None, Bit deny = Bit.None)
     {
-        Id = Overwrite.Key(Workshop, subject),
-        TangentId = Workshop,
-        SubjectId = subject,
-        Allow = [.. Bits.Names(allow)],
-        Deny = [.. Bits.Names(deny)]
-    };
+        var kind = subject == RoleTokens.Everyone || subject.StartsWith(RoleTokens.RolePrefix, StringComparison.Ordinal)
+            ? OverwriteSubjectKind.Role
+            : OverwriteSubjectKind.Person;
+        return new PermissionOverwrite
+        {
+            Id = PermissionOverwrite.KeyFor(Overwrites.Resource(Workshop), kind, subject),
+            ResourceId = Overwrites.Resource(Workshop),
+            SubjectKind = kind,
+            SubjectId = subject,
+            Allow = [.. Bits.Tokens(allow)],
+            Deny = [.. Bits.Tokens(deny)]
+        };
+    }
+
+    /// <summary>The everyone overwrite that gives the Workshop this audience.</summary>
+    private static PermissionOverwrite ForAudience(Audience audience) =>
+        audience == Audience.Public ? Over(RoleTokens.Everyone, allow: Bit.View) : Over(RoleTokens.Everyone, deny: Bit.View);
 
     private static Post Root(string authorId = Leo, bool locked = false, bool removed = false)
     {
@@ -69,8 +81,8 @@ public sealed class CapabilitiesTests
         string? everyone, string? role, string? own, bool held, string? gate)
     {
         var bag = Bag((baseHoldsTopic ? Bit.Topic : Bit.None) | (administrator ? Bit.Administrator : Bit.None), Roles.Member);
-        var overwrites = new List<Overwrite>();
-        if (everyone is not null) overwrites.Add(Over(Overwrite.Everyone, Rule(everyone, Bit.Topic), Rule(everyone, Bit.Topic, deny: true)));
+        var overwrites = new List<PermissionOverwrite>();
+        if (everyone is not null) overwrites.Add(Over(RoleTokens.Everyone, Rule(everyone, Bit.Topic), Rule(everyone, Bit.Topic, deny: true)));
         if (role is not null) overwrites.Add(Over(Roles.Member, Rule(role, Bit.Topic), Rule(role, Bit.Topic, deny: true)));
         if (own is not null) overwrites.Add(Over(Leo, Rule(own, Bit.Topic), Rule(own, Bit.Topic, deny: true)));
 
@@ -85,8 +97,8 @@ public sealed class CapabilitiesTests
     public void An_administrator_holds_every_bit_and_an_overwrite_grants_administrator_to_no_one()
     {
         var administrator = Capabilities.For(Participant(), Bag(Bit.Administrator, Roles.Administrator), PublicPlace,
-            [Over(Overwrite.Everyone, deny: Bits.All), Over(Roles.Administrator, deny: Bits.All), Over(Leo, deny: Bits.All)], Now, Root());
-        var granted = Capabilities.For(Participant(), Member(), PublicPlace, [Over(Overwrite.Everyone, allow: Bit.Administrator)], Now);
+            [Over(RoleTokens.Everyone, deny: Bits.All), Over(Roles.Administrator, deny: Bits.All), Over(Leo, deny: Bits.All)], Now, Root());
+        var granted = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, allow: Bit.Administrator)], Now);
 
         Assert.Equal(Bits.All, administrator.Held);
         Assert.Equal(Bits.Names(Bits.All), administrator.Can);
@@ -97,7 +109,7 @@ public sealed class CapabilitiesTests
     [Fact]
     public void A_role_overwrite_applies_only_to_a_role_in_the_bag_and_the_participants_own_only_to_them()
     {
-        var overwrites = new List<Overwrite> { Over(Roles.Moderator, allow: Bit.Moderate), Over(Ada, allow: Bit.ManageTangent) };
+        var overwrites = new List<PermissionOverwrite> { Over(Roles.Moderator, allow: Bit.Moderate), Over(Ada, allow: Bit.ManageTangent) };
 
         var member = Capabilities.For(Participant(), Member(), PublicPlace, overwrites, Now);
         var moderator = Capabilities.For(Participant(), Bag(Roles.MemberBits, Roles.Member, Roles.Moderator), PublicPlace, overwrites, Now);
@@ -117,7 +129,7 @@ public sealed class CapabilitiesTests
         var appliedPrivate = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, [], Now);
         var visitorPublic = Capabilities.For(null, Visitor, PublicPlace, [], Now);
         var visitorPrivate = Capabilities.For(null, Visitor, PrivatePlace, [], Now);
-        var visitorWidened = Capabilities.For(null, [.. Visitor, .. Bits.Tokens(Roles.MemberBits)], PublicPlace, [Over(Overwrite.Everyone, allow: Bits.All)], Now);
+        var visitorWidened = Capabilities.For(null, [.. Visitor, .. Bits.Tokens(Roles.MemberBits)], PublicPlace, [Over(RoleTokens.Everyone, allow: Bits.All)], Now);
 
         Assert.Equal((Bit.None, false, Capabilities.Absent), (banned.Held, banned.Exists, banned.Gate(Bit.View)));
         Assert.Equal((Bit.View, true, Capabilities.TimedOut), (timedOut.Held, timedOut.Exists, timedOut.Gate(Bit.Post)));
@@ -149,9 +161,9 @@ public sealed class CapabilitiesTests
         var visitorWithoutRoleView = Capabilities.For(null, Visitor, PublicPlace, [], Now);
         var memberOnPrivatePlace = Capabilities.For(Participant(), Member(), PrivatePlace, [], Now);
         var roleWithoutView = Capabilities.For(Participant(), Bag(Bit.Post | Bit.Topic, Roles.Member), PrivatePlace, [], Now);
-        var open = Capabilities.For(null, Visitor, PublicPlace, [Overwrite.ForAudience(Workshop, Audience.Public)], Now);
-        var closed = Capabilities.For(null, Visitor, PublicPlace, [Overwrite.ForAudience(Workshop, Audience.Private)], Now);
-        var member = Capabilities.For(Participant(), Member(), PublicPlace, [Overwrite.ForAudience(Workshop, Audience.Private), Over(Roles.Member, allow: Bit.View)], Now);
+        var open = Capabilities.For(null, Visitor, PublicPlace, [ForAudience(Audience.Public)], Now);
+        var closed = Capabilities.For(null, Visitor, PublicPlace, [ForAudience(Audience.Private)], Now);
+        var member = Capabilities.For(Participant(), Member(), PublicPlace, [ForAudience(Audience.Private), Over(Roles.Member, allow: Bit.View)], Now);
 
         Assert.True(visitorWithoutRoleView.Holds(Bit.View));
         Assert.Equal(OnTangent, memberOnPrivatePlace.Held);
@@ -164,7 +176,7 @@ public sealed class CapabilitiesTests
     [Fact]
     public void What_a_reader_may_not_view_does_not_exist_for_them_and_nothing_else_is_said()
     {
-        IReadOnlyList<Overwrite> closed = [Overwrite.ForAudience(Workshop, Audience.Private)];
+        IReadOnlyList<PermissionOverwrite> closed = [ForAudience(Audience.Private)];
         var member = Capabilities.For(Participant(), Member(), PublicPlace, closed, Now, Root(Leo, locked: true));
         var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, closed, Now, Root(Leo, locked: true));
         var moderator = Capabilities.For(Participant(), Moderator(), PublicPlace, [Over(Roles.Moderator, deny: Bit.View)], Now, Root(Ada, removed: true));
@@ -199,7 +211,7 @@ public sealed class CapabilitiesTests
     {
         var lockedRoot = Root(Leo, locked: true);
         var removedRoot = Root(Leo, removed: true);
-        IReadOnlyList<Overwrite> closed = [Overwrite.ForAudience(Workshop, Audience.Private)];
+        IReadOnlyList<PermissionOverwrite> closed = [ForAudience(Audience.Private)];
 
         var timedOutOnLocked = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, [], Now, lockedRoot);
         var visitorOnLocked = Capabilities.For(null, Visitor, PublicPlace, [], Now, lockedRoot);
@@ -207,7 +219,7 @@ public sealed class CapabilitiesTests
         var unseenLocked = Capabilities.For(Participant(), Member(), PublicPlace, closed, Now, lockedRoot);
         var unseenRemoved = Capabilities.For(Participant(), Member(), PublicPlace, closed, Now, removedRoot);
         var memberOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, [], Now, lockedRoot);
-        var deniedOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, [Over(Overwrite.Everyone, deny: Bit.Post)], Now, lockedRoot);
+        var deniedOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, deny: Bit.Post)], Now, lockedRoot);
         var visitorOnRemoved = Capabilities.For(null, Visitor, PublicPlace, [], Now, removedRoot);
         var memberOnRemoved = Capabilities.For(Participant(), Member(), PublicPlace, [], Now, removedRoot);
         var moderatorOnRemoved = Capabilities.For(Participant(), Moderator(), PublicPlace, [], Now, removedRoot);
@@ -228,12 +240,12 @@ public sealed class CapabilitiesTests
     [Fact]
     public void For_a_verb_the_bag_denies_the_answer_names_the_deciding_role_or_overwrite()
     {
-        var everyone = Capabilities.For(Participant(), Member(), PublicPlace, [Over(Overwrite.Everyone, deny: Bit.Topic)], Now);
+        var everyone = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, deny: Bit.Topic)], Now);
         var role = Capabilities.For(Participant(), Bag(Roles.MemberBits, Roles.Member, Roles.Moderator), PublicPlace,
-            [Over(Overwrite.Everyone, allow: Bit.Post), Over(Roles.Moderator, deny: Bit.Post)], Now);
+            [Over(RoleTokens.Everyone, allow: Bit.Post), Over(Roles.Moderator, deny: Bit.Post)], Now);
         var own = Capabilities.For(Participant(), Member(), PublicPlace, [Over(Roles.Member, allow: Bit.Post), Over(Leo, deny: Bit.Post)], Now);
         var noRole = Capabilities.For(Participant(), Member(), PublicPlace, [], Now);
-        var overruled = Capabilities.For(Participant(), Member(), PublicPlace, [Over(Overwrite.Everyone, deny: Bit.Topic), Over(Leo, allow: Bit.Topic)], Now);
+        var overruled = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, deny: Bit.Topic), Over(Leo, allow: Bit.Topic)], Now);
 
         Assert.Equal("everyone denies Topic", everyone.Gate(Bit.Topic));
         Assert.Equal("role:moderator denies Post", role.Gate(Bit.Post));

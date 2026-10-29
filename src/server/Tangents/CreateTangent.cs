@@ -1,4 +1,6 @@
+using Koan.Core.Hosting.App;
 using Koan.Data.Core;
+using Koan.Identity.Roles;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
@@ -24,6 +26,21 @@ public sealed record CreateTangent(
     /// <summary>The answer to an actor for whom the place does not exist.</summary>
     public const string NoPlace = "No Tangent Space is here.";
 
+    /// <summary>Writes the Tangent's audience, its <c>everyone</c> overwrite, before the transaction that creates the
+    /// Tangent opens, since Koan commits an overwrite only outside one: from the instant the Tangent's row commits, it
+    /// exists for nobody its audience excludes. Only where <see cref="Run"/> goes on to create it — the place exists for
+    /// the actor, who holds <see cref="Bit.ManageSpace"/>, the slug is a slug and no Tangent has it — so an existing
+    /// Tangent's audience stands and an actor <see cref="Run"/> refuses writes nothing. A command that is refused or fails
+    /// after this leaves the overwrite on a resource no Tangent has: every address there answers as for a missing
+    /// Tangent whatever its overwrites say, and the next create of that slug writes its own audience over it.</summary>
+    public async Task Prepare(CancellationToken ct)
+    {
+        var capabilities = await Capabilities.Load(ActorId, null, null, ct);
+        if (!capabilities.Exists || capabilities.Gate(Bit.ManageSpace) is not null || !Posts.Slug.IsValid(Slug)) return;
+        if (await Tangent.Get(Slug, ct) is not null) return;
+        await Overwrites.SetAudience(AppHost.GetRequiredService<RoleCollection>(nameof(CreateTangent)), Slug, Audience, ct);
+    }
+
     public async Task<Outcome<Tangent>> Run(Sequences sequences, CancellationToken ct)
     {
         var capabilities = await Capabilities.Load(ActorId, null, null, ct);
@@ -31,7 +48,7 @@ public sealed record CreateTangent(
 
         if (await Tangent.Get(Slug, ct) is { } existing)
         {
-            var audience = (await Overwrite.Get(Overwrite.Key(Slug, Overwrite.Everyone), ct))?.AudienceStated();
+            var audience = await Overwrites.AudienceOf(AppHost.GetRequiredService<RoleCollection>(nameof(CreateTangent)), Slug, ct);
             return existing.Same(Name, Description, DefaultKind, Order) && audience == Audience
                 ? new Outcome<Tangent>.Done(existing)
                 : new Outcome<Tangent>.Conflict($"Tangent '{Slug}' already exists with different fields.");
@@ -42,7 +59,6 @@ public sealed record CreateTangent(
         var at = At ?? DateTimeOffset.UtcNow;
         var tangent = Tangent.Create(Slug, Name, Description, DefaultKind, Order);
         await tangent.Save(ct);
-        await Overwrite.ForAudience(tangent.Id, Audience).Save(ct);
         await Event.Next(sequences, EventKind.TangentChanged, at, tangentId: tangent.Id, actorId: ActorId, audience: Audience).Save(ct);
         return new Outcome<Tangent>.Done(tangent);
     }
