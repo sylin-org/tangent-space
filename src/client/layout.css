@@ -130,7 +130,8 @@ h3 {
   border-bottom: 1px solid var(--ts-line);
 }
 
-.masthead:has([open], [aria-expanded="true"]) {
+.masthead:has([open], [aria-expanded="true"]),
+.path-bar:has([open]) {
   z-index: 50;
 }
 
@@ -162,6 +163,266 @@ h3 {
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The account: the signed-in participant's picture, round, or the first letter of their handle, with a chevron; it
+ * opens in the page, under the masthead, with their handle and the way to sign out. Never a dialog. */
+.account {
+  position: relative;
+}
+
+.account-button {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  border-radius: 22px;
+  color: var(--ts-text-3);
+  list-style: none;
+}
+
+.account-button::-webkit-details-marker {
+  display: none;
+}
+
+.account-button:hover,
+.account[open] .account-button {
+  background: var(--ts-hover);
+}
+
+.who-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ts-hover);
+  color: var(--ts-text);
+  font: 600 14px/1 var(--ts-font-ui);
+  object-fit: cover;
+}
+
+.account-button:hover .who-mark,
+.account[open] .who-mark {
+  background: var(--ts-line);
+}
+
+.account-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 264px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-raised);
+  box-shadow: var(--ts-shadow-popover);
+}
+
+.account-who {
+  padding: 10px 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.account-names {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-name {
+  overflow: hidden;
+  color: var(--ts-text);
+  font: var(--ts-type-ui-large);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who-handle {
+  overflow: hidden;
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-items {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-item {
+  height: 36px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text);
+  font: var(--ts-type-ui);
+  text-decoration: none;
+}
+
+.account-item:hover {
+  background: var(--ts-hover);
+}
+
+/* A visitor's way in: the primary button where a participant's account would be. */
+.masthead-sign-in {
+  height: 38px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--ts-radius-input);
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  font: 600 14px/1 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.masthead-sign-in:hover {
+  background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
+}
+
+/* A Tangent's letter tile: the first letter in display type on its tone's tint, over an edge in its tone. */
+.tone-amber { --tone: var(--ts-tangent-amber); --tone-tint: var(--ts-tangent-amber-tint); --tone-ink: var(--ts-tangent-amber-ink); }
+.tone-coral { --tone: var(--ts-tangent-coral); --tone-tint: var(--ts-tangent-coral-tint); --tone-ink: var(--ts-tangent-coral-ink); }
+.tone-jade { --tone: var(--ts-tangent-jade); --tone-tint: var(--ts-tangent-jade-tint); --tone-ink: var(--ts-tangent-jade-ink); }
+.tone-sky { --tone: var(--ts-tangent-sky); --tone-tint: var(--ts-tangent-sky-tint); --tone-ink: var(--ts-tangent-sky-ink); }
+.tone-iris { --tone: var(--ts-tangent-iris); --tone-tint: var(--ts-tangent-iris-tint); --tone-ink: var(--ts-tangent-iris-ink); }
+.tone-rose { --tone: var(--ts-tangent-rose); --tone-tint: var(--ts-tangent-rose-tint); --tone-ink: var(--ts-tangent-rose-ink); }
+
+.tangent-tile {
+  --tile: 18px;
+  --tile-edge: 2px;
+  width: var(--tile);
+  height: var(--tile);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: calc(var(--tile) * 0.22);
+  background: var(--tone-tint);
+}
+
+.tangent-tile-letter {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--tone-ink);
+  font: 700 calc(var(--tile) * 0.6) / 1 var(--ts-font-display);
+}
+
+.tangent-tile-edge {
+  height: var(--tile-edge);
+  background: var(--tone);
+}
+
+.tangent-tile-menu {
+  --tile: 22px;
+}
+
+/* The Tangent crumb: its tile, name and chevron, opening the list of Tangents in the page. */
+.switcher {
+  position: relative;
+}
+
+.switcher-button {
+  height: 32px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 7px;
+  color: var(--ts-text);
+  font: 500 13px/1 var(--ts-font-mono);
+  list-style: none;
+  white-space: nowrap;
+}
+
+.switcher-button::-webkit-details-marker {
+  display: none;
+}
+
+.switcher-button:hover,
+.switcher[open] .switcher-button {
+  background: var(--ts-hover);
+}
+
+.switcher-chevron {
+  color: var(--ts-text-3);
+}
+
+.switcher-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: 300px;
+  padding: 6px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-raised);
+  box-shadow: var(--ts-shadow-popover);
+}
+
+.switcher-heading {
+  margin: 6px 10px 6px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-caps);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.switcher-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.switcher-item {
+  min-height: 44px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.switcher-item:hover {
+  background: var(--ts-hover);
+}
+
+.switcher-item[aria-current="page"] {
+  background: var(--ts-hover);
+}
+
+.switcher-item-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.switcher-item-name {
+  overflow: hidden;
+  font: 600 14px/1.3 var(--ts-font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcher-item-detail {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
 }
 
 .masthead-actions {
@@ -468,6 +729,37 @@ h3 {
   .segmented button {
     height: 44px;
     padding: 0 16px;
+  }
+
+  .account-button {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .account-chevron {
+    display: none;
+  }
+
+  .masthead-sign-in {
+    height: 44px;
+    margin-right: 10px;
+    padding: 0 14px;
+  }
+
+  .switcher-button {
+    height: 40px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+
+  .switcher-panel {
+    width: min(300px, calc(100vw - 2 * var(--ts-phone-gutter)));
+  }
+
+  .who-mark {
+    width: 30px;
+    height: 30px;
   }
 }
 

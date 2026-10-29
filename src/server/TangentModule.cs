@@ -62,6 +62,7 @@ public sealed class TangentModule : KoanModule
             .Add<Door, DoorView>(door => door.Name, door => door.Version)
             .Add<Problem, ProblemView>(problem => problem.Title)
             .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignInView.Frame)
+            .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame)
             .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>

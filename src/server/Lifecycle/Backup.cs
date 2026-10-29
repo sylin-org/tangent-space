@@ -63,7 +63,7 @@ public static class Backup
         try
         {
             Write(dataFolder, files, partial, createdAt);
-            Directory.Move(partial, target);
+            Move(partial, target);
             return target;
         }
         catch
@@ -290,13 +290,14 @@ public static class Backup
     }
 
     /// <summary><paramref name="name"/> under <paramref name="parent"/>, with a counter when that name is taken.</summary>
-    /// <summary>How many times a restore's folder move is tried, and the first pause between tries, which doubles up
+    /// <summary>How many times a backup's or a restore's folder move is tried, and the first pause between tries, which doubles up
     /// to a second: about five seconds in all.</summary>
     private const int MoveAttempts = 8;
     private static readonly TimeSpan MovePause = TimeSpan.FromMilliseconds(100);
 
     /// <summary>Moves a folder, trying again for a moment when Windows still holds a file in it (an indexer or a virus
-    /// scanner reading what was just copied); the last failure is the one thrown.</summary>
+    /// scanner reading what was just written) or has not yet let go of the folder just deleted under the name it moves
+    /// to; the last failure is the one thrown.</summary>
     private static void Move(string from, string to)
     {
         for (var attempt = 1; ; attempt++)
@@ -306,7 +307,7 @@ public static class Backup
                 Directory.Move(from, to);
                 return;
             }
-            catch (Exception failure) when (attempt < MoveAttempts && Directory.Exists(from) && !Directory.Exists(to)
+            catch (Exception failure) when (attempt < MoveAttempts && Directory.Exists(from)
                 && failure is UnauthorizedAccessException or IOException { HResult: SharingViolation or LockViolation })
             {
                 Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(1000, MovePause.TotalMilliseconds * (1 << (attempt - 1)))));

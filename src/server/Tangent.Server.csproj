@@ -23,6 +23,10 @@
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Jobs/Koan.Jobs.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The rows a visual capture shows, seeded on the capture's request; only the capture host carries them. -->
+    <Compile Remove="Capture/**" Condition="'$(TangentCaptureHost)' != 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <ClientSource Include="$(ClientRoot)**" Exclude="$(ClientRoot)node_modules/**;$(ClientRoot)tests/**" />
     <ClientOutput Include="wwwroot/tangent.css;wwwroot/tangent.js;wwwroot/theme.js" />
   </ItemGroup>

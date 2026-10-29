@@ -146,6 +146,11 @@ public sealed partial class FirstRunTests
         Assert.DoesNotContain("__RequestVerificationToken", html);
         Assert.Equal(Leo, json.RootElement.GetProperty("operator").GetString());
         Assert.Equal("ada.example", json.RootElement.GetProperty("waiting").GetProperty("handle").GetString());
+        // The way out is the frame's account: its menu signs this person out and comes back to first run.
+        Assert.Contains("class=\"account-button\"", html);
+        var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
+        Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
+        Assert.Contains($"href=\"{WebUtility.HtmlEncode(signOut)}\">Sign out</a>", html);
         Assert.False(json.RootElement.TryGetProperty("form", out _));
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
     }

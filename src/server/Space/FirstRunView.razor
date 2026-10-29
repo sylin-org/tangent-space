@@ -198,9 +198,11 @@
 @code {
     [Parameter, EditorRequired] public FirstRun Model { get; set; } = default!;
 
-    /// <summary>The frame the shell draws around the page: the place, and the step as the one crumb.</summary>
+    /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and the account of
+    /// whoever is signed in, which is also their way out when the place is not theirs to set up.</summary>
     public static Frame Frame(FirstRun firstRun)
-        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Ready")]);
+        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Ready")],
+            firstRun.Reader is { } reader ? new Who(reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null);
 
     private string PanelClass => Model.Challenge is not null || Model.Waiting is not null ? "sign-in-panel" : "sign-in-panel first-run-panel";
 

@@ -166,6 +166,13 @@ function flatten(headers: IncomingHttpHeaders): Record<string, string> {
   return flat
 }
 
+/** Has the capture host write the rows of the named seed, through its writer, and waits until they are written. */
+export async function seed(listening: URL, baseUrl: URL, name: string): Promise<void> {
+  const target = new URL(baseUrl.pathname.replace(/\/$/, '') + '/capture/seed/' + encodeURIComponent(name), listening)
+  const response = await fetch(target, { method: 'POST', signal: AbortSignal.timeout(60_000) })
+  if (response.status !== 204) throw new Error(`Seeding ${name} at ${target} answered ${response.status} ${response.statusText}: ${await response.text()}`)
+}
+
 /** Someone a state is captured as: the test connector's persona name, its subject and the handle the sign-in
  *  carries as the atproto connector's verified handle claim. */
 export interface Persona {

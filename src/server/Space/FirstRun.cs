@@ -10,7 +10,8 @@ namespace Tangent.Space;
 /// code the server wrote to its log. Before sign-in it carries <see cref="Challenge"/>, the Koan connector's atproto
 /// challenge, which comes back here signed in; signed in as someone who may set it up, <see cref="Form"/>, which
 /// establishes the place; signed in as anyone else, <see cref="Waiting"/>; once the place is established, for its
-/// operator and its proprietor, <see cref="Pointers"/>, what the site places to point at it.</summary>
+/// operator and its proprietor, <see cref="Pointers"/>, what the site places to point at it. <see cref="Reader"/> is
+/// whoever is signed in, as the account menu shows them, with where they sign out.</summary>
 public sealed record FirstRun(
     string Name,
     string BaseUrl,
@@ -20,7 +21,8 @@ public sealed record FirstRun(
     string? Challenge = null,
     FirstRunForm? Form = null,
     FirstRunWaiting? Waiting = null,
-    IReadOnlyList<Pointer>? Pointers = null)
+    IReadOnlyList<Pointer>? Pointers = null,
+    FirstRunReader? Reader = null)
 {
     /// <summary>The configuration key that names the operator.</summary>
     public const string OperatorSetting = "Tangent:Operator";
@@ -65,3 +67,7 @@ public sealed record FirstRunForm(
 /// <summary>A signed-in person who may not set the place up, since the configuration names another operator: they
 /// signed in as <see cref="Handle"/> (empty when the connector verified none).</summary>
 public sealed record FirstRunWaiting(string Handle);
+
+/// <summary>The signed-in person reading first run: the name to show, their handle, the highest role they hold where
+/// they hold one, their avatar, and where they sign out, coming back to first run.</summary>
+public sealed record FirstRunReader(string Name, string Handle, string? Role, string? Avatar, string SignOut);

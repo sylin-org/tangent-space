@@ -22,7 +22,7 @@ public sealed class FirstRunGate(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOp
             && !action.ControllerTypeInfo.IsDefined(typeof(AnswersBeforeFirstRunAttribute), inherit: false)
             && await TangentSpace.Get(TangentSpace.SingleRow, context.HttpContext.RequestAborted) is null)
         {
-            context.Result = FirstRunController.Answer(context.HttpContext, baseUrl, options.Value, setupCode);
+            context.Result = await FirstRunController.Answer(context.HttpContext, baseUrl, options.Value, setupCode, context.HttpContext.RequestAborted);
             return;
         }
 

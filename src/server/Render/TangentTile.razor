@@ -1,0 +1,9 @@
+@* A Tangent's letter tile: its first letter in display type on its tone's tint, over an edge in the tone. The size
+   is the place it stands in: the path, the switcher, or the Tangent page's head. *@
+<span class="tangent-tile tangent-tile-@Size tone-@Tile.Tone" aria-hidden="true"><span class="tangent-tile-letter">@Tile.Initial</span><span class="tangent-tile-edge"></span></span>
+
+@code {
+    [Parameter, EditorRequired] public Tile Tile { get; set; } = default!;
+
+    [Parameter] public string Size { get; set; } = "path";
+}

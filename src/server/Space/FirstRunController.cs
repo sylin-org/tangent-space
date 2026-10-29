@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Koan.Identity.Roles;
 using Koan.Web.Auth.Connector.Atproto;
+using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -36,11 +37,15 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return Answer(HttpContext, baseUrl, options.Value, setupCode);
+        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return await Answer(HttpContext, baseUrl, options.Value, setupCode, ct);
         var personId = PersonId(User);
         if (personId is null || personId != space.OperatorId && personId != space.ProprietorId)
             return new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
-        return new ObjectResult(Place(baseUrl, space.Name, null) with { Pointers = Pointers.For(Configured(baseUrl)) });
+        return new ObjectResult(Place(baseUrl, space.Name, null) with
+        {
+            Pointers = Pointers.For(Configured(baseUrl)),
+            Reader = await ReaderOf(User, baseUrl, ct)
+        });
     }
 
     [HttpPost(Path)]
@@ -76,16 +81,16 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
             Accountable = affirmed
         };
         if (pinned is null && !setupCode.Matches(code))
-            return Again(sent with
+            return await Again(sent with
             {
                 CodeFailure = string.IsNullOrWhiteSpace(code)
                     ? "Write the setup code from this Tangent Space’s log."
                     : "That is not the setup code this Tangent Space wrote to its log at its last start."
             });
         if (!affirmed)
-            return Again(sent with { AccountableFailure = "Confirm that you are the person who answers for this place." });
+            return await Again(sent with { AccountableFailure = "Confirm that you are the person who answers for this place." });
         if (someone && named is null)
-            return Again(sent with { ProprietorFailure = "Write the handle of the participant whose place this is." });
+            return await Again(sent with { ProprietorFailure = "Write the handle of the participant whose place this is." });
 
         var outcome = await writer.Send(new Establish(personId, Handle(User), name ?? "", someone ? named : null), ct);
         switch (outcome)
@@ -100,14 +105,14 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
             case Outcome<TangentSpace>.Refused { Reason: Establish.AlreadyEstablished } refused:
                 return new Problem(StatusCodes.Status409Conflict, "Already set up", refused.Reason).ToResult();
             case Outcome<TangentSpace>.Refused { Reason: TangentSpace.NameRule } refused:
-                return Again(sent with { NameFailure = refused.Reason });
+                return await Again(sent with { NameFailure = refused.Reason });
             case Outcome<TangentSpace>.Refused refused when named is not null && refused.Reason == Establish.NoParticipant(named):
-                return Again(sent with { ProprietorFailure = refused.Reason + " They sign in here once before they can be named." });
+                return await Again(sent with { ProprietorFailure = refused.Reason + " They sign in here once before they can be named." });
             case Outcome<TangentSpace>.Refused refused when named is not null
                 && (refused.Reason == Establish.SharedHandle(named) || refused.Reason == Establish.Banned(named)):
-                return Again(sent with { ProprietorFailure = refused.Reason });
+                return await Again(sent with { ProprietorFailure = refused.Reason });
             case Outcome<TangentSpace>.Refused refused:
-                return Again(sent with { Failure = refused.Reason });
+                return await Again(sent with { Failure = refused.Reason });
             case Outcome<TangentSpace>.Failed failed:
                 throw new InvalidOperationException($"First run by {personId} failed.", failed.Cause);
             default:
@@ -117,11 +122,12 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
 
     /// <summary>The first-run resource for a request to a place that is not established: the challenge for a
     /// visitor, the form for a signed-in person who may set it up, and who may for anyone else.</summary>
-    public static IActionResult Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpaceOptions options, SetupCode setupCode)
+    public static async Task<IActionResult> Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpaceOptions options, SetupCode setupCode,
+        CancellationToken ct)
     {
         http.Response.Headers.CacheControl = "no-store";
         var pinned = options.Operator;
-        var place = Place(baseUrl, TangentSpace.Unnamed, pinned);
+        var place = Place(baseUrl, TangentSpace.Unnamed, pinned) with { Reader = await ReaderOf(http.User, baseUrl, ct) };
         if (PersonId(http.User) is not { } personId)
             return new ObjectResult(place with
             {
@@ -133,8 +139,25 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
     }
 
     /// <summary>The form again, keeping what was sent, with the reason it was refused.</summary>
-    private ObjectResult Again(FirstRunForm form)
-        => new(Place(baseUrl, TangentSpace.Unnamed, options.Value.Operator) with { Form = form }) { StatusCode = StatusCodes.Status400BadRequest };
+    private async Task<IActionResult> Again(FirstRunForm form)
+        => new ObjectResult(Place(baseUrl, TangentSpace.Unnamed, options.Value.Operator) with
+        {
+            Form = form,
+            Reader = await ReaderOf(User, baseUrl, HttpContext.RequestAborted)
+        }) { StatusCode = StatusCodes.Status400BadRequest };
+
+    /// <summary>Whoever is signed in, as the account menu shows them: their participant's display name, else their
+    /// handle; the highest seeded role they hold; and Koan's sign-out, coming back here. Null for a visitor.</summary>
+    private static async Task<FirstRunReader?> ReaderOf(ClaimsPrincipal user, KoanWebBaseUrl baseUrl, CancellationToken ct)
+    {
+        if (PersonId(user) is not { } personId) return null;
+        var participant = await Participant.Get(personId, ct);
+        var handle = participant?.Handle is { Length: > 0 } stored ? stored : Handle(user) is { Length: > 0 } claimed ? claimed : personId;
+        var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
+        var role = participant is null ? null : Roles.Word((await Capabilities.Load(personId, null, null, ct)).RoleIds);
+        var signOut = Configured(baseUrl) + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path);
+        return new FirstRunReader(name, handle, role, participant?.Profile.Avatar, signOut);
+    }
 
     private static FirstRun Place(KoanWebBaseUrl baseUrl, string name, string? pinned)
     {
