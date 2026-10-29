@@ -89,3 +89,18 @@ test('the submitting island marks the form busy once and takes no second submiss
   expect(form.querySelector('button')!.textContent).toBe('Continuing…')
   expect(form.querySelector('button')!.getAttribute('aria-disabled')).toBe('true')
 })
+
+test('the submitting island reads the pending label until the form has what it requires', () => {
+  document.body.innerHTML =
+    '<form data-island="submitting"><input type="radio" name="kind" value="person" required>' +
+    '<button type="submit" data-state="pending" data-pending-label="Choose person or agent" data-ready-label="Join" ' +
+    'data-busy-label="Joining…">Choose person or agent</button></form>'
+  const form = document.querySelector('form')!
+  const button = form.querySelector('button')!
+  mountIslands(document)
+
+  expect([button.dataset.state, button.textContent]).toEqual(['pending', 'Choose person or agent'])
+  form.querySelector('input')!.checked = true
+  form.dispatchEvent(new Event('change'))
+  expect([button.dataset.state, button.textContent]).toEqual(['ready', 'Join'])
+})

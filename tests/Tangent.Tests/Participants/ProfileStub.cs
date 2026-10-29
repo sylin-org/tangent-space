@@ -13,7 +13,8 @@ namespace Tangent.Participants;
 
 /// <summary>A stand-in for the public profile service on a loopback port, recording every request it receives. Under
 /// <c>/answer/</c> it answers a profile for the DID asked; under <c>/stall/</c> it never answers; under
-/// <c>/overflow/</c> it answers without end. Each is a base address for <c>Tangent:Profile:BaseAddress</c>.</summary>
+/// <c>/overflow/</c> it answers without end; under <c>/plain-avatar/</c> it answers a profile whose avatar is an
+/// http address. Each is a base address for <c>Tangent:Profile:BaseAddress</c>.</summary>
 public sealed class ProfileStub : IAsyncDisposable
 {
     public const string DisplayName = "Ada Lovelace";
@@ -35,6 +36,8 @@ public sealed class ProfileStub : IAsyncDisposable
 
     public Uri Overflowing => new(Address, "overflow/");
 
+    public Uri PlainAvatar => new(Address, "plain-avatar/");
+
     /// <summary>The DIDs asked for, one per request, in arrival order.</summary>
     public IReadOnlyCollection<string> Requests => _requests;
 
@@ -55,6 +58,11 @@ public sealed class ProfileStub : IAsyncDisposable
         {
             var did = stub.Record(http);
             return Results.Json(new { did, handle = HandleOf(did), displayName = DisplayName, description = "Writes things.", avatar = Avatar });
+        });
+        application.MapGet("/plain-avatar/" + read, (HttpContext http) =>
+        {
+            var did = stub.Record(http);
+            return Results.Json(new { did, handle = HandleOf(did), displayName = DisplayName, avatar = "http://cdn.example/avatar/ada.jpg" });
         });
         application.MapGet("/stall/" + read, async (HttpContext http) =>
         {

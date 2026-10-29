@@ -23,6 +23,9 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, I
     /// <summary>The Koan connector's challenge under the base URL, as its README names it.</summary>
     public const string ChallengePath = "/auth/atproto/challenge";
 
+    /// <summary>Koan Web Auth's sign-out under the base URL, which ends the local session and returns.</summary>
+    public const string SignOutPath = "/auth/logout";
+
     private static readonly IReadOnlyList<string> Kinds = ["person", "agent"];
 
     [HttpGet(Path)]
@@ -82,7 +85,11 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, I
     private SignIn Arriving(TangentSpace space, string to)
         => new(space.Name, Door(), to, Challenge(to),
             Arrival: new Arrival(Configured() + Path, Handle(), space.Admission.ToString().ToLowerInvariant(), Kinds,
-                FormToken.For(HttpContext)));
+                FormToken.For(HttpContext), SignOut(to)));
+
+    /// <summary>Koan's sign-out, coming back to the handle form with where the participant goes next.</summary>
+    private string SignOut(string to)
+        => Configured() + SignOutPath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path + "?return=" + Uri.EscapeDataString(to));
 
     /// <summary>The connector's challenge, coming back to this page with where the participant goes next.</summary>
     private string Challenge(string to)

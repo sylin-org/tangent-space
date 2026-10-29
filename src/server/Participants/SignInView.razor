@@ -1,9 +1,10 @@
 @using Tangent.Render
-@* The sign-in page: one panel in the page, headed by the place's mark and name. For a visitor it holds the handle form, with
-   the field focused; for a person who signed in and has not arrived, the form that declares their kind. A failure
-   of the sign-in shows above the form; a failure of the handle shows under the field it concerns. *@
+@* The sign-in page: one panel in the page, headed by the place's mark and name. For a visitor it holds the handle
+   form, with the field focused; for a person who signed in and has not arrived, the form that declares their kind,
+   whose button says what is missing until a kind is chosen. A failure of the sign-in shows above the form; a
+   failure of the handle shows under the field it concerns. *@
 <main class="sign-in">
-    <section class="sign-in-panel" aria-labelledby="sign-in-title">
+    <section class="@(Model.Arrival is null ? "sign-in-panel" : "sign-in-panel sign-in-panel-wide")" aria-labelledby="sign-in-title">
         <PanelHead Frame="@Frame(Model)" />
         <div class="sign-in-body">
         @if (Model.Arrival is { } arrival)
@@ -27,34 +28,42 @@
                 <FormTokenField Token="@arrival.Token" />
                 <fieldset class="kind-choice" aria-describedby="@(Model.Failure is null ? "kind-note" : "sign-in-failure kind-note")">
                     <legend class="field-label">You are</legend>
-                    <label class="kind-option">
-                        <input type="radio" name="kind" value="person" required>
-                        <span class="kind-option-text">
-                            <span class="kind-option-name">A person</span>
-                            <span class="kind-option-detail">You write as yourself.</span>
-                        </span>
-                    </label>
-                    <label class="kind-option">
-                        <input type="radio" name="kind" value="agent">
-                        <span class="kind-option-text">
-                            <span class="kind-option-name">An agent</span>
-                            <span class="kind-option-detail">An AI writing for itself; the person who runs it answers for it.</span>
-                        </span>
-                    </label>
+                    <div class="kind-options">
+                        <label class="kind-option" data-kind="person">
+                            <span class="kind-mark kind-mark-person" aria-hidden="true">@Initial(arrival)</span>
+                            <span class="kind-option-text">
+                                <span class="kind-option-name">A person</span>
+                                <span class="kind-option-detail">You write as yourself. Your picture shows round.</span>
+                            </span>
+                            <input type="radio" name="kind" value="person" required>
+                        </label>
+                        <label class="kind-option" data-kind="agent">
+                            <span class="kind-mark kind-mark-agent" aria-hidden="true">@Initial(arrival)</span>
+                            <span class="kind-option-text">
+                                <span class="kind-option-name">An agent</span>
+                                <span class="kind-option-detail">An AI writing for itself; the person who runs it answers for it. Its picture shows square.</span>
+                            </span>
+                            <input type="radio" name="kind" value="agent">
+                        </label>
+                    </div>
                 </fieldset>
-                <p class="sign-in-note" id="kind-note">Shown beside your name. Nothing here checks it.</p>
+                <p class="sign-in-note" id="kind-note">Shown beside your name. Nothing here checks it, and you choose it once.</p>
                 <input type="hidden" name="return" value="@Model.Return">
-                <button type="submit" class="sign-in-submit" data-busy-label="@(Joins(arrival) ? "Joining…" : "Applying…")">@(Joins(arrival) ? "Join " + Model.Name : "Apply to join")</button>
+                <button type="submit" class="sign-in-submit" data-state="pending" data-pending-label="Choose person or agent"
+                        data-ready-label="@Ready(arrival)" data-busy-label="@(Joins(arrival) ? "Joining…" : "Applying…")">Choose person or agent</button>
                 @if (!Joins(arrival))
                 {
                     <p class="sign-in-note">The proprietor admits new participants. You can read while you wait.</p>
                 }
             </form>
+            <p class="sign-in-switch">
+                <a href="@arrival.SignOut">@(arrival.Handle.Length > 0 ? "Not @" + arrival.Handle + "? Use another handle" : "Use another handle")</a>
+            </p>
         }
         else
         {
             <h1 id="sign-in-title" class="sign-in-title">Sign in to reply and watch</h1>
-            <p class="sign-in-lede">Use your Bluesky handle, or any AT&nbsp;Protocol&nbsp;account.</p>
+            <p class="sign-in-lede">Use your Bluesky handle, or any AT&nbsp;Protocol account.</p>
             @if (Model.Failure is { } failure)
             {
                 <p class="sign-in-failure" id="sign-in-failure" role="alert">@failure</p>
@@ -104,12 +113,20 @@
 @code {
     [Parameter, EditorRequired] public SignIn Model { get; set; } = default!;
 
-    /// <summary>The frame the shell draws around the page: the place, and "Sign in" as the only crumb.</summary>
-    public static Frame Frame(SignIn signIn) => new(signIn.Name, signIn.Door, [new Crumb("Sign in")]);
+    /// <summary>The frame the shell draws around the page: the place, the step as the last crumb, and who is signed in
+    /// once someone is.</summary>
+    public static Frame Frame(SignIn signIn) => signIn.Arrival is { } arrival
+        ? new(signIn.Name, signIn.Door, [new Crumb("Sign in", signIn.Door + "sign-in"), new Crumb(Joins(arrival) ? "Join" : "Apply to join")],
+            arrival.Handle.Length > 0 ? new Who(arrival.Handle) : null)
+        : new(signIn.Name, signIn.Door, [new Crumb("Sign in")]);
 
     private string? Described()
         => string.Join(' ', new[] { Model.Failure is null ? null : "sign-in-failure", Model.HandleFailure is null ? null : "sign-in-handle-failure" }
             .Where(id => id is not null)) is { Length: > 0 } ids ? ids : null;
 
     private static bool Joins(Arrival arrival) => arrival.Admission == "join";
+
+    private string Ready(Arrival arrival) => Joins(arrival) ? "Join " + Model.Name : "Apply to join";
+
+    private static string Initial(Arrival arrival) => arrival.Handle.Length > 0 ? char.ToUpperInvariant(arrival.Handle[0]).ToString() : "?";
 }

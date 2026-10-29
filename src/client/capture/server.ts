@@ -22,14 +22,20 @@ export interface TangentSpace {
 // server's loopback http address through forward().
 export const captureBaseUrl = 'https://tangent.localhost'
 
-/** Builds the server project and returns its entry assembly, or returns the published server it is given. */
+/** Builds the capture host and returns its entry assembly, or returns the published server it is given. The capture
+ *  host is the server with Koan's test connector, which only TangentCaptureHost adds, built into a folder of its
+ *  own under .local so neither the server's build nor its publish ever carries the connector. Its composition is
+ *  read from its folder rather than written to the server's koan.lock.json. */
 export function resolveServer(root: string, published?: string): string {
   // npm runs scripts in src/client; a relative path means the folder npm was started from.
   if (published) return resolve(process.env.INIT_CWD ?? process.cwd(), published)
   const project = join(root, 'src', 'server', 'Tangent.Server.csproj')
-  const build = spawnSync('dotnet', ['build', project, '-c', 'Release', '-nologo', '-t:Build', '-getProperty:TargetPath'], {
-    encoding: 'utf8',
-  })
+  const output = join(root, '.local', 'capture-host')
+  const build = spawnSync(
+    'dotnet',
+    ['build', project, '-c', 'Release', '-nologo', '-t:Build', '-p:TangentCaptureHost=true', '-p:KoanComposition=false', '-o', output, '-getProperty:TargetPath'],
+    { encoding: 'utf8' },
+  )
   if (build.status !== 0) throw new Error(`Building ${project} failed:\n${build.stdout}${build.stderr}`)
   return build.stdout.trim()
 }

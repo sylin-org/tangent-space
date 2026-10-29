@@ -21,6 +21,22 @@
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
+        @if (frame.Who is { } who)
+        {
+            <div class="masthead-actions">
+                <span class="masthead-who">
+                    @if (who.Avatar is { } avatar)
+                    {
+                        <img class="who-mark" src="@avatar" alt="">
+                    }
+                    else
+                    {
+                        <span class="who-mark" aria-hidden="true">@who.Initial</span>
+                    }
+                    <span class="who-handle">@("@" + who.Handle)</span>
+                </span>
+            </div>
+        }
     </header>
     <nav class="path-bar" aria-label="You are here">
         <span class="path-elbow" aria-hidden="true"></span>

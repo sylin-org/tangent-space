@@ -1,10 +1,26 @@
-@* A panel's head: the place's mark and name over a band. A place with no landing image of its own gets the band
-   alone, never a picture it did not choose. *@
+@* A panel's head: the place's mark and name over its face. A place with no landing image of its own shows its
+   atmosphere, the field of characters drawn in its accent, never a picture it did not choose; the same darkening
+   gradient lies behind the mark and the name either way. *@
 <div class="panel-head">
+    <pre class="panel-head-atmosphere" aria-hidden="true">@Atmosphere</pre>
+    <span class="panel-head-shade" aria-hidden="true"></span>
     <span class="panel-head-mark" aria-hidden="true">@Frame.Initial</span>
     <span class="panel-head-name">@Frame.Place</span>
 </div>
 
 @code {
     [Parameter, EditorRequired] public Frame Frame { get; set; } = default!;
+
+    /// <summary>The atmosphere a place has before it chooses one: the design reference's first, a lantern's glow.</summary>
+    private const string Atmosphere =
+        "       . .....               ...,,,,,,,,,,,,,,,,,,,,,,.,.....\n" +
+        "     . .........            ..,,,,,:::::,,,,,,,,,,,,,,,,,........\n" +
+        "      ...........         ..,,:::::::::,,,,.........,.,,.,,,,......\n" +
+        "     ...........           .,,:++++*+++:,,..          ....,.,........\n" +
+        "       ...........         ..,:+*#####***+:,..         . ....,.,.....\n" +
+        "       ..........           .,:+*##########*+:,.           .........\n" +
+        "      ......,.,......         .,::+**######*+:,,.           ..........\n" +
+        "        ....,,..,,....          .,,,:+++++++::,...           ..........\n" +
+        "         ........,,.,.............,,,::::+:::,,.            .........  .\n" +
+        "           ......,,,,,,,,,,,,,,,,,::::::::,,,,..            .........";
 }

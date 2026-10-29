@@ -1,5 +1,6 @@
 # One Tangent Space in a container on 5220, reachable from this machine only, its data folder in the `state`
-# volume. Back up while it runs, then copy the backup out:
+# volume, at the address TANGENT_URL names (TANGENT_URL=https://tangent.example docker compose up -d). Back up while
+# it runs, then copy the backup out:
 #   docker compose exec tangent /app/Tangent.Server backup /state/backups
 #   docker compose cp tangent:/state/backups ./backups
 # Restore while it is stopped (--replace moves the current data folder aside inside the volume):
@@ -13,9 +14,9 @@ services:
     ports:
       - "127.0.0.1:5220:5220"
     environment:
-      # Must be the https address the place answers at: atproto sign-in needs one, and in Production the Tangent
-      # Space refuses to start at an http address.
-      Koan__Web__ApplicationUrl: "http://localhost:5220"
+      # The https address people reach this Tangent Space at, from TANGENT_URL: atproto sign-in needs one, and in
+      # Production the Tangent Space refuses to start at an http address, so compose names none of its own.
+      Koan__Web__ApplicationUrl: "${TANGENT_URL:?Set TANGENT_URL to the https address people reach this Tangent Space at}"
       Tangent__DataFolder: "/state/data"
     volumes:
       - state:/state

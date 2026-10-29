@@ -109,6 +109,22 @@ public sealed class ProfileJobTests
         Assert.Equal(("before.example", "Before", (DateTimeOffset?)null), (after.Handle, after.Profile.DisplayName, after.Profile.CapturedAt));
     }
 
+    [Fact]
+    public async Task An_avatar_is_kept_only_at_an_https_address()
+    {
+        await using var stub = await ProfileStub.StartAsync(Cancellation);
+        await using var https = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.Answering.AbsoluteUri }, ct: Cancellation);
+        var secure = await https.Services.GetRequiredService<ProfileReader>().Read("did:plc:secure4example", Cancellation);
+        await using var plain = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.PlainAvatar.AbsoluteUri }, ct: Cancellation);
+        var unsafeAvatar = await plain.Services.GetRequiredService<ProfileReader>().Read("did:plc:plain4example", Cancellation);
+
+        Assert.Equal(ProfileStub.Avatar, secure.Avatar);
+        Assert.Null(unsafeAvatar.Avatar);
+        Assert.Equal(ProfileStub.DisplayName, unsafeAvatar.DisplayName);
+    }
+
     /// <summary>The participant once the job has cached its profile, waiting no longer than the bound.</summary>
     private static async Task<Participant> Captured(string did, DateTimeOffset? after = null)
     {

@@ -2,14 +2,31 @@
  * form, or, once a person has signed in, the form that declares their kind. Sizes follow the design reference's
  * sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @ prefix inside the field. */
 
-/* A panel's head: the place's mark and name over a band of the surface, washed with the accent. */
+/* A panel's head: the place's face, its atmosphere drawn in the accent on the surface, under the reference's
+ * darkening gradient, with the mark and the name in the light ink the reference sets over a place's image. */
 .panel-head {
+  --panel-head-ink: #f3eee3;
   position: relative;
   height: 128px;
-  border-bottom: 1px solid var(--ts-line);
-  background:
-    linear-gradient(135deg, var(--ts-accent-soft), transparent 70%),
-    var(--ts-surface);
+  overflow: hidden;
+  background: var(--ts-surface);
+}
+
+.panel-head-atmosphere {
+  position: absolute;
+  top: 10px;
+  right: -40px;
+  margin: 0;
+  color: var(--ts-accent);
+  font: 400 13px/1.2 var(--ts-font-mono);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.panel-head-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 9, 8, 0.05) 20%, rgba(10, 9, 8, 0.8) 100%);
 }
 
 .panel-head-mark {
@@ -24,6 +41,7 @@
   background: var(--ts-accent);
   color: var(--ts-on-accent);
   font: 600 18px/1 var(--ts-font-display);
+  box-shadow: 0 0 0 1px rgba(10, 9, 8, 0.25);
 }
 
 .panel-head-name {
@@ -32,7 +50,7 @@
   right: 20px;
   bottom: 18px;
   overflow: hidden;
-  color: var(--ts-text);
+  color: var(--panel-head-ink);
   font: 500 22px/1.2 var(--ts-font-display);
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
@@ -44,7 +62,7 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 56px var(--ts-page-gutter) 72px;
+  padding: 44px var(--ts-page-gutter) 72px;
 }
 
 .sign-in-panel {
@@ -54,6 +72,11 @@
   border-radius: var(--ts-radius-dialog);
   background: var(--ts-raised);
   box-shadow: var(--ts-shadow-popover);
+}
+
+/* The first arrival: wider, so the two kinds sit side by side. */
+.sign-in-panel-wide {
+  width: min(100%, 600px);
 }
 
 .sign-in-body {
@@ -123,6 +146,7 @@
 
 .field-input:has(input[aria-invalid="true"]) {
   border-color: var(--ts-danger);
+  box-shadow: 0 0 0 3px var(--ts-danger-soft);
 }
 
 .field-prefix {
@@ -166,13 +190,22 @@
   background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
 }
 
-/* Submitted: the button reads its busy label beside a still ring and takes no second press. */
+/* Not ready yet: the form still needs a choice, and the button says which. */
+.sign-in-submit[data-state="pending"] {
+  background: var(--ts-hover);
+  color: var(--ts-text-2);
+  box-shadow: inset 0 0 0 1px var(--ts-line);
+}
+
+/* Submitted: the button keeps the accent and its contrast, reads its busy label beside a ring, and takes no second
+ * press; the form says aria-busy. */
 .sign-in-submit[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: color-mix(in srgb, var(--ts-accent) 72%, var(--ts-raised));
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
   cursor: progress;
 }
 
@@ -257,11 +290,19 @@
   margin-bottom: 6px;
 }
 
+.kind-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .kind-option {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 14px 14px 16px;
   border: 1px solid var(--ts-line);
   border-radius: var(--ts-radius-row);
   background: var(--ts-page);
@@ -274,8 +315,43 @@
 }
 
 .kind-option input {
-  margin: 3px 0 0;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  margin: 0;
   accent-color: var(--ts-accent);
+}
+
+/* The Person and Agent marks: a person's picture is round; an agent's is square with its ring. */
+.kind-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: var(--ts-surface);
+  color: var(--ts-text);
+  font: 600 16px/1 var(--ts-font-ui);
+  box-shadow: inset 0 0 0 1px var(--ts-line);
+}
+
+.kind-mark-person {
+  border-radius: 50%;
+}
+
+.kind-mark-agent {
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--ts-page), 0 0 0 3.5px var(--ts-agent-ring);
+}
+
+.sign-in-switch {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--ts-line);
+  font-size: 13.5px;
+}
+
+.sign-in-switch a {
+  color: var(--ts-text-2);
 }
 
 .kind-option-text {
@@ -305,7 +381,12 @@
     padding: 28px var(--ts-phone-gutter) 48px;
   }
 
-  .sign-in-body {
+  /* The first arrival: wider, so the two kinds sit side by side. */
+.sign-in-panel-wide {
+  width: min(100%, 600px);
+}
+
+.sign-in-body {
     padding: 20px 18px 20px;
   }
 
@@ -314,7 +395,24 @@
     font-size: 16px;
   }
 
+  .sign-in-foot {
+    gap: 0;
+  }
+
   .sign-in-foot a {
     min-height: 44px;
+    margin: -10px 0 -8px;
+  }
+
+  .kind-options {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-head {
+    height: 88px;
+  }
+
+  .panel-head-atmosphere {
+    top: 2px;
   }
 }

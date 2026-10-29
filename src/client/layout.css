@@ -164,6 +164,35 @@ h3 {
   white-space: nowrap;
 }
 
+/* Who is signed in: their picture, round, or the first letter of their handle, and the handle. */
+.masthead-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+}
+
+.who-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ts-hover);
+  color: var(--ts-text);
+  font: 600 14px/1 var(--ts-font-ui);
+  object-fit: cover;
+}
+
+.who-handle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .masthead-actions {
   margin-left: auto;
   display: flex;
@@ -466,8 +495,16 @@ h3 {
   }
 
   .segmented button {
-    height: 38px;
+    height: 44px;
     padding: 0 16px;
+  }
+
+  .masthead-who {
+    padding-right: 10px;
+  }
+
+  .who-handle {
+    max-width: 140px;
   }
 }
 

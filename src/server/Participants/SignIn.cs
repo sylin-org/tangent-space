@@ -38,9 +38,9 @@ public sealed record SignIn(
         {
             null or "" => new SignIn(name, door, to, challenge, kept),
             HandleNotFound => new SignIn(name, door, to, challenge, kept,
-                HandleFailure: "No atproto account answers to this handle. Check its spelling, or use your DID."),
+                HandleFailure: "No AT Protocol account answers to this handle. Check its spelling and continue."),
             VerificationFailed => new SignIn(name, door, to, challenge, kept,
-                Failure: "Your sign-in could not be verified. Continue to try again."),
+                Failure: "Your account’s provider didn’t confirm this sign-in, so you aren’t signed in. Continue to try again, and approve the request on your provider’s page."),
             _ => new SignIn(name, door, to, challenge, kept,
                 Failure: "Sign-in could not be completed. Check your handle and continue to try again.")
         };
@@ -58,5 +58,7 @@ public sealed record SignIn(
 
 /// <summary>A signed-in person's first arrival: <see cref="Action"/> takes a form with <c>kind</c> (one of
 /// <see cref="Kinds"/>), <c>return</c> and the form's <see cref="Token"/>, and the place's <see cref="Admission"/> says
-/// whether they join or apply. <see cref="Handle"/> is the one the connector verified, or empty.</summary>
-public sealed record Arrival(string Action, string Handle, string Admission, IReadOnlyList<string> Kinds, FormToken Token);
+/// whether they join or apply. <see cref="Handle"/> is the one the connector verified, or empty;
+/// <see cref="SignOut"/> signs this person out and comes back to the handle form, for someone who meant another
+/// handle.</summary>
+public sealed record Arrival(string Action, string Handle, string Admission, IReadOnlyList<string> Kinds, FormToken Token, string SignOut);

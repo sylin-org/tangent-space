@@ -60,16 +60,16 @@ public sealed class SignInTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
 
-        var unverified = await Read(tangentSpace, $"/sign-in?failure={SignIn.VerificationFailed}&handle=ada.bsky.social", "text/html");
+        var unverified = WebUtility.HtmlDecode(await Read(tangentSpace, $"/sign-in?failure={SignIn.VerificationFailed}&handle=ada.bsky.social", "text/html"));
         using var json = JsonDocument.Parse(await Read(tangentSpace, "/sign-in?failure=" + SignIn.VerificationFailed, "application/json"));
         var notFound = await Read(tangentSpace, $"/sign-in?failure={SignIn.HandleNotFound}&handle=nobody.example", "text/html");
         var other = await Read(tangentSpace, "/sign-in?failure=" + Uri.EscapeDataString("<b>provider said</b>") + "&handle=" + Uri.EscapeDataString("a b"), "text/html");
 
-        Assert.Contains("<p class=\"sign-in-failure\" id=\"sign-in-failure\" role=\"alert\">Your sign-in could not be verified. Continue to try again.</p>", unverified);
+        Assert.Contains("<p class=\"sign-in-failure\" id=\"sign-in-failure\" role=\"alert\">Your account’s provider didn’t confirm this sign-in, so you aren’t signed in. Continue to try again, and approve the request on your provider’s page.</p>", unverified);
         Assert.Contains("value=\"ada.bsky.social\" aria-invalid=\"false\" aria-describedby=\"sign-in-failure\"", unverified);
-        Assert.Equal("Your sign-in could not be verified. Continue to try again.", json.RootElement.GetProperty("failure").GetString());
+        Assert.Equal("Your account’s provider didn’t confirm this sign-in, so you aren’t signed in. Continue to try again, and approve the request on your provider’s page.", json.RootElement.GetProperty("failure").GetString());
         Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\" aria-describedby=\"sign-in-handle-failure\"", notFound);
-        Assert.Contains("<p class=\"field-failure\" id=\"sign-in-handle-failure\">No atproto account answers to this handle.", notFound);
+        Assert.Contains("<p class=\"field-failure\" id=\"sign-in-handle-failure\">No AT Protocol account answers to this handle.", notFound);
         Assert.DoesNotContain("role=\"alert\"", notFound);
         Assert.Contains("role=\"alert\">Sign-in could not be completed. Check your handle and continue to try again.</p>", other);
         Assert.DoesNotContain("provider said", other);
@@ -152,6 +152,10 @@ public sealed class SignInTests
         Assert.Equal($"{BaseUrl}/sign-in", arrival.RootElement.GetProperty("arrival").GetProperty("action").GetString());
         Assert.Equal("grace.example", arrival.RootElement.GetProperty("arrival").GetProperty("handle").GetString());
         Assert.Contains("You’re signed in as <strong>@grace.example</strong>", page);
+        Assert.Contains("<span class=\"who-handle\">@grace.example</span>", page);
+        Assert.Contains("Not @grace.example? Use another handle", page);
+        Assert.Equal($"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/sign-in?return=" + Uri.EscapeDataString("/"))}",
+            arrival.RootElement.GetProperty("arrival").GetProperty("signOut").GetString());
 
         using var declaredKind = await browser.Arrive(kind, Cancellation);
 

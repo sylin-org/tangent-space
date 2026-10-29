@@ -43,7 +43,8 @@ export interface Screen {
 export const screens: Readonly<Record<string, Screen>> = {
   door: { path: '/', states: [{ name: 'signed-out' }] },
   // The handle form a visitor reads, focused; on its way after Continue; after a sign-in that could not be
-  // verified, the typed handle kept; with a handle no account answers to; and, signed in, the first arrival.
+  // verified, the typed handle kept; with a handle no account answers to; and, signed in, the first arrival
+  // before a kind is chosen and once one is.
   'sign-in': {
     path: '/sign-in',
     states: [
@@ -52,6 +53,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'verification-failed', query: { failure: 'atproto_authentication_failed', handle: 'ada.bsky.social' } },
       { name: 'handle-not-found', query: { failure: 'handle_not_found', handle: 'ada.bsky.socail' } },
       { name: 'arrival', signedIn: true },
+      { name: 'arrival-chosen', signedIn: true, click: '.kind-option[data-kind="person"]' },
     ],
   },
 }
