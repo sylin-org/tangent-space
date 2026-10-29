@@ -1,0 +1,168 @@
+/* Tangent Space — design tokens, Round 3 (2026-09-29).
+ * Light (Paper) is the default. Dark (Ink) applies with data-theme="dark" on <html>,
+ * or with no data-theme when the device prefers dark (System, the default choice).
+ * The Space accent is chosen with data-accent="gold|jade|iris|copper" on <html>.
+ * Derived tones (accent-line, accent-soft, selection) follow the accent automatically. */
+
+:root {
+  /* type */
+  --ts-font-display: 'Newsreader', Georgia, serif;
+  --ts-font-ui: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --ts-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --ts-type-article-title: 500 54px/1.04 var(--ts-font-display);
+  --ts-type-tangent-title: 500 44px/1.05 var(--ts-font-display);
+  --ts-type-topic-title: 500 40px/1.1 var(--ts-font-display);
+  --ts-type-page-title: 500 34px/1.1 var(--ts-font-display);
+  --ts-type-section: 600 30px/1.15 var(--ts-font-display);
+  --ts-type-shelf: 600 26px/1.1 var(--ts-font-display);
+  --ts-type-card-title: 500 20px/1.2 var(--ts-font-display);
+  --ts-type-article-body: 400 20px/1.65 var(--ts-font-display);
+  --ts-type-lead: 400 17px/1.55 var(--ts-font-display);
+  --ts-type-reply-body: 400 16px/1.6 var(--ts-font-display);
+  --ts-type-ui-large: 600 15px/1.4 var(--ts-font-ui);
+  --ts-type-ui: 400 14px/1.5 var(--ts-font-ui);
+  --ts-type-ui-small: 500 13px/1.45 var(--ts-font-ui);
+  --ts-type-meta: 400 12.5px/1.45 var(--ts-font-ui);
+  --ts-type-caps: 600 11px/1.3 var(--ts-font-ui);
+  --ts-type-tag: 700 10px/1.0 var(--ts-font-ui);
+  --ts-type-path: 400 13px/1.0 var(--ts-font-mono);
+  /* radius */
+  --ts-radius-tag: 4px;
+  --ts-radius-image: 6px;
+  --ts-radius-button: 8px;
+  --ts-radius-input: 9px;
+  --ts-radius-row: 10px;
+  --ts-radius-card: 12px;
+  --ts-radius-panel: 14px;
+  --ts-radius-dialog: 16px;
+  --ts-radius-pill: 999px;
+  /* layout */
+  --ts-header-height: 60px;
+  --ts-pathbar-height: 48px;
+  --ts-page-gutter: 32px;
+  --ts-rail-width: 216px;
+  --ts-reading-column: 680px;
+  --ts-home-column: 800px;
+  --ts-settings-column: 880px;
+  --ts-reading-container: 952px;
+  --ts-home-container: 1072px;
+  --ts-settings-container: 1144px;
+  --ts-phone-width: 390px;
+  --ts-phone-header-height: 56px;
+  --ts-phone-pathbar-height: 44px;
+  --ts-phone-gutter: 20px;
+  --ts-touch-target: 44px;
+  /* Space accent tones (gold by default) */
+  --ts-accent-light: #8a5f12; --ts-accent-dark: #d9ab55;
+  /* light theme */
+  color-scheme: light;
+  --ts-page: #f3eee3;
+  --ts-surface: #f9f6ef;
+  --ts-raised: #ffffff;
+  --ts-hover: #ebe5d8;
+  --ts-line: #dcd3c2;
+  --ts-connector: #bfb4a0;
+  --ts-text: #1d1b17;
+  --ts-text-2: #4a453c;
+  --ts-text-3: #6b6456;
+  --ts-on-accent: #ffffff;
+  --ts-agent: #3d5a73;
+  --ts-agent-line: #9fb0bf;
+  --ts-agent-ring: #6f8aa3;
+  --ts-danger: #a8322a;
+  --ts-danger-soft: #f6e1dc;
+  --ts-toolbar-on: #45403a;
+  --ts-shadow: rgba(40, 30, 15, 0.18);
+  --ts-scrim: rgba(29, 27, 23, 0.4);
+  --ts-accent: var(--ts-accent-light);
+  --ts-accent-line: color-mix(in srgb, var(--ts-accent) 50%, transparent);
+  --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 14%, transparent);
+  --ts-selection: color-mix(in srgb, var(--ts-accent) 24%, transparent);
+  --ts-tangent-amber: #c8931f; --ts-tangent-amber-tint: #f0e3c4; --ts-tangent-amber-ink: #7a5410;
+  --ts-tangent-coral: #c2542f; --ts-tangent-coral-tint: #efdcd2; --ts-tangent-coral-ink: #a4432a;
+  --ts-tangent-jade: #3f8f78; --ts-tangent-jade-tint: #d7ebe3; --ts-tangent-jade-ink: #2f6b5e;
+  --ts-tangent-sky: #3f7fb0; --ts-tangent-sky-tint: #d9e6f2; --ts-tangent-sky-ink: #2f5f86;
+  --ts-tangent-iris: #6a5cc4; --ts-tangent-iris-tint: #e2def5; --ts-tangent-iris-ink: #4f44a0;
+  --ts-tangent-rose: #b5507a; --ts-tangent-rose-tint: #f2dce5; --ts-tangent-rose-ink: #8f3a5d;
+  --ts-role-red: #c8452c;
+  --ts-role-violet: #7a55c9;
+  --ts-role-gold: #b8860b;
+  --ts-role-teal: #1f8f7a;
+}
+:root[data-accent="jade"] { --ts-accent-light: #2f6b5e; --ts-accent-dark: #7cc4b0; }
+:root[data-accent="iris"] { --ts-accent-light: #5a4fb0; --ts-accent-dark: #a99cf0; }
+:root[data-accent="copper"] { --ts-accent-light: #a4472a; --ts-accent-dark: #e58f6a; }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ts-page: #11100e;
+  --ts-surface: #171614;
+  --ts-raised: #1f1d1a;
+  --ts-hover: #24211d;
+  --ts-line: #2e2a24;
+  --ts-connector: #4a443b;
+  --ts-text: #efe9de;
+  --ts-text-2: #bdb4a4;
+  --ts-text-3: #948b7b;
+  --ts-on-accent: #16130d;
+  --ts-agent: #a8c0d3;
+  --ts-agent-line: #3b4a57;
+  --ts-agent-ring: #56708a;
+  --ts-danger: #f08a7e;
+  --ts-danger-soft: #3a1f1b;
+  --ts-toolbar-on: #c9c0b0;
+  --ts-shadow: rgba(0, 0, 0, 0.5);
+  --ts-scrim: rgba(0, 0, 0, 0.58);
+  --ts-accent: var(--ts-accent-dark);
+  --ts-accent-line: color-mix(in srgb, var(--ts-accent) 55%, transparent);
+  --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 18%, transparent);
+  --ts-selection: color-mix(in srgb, var(--ts-accent) 35%, transparent);
+  --ts-tangent-amber: #e9b949; --ts-tangent-amber-tint: #29220f; --ts-tangent-amber-ink: #e9b949;
+  --ts-tangent-coral: #e0795a; --ts-tangent-coral-tint: #2a211d; --ts-tangent-coral-ink: #e0795a;
+  --ts-tangent-jade: #6cc3a6; --ts-tangent-jade-tint: #15241f; --ts-tangent-jade-ink: #6cc3a6;
+  --ts-tangent-sky: #79b3e0; --ts-tangent-sky-tint: #16212b; --ts-tangent-sky-ink: #79b3e0;
+  --ts-tangent-iris: #a99cf0; --ts-tangent-iris-tint: #1f1c2c; --ts-tangent-iris-ink: #a99cf0;
+  --ts-tangent-rose: #e08aae; --ts-tangent-rose-tint: #2a1a21; --ts-tangent-rose-ink: #e08aae;
+  --ts-role-red: #f07a5e;
+  --ts-role-violet: #a98bf0;
+  --ts-role-gold: #e9b949;
+  --ts-role-teal: #4fc9ad;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]), :root[data-theme="system"] {
+    color-scheme: dark;
+    --ts-page: #11100e;
+    --ts-surface: #171614;
+    --ts-raised: #1f1d1a;
+    --ts-hover: #24211d;
+    --ts-line: #2e2a24;
+    --ts-connector: #4a443b;
+    --ts-text: #efe9de;
+    --ts-text-2: #bdb4a4;
+    --ts-text-3: #948b7b;
+    --ts-on-accent: #16130d;
+    --ts-agent: #a8c0d3;
+    --ts-agent-line: #3b4a57;
+    --ts-agent-ring: #56708a;
+    --ts-danger: #f08a7e;
+    --ts-danger-soft: #3a1f1b;
+    --ts-toolbar-on: #c9c0b0;
+    --ts-shadow: rgba(0, 0, 0, 0.5);
+    --ts-scrim: rgba(0, 0, 0, 0.58);
+    --ts-accent: var(--ts-accent-dark);
+    --ts-accent-line: color-mix(in srgb, var(--ts-accent) 55%, transparent);
+    --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 18%, transparent);
+    --ts-selection: color-mix(in srgb, var(--ts-accent) 35%, transparent);
+    --ts-tangent-amber: #e9b949; --ts-tangent-amber-tint: #29220f; --ts-tangent-amber-ink: #e9b949;
+    --ts-tangent-coral: #e0795a; --ts-tangent-coral-tint: #2a211d; --ts-tangent-coral-ink: #e0795a;
+    --ts-tangent-jade: #6cc3a6; --ts-tangent-jade-tint: #15241f; --ts-tangent-jade-ink: #6cc3a6;
+    --ts-tangent-sky: #79b3e0; --ts-tangent-sky-tint: #16212b; --ts-tangent-sky-ink: #79b3e0;
+    --ts-tangent-iris: #a99cf0; --ts-tangent-iris-tint: #1f1c2c; --ts-tangent-iris-ink: #a99cf0;
+    --ts-tangent-rose: #e08aae; --ts-tangent-rose-tint: #2a1a21; --ts-tangent-rose-ink: #e08aae;
+    --ts-role-red: #f07a5e;
+    --ts-role-violet: #a98bf0;
+    --ts-role-gold: #e9b949;
+    --ts-role-teal: #4fc9ad;
+  }
+}

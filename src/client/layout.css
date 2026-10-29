@@ -1,0 +1,354 @@
+/* The frame every page shares: the masthead, the path bar, the layout grid with its rail, and the footer.
+ * Sizes follow the design reference. Three containers: the door and Tangent pages (1072),
+ * reading (952) and settings (1144). From 1400 every rail shows; from 1024 the gap shrinks before
+ * the column does; under 1024 the rail folds and one column of 680 at most remains; under 720 the
+ * phone layout takes over. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--ts-header-height) + var(--ts-pathbar-height) + 24px);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ts-page);
+  color: var(--ts-text);
+  font: var(--ts-type-ui);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+a {
+  color: var(--ts-accent);
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--ts-text);
+  letter-spacing: -0.015em;
+}
+
+h1 {
+  font: var(--ts-type-page-title);
+}
+
+h2 {
+  font: var(--ts-type-section);
+}
+
+h3 {
+  font: var(--ts-type-shelf);
+}
+
+::selection {
+  background: var(--ts-selection);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: fixed;
+  top: -60px;
+  left: 20px;
+  z-index: 100;
+  padding: 12px 20px;
+  background: var(--ts-raised);
+  color: var(--ts-text);
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+/* The masthead: sticky at the top, the mark and the name on the left, actions on the right. */
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: var(--ts-header-height);
+  padding: 0 var(--ts-page-gutter);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--ts-surface);
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.masthead-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The path bar: sticky under the masthead; the elbow hangs from the centre of the 28px mark. */
+.path-bar {
+  position: sticky;
+  top: var(--ts-header-height);
+  z-index: 30;
+  height: var(--ts-pathbar-height);
+  padding: 0 var(--ts-page-gutter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--ts-page);
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.path-elbow {
+  position: absolute;
+  left: 45.5px;
+  top: -15px;
+  width: 20px;
+  height: 39px;
+  border-left: 1px solid var(--ts-connector);
+  border-bottom: 1px solid var(--ts-connector);
+  border-bottom-left-radius: 10px;
+  pointer-events: none;
+}
+
+.path-crumbs {
+  margin-left: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font: var(--ts-type-path);
+  color: var(--ts-text-2);
+}
+
+.path-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+/* The layout grid: the rail, then the main column. Without a rail, one reading column. */
+.layout {
+  --layout-container: var(--ts-home-container);
+  --layout-column: var(--ts-home-column);
+  --layout-gap: 56px;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: min(100% - 2 * var(--ts-page-gutter), var(--layout-container));
+  margin: 40px auto 64px;
+  display: grid;
+  grid-template-columns: var(--ts-rail-width) minmax(0, var(--layout-column));
+  /* The gap gives way first: it shrinks from its full size to the gutter before the column narrows. */
+  gap: clamp(var(--ts-page-gutter), 100% - var(--ts-rail-width) - var(--layout-column), var(--layout-gap));
+  align-items: start;
+}
+
+.layout-reading {
+  --layout-container: var(--ts-reading-container);
+  --layout-column: var(--ts-reading-column);
+}
+
+.layout-settings {
+  --layout-container: var(--ts-settings-container);
+  --layout-column: var(--ts-settings-column);
+  --layout-gap: 48px;
+}
+
+.layout:not(:has(> .rail)) {
+  display: block;
+  max-width: var(--ts-reading-column);
+}
+
+.layout > main {
+  min-width: 0;
+  width: 100%;
+}
+
+.rail {
+  position: sticky;
+  top: calc(var(--ts-header-height) + var(--ts-pathbar-height) + 40px);
+  min-width: 0;
+  font: var(--ts-type-ui-small);
+}
+
+.rail-heading {
+  margin: 0 0 12px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-caps);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 72px;
+  padding: 20px var(--ts-page-gutter);
+  border-top: 1px solid var(--ts-line);
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui);
+  font-size: 13px;
+}
+
+.footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.footer a {
+  color: var(--ts-text-2);
+  text-decoration: none;
+}
+
+.footer-end {
+  margin-left: auto;
+}
+
+/* Under 1024 the rail folds behind a button in the path bar and opens in place. */
+@media (max-width: 1023px) {
+  .layout {
+    display: block;
+    width: min(100% - 2 * var(--ts-page-gutter), var(--ts-reading-column));
+    margin: 32px auto 48px;
+  }
+
+  .rail {
+    display: none;
+    position: static;
+    margin-bottom: 24px;
+  }
+
+  .rail.is-expanded {
+    display: block;
+    padding: 16px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-surface);
+  }
+}
+
+/* The phone: a shorter masthead and path bar, the narrow gutter, 44px targets. */
+@media (max-width: 719px) {
+  html {
+    scroll-padding-top: calc(var(--ts-phone-header-height) + var(--ts-phone-pathbar-height) + 16px);
+  }
+
+  .masthead {
+    height: var(--ts-phone-header-height);
+    padding: 0 6px 0 16px;
+    gap: 2px;
+  }
+
+  .masthead-actions {
+    gap: 0;
+  }
+
+  .path-bar {
+    top: var(--ts-phone-header-height);
+    height: var(--ts-phone-pathbar-height);
+    padding: 0 var(--ts-phone-gutter);
+    gap: 8px;
+  }
+
+  .path-elbow {
+    left: 28.5px;
+    top: -13px;
+    width: 16px;
+    height: 35px;
+    border-bottom-left-radius: 8px;
+  }
+
+  .path-crumbs {
+    flex: 1;
+    margin-left: 26px;
+    gap: 6px;
+  }
+
+  .path-actions {
+    gap: 0;
+  }
+
+  .layout {
+    width: calc(100% - 2 * var(--ts-phone-gutter));
+    margin-top: 24px;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 24px var(--ts-phone-gutter);
+  }
+
+  .footer nav {
+    gap: 16px;
+  }
+
+  .footer-end {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}
