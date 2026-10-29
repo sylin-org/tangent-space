@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
-using Koan.Data.Abstractions;
 using Koan.Data.Core;
 using Koan.Web.Auth.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
@@ -92,14 +91,39 @@ public static class PostWrites
         }
     }
 
-    /// <summary>The root of the Topic with this slug in this Tangent, in one bounded read of the slug index; null when
-    /// no Topic there has it.</summary>
-    public static async Task<Post?> Topic(string tangent, string slug, CancellationToken ct)
+    /// <summary>A write route's address as it stands for the reader: its Tangent, the rows what the reader holds there is
+    /// computed from, and the Topic's root and the Post the address names, where it names them.</summary>
+    public sealed record Located(Tangents.Tangent Tangent, Capabilities.Rows Rows, Post? Root, Post? Post)
     {
-        if (!Slug.IsValid(tangent) || !Slug.IsValid(slug)) return null;
-        var found = await Post.Query(post => post.TangentId == tangent && post.Slug == slug,
-            new QueryDefinition { Page = 1, PageSize = 1 }, ct);
-        return found.FirstOrDefault(post => post.ParentId is null);
+        /// <summary>What the reader holds on the Post the address names, a reply judged by its Topic's root; on the
+        /// Tangent where the address names no Post.</summary>
+        public Capabilities Capabilities => Rows.For(Post, Post is { ParentId: not null } ? Root : null);
+    }
+
+    /// <summary>Resolves a write route's address in the Topic page's order, before anything is judged of the request
+    /// itself: the Tangent's row first, so an address no Tangent has reads no overwrites; capability's rows, once; the
+    /// gate of the place or the Tangent, the same for every address under it, so a visitor of a private place reads one
+    /// sign-in whether an address holds something or nothing; then the missing resource's answer for a Tangent no row
+    /// has, a slug no Topic of it has, or an Id no Post of that Topic has. Answers the address found, or what it answers
+    /// instead. The reads are the Topic page's: the Tangent, capability's rows, the root by slug and the Post by Id.</summary>
+    public static async Task<(Located? Found, IActionResult? Unseen)> Locate(string? personId, string tangent, string? topic, string? post,
+        CancellationToken ct)
+    {
+        var row = Slug.IsValid(tangent) ? await Tangents.Tangent.Get(tangent, ct) : null;
+        var rows = await Capabilities.LoadRows(personId, row?.Id, ct);
+        var here = rows.For(null);
+        if (!here.Exists) return (null, Unseen(here.Gate(Bit.View)));
+        if (row is null) return (null, Absent());
+        Post? root = null;
+        if (topic is not null && (!Slug.IsValid(topic) || (root = await TopicWindow.Topic(row.Id, topic, ct)) is null)) return (null, Absent());
+        Post? named = null;
+        if (post is not null)
+        {
+            named = root is null || !Tid.IsValid(post) ? null : post == root.Id ? root : await Post.Get(post, ct);
+            if (named is null || named.TopicId != root!.Id) return (null, Absent());
+        }
+
+        return (new Located(row, rows, root, named), null);
     }
 
     /// <summary>The version an edit names, or null when the field is not a whole number.</summary>
@@ -139,20 +163,21 @@ public static class PostWrites
         Post.NeedsTitle or Post.TitleTooLong => About.Title,
         Post.NeedsBody or Post.BodyTooLong or Post.BodyHasNul => About.Body,
         Post.NeedsTid or Post.NeedsTangent or Post.NeedsAuthor or Post.NotARoot or Post.TopicLocked or Post.TopicRemoved
-            or Post.NoTitleOnReply or Post.PostRemoved or Post.NeedsRemover or Reply.NoParent or KindRule or VersionRule => About.Sent,
+            or Post.NoTitleOnReply or Post.PostRemoved or Post.NeedsRemover or Post.IdTaken or Reply.NoParent or KindRule or VersionRule
+            => About.Sent,
         _ => About.Gate
     };
 
     /// <summary>A write that committed: a form is sent on to the Post's address; a JSON request reads the Post with the
-    /// writer's <c>can</c> on it, created (<c>201</c>) or changed (<c>200</c>), with that address as its
-    /// <c>Location</c>.</summary>
-    public static async Task<IActionResult> Written(HttpContext http, Post post, string address, string? personId, bool created,
+    /// writer's <c>can</c> on it — a reply's judged by its Topic's <paramref name="root"/> — created (<c>201</c>) or
+    /// changed (<c>200</c>), with that address as its <c>Location</c>.</summary>
+    public static async Task<IActionResult> Written(HttpContext http, Post post, Post root, string address, string? personId, bool created,
         CancellationToken ct)
     {
         http.Response.Headers.CacheControl = "no-store";
         http.Response.Headers.Location = address;
         if (!WantsJson(http.Request)) return new StatusCodeResult(StatusCodes.Status303SeeOther);
-        var capabilities = await Capabilities.Load(personId, post.TangentId, post, ct);
+        var capabilities = (await Capabilities.LoadRows(personId, post.TangentId, ct)).For(post, post.ParentId is null ? null : root);
         return new ObjectResult(WrittenPost.Of(post, address, capabilities.Can))
         {
             StatusCode = created ? StatusCodes.Status201Created : StatusCodes.Status200OK,

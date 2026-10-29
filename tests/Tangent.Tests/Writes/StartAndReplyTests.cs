@@ -1,5 +1,6 @@
 using System.Net;
 using Tangent.Events;
+using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -98,6 +99,43 @@ public sealed class StartAndReplyTests
         Assert.Equal("Sent once, then again.", (await Post.Get(minted, Cancellation))?.Body);
         Assert.Equal("And a reply.", (await Post.Get(replyId, Cancellation))?.Body);
         Assert.Equal((2L, 2L), await Counted());
+    }
+
+    [Fact]
+    public async Task An_id_a_post_holds_elsewhere_or_out_of_sight_answers_one_refusal_that_names_nothing_and_writes_nothing_while_a_replay_still_answers_the_post()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var hidden = Post.Root(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(hidden), Cancellation));
+        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        var other = await Started(writer, Bea, "Wicks", "Cotton or hemp?");
+        var elsewhere = await Replied(writer, other, Bea, "Cotton.");
+        var mine = await Replied(writer, root, Ada, "From the porch beam.");
+        using var ada = await SignedIn(tangentSpace, Ada);
+        const string form = "/t/" + Workshop + "/new";
+        var before = (await Counted(), await Snapshots());
+
+        var answers = new[]
+        {
+            await Json(ada, form, TopicPath(root), new { id = hidden.Id, body = "A reply." }),
+            await Json(ada, form, form, new { id = hidden.Id, title = "A topic", body = "Words." }),
+            await Json(ada, form, TopicPath(root), new { id = elsewhere.Id, body = "A reply." }),
+            await Json(ada, form, "/t/" + Articles + "/new", new { id = root.Id, title = "Lanterns", body = "How do you hang yours?" })
+        };
+        var onForm = await Form(ada, form, form, new Dictionary<string, string> { ["id"] = hidden.Id, ["title"] = "A topic", ["body"] = "Words." });
+        var replay = await Json(ada, form, TopicPath(root), new { id = mine.Id, body = "From the porch beam." });
+        var visibleConflict = await Json(ada, form, TopicPath(root), new { id = mine.Id, body = "Other words." });
+
+        Assert.All(answers, answered => Assert.Equal((HttpStatusCode.BadRequest, Post.IdTaken), (answered.Status, answered.Json.GetProperty("detail").GetString())));
+        Assert.All(answers, answered => Assert.Equal(answers[0].Body, answered.Body));
+        Assert.Equal(HttpStatusCode.BadRequest, onForm.Status);
+        Assert.Contains(Post.IdTaken, System.Net.WebUtility.HtmlDecode(onForm.Body));
+        Assert.DoesNotContain("value=\"" + hidden.Id + "\"", onForm.Body);
+        Assert.DoesNotContain("Not for everyone.", onForm.Body + string.Concat(answers.Select(answered => answered.Body)));
+        Assert.Equal((HttpStatusCode.Created, AddressOf(root, mine)), (replay.Status, replay.Location));
+        Assert.Equal(HttpStatusCode.Conflict, visibleConflict.Status);
+        Assert.Equal(before, (await Counted(), await Snapshots()));
     }
 
     [Fact]

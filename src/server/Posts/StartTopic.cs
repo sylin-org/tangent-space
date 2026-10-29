@@ -12,8 +12,10 @@ namespace Tangent.Posts;
 /// The Tangent exists for the author, who holds <see cref="Bit.View"/> in it, or the command answers that no Tangent
 /// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. A command that
 /// names no kind starts a Topic of the Tangent's <see cref="Tangents.Tangent.DefaultKind"/>, so a Topic started in an
-/// articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post;
-/// a different Tangent, title, kind, body or author is a conflict.</summary>
+/// articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
+/// before any gate, so a replay is safe; a Post of this Tangent holding the Id with a different title, kind, body or
+/// author is a conflict, and a Post anywhere else holding it is refused with <see cref="Post.IdTaken"/>, which says
+/// nothing of that Post.</summary>
 public sealed record StartTopic(
     string Id,
     string TangentId,
@@ -35,14 +37,15 @@ public sealed record StartTopic(
         if (!capabilities.Exists) return new Outcome<Post>.Refused(NoTangent);
 
         var kind = Kind ?? tangent.DefaultKind;
-        if (await Post.Get(Id, ct) is { } existing)
-        {
-            return Same(existing, kind)
-                ? new Outcome<Post>.Done(existing)
-                : new Outcome<Post>.Conflict($"Post '{Id}' already exists with a different body.");
-        }
-
+        var existing = await Post.Get(Id, ct);
+        if (existing is not null && Same(existing, kind)) return new Outcome<Post>.Done(existing);
         if (capabilities.Gate(Bit.Topic) is { } gate) return new Outcome<Post>.Refused(gate);
+        if (existing is not null)
+        {
+            return existing.TangentId == TangentId
+                ? new Outcome<Post>.Conflict($"Post '{Id}' already exists with a different body.")
+                : new Outcome<Post>.Refused(Post.IdTaken);
+        }
 
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);

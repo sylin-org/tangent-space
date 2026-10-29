@@ -48,7 +48,7 @@ public sealed class RemoveTests
     }
 
     [Fact]
-    public async Task Removing_twice_answers_the_same_tombstone_and_writes_nothing_and_a_removed_root_leaves_its_replies_where_no_one_replies_again()
+    public async Task Removing_twice_answers_the_same_tombstone_to_anyone_who_may_remove_it_and_writes_nothing_and_a_removed_root_leaves_its_replies()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         var writer = await Place(tangentSpace);
@@ -58,11 +58,13 @@ public sealed class RemoveTests
         var first = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(root.Id, Ada), Cancellation)).Result;
         var counted = (await Counted(), await Snapshots());
         var again = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(root.Id, Ada), Cancellation)).Result;
-        var byModerator = await writer.Send(new RemovePost(root.Id, Mo), Cancellation);
+        var byModerator = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(root.Id, Mo), Cancellation)).Result;
+        var bySomeoneElse = await writer.Send(new RemovePost(root.Id, Bea), Cancellation);
         var answer = await writer.Send(new Reply(Tids.Mint(), root.Id, "Still here?", Bea), Cancellation);
 
-        Assert.Equal((first.Id, first.RemovedAt, first.RemovedBy, first.Body), (again.Id, again.RemovedAt, again.RemovedBy, again.Body));
-        Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(byModerator).Reason);
+        Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (again.Id, again.RemovedAt, again.RemovedBy, again.Body));
+        Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (byModerator.Id, byModerator.RemovedAt, byModerator.RemovedBy, byModerator.Body));
+        Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(bySomeoneElse).Reason);
         Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(answer).Reason);
         Assert.Equal(counted, (await Counted(), await Snapshots()));
         var stored = await Post.Get(root.Id, Cancellation);

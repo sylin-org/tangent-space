@@ -34,6 +34,10 @@ public sealed class Post : Entity<Post>
     public const string PostRemoved = "The Post is removed.";
     public const string NeedsRemover = "A removal names who removes.";
 
+    /// <summary>The one answer for an Id a Post outside the place a command names already holds: it says nothing of
+    /// where, whose or what that Post is.</summary>
+    public const string IdTaken = "This id is not available; mint another.";
+
     /// <summary>The Tangent the Topic is in; on every row.</summary>
     [Index(Name = "ix_post_topics", Order = 0)]
     [Index(Name = "ix_post_slugs", Order = 0)]
