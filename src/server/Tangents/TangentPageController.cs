@@ -19,7 +19,7 @@ namespace Tangent.Tangents;
 /// <see cref="Bit.View"/> on the Tangent receives its gate instead, and one for whom the Tangent is absent receives
 /// what an address with no Tangent receives. Every read is bounded and keyed: the Tangent, then capability's rows, at
 /// most two reads of Topics, their latest replies by Id, the people on the page, the reader's checkpoints for those
-/// Topics, and the first <see cref="SwitcherLimit"/> Tangents by order with their overwrites for the switcher.</summary>
+/// Topics and for the Tangent, whose watch flag the page's watch form shows, and the first <see cref="SwitcherLimit"/> Tangents by order with their overwrites for the switcher.</summary>
 public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
@@ -54,6 +54,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
         var latest = await LatestReplies(page.Topics, ct);
         var people = await People(page.Topics, latest.Values, ct);
         var seen = await Seen(reader, page.Topics, ct);
+        var watched = reader is not null && (await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Tangent(row.Id)), ct))?.Watch == true;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(roles, row.Id, ct) == Audience.Private
             ? Audience.Private
@@ -62,7 +63,10 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
         var configured = Configured();
         var address = Address(row.Id);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + row.Id);
-        if (reader is not null) Response.Headers.CacheControl = "private";
+        // A signed-in reader's page carries the watch form with a fresh antiforgery token, so it is never stored or
+        // revalidated.
+        var token = reader is null ? null : FormToken.For(HttpContext);
+        if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
         return Ok(new TangentPage(
             row.Id,
             row.Name,
@@ -75,6 +79,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
             page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             capabilities.Holds(Bit.Topic) ? address + "/" + NewTopicSegment : null,
+            token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, watched, token),
             reader is null ? configured + SignInController.Path + "?return=" + back : null,
             await Viewable(personId, row, ct),
             space.Name,

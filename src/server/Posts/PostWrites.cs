@@ -57,7 +57,8 @@ public static class PostWrites
                && !accept.Any(type => string.Equals(type.MediaType.Value, "text/html", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>The fields a write sent, by name: a form's, or the string and number members of a JSON object; an empty
+    /// <summary>The fields a write sent, by name: a form's, or the string, number and true or false members of a JSON
+    /// object, each as its text; an empty
     /// set for a body of neither kind, and null for a JSON body that is not one object.</summary>
     public static async Task<IReadOnlyDictionary<string, string>?> Fields(HttpRequest request, CancellationToken ct)
     {
@@ -80,7 +81,7 @@ public static class PostWrites
             foreach (var member in json.RootElement.EnumerateObject())
             {
                 if (member.Value.ValueKind == JsonValueKind.String) fields[member.Name] = member.Value.GetString()!;
-                else if (member.Value.ValueKind == JsonValueKind.Number) fields[member.Name] = member.Value.GetRawText();
+                else if (member.Value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False) fields[member.Name] = member.Value.GetRawText();
             }
 
             return fields;

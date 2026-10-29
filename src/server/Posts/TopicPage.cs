@@ -11,7 +11,9 @@ namespace Tangent.Posts;
 /// of the windows on either side, each absent where nothing lies that way, and their cursors are sequence numbers.
 /// <see cref="Anchor"/> is the Post the window was opened around, where its address named one. <see cref="Can"/> is what
 /// the reader holds on the Topic — <c>Post</c> among it when they may reply — and <see cref="Gate"/> the one reason they
-/// may not, where they may not. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
+/// may not, where they may not. For a signed-in reader, <see cref="Seen"/> is the form that moves their checkpoint on
+/// the Topic through what the page shows, present while that reaches past it, and <see cref="Watching"/> the form that
+/// sets or clears their watch flag on it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for.</summary>
 public sealed record TopicPage(
@@ -26,6 +28,8 @@ public sealed record TopicPage(
     int ReplyCount,
     IReadOnlyList<string> Can,
     string? Gate,
+    Events.TopicSeen? Seen,
+    Events.Watching? Watching,
     TopicPage.Post Root,
     IReadOnlyList<TopicPage.Post> Replies,
     long? From,

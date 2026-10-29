@@ -1,0 +1,32 @@
+/* The watch toggle under a Tangent's or a Topic's head, with the mark of a watched one, and the seen control at the
+   end of a Topic's window. */
+.watch-form {
+  margin: 12px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.watch-button,
+.topic-seen-button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-surface);
+  color: var(--ts-text-2);
+  font: 600 13px/1 var(--ts-font-ui);
+  cursor: pointer;
+}
+
+.watch-button:hover,
+.topic-seen-button:hover {
+  border-color: var(--ts-text-3);
+  color: var(--ts-text);
+}
+
+.topic-seen {
+  margin: 16px 0 0;
+  display: flex;
+  justify-content: flex-end;
+}

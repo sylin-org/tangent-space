@@ -17,7 +17,8 @@ namespace Tangent.Posts;
 /// a signed-in reader's first unread Post — the first past their checkpoint on the Topic, the newest window when they
 /// have read everything — and from the start for a visitor or a reader without one; <see cref="Before"/> and
 /// <see cref="After"/> name the window on either side by sequence. At a Post's address the window opens around that
-/// Post, marked; at the root's own address, from the start, the root marked. Reading moves no checkpoint. A reader without <see cref="Bit.View"/> on the Tangent receives its gate,
+/// Post, marked; at the root's own address, from the start, the root marked. Reading moves no checkpoint: a signed-in
+/// reader's page carries the form that moves it through what the page shows (<see cref="CheckpointController"/>). A reader without <see cref="Bit.View"/> on the Tangent receives its gate,
 /// and one for whom the Tangent is absent — or an address no Topic or Post of this Topic answers — receives what an
 /// address with nothing at it receives. Every read is bounded and keyed: the Tangent; the rows capability is computed
 /// from, once for the page; the root by slug; the anchor by Id; at most two ranges of the window index; the reader's
@@ -91,7 +92,11 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var topicCan = rows.For(root);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + (anchor is null ? "" : "/" + anchor.Id));
         var space = rows.Space;
-        if (reader is not null) Response.Headers.CacheControl = "private";
+        // A signed-in reader's page carries their forms with a fresh antiforgery token, so it is never stored or
+        // revalidated. The window shows the root and its replies through its last, the root alone when it holds none.
+        var token = reader is null ? null : FormToken.For(HttpContext);
+        var shownThrough = window.Replies.Count == 0 ? 0 : window.High;
+        if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
         return Ok(new TopicPage(
             root.Id,
             root.Slug ?? root.Id,
@@ -104,6 +109,10 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             root.ReplyCount,
             topicCan.Can,
             topicCan.Gate(Bit.Post),
+            token is not null && shownThrough > (seen?.Seq ?? Checkpoint.Nothing)
+                ? new TopicSeen(address + "/" + CheckpointController.SeenSegment, shownThrough, token)
+                : null,
+            token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, seen?.Watch ?? false, token),
             Shown(root, root, address, rows, people, seen, reader),
             window.Replies.Select(reply => Shown(reply, root, address, rows, people, seen, reader)).ToList(),
             window.Replies.Count == 0 ? null : window.Low,
