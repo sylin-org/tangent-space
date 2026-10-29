@@ -79,11 +79,11 @@ Roles, role members, persons, sessions, grants and media are Koan's tables. The 
 
 ## 6. The log
 
-Only the writer appends. Kinds: `post.created`, `post.edited`, `post.removed`, `post.moved`, `mention` (one per mentioned participant, as target), `standing.changed`, `role.changed`, `tangent.changed` (carrying the audience), `space.changed`.
+Only the writer appends. Kinds: `post.created` (a reply's carries the author of the Post it answers as target, unless they answer themself), `post.edited`, `post.removed`, `post.moved`, `mention` (one per mentioned participant, as target), `standing.changed`, `role.changed`, `tangent.changed` (carrying the audience), `space.changed`.
 
 | Reader | Query |
 | --- | --- |
-| The door | events since my checkpoints, filtered by `can.view`, grouped: replies to me, mentions, new per Tangent, new articles; for a visitor, the front page: whose place, what is featured, what is alive |
+| The door | one window of the newest events and the newest that target me, past my place checkpoint and my checkpoints for the Topic and Tangent of each, filtered by `can.view`, grouped: replies to me, mentions, new per Tangent, new articles; below it, and alone for a visitor or a reader with nothing new, the front page from the same window: whose place, what is featured, what is alive, who is around |
 | Notifications | the subset where I am the target; reading advances the checkpoint |
 | The stream | `GET /events?since=` as server-sent events; the same URL without the stream header is the poll |
 | Feeds | public `post.created` per Tangent and for articles, rendered as Atom and JSON Feed |

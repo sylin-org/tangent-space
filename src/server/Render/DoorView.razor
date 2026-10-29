@@ -1,12 +1,201 @@
+@using System.Globalization
 @using System.Text.Json
 @using Tangent.Space
-@* The fragment island: the door reads as rendered here, and once the page script mounts it, it can refresh
-   itself from this component alone at the door's URL under the base URL the row records. *@
-<main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Model.BaseUrl + "/" })">
-    <h1>@Model.Name</h1>
-    <p><a href="@Model.BaseUrl">@Model.BaseUrl</a></p>
+@using Tangent.Tangents
+@* The door: whose place this is, in the head with what it holds; the Tangents the reader may view and who is around in
+   the rail; and in the column, for a signed-in reader with news, what is new since they were here — one sentence,
+   then replies to them, mentions of them, the new articles and what is new in each Tangent, with the form that marks
+   it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
+   in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
+   fragment island's host, so it refreshes itself from its own address. *@
+<main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Model.Address })">
+    <section class="tangent-head" aria-labelledby="door-title">
+        <div class="tangent-head-inner">
+            <TangentTile Tile="@(new Tile(Tile.Tones[0], Initial))" Size="head" />
+            <div class="tangent-head-text">
+                <h1 id="door-title" class="tangent-title">@Model.Name</h1>
+                @if (Model.Proprietor is { } proprietor)
+                {
+                    <p class="tangent-description">The place of @proprietor.Name, @("@" + proprietor.Handle)</p>
+                }
+                <p class="tangent-meta">
+                    <span>@Bold(Model.Tangents.Count, Model.MoreTangents, "Tangent", "Tangents")</span>
+                    <span>@Bold(Model.Tangents.Sum(tangent => tangent.TopicCount), Model.MoreTangents, "topic", "topics")</span>
+                </p>
+            </div>
+        </div>
+    </section>
+    <div class="layout tangent-layout">
+        <aside class="rail" aria-label="In this Tangent Space">
+            <h2 class="rail-heading">Tangents</h2>
+            <ul class="rail-views">
+                @foreach (var tangent in Model.Tangents)
+                {
+                    <li>
+                        <a href="@tangent.Address">@tangent.Name</a>
+                        @if (tangent.New > 0)
+                        {
+                            <span class="new-label">@tangent.New.ToString(CultureInfo.InvariantCulture) new</span>
+                        }
+                    </li>
+                }
+            </ul>
+            <h2 class="rail-heading rail-heading-spaced">Around</h2>
+            @if (Model.Around.People.Count == 0)
+            {
+                <p class="rail-audience-note">Nobody has written lately.</p>
+            }
+            else
+            {
+                <div class="rail-audience">
+                    <span class="topic-row-people">
+                        @foreach (var person in Model.Around.People)
+                        {
+                            @TopicRow.Mark(person, "face")
+                        }
+                    </span>
+                    <span class="rail-audience-text">
+                        <span class="rail-audience-name">@Words(Model.Around.Count, Model.Around.AtLeast, "participant", "participants")</span>
+                        <span class="rail-audience-note">wrote lately: @string.Join(", ", Model.Around.People.Select(person => person.Name))</span>
+                    </span>
+                </div>
+            }
+        </aside>
+        <div class="tangent-main">
+            @if (Model.News is { } news)
+            {
+                @if (news.Quiet)
+                {
+                    <div class="topic-empty">
+                        <p class="topic-empty-title">Nothing new since you were here.</p>
+                    </div>
+                }
+                else
+                {
+                    <section class="door-news" aria-labelledby="door-news-title">
+                        <div class="topic-list-head">
+                            <h2 id="door-news-title" class="topic-list-title">Since you were here</h2>
+                            @if (news.CaughtUp is { } caughtUp)
+                            {
+                                <form method="post" action="@caughtUp.Action">
+                                    <FormTokenField Token="@caughtUp.Token" />
+                                    <input type="hidden" name="@DoorController.Through" value="@caughtUp.Through.ToString(CultureInfo.InvariantCulture)">
+                                    <button type="submit" class="tangent-new">Mark all seen</button>
+                                </form>
+                            }
+                        </div>
+                        <p class="tangent-description">@Sentence(news)</p>
+                        @Items("Replies to you", news.Replies)
+                        @Items("Mentions of you", news.Mentions)
+                        @Items("New articles", news.Articles)
+                        @if (news.PerTangent.Count > 0)
+                        {
+                            <h3 class="rail-heading rail-heading-spaced">New in each Tangent</h3>
+                            <ul class="rail-views">
+                                @foreach (var tangent in news.PerTangent)
+                                {
+                                    <li><a href="@tangent.Address">@tangent.Name</a> <span class="new-label">@InTangent(tangent)</span></li>
+                                }
+                            </ul>
+                        }
+                    </section>
+                }
+            }
+            @if (Model.Featured.Count == 0 && Model.Alive.Count == 0)
+            {
+                <div class="topic-empty">
+                    <p class="topic-empty-title">Nothing written here yet.</p>
+                </div>
+            }
+            @Shelf("door-featured", "Featured", Model.Featured)
+            @Shelf("door-alive", "Alive now", Model.Alive)
+        </div>
+    </div>
 </main>
 
 @code {
     [Parameter, EditorRequired] public Door Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the door: the place, with the place itself as the one crumb, and who
+    /// reads, or where a visitor signs in.</summary>
+    public static Frame Frame(Door door)
+    {
+        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
+        return new(door.Name, door.Address, [new Crumb(door.Name)], who, door.SignIn);
+    }
+
+    private string Initial => Model.Name.Length > 0 ? char.ToUpperInvariant(Model.Name[0]).ToString() : "T";
+
+    /// <summary>A count with its noun; "at least" before it when the door could not finish counting.</summary>
+    private static string Words(int count, bool atLeast, string one, string many)
+        => (atLeast ? "at least " : "") + count.ToString(CultureInfo.InvariantCulture) + " " + (count == 1 && !atLeast ? one : many);
+
+    private static MarkupString Bold(int count, bool atLeast, string one, string many)
+        => new((atLeast ? "at least " : "") + "<b>" + count.ToString(CultureInfo.InvariantCulture) + "</b> " + (count == 1 && !atLeast ? one : many));
+
+    private static string InTangent(Door.InTangent tangent)
+    {
+        var parts = new List<string>();
+        if (tangent.Topics > 0) parts.Add(Words(tangent.Topics, tangent.AtLeast, "topic", "topics"));
+        if (tangent.Replies > 0) parts.Add(Words(tangent.Replies, tangent.AtLeast, "reply", "replies"));
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>The news in one sentence: each group that holds something, in the order the door shows them.</summary>
+    private static string Sentence(Door.Since news)
+    {
+        var parts = new List<string>();
+        if (news.Replies.Count > 0) parts.Add(Words(news.Replies.Count, news.Replies.AtLeast, "reply", "replies") + " to you");
+        if (news.Mentions.Count > 0) parts.Add(Words(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
+        foreach (var tangent in news.PerTangent)
+            parts.Add(Words(tangent.Topics + tangent.Replies, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
+        if (news.Articles.Count > 0) parts.Add(Words(news.Articles.Count, news.Articles.AtLeast, "new article", "new articles"));
+        return "Since you were here: " + string.Join(", ", parts) + ".";
+    }
+
+    /// <summary>One group of new Posts as rows: who wrote it, in which Topic and Tangent, its first words and when.</summary>
+    private RenderFragment Items(string title, Door.Group group) => @<text>
+        @if (group.Count > 0)
+        {
+            <h3 class="rail-heading rail-heading-spaced">@title · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
+            <ul class="topic-rows">
+                @foreach (var post in group.Posts)
+                {
+                    <li @key="post.PostId">@Row(post)</li>
+                }
+            </ul>
+        }
+    </text>;
+
+    private RenderFragment Row(Door.NewPost post) => @<a class="topic-row is-new" href="@post.Address">
+        <span class="topic-row-dot"><span class="new-dot" role="img" aria-label="Unread"></span></span>
+        <span class="topic-row-body">
+            <span class="topic-row-title">@post.Topic</span>
+            <span class="topic-row-opening"><span class="topic-row-author">@post.Who.Name</span>@(post.Line.Length > 0 ? ": " + post.Line : "")</span>
+        </span>
+        <span class="topic-row-people">@TopicRow.Mark(post.Who, "face")</span>
+        <span class="topic-row-replies"><span class="topic-row-none">@post.Tangent</span></span>
+        <span class="topic-row-activity"><time datetime="@post.At.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@TopicRow.When(post.At, Model.Day)</time></span>
+    </a>;
+
+    /// <summary>A shelf of the front page: its heading and its Topics as rows of the table, each with its Tangent.</summary>
+    private RenderFragment Shelf(string id, string title, IReadOnlyList<Door.Shown> topics) => @<text>
+        @if (topics.Count > 0)
+        {
+            <section aria-labelledby="@id">
+                <div class="topic-list-head">
+                    <h2 id="@id" class="topic-list-title">@title</h2>
+                    <span class="topic-list-order">latest activity first</span>
+                </div>
+                <div class="topic-table">
+                    <ul class="topic-rows">
+                        @foreach (var shown in topics)
+                        {
+                            <li @key="shown.Topic.Id"><TopicRow Model="@shown.Topic" Today="@Model.Day" /></li>
+                        }
+                    </ul>
+                </div>
+            </section>
+        }
+    </text>;
 }
