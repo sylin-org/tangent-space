@@ -62,7 +62,7 @@ public sealed partial class FirstRunTests
             Assert.Contains("<span class=\"panel-head-name\">New Tangent Space</span>", html);
             Assert.Contains("Setting it up asks for the setup code from this Tangent Space’s log.", html);
             Assert.Contains("<summary>Set it in configuration instead</summary>", html);
-            Assert.Contains("Set <code>Tangent:Operator</code> to your DID and restart, and no setup code is asked.", html);
+            Assert.Contains($"Set {Code("Tangent:Operator")} to your DID and restart, and no setup code is asked.", html);
             Assert.Equal(TangentSpace.Unnamed, json.RootElement.GetProperty("name").GetString());
             Assert.Equal(BaseUrl, json.RootElement.GetProperty("baseUrl").GetString());
             Assert.Equal(TangentModule.BaseUrlKey, json.RootElement.GetProperty("setting").GetString());
@@ -93,8 +93,8 @@ public sealed partial class FirstRunTests
         var page = await form.Content.ReadAsStringAsync(Cancellation);
 
         Assert.Contains("You’re signed in as <strong>@leo.example</strong>", page);
-        Assert.Contains($"<span class=\"first-run-address\" aria-labelledby=\"first-run-address-label\">{BaseUrl}</span>", page);
-        Assert.Contains("<code>Koan:Web:ApplicationUrl</code>", page);
+        Assert.Contains($"<span class=\"first-run-address\" aria-labelledby=\"first-run-address-label\">{Code(BaseUrl)}</span>", page);
+        Assert.Contains(Code("Koan:Web:ApplicationUrl"), page);
         Assert.DoesNotContain("name=\"code\"", page);
 
         using var established = await browser.SetUp("Field notes", Cancellation);
@@ -146,9 +146,9 @@ public sealed partial class FirstRunTests
         using var json = JsonDocument.Parse(await answered.Content.ReadAsStringAsync(Cancellation));
 
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("This Tangent Space waits for its operator", html);
-        Assert.Matches($@"Only\s+<code>{Leo}</code>\s+can set it up\.", beforeLeo);
-        Assert.Matches($@"Only\s+<strong>@leo\.example</strong> <span class=""first-run-did"">\(<code>{Leo}</code>\)</span>\s+can set it up\.", html);
+        Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Waiting for its operator</h1>", html);
+        Assert.Matches($@"Only\s+{Regex.Escape(Code(Leo))}\s+can set it up\.", beforeLeo);
+        Assert.Matches($@"Only\s+<strong>@leo\.example</strong> <span class=""first-run-did"">\({Regex.Escape(Code(Leo))}\)</span>\s+can set it up\.", html);
         Assert.Equal("leo.example", json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString());
         Assert.DoesNotContain("<form", html);
         Assert.DoesNotContain("__RequestVerificationToken", html);
@@ -191,7 +191,8 @@ public sealed partial class FirstRunTests
         Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
         Assert.Contains("id=\"first-run-code-failure\">That is not the setup code", wrongPage);
         Assert.Matches("<input id=\"first-run-code\"[^>]* autofocus", wrongPage);
-        Assert.DoesNotContain("AAAA-BBBB-CCCC-DDDD", wrongPage);
+        // The refused code stays in the field, so the sender sees what was refused.
+        Assert.Contains("value=\"AAAA-BBBB-CCCC-DDDD\"", wrongPage);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
 
         using var right = await browser.SetUp("Field notes", Cancellation, code: code.ToLowerInvariant());
@@ -488,7 +489,7 @@ public sealed partial class FirstRunTests
         Assert.Contains("return 308 /a%20b%5C/;", spaced.Text);
         Assert.Contains("location \"/a b\\\\/\" {", spaced.Text);
         Assert.Equal("", dollar.Text);
-        Assert.StartsWith("nginx cannot express the path /a$b safely", dollar.Where);
+        Assert.StartsWith("nginx cannot express the path `/a$b` safely", dollar.Where);
     }
 
     [Fact]
@@ -508,6 +509,12 @@ public sealed partial class FirstRunTests
         Assert.IsType<Outcome<TangentSpace>.Done>(outcome);
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
     }
+
+    /// <summary>Code as a sentence sets it: in runs between slashes, a break opportunity after each slash.</summary>
+    private static string Code(string text)
+        => "<code class=\"code-text\">" + string.Join("<wbr />", text.Split('/').Select((run, index) => index < text.Split('/').Length - 1
+            ? $"<span class=\"code-run\">{WebUtility.HtmlEncode(run)}/</span>"
+            : $"<span class=\"code-run\">{WebUtility.HtmlEncode(run)}</span>")) + "</code>";
 
     /// <summary>A base URL as Koan holds it.</summary>
     private static string Normalised(string url) => new KoanWebBaseUrl(url).Configured!;

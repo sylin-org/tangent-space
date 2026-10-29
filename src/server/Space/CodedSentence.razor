@@ -1,0 +1,19 @@
+@* A sentence whose code is set between backticks, as a pointer's sentence carries it: the code reads in the mono
+   face, breaking only after slashes. *@
+@for (var index = 0; index < Parts.Length; index++)
+{
+    if (index % 2 == 1)
+    {
+        <CodeText Text="@Parts[index]" />
+    }
+    else
+    {
+        @Parts[index]
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+
+    private string[] Parts => Text.Split('`');
+}

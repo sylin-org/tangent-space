@@ -12,6 +12,17 @@
   background: var(--ts-image-band);
 }
 
+/* The atmosphere's field covers the band and fades out before the name's line, as the reference shades its image
+ * under the name, and toward both sides of the band, so no character is cut at the panel's edge. */
+.panel-head-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, #000 30%, transparent 64%), linear-gradient(90deg, transparent 2%, #000 14%, #000 86%, transparent 98%);
+  mask-composite: intersect;
+}
+
 .panel-head-atmosphere {
   position: absolute;
   top: 8px;
@@ -20,13 +31,25 @@
   color: var(--ts-accent);
   font: 400 13px/1.2 var(--ts-font-mono);
   opacity: 0.6;
-  pointer-events: none;
 }
 
+/* The reference's shade under the mark and the name. */
 .panel-head-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 20%, var(--ts-image-band) 76%);
+  background: linear-gradient(180deg, rgba(10, 9, 8, 0.05) 20%, rgba(10, 9, 8, 0.8) 100%);
+}
+
+/* In dark the band sits on a raised panel of nearly its own colour: a rule along its foot parts them. */
+:root[data-theme="dark"] .panel-head {
+  border-bottom: 1px solid var(--ts-line);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .panel-head,
+  :root[data-theme="system"] .panel-head {
+    border-bottom: 1px solid var(--ts-line);
+  }
 }
 
 .panel-head-mark {
@@ -136,7 +159,12 @@
   box-shadow: 0 0 0 3px var(--ts-accent-soft);
 }
 
-.field-input:has(input[aria-invalid="true"]) {
+.field-input:has(input[aria-invalid="true"]:focus) {
+  border-color: var(--ts-danger);
+  box-shadow: 0 0 0 3px var(--ts-accent-line);
+}
+
+.field-input:has(input[aria-invalid="true"]:not(:focus)) {
   border-color: var(--ts-danger);
   box-shadow: 0 0 0 3px var(--ts-danger-soft);
 }
