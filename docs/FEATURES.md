@@ -9,7 +9,7 @@ Status: `todo` · `doing` · `done`. Everything is `todo` on 28 October 2026.
 | Brief | Koan home | Needed by |
 | --- | --- | --- |
 | 1 · SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL | `Koan.Data.Connector.Sqlite`, `Koan.Web` | slice 0; in the pin since Koan `7ba505e49` |
-| 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1 (Tangent composes its own step beside Koan's facts until then) |
+| 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1; in the pin since Koan `943e6358a` (SEC-0021), Tangent resolving on it since package 1.10 |
 | 3 · atproto content: records, blobs, resolution, AppView reads; service-auth verification; `did:web` on the issuer keys | `Koan.Web.Auth.Connector.Atproto`, Trust, Auth.Server — names assigned by Koan | slice 3 and the bridge in slice 8 |
 | 4 · Lexical search over entity fields | `Koan.Data` | slice 6 |
 
@@ -54,8 +54,8 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Topic window: bounded, lock-free, cursors are sequence numbers, anchor first | topic | `ConversationService.Window`, `WindowPlanner`, `History` (harvest) | — | M | todo |
-| Post, reply, edit, remove through the writer: TID ids, pre-edit snapshots in the audit partition, visible tombstones | topic | `PostChanges` snapshot chain (harvest) | audit partition | M | todo |
+| Topic window: bounded, lock-free, cursors are sequence numbers, anchor first | topic | `ConversationService.Window`, `WindowPlanner`, `History` (harvest) | — | M | done |
+| Post, reply, edit, remove through the writer: TID ids, pre-edit snapshots in the audit partition, visible tombstones | topic | `PostChanges` snapshot chain (harvest) | audit partition | M | doing |
 | Markdown body, sanitized HTML, mentions as identity-bearing links resolved at render | topic | `PostMarkup` (harvest) | — | S | todo |
 | The composer island: drafts in `localStorage` by scope; an uncertain submit reconciles by `GET` of the minted Id; never auto-posts | topic | `composables/conversation.ts` intents (harvest) | — | S | todo |
 | Live: the event stream, one per page, fragment patch; the door as the poll | topic | `activity/transport.ts` framing (harvest) | `Sylin.Koan.Web.Sse`, `Sylin.Koan.Communication` | M | todo |

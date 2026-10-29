@@ -126,9 +126,9 @@ export const screens: Readonly<Record<string, Screen>> = {
   },
   // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the
   // request the shared client waits with under the seeded code; a code no request waits under, said under its field;
-  // a code a self-registered client asked for, refused under its field; and where the person lands once they have
-  // decided. Every look-up of a code counts against the rate limit, raised
-  // so every width and theme reaches the page.
+  // a code a self-registered client asked for, refused under its field; and the done page reached without a decision
+  // of the persona's to show. Every look-up of a code counts against the rate limit, raised so every width and theme
+  // reaches the page.
   consent: {
     path: '/consent',
     placeName: 'Lantern Works',
@@ -180,6 +180,21 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'discussions-empty', seed: 'tangent', signedIn: true, path: '/t/workshop' },
       { name: 'articles', seed: 'tangent', signedIn: true, path: '/t/articles' },
       { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },
+    ],
+  },
+  // A short Topic whose replies answer one another, read by the persona up to its first reply, and as a visitor
+  // reads it; a long Topic of more replies than two windows, opened at the persona's first unread with the older
+  // window a cursor away; the same Topic at the address of its fortieth reply, marked in the middle of its window; a
+  // Topic with a reply a moderator removed; and a Topic without replies.
+  topic: {
+    path: '/t/discussions/what-kind-of-discussions',
+    states: [
+      { name: 'populated', seed: 'topic', signedIn: true },
+      { name: 'populated-visitor', seed: 'topic' },
+      { name: 'long', seed: 'topic', signedIn: true, path: '/t/discussions/notes-from-the-repair-workshop' },
+      { name: 'anchored', seed: 'topic', signedIn: true, path: '/t/discussions/notes-from-the-repair-workshop/3mwdfsj6d226g' },
+      { name: 'tombstone', seed: 'topic', signedIn: true, path: '/t/discussions/is-a-visible-repair-a-better-repair' },
+      { name: 'empty-replies', seed: 'topic', signedIn: true, path: '/t/discussions/a-quiet-question' },
     ],
   },
 }

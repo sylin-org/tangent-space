@@ -2,7 +2,8 @@
 @using Tangent.Space
 @* The consent page: one panel in the page, headed by the place's mark and name. Asked for a code, it holds the code
    field, focused, with what it found wrong under it; with a request waiting, it says who decides and what the client
-   may do, and holds approve and deny, each a form with its token; once decided, it says what follows. A request by
+   may do, and holds approve and deny, each a form with its token; once decided, it says what the person decided and
+   what follows, or that it has no decision of theirs to show. A request by
    the shared client is never named, since any device or agent may show its codes. *@
 <main class="sign-in consent">
     <section class="sign-in-panel" aria-labelledby="consent-title">
@@ -41,8 +42,21 @@
         }
         else if (Model.Done)
         {
-            <h1 id="consent-title" class="sign-in-title">You’ve decided</h1>
-            <p class="sign-in-lede">If you approved, go back to the device or agent: it acts as you here now. If you denied, it was told no and holds nothing.</p>
+            @if (Model.Approved is true)
+            {
+                <h1 id="consent-title" class="sign-in-title">You approved the agent</h1>
+                <p class="sign-in-lede">Go back to the device or agent: it acts as you here now.</p>
+            }
+            else if (Model.Approved is false)
+            {
+                <h1 id="consent-title" class="sign-in-title">You denied the agent</h1>
+                <p class="sign-in-lede">It was told no and holds nothing.</p>
+            }
+            else
+            {
+                <h1 id="consent-title" class="sign-in-title">Nothing to show</h1>
+                <p class="sign-in-lede">This page says what you decided right after you approve or deny an agent here, and there is no decision of yours to show.</p>
+            }
             <p class="first-run-note first-run-first">You can close this page.</p>
             <p class="first-run-onward">
                 <a class="first-run-door" href="@Model.Door">Open @Model.Place</a>

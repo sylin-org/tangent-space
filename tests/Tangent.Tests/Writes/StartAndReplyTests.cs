@@ -37,6 +37,12 @@ public sealed class StartAndReplyTests
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/workshop/lanterns-at-dusk/" + replyId), (replied.Status, replied.Location));
         var reply = await Post.Get(replyId, Cancellation);
         Assert.Equal((root.Id, root.Id, 1L, Bea), (reply?.TopicId, reply?.ParentId, reply?.Sequence, reply?.AuthorId));
+        // The address a form is sent on to is the Topic's page, opened at the Post and marking it.
+        var landed = await Send(bea.Client, HttpMethod.Get, new Uri(replied.Location!).AbsolutePath);
+        Assert.Equal(HttpStatusCode.OK, landed.Status);
+        Assert.Contains("<article id=\"" + replyId + "\"", landed.Body);
+        Assert.Contains("aria-current=\"true\"", landed.Body[landed.Body.IndexOf("<article id=\"" + replyId + "\"", StringComparison.Ordinal)..].Split('>')[0]);
+        Assert.Contains("I do, at six.", landed.Body);
 
         var topicId = Tids.Mint();
         var asJson = await Json(ada, form, form, new { id = topicId, title = "Wicks", body = "Cotton or hemp?" });

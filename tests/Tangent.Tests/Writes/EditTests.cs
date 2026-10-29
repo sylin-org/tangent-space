@@ -1,5 +1,9 @@
 using System.Net;
+using Koan.Identity.Roles;
+using Microsoft.Extensions.DependencyInjection;
+using Tangent.Access;
 using Tangent.Events;
+using Tangent.Tangents;
 using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -54,6 +58,32 @@ public sealed class EditTests
         var moEdit = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostEdited && e.PostId == reply.Id, Cancellation));
         Assert.Equal((Mo, 2L), (moEdit.ActorId, moEdit.Version));
         Assert.Equal(2, commits.Count);
+    }
+
+    [Fact]
+    public async Task A_member_whom_an_overwrite_grants_moderate_in_a_tangent_edits_and_removes_anyones_post_there_and_nowhere_else()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await tangentSpace.Services.GetRequiredService<RoleCollection>().Overwrite(Overwrites.Resource(Workshop), OverwriteSubjectKind.Person,
+            Bea, [Bits.Token(Bit.Moderate)], [], ct: Cancellation);
+        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        var reply = await Replied(writer, root, Ada, "From the porch beam.");
+        var elsewhere = await Started(writer, Ada, "On wicks", "A short piece.", Articles);
+
+        var edited = await writer.Send(new EditPost(root.Id, 1, "How do you hang yours? (moderated)", null, Bea), Cancellation);
+        var removed = await writer.Send(new RemovePost(reply.Id, Bea), Cancellation);
+        var notThere = await writer.Send(new EditPost(elsewhere.Id, 1, "Not mine to change.", null, Bea), Cancellation);
+        var notThereEither = await writer.Send(new RemovePost(elsewhere.Id, Bea), Cancellation);
+
+        Assert.Equal(2L, Assert.IsType<Outcome<Post>.Done>(edited).Result.Version);
+        Assert.Equal((true, Bea), (Assert.IsType<Outcome<Post>.Done>(removed).Result.Removed, Assert.IsType<Outcome<Post>.Done>(removed).Result.RemovedBy));
+        Assert.Equal("How do you hang yours?", (await AuditPartition.At<Post>(root.Id, 1, Cancellation))?.Body);
+        Assert.Equal("From the porch beam.", (await AuditPartition.At<Post>(reply.Id, 1, Cancellation))?.Body);
+        Assert.Equal(Capabilities.NotYours, Assert.IsType<Outcome<Post>.Refused>(notThere).Reason);
+        Assert.Equal(Capabilities.NotYours, Assert.IsType<Outcome<Post>.Refused>(notThereEither).Reason);
+        Assert.Equal(("A short piece.", 1L, false), ((await Post.Get(elsewhere.Id, Cancellation))?.Body, (await Post.Get(elsewhere.Id, Cancellation))?.Version,
+            (await Post.Get(elsewhere.Id, Cancellation))?.Removed));
     }
 
     [Fact]

@@ -7,10 +7,11 @@ using Koan.Data.Core.Transactions;
 namespace Tangent.Writer;
 
 /// <summary>The writer: one queue, one loop, one transaction per command. A sender hands a command to
-/// <see cref="Send{TResult}"/> and awaits its outcome. The loop takes commands in arrival order and, for each, opens
-/// one atomic scope, runs the command, assigns its sequences from the high-water marks loaded once at start, commits,
-/// announces a commit that wrote to <see cref="Committed"/> and answers the sender. A command that is refused or throws
-/// leaves no row behind and the next command runs. This is the only code in the tree that opens a transaction. Koan
+/// <see cref="Send{TResult}"/> and awaits its outcome. The loop takes commands in arrival order and, for each, runs its
+/// <see cref="ICommand{TResult}.Prepare"/> outside any transaction, opens one atomic scope, runs the command, assigns
+/// its sequences from the high-water marks loaded once at start, commits, announces a commit that wrote to
+/// <see cref="Committed"/> and answers the sender. A command that is refused or throws leaves no row of its transaction
+/// behind and the next command runs. This is the only code in the tree that opens a transaction. Koan
 /// discovers it as a background service and starts and stops it with the host.</summary>
 public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configuration, IEnumerable<HighWaterMark> marks)
     : KoanBackgroundServiceBase(logger, configuration)
@@ -100,10 +101,10 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
         }
     }
 
-    /// <summary>One command: its own atomic scope, which never outlives it; a commit only for a result; the sender
-    /// answered on every path out, after the scope is gone, so no sender continues inside it. A commit whose outcome
-    /// is unknown may have landed, so its sequences are not given back: every mark is reloaded from the store before
-    /// the next command runs.</summary>
+    /// <summary>One command: its step before any transaction, then its own atomic scope, which never outlives it; a
+    /// commit only for a result; the sender answered on every path out, after the scope is gone, so no sender continues
+    /// inside it. A commit whose outcome is unknown may have landed, so its sequences are not given back: every mark is
+    /// reloaded from the store before the next command runs.</summary>
     private async Task Run(IPending pending, Dictionary<string, long> committed, CancellationToken ct)
     {
         var name = pending.Command.GetType().Name;
@@ -113,35 +114,38 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
         var unknown = false;
         try
         {
-            using (EntityContext.Transaction(name, TransactionGuarantee.Atomic))
+            if (await pending.Prepare(ct))
             {
-                if (await pending.Run(sequences, ct))
+                using (EntityContext.Transaction(name, TransactionGuarantee.Atomic))
                 {
-                    wrote = (EntityContext.Current?.TransactionCoordinator?.TrackedOperationCount ?? 0) > 0;
-                    try
+                    if (await pending.Run(sequences, ct))
                     {
-                        // The commit itself is not cut short by a stop: a command that reached it either commits or
-                        // fails on its own terms, bounded by the store's busy timeout.
-                        await EntityContext.Commit(CancellationToken.None);
-                        sequences.Keep();
-                        landed = true;
+                        wrote = (EntityContext.Current?.TransactionCoordinator?.TrackedOperationCount ?? 0) > 0;
+                        try
+                        {
+                            // The commit itself is not cut short by a stop: a command that reached it either commits or
+                            // fails on its own terms, bounded by the store's busy timeout.
+                            await EntityContext.Commit(CancellationToken.None);
+                            sequences.Keep();
+                            landed = true;
+                        }
+                        catch (Exception failure)
+                        {
+                            unknown = !NothingLanded(failure);
+                            Logger.LogError(failure, "Writer could not commit {Command}; outcome {Outcome}", name, unknown ? "unknown" : "nothing landed");
+                            pending.Fail(failure);
+                        }
                     }
-                    catch (Exception failure)
+                    else
                     {
-                        unknown = !NothingLanded(failure);
-                        Logger.LogError(failure, "Writer could not commit {Command}; outcome {Outcome}", name, unknown ? "unknown" : "nothing landed");
-                        pending.Fail(failure);
+                        await EntityContext.Rollback(CancellationToken.None);
                     }
-                }
-                else
-                {
-                    await EntityContext.Rollback(CancellationToken.None);
                 }
             }
         }
         catch (Exception failure)
         {
-            // Thrown before a commit was attempted: opening the scope, or discarding. Nothing landed.
+            // Thrown before a commit was attempted: opening the scope, or discarding. Nothing in the scope landed.
             Logger.LogError(failure, "Writer could not run {Command}", name);
             pending.Fail(failure);
         }
@@ -187,6 +191,9 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
     {
         object Command { get; }
 
+        /// <summary>Runs the command's step before its transaction; false, with the outcome held, when it threw.</summary>
+        Task<bool> Prepare(CancellationToken ct);
+
         /// <summary>Runs the command and holds its outcome; true when the outcome is a result the writer commits.</summary>
         Task<bool> Run(Sequences sequences, CancellationToken ct);
 
@@ -202,6 +209,26 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
         public TaskCompletionSource<Outcome<TResult>> Outcome { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public object Command => command;
+
+        public async Task<bool> Prepare(CancellationToken ct)
+        {
+            try
+            {
+                await command.Prepare(ct);
+                return true;
+            }
+            catch (Refusal refusal)
+            {
+                _outcome = new Outcome<TResult>.Refused(refusal.Message);
+            }
+            catch (Exception failure)
+            {
+                logger.LogError(failure, "Writer command {Command} failed before its transaction", command.GetType().Name);
+                _outcome = new Outcome<TResult>.Failed(failure);
+            }
+
+            return false;
+        }
 
         public async Task<bool> Run(Sequences sequences, CancellationToken ct)
         {

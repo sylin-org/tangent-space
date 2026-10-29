@@ -149,7 +149,7 @@ internal static partial class Writing
         var deviceCode = device.RootElement.GetProperty("device_code").GetString()!;
         var code = device.RootElement.GetProperty("user_code").GetString()!;
         var token = await browser.Token(ConsentController.Path + "?" + ConsentController.CodeField + "=" + code, Cancellation);
-        using (var approved = await browser.Client.PostAsync(ConsentController.RequestEndpoint + code.Replace("-", "") + "/approve",
+        using (var approved = await browser.Client.PostAsync("/oauth/request/" + code.Replace("-", "") + "/approve",
                    new FormUrlEncodedContent(token), Cancellation))
             Assert.Equal(HttpStatusCode.Redirect, approved.StatusCode);
         using var granted = await JsonOf(tangentSpace.Client, "/oauth/token", new FormUrlEncodedContent(new Dictionary<string, string>

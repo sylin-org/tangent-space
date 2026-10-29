@@ -9,7 +9,7 @@ namespace Tangent.Writer;
 
 /// <summary>The writer's proofs, each in its own Tangent Space: order and exactly-once, atomic failure, refusal,
 /// idempotency by Id, high-water marks across a restart, shutdown with commands pending, what another connection
-/// sees before a commit, and a commit whose outcome is unknown.</summary>
+/// sees before a commit, a commit behind another writer's lock, and a commit whose outcome is unknown.</summary>
 public sealed class WriteLoopTests(ITestOutputHelper output)
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
@@ -115,29 +115,62 @@ public sealed class WriteLoopTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task A_commit_whose_outcome_is_unknown_fails_its_sender_and_reloads_every_mark_before_the_next_command()
+    public async Task A_commit_behind_another_writers_lock_lands_nothing_fails_its_sender_and_keeps_every_mark()
     {
         var loads = 0;
-        var counting = new HighWaterMark(CreateSlip.Mark, ct =>
-        {
-            Interlocked.Increment(ref loads);
-            return CreateSlip.HighWaterMark.Load(ct);
-        });
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:02" },
-            services => services.AddSingleton(counting),
-            Cancellation);
+        await using var tangentSpace = await Counted(new Dictionary<string, string?> { ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:02" },
+            () => Interlocked.Increment(ref loads));
         var writer = Writer(tangentSpace);
         Assert.Equal(1, Assert.IsType<Outcome<Slip>.Done>(await writer.Send(new CreateSlip("first", "s", 0, "body"), Cancellation)).Result.Sequence);
-        var loadedAtStart = loads;
 
-        // Another connection holds the write lock, so the commit's BEGIN IMMEDIATE fails on the busy timeout, which
-        // Koan reports as an outcome it cannot know.
+        // Another connection holds the write lock, so the commit's BEGIN IMMEDIATE fails on the busy timeout before
+        // anything is dispatched, which Koan reports as nothing committed.
         Outcome<Slip> blocked;
         await using (var holder = new SqliteConnection($"Data Source={tangentSpace.DatabasePath};Pooling=False"))
         {
             await holder.OpenAsync(Cancellation);
             await using var held = holder.BeginTransaction(deferred: false);
+            blocked = await writer.Send(new CreateSlip("blocked", "s", 1, "body"), Cancellation);
+        }
+
+        var next = await writer.Send(new CreateSlip("after", "s", 2, "body"), Cancellation);
+
+        var cause = Assert.IsType<TransactionException>(Assert.IsType<Outcome<Slip>.Failed>(blocked).Cause);
+        output.WriteLine($"{cause.CommitOutcome}: {cause.Message}");
+        Assert.Equal(DataCommitOutcome.NotCommitted, cause.CommitOutcome);
+        Assert.Equal(1, loads);
+        Assert.Null(await Slip.Get("blocked", Cancellation));
+        // The sequence the failed command took is given back without asking the store.
+        Assert.Equal(2, Assert.IsType<Outcome<Slip>.Done>(next).Result.Sequence);
+    }
+
+    [Fact]
+    public async Task A_commit_whose_outcome_is_unknown_fails_its_sender_and_reloads_every_mark_before_the_next_command()
+    {
+        var loads = 0;
+        // A rollback journal, where a commit needs every reader gone: a reader's shared lock makes the native COMMIT
+        // itself fail on the busy timeout, after the rows were dispatched, which Koan reports as an outcome it cannot know.
+        await using var tangentSpace = await Counted(new Dictionary<string, string?>
+            {
+                ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:02",
+                ["Koan:Data:Sqlite:JournalMode"] = "Delete"
+            },
+            () => Interlocked.Increment(ref loads));
+        var writer = Writer(tangentSpace);
+        Assert.Equal(1, Assert.IsType<Outcome<Slip>.Done>(await writer.Send(new CreateSlip("first", "s", 0, "body"), Cancellation)).Result.Sequence);
+        var loadedAtStart = loads;
+
+        Outcome<Slip> blocked;
+        await using (var reader = new SqliteConnection($"Data Source={tangentSpace.DatabasePath};Pooling=False"))
+        {
+            await reader.OpenAsync(Cancellation);
+            await using var reading = reader.BeginTransaction(deferred: true);
+            await using (var read = reader.CreateCommand())
+            {
+                read.CommandText = "SELECT count(*) FROM sqlite_master";
+                await read.ExecuteScalarAsync(Cancellation);
+            }
+
             blocked = await writer.Send(new CreateSlip("blocked", "s", 1, "body"), Cancellation);
         }
 
@@ -237,6 +270,18 @@ public sealed class WriteLoopTests(ITestOutputHelper output)
     /// <summary>A Tangent Space with the slips' high-water mark registered.</summary>
     private static Task<TangentSpaceFixture> Start(IReadOnlyDictionary<string, string?>? settings = null) =>
         TangentSpaceFixture.StartAsync(settings, services => services.AddSingleton(CreateSlip.HighWaterMark), Cancellation);
+
+    /// <summary>A Tangent Space with <paramref name="settings"/> whose slips' high-water mark calls
+    /// <paramref name="loaded"/> each time it is loaded.</summary>
+    private static Task<TangentSpaceFixture> Counted(IReadOnlyDictionary<string, string?> settings, Action loaded)
+    {
+        var counting = new HighWaterMark(CreateSlip.Mark, ct =>
+        {
+            loaded();
+            return CreateSlip.HighWaterMark.Load(ct);
+        });
+        return TangentSpaceFixture.StartAsync(settings, services => services.AddSingleton(counting), Cancellation);
+    }
 
     private static WriteLoop Writer(TangentSpaceFixture tangentSpace) => tangentSpace.Services.GetRequiredService<WriteLoop>();
 

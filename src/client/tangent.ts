@@ -7,6 +7,7 @@ import './sign-in.css'
 import './first-run.css'
 import './post-form.css'
 import './tangent-page.css'
+import './topic.css'
 import { mountIslands } from './islands'
 
 mountIslands(document)
