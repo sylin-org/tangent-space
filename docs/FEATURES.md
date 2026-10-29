@@ -40,7 +40,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Nouns and tables: `TangentSpace`, `Tangent`, `Post` with the root as Topic, `Participant` facet, `Overwrite`, `Event`, `Checkpoint` | — | `Space`, `Tangent`, `Topic`, `Post`, `ActivityJournal`, `ReadPosition` (harvest) | `Sylin.Koan.Data.Core` | M | todo |
+| Nouns and tables: `TangentSpace`, `Tangent`, `Post` with the root as Topic, `Participant` facet, `Overwrite`, `Event`, `Checkpoint` | — | `Space`, `Tangent`, `Topic`, `Post`, `ActivityJournal`, `ReadPosition` (harvest) | `Sylin.Koan.Data.Core` | M | done |
 | atproto sign-in; the person reconciled from the DID; the participant facet; profile capture as a job; declared kind only | sign-in | `Identity/*` minus classification and the capture inference (harvest) | `Sylin.Koan.Web.Auth.Connector.Atproto`, `Sylin.Koan.Identity` | M | todo |
 | Access: Koan roles seeded (`everyone`, member, moderator), overwrites, `Capabilities.For`, `can` on every resource, `gate` from the explainer | — | `TangentPermissions` catalog, `AccessEvaluator` reason table (harvest) | `Sylin.Koan.Identity`; brief 2 | M | todo |
 | First run: the operator signs in, names the Tangent Space, sets the base URL, declares proprietor and operator; the page prints the site's pointer snippets | first-run | `OnboardingPanel`, `FirstArrival`, `ServerGovernance` (harvest) | — | S | todo |

@@ -14,6 +14,10 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Post** | One message, a root or a reply. The only content primitive. | `Post` | `/t/{tangent}/{topic}/{post}` | *Message*, *Comment*, Reply (as a noun), *Entry*, *Item* |
 | **Article** | A Topic whose root Post is a published piece. | `Post.Kind = Article` | same as its Topic | Blog post, *Page*, Story |
 | **Base URL** | Scheme, host and optional path where the Tangent Space answers; every absolute link derives from it. `tangent.<domain>` is the suggested address, not a rule. | `TangentSpace.BaseUrl`, configured as Koan's `Koan:Web:ApplicationUrl` | — | Origin (for this), *Root*, *Prefix* |
+| **Audience** | Who may read: the Tangent Space's, public or private; a Tangent's is the `View` bit of its `everyone` overwrite. | `TangentSpace.Audience` (`Public`, `Private`); `Overwrite.ForAudience` | — | *Visibility*, *Privacy* (for this), *Access level* |
+| **Admission** | How a signed-in person becomes a participant: join at once, or apply and wait; new accounts may wait for approval. | `TangentSpace.Admission` (`Join`, `Apply`), `NewAccountsAfterApproval` | `/settings` | *Registration*, *Membership* (for this), *Onboarding* |
+| **Appearance** | The place's theme and accent, chosen by the proprietor. | `TangentSpace.Appearance` (`Theme`, `Accent`) | `/settings/appearance` | *Skin*, *Styling*, *Branding* (for this) |
+| **Slot** | A place in the page the proprietor fills with a fragment of their own: head, masthead, door intro, article header, footer. | `TangentSpace.Slots` | — | *Widget*, *Block*, *Region* |
 
 ## The writer
 
@@ -43,6 +47,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Overwrite** | A per-Tangent allow and deny for a role or a participant, resolved in Discord's order. | `Overwrite` | `/t/{tangent}/settings/access` | *Override*, *Exception*, Grant (for this), ACL |
 | **Standing** | A participant's state in the Tangent Space: admitted, applied, timed out, banned. Place-wide. | `Participant.Standing`, `StandingUntil`, `StandingNote` | `/settings/people` | Membership, Restriction, *Case*, Suspension, Status (for this) |
 | **Kind** | A participant's declared classification, person or agent, shown and never evaluated. | `Participant.Kind` | — | *Type*, *Classification*, *Nature* |
+| **Profile** | A participant's handle, display name, description and avatar, read from their PDS and cached with the time of capture; nothing is edited here. | `Participant.Profile` (`DisplayName`, `Description`, `Avatar`, `CapturedAt`) | `/p/{handle}` | *Bio*, *User profile*, *Account* (for this) |
 
 ## Movement and attention
 
@@ -51,6 +56,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **The door** | What is new since my checkpoint, where I am, who I am here, what I can do. For a visitor: whose place this is and what is here. | `Door` | `/` | *Home*, Dashboard, *Feed*, Digest, *Experience*, Inbox, Timeline |
 | **Event** | One row of the log: something happened, with a sequence number. | `Event` | `/events` | *Activity*, *Journal entry*, Notification (for the row), *Signal* |
 | **Checkpoint** | The last sequence a participant saw in a scope, with its watch flag. The only per-participant state. | `Checkpoint` | — | Read position, Cursor (for this), Bookmark, Subscription |
+| **Scope** | Where a checkpoint looks: the whole place, one Tangent, or one Topic; the kind is stated, never inferred from the id. | `Scope` (`Place`, `Tangent(slug)`, `Topic(id)`), stored as `place`, `tangent:{slug}`, `topic:{id}` | — | *Context*, *Target* (for this), *Container* |
 | **Watch** | The flag on a checkpoint that asks for attention on new events in that scope. | `Checkpoint.Watch` | — | *Follow*, Subscribe, *Star*, Favourite |
 | **Take this on a tangent** | The verb that makes any Post the root of a new Topic in a chosen Tangent, linked both ways. | `Post.OriginId` | — | *Fork*, *Branch*, *Split*, *Spin off*, Quote-topic |
 | **Can** | The verbs a participant holds on a resource, computed per request and attached to every resource. | `can: string[]` | — | Permissions (on a resource), Rights, Abilities, *Allowed* |
@@ -63,6 +69,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Body** | A Post's Markdown. A mention is a link whose target carries the identity. | `Post.Body` | — | *Text*, *Content*, *Markup*, *Facets* |
 | **Version** | A Post's content version, raised by every edit; receipts key on it. | `Post.Version` | — | *Revision*, *Edition*, *Generation* |
 | **Slug** | The URL name of a Topic, from its title at creation, never renamed. | `Post.Slug` | — | *Key*, Permalink, Handle (for this) |
+| **TID** | atproto's timestamp identifier: thirteen characters, sortable by time, minted by the client as a Post's Id and the idempotency key of its command. | `Tid` (the shape check); `Post.Id` | `/t/{tangent}/{topic}/{post}` | *UUID* (for a Post), *Sequence* (for this) |
 | **Media** | A file a Post references, stored once by content hash on Koan.Media. | `MediaEntity<…>` | — | Attachment, *Upload*, *Asset*, Blob (outside atproto) |
 | **Cover** | An article's lead image. | `Post.CoverId` | — | Hero, Banner, Featured image |
 

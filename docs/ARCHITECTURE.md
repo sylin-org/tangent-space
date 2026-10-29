@@ -64,18 +64,18 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 
 | Table | Key | Fields that matter |
 | --- | --- | --- |
-| `TangentSpace` | one row | name, `BaseUrl`, `ProprietorId`, `OperatorId`, audience, admission (`join`, `apply`, `new-accounts-after-approval`), appearance, slots, `Version` |
+| `TangentSpace` | one row | name, `BaseUrl`, `ProprietorId` and `OperatorId` (set at first run), `Audience` (public, private), `Admission` (`join`, `apply`) with `NewAccountsAfterApproval`, `Appearance` (theme, accent), `Slots` (head, masthead, door intro, article header, footer), `Version` |
 | `Tangent` | slug | name, description, default kind, order; audience is its `everyone` overwrite |
-| `Post` | TID | `TangentId` on every row; `TopicId` (= Id on a root); `ParentId`; `OriginId`; `Slug`, `Kind`, `Title`, `CoverId` (root); `Body` (Markdown); `Version`; `Sequence`; `AuthorId`; root carries `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned`; `Removed`, `RemovedBy`, `RemovedAt`. Pre-edit snapshots live in the audit partition |
-| `Participant` | the Koan person id | handle, cached profile, `Kind` (declared), `Standing`, `StandingUntil`, `StandingNote` |
-| `Overwrite` | (`TangentId`, `SubjectId`) | subject is a role or a participant; `Allow`, `Deny` |
-| `Event` | `Seq` | kind, `TangentId`, `TopicId`, `PostId`, `ActorId`, `TargetId`, `Version`, `At` |
-| `Checkpoint` | (`ParticipantId`, `ScopeId`) | `Seq`, `Watch` |
+| `Post` | TID | `TangentId` on every row; `TopicId` (= Id on a root); `ParentId`; `OriginId`; `Slug`, `Kind`, `Title`, `CoverId` (root); `Body` (Markdown); `Version`; `Sequence`; `AuthorId`; `CreatedAt`; root carries `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned`; `Removed`, `RemovedBy`, `RemovedAt`. Pre-edit snapshots live in the audit partition |
+| `Participant` | the Koan person id | handle, `Profile` (display name, description, avatar, captured at), `Kind` (declared), `Standing`, `StandingUntil`, `StandingNote` |
+| `Overwrite` | `TangentId/SubjectId` | subject is a role or a participant; `Allow`, `Deny` |
+| `Event` | `Seq` (the Id is the sequence, zero-padded) | kind, `TangentId`, `TopicId`, `PostId`, `ActorId`, `TargetId`, `Version`, `At`; `Audience` on `tangent.changed` |
+| `Checkpoint` | `ParticipantId/{scope}`, the scope typed: the place, a Tangent by slug or a Topic by Id (`place`, `tangent:{slug}`, `topic:{id}`) | `Seq`, `Watch` |
 | `Connection` | id | `ParticipantId`, kind, account, adapter-owned `Settings`, `Seq` (its cursor on the log), status, error |
 | `Receipt` | (`ConnectionId`, `PostId`) | `Version` delivered, status, remote reference, `At`, error |
 | `Reference` | id | `PostId`, `ConnectionId`, remote URI, kind (`reply`, `quote`, `mention`, `like`), author, `At` |
 
-Roles, role members, persons, sessions, grants and media are Koan's tables. `TangentSpace.BaseUrl` is the operator's `Koan:Web:ApplicationUrl` as Koan holds it, written at every start, so the row states where the place answers. Indexes: `Post(TangentId, ParentId, LastActivityAt)` for topic lists; `Post(TopicId, Sequence)` for windows; `Event(Seq)`; `Event(TargetId, Seq)`; the lexical index over `Post.Title` and `Post.Body`. A slug derives from the title at creation, deduplicated with a suffix, and never changes.
+Roles, role members, persons, sessions, grants and media are Koan's tables. `TangentSpace.BaseUrl` is the operator's `Koan:Web:ApplicationUrl` as Koan holds it, written at every start, so the row states where the place answers. Indexes: `Post(TangentId, ParentId, LastActivityAt)` for topic lists; `Post(TopicId, Sequence)` for windows; `Post(TangentId, Slug)` for the slug check; `Event(Seq)`, unique; `Event(TargetId, Seq)`; the lexical index over `Post.Title` and `Post.Body`. A composite key is one string Id composed from its parts with `/`, which no part holds. A slug derives from the title at creation, deduplicated with a suffix, and never changes.
 
 ## 6. The log
 
