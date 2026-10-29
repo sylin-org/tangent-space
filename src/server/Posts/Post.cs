@@ -30,6 +30,13 @@ public sealed class Post : Entity<Post>
     public const string NotARoot = "A reply goes to a Topic.";
     public const string TopicLocked = "The Topic is locked.";
     public const string TopicRemoved = "The Topic is removed.";
+    public const string NoTitleOnReply = "A reply has no title; a Topic's title is on its root.";
+    public const string PostRemoved = "The Post is removed.";
+    public const string NeedsRemover = "A removal names who removes.";
+
+    /// <summary>The one answer for an Id a Post outside the place a command names already holds: it says nothing of
+    /// where, whose or what that Post is.</summary>
+    public const string IdTaken = "This id is not available; mint another.";
 
     /// <summary>The Tangent the Topic is in; on every row.</summary>
     [Index(Name = "ix_post_topics", Order = 0)]
@@ -163,6 +170,43 @@ public sealed class Post : Entity<Post>
             AuthorId = authorId,
             CreatedAt = at
         };
+    }
+
+    /// <summary>Whether an edit with this body and title would leave the Post as it is: the same body, and on a root the
+    /// same title or none sent; a reply sent no title.</summary>
+    public bool Unchanged(string body, string? title) =>
+        Body == body && (ParentId is null ? title is null || Title == title.Trim() : string.IsNullOrEmpty(title));
+
+    /// <summary>Changes the body, and a root's title when one is sent, and raises <see cref="Version"/>, or a refusal: the
+    /// Post is not removed, the body and title are within their limits, and a reply is sent no title. The pre-edit
+    /// snapshot is the caller's, taken before this.</summary>
+    public void Edit(string body, string? title)
+    {
+        if (Removed) throw new Refusal(PostRemoved);
+        CheckBody(body);
+        if (ParentId is not null && !string.IsNullOrEmpty(title)) throw new Refusal(NoTitleOnReply);
+        if (ParentId is null && title is not null)
+        {
+            CheckTitle(title);
+            Title = title.Trim();
+        }
+
+        Body = body;
+        Version = checked(Version + 1);
+    }
+
+    /// <summary>Makes this Post a tombstone, or a refusal when it already is one or no one is named: it is removed, by
+    /// whom and when, and its body is cleared from the row. It keeps its place, its author and its version, and a
+    /// root keeps its title, slug and counters, so a Topic whose root is removed keeps its replies. The snapshot that
+    /// holds the body is the caller's, taken before this.</summary>
+    public void Remove(string removedBy, DateTimeOffset at)
+    {
+        if (Removed) throw new Refusal(PostRemoved);
+        if (string.IsNullOrWhiteSpace(removedBy)) throw new Refusal(NeedsRemover);
+        Removed = true;
+        RemovedBy = removedBy;
+        RemovedAt = at;
+        Body = "";
     }
 
     public static void CheckBody(string? body)

@@ -202,7 +202,7 @@ public sealed class PostTests
     }
 
     [Fact]
-    public async Task A_post_command_whose_id_exists_answers_with_the_existing_row_for_the_same_request_and_a_conflict_for_a_different_one_and_neither_writes()
+    public async Task A_post_command_whose_id_exists_answers_with_the_existing_row_for_the_same_request_a_conflict_for_a_different_one_in_the_same_place_and_one_refusal_for_an_id_held_elsewhere_and_none_writes()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = await Started(tangentSpace);
@@ -220,7 +220,6 @@ public sealed class PostTests
         var topicDiffers = new[]
         {
             await writer.Send(new StartTopic(topicId, Workshop, "Once", "Said twice.", "leo"), Cancellation),
-            await writer.Send(new StartTopic(topicId, "articles", "Once", "Said once.", "leo"), Cancellation),
             await writer.Send(new StartTopic(topicId, Workshop, "Twice", "Said once.", "leo"), Cancellation),
             await writer.Send(new StartTopic(topicId, Workshop, "Once", "Said once.", "leo", PostKind.Article), Cancellation),
             await writer.Send(new StartTopic(topicId, Workshop, "Once", "Said once.", "ada"), Cancellation),
@@ -230,16 +229,22 @@ public sealed class PostTests
         var replyDiffers = new[]
         {
             await writer.Send(new Reply(replyId, topicId, "Unheard.", "ada"), Cancellation),
-            await writer.Send(new Reply(replyId, otherTopicId, "Heard.", "ada"), Cancellation),
             await writer.Send(new Reply(replyId, topicId, "Heard.", "leo"), Cancellation),
             await writer.Send(new Reply(replyId, topicId, "Heard.", "ada", ParentId: otherTopicId), Cancellation),
             await writer.Send(new Reply(topicId, topicId, "Said once.", "leo"), Cancellation)
+        };
+        // An id a Post of another Tangent or another Topic holds: one refusal, which names nothing of that Post.
+        var heldElsewhere = new[]
+        {
+            await writer.Send(new StartTopic(topicId, "articles", "Once", "Said once.", "leo"), Cancellation),
+            await writer.Send(new Reply(replyId, otherTopicId, "Heard.", "ada"), Cancellation)
         };
 
         Assert.Equal((topic.Id, topic.Slug, topic.Body), Select(Assert.IsType<Outcome<Post>.Done>(topicAgain).Result));
         Assert.All(topicDiffers, differs => Assert.Contains("already exists", Assert.IsType<Outcome<Post>.Conflict>(differs).Reason));
         Assert.Equal((reply.Id, reply.Slug, reply.Body), Select(Assert.IsType<Outcome<Post>.Done>(replyAgain).Result));
         Assert.All(replyDiffers, differs => Assert.Contains("already exists", Assert.IsType<Outcome<Post>.Conflict>(differs).Reason));
+        Assert.All(heldElsewhere, refused => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(refused).Reason));
         Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced));
         Assert.Equal("Said once.", (await Post.Get(topicId, Cancellation))?.Body);
         Assert.Equal((1L, 1), ((await Post.Get(topicId, Cancellation))!.LastSequence, (await Post.Get(topicId, Cancellation))!.ReplyCount));

@@ -140,6 +140,33 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'done', seed: 'consent', signedIn: true, settings: consentSettings, path: '/consent/done' },
     ],
   },
+  // The form that starts a Topic in the discussions Tangent: empty for the persona, a member; sent with a body of
+  // nothing but spaces, refused under the body; and as a visitor reads it, who is told to sign in.
+  'new-topic': {
+    path: '/t/discussions/new',
+    states: [
+      { name: 'empty', seed: 'write', signedIn: true },
+      {
+        name: 'refused',
+        seed: 'write',
+        signedIn: true,
+        fill: { '#new-topic-title': 'A weekly link and a question', '#new-topic-body': '   ' },
+        click: '.post-form-submit',
+      },
+      { name: 'visitor', seed: 'write' },
+    ],
+  },
+  // The form that edits the persona's own Topic: as it opens; sent with a body of nothing but spaces, refused under
+  // the body; with the removal opened, confirmed in the page; and Leo's reply in the same Topic, which is not hers.
+  edit: {
+    path: '/t/discussions/what-should-an-introduction-say/3mwgqaw5is227/edit',
+    states: [
+      { name: 'form', seed: 'write', signedIn: true },
+      { name: 'refused', seed: 'write', signedIn: true, fill: { '#edit-body': '   ' }, click: '.post-form-submit' },
+      { name: 'remove-confirmation', seed: 'write', signedIn: true, click: '.post-remove-toggle' },
+      { name: 'not-yours', seed: 'write', signedIn: true, path: '/t/discussions/what-should-an-introduction-say/3mwnstt4b222d/edit' },
+    ],
+  },
   // A discussions Tangent and an articles Tangent, populated and empty, read by the persona, a member with some
   // Topics new to them; the discussions Tangent also as a visitor reads it, with the persona's account open, and with
   // the Tangent switcher open.
@@ -202,4 +229,5 @@ export const referenceVariants: Readonly<Record<string, Readonly<Record<string, 
 export const nearestReadings: Readonly<Record<string, readonly string[]>> = {
   door: ['01-space-home.html', '20-phone-space-home.html'],
   'first-run': ['08-space-general.html', '19-sign-in.html'],
+  edit: ['05-new-topic.html'],
 }

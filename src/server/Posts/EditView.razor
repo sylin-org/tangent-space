@@ -1,0 +1,120 @@
+@using global::Tangent.Render
+@* The form that edits a Post: one panel in the page, naming the Topic, with the title on a root and the body, and the
+   version the editor read riding in a hidden field. Below it, for a reader who may remove the Post, the removal waits
+   behind a disclosure that says what removing does and holds the one button that does it: the confirmation is in the
+   page, never a dialog. A reader who may not edit reads why above the form, whose fields are read-only and which has
+   no button; a tombstone says it is removed and holds nothing to change. After an edit made from another version the
+   fields hold the current text, and the words that were not saved stay below them to copy from. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="edit-heading">
+        <div class="sign-in-body">
+            <p class="post-form-where">In <a href="@Model.TopicAddress">@Model.TopicTitle</a></p>
+            <h1 id="edit-heading" class="sign-in-title">@(Model.Root ? "Edit topic" : "Edit post")</h1>
+            @if (Model.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="edit-failure" role="alert" data-gate="@Model.FailureGate">@failure</p>
+            }
+            else if (Model.Gate is { } gate)
+            {
+                <p class="sign-in-failure" id="edit-failure" role="alert" data-gate="@gate">
+                    @if (Model.SignIn is { } signIn)
+                    {
+                        @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                    }
+                    else
+                    {
+                        @PostWrites.Sentence(gate)
+                    }
+                </p>
+            }
+            @if (!Model.Removed)
+            {
+                <form class="sign-in-form" method="post" action="@Model.Action" data-island="submitting">
+                    <FormTokenField Token="@Model.Token" />
+                    <input type="hidden" name="@PostWrites.VersionField" value="@Model.Version">
+                    @if (Model.Root)
+                    {
+                        <div class="field">
+                            <label class="field-label" for="edit-title">Title</label>
+                            <span class="field-input">
+                                <input id="edit-title" name="@PostWrites.TitleField" type="text" required maxlength="@Post.TitleLimit" autocomplete="off"
+                                       autofocus="@(Model.Gate is null && Focus == "edit-title")" readonly="@(Model.Gate is not null)" value="@Model.Title"
+                                       aria-invalid="@(Model.TitleFailure is null ? "false" : "true")"
+                                       aria-describedby="@(Model.TitleFailure is null ? null : "edit-title-failure")">
+                            </span>
+                            @if (Model.TitleFailure is { } titleFailure)
+                            {
+                                <p class="field-failure" id="edit-title-failure">@titleFailure</p>
+                            }
+                        </div>
+                    }
+                    <div class="field">
+                        <label class="field-label" for="edit-body">Post</label>
+                        <textarea class="post-form-body" id="edit-body" name="@PostWrites.BodyField" rows="12" required
+                                  autofocus="@(Model.Gate is null && Focus == "edit-body")" readonly="@(Model.Gate is not null)"
+                                  aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
+                                  aria-describedby="@(Model.BodyFailure is null ? null : "edit-body-failure")">@Model.Body</textarea>
+                        @if (Model.BodyFailure is { } bodyFailure)
+                        {
+                            <p class="field-failure" id="edit-body-failure">@bodyFailure</p>
+                        }
+                    </div>
+                    @if (Model.SentBody is { } sentBody)
+                    {
+                        <div class="field post-form-unsaved">
+                            <label class="field-label" for="edit-sent">Your words, not saved</label>
+                            @if (Model.SentTitle is { } sentTitle)
+                            {
+                                <p class="post-form-unsaved-title">@sentTitle</p>
+                            }
+                            <textarea class="post-form-body" id="edit-sent" rows="6" readonly>@sentBody</textarea>
+                        </div>
+                    }
+                    @if (Model.Gate is null)
+                    {
+                        <div class="post-form-actions">
+                            <a class="post-form-cancel" href="@Model.Address">Cancel</a>
+                            <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Saving…">Save</button>
+                        </div>
+                    }
+                </form>
+                @if (Model.RemoveGate is null)
+                {
+                    <details class="post-remove">
+                        <summary class="post-remove-toggle">@(Model.Root ? "Remove this topic’s opening post" : "Remove this post")</summary>
+                        <div class="post-remove-confirm">
+                            <p class="post-remove-note">
+                                @if (Model.Root)
+                                {
+                                    <text>Its words leave the page and a tombstone stays in their place; the topic’s replies stay as they are.</text>
+                                }
+                                else
+                                {
+                                    <text>Its words leave the page and a tombstone stays in their place.</text>
+                                }
+                            </p>
+                            <form method="post" action="@Model.RemoveAction">
+                                <FormTokenField Token="@Model.Token" />
+                                <button type="submit" class="post-remove-submit">Remove</button>
+                            </form>
+                        </div>
+                    </details>
+                }
+            }
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public EditPage Model { get; set; } = default!;
+
+    /// <summary>The field the page opens on: the first one a refusal concerns, else the first there is.</summary>
+    private string Focus => Model.Root && (Model.TitleFailure is not null || Model.BodyFailure is null) ? "edit-title" : "edit-body";
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent and the form as crumbs, the Topic
+    /// named in the panel; and who reads, or where a visitor signs in.</summary>
+    public static Frame Frame(EditPage page)
+        => new(page.Place, page.Door,
+            [new Crumb(page.TangentName, page.TangentAddress), new Crumb(page.Root ? "Edit topic" : "Edit post")],
+            page.Who, page.SignIn);
+}
