@@ -17,3 +17,6 @@
 
 # Rust build artifacts.
 **/target/
+
+# The client build output.
+src/client/dist/
