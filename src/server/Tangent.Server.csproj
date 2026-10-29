@@ -5,9 +5,36 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Koan serves wwwroot beside the binaries as static files; the SDK's static web assets are not used. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <!-- The client in ../client builds into wwwroot; -p:SkipClientBuild=true builds the server alone, without Node. -->
+    <SkipClientBuild Condition="'$(SkipClientBuild)' == ''">false</SkipClientBuild>
+    <ClientRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../client/'))</ClientRoot>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ClientSource Include="$(ClientRoot)**" Exclude="$(ClientRoot)node_modules/**;$(ClientRoot)tests/**" />
+    <ClientOutput Include="wwwroot/tangent.css;wwwroot/tangent.js;wwwroot/theme.js" />
+  </ItemGroup>
+
+  <!-- Builds the client when an output is missing or older than a client file; installs its packages first
+       when they are absent. -->
+  <Target Name="BuildClient"
+          Condition="'$(SkipClientBuild)' != 'true' And '$(DesignTimeBuild)' != 'true'"
+          Inputs="@(ClientSource)"
+          Outputs="@(ClientOutput)">
+    <Exec Command="npm ci" WorkingDirectory="$(ClientRoot)" Condition="!Exists('$(ClientRoot)node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(ClientRoot)" />
+  </Target>
+
+  <!-- Whatever wwwroot holds after the client build is copied beside the binaries and published with them. -->
+  <Target Name="IncludeClientOutput" BeforeTargets="AssignTargetPaths" DependsOnTargets="BuildClient">
+    <ItemGroup>
+      <Content Remove="wwwroot/**" />
+      <Content Include="wwwroot/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 </Project>

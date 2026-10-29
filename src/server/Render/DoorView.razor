@@ -1,5 +1,8 @@
+@using System.Text.Json
 @using Tangent.Space
-<main>
+@* The fragment island: the door reads as rendered here, and once the page script mounts it, it can refresh
+   itself from this component alone at the door's URL. *@
+<main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Model.BaseUrl + "/" })">
     <h1>@Model.Name</h1>
     <p><a href="@Model.BaseUrl">@Model.BaseUrl</a></p>
 </main>

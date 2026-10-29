@@ -48,6 +48,9 @@ public sealed class TangentModule : KoanModule
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TrustedProxyPipelineContributor>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, BaseUrlPipelineContributor>());
 
+        // The controllers of this assembly, whichever assembly hosts the composition.
+        services.AddKoanControllersFrom<TangentModule>();
+
         // The HTML projection: each resource type names its component; the formatter goes first so a request
         // without a preference reads a page, and every other type keeps Koan's JSON.
         services.AddScoped<HtmlRenderer>();
