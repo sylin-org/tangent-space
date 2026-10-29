@@ -9,7 +9,7 @@ One process. One data folder. Four layers, each defined by a rule it cannot brea
 | Layer | Holds | Rule |
 | --- | --- | --- |
 | **Nouns** | `TangentSpace` (one row), `Tangent`, `Post`, `Participant`, `Overwrite`, `Event`, `Checkpoint`, `Connection`, `Receipt`, `Reference`; Koan's person, roles, sessions, grants and media beside them | An entity validates its own change and throws; it never loads another entity, never asks about permission, never opens a transaction |
-| **Writer** | one channel, one loop, one transaction per command | The only code that opens a write transaction. It touches the database and nothing else |
+| **Writer** | one queue, one loop, one transaction per command | The only code that opens a write transaction. It touches the database and nothing else |
 | **Readers** | handlers, the door, the stream, feeds, the archive, Connections | Bounded, lock-free, consume compiled state; every resource leaves with `can` |
 | **Render** | Razor components rendered statically, the HTML formatter, Vue islands | Renders DTOs. Knows no entity |
 
@@ -41,7 +41,7 @@ Koan work the tree depends on, each a scoped brief: SQLite posture (WAL, busy ti
 
 ## 3. The write path
 
-Every write is a command on one channel, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — enqueues it and awaits the result. The loop:
+Every write is a command on one queue, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — enqueues it and awaits the result. The loop:
 
 1. opens one transaction (`EntityContext.Transaction`, immediate on SQLite);
 2. loads what the command names: the participant with standing, the role bag, the Tangent's overwrites, the target Post;
@@ -116,7 +116,7 @@ Discord's model, on Koan's roles, resolved in Discord's order.
 
 A Connection belongs to a participant and syndicates only Posts that participant authored. The proprietor's Connection also carries the Tangent Space's `site.standard.publication`. Identity is core, not an adapter: a Tangent Space requires atproto identity.
 
-**A Connection is a log reader with a cursor.** The dispatch job runs per Connection: read events since `Connection.Seq` of kinds `post.*` and `tangent.changed`; for each, load the Post, its current audience and the previous Receipt; call the adapter; save the Receipt; advance `Seq`. On failure the cursor stays, so an edit lands before a removal; the Receipt records the error; after repeated failure the Connection appears on its owner's door as an attention item.
+**A Connection is a log reader with a cursor.** The dispatch job runs per Connection: read events since `Connection.Seq` of kinds `post.*` and `tangent.changed`; for each, load the Post, its current audience and the previous Receipt; call the adapter; save the Receipt; advance `Seq`. On failure the cursor stays, so an edit lands before a removal; the Receipt records the error; after repeated failure the Connection appears as an attention item on the door of the participant it belongs to.
 
 ```csharp
 interface IConnectionAdapter
@@ -133,7 +133,7 @@ interface IAsserter        { Task Assert(Participant p, Label label, Cancellatio
 | --- | --- | --- |
 | atproto | a `site.standard.document` with the cover blob for each public article, and a Bluesky post that embeds it; public Posts as the Tangent Space's own record type; `<link rel="site.standard.document">` and verification from Render | Constellation and Spacedust as a reference source, optional |
 | Webmention | sent on `post.created` for outbound links; Bridgy Fed opt-in for fediverse reach | received at an endpoint |
-| Mastodon | a status under the owner's account | replies through its API |
+| Mastodon | a status under the participant's own account | replies through its API |
 
 Feeds are a Render output, not a Connection. Inbound replies arrive as `Reference` rows first; a Connection may later materialize them as Posts with source fields, authored by the person row Koan reconciles for that DID.
 

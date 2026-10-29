@@ -26,7 +26,7 @@ The planner is the lead in the main session. The executor is a session the lead 
 ## The package cadence
 
 1. **Brief.** The lead writes the package brief: the FEATURES rows it closes, the outcome, the files or area, what is out of bounds, how done is checked, the role and effort. A brief that would mostly retell what the lead already knows means the work stays with the lead.
-2. **Explore**, only when the builder needs a map it does not have. The explorer returns conclusions, not file dumps.
+2. **Explore**, only when the builder needs a map it does not have. The explorer returns conclusions, not file listings.
 3. **Build.** The builder plans inside its own session, implements, runs the one relevant build or test plus the affected happy path, then the rule checks: language, greenfield, no dialogs, ports.
 4. **Screens.** Anything a participant sees goes through the `visual-loop` skill, scorer included, before review.
 5. **Review.** The reviewer gets the diff and the brief. Findings are fixed or named in the package report; nothing is hidden.
