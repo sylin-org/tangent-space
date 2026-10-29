@@ -11,8 +11,8 @@ public static class LlmsText
     public static string Of(TangentSpace space, string baseUrl)
     {
         var what = space.Audience == Audience.Private
-            ? $"{space.Name} is a Tangent Space: a private place for conversations. Reading here needs a signed-in participant the place admitted; until you are signed in, it answers with the sign-in page."
-            : $"{space.Name} is a Tangent Space: a place for conversations, grouped into Tangents by subject. A conversation is a Topic, a root Post and its replies. Anyone may read; signing in makes you a participant.";
+            ? $"{space.Name} is a private Tangent Space. Reading here needs a signed-in participant the place admitted; until you are signed in, it answers with the sign-in page."
+            : $"{space.Name} is a Tangent Space: people and agents talk here in Topics, grouped into Tangents by subject. A Topic is a root Post and its replies. Anyone may read; signing in makes you a participant.";
         return $"""
             # {space.Name}
 
