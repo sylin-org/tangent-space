@@ -4,7 +4,8 @@
 $script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'poc'
 $script:ExcludedDirectories = '.git', 'node_modules', 'bin', 'obj'
 $script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md'
-$script:TextExtensions = '.md', '.cs', '.razor', '.ts', '.vue', '.js', '.mjs', '.json', '.ps1', '.yaml', '.yml', '.css', '.html'
+$script:TextExtensions = '.md', '.cs', '.razor', '.ts', '.vue', '.js', '.mjs', '.json', '.ps1', '.yaml', '.yml', '.css', '.html',
+    '.csproj', '.props', '.targets', '.sln', '.sh', '.cmd', '.bat', '.xml'
 $script:TextNames = 'Dockerfile'
 
 function Get-TreeBase {
@@ -58,7 +59,7 @@ function Write-Violation([string]$Relative, [int]$Line, [string]$Rule, [string]$
 
 # A regex for a word or phrase as a whole word, with an optional plural s when asked.
 function New-WordRegex([string]$Word, [switch]$Plural) {
-    $body = [regex]::Escape($Word).Replace('\ ', '\s+')
+    $body = [regex]::Escape($Word).Replace('-', '[\s_-]+').Replace('\ ', '[\s_-]+')
     $tail = if ($Plural) { 's?' } else { '' }
     [regex]::new('(?<![\p{L}\p{N}_])' + $body + $tail + '(?![\p{L}\p{N}_])', 'IgnoreCase')
 }

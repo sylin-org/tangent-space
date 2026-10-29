@@ -16,7 +16,7 @@ $patterns = @(
     [pscustomobject]@{ Label = 'address and port'; Pattern = '(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\+|\*):(?<port>\d{2,5})\b' }
     [pscustomobject]@{ Label = 'port in a URL'; Pattern = '(?i)https?://[^\s/"''`]+:(?<port>\d{2,5})\b' }
     [pscustomobject]@{ Label = 'urls value'; Pattern = '(?i)(?:--urls|ASPNETCORE_URLS)\b\S*\s*[=:]?\s*(?<value>\S+)' }
-    [pscustomobject]@{ Label = 'port setting'; Pattern = '(?i)["'']?\bport["'']?\s*[:=]\s*["'']?(?<port>\d{2,5})\b' }
+    [pscustomobject]@{ Label = 'port setting'; Pattern = '(?i)(?<![a-z])ports?["'']?\s*[:=]\s*["'']?(?<list>\d{2,5}(?:[;,]\d{2,5})*)\b' }
     [pscustomobject]@{ Label = 'published port'; Pattern = '^\s*-\s*["'']?(?:[\d.]+:)?(?<port>\d{2,5}):(?<other>\d{2,5})\b' }
     [pscustomobject]@{ Label = 'exposed port'; Pattern = '^\s*EXPOSE\s+(?<port>\d{2,5})\b' }
 )
@@ -39,7 +39,10 @@ foreach ($file in Get-RuleFiles) {
         foreach ($check in $patterns) {
             foreach ($match in [regex]::Matches($remaining, $check.Pattern)) {
                 $value = Get-Capture $match 'value'
-                $ports = if ($value) {
+                $list = Get-Capture $match 'list'
+                $ports = if ($list) {
+                    [regex]::Matches($list, '\d+') | ForEach-Object { $_.Result('$0') }
+                } elseif ($value) {
                     [regex]::Matches($value, ':(\d{2,5})\b') | ForEach-Object { $_.Result('$1') }
                 } else {
                     @((Get-Capture $match 'port'), (Get-Capture $match 'other')) | Where-Object { $_ }
