@@ -60,7 +60,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | The composer island: drafts in `localStorage` by scope; an uncertain submit reconciles by `GET` of the minted Id; never auto-posts | topic | `composables/conversation.ts` intents (harvest) | — | S | doing |
 | Live: the event stream, one per page, fragment patch; the door as the poll | topic | `activity/transport.ts` framing (harvest) | `Sylin.Koan.Web.Sse`, `Sylin.Koan.Communication` | M | todo |
 | Take this on a tangent: choose the Tangent, a root Post with an origin, linked both ways | topic | new | — | S | todo |
-| Checkpoints and the watch flag | topic | `ReadPosition`, `Watches` (harvest) | — | S | doing |
+| Checkpoints and the watch flag | topic | `ReadPosition`, `Watches` (harvest) | — | S | done |
 | Reports: a Post taken on a tangent into the moderators' Tangent, with the origin | topic | `ReportPanel` (harvest) | — | S | todo |
 | Phone layout for the topic | topic at 390 | `mobile-reader.css` (transplant) | — | S | todo |
 
