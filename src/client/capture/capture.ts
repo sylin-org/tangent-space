@@ -99,7 +99,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
     try {
       // First run comes first: a seed writes into an established place.
       if (tangentSpace && group.place !== 'unestablished')
-        await establish(tangentSpace.listening, group.place === 'persona' ? capturePersona : captureOperator, capturePlaceName, tangentSpace.setupCode)
+        await establish(tangentSpace.listening, group.place === 'persona' ? capturePersona : captureOperator, screen.placeName ?? capturePlaceName, tangentSpace.setupCode)
       if (tangentSpace && group.seed) await seed(tangentSpace.listening, tangentSpace.baseUrl, group.seed)
       // A started Tangent Space is asked for at its base URL, which the browser maps to its loopback port.
       // A running one is asked for where --url says, and its pages link to the base URL it states.

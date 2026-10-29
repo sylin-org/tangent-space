@@ -29,6 +29,7 @@
                     }
                 </div>
                 <input type="hidden" name="return" value="@Model.ChallengeReturn()">
+                <input type="hidden" name="failure" value="@Model.FailureLanding()" data-carry="identifier" data-carry-as="handle">
                 <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
             </form>
             <ul class="sign-in-gains">
