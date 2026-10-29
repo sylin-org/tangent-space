@@ -5,35 +5,30 @@ using Xunit;
 
 namespace Tangent.Space;
 
-/// <summary>The first start: the data folder, the one settings row, and the base URL it records.</summary>
+/// <summary>The first start: the data folder, no row until first run, and the base URL as Koan holds it.</summary>
 public sealed class TangentSpaceTests
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task A_first_start_creates_the_data_folder_and_exactly_one_row()
+    public async Task A_first_start_creates_the_data_folder_and_no_row()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
 
         Assert.Equal(Path.Combine(tangentSpace.Folder, "data"), tangentSpace.DataFolder);
         Assert.True(Directory.Exists(tangentSpace.DataFolder));
         Assert.True(File.Exists(tangentSpace.DatabasePath));
-        Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
-        Assert.NotNull(await TangentSpace.Get(TangentSpace.SingleRow, Cancellation));
+        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
     }
 
     [Fact]
-    public async Task The_base_url_is_persisted_normalised()
+    public async Task The_base_url_is_held_normalised()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = "HTTPS://Tangent.Example:443/Field%20Notes/" },
             ct: Cancellation);
 
-        var row = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-
-        Assert.NotNull(row);
-        Assert.Equal("https://tangent.example/Field%20Notes", row.BaseUrl);
-        Assert.Equal(row.BaseUrl, tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Configured);
+        Assert.Equal("https://tangent.example/Field%20Notes", tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Configured);
     }
 
     [Fact]

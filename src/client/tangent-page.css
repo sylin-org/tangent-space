@@ -1,0 +1,999 @@
+/* The Tangent page: the head with the Tangent's tile, name, description and counts; the rail with the one list and
+ * who can read; the list, a table of Topics with their latest reply for a discussions Tangent and articles under a
+ * lead for an articles one; the empty state; the way to older Topics. Sizes follow the design reference's screens
+ * 02, 03 and 21 and its component spec. */
+
+/* The head: a band of surface across the page, its content as wide as the layout below it. */
+.tangent-head {
+  padding: 32px 0 28px;
+  background: var(--ts-surface);
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.tangent-head-inner {
+  width: min(100% - 2 * var(--ts-page-gutter), var(--ts-home-container));
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.tangent-head-articles .tangent-head-inner {
+  gap: 24px;
+}
+
+/* The head's tile by kind, as the reference draws them: 64 with a 5px edge for discussions, 72 with a 6px edge for
+ * articles. */
+.tangent-tile-head {
+  --tile: 64px;
+  --tile-edge: 5px;
+  border-radius: 13px;
+}
+
+.tangent-tile-head-articles {
+  --tile: 72px;
+  --tile-edge: 6px;
+  border-radius: 14px;
+}
+
+.tangent-tile-head .tangent-tile-letter,
+.tangent-tile-head-articles .tangent-tile-letter {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.tangent-head-articles {
+  padding: 36px 0 32px;
+}
+
+.tangent-head-articles .tangent-title {
+  font-size: 44px;
+}
+
+.tangent-head-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tangent-title {
+  margin: 0;
+  font: 500 42px/1.05 var(--ts-font-display);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.tangent-description {
+  margin: 0;
+  max-width: 680px;
+  color: var(--ts-text-2);
+  font: italic 400 18px/1.4 var(--ts-font-display);
+}
+
+.tangent-meta b {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.tangent-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+  font-weight: 400;
+}
+
+.tangent-audience {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tangent-layout {
+  margin-top: 32px;
+}
+
+/* The rail: the one list there is, and who can read. */
+.rail-heading-spaced {
+  margin-top: 30px;
+}
+
+.rail-views {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-views a {
+  height: 36px;
+  margin: 0 -10px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui);
+  text-decoration: none;
+}
+
+.rail-views a:hover {
+  background: var(--ts-hover);
+}
+
+.rail-views a[aria-current="page"] {
+  background: var(--ts-hover);
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.rail-audience {
+  display: flex;
+  gap: 10px;
+}
+
+.rail-audience-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text-2);
+}
+
+.rail-audience-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.rail-audience-name {
+  color: var(--ts-text);
+  font: 600 14px/1.35 var(--ts-font-ui);
+}
+
+.rail-audience-note {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+/* The list's head: what it holds, its order, and the start button. */
+.topic-list-head {
+  min-height: 50px;
+  padding-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topic-list-head-ruled {
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.topic-list-title {
+  margin: 0;
+  color: var(--ts-text-2);
+  font: 600 13px/1.4 var(--ts-font-ui);
+  letter-spacing: 0;
+}
+
+.topic-list-order {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.topic-list-order::before {
+  content: "·";
+  margin-right: 10px;
+}
+
+.tangent-new {
+  height: 36px;
+  margin-left: auto;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  font: 600 13px/1 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.tangent-new:hover {
+  background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
+}
+
+/* The table of Topics. */
+.topic-table {
+  overflow: hidden;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-surface);
+}
+
+.topic-table-heading {
+  height: 38px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid var(--ts-line);
+  color: var(--ts-text-3);
+  font: var(--ts-type-caps);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.topic-table-topic {
+  flex: 1;
+  padding-left: 26px;
+}
+
+.topic-table-people,
+.topic-row-people {
+  width: 80px;
+  flex: none;
+}
+
+.topic-table-replies,
+.topic-row-replies {
+  width: 64px;
+  flex: none;
+  text-align: right;
+}
+
+.topic-table-latest,
+.topic-row-activity {
+  width: 96px;
+  flex: none;
+  text-align: right;
+}
+
+.topic-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topic-rows > li + li {
+  border-top: 1px solid var(--ts-line);
+}
+
+.topic-row {
+  padding: 16px 18px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.topic-row:hover {
+  background: var(--ts-hover);
+}
+
+.topic-row:focus-visible {
+  outline-offset: -2px;
+}
+
+.topic-row-dot {
+  width: 8px;
+  flex: none;
+  padding-top: 8px;
+}
+
+.new-dot {
+  width: 8px;
+  height: 8px;
+  display: block;
+  border-radius: 50%;
+  background: var(--ts-accent);
+}
+
+.topic-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topic-row-title {
+  font: 700 17px/1.35 var(--ts-font-ui);
+  overflow-wrap: anywhere;
+}
+
+.topic-row-opening {
+  margin-top: 2px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ts-text-2);
+  font: 400 13px/1.5 var(--ts-font-ui);
+}
+
+.topic-row-author {
+  color: var(--ts-text-2);
+}
+
+.topic-flag,
+.agent-tag {
+  margin-left: 6px;
+  padding: 2px 4px 2px 5px;
+  display: inline-block;
+  vertical-align: 2px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-tag);
+  color: var(--ts-text-3);
+  font: var(--ts-type-tag);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agent-tag {
+  border-color: var(--ts-agent-line);
+  color: var(--ts-agent);
+}
+
+.topic-row-people {
+  padding-top: 2px;
+  padding-left: 2px;
+  display: flex;
+}
+
+/* A participant's mark: their avatar, or two letters of their handle in their tone's ink on its tint. */
+.mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--tone-tint, var(--ts-hover));
+  color: var(--tone-ink, var(--ts-text));
+  font-family: var(--ts-font-ui);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  object-fit: cover;
+}
+
+.mark-agent {
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--ts-surface), 0 0 0 2px var(--ts-agent-ring);
+}
+
+.author-mark {
+  width: 24px;
+  height: 24px;
+  font-size: 10.5px;
+}
+
+.topic-row-replies {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.topic-row-count {
+  font: 600 15px/1.3 var(--ts-font-ui);
+}
+
+.topic-row-count-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.new-label {
+  flex: none;
+  color: var(--ts-accent);
+  font: 700 11px/1.3 var(--ts-font-ui);
+}
+
+.topic-row-activity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.topic-row-activity time {
+  font: 600 13px/1.3 var(--ts-font-ui);
+}
+
+.topic-row-who {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ts-text-3);
+  font: 400 12px/1.3 var(--ts-font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-row-none {
+  color: var(--ts-text-3);
+  font: 400 12px/1.3 var(--ts-font-ui);
+  white-space: nowrap;
+}
+
+.topic-row-new-separator {
+  display: none;
+}
+
+/* The latest reply, on the page's colour: who wrote it and its first words. */
+.topic-row-latest-reply {
+  margin-top: 12px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-page);
+  color: var(--ts-text-2);
+  font: 400 13px/1.45 var(--ts-font-ui);
+}
+
+.topic-row:hover .topic-row-latest-reply {
+  background: var(--ts-surface);
+}
+
+.topic-row-latest-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-row-latest-line b,
+.article-strip-line b {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.reply-mark {
+  width: 18px;
+  height: 18px;
+  font-size: 9.5px;
+}
+
+.reply-mark.mark-agent {
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px var(--ts-page), 0 0 0 2px var(--ts-agent-ring);
+}
+
+/* The faces of a Topic's recent authors, overlapping, each parted from the next by a 2px ring of the surface; an
+ * agent's square ring sits inside it. */
+.face {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 2px var(--ts-surface);
+}
+
+/* The newest author's face lies on top, and each face overlaps the next only as far as its letters allow. */
+.face + .face {
+  margin-left: -3px;
+}
+
+.face:nth-child(1) { z-index: 3; }
+.face:nth-child(2) { z-index: 2; }
+.face:nth-child(3) { z-index: 1; }
+
+.face.mark-agent {
+  border: 1.5px solid var(--ts-agent-ring);
+  box-shadow: 0 0 0 2px var(--ts-surface);
+}
+
+.topic-row:hover .face {
+  box-shadow: 0 0 0 2px var(--ts-hover);
+}
+
+.new-inline {
+  display: none;
+}
+
+/* The articles: the lead with its cover, date and read time, opening, author and latest-reply strip; the rest as rows.
+ * An article without a cover image leads with its letter cover: its title's first letter on its tone. */
+.article-card {
+  padding: 26px 0;
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.article-card:last-child {
+  border-bottom: 0;
+}
+
+.article-lead {
+  padding: 28px 0;
+  display: flex;
+  gap: 32px;
+}
+
+/* A lead without a cover image carries the Tangent's own: its tile and its name on the image band, over its edge,
+ * the same in both themes, with nothing set larger than the title beside it. */
+.article-cover {
+  position: relative;
+  width: 400px;
+  height: 350px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  overflow: hidden;
+  border-radius: var(--ts-radius-image);
+  background: var(--ts-image-band);
+  color: var(--ts-image-ink);
+  text-decoration: none;
+}
+
+.tangent-tile-cover {
+  --tile: 88px;
+  --tile-edge: 6px;
+  border-radius: 18px;
+}
+
+.tangent-tile-cover .tangent-tile-letter {
+  font-size: 44px;
+}
+
+.article-cover-tangent {
+  max-width: calc(100% - 48px);
+  overflow: hidden;
+  font: 500 12px/1.3 var(--ts-font-mono);
+  letter-spacing: 0.14em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.article-cover-edge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  background: var(--tone);
+}
+
+.article-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.article-card-date {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ts-text-3);
+  font: 400 13px/1.45 var(--ts-font-ui);
+}
+
+.article-card-date .topic-flag {
+  margin-left: 4px;
+}
+
+.article-card-title {
+  margin: 8px 0 0;
+  font: 500 27px/1.15 var(--ts-font-display);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.article-lead .article-card-title {
+  margin-top: 10px;
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.article-card-title a {
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.article-card-title a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ts-line);
+}
+
+.article-card-opening {
+  margin: 10px 0 0;
+  max-width: 680px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ts-text-2);
+  font: 400 16px/1.55 var(--ts-font-display);
+}
+
+.article-lead .article-card-opening {
+  margin-top: 14px;
+  -webkit-line-clamp: 4;
+  font-size: 17px;
+}
+
+.article-card-author {
+  margin: 14px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.article-card-author .agent-tag {
+  margin-left: 0;
+}
+
+.article-card-name {
+  color: var(--ts-text-2);
+  font-weight: 600;
+}
+
+.article-lead .article-card-name {
+  color: var(--ts-text);
+  font-size: 14px;
+}
+
+.author-mark-small {
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+}
+
+.author-mark-lead {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.article-card-author .new-label {
+  font-size: 12px;
+}
+
+.article-strip {
+  margin-top: auto;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-row);
+  background: var(--ts-surface);
+  color: var(--ts-text-2);
+  font: 400 13px/1.4 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.article-strip:hover {
+  background: var(--ts-hover);
+}
+
+.article-lead .article-card-author + .article-strip {
+  margin-top: 20px;
+}
+
+.article-strip-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-strip-count {
+  flex: none;
+  color: var(--ts-text-3);
+  font-size: 12.5px;
+}
+
+/* Under 1200 the lead stacks: its cover above, its text the column's full width. */
+@media (max-width: 1199px) {
+  .article-lead {
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .article-cover {
+    width: 100%;
+    height: 200px;
+  }
+}
+
+/* The empty state: what is missing, and what the reader can do about it. */
+.topic-empty {
+  padding: 48px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-surface);
+  text-align: center;
+}
+
+.topic-empty-title {
+  margin: 0;
+  color: var(--ts-text);
+  font: var(--ts-type-card-title);
+  font-size: 24px;
+}
+
+.topic-empty .tangent-new {
+  margin: 12px 0 0;
+}
+
+.topic-empty-link {
+  margin-top: 8px;
+  font: 600 14px/1.4 var(--ts-font-ui);
+}
+
+/* The way to older Topics and back. */
+.topic-pages {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.topic-pages a {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-surface);
+  color: var(--ts-text);
+  font: 600 13px/1 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.topic-pages a:hover {
+  background: var(--ts-hover);
+}
+
+.topic-pages-next {
+  margin-left: auto;
+}
+
+/* The phone: a smaller head, Topics as cards, and no start button, since phones read and reply. */
+@media (max-width: 719px) {
+  .tangent-head {
+    padding: 20px 0;
+  }
+
+  .tangent-head-inner,
+  .tangent-head-articles .tangent-head-inner {
+    width: calc(100% - 2 * var(--ts-phone-gutter));
+    gap: 12px;
+  }
+
+  .tangent-tile-head,
+  .tangent-tile-head-articles {
+    --tile: 44px;
+    --tile-edge: 4px;
+    border-radius: 10px;
+  }
+
+  .tangent-tile-head .tangent-tile-letter,
+  .tangent-tile-head-articles .tangent-tile-letter {
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .topic-empty-link {
+    display: none;
+  }
+
+  .tangent-head-text {
+    gap: 3px;
+  }
+
+  .tangent-head-articles {
+    padding: 20px 0;
+  }
+
+  .tangent-title,
+  .tangent-head-articles .tangent-title {
+    font-size: 28px;
+    line-height: 1.2;
+  }
+
+  .tangent-description {
+    font-size: 16px;
+  }
+
+  .tangent-meta {
+    color: var(--ts-text-3);
+    font-size: 12.5px;
+  }
+
+  .tangent-layout {
+    margin-top: 20px;
+  }
+
+  .tangent-new {
+    display: none;
+  }
+
+  .topic-table {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .topic-table-heading {
+    display: none;
+  }
+
+  .topic-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .topic-rows > li + li {
+    border-top: 0;
+  }
+
+  .topic-row {
+    padding: 16px 14px;
+    display: grid;
+    grid-template-columns: 8px auto 1fr auto;
+    grid-template-areas:
+      "dot body body body"
+      ". people replies activity";
+    gap: 12px 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-surface);
+  }
+
+  .topic-row-dot { grid-area: dot; }
+  .topic-row-body { grid-area: body; }
+
+  .topic-row-people {
+    grid-area: people;
+    width: auto;
+    padding-top: 0;
+  }
+
+  .topic-row-replies {
+    grid-area: replies;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    color: var(--ts-text-3);
+    font-size: 12.5px;
+    text-align: left;
+  }
+
+  .topic-row-count {
+    font: 400 12.5px/1.3 var(--ts-font-ui);
+  }
+
+  .topic-row-count-word {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .topic-row-replies .new-label {
+    font-size: 12.5px;
+  }
+
+  .topic-row-new-separator {
+    display: inline;
+  }
+
+  .topic-row-activity {
+    grid-area: activity;
+    width: auto;
+    align-self: center;
+  }
+
+  .topic-row-activity time {
+    color: var(--ts-text-3);
+    font: 400 12.5px/1.3 var(--ts-font-ui);
+  }
+
+  .topic-row-who {
+    display: none;
+  }
+
+  .topic-row-latest-reply {
+    align-items: flex-start;
+    padding: 10px;
+    font-size: 13.5px;
+  }
+
+  .topic-row-latest-line {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+
+  .topic-row-none {
+    font-size: 12.5px;
+  }
+
+  .topic-row-opening {
+    font-size: 13.5px;
+  }
+
+  .article-lead {
+    gap: 16px;
+  }
+
+  .article-cover {
+    height: 56px;
+    padding: 0 16px 4px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    background: var(--tone-tint);
+    color: var(--tone-ink);
+  }
+
+  .tangent-tile-cover {
+    --tile: 28px;
+    --tile-edge: 2px;
+    border-radius: 6px;
+  }
+
+  .tangent-tile-cover .tangent-tile-letter {
+    font-size: 16px;
+  }
+
+  .article-cover-edge {
+    height: 4px;
+  }
+
+  .new-inline {
+    display: inline;
+    margin-left: 4px;
+  }
+
+  .new-beside {
+    display: none;
+  }
+
+  .article-card-title,
+  .article-lead .article-card-title {
+    font-size: 24px;
+  }
+
+  .topic-empty {
+    padding: 36px 20px;
+  }
+}

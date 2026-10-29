@@ -7,7 +7,8 @@ using Tangent.Writer;
 namespace Tangent.Posts;
 
 /// <summary>Starts a Topic: a root Post in the named Tangent, with a slug derived from the title and made unique in that
-/// Tangent by a suffix that never changes, and <see cref="EventKind.PostCreated"/> appended in the same commit.
+/// Tangent by a suffix that never changes — a slug a Tangent's own pages hold (<see cref="Slug.Reserved"/>) takes the
+/// suffix too — the Tangent's Topic count raised and <see cref="EventKind.PostCreated"/> appended in the same commit.
 /// The Tangent exists for the author, who holds <see cref="Bit.View"/> in it, or the command answers that no Tangent
 /// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post; a different Tangent,
 /// title, kind, body or author is a conflict.</summary>
@@ -27,7 +28,7 @@ public sealed record StartTopic(
 
     public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
     {
-        if (await Tangents.Tangent.Get(TangentId, ct) is null) return new Outcome<Post>.Refused(NoTangent);
+        if (await Tangents.Tangent.Get(TangentId, ct) is not { } tangent) return new Outcome<Post>.Refused(NoTangent);
         var capabilities = await Capabilities.Load(AuthorId, TangentId, null, ct);
         if (!capabilities.Exists) return new Outcome<Post>.Refused(NoTangent);
 
@@ -44,6 +45,8 @@ public sealed record StartTopic(
         Post.CheckTitle(Title);
         var root = Post.Root(Id, TangentId, Title, await UniqueSlug(ct), Kind, Body, AuthorId, at);
         await root.Save(ct);
+        tangent.TopicStarted();
+        await tangent.Save(ct);
         await Event.Next(sequences, EventKind.PostCreated, at,
             tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId, version: root.Version).Save(ct);
         return new Outcome<Post>.Done(root);
@@ -61,6 +64,7 @@ public sealed record StartTopic(
         var slug = Slug.From(Title);
         for (var suffix = 1; suffix <= SuffixBound; suffix++)
         {
+            if (suffix == 1 && Slug.Reserved.Contains(slug)) continue;
             var candidate = suffix == 1 ? slug : Slug.WithSuffix(slug, suffix);
             if (!await Taken(candidate, ct)) return candidate;
         }

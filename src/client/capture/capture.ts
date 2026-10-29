@@ -10,8 +10,8 @@ import { chromium, type Browser } from 'playwright'
 import { storageKey } from '../appearance.ts'
 import { interrupted, onInterrupt } from './interrupt.ts'
 import { referencePackage, renderReference } from './reference.ts'
-import { capturePersona, captureThemes, nearestReadings, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
-import { doorOf, forward, resolveServer, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
+import { captureOperator, capturePersona, capturePlaceName, captureThemes, nearestReadings, referenceVariants, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
+import { doorOf, establish, forward, resolveServer, seed, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
 
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const viewportHeight: Record<Width, number> = { 1440: 960, 1024: 768, 390: 844 }
@@ -25,14 +25,15 @@ const { values, positionals } = parseArgs({
 const name = positionals[0]
 const screen = name ? screens[name] : undefined
 const reference = name ? references[name] : undefined
-if (!name || positionals.length > 1 || (!screen && !reference)) {
+const variants = name ? referenceVariants[name] : undefined
+if (!name || positionals.length > 1 || (!screen && !reference && !variants)) {
   console.error('Usage: npm run capture -- <screen> [--url <base URL>] [--server <published Tangent.Server>]')
   console.error(`Screens: ${Object.keys(screens).join(', ')}.`)
   console.error(`In the reference, with no page yet: ${Object.keys(references).filter((key) => !screens[key]).join(', ')}.`)
   process.exit(2)
 }
 const referenceFolder = referencePackage(root)
-if (!('folder' in referenceFolder) && reference) console.error(referenceFolder.missing)
+if (!('folder' in referenceFolder) && (reference || variants)) console.error(referenceFolder.missing)
 if (!screen && !('folder' in referenceFolder)) process.exit(2)
 
 // The next round: one more than the highest finished round of this screen. It is written as <n>.partial
@@ -80,19 +81,26 @@ async function launch(args: string[] = []): Promise<{ browser: Browser; close():
 async function captureScreen(screen: Screen): Promise<string[]> {
   if (screen.states.some((state) => state.name === 'reference'))
     throw new Error('No state is named reference; that name marks the reference captures.')
-  // States that need the same settings share one Tangent Space.
+  // States that need the same settings, the same place and the same seed share one Tangent Space.
   const groups = new Map<string, State[]>()
   for (const state of screen.states) {
-    const key = JSON.stringify(state.settings ?? {})
+    const key = JSON.stringify({ settings: state.settings ?? {}, place: state.place ?? 'established', seed: state.seed ?? null })
     groups.set(key, [...(groups.get(key) ?? []), state])
   }
-  if (values.url && [...groups.keys()].some((key) => key !== '{}'))
-    throw new Error('A state of this screen needs settings the Tangent Space starts with; capture it without --url.')
+  if (values.url && screen.states.some((state) => state.settings || (state.place ?? 'established') !== 'established'))
+    throw new Error('A state of this screen needs settings or a place the Tangent Space starts with; capture it without --url.')
+  if (values.url && screen.states.some((state) => state.seed))
+    throw new Error('A state of this screen needs the rows the capture host seeds; capture it without --url.')
   const server = values.url ? undefined : resolveServer(root, values.server)
 
-  for (const [settings, states] of groups) {
-    const tangentSpace = server ? await startTangentSpace(server, JSON.parse(settings)) : undefined
+  for (const [key, states] of groups) {
+    const group = JSON.parse(key) as { settings: Record<string, string>; place: NonNullable<State['place']>; seed: string | null }
+    const tangentSpace = server ? await startTangentSpace(server, group.settings) : undefined
     try {
+      // First run comes first: a seed writes into an established place.
+      if (tangentSpace && group.place !== 'unestablished')
+        await establish(tangentSpace.listening, group.place === 'persona' ? capturePersona : captureOperator, capturePlaceName, tangentSpace.setupCode)
+      if (tangentSpace && group.seed) await seed(tangentSpace.listening, tangentSpace.baseUrl, group.seed)
       // A started Tangent Space is asked for at its base URL, which the browser maps to its loopback port.
       // A running one is asked for where --url says, and its pages link to the base URL it states.
       const pageBase = tangentSpace?.baseUrl ?? new URL(values.url!)
@@ -100,7 +108,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
       const args = tangentSpace ? [`--host-resolver-rules=MAP ${baseUrl.host} ${tangentSpace.listening.host}`] : []
       const { browser, close } = await launch(args)
       try {
-        for (const state of states) await captureState(browser, pageBase, baseUrl, screen.path, state, tangentSpace?.listening)
+        for (const state of states) await captureState(browser, pageBase, baseUrl, state.path ?? screen.path, state, tangentSpace?.listening)
       } finally {
         await close()
       }
@@ -110,7 +118,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
   }
   return [
     `Captures of ${screen.path} at ${widths.join(', ')} wide, light and dark, named <width>-<theme>-<state>.png.`,
-    `States: ${screen.states.map((state) => state.name).join(', ')}.`,
+    `States: ${screen.states.map((state) => (state.path ? `${state.name} (${state.path})` : state.name)).join(', ')}.`,
     values.url ? `Tangent Space: the one running at ${values.url}.` : 'Tangent Space: started for this round over a new data folder.',
   ]
 }
@@ -164,6 +172,8 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
         })
 
         await page.goto(target.href, { waitUntil: 'networkidle' })
+        for (const selector of state.check ?? []) await page.check(selector)
+        for (const [selector, value] of Object.entries(state.fill ?? {})) await page.fill(selector, value)
         if (state.click) {
           await page.click(state.click)
           await page.waitForLoadState('networkidle')
@@ -190,6 +200,15 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
 }
 
 async function captureReference(): Promise<string[]> {
+  if (variants) {
+    if (!('folder' in referenceFolder)) return [`The design reference has screens for ${name}. ${referenceFolder.missing}`]
+    const notes = [`Reference, from ${referenceFolder.folder}, named <width>-<theme>-reference-<variant>.png:`, '']
+    for (const [variant, entry] of Object.entries(variants)) {
+      notes.push(`${variant}:`)
+      notes.push(...(await renderReferences(references[entry] ?? {}, `-${variant}`)))
+    }
+    return notes
+  }
   if (!reference) {
     const nearest = nearestReadings[name]
     return [
@@ -200,7 +219,13 @@ async function captureReference(): Promise<string[]> {
     ]
   }
   if (!('folder' in referenceFolder)) return [`The design reference has a screen for ${name}. ${referenceFolder.missing}`]
-  const notes = [`Reference, from ${referenceFolder.folder}, named <width>-<theme>-reference.png:`, '']
+  return [`Reference, from ${referenceFolder.folder}, named <width>-<theme>-reference.png:`, '', ...(await renderReferences(reference, ''))]
+}
+
+// Renders a reference's screen at each width and theme it is drawn at, its file names carrying the suffix.
+async function renderReferences(reference: Partial<Record<Width, string>>, suffix: string): Promise<string[]> {
+  if (!('folder' in referenceFolder)) return []
+  const notes: string[] = []
   const { browser, close } = await launch()
   try {
     for (const width of widths)
@@ -210,7 +235,7 @@ async function captureReference(): Promise<string[]> {
           notes.push(`- ${width} ${theme}: the reference has no screen at this width.`)
           continue
         }
-        const output = `${width}-${theme}-reference.png`
+        const output = `${width}-${theme}-reference${suffix}.png`
         await renderReference(browser, referenceFolder.folder, file, width, theme, join(folder, output))
         notes.push(`- ${width} ${theme}: ${output}, from screens/${file}.`)
       }

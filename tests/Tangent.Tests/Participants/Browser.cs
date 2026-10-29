@@ -1,11 +1,12 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 
 namespace Tangent.Participants;
 
 /// <summary>A browser for one Tangent Space: it keeps cookies and follows redirects one at a time, so a test can sign in
 /// through Koan's test connector the way a person does and see every answer on the way.</summary>
-public sealed class Browser : IDisposable
+public sealed partial class Browser : IDisposable
 {
     /// <summary>The Koan test connector's persona cookie: the persona's name and its subject, which the connector's
     /// userinfo answers as <c>sub</c>.</summary>
@@ -27,14 +28,53 @@ public sealed class Browser : IDisposable
 
     /// <summary>Signs in through Koan's test connector as a persona whose subject is <paramref name="did"/>, coming back
     /// to the sign-in page, and answers with where the redirects ended. A <paramref name="handle"/> reaches the
-    /// sign-in as the verified handle claim the atproto connector carries.</summary>
-    public async Task<HttpResponseMessage> SignIn(string name, string did, CancellationToken ct, string? handle = null)
+    /// sign-in as the verified handle claim the atproto connector carries; <paramref name="under"/> is the base URL's
+    /// path, when it has one.</summary>
+    public async Task<HttpResponseMessage> SignIn(string name, string did, CancellationToken ct, string? handle = null, string under = "")
     {
         _jar.Add(_address, new Cookie(PersonaCookie, Uri.EscapeDataString(name + "|" + did)) { Path = "/" });
-        return await Follow(HttpMethod.Get, "/auth/test/challenge?return=" + Uri.EscapeDataString("/sign-in?return=/"), ct,
-            rewrite: target => handle is not null && target.AbsolutePath == Authorize
+        return await Follow(HttpMethod.Get, under + "/auth/test/challenge?return=" + Uri.EscapeDataString(under + "/sign-in?return=" + under + "/"), ct,
+            rewrite: target => handle is not null && target.AbsolutePath.EndsWith(Authorize, StringComparison.Ordinal)
                 ? new Uri(target + "&claim." + Uri.EscapeDataString("atproto:handle") + "=" + Uri.EscapeDataString(handle))
                 : target);
+    }
+
+    /// <summary>Sends the form the first-run page holds, with the form's token, as the page posts it: the place's name,
+    /// the proprietor's handle when it is someone else, the setup code when there is one, and the operator's
+    /// statement unless <paramref name="accountable"/> is false.</summary>
+    public async Task<HttpResponseMessage> SetUp(string name, CancellationToken ct, string? proprietorHandle = null, string? code = null,
+        bool accountable = true)
+    {
+        var fields = new Dictionary<string, string>
+        {
+            ["name"] = name,
+            ["proprietor"] = proprietorHandle is null ? "me" : "someone",
+            ["handle"] = proprietorHandle ?? ""
+        };
+        if (code is not null) fields["code"] = code;
+        if (accountable) fields["accountable"] = "yes";
+        return await Post("/first-run", fields, ct);
+    }
+
+    /// <summary>Reads the page at <paramref name="path"/> and posts its form back to it with the form's token.</summary>
+    private async Task<HttpResponseMessage> Post(string path, Dictionary<string, string> fields, CancellationToken ct)
+    {
+        foreach (var (key, value) in await Token(path, ct)) fields[key] = value;
+        return await Client.PostAsync(path, new FormUrlEncodedContent(fields), ct);
+    }
+
+    /// <summary>The token field of the form the page at <paramref name="path"/> holds, as a form a browser keeps open
+    /// carries it.</summary>
+    public async Task<Dictionary<string, string>> Token(string path, CancellationToken ct)
+    {
+        using var page = await Follow(HttpMethod.Get, path, ct);
+        var html = await page.Content.ReadAsStringAsync(ct);
+        var token = TokenField().Match(html);
+        if (!token.Success) throw new InvalidOperationException($"The page at {path} holds no form.");
+        return new Dictionary<string, string>
+        {
+            [WebUtility.HtmlDecode(token.Groups["field"].Value)] = WebUtility.HtmlDecode(token.Groups["value"].Value)
+        };
     }
 
     /// <summary>Sends a request and follows its redirects as a browser does, answering with the last response.</summary>
@@ -59,4 +99,6 @@ public sealed class Browser : IDisposable
 
     public void Dispose() => Client.Dispose();
 
+    [GeneratedRegex("<input type=\"hidden\" name=\"(?<field>__RequestVerificationToken[^\"]*)\" value=\"(?<value>[^\"]+)\"")]
+    private static partial Regex TokenField();
 }

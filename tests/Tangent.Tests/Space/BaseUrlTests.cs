@@ -41,24 +41,21 @@ public sealed class BaseUrlTests
     }
 
     [Fact]
-    public async Task A_restart_under_another_base_url_moves_the_row_the_links_and_the_island()
+    public async Task A_restart_under_another_base_url_moves_the_links_and_the_island()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
         {
-            await using (await TangentSpaceFixture.StartAsync(Settings(dataFolder, "https://first.example"), ct: Cancellation))
-                Assert.Equal("https://first.example", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.BaseUrl);
+            await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder, "https://first.example"), ct: Cancellation))
+                await Given.AnEstablishedTangentSpace(first, ct: Cancellation);
 
             await using var moved = await TangentSpaceFixture.StartAsync(Settings(dataFolder, "https://second.example"), ct: Cancellation);
-            var row = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
             using var request = new HttpRequestMessage(HttpMethod.Get, "/");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
             using var response = await moved.Client.SendAsync(request, Cancellation);
             var html = await response.Content.ReadAsStringAsync(Cancellation);
 
-            Assert.NotNull(row);
-            Assert.Equal("https://second.example", row.BaseUrl);
-            Assert.Equal(2, row.Version);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Contains("<script type=\"module\" src=\"https://second.example/tangent.js\"></script>", html);
             Assert.Contains("data-props=\"{&quot;url&quot;:&quot;https://second.example/&quot;}\"", html);
             Assert.DoesNotContain("first.example", html);

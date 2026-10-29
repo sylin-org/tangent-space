@@ -1,7 +1,8 @@
 // The screens the visual loop captures, and where the design reference draws each one.
 // A screen is a path under the base URL and the states it is captured in. A state is reached by a
-// query on the path, by settings the Tangent Space starts with, by signing the capture persona in, or by a
-// click in the page; never by a dialog.
+// path of its own or a query on the path, by settings the Tangent Space starts with, by how far first run has
+// gone, by the rows a seed writes, by signing the capture persona in, or by filling and clicking in the page; never
+// by a dialog.
 
 import type { Theme } from '../appearance.ts'
 
@@ -14,12 +15,24 @@ export const captureThemes: readonly CaptureTheme[] = ['light', 'dark']
 export interface State {
   /** Part of the file name: lowercase words joined by hyphens. */
   name: string
+  /** The path under the base URL this state opens, when it is not the screen's. */
+  path?: string
   /** Query parameters added to the screen's path. */
   query?: Readonly<Record<string, string>>
   /** Settings the Tangent Space starts with, such as `{ 'Koan:Web:ApplicationUrl': '…' }`. */
   settings?: Readonly<Record<string, string>>
+  /** How the place stands: established through first run by the capture operator before the page opens (the
+   *  default), not established yet, or established by the capture persona, who is then its operator. */
+  place?: 'established' | 'unestablished' | 'persona'
+  /** Fields filled once the page has settled and the checks are made, by selector, before any click. */
+  fill?: Readonly<Record<string, string>>
+  /** Radio buttons or checkboxes checked once the page has settled, before any click. */
+  check?: readonly string[]
   /** A selector clicked once the page has settled; the state is what the click shows in the page. */
   click?: string
+  /** The rows the Tangent Space holds, by the name of a seed the capture host writes before any page opens
+   *  (src/server/Capture). States with the same seed and settings share one Tangent Space. */
+  seed?: string
   /** Signed in as the capture persona through Koan's test connector before the page opens. */
   signedIn?: boolean
   /** A path under the base URL whose requests are cancelled, so a click that would leave the page shows the
@@ -30,6 +43,11 @@ export interface State {
 // Whom a signed-in state is captured as; the sign-in makes them a participant. The handle reaches the sign-in as
 // the atproto connector's verified handle claim.
 export const capturePersona = { name: 'ada', did: 'did:plc:capture4persona', handle: 'ada.bsky.social' } as const
+
+// Who establishes the place through first run before a state opens, unless the state says otherwise, and the
+// name they give it.
+export const captureOperator = { name: 'leo', did: 'did:plc:capture4operator', handle: 'leo.bsky.social' } as const
+export const capturePlaceName = 'Tangent Space'
 
 export interface Screen {
   /** The path under the base URL, starting with a slash. */
@@ -53,6 +71,42 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'handle-not-found', query: { failure: 'handle_not_found', handle: 'ada.bsky.socail' } },
     ],
   },
+  // Before anyone signs in; signed in where the configuration names someone else as operator; signed in, the
+  // form with its setup code field before anything is written; where the configuration names the persona, the form
+  // refused for a proprietor handle no participant has; and established, the site's pointers for its operator.
+  'first-run': {
+    path: '/first-run',
+    states: [
+      { name: 'arrival', place: 'unestablished' },
+      { name: 'waiting', place: 'unestablished', signedIn: true, settings: { 'Tangent:Operator': captureOperator.did } },
+      { name: 'form', place: 'unestablished', signedIn: true },
+      {
+        name: 'form-error',
+        place: 'unestablished',
+        signedIn: true,
+        settings: { 'Tangent:Operator': capturePersona.did },
+        check: ['#first-run-someone', '#first-run-accountable'],
+        fill: { '#first-run-name': 'Field notes', '#first-run-handle': 'studio.example' },
+        click: '.sign-in-submit',
+      },
+      { name: 'established', place: 'persona', signedIn: true },
+    ],
+  },
+  // A discussions Tangent and an articles Tangent, populated and empty, read by the persona, a member with some
+  // Topics new to them; the discussions Tangent also as a visitor reads it, with the persona's account open, and with
+  // the Tangent switcher open.
+  tangent: {
+    path: '/t/discussions',
+    states: [
+      { name: 'discussions', seed: 'tangent', signedIn: true },
+      { name: 'discussions-visitor', seed: 'tangent' },
+      { name: 'discussions-account', seed: 'tangent', signedIn: true, click: '.account-button' },
+      { name: 'discussions-switcher', seed: 'tangent', signedIn: true, click: '.switcher-button' },
+      { name: 'discussions-empty', seed: 'tangent', signedIn: true, path: '/t/workshop' },
+      { name: 'articles', seed: 'tangent', signedIn: true, path: '/t/articles' },
+      { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },
+    ],
+  },
 }
 
 // The reference's screens by width, as file names under its screens/ folder. Each is drawn at one size
@@ -74,8 +128,15 @@ export const references: Readonly<Record<string, Partial<Record<Width, string>>>
   'tangent-settings-access': { 1440: '17-tangent-access.html' },
 }
 
+// A screen the reference draws as several screens, by variant: each variant names an entry of `references`, and
+// its reference captures are named <width>-<theme>-reference-<variant>.png.
+export const referenceVariants: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  tangent: { discussions: 'tangent-discussions', articles: 'tangent-articles' },
+}
+
 // For a screen the reference does not draw, the reference screens nearest to it, named in the round's
 // README for whoever draws its mock. They are not rendered and are not its target.
 export const nearestReadings: Readonly<Record<string, readonly string[]>> = {
   door: ['01-space-home.html', '20-phone-space-home.html'],
+  'first-run': ['08-space-general.html', '19-sign-in.html'],
 }

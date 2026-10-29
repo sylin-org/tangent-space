@@ -119,10 +119,7 @@ public sealed class CommandGateTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        Assert.NotNull(space);
-        space.Audience = Audience.Private;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        await Given.AnEstablishedTangentSpace(tangentSpace, audience: Audience.Private, ct: Cancellation);
         await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Member], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ban", [Roles.Member], Standing.Banned, Cancellation);

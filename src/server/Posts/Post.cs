@@ -11,6 +11,9 @@ namespace Tangent.Posts;
 /// Topic.</summary>
 public sealed class Post : Entity<Post>
 {
+    /// <summary>How many of a Topic's most recent authors its root keeps.</summary>
+    public const int RecentAuthorLimit = 4;
+
     /// <summary>The most UTF-8 bytes a body holds.</summary>
     public const int BodyLimit = 64 * 1024;
 
@@ -80,13 +83,24 @@ public sealed class Post : Entity<Post>
     public int ReplyCount { get; set; }
 
     /// <summary>When the Topic last gained a Post. Root only.</summary>
-    [Index(Name = "ix_post_topics", Order = 2)]
+    [Index(Name = "ix_post_topics", Order = 3)]
     public DateTimeOffset LastActivityAt { get; set; }
+
+    /// <summary>The Topic's latest reply and its author; null until the first reply. Root only.</summary>
+    public string? LatestReplyId { get; set; }
+
+    public string? LatestReplyAuthorId { get; set; }
+
+    /// <summary>The Topic's most recent authors, newest first, each once, at most <see cref="RecentAuthorLimit"/>.
+    /// Root only.</summary>
+    public List<string> RecentAuthorIds { get; set; } = [];
 
     /// <summary>Root only.</summary>
     public bool Locked { get; set; }
 
-    /// <summary>Root only.</summary>
+    /// <summary>Root only. In the topic-list index before the last activity, so the pinned Topics and the others are
+    /// each one range of it.</summary>
+    [Index(Name = "ix_post_topics", Order = 2)]
     public bool Pinned { get; set; }
 
     public bool Removed { get; set; }
@@ -115,13 +129,15 @@ public sealed class Post : Entity<Post>
             Body = body,
             AuthorId = authorId,
             CreatedAt = at,
-            LastActivityAt = at
+            LastActivityAt = at,
+            RecentAuthorIds = [authorId]
         };
     }
 
     /// <summary>A reply to this root, or a refusal: this Post is a root that is neither locked nor removed, the Id is a TID,
     /// the body is within its limits and the author is named. The parent is the caller's, already known to be a Post of
-    /// this Topic. The reply takes the Topic's next sequence, and the root's counters and last activity move with it.</summary>
+    /// this Topic. The reply takes the Topic's next sequence, and the root's counters, last activity, latest reply and
+    /// recent authors move with it.</summary>
     public Post Reply(string id, string body, string authorId, string parentId, DateTimeOffset at)
     {
         if (ParentId is not null) throw new Refusal(NotARoot);
@@ -133,6 +149,9 @@ public sealed class Post : Entity<Post>
         LastSequence = checked(LastSequence + 1);
         ReplyCount = checked(ReplyCount + 1);
         LastActivityAt = at;
+        LatestReplyId = id;
+        LatestReplyAuthorId = authorId;
+        RecentAuthorIds = [authorId, .. RecentAuthorIds.Where(author => author != authorId).Take(RecentAuthorLimit - 1)];
         return new Post
         {
             Id = id,

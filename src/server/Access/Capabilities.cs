@@ -33,12 +33,16 @@ public sealed class Capabilities
 
     private readonly Dictionary<Bit, string> _missing;
 
-    private Capabilities(Bit held, bool exists, Dictionary<Bit, string> missing)
+    private Capabilities(Bit held, bool exists, Dictionary<Bit, string> missing, IReadOnlyList<string> roleIds)
     {
         Held = held;
         Exists = exists;
         _missing = missing;
+        RoleIds = roleIds;
     }
+
+    /// <summary>The roles in the participant's bag, by id; empty for a visitor.</summary>
+    public IReadOnlyList<string> RoleIds { get; }
 
     /// <summary>The bits the participant holds on this resource.</summary>
     public Bit Held { get; }
@@ -80,6 +84,8 @@ public sealed class Capabilities
     {
         var missing = new Dictionary<Bit, string>();
         var held = Bits.All;
+        var bag = tokens as IReadOnlyCollection<string> ?? tokens.ToList();
+        IReadOnlyList<string> roleIds = participant is null ? [] : bag.Where(Bits.IsRoleId).Distinct(StringComparer.Ordinal).ToList();
         var viewIfPublic = space.Audience == Audience.Public ? Bit.View : Bit.None;
 
         // Standing precedes everything: a cap on what any later step may leave. A timeout that has ended is over.
@@ -101,7 +107,7 @@ public sealed class Capabilities
                 break;
         }
 
-        var (granted, denied) = Resolve(tokens, viewIfPublic, overwrites, participant?.Id);
+        var (granted, denied) = Resolve(bag, viewIfPublic, overwrites, participant?.Id);
 
         // View on the Tangent: without it the resource is absent to the reader, and every verb says only that.
         if (!granted.HasFlag(Bit.View)) Drop(Bit.View, Absent);
@@ -109,7 +115,7 @@ public sealed class Capabilities
         {
             var reason = missing[Bit.View];
             foreach (var bit in Bits.Each) missing[bit] = reason;
-            return new Capabilities(Bit.None, false, missing);
+            return new Capabilities(Bit.None, false, missing, roleIds);
         }
 
         if (post is { Locked: true }) Drop(Bit.Post, Locked);
@@ -122,7 +128,7 @@ public sealed class Capabilities
 
         if (post is null || participant is null || post.AuthorId != participant.Id) Drop(Bit.EditOwn | Bit.RemoveOwn, NotYours);
 
-        return new Capabilities(held, true, missing);
+        return new Capabilities(held, true, missing, roleIds);
 
         void Drop(Bit bits, string reason)
         {
@@ -187,23 +193,47 @@ public sealed class Capabilities
     /// reader without <see cref="Bit.View"/> is answered as for a missing resource before anything else is said.</summary>
     public static async Task<Capabilities> Load(string? participantId, string? tangentId, Post? post, CancellationToken ct)
     {
+        var reader = await Reader(participantId, ct);
+        IReadOnlyList<Overwrite> overwrites = tangentId is null ? [] : await Overwrites(reader, [tangentId], ct);
+        return For(reader.Participant, reader.Tokens, reader.Space, overwrites, DateTimeOffset.UtcNow, post);
+    }
+
+    /// <summary>What one participant holds on each of several Tangents, from the reads <see cref="Load"/> makes once
+    /// and one read of the overwrites of all of them, by Tangent id.</summary>
+    public static async Task<IReadOnlyDictionary<string, Capabilities>> LoadEach(string? participantId, IReadOnlyList<string> tangentIds,
+        CancellationToken ct)
+    {
+        var reader = await Reader(participantId, ct);
+        var overwrites = tangentIds.Count == 0 ? [] : await Overwrites(reader, tangentIds, ct);
+        var now = DateTimeOffset.UtcNow;
+        return tangentIds.Distinct(StringComparer.Ordinal).ToDictionary(id => id,
+            id => For(reader.Participant, reader.Tokens, reader.Space, overwrites.Where(overwrite => overwrite.TangentId == id).ToList(), now),
+            StringComparer.Ordinal);
+    }
+
+    /// <summary>The rows every answer starts from: the participant, their bag with the everyone role's own
+    /// permissions beside it, and the settings row.</summary>
+    private sealed record ReaderRows(Participant? Participant, IReadOnlyList<string> BagTokens, IReadOnlyList<string> Tokens, TangentSpace Space);
+
+    private static async Task<ReaderRows> Reader(string? participantId, CancellationToken ct)
+    {
         var participant = string.IsNullOrWhiteSpace(participantId) ? null : await Participant.Get(participantId, ct);
         var roles = AppHost.GetRequiredService<RoleCollection>(nameof(Capabilities));
         var bag = await roles.Bag(participant?.Id, authenticated: participant is not null, ct);
         var everyone = await roles.Get(Roles.Everyone, ct);
-        var tokens = everyone is null ? bag.Tokens : [.. bag.Tokens, .. everyone.Permissions];
+        IReadOnlyList<string> tokens = everyone is null ? bag.Tokens.ToList() : [.. bag.Tokens, .. everyone.Permissions];
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
+        return new ReaderRows(participant, bag.Tokens.ToList(), tokens, space);
+    }
 
-        IReadOnlyList<Overwrite> overwrites = [];
-        if (tangentId is not null)
-        {
-            var subjects = bag.Tokens.Where(Bits.IsRoleId).Append(Overwrite.Everyone).ToList();
-            if (participant is not null) subjects.Add(participant.Id);
-            overwrites = await Overwrite.Query(
-                overwrite => overwrite.TangentId == tangentId && subjects.Contains(overwrite.SubjectId),
-                new QueryDefinition { Page = 1, PageSize = subjects.Count }, ct);
-        }
-
-        return For(participant, tokens, space, overwrites, DateTimeOffset.UtcNow, post);
+    /// <summary>The overwrites of these Tangents for the subjects the bag names, in one bounded read.</summary>
+    private static async Task<IReadOnlyList<Overwrite>> Overwrites(ReaderRows reader, IReadOnlyList<string> tangentIds, CancellationToken ct)
+    {
+        var subjects = reader.BagTokens.Where(Bits.IsRoleId).Append(Overwrite.Everyone).ToList();
+        if (reader.Participant is not null) subjects.Add(reader.Participant.Id);
+        var tangents = tangentIds.Distinct(StringComparer.Ordinal).ToList();
+        return await Overwrite.Query(
+            overwrite => tangents.Contains(overwrite.TangentId) && subjects.Contains(overwrite.SubjectId),
+            new QueryDefinition { Page = 1, PageSize = subjects.Count * tangents.Count }, ct);
     }
 }

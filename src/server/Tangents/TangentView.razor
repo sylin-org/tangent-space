@@ -1,0 +1,167 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* The Tangent page: its head with the Tangent's tile, name, description and how many Topics were started here, then
+   the rail and the list. A discussions Tangent lists its Topics as a table, an articles Tangent as articles under a
+   lead. An empty list says so in one sentence with one next step: the start button for a reader who can start a
+   Topic, signing in for a visitor, neither on a phone, which reads and replies. Zeros are said in words. *@
+<section class="tangent-head@(Articles ? " tangent-head-articles" : "")" aria-labelledby="tangent-title">
+    <div class="tangent-head-inner">
+        <TangentTile Tile="@Tile.For(Model.Slug, Model.Name)" Size="@(Articles ? "head-articles" : "head")" />
+        <div class="tangent-head-text">
+            <h1 id="tangent-title" class="tangent-title">@Model.Name</h1>
+            @if (Model.Description.Length > 0)
+            {
+                <p class="tangent-description">@Model.Description</p>
+            }
+            <p class="tangent-meta">
+                @if (Started > 0)
+                {
+                    <span>@Holds()</span>
+                }
+                <span class="tangent-audience">@AudienceIcon(12)@AudienceLine()</span>
+            </p>
+        </div>
+    </div>
+</section>
+<div class="layout tangent-layout">
+    <aside class="rail" aria-label="@(Articles ? "Articles" : "Topics") in this Tangent">
+        <h2 class="rail-heading">@(Articles ? "Articles" : "Topics")</h2>
+        <ul class="rail-views">
+            <li><a href="@Model.Address" aria-current="@(Model.Continued ? null : "page")">@(Articles ? "All articles" : "All topics")</a></li>
+        </ul>
+        <h2 class="rail-heading rail-heading-spaced">Who can read</h2>
+        <div class="rail-audience">
+            <span class="rail-audience-icon">@AudienceIcon(14)</span>
+            <span class="rail-audience-text">
+                <span class="rail-audience-name">@(Model.Audience == "public" ? "Public" : "Private")</span>
+                <span class="rail-audience-note">@(Model.Audience == "public" ? "Anyone can read this Tangent, signed in or not." : "Only participants it is open to can read this Tangent.")</span>
+            </span>
+        </div>
+    </aside>
+    <main class="tangent-main">
+        @if (Model.Topics.Count == 0)
+        {
+            <div class="topic-empty">
+                <p class="topic-empty-title">@(Model.Continued ? "Nothing further back." : Articles ? "No articles yet." : "No topics yet.")</p>
+                @if (!Model.Continued && Model.NewTopic is { } first)
+                {
+                    <a class="tangent-new" href="@first">@PlusIcon()@(Articles ? "New article" : "New topic")</a>
+                }
+                else if (!Model.Continued && Model.SignIn is { } signIn)
+                {
+                    <a class="topic-empty-link" href="@signIn">Sign in to start one</a>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="topic-list-head@(Articles ? " topic-list-head-ruled" : "")">
+                <h2 class="topic-list-title">@ListTitle()</h2>
+                <span class="topic-list-order">latest activity first</span>
+                @if (Model.NewTopic is { } start)
+                {
+                    <a class="tangent-new" href="@start">@PlusIcon()@(Articles ? "New article" : "New topic")</a>
+                }
+            </div>
+            @if (Articles)
+            {
+                <div class="article-list">
+                    @for (var index = 0; index < Model.Topics.Count; index++)
+                    {
+                        <TopicRow Model="@Model.Topics[index]" Today="@Model.Day" Article="true" Lead="@(index == 0 && !Model.Continued)"
+                                  TangentName="@Model.Name" TangentTile="@Tile.For(Model.Slug, Model.Name)" />
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="topic-table">
+                    <div class="topic-table-heading" aria-hidden="true">
+                        <span class="topic-table-topic">Topic</span>
+                        <span class="topic-table-people">People</span>
+                        <span class="topic-table-replies">Replies</span>
+                        <span class="topic-table-latest">Latest</span>
+                    </div>
+                    <ul class="topic-rows">
+                        @foreach (var topic in Model.Topics)
+                        {
+                            <li><TopicRow Model="@topic" Today="@Model.Day" /></li>
+                        }
+                    </ul>
+                </div>
+            }
+        }
+        @if (Model.Next is not null || Model.Continued)
+        {
+            <nav class="topic-pages" aria-label="More @(Articles ? "articles" : "topics")">
+                @if (Model.Continued)
+                {
+                    <a href="@Model.Address">Back to the latest</a>
+                }
+                @if (Model.Next is { } next)
+                {
+                    <a class="topic-pages-next" href="@next">Older @(Articles ? "articles" : "topics") →</a>
+                }
+            </nav>
+        }
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TangentPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent as the one crumb, a switcher listing
+    /// the Tangents the reader may view; and who reads, or where a visitor signs in.</summary>
+    public static Frame Frame(TangentPage page)
+    {
+        var switcher = new Switcher(Tile.For(page.Slug, page.Name), page.Tangents
+            .Select(tangent => new SwitcherItem(tangent.Name, tangent.Address, Detail(tangent), Tile.For(tangent.Slug, tangent.Name), tangent.Slug == page.Slug))
+            .ToList(), page.Door);
+        var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
+        return new(page.Place, page.Door, [new Crumb(page.Name, page.Address, switcher)], who, page.SignIn);
+    }
+
+    /// <summary>A Tangent in the switcher: its kind and how many Topics were started there, in words.</summary>
+    private static string Detail(TangentPage.Listed tangent) => tangent.Kind == "article"
+        ? "Articles · " + TopicRow.Count(tangent.TopicCount, "article", "articles", "no articles yet")
+        : "Discussions · " + TopicRow.Count(tangent.TopicCount, "topic", "topics", "no topics yet");
+
+    private bool Articles => Model.Kind == "article";
+
+    /// <summary>Whether the page holds every Topic of the Tangent: the first page, with no page after it.</summary>
+    private bool Whole => !Model.Continued && Model.Next is null;
+
+    /// <summary>How many Topics were started here, as the Tangent's row counts them.</summary>
+    private int Started => Model.Tangents.FirstOrDefault(tangent => tangent.Slug == Model.Slug)?.TopicCount ?? Model.Topics.Count;
+
+    /// <summary>What the Tangent holds, in the head, numbers in bold: the Topics started here and, when this page holds
+    /// all of them, their Posts (articles: their replies). An empty Tangent says so once, in the list, not here.</summary>
+    private RenderFragment Holds() => builder =>
+    {
+        var nouns = Articles ? ("article", "articles") : ("topic", "topics");
+        builder.AddMarkupContent(1, Bold(Started, nouns.Item1, nouns.Item2));
+        var replies = Model.Topics.Sum(topic => topic.ReplyCount);
+        if (!Whole) return;
+        if (Articles && replies > 0) builder.AddMarkupContent(2, " · " + Bold(replies, "reply", "replies"));
+        if (!Articles) builder.AddMarkupContent(3, " · " + Bold(Started + replies, "post", "posts"));
+    };
+
+    private static string Bold(int count, string one, string many)
+        => "<b>" + count.ToString(CultureInfo.InvariantCulture) + "</b> " + (count == 1 ? one : many);
+
+    private string ListTitle()
+    {
+        var nouns = Articles ? ("article", "articles") : ("topic", "topics");
+        return Model.Continued ? "Older " + nouns.Item2 : TopicRow.Count(Started, nouns.Item1, nouns.Item2, "");
+    }
+
+    private string AudienceLine() => Model.Audience == "public" ? "Public · anyone can read" : "Private · not everyone can read";
+
+    private static RenderFragment PlusIcon() => builder => builder.AddMarkupContent(0,
+        "<svg width=\"15\" height=\"15\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M10 4.5v11M4.5 10h11\"></path></svg>");
+
+    /// <summary>A globe for a public Tangent, the closed ring for a private one, as the reference draws them.</summary>
+    private RenderFragment AudienceIcon(int size) => builder => builder.AddMarkupContent(0, Model.Audience == "public"
+        ? $"<svg width=\"{size}\" height=\"{size}\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"7\"></circle><path d=\"M3 10h14\"></path><path d=\"M10 3c2.2 2 3.2 4.4 3.2 7s-1 5-3.2 7c-2.2-2-3.2-4.4-3.2-7s1-5 3.2-7z\"></path></svg>"
+        : $"<svg width=\"{size}\" height=\"{size}\" viewBox=\"0 0 32 32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M13 5.4A11 11 0 1 0 19 5.4\"></path><circle cx=\"16\" cy=\"17\" r=\"4\" fill=\"currentColor\" stroke=\"none\"></circle></svg>");
+}
