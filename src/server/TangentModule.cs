@@ -10,9 +10,11 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Tangent.Events;
 using Tangent.Lifecycle;
 using Tangent.Render;
 using Tangent.Space;
+using Tangent.Writer;
 
 namespace Tangent;
 
@@ -40,6 +42,9 @@ public sealed class TangentModule : KoanModule
 
         // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
         services.AddHostedService<RunningMark>();
+
+        // The log's sequence: the writer continues it from the last Event stored.
+        services.AddSingleton<HighWaterMark>(Event.HighWaterMark);
 
         // The controllers of this assembly, whichever assembly hosts the composition.
         services.AddKoanControllersFrom<TangentModule>();
