@@ -401,9 +401,10 @@ public sealed class DelegatedDoorTests
         Assert.DoesNotContain("Field notes official app", page);
         Assert.DoesNotContain("/approve", page);
         Assert.DoesNotContain("/deny", page);
+        // Koan refuses the exchange outright for a client it does not allow the Device flow, so nothing ever reaches it.
         using var poll = await tangentSpace.Client.PostAsync("/oauth/token",
             Form(("grant_type", DeviceGrant), ("device_code", waiting.Id), ("client_id", impostor)), Cancellation);
-        Assert.Equal("authorization_pending", await Error(poll));
+        Assert.Equal("unauthorized_client", await Error(poll));
     }
 
     [Fact]

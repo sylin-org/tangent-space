@@ -52,8 +52,8 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
         if (rid is null && code is null) return Ok(page with { Entry = Entry() });
 
         var lookup = await ConsentPage.Find(HttpContext, rid ?? code, ct);
-        if (lookup.Request is { UserCode: not null } device && !await AllowedTheDeviceFlow(device.ClientId, ct))
-            return Again(page, code ?? device.UserCode, StatusCodes.Status400BadRequest,
+        if (lookup.ClientNotAllowed)
+            return Again(page, code ?? string.Empty, StatusCodes.Status400BadRequest,
                 "This code was not issued for this Tangent Space’s device door, so it can’t be approved here.");
         if (lookup.Request is { } pending) return Ok(page with { Decision = Decision(pending) });
         if (code is null || rid is not null)
@@ -91,11 +91,6 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
         return new ConsentDecision(new Uri(origin, pending.Approve).AbsoluteUri, new Uri(origin, pending.Deny).AbsoluteUri,
             FormToken.For(HttpContext), pending.UserCode, pending.UserCode is null ? pending.ClientName : null, pending.RedirectUri);
     }
-
-    /// <summary>Whether Koan allows the client the Device flow now. A code a client asked for while it was allowed, or
-    /// before Koan asked, may still wait; one whose client is not allowed it now is refused, never approved.</summary>
-    private static async Task<bool> AllowedTheDeviceFlow(string clientId, CancellationToken ct)
-        => (await OAuthClient.Get(clientId, ct))?.AllowsGrant(OAuthGrantTypes.DeviceCode) == true;
 
     private ConsentEntry Entry(string? code = null, string? failure = null) => new(Configured() + Path, CodeField, code, failure);
 
