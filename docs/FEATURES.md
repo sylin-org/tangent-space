@@ -23,7 +23,7 @@ The tree boots, serves one page both ways, and every rule has a check.
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Server skeleton: `Sylin.Koan.App`, SQLite in WAL with immediate write transactions, fixed port, trusted-proxy pipeline, base URL under a path prefix, health | — | `TrustedProxyPipelineContributor` (harvest) | brief 1 | S | todo |
+| Server skeleton: `Sylin.Koan.App`, SQLite in WAL with immediate write transactions, fixed port, trusted-proxy pipeline, base URL under a path prefix, health | — | `TrustedProxyPipelineContributor` (harvest) | brief 1 | S | done |
 | The writer: one queue, one loop, one transaction per command, sequences from high-water marks; the Koan transaction proven inside a loop | — | `ConversationService.Writes` ordering (harvest) | `EntityContext.Transaction` | M | todo |
 | The HTML projection: one DTO rendered through a Razor component or as JSON by `Accept`; fragments by header | — | `PublicPageRenderer` (harvest) | lift later | M | todo |
 | Island bootstrap: `data-island` mounting into server HTML, one bundle, one event stream per page, fragment patch | — | `public-fragment.js` (harvest) | — | S | todo |
