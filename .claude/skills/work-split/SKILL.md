@@ -27,7 +27,7 @@ When the executor is run by hand — another machine, another account — the sa
 
 The lead keeps working while the executor runs, never predicts its result and never reads its transcript.
 
-The lead watches the clock, not the transcript. When the executor starts, the lead schedules one check for forty-five minutes later (`CronCreate`, one shot, with the executor's id and its output file in the prompt) and deletes it when the report arrives. A note that the executor is waiting on its own background work, an output file untouched for twenty minutes, or the check firing with no report is a hang, handled as §4 says, never waited out.
+The lead watches the clock, not the transcript. When the executor starts, the lead schedules one check for forty-five minutes later (`CronCreate`, one shot, with the executor's id and its output file in the prompt) and deletes it when the report arrives. A note that the executor is waiting on its own background work, no sign of progress for twenty minutes, or the check firing with no report and no progress is a hang, handled as §4 says, never waited out. Progress is the executor's worktree: its commits and the times of the files it builds and edits. An `Agent` executor's task output file is written when it finishes, so its age says nothing while it runs.
 
 ## 4. Verify
 
