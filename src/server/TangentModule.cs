@@ -4,16 +4,19 @@ using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent;
 
 /// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder,
-/// the request pipeline, and the first start.</summary>
+/// the request pipeline, the HTML projection, and the first start.</summary>
 public sealed class TangentModule : KoanModule
 {
     public override void Register(IServiceCollection services)
@@ -41,6 +44,20 @@ public sealed class TangentModule : KoanModule
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TrustedProxyPipelineContributor>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, BaseUrlPipelineContributor>());
+
+        // The HTML projection: each resource type names its component; the formatter goes first so a request
+        // without a preference reads a page, and every other type keeps Koan's JSON.
+        services.AddScoped<HtmlRenderer>();
+        services.AddSingleton(new ResourceComponents()
+            .Add<Door, DoorView>(door => door.Name, door => door.Version)
+            .Add<Problem, ProblemView>(problem => problem.Title));
+        services.AddSingleton<HtmlFormatter>();
+        services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
+        {
+            mvc.OutputFormatters.Insert(0, html);
+            mvc.RespectBrowserAcceptHeader = true;
+            mvc.Filters.Add<ETagFilter>();
+        });
     }
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)

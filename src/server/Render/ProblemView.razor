@@ -1,0 +1,15 @@
+<main>
+    <h1>@Model.Title</h1>
+    @if (Model.Detail is { } detail)
+    {
+        <p>@detail</p>
+    }
+    @if (Model.Gate is { } gate)
+    {
+        <p data-gate="@gate">@gate</p>
+    }
+</main>
+
+@code {
+    [Parameter, EditorRequired] public Problem Model { get; set; } = default!;
+}

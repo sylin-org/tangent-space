@@ -1,0 +1,22 @@
+@* The page around one resource's component: the two links every page loads, absolute from the base URL. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@Title</title>
+    <link rel="stylesheet" href="@(BaseUrl)/tangent.css">
+    <script src="@(BaseUrl)/tangent.js" defer></script>
+</head>
+<body>
+@ChildContent
+</body>
+</html>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
