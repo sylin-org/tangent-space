@@ -69,6 +69,7 @@
                 <TopicPost Model="@reply" Today="@Model.Day" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" />
             }
             <Tangent.Events.TopicSeenForm Model="@Model.Seen" />
+            <Tangent.Events.Live Page="topic" Tangent="@Model.Tangent.Slug" Topic="@Model.Id" Address="@Model.Address" Newest="@(Model.Newer is null)" />
             @if (Model.Newer is { } newer)
             {
                 <nav class="topic-pages" aria-label="Newer replies">

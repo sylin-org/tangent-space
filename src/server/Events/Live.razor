@@ -1,0 +1,54 @@
+@using System.Text.Json
+@using Koan.Web.Hosting
+@inject PagePosition Position
+@inject KoanWebBaseUrl BaseUrl
+@* The live updater's island, one per page: it streams the log from where the page's request found it and patches the
+   page as rows that concern it arrive — on a Topic, a new reply appended at the newest window or announced by the
+   notice below the replies, and a Post edited or removed fetched again in place; on a Tangent, its list of Topics;
+   on the door, the door. It never moves a checkpoint. *@
+<div class="live" data-island="live" data-props="@Props()">
+    @if (Page == TopicPage)
+    {
+        <nav class="topic-pages" aria-live="polite" hidden>
+            <a class="topic-pages-next" href="@Address">New replies →</a>
+        </nav>
+    }
+</div>
+
+@code {
+    public const string DoorPage = "door";
+    public const string TangentPage = "tangent";
+    public const string TopicPage = "topic";
+
+    /// <summary>Which page this is: <see cref="DoorPage"/>, <see cref="TangentPage"/> or <see cref="TopicPage"/>.</summary>
+    [Parameter, EditorRequired] public string Page { get; set; } = "";
+
+    /// <summary>The Tangent's slug, on a Tangent's page or a Topic's.</summary>
+    [Parameter] public string? Tangent { get; set; }
+
+    /// <summary>The Topic's Id, on a Topic's page.</summary>
+    [Parameter] public string? Topic { get; set; }
+
+    /// <summary>The Topic's address, under which each of its Posts has its own.</summary>
+    [Parameter] public string? Address { get; set; }
+
+    /// <summary>Whether a Topic's page shows its newest window, where a new reply is appended.</summary>
+    [Parameter] public bool Newest { get; set; }
+
+    private string Props()
+    {
+        var configured = BaseUrl.Configured
+            ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+        return JsonSerializer.Serialize(new
+        {
+            events = configured + EventsController.Path,
+            door = configured + "/",
+            since = Position.Since,
+            page = Page,
+            tangent = Tangent,
+            topic = Topic,
+            address = Address,
+            newest = Newest
+        });
+    }
+}

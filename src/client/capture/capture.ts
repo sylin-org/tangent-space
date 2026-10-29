@@ -150,6 +150,9 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
           const url = new URL(request.url())
           if (!tangentSpace.has(url.origin)) return route.abort('blockedbyclient')
           if (state.cancel && url.pathname === pageBase.pathname.replace(/\/$/, '') + state.cancel) return route.abort('aborted')
+          // The live updater's stream never ends, and a capture is the page as it stands: it is refused, and the
+          // updater polls instead, which answers nothing new.
+          if ((await request.allHeaders()).accept?.includes('text/event-stream')) return route.abort('blockedbyclient')
           if (!listening) return route.fallback()
           const answered = await forward(listening, url, request.method(), await request.allHeaders(), request.postDataBuffer() ?? undefined)
           return route.fulfill(answered)

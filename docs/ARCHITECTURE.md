@@ -84,7 +84,7 @@ Only the writer appends. Kinds: `post.created` (a reply's carries the author of 
 | --- | --- |
 | The door | one window of the newest events and the newest that target me, past my place checkpoint and my checkpoints for the Topic and Tangent of each (a mention past the place's and the Tangent's alone, since an edit can mention me in a Post I read before), filtered by `can.view`, grouped: first the Topics and Tangents I watch that hold something new, by the watch flag on those checkpoints, then replies to me, mentions, new per Tangent, new articles; below it, and alone for a visitor or a reader with nothing new, the front page from the same window: whose place, what is featured, what is alive, who is around |
 | Notifications | the subset where I am the target; reading advances the checkpoint |
-| The stream | `GET /events?since=` as server-sent events; the same URL without the stream header is the poll |
+| The stream | `GET /events?since=` as server-sent events, one event to a frame with its sequence as the frame's id, resumed by `Last-Event-ID`: first what the log already holds, then each row Koan Communication carries once its commit has landed; the same URL without the stream header is the poll, one bounded page with where to ask next, which the door also names. A stream holds what its reader may view for at most a second, and reads it again at once when a row changes a standing, a role, a Tangent or the place |
 | Feeds | public `post.created` per Tangent and for articles, rendered as Atom and JSON Feed |
 | Connections | each reads from its own `Seq` |
 | Export, archive | walk it |

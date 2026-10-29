@@ -13,7 +13,9 @@ namespace Tangent.Space;
 /// who is <see cref="Around"/>. Every list is bounded, and a count the door could not finish says it is a lower bound
 /// with <c>atLeast</c>; nothing is a total over the log. Every link is absolute under the base URL. <see cref="Who"/>
 /// is the signed-in reader and <see cref="SignIn"/> where a visitor signs in; <see cref="Day"/> is the UTC day the
-/// times are written for. <c>api</c> is the stability promise an agent reads.</summary>
+/// times are written for. <see cref="Poll"/> is where the reader asks for what happens after this door: the poll past the
+/// newest event the door read that the reader may see, which the stream at the same address also answers.
+/// <c>api</c> is the stability promise an agent reads.</summary>
 public sealed record Door(
     string Name,
     string Address,
@@ -27,7 +29,8 @@ public sealed record Door(
     Door.Crowd Around,
     string? SignIn,
     Door.Reader? Who,
-    DateOnly Day)
+    DateOnly Day,
+    Door.Position Poll)
 {
     public int Api => 1;
 
@@ -83,6 +86,10 @@ public sealed record Door(
     /// <summary>The signed-in reader: their id, the name to show, their handle, the highest role they hold where they
     /// hold one, their avatar, and where they sign out, coming back to the door.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
+
+    /// <summary>Where the door stands in the log and where to ask again: the sequence it read through for this reader, and the
+    /// poll's address past it.</summary>
+    public sealed record Position(long Through, string Next);
 
     /// <summary>The version the door's <c>ETag</c> carries: a hash of everything the door says, so a new event the
     /// reader may see, a moved checkpoint, a changed <c>can</c> or a new day changes it. A door with the form carries a

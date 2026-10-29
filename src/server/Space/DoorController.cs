@@ -113,14 +113,14 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
         var configured = Configured();
         var door = configured + "/";
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
+        // Read through the newest event in a Tangent the reader may view, their own included; an event in a Tangent
+        // they may not view moves nothing they can see.
+        var through = Math.Max(since, window.Concat(targeted).Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max());
         Door.Since? news = null;
         if (reader is not null)
         {
             var partial = LogWindow.Partial(window, since);
             var targetedFull = targeted.Count >= LogWindow.TargetedSize;
-            // Read through the newest event in a Tangent the reader may view, their own included; an event in a Tangent
-            // they may not view moves nothing they can see.
-            var through = Math.Max(since, window.Concat(targeted).Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max());
             news = new Door.Since(
                 since,
                 through,
@@ -158,7 +158,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             reader is null ? configured + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
                 Roles.Word(place.RoleIds), reader.Profile.Avatar, configured + AuthConstants.Routes.Logout + "?return=" + back),
-            DateOnly.FromDateTime(DateTime.UtcNow)));
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            new Door.Position(through, configured + EventsController.Path + "?" + EventsController.Since + "=" + through.ToString(System.Globalization.CultureInfo.InvariantCulture))));
     }
 
     /// <summary>Marks the door seen: moves the signed-in reader's place checkpoint to the sequence in the
@@ -197,7 +198,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
 
     /// <summary>What a reader without <see cref="Bit.View"/> on the place receives: a missing resource's answer where
     /// the place is absent to them; otherwise the one step that stands between them and reading.</summary>
-    private static IActionResult Gated(string gate) => gate switch
+    internal static IActionResult Gated(string gate) => gate switch
     {
         Capabilities.Absent => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.", gate).ToResult(),
         Capabilities.SignIn => new Problem(StatusCodes.Status401Unauthorized, "Sign in to read",
