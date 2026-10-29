@@ -24,7 +24,7 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 | Entities, queries, partitions, transactions; the SQLite posture (WAL, busy timeout, synchronous) and one native commit across entity types | `Sylin.Koan.Data.Core` on `Sylin.Koan.Data.Connector.Sqlite` | every table; the writer's one commit per command (`TransactionGuarantee.Atomic`); the audit partition for edit history |
 | The canonical base URL, served under its path and nothing outside it; trusted proxies for one hop | `Sylin.Koan.Web` (`Koan:Web:ApplicationUrl`, `Koan:Web:TrustedProxies`) | every absolute link; the `TangentSpace` row's `BaseUrl`; the reverse proxy's scheme |
 | Durable person, external identities, sessions, audit, erasure | `Sylin.Koan.Identity` · `Sylin.Koan.Identity.Web` | the participant spine; the atproto DID as the person's external identity |
-| Roles with permissions, members and cached bags; effective access composed from contributors; the access explainer | `Sylin.Koan.Identity` | the Discord role model; the `gate` reason |
+| Roles with permissions, members and cached bags; effective access composed from contributors; the access explainer | `Sylin.Koan.Identity` | the Discord role model's roles and bags; the explainer names the deciding fact once brief 2 lands |
 | atproto sign-in and authorized sessions | `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | sign-in; record and blob operations under a participant's session |
 | OAuth 2.1 authorization server: code with PKCE, Device flow, loopback DCR, consent seam, revocable grants, persisted ES256 keys | `Sylin.Koan.Web.Auth.Server` | the delegated agent door; the installation's signing keys |
 | ES256 issuer, JWKS, inbound bearer scheme | `Sylin.Koan.Security.Trust` | credentials minted by the proof bridge; bearer validation |
@@ -45,7 +45,7 @@ Koan work the tree depends on, each a scoped brief: scoped overwrites with deny 
 Every write is a command on one queue, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — hands it to the writer and awaits its outcome: the result, a refusal with its reason, a conflict, or the failure. The loop takes commands in arrival order and, for each:
 
 1. opens one atomic scope (`EntityContext.Transaction` with `TransactionGuarantee.Atomic`; SQLite begins the immediate transaction at commit, so the command's reads see the committed state and the serial loop keeps them consistent);
-2. runs the command, which loads what it names — the participant with standing, the role bag, the Tangent's overwrites, the target Post — asks `Capabilities.For(...)` and refuses with the explainer's reason when the verb is missing, and calls the entity method, where validation lives;
+2. runs the command, which loads what it names — the participant with standing, the role bag, the Tangent's overwrites, the target Post — asks `Capabilities.For(...)` before it answers anything else — refusing with the gate word when the verb is missing, and answering as for a missing resource when the actor may not `View` — and calls the entity method, where validation lives;
 3. assigns the sequences the command asks for from in-memory high-water marks loaded once at start — the log's from the last `Event.Seq`; a Topic's comes from its root Post's `LastSequence`, read and advanced inside the command — and keeps them only on commit, so a command that does not commit skips none; after a commit whose outcome Koan cannot report, the marks are reloaded from the store before the next command;
 4. commits the rows, the audit snapshot for an edit and the Events together, as one native transaction or nothing;
 5. announces a commit that wrote — the command and the sequences it took — in-process, and answers the sender with the resource and its `can`. A command that is refused or throws leaves no row behind and the next command runs; at a stop, the command in flight ends on its own terms and every queued command is answered as not run.
@@ -58,7 +58,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 
 **The page is the API.** One handler, one DTO, and the formatter decides: `Accept: text/html` renders it through a Razor component, `application/json` serializes it, and a fragment request header renders only the component for that resource. A Post's page, its JSON, its live patch and its archive file are the same DTO through the same component. Agents fetch the URL a person shares; `llms.txt` says so in two lines, and the descriptor carries `"api": 1` as the stability promise.
 
-`ETag` is `Post.Version` or `Event.Seq`. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` word the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`.
+`ETag` is `Post.Version` or `Event.Seq`. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`, or the deciding overwrite or missing role in one sentence; what the reader may not view is absent and answers as not found.
 
 ## 5. Data
 
