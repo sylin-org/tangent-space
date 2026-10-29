@@ -10,21 +10,18 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
     public string Initial => Place.Length > 0 ? char.ToUpperInvariant(Place[0]).ToString() : "T";
 }
 
-/// <summary>Who is signed in, as the account menu shows them: the name to show, their handle, the highest role they
+/// <summary>Who is signed in, as the account menu shows them: their id, the name to show, their handle, the highest role they
 /// hold where they hold one, their avatar where their profile has one, and where they sign out, coming back to the
 /// page they are on.</summary>
-public sealed record Who(string Name, string Handle, string? Role, string? Avatar, string SignOut)
-{
-    /// <summary>The mark drawn without an avatar: the first letter of the name.</summary>
-    public string Initial => Name.TrimStart('@') is { Length: > 0 } name ? char.ToUpperInvariant(name[0]).ToString() : "?";
-}
+public sealed record Who(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
 
 /// <summary>One step of the path bar. The last crumb is the page itself and has no address. A crumb with a
 /// <see cref="Switcher"/> is a Tangent's, drawn with its tile and opening the list of Tangents in the page.</summary>
 public sealed record Crumb(string Label, string? Address = null, Switcher? Switcher = null);
 
-/// <summary>The Tangent crumb's list: the current Tangent's tile and the Tangents the reader may view.</summary>
-public sealed record Switcher(Tile Tile, IReadOnlyList<SwitcherItem> Tangents);
+/// <summary>The Tangent crumb's list: the current Tangent's tile, the Tangents the reader may view, and where all the
+/// Tangents are, the door.</summary>
+public sealed record Switcher(Tile Tile, IReadOnlyList<SwitcherItem> Tangents, string All);
 
 /// <summary>One Tangent in the switcher: its name, address, kind and count in words, tile, and whether it is the page's.</summary>
 public sealed record SwitcherItem(string Name, string Address, string Detail, Tile Tile, bool Current);
@@ -44,4 +41,33 @@ public sealed record Tile(string Tone, string Initial)
         foreach (var unit in System.Text.Encoding.UTF8.GetBytes(slug)) hash = unchecked((hash ^ unit) * 16777619u);
         return new Tile(Tones[(int)((hash >> 8) % (uint)Tones.Count)], name.Length > 0 ? char.ToUpperInvariant(name[0]).ToString() : "T");
     }
+}
+
+/// <summary>A participant's mark without an avatar: two letters of their handle on a tint of their own, one of the
+/// Tangent tones chosen by a hash of their id, so two people whose names share a first letter still differ. A
+/// profile avatar is shown instead where it is an https address.</summary>
+public static class Monogram
+{
+    /// <summary>The first two letters or digits of the handle's first label; a DID's last segment where the handle is
+    /// the DID.</summary>
+    public static string Letters(string handle)
+    {
+        var name = handle.TrimStart('@');
+        if (name.StartsWith("did:", StringComparison.Ordinal)) name = name[(name.LastIndexOf(':') + 1)..];
+        var label = name.Split('.')[0];
+        var letters = new string(label.Where(char.IsLetterOrDigit).Take(2).ToArray()).ToUpperInvariant();
+        return letters.Length > 0 ? letters : "?";
+    }
+
+    /// <summary>The tone of a participant's tint, the same for their id wherever it is drawn.</summary>
+    public static string Tone(string id)
+    {
+        var hash = 2166136261u;
+        foreach (var unit in System.Text.Encoding.UTF8.GetBytes(id)) hash = unchecked((hash ^ unit) * 16777619u);
+        return Tile.Tones[(int)((hash >> 8) % (uint)Tile.Tones.Count)];
+    }
+
+    /// <summary>The avatar to show: the profile's, when it is an https address.</summary>
+    public static string? Avatar(string? avatar)
+        => avatar is { Length: > 0 } && avatar.StartsWith("https://", StringComparison.Ordinal) ? avatar : null;
 }

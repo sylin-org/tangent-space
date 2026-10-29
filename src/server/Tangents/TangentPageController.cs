@@ -81,7 +81,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             space.Name,
             configured + "/",
             reader is null ? null : new TangentPage.Reader(
-                Named(reader).Name, Named(reader).Handle, Role(capabilities), reader.Profile.Avatar,
+                reader.Id, Named(reader).Name, Named(reader).Handle, Role(capabilities), reader.Profile.Avatar,
                 configured + AuthConstants.Routes.Logout + "?return=" + back),
             DateOnly.FromDateTime(DateTime.UtcNow)));
     }

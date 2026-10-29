@@ -4,15 +4,19 @@
    reader, its title with any pin or lock, who started it and its opening words, its latest reply on the page's colour
    with "New" when the reader has not seen it, the faces of its recent authors, its replies with how many Posts are
    new, and when it last gained a Post and from whom. In an articles Tangent it is an article: the lead, first on the
-   first page, with its letter cover, date and read time, opening, author and latest-reply strip; the rest as rows.
-   Zeros are said in words. *@
+   first page, with its cover, date and read time, opening, author and latest-reply strip; the rest as rows. An
+   article without a cover image leads with the Tangent's own: its tile and name on the image band over its edge,
+   never the title again. Zeros are said in words, and how many replies are new is said the same way beside every
+   count. *@
 @if (Article)
 {
     <article class="@ArticleClass()">
         @if (Lead)
         {
-            <a class="article-cover" href="@Model.Address" tabindex="-1" aria-hidden="true">
-                <TangentTile Tile="@Tile.For(Model.Slug, Model.Title)" Size="cover" />
+            <a class="article-cover tone-@TangentTile.Tone" href="@Model.Address" tabindex="-1" aria-hidden="true">
+                <TangentTile Tile="@TangentTile" Size="cover" />
+                <span class="article-cover-tangent">@TangentName</span>
+                <span class="article-cover-edge"></span>
             </a>
         }
         <div class="article-card-text">
@@ -34,22 +38,16 @@
                 {
                     <span aria-hidden="true">·</span>
                     <span>@Replies()</span>
-                    @if (Model.New)
-                    {
-                        <span class="new-label">@NewWords()</span>
-                    }
+                    @NewReplies()
                 }
             </p>
             @if (Lead && Model.Latest is { } latest)
             {
                 <a class="article-strip" href="@Model.Address">
                     @Mark(latest.Author, "author-mark")
-                    <span class="article-strip-line"><b>@latest.Author.Name</b> @latest.Line</span>
+                    <span class="article-strip-line"><b>@latest.Author.Name</b> @Clip(latest.Line, StripLimit)</span>
                     <span class="article-strip-count">@Replies()</span>
-                    @if (Model.New)
-                    {
-                        <span class="new-label">@NewWords()</span>
-                    }
+                    @NewReplies()
                 </a>
             }
         </div>
@@ -71,10 +69,13 @@ else
             {
                 <span class="topic-row-latest-reply">
                     @Mark(latest.Author, "reply-mark")
-                    <span class="topic-row-latest-line"><b>@latest.Author.Name</b> @latest.Line</span>
+                    <span class="topic-row-latest-line"><b>@latest.Author.Name</b> @Clip(latest.Line, PreviewLimit)@if (latest.New)
+                        {
+                            <span class="new-label new-inline">New</span>
+                        }</span>
                     @if (latest.New)
                     {
-                        <span class="new-label">New</span>
+                        <span class="new-label new-beside">New</span>
                     }
                 </span>
             }
@@ -94,8 +95,9 @@ else
             {
                 <span class="topic-row-count">@Model.ReplyCount.ToString(CultureInfo.InvariantCulture)<span class="topic-row-count-word">@(Model.ReplyCount == 1 ? " reply" : " replies")</span></span>
             }
-            @if (Model.New)
+            @if (NewCount > 0)
             {
+                <span class="topic-row-new-separator" aria-hidden="true">·</span>
                 <span class="new-label">@NewWords()</span>
             }
         </span>
@@ -118,8 +120,27 @@ else
     /// <summary>Whether the article leads the list: drawn large, with its cover and its latest-reply strip.</summary>
     [Parameter] public bool Lead { get; set; }
 
+    /// <summary>The Tangent's name and tile, which a lead's cover carries.</summary>
+    [Parameter] public string TangentName { get; set; } = "";
+
+    [Parameter] public Tile TangentTile { get; set; } = new("amber", "T");
+
     /// <summary>How many faces a row shows.</summary>
     private const int FaceLimit = 3;
+
+    /// <summary>The most characters of a latest reply a row's preview and a lead's strip show, cut at a word, so an
+    /// ellipsis follows a word and never a space.</summary>
+    private const int PreviewLimit = 56;
+
+    private const int StripLimit = 40;
+
+    /// <summary>Text cut at the last word within <paramref name="limit"/> characters, with an ellipsis after it.</summary>
+    public static string Clip(string text, int limit)
+    {
+        if (text.Length <= limit) return text;
+        var cut = text.LastIndexOf(' ', limit);
+        return text[..(cut > limit / 2 ? cut : limit)].TrimEnd(' ', ',', ';', ':', '.', '…') + "…";
+    }
 
     /// <summary>A time as the list shows it: the time of day on the page's day, the month and day in its year, the
     /// full date otherwise; in UTC, which the <c>datetime</c> beside it states.</summary>
@@ -142,8 +163,16 @@ else
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
-    /// <summary>"New" for a Topic the reader has seen none of, otherwise how many of its Posts are new to them.</summary>
-    private string NewWords() => Model.NewPosts > Model.ReplyCount ? "New" : Model.NewPosts.ToString(CultureInfo.InvariantCulture) + " new";
+    /// <summary>How many of the Topic's replies are new to the reader: every one where they have not seen the Topic,
+    /// otherwise those past their checkpoint.</summary>
+    private long NewCount => Math.Min(Model.NewPosts, Model.ReplyCount);
+
+    private string NewWords() => NewCount.ToString(CultureInfo.InvariantCulture) + " new";
+
+    private RenderFragment NewReplies() => builder =>
+    {
+        if (NewCount > 0) builder.AddMarkupContent(0, "<span class=\"new-label\">" + NewWords() + "</span>");
+    };
 
     private static RenderFragment AgentTag(TangentPage.Author author) => builder =>
     {
@@ -156,12 +185,12 @@ else
         if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"topic-flag\">Locked</span>");
     };
 
-    /// <summary>A participant's mark: their avatar, or the first letter of their name; round for a person, square with
-    /// a ring for an agent.</summary>
+    /// <summary>A participant's mark: their avatar, or two letters of their handle on their own tint; round for a
+    /// person, square with a ring for an agent.</summary>
     public static RenderFragment Mark(TangentPage.Author author, string size) => builder =>
     {
         var shape = author.Kind == "agent" ? " mark-agent" : "";
-        if (author.Avatar is { Length: > 0 } avatar)
+        if (Monogram.Avatar(author.Avatar) is { } avatar)
         {
             builder.OpenElement(0, "img");
             builder.AddAttribute(1, "class", "mark " + size + shape);
@@ -172,10 +201,11 @@ else
         else
         {
             builder.OpenElement(4, "span");
-            builder.AddAttribute(5, "class", "mark " + size + shape);
+            builder.AddAttribute(5, "class", "mark " + size + shape + " tone-" + Monogram.Tone(author.Id));
             builder.AddAttribute(6, "aria-hidden", "true");
-            var name = author.Name.TrimStart('@');
-            builder.AddContent(7, name.Length > 0 ? char.ToUpperInvariant(name[0]).ToString() : "?");
+            // One letter where the mark is too small for two to read.
+            var letters = Monogram.Letters(author.Handle);
+            builder.AddContent(7, size == "reply-mark" ? letters[..1] : letters);
             builder.CloseElement();
         }
     };

@@ -4,9 +4,9 @@
    the rail and the list. A discussions Tangent lists its Topics as a table, an articles Tangent as articles under a
    lead. An empty list says so in one sentence with one next step: the start button for a reader who can start a
    Topic, signing in for a visitor, neither on a phone, which reads and replies. Zeros are said in words. *@
-<section class="tangent-head" aria-labelledby="tangent-title">
+<section class="tangent-head@(Articles ? " tangent-head-articles" : "")" aria-labelledby="tangent-title">
     <div class="tangent-head-inner">
-        <TangentTile Tile="@Tile.For(Model.Slug, Model.Name)" Size="head" />
+        <TangentTile Tile="@Tile.For(Model.Slug, Model.Name)" Size="@(Articles ? "head-articles" : "head")" />
         <div class="tangent-head-text">
             <h1 id="tangent-title" class="tangent-title">@Model.Name</h1>
             @if (Model.Description.Length > 0)
@@ -14,7 +14,10 @@
                 <p class="tangent-description">@Model.Description</p>
             }
             <p class="tangent-meta">
-                <span>@Holds()</span>
+                @if (Started > 0)
+                {
+                    <span>@Holds()</span>
+                }
                 <span class="tangent-audience">@AudienceIcon(12)@AudienceLine()</span>
             </p>
         </div>
@@ -54,7 +57,7 @@
         {
             <div class="topic-list-head@(Articles ? " topic-list-head-ruled" : "")">
                 <h2 class="topic-list-title">@ListTitle()</h2>
-                <span class="topic-list-order">@(Articles ? "Newest activity first" : "Latest activity")</span>
+                <span class="topic-list-order">latest activity first</span>
                 @if (Model.NewTopic is { } start)
                 {
                     <a class="tangent-new" href="@start">@PlusIcon()@(Articles ? "New article" : "New topic")</a>
@@ -65,7 +68,8 @@
                 <div class="article-list">
                     @for (var index = 0; index < Model.Topics.Count; index++)
                     {
-                        <TopicRow Model="@Model.Topics[index]" Today="@Model.Day" Article="true" Lead="@(index == 0 && !Model.Continued)" />
+                        <TopicRow Model="@Model.Topics[index]" Today="@Model.Day" Article="true" Lead="@(index == 0 && !Model.Continued)"
+                                  TangentName="@Model.Name" TangentTile="@Tile.For(Model.Slug, Model.Name)" />
                     }
                 </div>
             }
@@ -112,8 +116,8 @@
     {
         var switcher = new Switcher(Tile.For(page.Slug, page.Name), page.Tangents
             .Select(tangent => new SwitcherItem(tangent.Name, tangent.Address, Detail(tangent), Tile.For(tangent.Slug, tangent.Name), tangent.Slug == page.Slug))
-            .ToList());
-        var who = page.Who is { } reader ? new Who(reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
+            .ToList(), page.Door);
+        var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
         return new(page.Place, page.Door, [new Crumb(page.Name, page.Address, switcher)], who, page.SignIn);
     }
 
@@ -131,16 +135,10 @@
     private int Started => Model.Tangents.FirstOrDefault(tangent => tangent.Slug == Model.Slug)?.TopicCount ?? Model.Topics.Count;
 
     /// <summary>What the Tangent holds, in the head, numbers in bold: the Topics started here and, when this page holds
-    /// all of them, their Posts (articles: their replies). None in words.</summary>
+    /// all of them, their Posts (articles: their replies). An empty Tangent says so once, in the list, not here.</summary>
     private RenderFragment Holds() => builder =>
     {
         var nouns = Articles ? ("article", "articles") : ("topic", "topics");
-        if (Started == 0)
-        {
-            builder.AddContent(0, Articles ? "No articles yet" : "No topics yet");
-            return;
-        }
-
         builder.AddMarkupContent(1, Bold(Started, nouns.Item1, nouns.Item2));
         var replies = Model.Topics.Sum(topic => topic.ReplyCount);
         if (!Whole) return;
