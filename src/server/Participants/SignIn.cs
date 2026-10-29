@@ -36,7 +36,7 @@ public sealed record SignIn(
             HandleNotFound => new SignIn(name, door, to, challenge, kept,
                 HandleFailure: "No AT Protocol account answers to this handle. Check its spelling and continue."),
             VerificationFailed => new SignIn(name, door, to, challenge, kept,
-                Failure: "Your account’s provider didn’t confirm this sign-in, so you aren’t signed in. Continue to try again, and approve the request on your provider’s page."),
+                Failure: "Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page."),
             _ => new SignIn(name, door, to, challenge, kept,
                 Failure: "Sign-in could not be completed. Check your handle and continue to try again.")
         };

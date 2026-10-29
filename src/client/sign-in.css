@@ -2,41 +2,37 @@
  * form. Sizes follow the design reference's sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @
  * prefix inside the field. */
 
-/* A panel's head: the place's face. Its atmosphere is drawn in the accent across the upper part, fading out before
- * the band; the mark and the name sit on the reference's dark ink band, in the light ink it sets over a place's
- * image, in both themes. */
+/* A panel's head: one band of the reference's dark ink in both themes, the place's atmosphere drawn in the accent
+ * across all of it, a shade deepening its foot, and the mark and the name at its bottom left in the light ink the
+ * reference sets over a place's image. */
 .panel-head {
   position: relative;
   height: 128px;
   overflow: hidden;
-  background: var(--ts-surface);
+  background: var(--ts-image-band);
 }
 
 .panel-head-atmosphere {
   position: absolute;
-  top: 6px;
+  top: 8px;
   right: -40px;
   margin: 0;
   color: var(--ts-accent);
   font: 400 13px/1.2 var(--ts-font-mono);
-  opacity: 0.55;
+  opacity: 0.6;
   pointer-events: none;
-  mask-image: linear-gradient(180deg, #000 0, #000 46px, transparent 66px);
 }
 
-.panel-head-band {
+.panel-head-shade {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 56px;
-  background: var(--ts-image-band);
+  inset: 0;
+  background: linear-gradient(180deg, transparent 25%, var(--ts-image-band) 92%);
 }
 
 .panel-head-mark {
   position: absolute;
   left: 20px;
-  bottom: 12px;
+  bottom: 16px;
   width: 32px;
   height: 32px;
   display: grid;
@@ -52,7 +48,7 @@
   position: absolute;
   left: 64px;
   right: 20px;
-  bottom: 14px;
+  bottom: 18px;
   overflow: hidden;
   color: var(--ts-image-ink);
   font: 500 22px/1.2 var(--ts-font-display);
@@ -91,6 +87,7 @@
 .sign-in-lede {
   margin: 4px 0 0;
   color: var(--ts-text-2);
+  text-wrap: pretty;
 }
 
 .sign-in-failure {
@@ -101,6 +98,7 @@
   background: var(--ts-danger-soft);
   color: var(--ts-text);
   font: var(--ts-type-ui-small);
+  text-wrap: pretty;
 }
 
 .sign-in-form {
@@ -168,6 +166,19 @@
   margin: 0;
   color: var(--ts-danger);
   font: var(--ts-type-ui-small);
+  text-wrap: pretty;
+}
+
+/* On its way: the field holds what was sent and takes no typing, read as such. */
+.field-input:has(input:read-only) {
+  border-style: dashed;
+  background: var(--ts-hover);
+  box-shadow: none;
+}
+
+.field-input input:read-only {
+  color: var(--ts-text-2);
+  cursor: default;
 }
 
 .sign-in-submit {
@@ -289,24 +300,15 @@
   }
 
   .panel-head {
-    height: 88px;
-  }
-
-  .panel-head-atmosphere {
-    top: 0;
-    mask-image: linear-gradient(180deg, #000 0, #000 22px, transparent 38px);
-  }
-
-  .panel-head-band {
-    height: 48px;
+    height: 104px;
   }
 
   .panel-head-mark {
-    bottom: 8px;
+    bottom: 12px;
   }
 
   .panel-head-name {
-    bottom: 10px;
+    bottom: 14px;
     font-size: 20px;
   }
 }

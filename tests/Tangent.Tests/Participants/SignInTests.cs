@@ -65,9 +65,9 @@ public sealed class SignInTests
         var notFound = await Read(tangentSpace, $"/sign-in?failure={SignIn.HandleNotFound}&handle=nobody.example", "text/html");
         var other = await Read(tangentSpace, "/sign-in?failure=" + Uri.EscapeDataString("<b>provider said</b>") + "&handle=" + Uri.EscapeDataString("a b"), "text/html");
 
-        Assert.Contains("<p class=\"sign-in-failure\" id=\"sign-in-failure\" role=\"alert\">Your account’s provider didn’t confirm this sign-in, so you aren’t signed in. Continue to try again, and approve the request on your provider’s page.</p>", unverified);
+        Assert.Contains("<p class=\"sign-in-failure\" id=\"sign-in-failure\" role=\"alert\">Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.</p>", unverified);
         Assert.Contains("value=\"ada.bsky.social\" aria-invalid=\"false\" aria-describedby=\"sign-in-failure\"", unverified);
-        Assert.Equal("Your account’s provider didn’t confirm this sign-in, so you aren’t signed in. Continue to try again, and approve the request on your provider’s page.", json.RootElement.GetProperty("failure").GetString());
+        Assert.Equal("Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.", json.RootElement.GetProperty("failure").GetString());
         Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\" aria-describedby=\"sign-in-handle-failure\"", notFound);
         Assert.Contains("<p class=\"field-failure\" id=\"sign-in-handle-failure\">No AT Protocol account answers to this handle.", notFound);
         Assert.DoesNotContain("role=\"alert\"", notFound);
