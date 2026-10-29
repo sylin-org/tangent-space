@@ -1,6 +1,6 @@
 # Architecture
 
-How the tree at the root is built. [BRIEF](BRIEF.md) says what it is for; [LANGUAGE](LANGUAGE.md) says what things are called; [ADR 0015](adr/0015-the-spine.md) records why the shape is this one. Koan's revision is pinned in `global.json` and `koan.lock.json`; every Koan capability named here is referenced by its exact package identifier from Koan's capability map, never derived.
+How the tree at the root is built. [BRIEF](BRIEF.md) says what it is for; [LANGUAGE](LANGUAGE.md) says what things are called; [ADR 0015](adr/0015-the-spine.md) records why the shape is this one. Koan's revision is pinned by `scripts/prepare-framework.ps1`, which clones or verifies the source checkout at `.local/upstream/koan-framework`; `global.json` pins the SDK and `koan.lock.json` records the composed modules. Every Koan capability named here is referenced by its exact package identifier from Koan's capability map, never derived.
 
 ## 1. Shape
 
