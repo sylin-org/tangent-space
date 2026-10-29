@@ -9,7 +9,7 @@ A screen is done when an independent scorer rates fixed captures of it at or abo
 
 ## Targets
 
-- The design reference: `artifacts/tangent-space-redesign-reference` (its `spec/` and `tokens/`, with the screens' vocabulary read through `docs/LANGUAGE.md`: the reference's Space is the Tangent Space, its Tangent is a Tangent).
+- The design reference: the package of `screens/`, `spec/` and `tokens/` kept outside the tree at `.local/reference/tangent-space-redesign-reference`, with the screens' vocabulary read through `docs/LANGUAGE.md` (the reference's Space is the Tangent Space, its Tangent is a Tangent). The capture script reads it from `.dream-loop/reference` (a junction to that folder, made once per checkout and per worktree) or from `TANGENT_REFERENCE`.
 - For a screen with no reference (the door, take this on a tangent, bring your agent, consent, connections), the builder produces a mock first; Leo approves it; the mock is the target from then on.
 
 ## Captures
