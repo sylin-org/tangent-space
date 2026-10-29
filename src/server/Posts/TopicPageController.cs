@@ -23,7 +23,10 @@ namespace Tangent.Posts;
 /// address with nothing at it receives. At <c>/t/{tangent}/{tid}</c>, where no Topic has that slug, the root with that TID
 /// answers a redirect to its Topic's address. Every read is bounded and keyed: the Tangent; the rows capability is computed
 /// from, once for the page; the root by slug; the anchor by Id; at most two ranges of the window index; the reader's
-/// checkpoint on the Topic; the people on the page; and the participants its bodies mention.</summary>
+/// checkpoint on the Topic; the people on the page; the participants its bodies mention; where the Topic was taken on a
+/// tangent from and the Topics taken from each Post on the page, as far as the reader may view them
+/// (<see cref="Origins"/>); and, for a signed-in reader who may not start a Topic in this Tangent, the Tangents where they
+/// may, which decide whether each Post offers to take it on a tangent.</summary>
 public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The query parameter naming the sequence the window ends before.</summary>
@@ -98,11 +101,14 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var people = await People(window.Replies.Prepend(root).ToList(), ct);
         var configured = Configured();
         var mentioned = await Mentions.Resolve(window.Replies.Prepend(root), configured, ct);
+        var taken = await Origins.From(window.Replies.Prepend(root).ToList(), personId, configured, ct);
+        var takenFrom = await Origins.Of(root, personId, configured, ct);
         var tangentAddress = configured + "/t/" + Uri.EscapeDataString(tangentRow.Id);
         var address = tangentAddress + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
         var topicCan = rows.For(root);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + (anchor is null ? "" : "/" + anchor.Id));
         var space = rows.Space;
+        var takeOn = reader is not null && (place.Holds(Bit.Topic) || (await Origins.Destinations(personId, ct)).Count > 0);
         // A signed-in reader's page carries their forms with a fresh antiforgery token, so it is never stored or
         // revalidated. The page shows the root and the window's replies through its last, the root alone when it holds
         // none. The seen form is offered only for a window that continues from what the reader has seen — its first
@@ -129,8 +135,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
                 ? new TopicSeen(address + "/" + CheckpointController.SeenSegment, shownThrough, token)
                 : null,
             token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, seen?.Watch ?? false, token),
-            Shown(root, root, address, rows, people, mentioned, seen, reader),
-            window.Replies.Select(reply => Shown(reply, root, address, rows, people, mentioned, seen, reader)).ToList(),
+            Shown(root, root, address, rows, people, mentioned, seen, reader, taken, takeOn),
+            window.Replies.Select(reply => Shown(reply, root, address, rows, people, mentioned, seen, reader, taken, takeOn)).ToList(),
             window.Replies.Count == 0 ? null : window.Low,
             window.Replies.Count == 0 ? null : window.High,
             window.Older is { } older ? address + "?" + Before + "=" + older.ToString(CultureInfo.InvariantCulture) : null,
@@ -143,14 +149,16 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             reader is null ? null : new TopicPage.Reader(
                 reader.Id, Named(reader).Name, Named(reader).Handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
                 configured + AuthConstants.Routes.Logout + "?return=" + back),
-            DateOnly.FromDateTime(DateTime.UtcNow)));
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            takenFrom));
     }
 
-    /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, and where it is
-    /// edited where they may edit or remove it.</summary>
+    /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is
+    /// edited where they may edit or remove it, where it is taken on a tangent where <paramref name="takeOn"/> says they
+    /// may start a Topic somewhere and it is not removed, and the Topics taken from it that they may view.</summary>
     private static TopicPage.Post Shown(Post post, Post root, string topicAddress, Capabilities.Rows rows,
         IReadOnlyDictionary<string, TangentPage.Author> people, IReadOnlyDictionary<string, TopicPage.Mention> mentioned, Checkpoint? seen,
-        Participant? reader)
+        Participant? reader, IReadOnlyDictionary<string, TopicPage.Taken> taken, bool takeOn)
     {
         var address = topicAddress + "/" + Uri.EscapeDataString(post.Id);
         var can = rows.For(post, root);
@@ -170,7 +178,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             post.Removed ? new TopicPage.Removal(Person(people, post.RemovedBy ?? post.AuthorId), post.RemovedAt ?? post.CreatedAt) : null,
             reader is not null && (seen is null || post.Sequence > seen.Seq),
             can.Can,
-            editable ? address + "/" + EditSegment : null);
+            editable ? address + "/" + EditSegment : null,
+            takeOn && !post.Removed ? address + "/" + TakeOnATangentController.Segment : null,
+            taken.GetValueOrDefault(post.Id));
     }
 
     /// <summary>A cursor's sequence: a non-negative whole number; null when the text is not one.</summary>

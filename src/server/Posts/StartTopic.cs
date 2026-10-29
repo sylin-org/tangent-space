@@ -17,7 +17,12 @@ namespace Tangent.Posts;
 /// before any gate, so a replay is safe; a Post of this Tangent holding the Id with a different title, kind, body or
 /// author is a conflict, and a Post anywhere else holding it is refused with <see cref="Post.IdTaken"/>, which says
 /// nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in the
-/// writer.</summary>
+/// writer. A Topic taken on a tangent names its <see cref="OriginId"/>: the origin exists for the author, who holds
+/// <see cref="Bit.View"/> in its Tangent, or the command answers that no Post has the Id before anything else; a removed
+/// origin is refused with <see cref="Capabilities.Removed"/>; the root carries the origin, may start without a body of
+/// the author's own (<see cref="Post.RootBody"/>), and its <see cref="EventKind.PostCreated"/> targets the origin's
+/// author unless they take their own Post on a tangent, so the author of what a Topic answers hears of it as the author
+/// of what a reply answers does, wherever they may view the new Topic's Tangent.</summary>
 public sealed record StartTopic(
     string Id,
     string TangentId,
@@ -25,15 +30,21 @@ public sealed record StartTopic(
     PostBody Body,
     string AuthorId,
     PostKind? Kind = null,
-    DateTimeOffset? At = null) : ICommand<Post>
+    DateTimeOffset? At = null,
+    string? OriginId = null) : ICommand<Post>
 {
     /// <summary>How many numbered suffixes are tried before the Post's own Id becomes the suffix.</summary>
     public const int SuffixBound = 50;
 
     public const string NoTangent = "No Tangent has this slug.";
 
+    public const string NoOrigin = "No Post has the origin's Id.";
+
     public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
     {
+        Post? origin = null;
+        if (OriginId is not null && ((origin = await Post.Get(OriginId, ct)) is null || !(await Capabilities.Load(AuthorId, origin.TangentId, origin, ct)).Exists))
+            return new Outcome<Post>.Refused(NoOrigin);
         if (await Tangents.Tangent.Get(TangentId, ct) is not { } tangent) return new Outcome<Post>.Refused(NoTangent);
         var capabilities = await Capabilities.Load(AuthorId, TangentId, null, ct);
         if (!capabilities.Exists) return new Outcome<Post>.Refused(NoTangent);
@@ -41,6 +52,7 @@ public sealed record StartTopic(
         var kind = Kind ?? tangent.DefaultKind;
         var existing = await Post.Get(Id, ct);
         if (existing is not null && Same(existing, kind)) return new Outcome<Post>.Done(existing);
+        if (origin is { Removed: true }) return new Outcome<Post>.Refused(Capabilities.Removed);
         if (capabilities.Gate(Bit.Topic) is { } gate) return new Outcome<Post>.Refused(gate);
         if (existing is not null)
         {
@@ -51,20 +63,22 @@ public sealed record StartTopic(
 
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);
-        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(ct), kind, Body, AuthorId, at);
+        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(ct), kind, Body, AuthorId, at, origin?.Id);
         await root.Save(ct);
         tangent.TopicStarted();
         await tangent.Save(ct);
         await Event.Next(sequences, EventKind.PostCreated, at,
-            tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId, version: root.Version).Save(ct);
+            tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId,
+            targetId: origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, version: root.Version).Save(ct);
         await Mentions.Notify(sequences, root, root.AuthorId, [], at, ct);
         return new Outcome<Post>.Done(root);
     }
 
-    /// <summary>Whether the existing row is this request: the same Tangent, title, kind, body and author.</summary>
+    /// <summary>Whether the existing row is this request: the same Tangent, title, kind, body, author and origin.</summary>
     private bool Same(Post existing, PostKind kind) =>
         existing.ParentId is null && existing.TangentId == TangentId && existing.Title == Title.Trim()
-        && existing.Kind == kind && existing.Body == Body.Text && existing.AuthorId == AuthorId;
+        && existing.Kind == kind && existing.Body == Post.RootBody(Body, OriginId) && existing.AuthorId == AuthorId
+        && existing.OriginId == OriginId;
 
     /// <summary>The title's slug, or the first numbered suffix of it that no Topic in the Tangent holds; each try is one
     /// counted query. Past the bound, the Post's own Id is the suffix, and the whole still stays within the limit.</summary>

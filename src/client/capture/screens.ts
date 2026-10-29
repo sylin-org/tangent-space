@@ -206,9 +206,11 @@ export const screens: Readonly<Record<string, Screen>> = {
   // removed; and a Topic without replies. Then the composer: her reply typed and the page opened again, which brings
   // it back; a reply of nothing but spaces, refused above the field; a locked Topic, whose gate she reads instead; and
   // last, since it writes, a reply sent through the composer, which lands on the reply's address; it carries the same
-  // TID in every width and theme, so the server's idempotency keeps it one Post. A signed-in state cancels the seen
-  // post the seen island sends once the window's end is on screen, so its control stays on the page and every width
-  // and theme reads the same checkpoints.
+  // TID in every width and theme, so the server's idempotency keeps it one Post. Then take this on a tangent: a Topic
+  // whose reply was taken into the workshop, each Post offering the verb and the reply listing the Topic taken from
+  // it; that Topic, linked to its origin; and a Topic taken from a Post in a Tangent the persona may not view, which
+  // says only that. A signed-in state cancels the seen post the seen island sends once the window's end is on screen,
+  // so its control stays on the page and every width and theme reads the same checkpoints.
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
     states: [
@@ -278,6 +280,38 @@ export const screens: Readonly<Record<string, Screen>> = {
         click: '.post-form-submit',
         waitFor: 'article.post.is-anchor',
       },
+      {
+        name: 'taken-origin',
+        seed: 'tangent-taken',
+        signedIn: true,
+        path: '/t/discussions/where-should-the-glue-notes-live',
+        cancel: '/t/discussions/where-should-the-glue-notes-live/seen',
+      },
+      {
+        name: 'taken-from',
+        seed: 'tangent-taken',
+        signedIn: true,
+        path: '/t/workshop/adhesives-we-trust',
+        cancel: '/t/workshop/adhesives-we-trust/seen',
+      },
+      {
+        name: 'taken-from-unseen',
+        seed: 'tangent-taken',
+        signedIn: true,
+        path: '/t/workshop/the-kiln-budget',
+        cancel: '/t/workshop/the-kiln-budget/seen',
+      },
+    ],
+  },
+  // The form that takes Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted and the
+  // Tangents she may start a Topic in listed; sent with a title of nothing but spaces, refused under the title; and as a
+  // visitor reads it, who is told to sign in.
+  'take-this-on-a-tangent': {
+    path: '/t/discussions/where-should-the-glue-notes-live/3mwfyixhb2224/tangent',
+    states: [
+      { name: 'form', seed: 'tangent-taken', signedIn: true },
+      { name: 'refused', seed: 'tangent-taken', signedIn: true, fill: { '#take-title': '   ' }, click: '.post-form-submit' },
+      { name: 'visitor', seed: 'tangent-taken' },
     ],
   },
 }

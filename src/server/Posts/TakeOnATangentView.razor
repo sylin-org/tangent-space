@@ -1,0 +1,112 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* The form that takes a Post on a tangent: one panel in the page, quoting the Post — who wrote it, when, and its words
+   cut short, or that it is removed — then the Tangents the reader may start a Topic in, one chosen, a title, and words
+   of their own, which they may leave out. The new root's Id rides in a hidden field, minted when the page was
+   rendered, so a form sent twice starts one Topic. A reader who may not take it anywhere reads why above the form,
+   whose fields are read-only and which has no button, and a visitor the way to sign in; a refusal of a field shows
+   under that field, and any other above the form. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="take-heading">
+        <div class="sign-in-body">
+            <p class="post-form-where">From <a href="@Model.Origin.TopicAddress">@Model.Origin.Topic</a> in <a href="@Model.Origin.TangentAddress">@Model.Origin.Tangent</a></p>
+            <h1 id="take-heading" class="sign-in-title">Take this on a tangent</h1>
+            <blockquote cite="@Model.Origin.Address">
+                <p>
+                    <a href="@Model.Origin.Address"><strong>@Model.Origin.Author.Name</strong> <span class="post-handle">@("@" + Model.Origin.Author.Handle)</span>
+                        · <time datetime="@Model.Origin.CreatedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@Model.Origin.CreatedAt.ToUniversalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</time></a>
+                </p>
+                <p>@(Model.Origin.Removed ? "This post is removed." : Model.Origin.Text)</p>
+            </blockquote>
+            @if (Model.Gate is { } gate)
+            {
+                <p class="sign-in-failure" id="take-failure" role="alert" data-gate="@gate">
+                    @if (Model.SignIn is { } signIn)
+                    {
+                        @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                    }
+                    else
+                    {
+                        @PostWrites.Sentence(gate)
+                    }
+                </p>
+            }
+            else if (Model.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="take-failure" role="alert">@failure</p>
+            }
+            <form class="sign-in-form" method="post" action="@Model.Action">
+                <FormTokenField Token="@Model.Token" />
+                <input type="hidden" name="@PostWrites.IdField" value="@Model.Id">
+                @if (Model.Tangents.Count > 0)
+                {
+                    <fieldset class="first-run-choice" aria-describedby="@(Model.ChoiceFailure is null ? null : "take-tangent-failure")">
+                        <legend class="field-label">Start the topic in</legend>
+                        <div class="first-run-options">
+                            @foreach (var choice in Model.Tangents)
+                            {
+                                <label class="first-run-option" data-tangent="@choice.Slug">
+                                    <span class="first-run-option-text">
+                                        <span class="first-run-option-name">@choice.Name</span>
+                                        <span class="first-run-option-detail">@(choice.Kind == PostWrites.Word(PostKind.Article) ? "Starts an article" : "Starts a topic")</span>
+                                    </span>
+                                    <input type="radio" name="@TakeOnATangentController.TangentField" value="@choice.Slug" checked="@(choice.Slug == Model.Chosen)"
+                                           disabled="@(Model.Gate is not null)">
+                                </label>
+                            }
+                        </div>
+                        @if (Model.ChoiceFailure is { } choiceFailure)
+                        {
+                            <p class="field-failure" id="take-tangent-failure">@choiceFailure</p>
+                        }
+                    </fieldset>
+                }
+                <div class="field">
+                    <label class="field-label" for="take-title">Title</label>
+                    <span class="field-input">
+                        <input id="take-title" name="@PostWrites.TitleField" type="text" required maxlength="@Post.TitleLimit" autocomplete="off"
+                               autofocus="@(Model.Gate is null && Model.BodyFailure is null)" readonly="@(Model.Gate is not null)" value="@Model.Title"
+                               aria-invalid="@(Model.TitleFailure is null ? "false" : "true")"
+                               aria-describedby="@(Model.TitleFailure is null ? null : "take-title-failure")">
+                    </span>
+                    @if (Model.TitleFailure is { } titleFailure)
+                    {
+                        <p class="field-failure" id="take-title-failure">@titleFailure</p>
+                    }
+                </div>
+                <div class="field">
+                    <label class="field-label" for="take-body">Your words (optional)</label>
+                    <textarea class="post-form-body" id="take-body" name="@PostWrites.BodyField" rows="8"
+                              autofocus="@(Model.Gate is null && Model.TitleFailure is null && Model.BodyFailure is not null)" readonly="@(Model.Gate is not null)"
+                              aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
+                              aria-describedby="@(Model.BodyFailure is null ? null : "take-body-failure")">@Model.Body</textarea>
+                    @if (Model.BodyFailure is { } bodyFailure)
+                    {
+                        <p class="field-failure" id="take-body-failure">@bodyFailure</p>
+                    }
+                </div>
+                @if (Model.Gate is null)
+                {
+                    <div class="post-form-actions">
+                        @if (Model.Who is { } who)
+                        {
+                            <span class="post-form-as">Starting as <strong>@("@" + who.Handle)</strong></span>
+                        }
+                        <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Starting…">Start the topic</button>
+                    </div>
+                }
+            </form>
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public TakeOnATangentPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place; the origin's Tangent and Topic and the form as
+    /// crumbs; and who reads, or where a visitor signs in.</summary>
+    public static Frame Frame(TakeOnATangentPage page)
+        => new(page.Place, page.Door,
+            [new Crumb(page.Origin.Tangent, page.Origin.TangentAddress), new Crumb(page.Origin.Topic, page.Origin.TopicAddress), new Crumb("Take this on a tangent")],
+            page.Who, page.SignIn);
+}

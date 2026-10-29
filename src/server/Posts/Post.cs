@@ -55,7 +55,9 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_topics", Order = 1)]
     public string? ParentId { get; set; }
 
-    /// <summary>The Post this Topic was taken on a tangent from; null otherwise. Root only.</summary>
+    /// <summary>The Post this Topic was taken on a tangent from; null otherwise. Root only. In <c>ix_post_origins</c>
+    /// before the time the Topic started, so the Topics taken from one Post, newest first, are one range of it.</summary>
+    [Index(Name = "ix_post_origins", Order = 0)]
     public string? OriginId { get; set; }
 
     /// <summary>The Topic's URL name, from its title at creation, unique in its Tangent and never renamed. Root only.</summary>
@@ -90,6 +92,7 @@ public sealed class Post : Entity<Post>
 
     public string AuthorId { get; set; } = "";
 
+    [Index(Name = "ix_post_origins", Order = 1)]
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>The last sequence taken in the Topic. Root only.</summary>
@@ -126,30 +129,41 @@ public sealed class Post : Entity<Post>
     public DateTimeOffset? RemovedAt { get; set; }
 
     /// <summary>A Topic's root, or a refusal: the Id is a TID, the title and body are within their limits, and the Tangent
-    /// and author are named. The slug is the caller's, derived from the title and already made unique in the Tangent.</summary>
-    public static Post Root(string id, string tangentId, string title, string slug, PostKind kind, PostBody body, string authorId, DateTimeOffset at)
+    /// and author are named. The slug is the caller's, derived from the title and already made unique in the Tangent. A
+    /// Topic taken on a tangent names its <paramref name="originId"/>, already known to be a Post its author may view, and
+    /// a body of its author's own is their choice: one of nothing but white space is none, and the root holds an empty
+    /// body (<see cref="RootBody"/>).</summary>
+    public static Post Root(string id, string tangentId, string title, string slug, PostKind kind, PostBody body, string authorId, DateTimeOffset at,
+        string? originId = null)
     {
         if (!Tid.IsValid(id)) throw new Refusal(NeedsTid);
         if (string.IsNullOrWhiteSpace(tangentId)) throw new Refusal(NeedsTangent);
         if (string.IsNullOrWhiteSpace(authorId)) throw new Refusal(NeedsAuthor);
         CheckTitle(title);
-        CheckBody(body);
+        var text = RootBody(body, originId);
+        if (originId is null || text.Length > 0) CheckBody(body);
         return new Post
         {
             Id = id,
             TangentId = tangentId,
             TopicId = id,
+            OriginId = originId,
             Slug = slug,
             Kind = kind,
             Title = title.Trim(),
-            Body = body.Text,
-            MentionedIds = [.. body.Mentioned],
+            Body = text,
+            MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [],
             AuthorId = authorId,
             CreatedAt = at,
             LastActivityAt = at,
             RecentAuthorIds = [authorId]
         };
     }
+
+    /// <summary>The body a root starts with: the body sent, except that a Topic taken on a tangent from
+    /// <paramref name="originId"/> may start with none, and a body of nothing but white space is none.</summary>
+    public static string RootBody(PostBody body, string? originId)
+        => originId is not null && string.IsNullOrWhiteSpace(body.Text) ? "" : body.Text;
 
     /// <summary>A reply to this root, or a refusal: this Post is a root that is neither locked nor removed, the Id is a TID,
     /// the body is within its limits and the author is named. The parent is the caller's, already known to be a Post of
@@ -189,12 +203,14 @@ public sealed class Post : Entity<Post>
         Body == body && (ParentId is null ? title is null || Title == title.Trim() : string.IsNullOrEmpty(title));
 
     /// <summary>Changes the body, and a root's title when one is sent, and raises <see cref="Version"/>, or a refusal: the
-    /// Post is not removed, the body and title are within their limits, and a reply is sent no title. The pre-edit
+    /// Post is not removed, the body and title are within their limits, and a reply is sent no title. A root taken on a
+    /// tangent may keep no body of its author's own (<see cref="RootBody"/>); every other Post needs one. The pre-edit
     /// snapshot is the caller's, taken before this.</summary>
     public void Edit(PostBody body, string? title)
     {
         if (Removed) throw new Refusal(PostRemoved);
-        CheckBody(body);
+        var text = ParentId is null ? RootBody(body, OriginId) : body.Text;
+        if (OriginId is null || ParentId is not null || text.Length > 0) CheckBody(body);
         if (ParentId is not null && !string.IsNullOrEmpty(title)) throw new Refusal(NoTitleOnReply);
         if (ParentId is null && title is not null)
         {
@@ -202,8 +218,8 @@ public sealed class Post : Entity<Post>
             Title = title.Trim();
         }
 
-        Body = body.Text;
-        MentionedIds = [.. body.Mentioned];
+        Body = text;
+        MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [];
         Version = checked(Version + 1);
     }
 
