@@ -40,8 +40,8 @@ public sealed record CreateTangent(
     /// the slug holds, before the transaction that creates the Tangent opens, since Koan commits an overwrite only outside
     /// one: from the instant the Tangent's row commits, it exists for nobody its audience excludes. Only where
     /// <see cref="Run"/> goes on to create it — the place exists for the actor, who holds <see cref="Bit.ManageSpace"/>,
-    /// the slug is a slug and no Tangent has it — so an existing Tangent's audience stands and an actor <see cref="Run"/>
-    /// refuses writes nothing. At Koan's bound on overwrites the command is refused with the setting to raise, and
+    /// the slug is a slug, the name and description are a Tangent's and no Tangent has the slug — so an existing
+    /// Tangent's audience stands and a command <see cref="Run"/> refuses writes nothing. At Koan's bound on overwrites the command is refused with the setting to raise, and
     /// writes nothing. A command that is refused or fails after this leaves the overwrite on a resource no Tangent has:
     /// every address there answers as for a missing Tangent whatever its overwrites say, and the next create of that
     /// slug writes its own audience over it.</summary>
@@ -50,6 +50,8 @@ public sealed record CreateTangent(
         var capabilities = await Capabilities.Load(ActorId, null, null, ct);
         if (!capabilities.Exists || capabilities.Gate(Bit.ManageSpace) is not null || !Posts.Slug.IsValid(Slug)) return;
         if (await Tangent.Get(Slug, ct) is not null) return;
+        try { Tangent.Create(Slug, Name, Description, DefaultKind, Order); }
+        catch (Refusal) { return; }
         try
         {
             await Overwrites.SetAudience(Collection(), Slug, Audience, ct);

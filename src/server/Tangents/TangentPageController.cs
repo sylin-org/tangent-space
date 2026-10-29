@@ -38,8 +38,9 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
     {
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
         // The Tangent's row is read before its overwrites: a Tangent found here committed after its audience was written.
+        // A missing Tangent's overwrites are not read, so an address no Tangent has takes no place in Koan's cache.
         var found = await Tangent.Get(tangent, ct);
-        var capabilities = await Capabilities.Load(personId, tangent, null, ct);
+        var capabilities = await Capabilities.Load(personId, found?.Id, null, ct);
         if (!capabilities.Exists) return Gated(capabilities.Gate(Bit.View) ?? Capabilities.Absent);
         if (found is not { } row) return Gated(Capabilities.Absent);
 

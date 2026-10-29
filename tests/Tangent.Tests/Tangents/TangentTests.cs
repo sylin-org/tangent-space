@@ -224,6 +224,26 @@ public sealed class TangentTests(ITestOutputHelper output)
         Assert.Empty(await roles.Overwrites(Overwrites.Resource("three"), Cancellation));
     }
 
+    [Fact]
+    public async Task A_create_refused_for_its_fields_writes_no_audience_and_holds_no_place_under_the_bound()
+    {
+        const string bound = "Koan:Identity:Roles:MaxOverwritesPerSubject";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?> { [bound] = "1" }, ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
+
+        var blank = await writer.Send(new CreateTangent("s1", " ", "", PostKind.Topic, 1, Audience.Private, "leo"), Cancellation);
+        var long_ = await writer.Send(new CreateTangent("s2", "Two", new string('d', 1001), PostKind.Topic, 2, Audience.Private, "leo"), Cancellation);
+
+        Assert.Equal(Tangent.NeedsName, Assert.IsType<Outcome<Tangent>.Refused>(blank).Reason);
+        Assert.Equal(Tangent.DescriptionTooLong, Assert.IsType<Outcome<Tangent>.Refused>(long_).Reason);
+        Assert.Empty(await roles.Overwrites(Overwrites.Resource("s1"), Cancellation));
+        Assert.Empty(await roles.Overwrites(Overwrites.Resource("s2"), Cancellation));
+        // With a bound of one, the refused creates held no place: the next real create still fits.
+        Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("three", "Three", "", PostKind.Topic, 3, Audience.Private, "leo"), Cancellation));
+    }
+
     /// <summary>Runs <paramref name="Command"/>, with <paramref name="Probe"/> between its step outside the transaction
     /// and the transaction itself: the instant after what it writes first and before its commit.</summary>
     private sealed record Between<T>(ICommand<T> Command, Func<CancellationToken, Task> Probe) : ICommand<T>
