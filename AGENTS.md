@@ -12,7 +12,7 @@ The repository root is the product: .NET 10 on Koan for the server, Razor compon
 
 - **Cleanup is mandatory.** Removing a capability removes its code, tests, scripts, configuration and documentation in the same change.
 - **Code and prose read greenfield.** Names, comments and documents describe the system as it is and never narrate what they replaced.
-- **The user-delight filter.** Before implementing anything a person or an agent will meet — a step, a field, a check, a refusal, a protection against a remote possibility — score its impact on them from 0 to 10, benefits weighed against what it costs their experience. Below 5, it is not built: it is recorded in [docs/PROPOSALS.md](docs/PROPOSALS.md) with its score and reasoning and taken to Leo at the next iteration cycle.
+- **The delight filter.** Before implementing anything a person or an agent will meet — a step, a field, a check, a refusal, a protection against a remote possibility — score its impact on them from 0 to 10, benefits weighed against what it costs their experience. Below 5, it is not built: it is recorded in [docs/PROPOSALS.md](docs/PROPOSALS.md) with its score and reasoning and taken to Leo at the next iteration cycle.
 - **The browser never opens a dialog.** No `alert`, `confirm`, `prompt` or modal `<dialog>`; a destructive action confirms inline, a form opens as a panel in the page.
 - **Reads are bounded and take no lock.** Background work runs in background workers on Koan's mechanisms; reads consume compiled state.
 - **Ports are fixed.** The server listens on 5220 or the port an operator names.

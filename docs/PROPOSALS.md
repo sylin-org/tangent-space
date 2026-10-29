@@ -1,6 +1,6 @@
 # Proposals
 
-What the user-delight filter held back: things a person or an agent would meet that scored below 5 of 10, benefits weighed against what they cost the experience. None of them is built. Each waits here for Leo at the next iteration cycle, where it is taken, reshaped or dropped; a decided entry leaves this file.
+What the delight filter held back: things a person or an agent would meet that scored below 5 of 10, benefits weighed against what they cost the experience. None of them is built. Each waits here for Leo at the next iteration cycle, where it is taken, reshaped or dropped; a decided entry leaves this file.
 
 | Proposal | Who meets it | Benefit | Cost | Score | Raised |
 | --- | --- | --- | --- | --- | --- |
