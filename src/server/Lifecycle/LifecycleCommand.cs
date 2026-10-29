@@ -14,8 +14,9 @@ public sealed class LifecycleCommand
         "Tangent.Server restore --replace                    move the data folder aside; the next start begins anew\n" +
         "--replace moves a non-empty data folder aside with a timestamp; nothing is deleted.";
 
-    private LifecycleCommand(string verb, string? folder, bool replace, string[] configuration)
+    private LifecycleCommand(string verb, string? folder, bool replace, string[] configuration, bool understood)
     {
+        Understood = understood;
         Verb = verb;
         Folder = folder;
         Replace = replace;
@@ -23,6 +24,9 @@ public sealed class LifecycleCommand
     }
 
     public string Verb { get; }
+
+    /// <summary>False when the arguments name more than one folder, or --replace for a backup.</summary>
+    public bool Understood { get; }
 
     /// <summary>The folder the verb names: where a backup goes, or the backup a restore puts back.</summary>
     public string? Folder { get; }
@@ -39,21 +43,48 @@ public sealed class LifecycleCommand
         var verb = args[0].ToLowerInvariant();
         if (verb is not ("backup" or "restore")) return null;
 
-        var rest = args.Skip(1).ToList();
+        // The folder and --replace in any order; every other --Key=value or --Key value is configuration, read as
+        // the configuration's own command line reads it. More than one folder is not understood.
         string? folder = null;
-        if (rest.Count > 0 && !rest[0].StartsWith("--", StringComparison.Ordinal))
+        var replace = false;
+        var understood = true;
+        var configuration = new List<string>();
+        for (var index = 1; index < args.Length; index++)
         {
-            folder = rest[0];
-            rest.RemoveAt(0);
+            var argument = args[index];
+            if (argument.Equals("--replace", StringComparison.OrdinalIgnoreCase))
+            {
+                replace = true;
+            }
+            else if (argument.StartsWith("--", StringComparison.Ordinal))
+            {
+                configuration.Add(argument);
+                if (!argument.Contains('=') && index + 1 < args.Length) configuration.Add(args[++index]);
+            }
+            else if (folder is null)
+            {
+                folder = argument;
+            }
+            else
+            {
+                understood = false;
+            }
         }
-        var replace = rest.RemoveAll(argument => argument.Equals("--replace", StringComparison.OrdinalIgnoreCase)) > 0;
-        return new LifecycleCommand(verb, folder, replace, rest.ToArray());
+
+        if (verb == "backup" && replace) understood = false;
+        return new LifecycleCommand(verb, understood ? folder : null, replace && understood, configuration.ToArray(), understood);
     }
 
     /// <summary>Runs the verb against the data folder configured under <paramref name="contentRoot"/> and returns the
     /// process exit code: 0 done, 1 refused or failed, 2 not understood.</summary>
     public int Run(string contentRoot)
     {
+        if (!Understood)
+        {
+            Console.Error.WriteLine(Usage);
+            return 2;
+        }
+
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             Args = ConfigurationArguments,
@@ -73,6 +104,8 @@ public sealed class LifecycleCommand
                     return 0;
                 case "restore" when Folder is not null || Replace:
                     var restored = Backup.Restore(Folder, dataFolder, Replace);
+                    if (restored.StaleMark is not null)
+                        Console.WriteLine($"Ignored a running mark left by {restored.StaleMark}, which is no longer running.");
                     if (restored.MovedAside is not null) Console.WriteLine($"Moved {dataFolder} aside to {restored.MovedAside}");
                     Console.WriteLine(Folder is null
                         ? $"The data folder {dataFolder} is empty; the next start begins a new Tangent Space."

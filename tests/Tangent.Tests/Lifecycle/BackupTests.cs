@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Koan.Data.Core;
+using Microsoft.Data.Sqlite;
 using Tangent.Space;
 using Xunit;
 
@@ -19,6 +20,7 @@ public sealed class BackupTests(ITestOutputHelper output)
             ct: Cancellation);
         var row = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         row!.Name = "The workshop's place";
+        row.Version++;
         await row.Save(Cancellation);
         var media = Path.Combine(original.DataFolder, "media", "cover.bin");
         Directory.CreateDirectory(Path.GetDirectoryName(media)!);
@@ -36,7 +38,7 @@ public sealed class BackupTests(ITestOutputHelper output)
         await using var restored = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?>
             {
-                ["Tangent:BaseUrl"] = "https://restored.example",
+                ["Tangent:BaseUrl"] = "https://backed-up.example",
                 ["Tangent:DataFolder"] = restoredFolder
             },
             ct: Cancellation);
@@ -45,6 +47,7 @@ public sealed class BackupTests(ITestOutputHelper output)
         Assert.Equal(restoredFolder, restored.DataFolder);
         Assert.Equal("The workshop's place", read?.Name);
         Assert.Equal("https://backed-up.example", read?.BaseUrl);
+        Assert.Equal(row.Version, read?.Version);
         Assert.Equal([1, 2, 3], await File.ReadAllBytesAsync(Path.Combine(restoredFolder, "media", "cover.bin"), Cancellation));
     }
 
@@ -73,6 +76,56 @@ public sealed class BackupTests(ITestOutputHelper output)
         await Server(0, "restore", "--replace", $"--Tangent:DataFolder={occupied}");
         Assert.False(Directory.Exists(occupied));
         Assert.Equal(2, Directory.GetDirectories(tangentSpace.Folder, "occupied-before-restore-*").Length);
+    }
+
+    [Fact]
+    public async Task Restore_refuses_the_data_folder_of_a_running_tangent_space_and_proceeds_once_it_stops()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var backups = Path.Combine(tangentSpace.Folder, "backups");
+        await Server(0, "backup", backups, $"--Tangent:DataFolder={tangentSpace.DataFolder}");
+        var backup = Assert.Single(Directory.GetDirectories(backups));
+        Assert.False(File.Exists(Path.Combine(backup, RunningMark.FileName)));
+
+        Assert.Contains("in use", await Server(1, "restore", backup, "--replace", $"--Tangent:DataFolder={tangentSpace.DataFolder}"));
+        Assert.Contains("in use", await Server(1, "restore", "--replace", $"--Tangent:DataFolder={tangentSpace.DataFolder}"));
+        Assert.True(File.Exists(tangentSpace.DatabasePath));
+        Assert.Empty(Directory.GetDirectories(tangentSpace.Folder, "data-*"));
+
+        await tangentSpace.StopAsync(Cancellation);
+        // A stopped process holds no database file; the fixture's process stays, so its pooled handles are let go.
+        SqliteConnection.ClearAllPools();
+        await Server(0, "restore", backup, "--replace", $"--Tangent:DataFolder={tangentSpace.DataFolder}");
+
+        Assert.Single(Directory.GetDirectories(tangentSpace.Folder, "data-before-restore-*"));
+        Assert.True(File.Exists(tangentSpace.DatabasePath));
+        Assert.False(File.Exists(Path.Combine(tangentSpace.DataFolder, RunningMark.FileName)));
+    }
+
+    [Fact]
+    public async Task Restore_takes_the_backup_and_replace_in_either_order_and_refuses_a_second_folder()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var backups = Path.Combine(tangentSpace.Folder, "backups");
+        await Server(0, "backup", backups, $"--Tangent:DataFolder={tangentSpace.DataFolder}");
+        var backup = Assert.Single(Directory.GetDirectories(backups));
+        var first = Path.Combine(tangentSpace.Folder, "first");
+        var second = Path.Combine(tangentSpace.Folder, "second");
+        foreach (var folder in new[] { first, second })
+        {
+            Directory.CreateDirectory(folder);
+            await File.WriteAllTextAsync(Path.Combine(folder, "kept.txt"), "kept", Cancellation);
+        }
+
+        await Server(0, "restore", "--replace", backup, $"--Tangent:DataFolder={first}");
+        await Server(0, "restore", "--Tangent:DataFolder", second, backup, "--replace");
+        await Server(2, "restore", backup, backup, "--replace", $"--Tangent:DataFolder={first}");
+
+        foreach (var folder in new[] { first, second })
+        {
+            Assert.True(File.Exists(Path.Combine(folder, TangentSpaceOptions.DatabaseFile)));
+            Assert.Single(Directory.GetDirectories(tangentSpace.Folder, Path.GetFileName(folder) + "-before-restore-*"));
+        }
     }
 
     /// <summary>Runs the server executable with <paramref name="arguments"/>, asserts its exit code and returns

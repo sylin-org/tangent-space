@@ -9,6 +9,7 @@
 !.local/upstream/
 !.local/upstream/koan-framework/
 !.local/upstream/koan-framework/**
+src/server/wwwroot/**
 **/bin/**
 **/obj/**
 **/node_modules/**

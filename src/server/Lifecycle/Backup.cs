@@ -22,19 +22,21 @@ public static class Backup
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    /// <summary>The database and the files SQLite keeps beside it; the database's content leaves through
-    /// <c>VACUUM INTO</c>, so none of them is copied as a file.</summary>
-    private static readonly string[] DatabaseFiles =
+    /// <summary>The database and the files SQLite keeps beside it, whose content leaves through <c>VACUUM INTO</c>,
+    /// and the running mark, which belongs to the process that wrote it.</summary>
+    private static readonly string[] NotCopied =
     [
         TangentSpaceOptions.DatabaseFile,
         TangentSpaceOptions.DatabaseFile + "-journal",
         TangentSpaceOptions.DatabaseFile + "-wal",
-        TangentSpaceOptions.DatabaseFile + "-shm"
+        TangentSpaceOptions.DatabaseFile + "-shm",
+        RunningMark.FileName
     ];
 
     /// <summary>Backs up <paramref name="dataFolder"/> into a new timestamped folder under
     /// <paramref name="destination"/> and returns its path. Safe while the Tangent Space runs: the database is
-    /// read through one read-only connection whose <c>VACUUM INTO</c> sees a single transaction.</summary>
+    /// read through one connection whose <c>VACUUM INTO</c> sees a single transaction. The connection may write,
+    /// so SQLite rolls back a journal an unclean stop left behind before it reads. A failed backup leaves nothing.</summary>
     public static string Take(string dataFolder, string destination)
     {
         dataFolder = FullPath(dataFolder);
@@ -51,7 +53,21 @@ public static class Backup
         // Written under a name no restore accepts, and named as a backup only once it is whole.
         var partial = target + ".partial";
         Directory.CreateDirectory(partial);
+        try
+        {
+            Write(dataFolder, files, partial, createdAt);
+            Directory.Move(partial, target);
+            return target;
+        }
+        catch
+        {
+            Directory.Delete(partial, recursive: true);
+            throw;
+        }
+    }
 
+    private static void Write(string dataFolder, List<string> files, string partial, DateTimeOffset createdAt)
+    {
         string? sqliteVersion = null;
         var database = Path.Combine(dataFolder, TangentSpaceOptions.DatabaseFile);
         if (File.Exists(database))
@@ -59,7 +75,7 @@ public static class Backup
             using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = database,
-                Mode = SqliteOpenMode.ReadOnly,
+                Mode = SqliteOpenMode.ReadWrite,
                 Pooling = false
             }.ToString());
             connection.Open();
@@ -74,7 +90,7 @@ public static class Backup
             sqliteVersion = (string?)version.ExecuteScalar();
         }
 
-        foreach (var relative in files.Where(relative => !DatabaseFiles.Contains(relative, StringComparer.OrdinalIgnoreCase)))
+        foreach (var relative in files.Where(relative => !NotCopied.Contains(relative, StringComparer.OrdinalIgnoreCase)))
         {
             var copy = Path.Combine(partial, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
@@ -94,8 +110,6 @@ public static class Backup
                 Environment.Version.ToString()),
             OrdinaryFiles(partial).Select(relative => Describe(partial, relative)).ToList());
         File.WriteAllText(Path.Combine(partial, ManifestFile), JsonSerializer.Serialize(manifest, Json));
-        Directory.Move(partial, target);
-        return target;
     }
 
     /// <summary>Puts the backup at <paramref name="backupFolder"/> into <paramref name="dataFolder"/>. An absent or
@@ -107,6 +121,10 @@ public static class Backup
     {
         dataFolder = FullPath(dataFolder);
         backupFolder = backupFolder is null ? null : FullPath(backupFolder);
+        var mark = RunningMark.Inspect(dataFolder);
+        if (mark.InUse)
+            throw new LifecycleRefusal(
+                $"The data folder {dataFolder} is in use by a running Tangent Space ({mark.Holder}). Stop it before restoring.");
         var manifest = backupFolder is null ? null : Verify(backupFolder, dataFolder);
         var occupied = Directory.Exists(dataFolder) && Directory.EnumerateFileSystemEntries(dataFolder).Any();
         if (occupied && !replace)
@@ -120,30 +138,63 @@ public static class Backup
         Directory.CreateDirectory(parent);
 
         string? staged = null;
-        if (manifest is not null)
-        {
-            staged = FreeName(parent, Path.GetFileName(dataFolder) + "-restoring-" + stamp);
-            foreach (var file in manifest.Files)
-            {
-                var copy = Path.Combine(staged, file.Path);
-                Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
-                File.Copy(Path.Combine(backupFolder!, file.Path), copy);
-            }
-        }
-
         string? movedAside = null;
-        if (occupied)
+        try
         {
-            movedAside = FreeName(parent, Path.GetFileName(dataFolder) + "-before-restore-" + stamp);
-            Directory.Move(dataFolder, movedAside);
+            if (manifest is not null)
+            {
+                staged = FreeName(parent, Path.GetFileName(dataFolder) + "-restoring-" + stamp);
+                foreach (var file in manifest.Files)
+                {
+                    var copy = Path.Combine(staged, file.Path);
+                    Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+                    File.Copy(Path.Combine(backupFolder!, file.Path), copy);
+                }
+            }
+
+            if (occupied)
+            {
+                var aside = FreeName(parent, Path.GetFileName(dataFolder) + "-before-restore-" + stamp);
+                Directory.Move(dataFolder, aside);
+                movedAside = aside;
+            }
+            else if (Directory.Exists(dataFolder) && staged is not null)
+            {
+                Directory.Delete(dataFolder); // empty: the move below needs its name
+            }
+
+            if (staged is not null) Directory.Move(staged, dataFolder);
         }
-        else if (Directory.Exists(dataFolder) && staged is not null)
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
-            Directory.Delete(dataFolder); // empty: the move below needs its name
+            throw new LifecycleRefusal($"Restore failed: {failure.Message} {PutBack(dataFolder, movedAside, staged)}");
         }
 
-        if (staged is not null) Directory.Move(staged, dataFolder);
-        return new RestoreResult(dataFolder, manifest?.Files.Count ?? 0, movedAside);
+        return new RestoreResult(dataFolder, manifest?.Files.Count ?? 0, movedAside, mark.Stale ? mark.Holder : null);
+    }
+
+    /// <summary>After a failed restore: the copy in progress is removed, and a data folder already moved aside goes
+    /// back where it was. Says where the data folder is.</summary>
+    private static string PutBack(string dataFolder, string? movedAside, string? staged)
+    {
+        if (staged is not null && Directory.Exists(staged))
+        {
+            try { Directory.Delete(staged, recursive: true); }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { }
+        }
+
+        if (movedAside is null) return "Nothing was moved aside.";
+        if (Directory.Exists(dataFolder))
+            return $"The data folder that was moved aside is at {movedAside}.";
+        try
+        {
+            Directory.Move(movedAside, dataFolder);
+            return $"The data folder was moved back from {movedAside} to {dataFolder}.";
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            return $"The data folder is at {movedAside}; move it back to {dataFolder} before starting.";
+        }
     }
 
     /// <summary>Reads the manifest and checks every file it names: contained in the backup, present, of the stated
@@ -237,7 +288,9 @@ public sealed record BackupVersions(string Tangent, string Koan, string? Sqlite,
 
 public sealed record BackupFile(string Path, long Length, string Sha256);
 
-public sealed record RestoreResult(string DataFolder, int Files, string? MovedAside);
+/// <summary>What a restore did: the files it put back, where the replaced folder went, and the process named by a
+/// stale running mark it ignored.</summary>
+public sealed record RestoreResult(string DataFolder, int Files, string? MovedAside, string? StaleMark);
 
 /// <summary>A lifecycle verb declined to act, with the reason an operator reads.</summary>
 public sealed class LifecycleRefusal(string message) : Exception(message);

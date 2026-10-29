@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Tangent.Lifecycle;
 using Tangent.Render;
 using Tangent.Space;
 
@@ -47,6 +48,9 @@ public sealed class TangentModule : KoanModule
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TrustedProxyPipelineContributor>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, BaseUrlPipelineContributor>());
+
+        // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
+        services.AddHostedService<RunningMark>();
 
         // The controllers of this assembly, whichever assembly hosts the composition.
         services.AddKoanControllersFrom<TangentModule>();

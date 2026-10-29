@@ -7,13 +7,16 @@ pwsh scripts/tangent.ps1 <verb> [options], from any directory.
 
   build                      Verifies the pinned Koan checkout and builds the solution.
   publish                    Publishes publish/<platform>/: one self-contained executable for this
-                             platform with its appsettings.json, Koan's koan.lock.json and the
-                             static web assets in wwwroot/. Its data folder is created beside it on
-                             the first start.
+                             platform, its appsettings.json, Koan's koan.lock.json and the client
+                             build in wwwroot/. A publish replaces those and keeps every other
+                             folder; the data folder is created beside the executable on the
+                             first start.
   launch [-Port <port>]      Starts the published executable, or `dotnet run` when nothing is
                              published, on port 5220 or the one given, and waits until
                              /health/live answers. Output goes to .local/launch/.
-  stop                       Ends the Tangent Space this script launched.
+  stop                       Ends the Tangent Space this script launched: a clean stop on Linux and
+                             macOS, a hard stop on Windows, which SQLite's journal recovers from
+                             at the next start or backup.
   backup [-To <folder>]      Backs up the data folder into a new timestamped folder under <folder>
                              (default .local/backups): the database through SQLite's VACUUM INTO,
                              every other file copied, and backup.json naming each file and the
@@ -21,8 +24,8 @@ pwsh scripts/tangent.ps1 <verb> [options], from any directory.
   restore -From <backup> [-Replace]
                              Puts a backup back into an empty or absent data folder. A data folder
                              that is not empty is refused unless -Replace is given, which first
-                             moves it aside with a timestamp. Run it while the Tangent Space is
-                             stopped.
+                             moves it aside with a timestamp. A data folder a running Tangent
+                             Space holds is refused.
   restore -Replace           A wipe is a restore of nothing: the data folder is moved aside with a
                              timestamp and the next launch begins a new Tangent Space.
 
@@ -105,12 +108,21 @@ switch ($Verb) {
         if (Get-LaunchedProcess) { throw 'The Tangent Space is running; stop it before publishing over its executable.' }
         & (Join-Path $PSScriptRoot 'prepare-framework.ps1')
         $folder = Get-PublishFolder
+        # Published whole into an emptied staging folder, then put in place of the previous publish.
+        $staging = Join-Path $root ".local/publish/$(Get-Platform)"
+        if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
         Invoke-Checked 'dotnet publish' {
-            dotnet publish $serverProject -nologo -c Release -r (Get-Platform) --self-contained true -o $folder `
+            dotnet publish $serverProject -nologo -c Release -r (Get-Platform) --self-contained true -o $staging `
                 -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
                 -p:DebugType=None -p:DebugSymbols=false -p:GenerateDocumentationFile=false `
-                -p:IsTransformWebConfigDisabled=true
+                -p:AllowedReferenceRelatedFileExtensions=none -p:IsTransformWebConfigDisabled=true
         }
+        New-Item -ItemType Directory -Force -Path $folder | Out-Null
+        # What a publish owns is its files and wwwroot/; every other folder, the data folder above all, stays.
+        Get-ChildItem -LiteralPath $folder -File | Remove-Item
+        $previousClient = Join-Path $folder 'wwwroot'
+        if (Test-Path -LiteralPath $previousClient) { Remove-Item -LiteralPath $previousClient -Recurse -Force }
+        Get-ChildItem -LiteralPath $staging | Move-Item -Destination $folder
         Write-Output "Published $folder"
         Get-ChildItem -LiteralPath $folder | ForEach-Object { Write-Output "  $($_.Name)" }
     }
