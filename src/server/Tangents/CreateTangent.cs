@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
@@ -7,8 +8,9 @@ using Tangent.Writer;
 namespace Tangent.Tangents;
 
 /// <summary>Sets up a Tangent with its audience, and appends <see cref="EventKind.TangentChanged"/> carrying that
-/// audience. Idempotent by slug: the same slug with the same fields and audience answers with the existing Tangent; a
-/// different one is a conflict.</summary>
+/// audience. The actor holds <see cref="Bit.ManageSpace"/> on the place, or is refused with the gate word. Idempotent
+/// by slug: the same slug with the same fields and audience answers with the existing Tangent; a different one is a
+/// conflict.</summary>
 public sealed record CreateTangent(
     string Slug,
     string Name,
@@ -28,6 +30,9 @@ public sealed record CreateTangent(
                 ? new Outcome<Tangent>.Done(existing)
                 : new Outcome<Tangent>.Conflict($"Tangent '{Slug}' already exists with different fields.");
         }
+
+        var capabilities = await Capabilities.Load(ActorId, null, null, ct);
+        if (capabilities.Gate(Bit.ManageSpace) is { } gate) return new Outcome<Tangent>.Refused(gate);
 
         var at = At ?? DateTimeOffset.UtcNow;
         var tangent = Tangent.Create(Slug, Name, Description, DefaultKind, Order);

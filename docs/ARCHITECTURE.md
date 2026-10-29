@@ -97,13 +97,14 @@ Visibility applies at read: an event in a Tangent the reader cannot view does no
 
 Discord's model, on Koan's roles, resolved in Discord's order.
 
-- **Bits**: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate` (edit or remove any, lock, pin, move, take on a tangent anywhere), `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all.
-- **Base** is the union of the participant's roles; every bag holds `everyone`.
-- **Overwrites**, in order: `everyone` deny then allow → role denies then allows → the participant's own deny then allow. A Tangent's audience is nothing more than `View` in its `everyone` overwrite.
-- **Standing precedes everything**: banned sees nothing; timed out keeps `View`; applied holds `View` where the Tangent Space is public. A visitor is `everyone` with `View` alone on a public place.
-- **`can`** is the bits the participant holds on this resource plus authorship and state: `EditOwn` applies to my Post; nothing applies to a removed Post; `Post` is absent on a locked Topic.
+- **Bits**: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate` (edit or remove any, lock, pin, move, take on a tangent anywhere), `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all, and no overwrite grants or denies it. On a Koan role a bit is the permission token `global:` followed by its name, which Koan compiles into the bag; in an overwrite it is the name alone.
+- **Roles** are seeded at first start on Koan's `RoleCollection`, each once and left as the proprietor sets it: `everyone` with `View` on a public place and nothing on a private one, `role:member`, `role:moderator`, and `role:administrator` with `Administrator`.
+- **Base** is the union of the bits in the participant's bag and the `everyone` role's own, which Koan's bag does not carry; every bag holds `everyone`.
+- **Overwrites**, in order: `everyone` deny then allow → role denies then allows → the participant's own deny then allow. A Tangent's audience is nothing more than `View` in its `everyone` overwrite, and without `View` nothing else applies there.
+- **Standing precedes everything**: banned sees nothing and the resource reads as absent; timed out keeps `View`; applied holds `View` where the Tangent Space is public. A visitor is `everyone` with `View` alone on a public place.
+- **`can`** is the bits the participant holds on this resource plus authorship and state: `EditOwn` and `RemoveOwn` apply to my Post; nothing applies to a removed Post; `Post` is absent on a locked Topic.
 
-`Capabilities.For(participant, space, tangent, post?)` is one pure function over Koan's effective access and Tangent's overwrites; its tests enumerate the table. The `gate` word is the explainer's answer for the missing verb. The browser and every agent render `can` and compute nothing.
+`Capabilities.For(participant, tokens, space, overwrites, post?)` is one pure function over Koan's bag with the `everyone` role beside it, the settings row and the Tangent's overwrites; a command loads those with bounded reads and asks it inside its `Run`; its tests enumerate the table. The `gate` is the first step that dropped the verb: `sign-in`, `apply`, `timed-out`, `locked` or `removed` where standing or state decided, the deciding overwrite where one did, and the absence of a role otherwise. The browser and every agent render `can` and compute nothing.
 
 ## 8. Rendering
 

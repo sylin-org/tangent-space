@@ -13,6 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
   </ItemGroup>
   <ItemGroup>

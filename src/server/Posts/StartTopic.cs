@@ -1,5 +1,6 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
+using Tangent.Access;
 using Tangent.Events;
 using Tangent.Writer;
 
@@ -7,8 +8,9 @@ namespace Tangent.Posts;
 
 /// <summary>Starts a Topic: a root Post in the named Tangent, with a slug derived from the title and made unique in that
 /// Tangent by a suffix that never changes, and <see cref="EventKind.PostCreated"/> appended in the same commit.
-/// Idempotent by Id: the same Id with the same request answers with the existing Post; a different Tangent, title,
-/// kind, body or author is a conflict. The Tangent and the author are taken as given.</summary>
+/// The Tangent exists and the author holds <see cref="Bit.Topic"/> in it, or the command is refused with the gate
+/// word. Idempotent by Id: the same Id with the same request answers with the existing Post; a different Tangent,
+/// title, kind, body or author is a conflict.</summary>
 public sealed record StartTopic(
     string Id,
     string TangentId,
@@ -21,6 +23,8 @@ public sealed record StartTopic(
     /// <summary>How many numbered suffixes are tried before the Post's own Id becomes the suffix.</summary>
     public const int SuffixBound = 50;
 
+    public const string NoTangent = "No Tangent has this slug.";
+
     public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
     {
         if (await Post.Get(Id, ct) is { } existing)
@@ -29,6 +33,10 @@ public sealed record StartTopic(
                 ? new Outcome<Post>.Done(existing)
                 : new Outcome<Post>.Conflict($"Post '{Id}' already exists with a different body.");
         }
+
+        if (await Tangents.Tangent.Get(TangentId, ct) is null) return new Outcome<Post>.Refused(NoTangent);
+        var capabilities = await Capabilities.Load(AuthorId, TangentId, null, ct);
+        if (capabilities.Gate(Bit.Topic) is { } gate) return new Outcome<Post>.Refused(gate);
 
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);
