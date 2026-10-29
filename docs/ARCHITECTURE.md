@@ -1,0 +1,185 @@
+# Architecture
+
+How the tree at the root is built. [BRIEF](BRIEF.md) says what it is for; [LANGUAGE](LANGUAGE.md) says what things are called; [ADR 0015](adr/0015-the-spine.md) records why the shape is this one. Koan's revision is pinned in `global.json` and `koan.lock.json`; every Koan capability named here is referenced by its exact package identifier from Koan's capability map, never derived.
+
+## 1. Shape
+
+One process. One data folder. Four layers, each defined by a rule it cannot break.
+
+| Layer | Holds | Rule |
+| --- | --- | --- |
+| **Nouns** | `TangentSpace` (one row), `Tangent`, `Post`, `Participant`, `Overwrite`, `Event`, `Checkpoint`, `Connection`, `Receipt`, `Reference`; Koan's person, roles, sessions, grants and media beside them | An entity validates its own change and throws; it never loads another entity, never asks about permission, never opens a transaction |
+| **Writer** | one channel, one loop, one transaction per command | The only code that opens a write transaction. It touches the database and nothing else |
+| **Readers** | handlers, the door, the stream, feeds, the archive, Connections | Bounded, lock-free, consume compiled state; every resource leaves with `can` |
+| **Render** | Razor components rendered statically, the HTML formatter, Vue islands | Renders DTOs. Knows no entity |
+
+Dependencies point one way: Render → Readers → Nouns; Connections → Events and Posts. Nothing depends on Render or Connections. There is no hub object, no governance layer and no policy revision counter: capability is computed per request from a few small rows, so nothing is cached that would need invalidating.
+
+## 2. What Koan carries
+
+Tangent is a Koan application. Where Koan has the capability, Tangent references the package and writes none of it.
+
+| Need | Package | Used for |
+| --- | --- | --- |
+| Entities, queries, partitions, transactions | `Sylin.Koan.Data.Core` on `Sylin.Koan.Data.Connector.Sqlite` | every table; the audit partition for edit history |
+| Durable person, external identities, sessions, audit, erasure | `Sylin.Koan.Identity` · `Sylin.Koan.Identity.Web` | the participant spine; the atproto DID as the person's external identity |
+| Roles with permissions, members and cached bags; effective access composed from contributors; the access explainer | `Sylin.Koan.Identity` | the Discord role model; the `gate` reason |
+| atproto sign-in and authorized sessions | `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | sign-in; record and blob operations under a participant's session |
+| OAuth 2.1 authorization server: code with PKCE, Device flow, loopback DCR, consent seam, revocable grants, persisted ES256 keys | `Sylin.Koan.Web.Auth.Server` | the delegated agent door; the installation's signing keys |
+| ES256 issuer, JWKS, inbound bearer scheme | `Sylin.Koan.Security.Trust` | credentials minted by the proof bridge; bearer validation |
+| Content-addressed media, lazy pipelines, recipes | `Sylin.Koan.Media.Core` · `Sylin.Koan.Media.Web` on `Sylin.Koan.Storage.Connector.Local` | every image a Post references; covers; derivatives |
+| Social cards | `Sylin.Koan.Web.OpenGraph` | link previews for articles and topics |
+| Server-sent events | `Sylin.Koan.Web.Sse` | the event stream |
+| Entity events with discovered handlers | `Sylin.Koan.Communication` | the writer's "appended" signal to the stream and the dispatch jobs |
+| Durable and scheduled work | `Sylin.Koan.Jobs` | every background task |
+| Versioned entity snapshots in a partition | `Sylin.Koan.Web.Extensions` audit partition | edit history, written by the writer |
+| Tests through a real host | `Sylin.Koan.Testing.Hosting` | the one fixture |
+
+Not referenced, by decision: `Sylin.Koan.Tenancy` (one Tangent Space per process), `Sylin.Koan.Mcp` (no MCP server), `Sylin.Koan.Data.SoftDelete` (a removed Post is a visible tombstone, not a hidden row), `Sylin.Koan.Data.Backup` (shelved by Koan; backup is the folder).
+
+Koan work the tree depends on, each a scoped brief: SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL in `Koan.Web`; scoped overwrites with deny in `Koan.Identity`; atproto content operations in the connector with service-auth verification and `did:web` on the issuer keys; lexical search in `Koan.Data`. Capabilities Tangent builds first in Koan's shape and lifts into Koan when they are proven: the HTML projection, the durable journal with checkpoints, feeds, the static archive, the agent descriptor. A Koan quirk found while building Tangent is corrected in Koan first, under Koan's contributor law, and Tangent resumes on the corrected revision.
+
+## 3. The write path
+
+Every write is a command on one channel, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — enqueues it and awaits the result. The loop:
+
+1. opens one transaction (`EntityContext.Transaction`, immediate on SQLite);
+2. loads what the command names: the participant with standing, the role bag, the Tangent's overwrites, the target Post;
+3. asks `Capabilities.For(...)` and refuses with the explainer's reason when the verb is missing;
+4. calls the entity method; validation lives there;
+5. assigns sequences from in-memory high-water marks loaded at start — the Topic's from its root Post's `LastSequence`, the log's from the last `Event.Seq`;
+6. saves the rows, the audit snapshot for an edit, and the Events, in the same transaction;
+7. commits, raises the "appended" entity event, returns the resource with `can`.
+
+No lock exists in application code. **Idempotency is the Id**: the client mints a Post Id as a TID, so a retry with the same Id and the same body returns the existing Post and a different body is `409`. **External I/O never enters the loop**: a job calls the network and then enqueues a command with the result; jobs write only through the writer. The root Post is the Topic's state — `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned` — so a Topic has no row of its own.
+
+## 4. The read path
+
+A request is resolved once in the pipeline: session or bearer → person → role bag → the overwrites of the Tangent in the route. Handlers are thin: a bounded query, `can` attached, the DTO returned.
+
+**The page is the API.** One handler, one DTO, and the formatter decides: `Accept: text/html` renders it through a Razor component, `application/json` serializes it, and a fragment request header renders only the component for that resource. A Post's page, its JSON, its live patch and its archive file are the same DTO through the same component. Agents fetch the URL a person shares; `llms.txt` says so in two lines, and the descriptor carries `"api": 1` as the stability promise.
+
+`ETag` is `Post.Version` or `Event.Seq`. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` word the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`.
+
+## 5. Data
+
+| Table | Key | Fields that matter |
+| --- | --- | --- |
+| `TangentSpace` | one row | name, `BaseUrl`, `ProprietorId`, `OperatorId`, audience, admission (`join`, `apply`, `new-accounts-after-approval`), appearance, slots, `Version` |
+| `Tangent` | slug | name, description, default kind, order; audience is its `everyone` overwrite |
+| `Post` | TID | `TangentId` on every row; `TopicId` (= Id on a root); `ParentId`; `OriginId`; `Slug`, `Kind`, `Title`, `CoverId` (root); `Body` (Markdown); `Version`; `Sequence`; `AuthorId`; root carries `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned`; `Removed`, `RemovedBy`, `RemovedAt`. Pre-edit snapshots live in the audit partition |
+| `Participant` | the Koan person id | handle, cached profile, `Kind` (declared), `Standing`, `StandingUntil`, `StandingNote` |
+| `Overwrite` | (`TangentId`, `SubjectId`) | subject is a role or a participant; `Allow`, `Deny` |
+| `Event` | `Seq` | kind, `TangentId`, `TopicId`, `PostId`, `ActorId`, `TargetId`, `Version`, `At` |
+| `Checkpoint` | (`ParticipantId`, `ScopeId`) | `Seq`, `Watch` |
+| `Connection` | id | `ParticipantId`, kind, account, adapter-owned `Settings`, `Seq` (its cursor on the log), status, error |
+| `Receipt` | (`ConnectionId`, `PostId`) | `Version` delivered, status, remote reference, `At`, error |
+| `Reference` | id | `PostId`, `ConnectionId`, remote URI, kind (`reply`, `quote`, `mention`, `like`), author, `At` |
+
+Roles, role members, persons, sessions, grants and media are Koan's tables. Indexes: `Post(TangentId, ParentId, LastActivityAt)` for topic lists; `Post(TopicId, Sequence)` for windows; `Event(Seq)`; `Event(TargetId, Seq)`; the lexical index over `Post.Title` and `Post.Body`. A slug derives from the title at creation, deduplicated with a suffix, and never changes.
+
+## 6. The log
+
+Only the writer appends. Kinds: `post.created`, `post.edited`, `post.removed`, `post.moved`, `mention` (one per mentioned participant, as target), `standing.changed`, `role.changed`, `tangent.changed` (carrying the audience), `space.changed`.
+
+| Reader | Query |
+| --- | --- |
+| The door | events since my checkpoints, filtered by `can.view`, grouped: replies to me, mentions, new per Tangent, new articles; for a visitor, the front page: whose place, what is featured, what is alive |
+| Notifications | the subset where I am the target; reading advances the checkpoint |
+| The stream | `GET /events?since=` as server-sent events; the same URL without the stream header is the poll |
+| Feeds | public `post.created` per Tangent and for articles, rendered as Atom and JSON Feed |
+| Connections | each reads from its own `Seq` |
+| Export, archive | walk it |
+| The moderation trail | `post.removed`, `standing.changed`, `role.changed` with their actors |
+
+Visibility applies at read: an event in a Tangent the reader cannot view does not exist for them. Nothing is pruned. A protocol's "content changed, content removed, audience changed" is a filter over these kinds.
+
+## 7. Access
+
+Discord's model, on Koan's roles, resolved in Discord's order.
+
+- **Bits**: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate` (edit or remove any, lock, pin, move, take on a tangent anywhere), `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all.
+- **Base** is the union of the participant's roles; every bag holds `everyone`.
+- **Overwrites**, in order: `everyone` deny then allow → role denies then allows → the participant's own deny then allow. A Tangent's audience is nothing more than `View` in its `everyone` overwrite.
+- **Standing precedes everything**: banned sees nothing; timed out keeps `View`; applied holds `View` where the Tangent Space is public. A visitor is `everyone` with `View` alone on a public place.
+- **`can`** is the bits the participant holds on this resource plus authorship and state: `EditOwn` applies to my Post; nothing applies to a removed Post; `Post` is absent on a locked Topic.
+
+`Capabilities.For(participant, space, tangent, post?)` is one pure function over Koan's effective access and Tangent's overwrites; its tests enumerate the table. The `gate` word is the explainer's answer for the missing verb. The browser and every agent render `can` and compute nothing.
+
+## 8. Rendering
+
+**Razor components rendered statically** through `HtmlRenderer`: typed templates, no interactive runtime, no JavaScript needed to read. One component per DTO; a page composes them; a fragment is one alone; the archive writes them to files; export packages them; feeds are a sibling output of the same models. Theming slots — head, masthead, door intro, article header, footer — render once and are therefore identical in the live site, the archive and exports.
+
+**Vue islands** mount where a participant does something: the composer, the article editor with its source view and roundtrip check, the role editor, settings panels, the live updater, bring-your-agent. An island is `<div data-island="composer" data-props="…">`; one bundle, one entry, no client router, no store library. Islands share one event stream per page; a live event fetches the fragment and inserts it. Drafts are `localStorage` keyed by scope; an uncertain submit is a `GET` of the minted Id. Pages load as pages, with cross-document view transitions. Phone layouts are CSS on the same HTML.
+
+## 9. Connections
+
+A Connection belongs to a participant and syndicates only Posts that participant authored. The proprietor's Connection also carries the Tangent Space's `site.standard.publication`. Identity is core, not an adapter: a Tangent Space requires atproto identity.
+
+**A Connection is a log reader with a cursor.** The dispatch job runs per Connection: read events since `Connection.Seq` of kinds `post.*` and `tangent.changed`; for each, load the Post, its current audience and the previous Receipt; call the adapter; save the Receipt; advance `Seq`. On failure the cursor stays, so an edit lands before a removal; the Receipt records the error; after repeated failure the Connection appears on its owner's door as an attention item.
+
+```csharp
+interface IConnectionAdapter
+{
+    Task<Receipt> Handle(Event e, Post post, Audience audience, Receipt? previous, CancellationToken ct);
+}
+interface IReferenceSource { IAsyncEnumerable<Reference> Since(string cursor, CancellationToken ct); } // optional
+interface IAsserter        { Task Assert(Participant p, Label label, CancellationToken ct); }          // optional
+```
+
+`Handle` compares the delivered `Receipt.Version` with `Post.Version` and decides — publish, update, retract, requote. Adapter state is `Receipt` plus the Connection's own `Settings`. The connections screen derives "in sync", "changed", "retracted" and "a copy may remain" from Receipt against Post.
+
+| Package (a folder of `Connections/`) | Syndication | References |
+| --- | --- | --- |
+| atproto | a `site.standard.document` with the cover blob for each public article, and a Bluesky post that embeds it; public Posts as the Tangent Space's own record type; `<link rel="site.standard.document">` and verification from Render | Constellation and Spacedust as a reference source, optional |
+| Webmention | sent on `post.created` for outbound links; Bridgy Fed opt-in for fediverse reach | received at an endpoint |
+| Mastodon | a status under the owner's account | replies through its API |
+
+Feeds are a Render output, not a Connection. Inbound replies arrive as `Reference` rows first; a Connection may later materialize them as Posts with source fields, authored by the person row Koan reconciles for that DID.
+
+## 10. Identity
+
+- **Sign-in** is atproto OAuth through Koan's connector; Koan's reconciler turns the DID into a durable person with the DID as its external identity. The `Participant` row is Tangent's facet on that person.
+- **A delegated agent** ("my agent acts as me") is an OAuth client of the Tangent Space through `Koan.Web.Auth.Server`: Companion Lobby registers as a loopback client and runs the code flow; any other client, local or remote, uses the Device flow against a pre-registered public client. The person approves on the consent page Tangent provides. All clients are public; there are no client secrets.
+- **A DID-native agent** (its own participant) arrives through the proof bridge: an atproto service-auth token addressed to this Tangent Space, verified by the connector, exchanged for a bearer that Trust's issuer mints and Trust's bearer scheme accepts. Revocation is Koan's grant revocation.
+- **The installation's identity** is a `did:web` served from the issuer's ES256 key ring at `<base>/did.json` (`did:web` resolves paths), the same keys Auth.Server publishes as JWKS.
+- **Proprietor and operator** are two fields on the settings row, declared at first run, stated in the descriptor and on the about page. The operator is a person.
+- **Profiles** are the PDS, cached by a job. Nothing is edited locally. `Kind` is declared, shown and never evaluated.
+
+## 11. Discovery
+
+A Tangent Space answers at its **base URL** — scheme, host, optional path — set at first run. Every absolute thing derives from it: links, the cookie path, the OAuth client metadata and redirect, the `did:web`, the publication URL. `tangent.<domain>` is the suggested address, the one a client tries first when a site holds no pointer.
+
+Pointers live on the site, since `/.well-known/` belongs to an origin: `<link rel="tangent" href="…">` on the site's pages, or `/.well-known/tangent` at the site origin, or a `_tangent` TXT record. The Tangent Space serves its own descriptor at `<base>/tangent.json` — address, identity, publication, `"api": 1` — and `<base>/llms.txt`. The first-run page prints the pointer snippets and, for a path install, the reverse-proxy rule.
+
+## 12. Background work
+
+Koan jobs, each a reader that writes through the writer: profile capture, handle resolution, connection dispatch, reference polling, media processing, archive rendering, backup (`VACUUM INTO` into the folder, then copy). Nothing else runs in the background; nothing in a request does network I/O.
+
+## 13. Folders
+
+```
+src/server/
+  Space/          TangentSpace row, first run, tangent.json, llms.txt, did.json, consent page
+  Tangents/       Tangent, overwrites, the Tangent page and settings
+  Posts/          Post, Markdown, slugs, topic queries, windows, media references
+  Participants/   Participant facet, standing, profile cache job, the proof bridge, profile page
+  Access/         bits, Capabilities.For
+  Events/         Event, the writer, the stream, the door, checkpoints
+  Render/         components, HTML formatter, fragments, feeds, archive sink, slots
+  Connections/    Connection, Receipt, Reference, dispatch; Atproto/ Webmention/ Mastodon/
+  Lifecycle/      backup, restore, export, archive, retirement
+src/client/       islands and tokens.css
+tests/            one fixture on Koan.Testing.Hosting, tests by noun, visual captures
+scripts/          lifecycle; checks: greenfield, language, no-dialogs, ports
+```
+
+By noun, not by layer. A Connection package is a folder until a dependency is heavy enough to earn an assembly.
+
+## 14. Verification
+
+One fixture: the real process on a loopback port over a temp folder, run at least once under a path prefix. Tests by noun; the capability table enumerated; the writer's idempotency and ordering; one end-to-end per slice through the page-as-API. The visual loop captures server HTML with islands mounted, at three widths in two themes, and gates every screen.
+
+## 15. Settled in slice 0
+
+Four questions the foundation slice answers with an afternoon each: a Koan transaction across several entity saves inside a background loop; the HTML formatter beside Koan's JSON projection; a Vue island mounting into server HTML with a stream-driven fragment patch; lexical search through Koan's SQLite connector. A Koan answer that falls short is corrected in Koan.
