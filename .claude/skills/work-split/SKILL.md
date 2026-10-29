@@ -21,6 +21,8 @@ Write it from [brief.md](brief.md) — the FEATURES rows, the outcome, the area,
 
 When the app cannot create a worktree (its registry fails on this machine while `HOME` is unset), start the session with `use_worktree: false` and open the brief with a workspace section: the executor runs `git worktree add -b claude/<package> .local/worktrees/<package> dev` from the shared checkout, confirms the head commit, works only in that folder, and — for a package that builds — makes the Koan checkout visible there with a directory junction to `.local/upstream/koan-framework`. It commits on that branch and never runs git in the shared checkout again.
 
+When the app refuses to start a session because the turn began with an automated event rather than Leo's words (the case overnight, between reports), the executor runs as an `Agent` instead: `subagent_type: "general-purpose"`, the role's `model` and `effort`, the same brief with the same worktree section; its final message is the report, and feedback goes to its agent id with `SendMessage`. The loop is otherwise unchanged.
+
 When the executor is run by hand — another machine, another account — the same brief goes to `.claude/briefs/<package>.md` with the model and effort stated, and the pasted report is read as the executor's report.
 
 The lead keeps working while the executor runs, never predicts its result and never reads its transcript.
