@@ -323,11 +323,12 @@ public sealed class TangentPageTests
         Assert.Equal("Oct 29, 2026", Render.TopicRow.When(at, new DateOnly(2027, 1, 1)));
     }
 
-    /// <summary>The place every proof starts from: an administrator who sets up the public Tangent, and a member who
-    /// starts its Topics.</summary>
+    /// <summary>The place every proof starts from: established, with an administrator who sets up the public Tangent,
+    /// and a member who starts its Topics.</summary>
     private static async Task<WriteLoop> Place(TangentSpaceFixture tangentSpace)
     {
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
         Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(

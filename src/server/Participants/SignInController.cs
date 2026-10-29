@@ -7,7 +7,9 @@ namespace Tangent.Participants;
 
 /// <summary>The sign-in page, one resource both ways. A visitor reads the handle form, or as JSON the Koan connector's
 /// challenge to follow; the challenge comes back here signed in, the first sign-in having made the person a
-/// participant on the way, and a signed-in person is sent where they were going.</summary>
+/// participant on the way, and a signed-in person is sent where they were going. It answers as itself before first
+/// run, for a place that reads as unestablished.</summary>
+[AnswersBeforeFirstRun]
 public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The page's path under the base URL.</summary>
@@ -23,8 +25,7 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
         Response.Headers.CacheControl = "no-store";
         var to = Destination(destination);
         if (User.Identity?.IsAuthenticated == true && User.FindFirst(ClaimTypes.NameIdentifier) is not null) return Redirect(to);
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
-            ?? throw new InvalidOperationException("The Tangent Space row is missing.");
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         return new ObjectResult(Participants.SignIn.ForVisitor(space.Name, Configured() + "/", to, Challenge(to), handle, failure));
     }
 

@@ -9,10 +9,22 @@ using Xunit;
 
 namespace Tangent;
 
-/// <summary>The rows a proof starts from, written the way every row is written: a Tangent with its audience as its
-/// everyone overwrite, and a participant with a standing and the roles they hold on Koan's RoleCollection.</summary>
+/// <summary>The rows a proof starts from, written the way every row is written: the place's row as first run leaves
+/// it, a Tangent with its audience as its everyone overwrite, and a participant with a standing and the roles they hold
+/// on Koan's RoleCollection.</summary>
 public static class Given
 {
+    /// <summary>The Tangent Space's row, so the place is established: its name, and the audience and admission a proof
+    /// needs.</summary>
+    public static async Task<TangentSpace> AnEstablishedTangentSpace(TangentSpaceFixture tangentSpace, string name = "Tangent Space",
+        Audience audience = Audience.Public, Admission admission = Admission.Join, CancellationToken ct = default)
+    {
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var space = new TangentSpace { Name = name, Audience = audience, Admission = admission };
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), ct));
+        return space;
+    }
+
     public static async Task<Tangents.Tangent> ATangent(TangentSpaceFixture tangentSpace, string slug,
         Audience audience = Audience.Public, CancellationToken ct = default)
     {

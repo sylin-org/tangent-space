@@ -31,10 +31,6 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     /// <summary>The most Tangents the switcher reads, by order.</summary>
     public const int SwitcherLimit = 50;
 
-    /// <summary>The seeded roles from the highest down, with the word the account menu shows for each.</summary>
-    private static readonly (string Role, string Word)[] RoleWords =
-        [(Roles.Administrator, "Administrator"), (Roles.Moderator, "Moderator"), (Roles.Member, "Member")];
-
     [HttpGet("/t/{tangent}")]
     [HttpHead("/t/{tangent}")]
     public async Task<IActionResult> Get(string tangent, [FromQuery(Name = After)] string? after, CancellationToken ct)
@@ -165,8 +161,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     }
 
     /// <summary>The highest seeded role the reader holds, in words; null for none.</summary>
-    private static string? Role(Capabilities capabilities)
-        => RoleWords.FirstOrDefault(pair => capabilities.RoleIds.Contains(pair.Role)).Word;
+    private static string? Role(Capabilities capabilities) => Roles.Word(capabilities.RoleIds);
 
     /// <summary>The Tangents the reader may view among the first <see cref="SwitcherLimit"/> by order, this one always
     /// among them: one read of the Tangents and one of their overwrites.</summary>

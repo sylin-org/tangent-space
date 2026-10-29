@@ -21,18 +21,21 @@ using Tangent.Writer;
 namespace Tangent;
 
 /// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder,
-/// the HTML projection, and the first start.</summary>
+/// the HTML projection, first run's gate, and what every start makes sure of: the roles and first run.</summary>
 public sealed class TangentModule : KoanModule
 {
-    /// <summary>The key Koan reads the base URL from. A Tangent Space always has one: its row records it and
-    /// every absolute link derives from it, so Koan's request-derived posture is never enough here.</summary>
+    /// <summary>The key Koan reads the base URL from. A Tangent Space always has one: every absolute link derives from
+    /// it, so Koan's request-derived posture is never enough here.</summary>
     public const string BaseUrlKey = "Koan:Web:ApplicationUrl";
 
     public override void Register(IServiceCollection services)
     {
         services.AddKoanOptions<TangentSpaceOptions>(TangentSpaceOptions.Configuration)
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
-                "Tangent:DataFolder must name a folder.");
+                "Tangent:DataFolder must name a folder.")
+            .Validate(options => options.Operator is null || options.Operator.StartsWith("did:", StringComparison.Ordinal),
+                $"{FirstRun.OperatorSetting} must be the DID of the person who may set up the Tangent Space, or unset.");
+        services.AddSingleton<SetupCode>();
 
         services.AddOptions<KoanWebOptions>()
             .Validate(options => !string.IsNullOrWhiteSpace(options.ApplicationUrl),
@@ -59,13 +62,15 @@ public sealed class TangentModule : KoanModule
             .Add<Door, DoorView>(door => door.Name, door => door.Version)
             .Add<Problem, ProblemView>(problem => problem.Title)
             .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignInView.Frame)
-            .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame));
+            .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame)
+            .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
         {
             mvc.OutputFormatters.Insert(0, html);
             mvc.RespectBrowserAcceptHeader = true;
             mvc.Filters.Add<ETagFilter>();
+            mvc.Filters.Add<FirstRunGate>();
         });
         services.WithExceptionHandler();
         services.AddExceptionHandler(handler => handler.ExceptionHandler = ProblemExceptionHandler.Answer);
@@ -73,20 +78,8 @@ public sealed class TangentModule : KoanModule
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)
     {
-        // The row records the base URL the operator configures; a start under another one moves it.
-        var baseUrl = services.GetRequiredService<KoanWebBaseUrl>().Configured
-            ?? throw new InvalidOperationException($"{BaseUrlKey} must be set to the base URL the Tangent Space answers at.");
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
-        if (space is null)
-            await new TangentSpace { Name = "Tangent Space", BaseUrl = baseUrl }.Save(ct);
-        else if (space.BaseUrl != baseUrl)
-        {
-            space.BaseUrl = baseUrl;
-            space.Version++;
-            await space.Save(ct);
-        }
-
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
+        await FirstRunStart.Run(services, ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 

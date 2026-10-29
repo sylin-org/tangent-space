@@ -24,6 +24,17 @@ public static class Roles
     /// <summary>A member who also moderates every Tangent and the standing of participants.</summary>
     public const Bit ModeratorBits = MemberBits | Bit.Moderate | Bit.ManageStanding;
 
+    /// <summary>The seeded roles from the highest down, with the word the account menu shows for each.</summary>
+    private static readonly (string Role, string Word)[] Words =
+        [(Administrator, "Administrator"), (Moderator, "Moderator"), (Member, "Member")];
+
+    /// <summary>The highest seeded role among <paramref name="roleIds"/>, in words; null for none.</summary>
+    public static string? Word(IEnumerable<string> roleIds)
+    {
+        var held = roleIds.ToHashSet(StringComparer.Ordinal);
+        return Words.FirstOrDefault(pair => held.Contains(pair.Role)).Word;
+    }
+
     /// <summary>Defines each role that does not exist yet; a role that exists is left as it is.</summary>
     public static async Task Seed(RoleCollection roles, CancellationToken ct)
     {

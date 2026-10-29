@@ -14,6 +14,8 @@ export interface TangentSpace {
   baseUrl: URL
   /** Where the base URL's host and port actually answer. */
   listening: URL
+  /** The setup code the server wrote to its log at this start, when it drew one. */
+  setupCode?: string
   stop(): Promise<void>
 }
 
@@ -125,7 +127,8 @@ export async function startTangentSpace(server: string, settings: Readonly<Recor
     }
     if (stated.href !== baseUrl.href)
       throw new Error(`${listening} states the base URL ${stated}, not ${baseUrl}: it is not this run's Tangent Space.`)
-    return { baseUrl, listening, stop }
+    const setupCode = /Setup code ([0-9A-Z-]+):/.exec(log)?.[1]
+    return { baseUrl, listening, setupCode, stop }
   } catch (failure) {
     await stop()
     throw new Error(`${(failure as Error).message}\n${log}`)
@@ -199,4 +202,32 @@ export async function signIn(listening: URL, persona: Persona): Promise<Map<stri
   const session = new Map([...jar].filter(([name, value]) => name.startsWith('.AspNetCore.Koan.cookie') && value !== ''))
   if (session.size === 0) throw new Error(`Signing ${persona.name} in through the test connector left no session cookie.`)
   return session
+}
+
+/** Establishes the place through first run as a persona, the way the page does: signs them in, reads the form's
+ *  token from the first-run resource as JSON, and posts the form with the place's name, the operator's statement and
+ *  the setup code the server logged, when it asks for one. */
+export async function establish(listening: URL, persona: Persona, name: string, setupCode?: string): Promise<void> {
+  const jar = await signIn(listening, persona)
+  const cookies = () => [...jar].map(([key, value]) => `${key}=${value}`).join('; ')
+  const page = await fetch(new URL('/first-run', listening), { headers: { accept: 'application/json', cookie: cookies() } })
+  if (!page.ok) throw new Error(`The first-run page answered ${page.status} ${page.statusText}.`)
+  for (const set of page.headers.getSetCookie()) {
+    const pair = set.split(';')[0]
+    const split = pair.indexOf('=')
+    jar.set(pair.slice(0, split).trim(), pair.slice(split + 1))
+  }
+  const { form } = (await page.json()) as { form?: { token?: { field?: string; value?: string }; asksCode?: boolean } }
+  if (!form?.token?.field || !form.token.value) throw new Error(`The first-run page holds no form for ${persona.name}.`)
+  if (form.asksCode && !setupCode) throw new Error('The first-run form asks for the setup code, and the server logged none.')
+  const body = new URLSearchParams({ [form.token.field]: form.token.value, name, proprietor: 'me', handle: '', accountable: 'yes' })
+  if (form.asksCode && setupCode) body.set('code', setupCode)
+  const posted = await fetch(new URL('/first-run', listening), {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { cookie: cookies(), 'content-type': 'application/x-www-form-urlencoded' },
+    body,
+  })
+  if (posted.status !== 303) throw new Error(`First run as ${persona.name} answered ${posted.status}:
+${await posted.text()}`)
 }
