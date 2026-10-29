@@ -189,9 +189,13 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using (var json = await Json(browser.Client, "/"))
             Assert.True(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
-        var (status, busy, through) = await Read(browser.Client, null);
+        // The door with the form is never stored, and its fresh token makes every answer a new version.
+        var (status, busy, through, _, caching) = await Read(browser.Client, null);
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(busy, (await Read(browser.Client, null)).ETag);
+        Assert.Contains("no-store", caching);
+        var again = await Read(browser.Client, busy);
+        Assert.Equal(HttpStatusCode.OK, again.Status);
+        Assert.NotEqual(busy, again.ETag);
         Assert.Equal(await Event.HighWaterMark.Load(Cancellation), through);
 
         using (var refused = await browser.Client.PostAsync("/", Form(new() { [DoorController.Through] = through.ToString(CultureInfo.InvariantCulture) }), Cancellation))
@@ -206,8 +210,9 @@ public sealed class DoorTests(ITestOutputHelper output)
         }
         Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq);
 
-        var (_, quiet, _) = await Read(browser.Client, null);
+        var (_, quiet, _, _, quietCaching) = await Read(browser.Client, null);
         Assert.NotEqual(busy, quiet);
+        Assert.Equal("private", quietCaching);
         Assert.Equal(HttpStatusCode.NotModified, (await Read(browser.Client, quiet)).Status);
         using (var json = await Json(browser.Client, "/"))
         {
@@ -285,6 +290,54 @@ public sealed class DoorTests(ITestOutputHelper output)
             Assert.Contains("<p data-gate=\"sign-in\">sign-in</p>", gatedHtml);
             Assert.DoesNotContain("What should we build?", gatedHtml);
         }
+    }
+
+    [Fact]
+    public async Task An_event_in_a_tangent_the_reader_may_not_view_moves_neither_what_the_door_read_through_nor_its_body_nor_its_etag()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
+            new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo"), Cancellation));
+        var since = await Mark(writer, Reader);
+        using var browser = await SignedIn(tangentSpace);
+
+        var before = await Read(browser.Client, null);
+        Assert.Equal(since, before.Through);
+        await Started(writer, "studio", "A private matter", "leo");
+        Assert.True(await Event.HighWaterMark.Load(Cancellation) > since);
+
+        var after = await Read(browser.Client, null);
+        Assert.Equal((since, before.Body, before.ETag), (after.Through, after.Body, after.ETag));
+        Assert.Equal(HttpStatusCode.NotModified, (await Read(browser.Client, before.ETag)).Status);
+    }
+
+    [Fact]
+    public async Task At_exactly_the_tangent_limit_the_door_lists_every_tangent_and_claims_no_more_and_one_more_it_may_view_makes_it_at_least()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        for (var index = 2; index < DoorController.TangentLimit; index++) await Given.ATangent(tangentSpace, "tangent-" + index, ct: Cancellation);
+        // A Tangent the reader may not view, last by order: the one row past the limit, which claims nothing.
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
+            new CreateTangent("hidden", "Hidden", "", PostKind.Topic, 99, Audience.Private, "leo"), Cancellation));
+
+        using (var json = await Json(tangentSpace.Client, "/"))
+        {
+            Assert.Equal(DoorController.TangentLimit, json.RootElement.GetProperty("tangents").GetArrayLength());
+            Assert.False(json.RootElement.GetProperty("moreTangents").GetBoolean());
+        }
+        var html = await Html(tangentSpace.Client, "/");
+        Assert.Contains($"<span><b>{DoorController.TangentLimit}</b> Tangents</span>", html);
+        Assert.DoesNotContain("at least", html);
+
+        await Given.ATangent(tangentSpace, "one-more", ct: Cancellation);
+        using (var json = await Json(tangentSpace.Client, "/"))
+        {
+            Assert.Equal(DoorController.TangentLimit, json.RootElement.GetProperty("tangents").GetArrayLength());
+            Assert.True(json.RootElement.GetProperty("moreTangents").GetBoolean());
+        }
+        Assert.Contains($"at least <b>{DoorController.TangentLimit}</b> Tangents", await Html(tangentSpace.Client, "/"));
     }
 
     /// <summary>The place every proof starts from: established as Lantern Works, Leo's place, with Leo an
@@ -411,15 +464,18 @@ public sealed class DoorTests(ITestOutputHelper output)
         return (table, expressions);
     }
 
-    private static async Task<(HttpStatusCode Status, EntityTagHeaderValue? ETag, long Through)> Read(HttpClient client, EntityTagHeaderValue? held)
+    private static async Task<(HttpStatusCode Status, EntityTagHeaderValue? ETag, long Through, string Body, string Caching)> Read(HttpClient client,
+        EntityTagHeaderValue? held)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (held is not null) request.Headers.IfNoneMatch.Add(held);
         using var response = await client.SendAsync(request, Cancellation);
-        if (response.StatusCode != HttpStatusCode.OK) return (response.StatusCode, response.Headers.ETag, 0);
-        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
-        return (response.StatusCode, response.Headers.ETag, json.RootElement.GetProperty("news").GetProperty("through").GetInt64());
+        var caching = response.Headers.CacheControl?.ToString() ?? "";
+        if (response.StatusCode != HttpStatusCode.OK) return (response.StatusCode, response.Headers.ETag, 0, "", caching);
+        var body = await response.Content.ReadAsStringAsync(Cancellation);
+        using var json = JsonDocument.Parse(body);
+        return (response.StatusCode, response.Headers.ETag, json.RootElement.GetProperty("news").GetProperty("through").GetInt64(), body, caching);
     }
 
     private static async Task<JsonDocument> Json(HttpClient client, string path)

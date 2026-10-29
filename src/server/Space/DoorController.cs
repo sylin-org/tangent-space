@@ -31,7 +31,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAn
     /// <summary>The form field that carries the sequence the door was read through.</summary>
     public const string Through = "through";
 
-    /// <summary>The most Tangents the door lists, by order.</summary>
+    /// <summary>The most Tangents the door lists, by order. It reads one more, and says there are more only when that
+    /// one is among the Tangents the reader may view.</summary>
     public const int TangentLimit = TangentPageController.SwitcherLimit;
 
     public const int FeaturedLimit = 3;
@@ -58,7 +59,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAn
         var window = await LogWindow.Newest(ct);
         IReadOnlyList<Event> targeted = reader is null ? [] : await LogWindow.Targeting(reader.Id, since, ct);
 
-        var listed = await Tangents.Tangent.All(new QueryDefinition { Page = 1, PageSize = TangentLimit }
+        var listed = await Tangents.Tangent.All(new QueryDefinition { Page = 1, PageSize = TangentLimit + 1 }
             .WithSort<Tangents.Tangent>(sort => sort.OrderBy(tangent => tangent.Order).ThenBy(tangent => tangent.Id)), ct);
         var tangentIds = listed.Select(tangent => tangent.Id)
             .Concat(window.Concat(targeted).Select(e => e.TangentId).OfType<string>())
@@ -110,7 +111,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAn
         {
             var partial = LogWindow.Partial(window, since);
             var targetedFull = targeted.Count >= LogWindow.TargetedSize;
-            var through = Math.Max(since, window.Concat(targeted).Select(e => e.Seq).DefaultIfEmpty(0).Max());
+            // Read through the newest event in a Tangent the reader may view, their own included; an event in a Tangent
+            // they may not view moves nothing they can see.
+            var through = Math.Max(since, window.Concat(targeted).Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max());
             news = new Door.Since(
                 since,
                 through,
@@ -122,10 +125,13 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAn
                     .ToList(),
                 Group(articles, partial, posts, tangents, people),
                 null);
+            // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
+            // other door of a signed-in reader is theirs alone to cache.
             if (!news.Quiet) news = news with { CaughtUp = new Door.CaughtUp(door, through, FormToken.For(HttpContext)) };
-            Response.Headers.CacheControl = "private";
+            Response.Headers.CacheControl = news.CaughtUp is null ? "private" : "no-cache, no-store";
         }
 
+        var viewable = listed.Where(tangent => Viewable(tangent.Id)).ToList();
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
         return Ok(new Door(
             space.Name,
@@ -133,11 +139,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAn
             space.ProprietorId is { } proprietor ? Person(people, proprietor) : null,
             place.Can,
             news,
-            listed.Where(tangent => Viewable(tangent.Id))
+            viewable.Take(TangentLimit)
                 .Select(tangent => new Door.Listed(tangent.Id, tangent.Name, Word(tangent.DefaultKind), Address(tangent.Id), tangent.TopicCount,
                     newIn?.GetValueOrDefault(tangent.Id) ?? 0))
                 .ToList(),
-            listed.Count >= TangentLimit,
+            viewable.Count > TangentLimit,
             featured.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             alive.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             new Door.Crowd(writers.Count, full, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),

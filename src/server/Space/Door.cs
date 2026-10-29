@@ -77,14 +77,9 @@ public sealed record Door(
     /// hold one, their avatar, and where they sign out, coming back to the door.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
 
-    /// <summary>The version the door's <c>ETag</c> carries: a hash of everything the door says except the form's
-    /// antiforgery token, which is new on every request, so a new event, a moved checkpoint, a changed <c>can</c> or a
-    /// new day changes it and nothing else does.</summary>
+    /// <summary>The version the door's <c>ETag</c> carries: a hash of everything the door says, so a new event the
+    /// reader may see, a moved checkpoint, a changed <c>can</c> or a new day changes it. A door with the form carries a
+    /// new antiforgery token every time, so its version never repeats and it is never answered as unchanged.</summary>
     public static long Version(Door door)
-    {
-        var stable = door.News?.CaughtUp is { } form
-            ? door with { News = door.News with { CaughtUp = form with { Token = form.Token with { Value = "" } } } }
-            : door;
-        return BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(stable)), 0) & long.MaxValue;
-    }
+        => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(door)), 0) & long.MaxValue;
 }
