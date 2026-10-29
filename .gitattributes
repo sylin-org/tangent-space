@@ -1,2 +1,4 @@
 # Contribution manifests verify exact patch bytes; checkout must not rewrite them.
 poc/contributions/**/*.patch -text
+# Koan writes its composition lock file with LF on every build; store and check it out that way so builds never dirty the tree.
+src/server/koan.lock.json text eol=lf
