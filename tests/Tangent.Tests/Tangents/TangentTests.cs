@@ -160,6 +160,70 @@ public sealed class TangentTests(ITestOutputHelper output)
         });
     }
 
+    /// <summary>A create whose audience is not what Koan's rows state when its transaction runs is refused and leaves no
+    /// Tangent: here the actor gains ManageSpace between the step that would have written the audience and the
+    /// transaction, with no audience on the slug and then with an orphan of the other audience. A create that writes its
+    /// own audience replaces an orphan of the other one, and the Tangent is what it asked for.</summary>
+    [Fact]
+    public async Task A_create_whose_audience_is_not_in_place_is_refused_and_an_orphan_audience_is_replaced_by_the_one_asked_for()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "bo", [Roles.Member], ct: Cancellation);
+        await Overwrites.SetAudience(roles, "corner", Audience.Public, Cancellation);
+        await Overwrites.SetAudience(roles, "den", Audience.Public, Cancellation);
+
+        var unwritten = await writer.Send(new Between<Tangent>(
+            new CreateTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, "ada"),
+            ct => roles.Add(Roles.Administrator, "ada", ct)), Cancellation);
+        var orphaned = await writer.Send(new Between<Tangent>(
+            new CreateTangent("corner", "The corner", "", PostKind.Topic, 3, Audience.Private, "bo"),
+            ct => roles.Add(Roles.Administrator, "bo", ct)), Cancellation);
+        var replaced = await writer.Send(new CreateTangent("den", "The den", "", PostKind.Topic, 4, Audience.Private, "leo"), Cancellation);
+
+        Assert.Equal(CreateTangent.NoAudience, Assert.IsType<Outcome<Tangent>.Refused>(unwritten).Reason);
+        Assert.Equal(CreateTangent.NoAudience, Assert.IsType<Outcome<Tangent>.Refused>(orphaned).Reason);
+        Assert.Equal("den", Assert.IsType<Outcome<Tangent>.Done>(replaced).Result.Id);
+        Assert.Equal(["den"], (await Tangent.All(Cancellation)).Select(tangent => tangent.Id).ToList());
+        Assert.Equal(1, await Event.Count.Exact(Cancellation));
+        Assert.Equal((null, Audience.Public, Audience.Private), (await Overwrites.AudienceOf(roles, "studio", Cancellation),
+            await Overwrites.AudienceOf(roles, "corner", Cancellation), await Overwrites.AudienceOf(roles, "den", Cancellation)));
+        foreach (var slug in new[] { "studio", "corner", "den" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/t/" + slug);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var response = await tangentSpace.Client.SendAsync(request, Cancellation);
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
+            Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (response.StatusCode, problem.RootElement.GetProperty("gate").GetString()));
+        }
+    }
+
+    /// <summary>The number of Tangents is a bound of the place: each holds one everyone overwrite, and Koan bounds the
+    /// overwrites one subject holds. At the bound a create is refused with the setting to raise, and writes nothing.</summary>
+    [Fact]
+    public async Task A_create_past_the_bound_on_tangents_is_refused_with_the_setting_to_raise_and_writes_nothing()
+    {
+        const string bound = "Koan:Identity:Roles:MaxOverwritesPerSubject";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?> { [bound] = "2" }, ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
+
+        Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("one", "One", "", PostKind.Topic, 1, Audience.Public, "leo"), Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("two", "Two", "", PostKind.Topic, 2, Audience.Private, "leo"), Cancellation));
+        var third = await writer.Send(new CreateTangent("three", "Three", "", PostKind.Topic, 3, Audience.Private, "leo"), Cancellation);
+
+        var refused = Assert.IsType<Outcome<Tangent>.Refused>(third).Reason;
+        Assert.Equal(CreateTangent.AtBound(bound), refused);
+        Assert.Contains(bound, refused);
+        Assert.Equal((2, 2), (await Tangent.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
+        Assert.Empty(await roles.Overwrites(Overwrites.Resource("three"), Cancellation));
+    }
+
     /// <summary>Runs <paramref name="Command"/>, with <paramref name="Probe"/> between its step outside the transaction
     /// and the transaction itself: the instant after what it writes first and before its commit.</summary>
     private sealed record Between<T>(ICommand<T> Command, Func<CancellationToken, Task> Probe) : ICommand<T>

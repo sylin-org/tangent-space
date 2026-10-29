@@ -193,14 +193,15 @@ public sealed class Capabilities
 
     /// <summary>The rows what one participant holds in one Tangent, or in the place where <paramref name="tangentId"/> is
     /// null, is computed from, each read bounded and without a lock: the participant's row, Koan's cached bag for them,
-    /// the settings row, and the Tangent's overwrites from Koan's cache. A participant without a row is a visitor. The
+    /// the settings row, and the Tangent's overwrites from Koan's cache (<see cref="OverwritesOf"/>). A participant
+    /// without a row is a visitor. The
     /// bag and the overwrites are resolved once, so <see cref="Rows.For"/> answers for the Tangent and each of its Posts
     /// without another read. A page that answers for a Tangent reads the Tangent's row before these: a Tangent it finds
     /// is one whose audience is already among the overwrites read here.</summary>
     public static async Task<Rows> LoadRows(string? participantId, string? tangentId, CancellationToken ct)
     {
         var reader = await Reader(participantId, ct);
-        var overwrites = tangentId is null ? [] : await reader.Roles.Overwrites(Overwrites.Resource(tangentId), ct);
+        var overwrites = await OverwritesOf(reader.Roles, tangentId, ct);
         var now = DateTimeOffset.UtcNow;
         return new Rows(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, overwrites, now), now);
     }
@@ -215,12 +216,18 @@ public sealed class Capabilities
         var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
         foreach (var id in tangentIds.Distinct(StringComparer.Ordinal))
         {
-            var overwrites = await reader.Roles.Overwrites(Overwrites.Resource(id), ct);
+            var overwrites = await OverwritesOf(reader.Roles, id, ct);
             each[id] = For(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, overwrites, now), now, null, null);
         }
 
         return each;
     }
+
+    /// <summary>The overwrites on a Tangent's resource, from Koan's cache. An id that cannot be a Tangent's slug, the
+    /// place's null among them, names no Tangent and so no resource: none is read for it, and it is answered as a missing
+    /// Tangent is.</summary>
+    private static async Task<IReadOnlyList<PermissionOverwrite>> OverwritesOf(RoleCollection roles, string? tangentId, CancellationToken ct)
+        => tangentId is null || !Slug.IsValid(tangentId) ? [] : await roles.Overwrites(Overwrites.Resource(tangentId), ct);
 
     /// <summary>The rows one reader's capabilities in one Tangent are computed from, read once, with the bag and the
     /// overwrites resolved.</summary>

@@ -172,6 +172,21 @@ public sealed class TangentPageTests
     }
 
     [Fact]
+    public async Task A_segment_that_cannot_be_a_tangents_slug_answers_absent_on_the_tangent_page_and_the_topic_page()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        var segment = new string('a', 300);
+
+        var tangent = await Problem(tangentSpace.Client, "/t/" + segment);
+        var topic = await Problem(tangentSpace.Client, "/t/" + segment + "/some-topic");
+
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (tangent.Status, tangent.Gate));
+        Assert.Equal(tangent, topic);
+        Assert.Equal(await Problem(tangentSpace.Client, "/t/nowhere"), tangent);
+    }
+
+    [Fact]
     public async Task A_visitor_on_a_private_place_receives_sign_in_and_a_reader_the_tangent_is_absent_to_receives_what_a_missing_tangent_receives()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
