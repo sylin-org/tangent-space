@@ -1,3 +1,5 @@
+using Koan.Web.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -24,26 +26,35 @@ public sealed class TangentSpaceTests
     public async Task The_base_url_is_persisted_normalised()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Tangent:BaseUrl"] = "HTTPS://Tangent.Example:443/Field%20Notes/" },
+            new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = "HTTPS://Tangent.Example:443/Field%20Notes/" },
             ct: Cancellation);
 
         var row = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
 
         Assert.NotNull(row);
         Assert.Equal("https://tangent.example/Field%20Notes", row.BaseUrl);
-        Assert.Equal(row.BaseUrl, tangentSpace.Options.BaseUrl);
+        Assert.Equal(row.BaseUrl, tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Configured);
     }
 
     [Fact]
-    public async Task An_invalid_base_url_fails_start_with_the_rule_message()
+    public async Task A_base_url_that_is_not_a_url_fails_start_naming_the_key()
     {
-        var failure = await Assert.ThrowsAsync<AggregateException>(() => TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Tangent:BaseUrl"] = "tangent.example/notes" },
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = "tangent.example/notes" },
             ct: Cancellation));
 
-        Assert.NotEmpty(failure.InnerExceptions);
-        Assert.All(failure.InnerExceptions, inner => Assert.Contains(
-            "Tangent:BaseUrl must be an absolute http or https URL: scheme, host and an optional path.",
-            Assert.IsType<OptionsValidationException>(inner).Failures));
+        Assert.StartsWith($"{TangentModule.BaseUrlKey} must be the application's public URL", failure.Message);
+    }
+
+    [Fact]
+    public async Task A_missing_base_url_fails_start_naming_the_key()
+    {
+        var failure = await Assert.ThrowsAsync<OptionsValidationException>(() => TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = "" },
+            ct: Cancellation));
+
+        Assert.Contains(
+            $"{TangentModule.BaseUrlKey} must be set to the base URL the Tangent Space answers at: scheme, host and an optional path.",
+            failure.Failures);
     }
 }

@@ -15,7 +15,7 @@ export interface State {
   name: string
   /** Query parameters added to the screen's path. */
   query?: Readonly<Record<string, string>>
-  /** `Tangent:*` settings the Tangent Space starts with, such as `{ 'Tangent:BaseUrl': '…' }`. */
+  /** Settings the Tangent Space starts with, such as `{ 'Koan:Web:ApplicationUrl': '…' }`. */
   settings?: Readonly<Record<string, string>>
   /** A selector clicked once the page has settled; the state is what the click shows in the page. */
   click?: string

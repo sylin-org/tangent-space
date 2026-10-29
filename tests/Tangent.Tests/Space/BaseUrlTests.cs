@@ -23,13 +23,21 @@ public sealed class BaseUrlTests
     public async Task Under_a_base_url_path_the_routes_answer_only_under_the_path()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Tangent:BaseUrl"] = "https://tangent.example/notes" },
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://tangent.example/notes" },
             ct: Cancellation);
 
         Assert.Equal(HttpStatusCode.OK, (await tangentSpace.Client.GetAsync("/notes/health/live", Cancellation)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await tangentSpace.Client.GetAsync("/notes/health/ready", Cancellation)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await tangentSpace.Client.GetAsync("/health/live", Cancellation)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await tangentSpace.Client.GetAsync("/health/ready", Cancellation)).StatusCode);
+
+        using var door = new HttpRequestMessage(HttpMethod.Get, "/notes/");
+        door.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        using var answered = await tangentSpace.Client.SendAsync(door, Cancellation);
+        Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
+        Assert.Equal("text/html", answered.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("https://tangent.example/notes/tangent.js", await answered.Content.ReadAsStringAsync(Cancellation));
+        Assert.Equal(HttpStatusCode.NotFound, (await tangentSpace.Client.GetAsync("/", Cancellation)).StatusCode);
     }
 
     [Fact]
@@ -63,5 +71,5 @@ public sealed class BaseUrlTests
     }
 
     private static Dictionary<string, string?> Settings(string dataFolder, string baseUrl)
-        => new() { ["Tangent:DataFolder"] = dataFolder, ["Tangent:BaseUrl"] = baseUrl };
+        => new() { ["Tangent:DataFolder"] = dataFolder, ["Koan:Web:ApplicationUrl"] = baseUrl };
 }

@@ -13,7 +13,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Topic** | One conversation: a root Post and its replies. | a root `Post` (`ParentId` null); `Topics` is a query, not a table | `/t/{tangent}/{topic}` | Thread, *Discussion*, Conversation (as a noun) |
 | **Post** | One message, a root or a reply. The only content primitive. | `Post` | `/t/{tangent}/{topic}/{post}` | *Message*, *Comment*, Reply (as a noun), *Entry*, *Item* |
 | **Article** | A Topic whose root Post is a published piece. | `Post.Kind = Article` | same as its Topic | Blog post, *Page*, Story |
-| **Base URL** | Scheme, host and optional path where the Tangent Space answers; every absolute link derives from it. `tangent.<domain>` is the suggested address, not a rule. | `TangentSpace.BaseUrl` | — | Origin (for this), *Root*, *Prefix* |
+| **Base URL** | Scheme, host and optional path where the Tangent Space answers; every absolute link derives from it. `tangent.<domain>` is the suggested address, not a rule. | `TangentSpace.BaseUrl`, configured as Koan's `Koan:Web:ApplicationUrl` | — | Origin (for this), *Root*, *Prefix* |
 
 ## People
 

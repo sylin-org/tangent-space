@@ -20,11 +20,11 @@ public sealed class TangentSpaceFixtureTests
     public async Task Each_tangent_space_serves_its_own_row_while_another_runs()
     {
         var first = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Tangent:BaseUrl"] = "https://first.example" },
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://first.example" },
             services => services.AddSingleton<IKoanEndpointContributor, RowEndpoint>(),
             Cancellation);
         await using var second = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Tangent:BaseUrl"] = "https://second.example" },
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://second.example" },
             services => services.AddSingleton<IKoanEndpointContributor, RowEndpoint>(),
             Cancellation);
 
