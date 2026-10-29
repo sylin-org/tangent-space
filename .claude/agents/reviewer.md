@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Fresh-context correctness review of one package's diff against its brief, docs/LANGUAGE.md and docs/ARCHITECTURE.md, before Leo's commit word. Reports confirmed findings only, most severe first, with file:line and the input that exposes each. Pass model fable for the writer, the evaluator, Connections and any Koan change.
+description: Fresh-context correctness review of one package's diff against its brief, docs/LANGUAGE.md and docs/ARCHITECTURE.md, before Leo's commit word. Reports confirmed findings only, most severe first, with file:line and the input that exposes each. Pass effort xhigh for a spine package, Connections and any Koan change.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high

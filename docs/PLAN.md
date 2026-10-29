@@ -6,14 +6,16 @@ How the tree is built: in packages, by roles that each have a model and an effor
 
 | Role | Does | Model | Effort | Runs as |
 | --- | --- | --- | --- | --- |
-| **Lead** | Product and architecture decisions, ADRs, briefs for every package, reading results, Koan design, the conversation with Leo | Claude Fable 5.1 | high; xhigh only while deciding the writer, the capability evaluator or Koan transaction semantics | the main session |
-| **Builder, first of its kind** | A package that establishes a pattern the tree has not got yet: the writer, the HTML projection, the evaluator, the door, the first Connection package, anything in Koan | Claude Fable 5.1 | high | a session of its own, in a worktree |
+| **Lead** | Product and architecture decisions, ADRs, briefs for every package, reading results, Koan design, the conversation with Leo | Claude Opus 5.5 | high; xhigh only while deciding a spine question or Koan semantics | the main session |
+| **Builder, first of its kind** | A package that establishes a pattern the tree has not got yet: the writer, the HTML projection, the evaluator, the door, the first Connection package, anything in Koan | Claude Opus 5.5 | high; xhigh for a spine package or Koan semantics | a session of its own, in a worktree |
 | **Builder, repeat** | A package that repeats an established pattern: a second settings screen, a second Connection package, feeds, a phone layout | Claude Opus 5.5 | high, set explicitly (its own default is medium) | a session of its own, in a worktree |
 | **Explorer** | Finds and reads: inventories, Koan source lookups, "where is X handled", research with the web | Claude Sonnet 5.5 | medium | the project's `Explore` agent (`.claude/agents/explore.md`), which pins Sonnet at medium; the built-in Explore would run on the session's own model |
 | **Mechanic** | Bulk, checkable edits from an exact instruction: a rename sweep, language-check fixes, fixture data, test scaffolds from a spec | Claude Haiku 5.5 | low, medium when the instruction has judgment in it | a subagent |
 | **Scorer** | The visual loop's independent judgment on captures | Claude Opus 5.5 | high | the `scorer` agent (`.claude/agents/scorer.md`), given only captures, reference, spec and rubric |
 | **Second scorer** | The tie-break within 0.3 of the gate | Claude Sonnet 5.5 | high | the same agent run with `model: "sonnet"` — a different family |
-| **Reviewer** | Correctness review of a package before Leo's commit word; the spine's and Koan's reviews | Claude Opus 5.5; Claude Fable 5.1 for the writer, the evaluator, Connections and any Koan change | high | the `reviewer` agent (`.claude/agents/reviewer.md`), given the diff and the brief, never the builder's reasoning |
+| **Reviewer** | Correctness review of a package before Leo's commit word; the spine's and Koan's reviews | Claude Opus 5.5 | high; xhigh for a spine package, Connections and any Koan change | the `reviewer` agent (`.claude/agents/reviewer.md`), given the diff and the brief, never the builder's reasoning |
+
+Claude Fable 5.1 is held back: from 29 October 2026 no role runs on it unless Leo names it for a package, because its quota is spent faster than the work it buys over Opus at `high` or `xhigh`; slice 0's packages built on Fable are the record of what it did.
 
 Rates, first-party API, per million tokens in and out: Fable 5.1 $10 / $50 · Opus 5.5 $4 / $20 · Sonnet 5.5 $2 / $10 · Haiku 5.5 $0.10 / $0.50 (prompts up to 100K). A builder session is one model for its whole life; a model switch happens between sessions, never inside one.
 
