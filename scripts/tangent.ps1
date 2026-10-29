@@ -133,6 +133,19 @@ switch ($Verb) {
         New-Item -ItemType Directory -Force -Path $launchFolder | Out-Null
         $urls = "--urls=http://localhost:$Port"
         $executable = Get-PublishedExecutable
+        # On Windows a child whose output is redirected still inherits every inheritable handle of this process,
+        # among them the pipe a caller reads this script through; the server would hold that pipe open for its
+        # whole life and the caller would wait for it. This process's own output handles are therefore made
+        # non-inheritable before the server starts; the server's output goes only to its two files.
+        if ($IsWindows) {
+            Add-Type -Namespace Tangent -Name StandardHandles -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetHandleInformation(IntPtr hObject, uint dwMask, uint dwFlags);
+'@
+            foreach ($standardHandle in -11, -12) {
+                [Tangent.StandardHandles]::SetHandleInformation([Tangent.StandardHandles]::GetStdHandle($standardHandle), 1, 0) | Out-Null
+            }
+        }
         $start = @{
             RedirectStandardOutput = Join-Path $launchFolder 'tangent.log'
             RedirectStandardError = Join-Path $launchFolder 'tangent.error.log'
