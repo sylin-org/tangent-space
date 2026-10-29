@@ -20,3 +20,6 @@
 
 # The client build output.
 src/client/dist/
+
+# The published executable and the data folder created beside it.
+publish/

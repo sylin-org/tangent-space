@@ -26,6 +26,7 @@ namespace Tangent;
 public sealed class TangentSpaceFixture : IAsyncDisposable
 {
     private readonly WebApplication _application;
+    private bool _stopped;
     private bool _disposed;
 
     private TangentSpaceFixture(WebApplication application, string folder, Uri address)
@@ -119,6 +120,15 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         return new TangentSpaceFixture(application, folder, new Uri(address));
     }
 
+    /// <summary>Stops the application and keeps the folder, so a test can read what it left behind; disposing
+    /// still deletes the folder.</summary>
+    public async Task StopAsync(CancellationToken ct = default)
+    {
+        if (_stopped) return;
+        _stopped = true;
+        await _application.StopAsync(ct);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed) return;
@@ -126,7 +136,7 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         Client.Dispose();
         try
         {
-            await _application.StopAsync(CancellationToken.None);
+            await StopAsync(CancellationToken.None);
         }
         finally
         {
