@@ -65,8 +65,9 @@ public sealed record FirstRunForm(
 }
 
 /// <summary>A signed-in person who may not set the place up, since the configuration names another operator: they
-/// signed in as <see cref="Handle"/> (empty when the connector verified none).</summary>
-public sealed record FirstRunWaiting(string Handle);
+/// signed in as <see cref="Handle"/> (empty when the connector verified none), and <see cref="OperatorHandle"/> is the
+/// named operator's handle where a participant with that DID has arrived here.</summary>
+public sealed record FirstRunWaiting(string Handle, string? OperatorHandle = null);
 
 /// <summary>The signed-in person reading first run: the name to show, their handle, the highest role they hold where
 /// they hold one, their avatar, and where they sign out, coming back to first run.</summary>

@@ -142,7 +142,11 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
                 Challenge = Configured(baseUrl) + SignInController.ChallengePath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path)
             });
         if (pinned is not null && pinned != personId)
-            return new ObjectResult(place with { Waiting = new FirstRunWaiting(Handle(http.User)) });
+            return new ObjectResult(place with
+            {
+                Waiting = new FirstRunWaiting(Handle(http.User),
+                    (await Participant.Get(pinned, ct))?.Handle is { Length: > 0 } operatorHandle ? operatorHandle : null)
+            });
         return new ObjectResult(place with { Form = Form(http, baseUrl, pinned is null && setupCode.Required) });
     }
 
