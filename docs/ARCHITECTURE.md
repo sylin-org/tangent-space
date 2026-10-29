@@ -33,7 +33,7 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 | Entity events with discovered handlers | `Sylin.Koan.Communication` | the writer's "appended" signal to the stream and the dispatch jobs |
 | Durable and scheduled work | `Sylin.Koan.Jobs` | every background task |
 | Versioned entity snapshots in a partition | `Sylin.Koan.Web.Extensions` audit partition | edit history, written by the writer |
-| Tests through a real host | `Sylin.Koan.Testing.Hosting` | the one fixture |
+| Tests through a real host | the fixture builds the application as `Program.cs` does, on a loopback port, and binds Koan's ambient host per request; `Sylin.Koan.Testing.Hosting` cannot host Kestrel at the pinned revision, and this fixture is lifted into it | the one fixture |
 
 Not referenced, by decision: `Sylin.Koan.Tenancy` (one Tangent Space per process), `Sylin.Koan.Mcp` (no MCP server), `Sylin.Koan.Data.SoftDelete` (a removed Post is a visible tombstone, not a hidden row), `Sylin.Koan.Data.Backup` (shelved by Koan; backup is the folder).
 
@@ -170,7 +170,7 @@ src/server/
   Connections/    Connection, Receipt, Reference, dispatch; Atproto/ Webmention/ Mastodon/
   Lifecycle/      backup, restore, export, archive, retirement
 src/client/       islands and tokens.css
-tests/            one fixture on Koan.Testing.Hosting, tests by noun, visual captures
+tests/            one fixture over the real composition, tests by noun, visual captures; rules/ holds the rule checks' own test
 scripts/          lifecycle; checks: greenfield, language, no-dialogs, ports
 ```
 
