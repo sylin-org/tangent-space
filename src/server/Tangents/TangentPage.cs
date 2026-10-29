@@ -8,7 +8,8 @@ namespace Tangent.Tangents;
 /// <see cref="Can"/> do here, and one bounded page of its <see cref="Topics"/>, pinned first and then by last
 /// activity. <see cref="Next"/> is the address of the page after this one, absent on the last; nothing is counted to
 /// answer it. <see cref="NewTopic"/> is where a Topic is started, present only when <see cref="Can"/> holds
-/// <c>Topic</c>; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
+/// <c>Topic</c>; <see cref="Watching"/> is the form that sets or clears a signed-in reader's watch flag on the
+/// Tangent; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
 /// Tangents the reader may view, this one among them, with the Topics started in each. <see cref="Place"/>,
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
 /// its times are written for.</summary>
@@ -24,6 +25,7 @@ public sealed partial record TangentPage(
     string? Next,
     bool Continued,
     string? NewTopic,
+    Events.Watching? Watching,
     string? SignIn,
     IReadOnlyList<TangentPage.Listed> Tangents,
     string Place,
@@ -77,8 +79,9 @@ public sealed partial record TangentPage(
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are
-    /// written for among it, so the same page for the same reader on the same day answers the same tag, and a new
-    /// Post, a moved checkpoint, a changed <c>can</c> or a new day changes it.</summary>
+    /// written for among it, so the same page for a visitor on the same day answers the same tag, and a new Post, a
+    /// changed <c>can</c> or a new day changes it. A signed-in reader's page carries their watch form with a new
+    /// antiforgery token every time, so its version never repeats and it is never answered as unchanged.</summary>
     public static long Version(TangentPage page)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;
 

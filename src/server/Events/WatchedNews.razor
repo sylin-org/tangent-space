@@ -1,0 +1,22 @@
+@using System.Globalization
+@using global::Tangent.Space
+@* The door's watched news, first among what is new: each Topic and Tangent the reader watches that holds new Posts,
+   marked watched, with how many. *@
+@if (Model.Count > 0)
+{
+    <h3 class="rail-heading rail-heading-spaced">Watching</h3>
+    <ul class="rail-views">
+        @foreach (var watched in Model)
+        {
+            <li><a href="@watched.Address">@watched.Name</a>@(watched.Scope == "topic" ? " in " + watched.Tangent : "") <span class="new-label">Watched · @Count(watched)</span></li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<Door.Watched> Model { get; set; } = default!;
+
+    /// <summary>How many Posts are new there, "at least" before it when the door could not finish counting.</summary>
+    private static string Count(Door.Watched watched)
+        => (watched.AtLeast ? "at least " : "") + watched.New.ToString(CultureInfo.InvariantCulture) + (watched.New == 1 && !watched.AtLeast ? " new post" : " new posts");
+}
