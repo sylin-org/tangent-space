@@ -14,7 +14,7 @@ A screen is done when an independent scorer rates fixed captures of it at or abo
 
 ## Captures
 
-`npm run capture -- <screen>` in `src/client` renders the screen with seeded fixture data and bundled fonts at 1440, 1024 and 390 wide, in light and dark, in every state the screen has (loading, empty, populated, partial, error). Output: `.dream-loop/<screen>/<n>/` with the reference rendered beside it at the same width and theme. `.dream-loop/` is ignored.
+`npm run capture -- <screen>` in `src/client` renders the screen with seeded fixture data and bundled fonts at 1440, 1024 and 390 wide, in light and dark, in every state the screen has (loading, empty, populated, partial, error). Output: `.dream-loop/<screen>/<n>/<width>-<theme>-<state>.png`, with the reference rendered beside it as `<width>-<theme>-reference.png` at each width the reference draws (1440, and 390 for its phone screens), and a `README.md` naming what the reference lacks. The reference package is read from `.dream-loop/reference` or `TANGENT_REFERENCE`. `.dream-loop/` is ignored.
 
 ## Rubric
 

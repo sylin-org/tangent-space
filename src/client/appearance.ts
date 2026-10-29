@@ -7,7 +7,7 @@ export type Accent = 'gold' | 'jade' | 'iris' | 'copper'
 export const themes: readonly Theme[] = ['system', 'light', 'dark']
 export const accents: readonly Accent[] = ['gold', 'jade', 'iris', 'copper']
 
-const storageKey = 'tangent:appearance'
+export const storageKey = 'tangent:appearance'
 
 function applyTheme(theme: Theme): void {
   const root = document.documentElement
