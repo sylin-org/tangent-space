@@ -195,6 +195,15 @@ public sealed partial class FirstRunTests
         Assert.Contains("value=\"AAAA-BBBB-CCCC-DDDD\"", wrongPage);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
 
+        // An accepted code with another refusal is said in one line and carried on unseen.
+        using var accepted = await browser.SetUp("Field notes", Cancellation, code: code, accountable: false);
+        var acceptedPage = await accepted.Content.ReadAsStringAsync(Cancellation);
+        Assert.Equal(HttpStatusCode.BadRequest, accepted.StatusCode);
+        Assert.Contains("Setup code accepted.</p>", acceptedPage);
+        Assert.Contains($"<input type=\"hidden\" name=\"code\" value=\"{code}\"", acceptedPage);
+        Assert.DoesNotContain("id=\"first-run-code\"", acceptedPage);
+        Assert.Matches("<input type=\"checkbox\" id=\"first-run-accountable\"[^>]* autofocus", acceptedPage);
+
         using var right = await browser.SetUp("Field notes", Cancellation, code: code.ToLowerInvariant());
 
         Assert.Equal(HttpStatusCode.SeeOther, right.StatusCode);
@@ -385,7 +394,7 @@ public sealed partial class FirstRunTests
         var refused = await nobody.Content.ReadAsStringAsync(Cancellation);
 
         Assert.Equal(HttpStatusCode.BadRequest, nobody.StatusCode);
-        Assert.Contains($"<p class=\"field-failure\" id=\"first-run-handle-failure\">{WebUtility.HtmlEncode(Establish.NoParticipant("nobody.example").TrimEnd('.'))}; they sign in here once before they can be named.</p>", refused);
+        Assert.Contains($"<p class=\"field-failure\" id=\"first-run-handle-failure\">{WebUtility.HtmlEncode(Establish.NoParticipant("nobody.example").TrimEnd('.'))}; they sign in here first.</p>", refused);
         Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\"", refused);
         // The page opens on the field in error, and the standing hint gives way to the error that says the same.
         Assert.Matches("<input id=\"first-run-handle\"[^>]* autofocus", refused);
