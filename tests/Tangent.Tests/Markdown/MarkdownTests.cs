@@ -68,8 +68,37 @@ public sealed class MarkdownTests
             (image.GetAttribute("loading"), image.GetAttribute("decoding"), image.GetAttribute("referrerpolicy"))));
 
         var figures = new HtmlParser().ParseDocument("<body>" + MarkdownHtml.Render("![First](/media/first) *Same paragraph*\n\n"
-            + "![Second](/media/second)\n\n*Next paragraph*\n\n![Third](/media/third)\n\n*Prose* with more words.").Html() + "</body>").QuerySelectorAll("figure");
-        Assert.Equal(["Same paragraph", "Next paragraph"], figures.Select(figure => figure.QuerySelector("figcaption")!.TextContent).ToList());
+            + "![Second](/media/second)\n\n*Next paragraph*\n\n![Third](/media/third)\n\n*Prose* with more words.\n\n"
+            + "![Fourth](https://img/x.png)\n*Next line*").Html() + "</body>").QuerySelectorAll("figure");
+        Assert.Equal(["Same paragraph", "Next paragraph", "Next line"], figures.Select(figure => figure.QuerySelector("figcaption")!.TextContent).ToList());
+        Assert.Empty(figures[2].QuerySelectorAll("br"));
+    }
+
+    [Fact]
+    public void Bodies_that_would_hold_too_many_elements_or_parse_slowly_are_refused_in_well_under_100_ms()
+    {
+        string Repeat(string unit, int count) => string.Concat(Enumerable.Repeat(unit, count));
+        string Cut(string text) => text.Length <= Post.BodyLimit ? text : text[..Post.BodyLimit];
+        PostBody.Of("warm *up*");
+        var bodies = new Dictionary<string, string>
+        {
+            ["lines"] = Repeat("a\n", 32_767),
+            ["one table row of 32K cells"] = Cut("|" + Repeat("a|", 16_384) + "\n|" + Repeat("-|", 16_384) + "\n"),
+            ["one table row of 16K cells"] = "|" + Repeat("a|", 8_192) + "\n|" + Repeat("-|", 8_192) + "\n",
+            ["nested list markers"] = Cut(Repeat("- ", 32_768)),
+            ["paragraphs"] = Cut(Repeat("a\n\n", 21_845)),
+            ["headings"] = Cut(Repeat("# a\n", 16_384)),
+            ["list items"] = Cut(Repeat("- a\n", 16_384)),
+            ["unclosed links"] = Repeat("[a](", 16_384)
+        };
+        foreach (var (name, text) in bodies)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var body = PostBody.Of(text);
+            watch.Stop();
+            Assert.True(body.Refusal == Post.BodyTooIntricate, $"{name}: {body.Refusal ?? "accepted"}");
+            Assert.True(watch.ElapsedMilliseconds < 100, $"{name}: judged in {watch.ElapsedMilliseconds} ms.");
+        }
     }
 
     [Fact]
@@ -80,19 +109,23 @@ public sealed class MarkdownTests
         var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
         var before = await Counted();
 
-        // Sixty kilobytes of pipes fit the body's limit and render to more than half a megabyte of table cells.
+        // Sixty kilobytes of pipes fit the body's limit and would render more than half a megabyte of table cells; twenty
+        // thousand quote markers would nest past Markdig's limit: both hold far too many elements. A list nested a
+        // thousand deep is within the element bound, and Markdig refuses its depth.
         var wide = "a|b\n-|-\n" + string.Concat(Enumerable.Repeat(new string('|', 200) + "\n", 300));
         var deep = new string('>', 20_000) + " a";
+        var nested = string.Concat(Enumerable.Repeat("- ", 999)) + "a";
         var crowded = string.Join(' ', Enumerable.Range(0, Mentions.Limit + 1).Select(index => $"[@p{index}](at://did:plc:p{index})"));
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(wide) <= Post.BodyLimit);
+        Assert.True(MarkdownHtml.Tractable(nested));
 
-        foreach (var body in new[] { wide, deep })
+        foreach (var (body, reason) in new[] { (wide, Post.BodyTooIntricate), (deep, Post.BodyTooIntricate), (nested, Post.BodyRendersTooLong) })
         {
-            Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(
+            Assert.Equal(reason, Assert.IsType<Outcome<Post>.Refused>(
                 await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Too much", body, Ada), Cancellation)).Reason);
-            Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(
+            Assert.Equal(reason, Assert.IsType<Outcome<Post>.Refused>(
                 await writer.Send(new Reply(Tids.Mint(), root.Id, body, Bea), Cancellation)).Reason);
-            Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(
+            Assert.Equal(reason, Assert.IsType<Outcome<Post>.Refused>(
                 await writer.Send(new EditPost(root.Id, 1, body, null, Ada), Cancellation)).Reason);
         }
 
@@ -100,10 +133,10 @@ public sealed class MarkdownTests
             await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Everyone", crowded, Ada), Cancellation)).Reason);
 
         // One identity mentioned over and over: every mention is measured at its longest rendering, whatever handle Bea
-        // holds when it is read, so the body is refused — on lines of their own by the rendered size, and as one paragraph
-        // already by its brackets.
+        // holds when it is read, so the body is refused — two hundred on lines of their own by the rendered size, and the
+        // body's limit of them in one paragraph already by its brackets.
         Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new RecordHandle(Bea, new string('b', 243) + ".bsky"), Cancellation));
-        var repeated = Fill($"[x](at://{Bea})\n\n");
+        var repeated = string.Concat(Enumerable.Repeat($"[x](at://{Bea})\n\n", 200));
         var paragraph = Fill($"[x](at://{Bea}) ");
         Assert.True(MarkdownHtml.Tractable(repeated));
         Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(

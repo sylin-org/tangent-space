@@ -1,4 +1,5 @@
 using System.Net;
+using Tangent.Access;
 using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -52,5 +53,33 @@ public sealed class RenderOnceTests
         Assert.Equal(built, MarkdownHtml.Parses);
         Assert.Contains("Edited.", (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body);
         Assert.Equal(built + 1, MarkdownHtml.Parses);
+    }
+
+    [Fact]
+    public async Task A_write_the_gate_refuses_is_answered_with_the_gate_without_its_body_being_judged()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        var heavy = string.Concat(Enumerable.Repeat("A line with *emphasis* and a [link](https://example.org/x).\n", 300));
+        Assert.True(MarkdownHtml.Tractable(heavy));
+        using var visitor = Agent(tangentSpace);
+        using var bea = await SignedIn(tangentSpace, Bea);
+        var token = await bea.Token("/t/" + Workshop + "/new", Cancellation);
+        var before = await Counted();
+
+        // A visitor may start, reply and edit nothing; Bea may not edit Ada's Post. Each is answered with its gate, and
+        // nothing parses the body.
+        var parses = MarkdownHtml.Parses;
+        var started = await Send(visitor, HttpMethod.Post, "/t/" + Workshop + "/new", JsonBody(new { id = Tids.Mint(), title = "Heavy", body = heavy }), json: true);
+        var replied = await Send(visitor, HttpMethod.Post, TopicPath(root), JsonBody(new { id = Tids.Mint(), body = heavy }), json: true);
+        var edited = await Send(visitor, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = heavy, version = 1 }), json: true);
+        var notYours = await Send(bea.Client, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = heavy, version = 1 }), json: true,
+            token: token.Values.Single());
+        Assert.Equal(parses, MarkdownHtml.Parses);
+
+        Assert.Equal([Capabilities.SignIn, Capabilities.SignIn, Capabilities.SignIn, Capabilities.NotYours],
+            new[] { started, replied, edited, notYours }.Select(answer => answer.Gate).ToList());
+        Assert.Equal(before, await Counted());
     }
 }

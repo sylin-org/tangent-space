@@ -168,6 +168,24 @@ public sealed class MentionTests
         Assert.Equal(("@bea.renamed.example has a question about @ghost.", "@bea.renamed.example has a question about @ghost."), await Lines());
     }
 
+    [Fact]
+    public async Task A_mention_inside_an_image_description_is_only_words_of_its_alt()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var root = await Started(writer, Bea, "A picture", $"![see {Mention(Ada, "ada")}](https://img/x.png)");
+
+        Assert.Empty(root.MentionedIds);
+        Assert.Empty((await Post.Get(root.Id, Cancellation))!.MentionedIds);
+        Assert.Empty(await MentionsOf(root.Id));
+        using var visitor = Agent(tangentSpace);
+        var page = await Send(visitor, HttpMethod.Get, TopicPath(root), json: true);
+        Assert.Empty(page.Json.GetProperty("root").GetProperty("mentions").EnumerateArray());
+        var html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;
+        Assert.Contains("alt=\"see @ada\"", html);
+        Assert.DoesNotContain("/p/", html);
+    }
+
     /// <summary>The mention events of one Post, in the order of the log.</summary>
     private static async Task<List<Event>> MentionsOf(string postId)
         => (await Event.Query(e => e.Kind == EventKind.Mention && e.PostId == postId, Cancellation)).OrderBy(e => e.Seq).ToList();

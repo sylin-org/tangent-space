@@ -25,6 +25,7 @@ public sealed class Post : Entity<Post>
     public const string BodyHasNul = "A Post's body holds no NUL character.";
     public const string BodyRendersTooLong = "A Post's body renders to at most 512 KiB of HTML, its elements nested no deeper than the renderer allows.";
     public const string TooManyMentions = "A Post's body mentions at most 32 identities.";
+    public const string BodyNotJudged = "This body was not judged before it was sent; send it again.";
     public const string BodyTooIntricate = "A Post's body holds too many unclosed links, brackets or emphasis marks to render quickly.";
     public const string NeedsTitle = "A Topic's title holds at least one visible character.";
     public const string TitleTooLong = "A Topic's title holds at most 200 characters.";

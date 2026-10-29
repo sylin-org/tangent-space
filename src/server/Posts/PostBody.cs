@@ -29,6 +29,11 @@ public sealed class PostBody
 
     public static implicit operator PostBody(string text) => Of(text);
 
+    /// <summary>A body left unjudged, for a command the writer's gate will refuse before it reads the body: a replay of
+    /// a Post already written still answers, and a body that reaches the entity regardless is refused with
+    /// <see cref="Post.BodyNotJudged"/>, never written.</summary>
+    public static PostBody Unjudged(string text) => new(text ?? "", [], Post.BodyNotJudged);
+
     public static PostBody Of(string text)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Contains('\0') || Encoding.UTF8.GetByteCount(text) > Post.BodyLimit)

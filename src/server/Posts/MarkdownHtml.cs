@@ -42,6 +42,11 @@ public static class MarkdownHtml
     /// <c>*</c> or <c>_</c>, squared.</summary>
     public const long EmphasisWork = 4_000_000;
 
+    /// <summary>The most elements the HTML may hold, as the lines and marks outside fenced code count them: each line
+    /// one, each quote or list marker opening it two, each table cell, bracket, emphasis run, code span and autolink
+    /// one, and each fence two. The sanitizer's work grows faster than the elements it walks.</summary>
+    public const long ElementLimit = 2000;
+
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UsePipeTables().UseSoftlineBreakAsHardlineBreak().DisableHtml().Build();
 
@@ -115,16 +120,18 @@ public static class MarkdownHtml
         }
     }
 
-    /// <summary>Whether Markdig parses <paramref name="markdown"/> in time proportional to its size: within
-    /// <see cref="DestinationWork"/>, <see cref="BracketWork"/> and <see cref="EmphasisWork"/>. Fenced code is not
-    /// counted; every other line is, and a paragraph runs to a blank line or a fence, which counts more than Markdig
-    /// would and never less. One pass over the text.</summary>
+    /// <summary>Whether <paramref name="markdown"/> parses and renders in time proportional to its size: Markdig's parse
+    /// within <see cref="DestinationWork"/>, <see cref="BracketWork"/> and <see cref="EmphasisWork"/>, and the HTML
+    /// within <see cref="ElementLimit"/> elements, which also bounds how deep quotes and lists nest. Fenced code is not
+    /// counted but its fences are; every other line is, and a paragraph runs to a blank line or a fence, which counts
+    /// more than Markdig would and never less. One pass over the text.</summary>
     public static bool Tractable(string markdown)
     {
-        long destinations = 0, bracketWork = 0, emphasisWork = 0, brackets = 0, runs = 0;
+        long destinations = 0, bracketWork = 0, emphasisWork = 0, brackets = 0, runs = 0, elements = 0;
         char? fence = null;
         foreach (var line in markdown.Split('\n'))
         {
+            if (elements > ElementLimit) return false;
             var start = 0;
             while (start < line.Length && start < 3 && line[start] == ' ') start++;
             var fenceLine = line.Length - start >= 3 && line[start] is '`' or '~' && line[start + 1] == line[start] && line[start + 2] == line[start];
@@ -133,9 +140,16 @@ public static class MarkdownHtml
                 bracketWork += brackets * brackets;
                 emphasisWork += runs * runs;
                 brackets = runs = 0;
-                if (fenceLine) fence = fence is null ? line[start] : fence == line[start] ? null : fence;
+                if (fenceLine)
+                {
+                    elements += 2;
+                    fence = fence is null ? line[start] : fence == line[start] ? null : fence;
+                }
+
                 continue;
             }
+
+            elements += 1 + 2 * Markers(line);
 
             // The index of the next whitespace at or after each position, so each destination is measured in one step.
             var next = new int[line.Length + 1];
@@ -144,8 +158,21 @@ public static class MarkdownHtml
             for (var index = 0; index < line.Length; index++)
             {
                 var c = line[index];
-                if (c == '[') brackets++;
-                else if (c is '*' or '_' && (index == 0 || line[index - 1] != c)) runs++;
+                var first = index == 0 || line[index - 1] != c;
+                if (c == '[')
+                {
+                    brackets++;
+                    elements++;
+                }
+                else if (c is '*' or '_' && first)
+                {
+                    runs++;
+                    elements++;
+                }
+                else if (c == '|' || c == '`' && first || c == '<' && index + 1 < line.Length && char.IsAsciiLetter(line[index + 1]))
+                {
+                    elements++;
+                }
                 else if (c == '(' && index > 0 && line[index - 1] == ']')
                 {
                     var from = index + 1;
@@ -157,11 +184,50 @@ public static class MarkdownHtml
 
         bracketWork += brackets * brackets;
         emphasisWork += runs * runs;
-        return destinations <= DestinationWork && bracketWork <= BracketWork && emphasisWork <= EmphasisWork;
+        return destinations <= DestinationWork && bracketWork <= BracketWork && emphasisWork <= EmphasisWork && elements <= ElementLimit;
     }
 
-    /// <summary>Parses <paramref name="markdown"/> once into its HTML and plain text, holding each link that is not an
-    /// image whose target <paramref name="hold"/> answers true for. Throws <see cref="ArgumentException"/> where Markdig
+    /// <summary>How many quote and list markers open a line, however they are indented: <c>&gt;</c>, a bullet
+    /// (<c>-</c>, <c>*</c> or <c>+</c>) or an ordinal (digits, then <c>.</c> or <c>)</c>) followed by whitespace or the
+    /// line's end.</summary>
+    private static int Markers(string line)
+    {
+        var markers = 0;
+        var at = 0;
+        while (true)
+        {
+            while (at < line.Length && line[at] is ' ' or '\t') at++;
+            if (at >= line.Length) return markers;
+            var end = at;
+            if (line[at] == '>')
+            {
+                end = at + 1;
+            }
+            else if (line[at] is '-' or '*' or '+')
+            {
+                end = at + 1;
+                if (end < line.Length && line[end] is not (' ' or '\t')) return markers;
+            }
+            else if (char.IsAsciiDigit(line[at]))
+            {
+                while (end < line.Length && end - at < 9 && char.IsAsciiDigit(line[end])) end++;
+                if (end >= line.Length || line[end] is not ('.' or ')')) return markers;
+                end++;
+                if (end < line.Length && line[end] is not (' ' or '\t')) return markers;
+            }
+            else
+            {
+                return markers;
+            }
+
+            markers++;
+            at = end;
+        }
+    }
+
+    /// <summary>Parses <paramref name="markdown"/> once into its HTML and plain text, holding each link whose target
+    /// <paramref name="hold"/> answers true for — never an image, nor a link inside an image's description, which is
+    /// only words of its <c>alt</c>. Throws <see cref="ArgumentException"/> where Markdig
     /// refuses elements nested deeper than its limit; ask <see cref="Tractable"/> first, since a refused parse costs as
     /// much as any.</summary>
     public static Rendered Render(string markdown, Func<string, bool>? hold = null)
@@ -171,7 +237,7 @@ public static class MarkdownHtml
         var held = new List<(LinkInline Link, string Target)>();
         if (hold is not null)
         {
-            foreach (var link in document.Descendants<LinkInline>().Where(link => !link.IsImage).ToList())
+            foreach (var link in document.Descendants<LinkInline>().Where(link => !link.IsImage && !InImage(link)).ToList())
             {
                 if (Target(link) is not { } target || !hold(target)) continue;
                 link.Url = HeldPrefix + held.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -240,6 +306,15 @@ public static class MarkdownHtml
 
     private static string? Target(LinkInline link) => link.GetDynamicUrl is null ? link.Url : link.GetDynamicUrl();
 
+    /// <summary>Whether a link sits inside an image's description, where it is only words of the image's
+    /// <c>alt</c>.</summary>
+    private static bool InImage(Inline link)
+    {
+        for (var parent = link.Parent; parent is not null; parent = parent.Parent)
+            if (parent is LinkInline { IsImage: true }) return true;
+        return false;
+    }
+
     /// <summary>Whether the HTML may hold an image with a caption: both an image and emphasis occur in it.</summary>
     private static bool Figured(string html)
         => html.Contains("<img", StringComparison.OrdinalIgnoreCase) && html.Contains("<em", StringComparison.OrdinalIgnoreCase);
@@ -253,9 +328,11 @@ public static class MarkdownHtml
             if (children.Length == 0 || children[0] is not IElement { LocalName: "img" } image) continue;
             IElement? caption = null;
             IElement? following = null;
-            if (children.Length == 2 && children[1] is IElement { LocalName: "em" } sameParagraph)
+            // The caption may follow on the image's own line or the next, where the line break is a <br> between them.
+            if (children.Length == 2 && children[1] is IElement { LocalName: "em" } sameParagraph
+                || children.Length == 3 && children[1] is IElement { LocalName: "br" } && children[2] is IElement { LocalName: "em" })
             {
-                caption = sameParagraph;
+                caption = (IElement)children[^1];
             }
             else if (children.Length == 1 && paragraph.NextElementSibling is { LocalName: "p" } nextParagraph)
             {

@@ -149,6 +149,15 @@ public static class PostWrites
 
     public static string Word(PostKind kind) => kind.ToString().ToLowerInvariant();
 
+    /// <summary>The body a write route hands its command: judged (<see cref="PostBody.Of"/>) only where the person holds
+    /// the verb the command needs here, so a request the writer will refuse at its gate never pays for a parse; left
+    /// unjudged otherwise.</summary>
+    public static PostBody Body(IReadOnlyDictionary<string, string> fields, bool mayWrite)
+    {
+        var text = fields.GetValueOrDefault(BodyField) ?? "";
+        return mayWrite ? PostBody.Of(text) : PostBody.Unjudged(text);
+    }
+
     public static string TangentAddress(string configured, string tangent) => configured + "/t/" + Uri.EscapeDataString(tangent);
 
     public static string TopicAddress(string configured, string tangent, string topic)
@@ -164,7 +173,7 @@ public static class PostWrites
         Post.NeedsTitle or Post.TitleTooLong => About.Title,
         Post.NeedsBody or Post.BodyTooLong or Post.BodyHasNul or Post.BodyRendersTooLong or Post.TooManyMentions or Post.BodyTooIntricate => About.Body,
         Post.NeedsTid or Post.NeedsTangent or Post.NeedsAuthor or Post.NotARoot or Post.TopicLocked or Post.TopicRemoved
-            or Post.NoTitleOnReply or Post.PostRemoved or Post.NeedsRemover or Post.IdTaken or Reply.NoParent or KindRule or VersionRule
+            or Post.NoTitleOnReply or Post.BodyNotJudged or Post.PostRemoved or Post.NeedsRemover or Post.IdTaken or Reply.NoParent or KindRule or VersionRule
             => About.Sent,
         _ => About.Gate
     };

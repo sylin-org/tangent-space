@@ -1,5 +1,6 @@
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Tangent.Access;
 using Tangent.Render;
 using Tangent.Writer;
 
@@ -28,7 +29,7 @@ public sealed class ReplyController(KoanWebBaseUrl baseUrl, WriteLoop writer) : 
         var outcome = await writer.Send(new Reply(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             root.Id,
-            fields.GetValueOrDefault(PostWrites.BodyField) ?? "",
+            PostWrites.Body(fields, found.Rows.For(root).Holds(Bit.Post)),
             personId ?? "",
             fields.GetValueOrDefault(PostWrites.ParentField) is { Length: > 0 } parent ? parent : null), ct);
         return outcome switch
