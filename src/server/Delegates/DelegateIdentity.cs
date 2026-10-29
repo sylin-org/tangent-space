@@ -7,8 +7,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace Tangent.Delegates;
 
-/// <summary>Who a request is, once, for every page: a request that carries an <c>Authorization</c> header is
-/// authenticated by Koan's bearer scheme alone and never by the session cookie, any other by the session cookie. A
+/// <summary>Who a request is, once, for every page: a request that carries a bearer token (an <c>Authorization</c>
+/// header of the <c>Bearer</c> scheme) is authenticated by Koan's bearer scheme alone and never by the session cookie;
+/// any other, including one whose header has another scheme, such as a proxy's basic credentials, by the session
+/// cookie. A
 /// bearer token Koan's server issued is the person who approved it, under the same
 /// <see cref="ClaimTypes.NameIdentifier"/>, their DID, as their session, so the participant, <c>can</c> and every gate
 /// answer for their delegate exactly as for them; and only when it was issued for this Tangent Space's base URL, since
@@ -18,10 +20,18 @@ public static class DelegateIdentity
     /// <summary>The scheme every request is authenticated by: it forwards to the bearer or to the cookie.</summary>
     public const string Scheme = "Tangent.SessionOrBearer";
 
-    /// <summary>The scheme that authenticates this request: Koan's bearer when it carries an <c>Authorization</c>
-    /// header, whatever cookie it also carries; the session cookie otherwise.</summary>
+    /// <summary>The scheme that authenticates this request: Koan's bearer when it carries a bearer token, whatever
+    /// cookie it also carries; the session cookie otherwise.</summary>
     public static string Select(HttpContext http)
-        => http.Request.Headers.Authorization.Count > 0 ? KoanBearerDefaults.AuthenticationScheme : AuthenticationExtensions.CookieScheme;
+        => CarriesBearer(http) ? KoanBearerDefaults.AuthenticationScheme : AuthenticationExtensions.CookieScheme;
+
+    /// <summary>Whether this request carries a bearer token: an <c>Authorization</c> header whose scheme is
+    /// <c>Bearer</c>, in any letter case, valid or not.</summary>
+    public static bool CarriesBearer(HttpContext http)
+    {
+        var header = http.Request.Headers.Authorization.ToString();
+        return header.Length > 7 && header.StartsWith("Bearer", StringComparison.OrdinalIgnoreCase) && header[6] == ' ';
+    }
 
     /// <summary>Accepts a token Koan's bearer scheme has verified when its audience is this Tangent Space's base URL,
     /// and makes its subject the person's identifier; refuses it otherwise, so the request reads as carrying a
@@ -51,8 +61,7 @@ public static class DelegateIdentity
     public static bool Delegated(HttpContext http)
         => http.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult is { Succeeded: true, Ticket.AuthenticationScheme: KoanBearerDefaults.AuthenticationScheme };
 
-    /// <summary>Whether this request carried an <c>Authorization</c> header that authenticated nobody: expired,
-    /// tampered, signed by another issuer or issued for another resource.</summary>
-    public static bool Rejected(HttpContext http)
-        => http.Request.Headers.Authorization.Count > 0 && http.User.Identity?.IsAuthenticated != true;
+    /// <summary>Whether this request carried a bearer token that authenticated nobody: expired, tampered, signed by
+    /// another issuer or issued for another resource.</summary>
+    public static bool Rejected(HttpContext http) => CarriesBearer(http) && http.User.Identity?.IsAuthenticated != true;
 }

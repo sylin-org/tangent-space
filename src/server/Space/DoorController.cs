@@ -3,7 +3,6 @@ using Koan.Data.Abstractions;
 using Koan.Data.Core.Sorting;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Events;
@@ -26,7 +25,7 @@ namespace Tangent.Space;
 /// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
 /// rule, and its writers <see cref="Door.Around"/>. A reader without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
 /// moves the reader's place checkpoint to the sequence a door read through, through the writer.</summary>
-public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAntiforgery antiforgery) : ControllerBase
+public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
 {
     /// <summary>The form field that carries the sequence the door was read through.</summary>
     public const string Through = "through";
@@ -154,8 +153,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAn
     }
 
     /// <summary>Marks the door seen: moves the signed-in reader's place checkpoint to the sequence in the
-    /// <see cref="Through"/> field, never backwards, and sends them back to the door. The form's antiforgery token is
-    /// validated before anything else is read.</summary>
+    /// <see cref="Through"/> field, never backwards, and sends them back to the door. The form answers to
+    /// <see cref="FormToken.Validate"/>, a session with its antiforgery token, before anything else is read.</summary>
     [HttpPost("/")]
     public async Task<IActionResult> MarkSeen([FromForm(Name = Through)] string? through, CancellationToken ct)
     {
@@ -163,15 +162,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAn
         if (PersonId(User) is not { } personId)
             return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Marking the door seen needs a signed-in participant.",
                 Capabilities.SignIn).ToResult();
-        try
-        {
-            await antiforgery.ValidateRequestAsync(HttpContext);
-        }
-        catch (AntiforgeryValidationException)
-        {
+        if (!await FormToken.Validate(HttpContext))
             return new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was marked seen.").ToResult();
-        }
 
         if (!long.TryParse(through, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var sequence))
             return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log",

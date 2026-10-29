@@ -18,7 +18,9 @@ namespace Tangent.Delegates;
 /// waiting under it: who decides, and that the client acts as them here with everything they can do. A loopback
 /// client's request arrives under its <c>rid</c> instead and shows the name it registered and where it returns.
 /// Approve and deny post to Koan's request endpoint, which answers the client; the person lands on the done page.
-/// Looking a code up is rate-limited per address as Koan's own verification is. Only a person's session decides: a
+/// A code belongs to the device door only when the shared client asked for it: one a self-registered client asked for
+/// is refused under the field, and no name a client chose is ever shown for a code. Looking a code up counts against
+/// the one allowance per address that Koan's own verification counts against. Only a person's session decides: a
 /// delegate's bearer request is refused.</summary>
 public sealed class ConsentController(KoanWebBaseUrl baseUrl, IOptions<AuthServerOptions> server, FixedWindowRateLimiter limiter,
     TimeProvider time) : ControllerBase
@@ -39,6 +41,10 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl, IOptions<AuthServe
     /// <summary>Koan's request endpoint under the base URL; a request's approve and deny follow its id.</summary>
     public const string RequestEndpoint = "/oauth/request/";
 
+    /// <summary>The key, before the address, under which Koan's server counts the code verifications one address may
+    /// make in a minute; the page counts its look-ups under the same key on the same limiter.</summary>
+    public const string AllowanceKey = "usercode:";
+
     /// <summary>The longest code or request id the page looks up, as Koan's endpoint accepts.</summary>
     public const int IdLimit = 128;
 
@@ -57,7 +63,7 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl, IOptions<AuthServe
 
         var now = time.GetUtcNow();
         var address = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        if (!limiter.TryAcquire("consent:" + address, server.Value.UserCodeVerificationRateLimitPerMinute, TimeSpan.FromMinutes(1), now))
+        if (!limiter.TryAcquire(AllowanceKey + address, server.Value.UserCodeVerificationRateLimitPerMinute, TimeSpan.FromMinutes(1), now))
             return Again(page, code, StatusCodes.Status429TooManyRequests, "Too many codes were tried from here; wait a minute, then enter it again.");
 
         var normalized = Normalize(code);
@@ -68,8 +74,10 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl, IOptions<AuthServe
             return Again(page, code, StatusCodes.Status400BadRequest,
                 "No request is waiting for that code: it may be mistyped or expired. Check it, or ask the device or agent for a new one.");
 
-        var client = device.ClientId == DelegateClient.Id ? null : (await OAuthClient.Get(device.ClientId, ct))?.ClientName is { Length: > 0 } name ? name : device.ClientId;
-        return Ok(page with { Decision = Decision(normalized, Format(normalized), client, null) });
+        if (device.ClientId != DelegateClient.Id)
+            return Again(page, code, StatusCodes.Status400BadRequest,
+                "This code was not issued for this Tangent Space’s device door, so it can’t be approved here.");
+        return Ok(page with { Decision = Decision(normalized, Format(normalized), null, null) });
     }
 
     [HttpGet(DonePath)]

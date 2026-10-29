@@ -9,7 +9,7 @@ namespace Tangent.Delegates;
 public static class DelegateClient
 {
     /// <summary>Its <c>client_id</c>, which the descriptor and <c>llms.txt</c> state.</summary>
-    public const string Id = "delegate";
+    public const string Id = Space.DelegatedDoor.ClientId;
 
     /// <summary>The name its row carries; the consent page says "the device or agent that showed you this code"
     /// instead.</summary>

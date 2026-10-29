@@ -22,8 +22,9 @@ public sealed record ConsentEntry(string Action, string Field, string? Code = nu
 
 /// <summary>One request waiting for the person's decision: <see cref="Approve"/> and <see cref="Deny"/> are Koan's
 /// request endpoint, each posted as a form with <see cref="Token"/>. A request that came by the Device flow carries
-/// its <see cref="Code"/>; <see cref="Client"/> is the name the client registered, null for the shared pre-registered
-/// client, whose name the page cannot know; <see cref="Redirect"/> is where a loopback client's request returns.</summary>
+/// its <see cref="Code"/> and never a client's name: only the shared pre-registered client asks that way, and the page
+/// cannot know who holds it. A loopback client's request carries <see cref="Client"/>, the name it registered, and
+/// <see cref="Redirect"/>, where it returns.</summary>
 public sealed record ConsentDecision(
     string Approve,
     string Deny,

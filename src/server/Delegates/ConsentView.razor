@@ -12,13 +12,9 @@
         {
             <h1 id="consent-title" class="sign-in-title">Let this agent act as you?</h1>
             <p class="sign-in-lede">
-                @if (decision.Code is { } deviceCode && decision.Client is null)
+                @if (decision.Code is { } deviceCode)
                 {
                     <text>The device or agent that showed you the code <strong>@deviceCode</strong> asks to act as you in @Model.Place.</text>
-                }
-                else if (decision.Code is { } shown)
-                {
-                    <text><strong>@decision.Client</strong>, which showed you the code <strong>@shown</strong>, asks to act as you in @Model.Place.</text>
                 }
                 else
                 {
@@ -26,7 +22,7 @@
                 }
             </p>
             <p class="first-run-rule">It reads and acts here as <strong>@Handle</strong>, with everything you can do, and never more.</p>
-            @if (decision.Code is not null && decision.Client is null)
+            @if (decision.Code is not null)
             {
                 <p class="first-run-note consent-shared">Any device or agent can show a code like this one, so this page can’t name it: approve only a code you just asked for.</p>
             }

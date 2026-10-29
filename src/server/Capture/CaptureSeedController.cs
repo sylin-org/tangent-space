@@ -32,6 +32,9 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
     /// BCDF-GHJK.</summary>
     private const string ConsentCode = "BCDFGHJK";
 
+    /// <summary>The code a self-registered client's request waits under; a device shows it as CDFG-HJKM.</summary>
+    private const string OtherClientCode = "CDFGHJKM";
+
     [HttpPost("/capture/seed/{name}")]
     public async Task<IActionResult> Seed(string name, CancellationToken ct)
     {
@@ -48,14 +51,20 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
         }
     }
 
-    /// <summary>A request by the shared client, waiting for a person's decision under a fixed code for an hour: Koan's
-    /// own row, saved as its server saves one.</summary>
+    /// <summary>Two requests waiting under fixed codes for an hour, Koan's own rows saved as its server saves them: one
+    /// by the shared client, which the page shows, and one by a self-registered client, which it refuses.</summary>
     private async Task ConsentScreen(CancellationToken ct)
-        => await new DeviceCode
+    {
+        await Waiting("capture-consent-device", ConsentCode, DelegateClient.Id, ct);
+        await Waiting("capture-consent-other", OtherClientCode, "dcr_capture", ct);
+    }
+
+    private Task Waiting(string id, string code, string clientId, CancellationToken ct)
+        => new DeviceCode
         {
-            Id = "capture-consent-device",
-            UserCode = ConsentCode,
-            ClientId = DelegateClient.Id,
+            Id = id,
+            UserCode = code,
+            ClientId = clientId,
             Resource = baseUrl.Configured ?? "",
             Status = DeviceCode.StatusPending,
             ExpiresUtc = DateTimeOffset.UtcNow.AddHours(1)

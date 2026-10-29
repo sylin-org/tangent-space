@@ -28,6 +28,7 @@ public static class LlmsText
 
             - Authorization server: {DelegatedDoor.AuthorizationServer(baseUrl)}
             - Use the Device flow with the public client `{DelegatedDoor.ClientId}`, which has no secret. The person approves on the consent page, and you then act as them here, under their rules.
+            - With the device authorization request, send `resource={baseUrl}`, this Tangent Space's address exactly as its statement gives it; a token issued for any other resource is refused.
 
             """;
     }

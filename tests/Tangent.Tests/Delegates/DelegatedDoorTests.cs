@@ -11,6 +11,7 @@ using Koan.Web.Auth.Server.Protocol;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Events;
 using Tangent.Lifecycle;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -327,6 +328,136 @@ public sealed class DelegatedDoorTests
         }
     }
 
+    [Fact]
+    public async Task A_code_a_self_registered_client_asked_for_is_refused_under_its_field_with_no_name_it_chose_and_no_approval()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await Place(tangentSpace);
+        var impostor = await Register(tangentSpace, "Field notes official app", "http://127.0.0.1:1/cb");
+        using var device = await Json(tangentSpace.Client, "/oauth/device", Form(("client_id", impostor), ("resource", BaseUrl)));
+        var complete = device.RootElement.GetProperty("verification_uri_complete").GetString()!;
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+
+        var refused = await Answer(browser.Client, new Uri(complete).PathAndQuery, html: true);
+        var page = WebUtility.HtmlDecode(refused.Body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
+        Assert.Contains("id=\"consent-code-failure\">This code was not issued for this Tangent Space’s device door, so it can’t be approved here.</p>", page);
+        Assert.DoesNotContain("Field notes official app", page);
+        Assert.DoesNotContain("/approve", page);
+        Assert.DoesNotContain("/deny", page);
+        using var poll = await tangentSpace.Client.PostAsync("/oauth/token", Form(("grant_type", DeviceGrant),
+            ("device_code", device.RootElement.GetProperty("device_code").GetString()!), ("client_id", impostor)), Cancellation);
+        Assert.Equal("authorization_pending", await Error(poll));
+    }
+
+    [Fact]
+    public async Task A_bearer_never_reaches_the_authorize_or_request_endpoints_so_a_remembered_consent_issues_no_code_to_a_delegate()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await Place(tangentSpace);
+        const string redirect = "http://127.0.0.1:43123/callback";
+        var clientId = await Register(tangentSpace, "Companion Lobby", redirect);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+
+        // The person connects the loopback client once, so Koan remembers the consent for it.
+        var (verifier, challenge) = Pkce();
+        using var consent = await browser.Follow(HttpMethod.Get, Authorize(clientId, redirect, challenge), Cancellation);
+        var rid = consent.RequestMessage!.RequestUri!.Query.Split("rid=")[1];
+        using (var approved = await browser.Client.PostAsync("/oauth/request/" + rid + "/approve",
+                   new FormUrlEncodedContent(await browser.Token("/consent?rid=" + rid, Cancellation)), Cancellation))
+        {
+            var code = approved.Headers.Location!.Query.Split('&').Single(pair => pair.StartsWith("?code=", StringComparison.Ordinal))[6..];
+            using var exchanged = await Json(tangentSpace.Client, "/oauth/token", Form(("grant_type", "authorization_code"), ("code", Uri.UnescapeDataString(code)),
+                ("client_id", clientId), ("redirect_uri", redirect), ("code_verifier", verifier)));
+        }
+
+        using (var remembered = await browser.Client.GetAsync(Authorize(clientId, redirect, Pkce().Challenge), Cancellation))
+            Assert.StartsWith(redirect + "?code=", remembered.Headers.Location?.ToString());
+
+        var token = await Delegate(tangentSpace, browser);
+        using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var another = await Device(tangentSpace);
+        var codes = await AuthorizationCode.Count.Exact(Cancellation);
+
+        using var authorize = await agent.GetAsync(Authorize(clientId, redirect, Pkce().Challenge), Cancellation);
+        using var request = await agent.GetAsync("/oauth/request/" + another.Code.Replace("-", ""), Cancellation);
+        using var deny = await agent.PostAsync("/oauth/request/" + another.Code.Replace("-", "") + "/deny", Form(("unused", "")), Cancellation);
+
+        Assert.Equal(HttpStatusCode.Forbidden, authorize.StatusCode);
+        Assert.Null(authorize.Headers.Location);
+        Assert.Equal(HttpStatusCode.Forbidden, request.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, deny.StatusCode);
+        Assert.Equal(codes, await AuthorizationCode.Count.Exact(Cancellation));
+        using var poll = await Poll(tangentSpace, another);
+        Assert.Equal("authorization_pending", await Error(poll));
+    }
+
+    [Fact]
+    public async Task The_page_and_koan_count_code_look_ups_from_one_address_against_one_allowance()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            TestConnector(("Koan:Web:Auth:Server:UserCodeVerificationRateLimitPerMinute", "3")), ct: Cancellation);
+        await Place(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+
+        for (var attempt = 0; attempt < 3; attempt++)
+            Assert.Equal(HttpStatusCode.BadRequest, (await Answer(browser.Client, AtCode("ZZZZ-ZZZZ"), html: true)).Status);
+        using var koan = await tangentSpace.Client.GetAsync("/oauth/request/ZZZZZZZZ", Cancellation);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, koan.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_session_whose_request_carries_another_authorization_scheme_reads_the_door_as_the_person()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes("proxy:secret"))) }
+        };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var door = await browser.Client.SendAsync(request, Cancellation);
+        using var json = JsonDocument.Parse(await door.Content.ReadAsStringAsync(Cancellation));
+
+        Assert.Equal(HttpStatusCode.OK, door.StatusCode);
+        Assert.Equal(Leo, json.RootElement.GetProperty("who").GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public async Task Marking_the_door_seen_takes_a_bearer_without_a_form_token_and_refuses_a_session_without_one()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await PrivatePlace(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+        var token = await Delegate(tangentSpace, browser);
+        var through = (await Event.HighWaterMark.Load(Cancellation)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var session = await Answer(browser.Client, "/", content: Form((DoorController.Through, through)));
+        Assert.Equal((HttpStatusCode.BadRequest, "Open the door again"), (session.Status, session.Title));
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Place), Cancellation));
+
+        using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
+        using var marked = new HttpRequestMessage(HttpMethod.Post, "/")
+        {
+            Content = Form((DoorController.Through, through)),
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) }
+        };
+        using var seen = await agent.SendAsync(marked, Cancellation);
+
+        Assert.Equal(HttpStatusCode.SeeOther, seen.StatusCode);
+        Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Place), Cancellation))?.Seq.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     /// <summary>An established place, Field notes, where Leo is an administrator.</summary>
     private static async Task Place(TangentSpaceFixture tangentSpace)
     {
@@ -342,6 +473,26 @@ public sealed class DelegatedDoorTests
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(
             new CreateTangent("studio", "The studio", "", PostKind.Topic, 1, Audience.Private, Leo), Cancellation));
     }
+
+    /// <summary>A loopback client registers itself, as Koan's dynamic registration lets anyone; its id.</summary>
+    private static async Task<string> Register(TangentSpaceFixture tangentSpace, string name, string redirect)
+    {
+        using var registered = await Json(tangentSpace.Client, "/oauth/register",
+            JsonContent("{\"client_name\":\"" + name + "\",\"redirect_uris\":[\"" + redirect + "\"]}"), HttpStatusCode.Created);
+        return registered.RootElement.GetProperty("client_id").GetString()!;
+    }
+
+    /// <summary>A PKCE verifier and its S256 challenge.</summary>
+    private static (string Verifier, string Challenge) Pkce()
+    {
+        var verifier = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return (verifier, Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(verifier))).TrimEnd('=').Replace('+', '-').Replace('/', '_'));
+    }
+
+    /// <summary>The code flow's authorize request for a loopback client, for this Tangent Space as its resource.</summary>
+    private static string Authorize(string clientId, string redirect, string challenge)
+        => "/oauth/authorize?response_type=code&client_id=" + clientId + "&redirect_uri=" + Uri.EscapeDataString(redirect)
+           + "&code_challenge=" + challenge + "&code_challenge_method=S256&resource=" + Uri.EscapeDataString(BaseUrl) + "&state=s1";
 
     private sealed record DeviceRequest(string DeviceCode, string Code, string VerificationUri, string Complete);
 
