@@ -30,7 +30,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
         SupportedEncodings.Add(Encoding.UTF8);
     }
 
-    private static bool IsFragment(HttpRequest request) => request.Headers.ContainsKey(FragmentHeader);
+    public static bool IsFragment(HttpRequest request) => request.Headers.ContainsKey(FragmentHeader);
 
     protected override bool CanWriteType(Type? type) => type is not null && _components.Has(type);
 

@@ -3,6 +3,7 @@ using Koan.Core;
 using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
+using Koan.Web.Extensions;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -28,6 +29,8 @@ public sealed class TangentModule : KoanModule
             })
             .Validate(options => TangentSpaceOptions.TryParseBaseUrl(options.BaseUrl, out _),
                 "Tangent:BaseUrl must be an absolute http or https URL: scheme, host and an optional path.")
+            .Validate(options => !TangentSpaceOptions.EncodesSeparator(options.BaseUrl),
+                "Tangent:BaseUrl must not encode a path separator (%2F): write the path as plain segments.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
                 "Tangent:DataFolder must name a folder.")
             .Validate(options => options.TrustedProxy is null || IPAddress.TryParse(options.TrustedProxy, out _),
@@ -58,6 +61,8 @@ public sealed class TangentModule : KoanModule
             mvc.RespectBrowserAcceptHeader = true;
             mvc.Filters.Add<ETagFilter>();
         });
+        services.WithExceptionHandler();
+        services.AddExceptionHandler(handler => handler.ExceptionHandler = ProblemExceptionHandler.Answer);
     }
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)

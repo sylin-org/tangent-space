@@ -6,6 +6,7 @@ namespace Tangent.Space;
 public sealed class DoorController : ControllerBase
 {
     [HttpGet("/")]
+    [HttpHead("/")]
     public async Task<ActionResult<Door>> Get(CancellationToken ct)
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
