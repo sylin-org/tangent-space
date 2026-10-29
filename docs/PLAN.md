@@ -94,6 +94,7 @@ Group A is a chain from 0.1; group B is independent of it. Four sessions at once
 | 1.8 The delegated agent door: the consent page, the Device flow, a pre-registered client | 1.2 | repeat |
 | 1.9 Phone layouts for the door and the Tangent | the polish stage | repeat |
 | 1.10 Access on Koan's overwrites: Tangent's own overwrite step lifted onto K2's resolution and explainer | K2, 1.3 | repeat |
+| 1.11 Tangent on Koan's K6 and K7: the pin moves, the delegated agent door composes Koan's resource edge and consent seam, and Tangent's own copies of them go | K6, K7, 1.8 | repeat |
 
 Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1.5, 1.7 and 1.8 together, with K2 in the Koan checkout beside them; 1.10 once K2 merges. Phone layouts are visual work and wait for the polish stage; until then every screen is captured at 390 and must read there without a horizontal scroll.
 
