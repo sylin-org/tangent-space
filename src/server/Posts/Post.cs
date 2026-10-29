@@ -1,0 +1,159 @@
+using System.Text;
+using Koan.Data.Abstractions.Annotations;
+using Koan.Data.Core.Model;
+using Tangent.Writer;
+
+namespace Tangent.Posts;
+
+/// <summary>One message, a root or a reply, keyed by the TID the client minted. A Topic has no row: its title, slug,
+/// kind, cover, lock, pin and counters live on its root Post, whose <see cref="TopicId"/> is its own Id. A reply
+/// carries its root's <see cref="TangentId"/> and <see cref="TopicId"/> and the next <see cref="Sequence"/> of its
+/// Topic.</summary>
+public sealed class Post : Entity<Post>
+{
+    /// <summary>The most UTF-8 bytes a body holds.</summary>
+    public const int BodyLimit = 64 * 1024;
+
+    public const int TitleLimit = 200;
+
+    public const string NeedsTid = "A Post's Id is a TID.";
+    public const string NeedsBody = "A Post's body holds at least one visible character.";
+    public const string BodyTooLong = "A Post's body holds at most 64 KiB of UTF-8.";
+    public const string BodyHasNul = "A Post's body holds no NUL character.";
+    public const string NeedsTitle = "A Topic's title holds at least one visible character.";
+    public const string TitleTooLong = "A Topic's title holds at most 200 characters.";
+    public const string NeedsTangent = "A Topic starts in a Tangent.";
+    public const string NeedsAuthor = "A Post has an author.";
+    public const string NotARoot = "A reply goes to a Topic.";
+    public const string TopicLocked = "The Topic is locked.";
+    public const string TopicRemoved = "The Topic is removed.";
+
+    /// <summary>The Tangent the Topic is in; on every row.</summary>
+    [Index(Name = "ix_post_topics", Order = 0)]
+    [Index(Name = "ix_post_slugs", Order = 0)]
+    public string TangentId { get; set; } = "";
+
+    /// <summary>The root of the Topic; the root's own Id on a root.</summary>
+    [Index(Name = "ix_post_windows", Order = 0)]
+    public string TopicId { get; set; } = "";
+
+    /// <summary>The Post this one replies to; null on a root.</summary>
+    [Index(Name = "ix_post_topics", Order = 1)]
+    public string? ParentId { get; set; }
+
+    /// <summary>The Post this Topic was taken on a tangent from; null otherwise. Root only.</summary>
+    public string? OriginId { get; set; }
+
+    /// <summary>The Topic's URL name, from its title at creation, unique in its Tangent and never renamed. Root only.</summary>
+    [Index(Name = "ix_post_slugs", Order = 1)]
+    public string? Slug { get; set; }
+
+    public PostKind Kind { get; set; }
+
+    /// <summary>Root only.</summary>
+    public string? Title { get; set; }
+
+    /// <summary>An article's lead image. Root only.</summary>
+    public string? CoverId { get; set; }
+
+    /// <summary>Markdown.</summary>
+    public string Body { get; set; } = "";
+
+    /// <summary>Raised by every edit.</summary>
+    public long Version { get; set; } = 1;
+
+    /// <summary>The Post's place in its Topic: zero on the root, then one higher per reply.</summary>
+    [Index(Name = "ix_post_windows", Order = 1)]
+    public long Sequence { get; set; }
+
+    public string AuthorId { get; set; } = "";
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>The last sequence taken in the Topic. Root only.</summary>
+    public long LastSequence { get; set; }
+
+    /// <summary>Root only.</summary>
+    public int ReplyCount { get; set; }
+
+    /// <summary>When the Topic last gained a Post. Root only.</summary>
+    [Index(Name = "ix_post_topics", Order = 2)]
+    public DateTimeOffset LastActivityAt { get; set; }
+
+    /// <summary>Root only.</summary>
+    public bool Locked { get; set; }
+
+    /// <summary>Root only.</summary>
+    public bool Pinned { get; set; }
+
+    public bool Removed { get; set; }
+
+    public string? RemovedBy { get; set; }
+
+    public DateTimeOffset? RemovedAt { get; set; }
+
+    /// <summary>A Topic's root, or a refusal: the Id is a TID, the title and body are within their limits, and the Tangent
+    /// and author are named. The slug is the caller's, derived from the title and already made unique in the Tangent.</summary>
+    public static Post Root(string id, string tangentId, string title, string slug, PostKind kind, string body, string authorId, DateTimeOffset at)
+    {
+        if (!Tid.IsValid(id)) throw new Refusal(NeedsTid);
+        if (string.IsNullOrWhiteSpace(tangentId)) throw new Refusal(NeedsTangent);
+        if (string.IsNullOrWhiteSpace(authorId)) throw new Refusal(NeedsAuthor);
+        CheckTitle(title);
+        CheckBody(body);
+        return new Post
+        {
+            Id = id,
+            TangentId = tangentId,
+            TopicId = id,
+            Slug = slug,
+            Kind = kind,
+            Title = title.Trim(),
+            Body = body,
+            AuthorId = authorId,
+            CreatedAt = at,
+            LastActivityAt = at
+        };
+    }
+
+    /// <summary>A reply to this root, or a refusal: this Post is a root that is neither locked nor removed, the Id is a TID,
+    /// the body is within its limits and the author is named. The reply takes the Topic's next sequence, and the root's
+    /// counters and last activity move with it.</summary>
+    public Post Reply(string id, string body, string authorId, string parentId, DateTimeOffset at)
+    {
+        if (ParentId is not null) throw new Refusal(NotARoot);
+        if (Removed) throw new Refusal(TopicRemoved);
+        if (Locked) throw new Refusal(TopicLocked);
+        if (!Tid.IsValid(id)) throw new Refusal(NeedsTid);
+        if (string.IsNullOrWhiteSpace(authorId)) throw new Refusal(NeedsAuthor);
+        CheckBody(body);
+        LastSequence = checked(LastSequence + 1);
+        ReplyCount = checked(ReplyCount + 1);
+        LastActivityAt = at;
+        return new Post
+        {
+            Id = id,
+            TangentId = TangentId,
+            TopicId = Id,
+            ParentId = parentId,
+            Kind = Kind,
+            Body = body,
+            Sequence = LastSequence,
+            AuthorId = authorId,
+            CreatedAt = at
+        };
+    }
+
+    public static void CheckBody(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) throw new Refusal(NeedsBody);
+        if (body.Contains('\0')) throw new Refusal(BodyHasNul);
+        if (Encoding.UTF8.GetByteCount(body) > BodyLimit) throw new Refusal(BodyTooLong);
+    }
+
+    public static void CheckTitle(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) throw new Refusal(NeedsTitle);
+        if (title.Trim().Length > TitleLimit) throw new Refusal(TitleTooLong);
+    }
+}
