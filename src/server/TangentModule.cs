@@ -56,6 +56,7 @@ public sealed class TangentModule : KoanModule
         services.AddKoanControllersFrom<TangentModule>();
         Participants.ParticipantsComposition.AddParticipants(services);
         Delegates.DelegatesComposition.AddDelegates(services);
+        LiveComposition.AddLive(services);
 
         // The HTML projection: each resource type names its component; the formatter goes first so a request
         // without a preference reads a page, and every other type keeps Koan's JSON.

@@ -73,9 +73,17 @@
     {
       "id": "Koan.Web.Auth.Server",
       "version": "1.0"
+    },
+    {
+      "id": "Koan.Web.Sse",
+      "version": "1.0"
     }
   ],
   "directReferences": [
+    {
+      "kind": "project",
+      "id": "Koan.Communication"
+    },
     {
       "kind": "project",
       "id": "Koan.Data.Connector.Sqlite"
@@ -103,6 +111,10 @@
     {
       "kind": "project",
       "id": "Koan.Web.Auth.Server"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Web.Sse"
     }
   ]
 }

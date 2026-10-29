@@ -23,6 +23,8 @@
          own build and publish never carry it. -->
     <ProjectReference Condition="'$(TangentCaptureHost)' == 'true'" Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Test/Koan.Web.Auth.Connector.Test.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Jobs/Koan.Jobs.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web.Sse/Koan.Web.Sse.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Communication/Koan.Communication.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- A body's Markdown to HTML (BSD-2-Clause) and the allow-list that HTML passes through (MIT, on AngleSharp). -->
