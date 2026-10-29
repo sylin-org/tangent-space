@@ -66,7 +66,17 @@ export interface Screen {
 // "Tangent Space settings (general)" is tangent-space-settings-general. The door's two screens are the
 // door's states.
 export const screens: Readonly<Record<string, Screen>> = {
-  door: { path: '/', states: [{ name: 'signed-out' }] },
+  // A visitor's front page; the capture persona with news since her place checkpoint — replies to her Topic, a
+  // mention of her, new articles and new Posts in each Tangent; and the same persona with her checkpoint at the
+  // log's last sequence, quiet.
+  door: {
+    path: '/',
+    states: [
+      { name: 'visitor', seed: 'door' },
+      { name: 'signed-in-with-news', seed: 'door', signedIn: true },
+      { name: 'quiet', seed: 'door-quiet', signedIn: true },
+    ],
+  },
   // The handle form a visitor reads, focused; on its way after Continue; and back from a failed sign-in with Koan's
   // code and the typed handle kept: one the provider did not confirm, one refused on the provider's page, and a
   // handle no account answers to.

@@ -36,7 +36,8 @@ public sealed class Event : Entity<Event>
     /// <summary>Who did it.</summary>
     public string? ActorId { get; set; }
 
-    /// <summary>Whom it concerns: the participant mentioned, admitted, timed out or banned.</summary>
+    /// <summary>Whom it concerns: the author of the Post a reply answers, the participant mentioned, admitted, timed out
+    /// or banned.</summary>
     [Index(Name = "ix_event_targets", Order = 0)]
     public string? TargetId { get; set; }
 
