@@ -9,7 +9,7 @@ Status: `todo` · `doing` · `done`. Everything is `todo` on 28 October 2026.
 | Brief | Koan home | Needed by |
 | --- | --- | --- |
 | 1 · SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL | `Koan.Data.Connector.Sqlite`, `Koan.Web` | slice 0; in the pin since Koan `7ba505e49` |
-| 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1 (Tangent composes its own step beside Koan's facts until then) |
+| 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1; in the pin since Koan `943e6358a` (SEC-0021), Tangent resolving on it since package 1.10 |
 | 3 · atproto content: records, blobs, resolution, AppView reads; service-auth verification; `did:web` on the issuer keys | `Koan.Web.Auth.Connector.Atproto`, Trust, Auth.Server — names assigned by Koan | slice 3 and the bridge in slice 8 |
 | 4 · Lexical search over entity fields | `Koan.Data` | slice 6 |
 
