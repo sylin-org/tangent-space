@@ -17,3 +17,5 @@ Built from the frame and the shared components, captured, and scored last as bel
 | door | never | — | templated from the frame, `TangentTile` and `TopicRow`; captured as visitor, signed-in with news and quiet |
 | consent | never | — | templated from the sign-in panel; captured as code, request, code error, code refused and done |
 | topic | never | — | templated from the frame and `TopicPost`; captured as populated, visitor, long, anchored, tombstone and empty replies; at 390 a long title overlaps the path bar's separator |
+| new-topic | never | — | templated from the sign-in panel's form styles; captured as empty, refused and visitor |
+| edit | never | — | templated from the new-topic form; captured as form, refused, remove confirmation and not yours |
