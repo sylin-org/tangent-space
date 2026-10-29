@@ -42,15 +42,15 @@ Koan work the tree depends on, each a scoped brief: scoped overwrites with deny 
 
 ## 3. The write path
 
-Every write is a command on one queue, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — enqueues it and awaits the result. The loop:
+Every write is a command on one queue, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — hands it to the writer and awaits its outcome: the result, a refusal with its reason, a conflict, or the failure. The loop:
 
 1. opens one transaction (`EntityContext.Transaction`, immediate on SQLite);
 2. loads what the command names: the participant with standing, the role bag, the Tangent's overwrites, the target Post;
 3. asks `Capabilities.For(...)` and refuses with the explainer's reason when the verb is missing;
 4. calls the entity method; validation lives there;
-5. assigns sequences from in-memory high-water marks loaded at start — the Topic's from its root Post's `LastSequence`, the log's from the last `Event.Seq`;
+5. assigns sequences from in-memory high-water marks loaded at start — the Topic's from its root Post's `LastSequence`, the log's from the last `Event.Seq`; a command that does not commit gives its sequences back, so none is skipped, and after a commit whose outcome Koan cannot report the marks are reloaded from the store before the next command;
 6. saves the rows, the audit snapshot for an edit, and the Events, in the same transaction;
-7. commits, raises the "appended" entity event, returns the resource with `can`.
+7. commits, announces the commit in-process — the command and the sequences it took — and answers the sender with the resource and its `can`.
 
 No lock exists in application code. **Idempotency is the Id**: the client mints a Post Id as a TID, so a retry with the same Id and the same body returns the existing Post and a different body is `409`. **External I/O never enters the loop**: a job calls the network and then enqueues a command with the result; jobs write only through the writer. The root Post is the Topic's state — `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned` — so a Topic has no row of its own.
 
