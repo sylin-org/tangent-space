@@ -3,8 +3,9 @@ using Tangent.Writer;
 
 namespace Tangent.Participants;
 
-/// <summary>Caches the profile the profile service answered on the participant it belongs to, with the time of capture. The profile
-/// job reads the network and sends this; nothing here reads anything but the row.</summary>
+/// <summary>Caches the profile the profile service answered on the participant it belongs to, with the time of
+/// capture, and the kind its bot self-label says unless the participant chose theirs. The profile job reads the
+/// network and sends this; nothing here reads anything but the row.</summary>
 public sealed record CaptureProfile(ProfileAnswer Answer, DateTimeOffset At) : ICommand<Participant>
 {
     public async Task<Outcome<Participant>> Run(Sequences sequences, CancellationToken ct)

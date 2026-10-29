@@ -1,14 +1,11 @@
-using Tangent.Render;
-
 namespace Tangent.Participants;
 
-/// <summary>The sign-in page as a resource. For a visitor it says where to go: <see cref="Challenge"/>, the Koan
-/// connector's atproto challenge, which comes back here once the person has signed in (add <c>identifier</c> with a
-/// handle or DID to choose the account). <see cref="Handle"/> is the handle typed last, kept in the field after a
-/// failure; <see cref="Failure"/> is a failure of the sign-in as a whole and <see cref="HandleFailure"/> one of the
-/// handle itself, both in words. For a person who signed in and has not arrived yet it carries
-/// <see cref="Arrival"/>: where to declare their kind. <see cref="Door"/> is the place's door and
-/// <see cref="Return"/> is where the participant goes once they have arrived.</summary>
+/// <summary>The sign-in page as a resource, for a visitor: it says where to go, <see cref="Challenge"/>, the Koan
+/// connector's atproto challenge, which comes back here once the person has signed in and sends them on to
+/// <see cref="Return"/> (add <c>identifier</c> with a handle or DID to choose the account). <see cref="Handle"/> is
+/// the handle typed last, kept in the field after a failure; <see cref="Failure"/> is a failure of the sign-in as a
+/// whole and <see cref="HandleFailure"/> one of the handle itself, both in words. <see cref="Door"/> is the place's
+/// door.</summary>
 public sealed record SignIn(
     string Name,
     string Door,
@@ -16,8 +13,7 @@ public sealed record SignIn(
     string Challenge,
     string? Handle = null,
     string? Failure = null,
-    string? HandleFailure = null,
-    Arrival? Arrival = null)
+    string? HandleFailure = null)
 {
     /// <summary>The failure code the connector's callback answers when it could not verify a sign-in.</summary>
     public const string VerificationFailed = "atproto_authentication_failed";
@@ -55,10 +51,3 @@ public sealed record SignIn(
             ? value.ToString()
             : "";
 }
-
-/// <summary>A signed-in person's first arrival: <see cref="Action"/> takes a form with <c>kind</c> (one of
-/// <see cref="Kinds"/>), <c>return</c> and the form's <see cref="Token"/>, and the place's <see cref="Admission"/> says
-/// whether they join or apply. <see cref="Handle"/> is the one the connector verified, or empty;
-/// <see cref="SignOut"/> signs this person out and comes back to the handle form, for someone who meant another
-/// handle.</summary>
-public sealed record Arrival(string Action, string Handle, string Admission, IReadOnlyList<string> Kinds, FormToken Token, string SignOut);

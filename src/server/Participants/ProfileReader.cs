@@ -20,9 +20,10 @@ public sealed class ProfileReaderOptions
     public int MaximumResponseBytes { get; set; } = 64 * 1024;
 }
 
-/// <summary>A public profile as the profile service answered it: the DID it is for and what the profile holds. The
-/// handle is not in it: the place shows the handle the connector verified at sign-in.</summary>
-public sealed record ProfileAnswer(string Did, string? DisplayName, string? Description, string? Avatar);
+/// <summary>A public profile as the profile service answered it: the DID it is for, what the profile holds, and
+/// whether the account labels itself a bot on its own profile. The handle is not in it: the place shows the handle the
+/// connector verified at sign-in.</summary>
+public sealed record ProfileAnswer(string Did, string? DisplayName, string? Description, string? Avatar, bool AgentLabel = false);
 
 /// <summary>Why a profile could not be read: the service did not answer in time, answered past the bound, refused, or
 /// answered something that is not this DID's profile. Nothing was cached.</summary>
@@ -36,6 +37,10 @@ public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions
     private const int DisplayNameLimit = 640;
     private const int DescriptionLimit = 2560;
     private const int AvatarLimit = 2048;
+
+    /// <summary>The label value an account sets on its own profile to say it is automated: one of the known values
+    /// of <c>com.atproto.label.defs#labelValue</c>.</summary>
+    public const string AgentLabelValue = "bot";
 
     public async Task<ProfileAnswer> Read(string did, CancellationToken ct)
     {
@@ -96,13 +101,25 @@ public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions
                 && Uri.TryCreate(avatar, UriKind.Absolute, out var parsed)
                 && parsed.Scheme == "https" ? avatar : null;
             return new ProfileAnswer(did, Text(root, "displayName", DisplayNameLimit),
-                Text(root, "description", DescriptionLimit), avatarAddress);
+                Text(root, "description", DescriptionLimit), avatarAddress, AgentLabelled(root, did));
         }
         catch (JsonException malformed)
         {
             throw new ProfileReadFailed($"The profile service answered something other than JSON for {did}.", malformed);
         }
     }
+
+    /// <summary>Whether the answer's <c>labels</c> hold the bot label the account set itself: the profile view carries
+    /// the profile record's self-labels as labels whose source is the account, beside any a labeler applied, which do
+    /// not count. A negated label says nothing.</summary>
+    private static bool AgentLabelled(JsonElement root, string did)
+        => root.ValueKind == JsonValueKind.Object
+           && root.TryGetProperty("labels", out var labels)
+           && labels.ValueKind == JsonValueKind.Array
+           && labels.EnumerateArray().Any(label =>
+               Text(label, "val", AgentLabelValue.Length + 1) == AgentLabelValue
+               && Text(label, "src", did.Length + 1) == did
+               && !(label.TryGetProperty("neg", out var negated) && negated.ValueKind == JsonValueKind.True));
 
     private static string? Text(JsonElement root, string name, int limit)
         => root.ValueKind == JsonValueKind.Object

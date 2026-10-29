@@ -29,16 +29,17 @@ public sealed class ProfileJobTests
         using var browser = new Browser(tangentSpace);
         const string did = "did:plc:ada4example";
 
-        // The first arrival submits the job.
+        // The first sign-in is the first arrival, and submits the job.
         using var arriving = await browser.SignIn("ada", did, Cancellation, handle: "ada.example");
-        using var arrived = await browser.Arrive("person", Cancellation);
-        Assert.Equal(HttpStatusCode.SeeOther, arrived.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, arriving.StatusCode);
         var participant = await Captured(did);
 
         // The handle is the one the connector verified, never the profile service's.
         Assert.Equal("ada.example", participant.Handle);
         Assert.Equal((ProfileStub.DisplayName, ProfileStub.Avatar), (participant.Profile.DisplayName, participant.Profile.Avatar));
         Assert.Equal("Writes things.", participant.Profile.Description);
+        // No bot self-label: a person.
+        Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel), (participant.Kind, participant.KindSource));
         lock (committed) Assert.Contains(committed, commit => commit.Command is CaptureProfile);
 
         // Within the day: another run reads nothing, and a sign-in submits nothing.
@@ -73,6 +74,32 @@ public sealed class ProfileJobTests
         Assert.Equal("/", signedIn.RequestMessage!.RequestUri!.AbsolutePath);
         Assert.Equal("new.example", participant.Handle);
         Assert.Equal([did], stub.Requests);
+    }
+
+    [Theory]
+    [InlineData(KindSource.ProfileLabel, ParticipantKind.Agent)]
+    [InlineData(KindSource.OwnChoice, ParticipantKind.Person)]
+    public async Task An_agent_self_label_on_the_profile_makes_the_participant_an_agent_through_the_jobs_command_unless_they_chose_their_kind(
+        KindSource source, ParticipantKind expected)
+    {
+        await using var stub = await ProfileStub.StartAsync(Cancellation);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.AgentLabelled.AbsoluteUri }, ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var committed = new List<Committed>();
+        writer.Committed += commit => { lock (committed) committed.Add(commit); };
+        const string did = "did:plc:lumen4example";
+        var stored = new Participant { Id = did, Handle = "lumen.example", Kind = ParticipantKind.Person, KindSource = source };
+        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(stored), Cancellation));
+
+        var job = await stored.Job.Submit(ct: Cancellation);
+        Assert.Equal(JobStatus.Completed, (await job.Completion(Bound, Cancellation)).Status);
+        var after = await Participant.Get(did, Cancellation);
+
+        Assert.NotNull(after);
+        Assert.NotNull(after.Profile.CapturedAt);
+        Assert.Equal((expected, source), (after.Kind, after.KindSource));
+        lock (committed) Assert.Contains(committed, commit => commit.Command is CaptureProfile);
     }
 
     [Theory]
