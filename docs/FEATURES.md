@@ -24,7 +24,7 @@ The tree boots, serves one page both ways, and every rule has a check.
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | Server skeleton: `Sylin.Koan.App`, SQLite in WAL with immediate write transactions, fixed port, trusted-proxy pipeline, base URL under a path prefix, health | — | `TrustedProxyPipelineContributor` (harvest) | brief 1 | S | todo |
-| The writer: one channel, one loop, one transaction per command, sequences from high-water marks; the Koan transaction proven inside a loop | — | `ConversationService.Writes` ordering (harvest) | `EntityContext.Transaction` | M | todo |
+| The writer: one queue, one loop, one transaction per command, sequences from high-water marks; the Koan transaction proven inside a loop | — | `ConversationService.Writes` ordering (harvest) | `EntityContext.Transaction` | M | todo |
 | The HTML projection: one DTO rendered through a Razor component or as JSON by `Accept`; fragments by header | — | `PublicPageRenderer` (harvest) | lift later | M | todo |
 | Island bootstrap: `data-island` mounting into server HTML, one bundle, one event stream per page, fragment patch | — | `public-fragment.js` (harvest) | — | S | todo |
 | Design foundation: tokens, fonts, layout, Paper and Ink, four accents | — | `tokens.css`, `fonts.css`, `workspace.css`, `appearance.ts` (transplant) | — | S | todo |
@@ -83,7 +83,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feeds as a Render output: Atom and JSON Feed per Tangent and for articles | — | new | lift later | S | todo |
 | References on a Post: Constellation and Spacedust as an optional source; "elsewhere" on the topic page | topic | new | — | M | todo |
 | Webmention: send on `post.created`, receive at an endpoint; Bridgy Fed opt-in | topic | new | — | S | todo |
-| The Mastodon package: a status under the owner's account; replies as references | — | new | — | M | todo |
+| The Mastodon package: a status under the participant's own account; replies as references | — | new | — | M | todo |
 | Connections settings: each Connection, its account, every Post's state derived from Receipt against Version | settings connections | `BlueskyConnectionController` (harvest) | — | S | todo |
 
 ### 5 · People, roles and admission

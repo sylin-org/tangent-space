@@ -18,9 +18,13 @@ The folders and files this package owns. Anything outside them is out of bounds 
 
 What this package does not do, even if it looks adjacent: other packages' rows, cleanup the brief did not ask for, abstractions for later needs.
 
+## Koan first
+
+The capabilities this package touches, each with what the lead already knows Koan has for it (package, file) or does not. The executor verifies the list in the checkout before writing anything and extends it in the report.
+
 ## Constraints
 
-The standing rules that bite here, by name: the language file's words, no dialogs, bounded reads, the writer as the only transaction owner, Koan before hand-rolled, never derive a Koan identifier. Any decision already made that the executor must not reopen, with its ADR.
+The standing rules that bite here, by name: the language file's words, no dialogs, bounded reads, the writer as the only code that opens a transaction, Koan before hand-rolled, never derive a Koan identifier. Any decision already made that the executor must not reopen, with its ADR.
 
 ## Done is checked by
 

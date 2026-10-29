@@ -1,6 +1,6 @@
 ---
 name: Explore
-description: Read-only exploration of the tree, the harvest source and the Koan checkout — where something is handled, what a module exposes, which files a change touches. Returns conclusions with file:line, not file dumps. Runs on Sonnet at medium so breadth stays cheap.
+description: Read-only exploration of the tree, the harvest source and the Koan checkout — where something is handled, what a module exposes, which files a change touches. Returns conclusions with file:line, not file listings. Runs on Sonnet at medium so breadth stays cheap.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 effort: medium
