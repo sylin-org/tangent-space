@@ -23,7 +23,7 @@ namespace Tangent.Posts;
 /// address with nothing at it receives. At <c>/t/{tangent}/{tid}</c>, where no Topic has that slug, the root with that TID
 /// answers a redirect to its Topic's address. Every read is bounded and keyed: the Tangent; the rows capability is computed
 /// from, once for the page; the root by slug; the anchor by Id; at most two ranges of the window index; the reader's
-/// checkpoint on the Topic; and the people on the page.</summary>
+/// checkpoint on the Topic; the people on the page; and the participants its bodies mention.</summary>
 public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The query parameter naming the sequence the window ends before.</summary>
@@ -97,6 +97,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 
         var people = await People(window.Replies.Prepend(root).ToList(), ct);
         var configured = Configured();
+        var mentioned = await Mentions.Resolve(window.Replies.Prepend(root), configured, ct);
         var tangentAddress = configured + "/t/" + Uri.EscapeDataString(tangentRow.Id);
         var address = tangentAddress + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
         var topicCan = rows.For(root);
@@ -128,8 +129,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
                 ? new TopicSeen(address + "/" + CheckpointController.SeenSegment, shownThrough, token)
                 : null,
             token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, seen?.Watch ?? false, token),
-            Shown(root, root, address, rows, people, seen, reader),
-            window.Replies.Select(reply => Shown(reply, root, address, rows, people, seen, reader)).ToList(),
+            Shown(root, root, address, rows, people, mentioned, seen, reader),
+            window.Replies.Select(reply => Shown(reply, root, address, rows, people, mentioned, seen, reader)).ToList(),
             window.Replies.Count == 0 ? null : window.Low,
             window.Replies.Count == 0 ? null : window.High,
             window.Older is { } older ? address + "?" + Before + "=" + older.ToString(CultureInfo.InvariantCulture) : null,
@@ -148,7 +149,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, and where it is
     /// edited where they may edit or remove it.</summary>
     private static TopicPage.Post Shown(Post post, Post root, string topicAddress, Capabilities.Rows rows,
-        IReadOnlyDictionary<string, TangentPage.Author> people, Checkpoint? seen, Participant? reader)
+        IReadOnlyDictionary<string, TangentPage.Author> people, IReadOnlyDictionary<string, TopicPage.Mention> mentioned, Checkpoint? seen,
+        Participant? reader)
     {
         var address = topicAddress + "/" + Uri.EscapeDataString(post.Id);
         var can = rows.For(post, root);
@@ -160,6 +162,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             address,
             Person(people, post.AuthorId),
             post.Removed ? null : post.Body,
+            post.Removed ? [] : Mentions.Of(post, mentioned),
             post.CreatedAt,
             post.Version,
             parent,

@@ -74,8 +74,9 @@ public static class TopicWindow
         return Covering(replies, anchor.Sequence, boundary);
     }
 
-    /// <summary>What a Post weighs in a window: its fields as JSON carries them, a removed Post without its body.</summary>
-    public static int Weight(Post post) => JsonSerializer.SerializeToUtf8Bytes(new
+    /// <summary>What a Post weighs in a window: its fields as JSON carries them, a removed Post without its body, and
+    /// what the participants its body mentions may weigh.</summary>
+    public static int Weight(Post post) => post.MentionedIds.Count * Mentions.Weight + JsonSerializer.SerializeToUtf8Bytes(new
     {
         post.Id,
         post.ParentId,

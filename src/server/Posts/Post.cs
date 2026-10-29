@@ -23,6 +23,10 @@ public sealed class Post : Entity<Post>
     public const string NeedsBody = "A Post's body holds at least one visible character.";
     public const string BodyTooLong = "A Post's body holds at most 64 KiB of UTF-8.";
     public const string BodyHasNul = "A Post's body holds no NUL character.";
+    public const string BodyRendersTooLong = "A Post's body renders to at most 512 KiB of HTML, its elements nested no deeper than the renderer allows.";
+    public const string TooManyMentions = "A Post's body mentions at most 32 identities.";
+    public const string BodyNotJudged = "This body was not judged before it was sent; send it again.";
+    public const string BodyTooIntricate = "A Post's body holds too many unclosed links, brackets or emphasis marks to render quickly.";
     public const string NeedsTitle = "A Topic's title holds at least one visible character.";
     public const string TitleTooLong = "A Topic's title holds at most 200 characters.";
     public const string NeedsTangent = "A Topic starts in a Tangent.";
@@ -68,9 +72,14 @@ public sealed class Post : Entity<Post>
     /// <summary>An article's lead image. Root only.</summary>
     public string? CoverId { get; set; }
 
-    /// <summary>Markdown. Found by its words.</summary>
+    /// <summary>Markdown, rendered to safe HTML where it is shown (<see cref="MarkdownHtml"/>); a mention is a link to
+    /// <c>at://</c> and a DID (<see cref="Mentions"/>). Found by its words.</summary>
     [Lexical]
     public string Body { get; set; } = "";
+
+    /// <summary>The DIDs the body mentions, each once, in the order of their first mention, at most
+    /// <see cref="Mentions.Limit"/>; empty on a tombstone.</summary>
+    public List<string> MentionedIds { get; set; } = [];
 
     /// <summary>Raised by every edit.</summary>
     public long Version { get; set; } = 1;
@@ -118,7 +127,7 @@ public sealed class Post : Entity<Post>
 
     /// <summary>A Topic's root, or a refusal: the Id is a TID, the title and body are within their limits, and the Tangent
     /// and author are named. The slug is the caller's, derived from the title and already made unique in the Tangent.</summary>
-    public static Post Root(string id, string tangentId, string title, string slug, PostKind kind, string body, string authorId, DateTimeOffset at)
+    public static Post Root(string id, string tangentId, string title, string slug, PostKind kind, PostBody body, string authorId, DateTimeOffset at)
     {
         if (!Tid.IsValid(id)) throw new Refusal(NeedsTid);
         if (string.IsNullOrWhiteSpace(tangentId)) throw new Refusal(NeedsTangent);
@@ -133,7 +142,8 @@ public sealed class Post : Entity<Post>
             Slug = slug,
             Kind = kind,
             Title = title.Trim(),
-            Body = body,
+            Body = body.Text,
+            MentionedIds = [.. body.Mentioned],
             AuthorId = authorId,
             CreatedAt = at,
             LastActivityAt = at,
@@ -145,7 +155,7 @@ public sealed class Post : Entity<Post>
     /// the body is within its limits and the author is named. The parent is the caller's, already known to be a Post of
     /// this Topic. The reply takes the Topic's next sequence, and the root's counters, last activity, latest reply and
     /// recent authors move with it.</summary>
-    public Post Reply(string id, string body, string authorId, string parentId, DateTimeOffset at)
+    public Post Reply(string id, PostBody body, string authorId, string parentId, DateTimeOffset at)
     {
         if (ParentId is not null) throw new Refusal(NotARoot);
         if (Removed) throw new Refusal(TopicRemoved);
@@ -165,7 +175,8 @@ public sealed class Post : Entity<Post>
             TangentId = TangentId,
             TopicId = Id,
             ParentId = parentId,
-            Body = body,
+            Body = body.Text,
+            MentionedIds = [.. body.Mentioned],
             Sequence = LastSequence,
             AuthorId = authorId,
             CreatedAt = at
@@ -180,7 +191,7 @@ public sealed class Post : Entity<Post>
     /// <summary>Changes the body, and a root's title when one is sent, and raises <see cref="Version"/>, or a refusal: the
     /// Post is not removed, the body and title are within their limits, and a reply is sent no title. The pre-edit
     /// snapshot is the caller's, taken before this.</summary>
-    public void Edit(string body, string? title)
+    public void Edit(PostBody body, string? title)
     {
         if (Removed) throw new Refusal(PostRemoved);
         CheckBody(body);
@@ -191,7 +202,8 @@ public sealed class Post : Entity<Post>
             Title = title.Trim();
         }
 
-        Body = body;
+        Body = body.Text;
+        MentionedIds = [.. body.Mentioned];
         Version = checked(Version + 1);
     }
 
@@ -207,13 +219,18 @@ public sealed class Post : Entity<Post>
         RemovedBy = removedBy;
         RemovedAt = at;
         Body = "";
+        MentionedIds = [];
     }
 
-    public static void CheckBody(string? body)
+    /// <summary>Refuses a body that is empty, holds a NUL or more than <see cref="BodyLimit"/> bytes, or that its own
+    /// judgement refused (<see cref="PostBody.Refusal"/>): too intricate to render quickly, rendering too large or too
+    /// deep, or mentioning too many identities.</summary>
+    public static void CheckBody(PostBody body)
     {
-        if (string.IsNullOrWhiteSpace(body)) throw new Refusal(NeedsBody);
-        if (body.Contains('\0')) throw new Refusal(BodyHasNul);
-        if (Encoding.UTF8.GetByteCount(body) > BodyLimit) throw new Refusal(BodyTooLong);
+        if (string.IsNullOrWhiteSpace(body.Text)) throw new Refusal(NeedsBody);
+        if (body.Text.Contains('\0')) throw new Refusal(BodyHasNul);
+        if (Encoding.UTF8.GetByteCount(body.Text) > BodyLimit) throw new Refusal(BodyTooLong);
+        if (body.Refusal is { } refusal) throw new Refusal(refusal);
     }
 
     public static void CheckTitle(string? title)
