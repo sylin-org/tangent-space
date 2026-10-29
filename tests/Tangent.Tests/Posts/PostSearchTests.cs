@@ -24,6 +24,16 @@ public sealed class PostSearchTests
 
     private const string Workshop = "the-workshop";
 
+    /// <summary>The writer of a Tangent Space with the public workshop, whose two authors, leo and ada, are members who
+    /// may start and answer topics there.</summary>
+    private static async Task<WriteLoop> Writing(TangentSpaceFixture tangentSpace)
+    {
+        await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "leo", [Access.Roles.Member], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "ada", [Access.Roles.Member], ct: Cancellation);
+        return tangentSpace.Services.GetRequiredService<WriteLoop>();
+    }
+
     private static async Task<Post> Topic(WriteLoop writer, string title, string body) =>
         Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Workshop, title, body, "leo"), Cancellation)).Result;
 
@@ -37,7 +47,7 @@ public sealed class PostSearchTests
     public async Task A_post_is_found_by_a_word_of_its_title_and_by_a_word_of_its_body_and_not_by_a_word_in_neither()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Writing(tangentSpace);
         var topic = await Topic(writer, "Copper lanterns", "How the glass is cut.");
         var reply = await Answer(writer, topic.Id, "Annealing matters most.");
 
@@ -51,7 +61,7 @@ public sealed class PostSearchTests
     public async Task A_two_term_query_answers_the_post_holding_both_terms_before_the_post_holding_one_and_the_snippet_marks_the_terms()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Writing(tangentSpace);
         var one = await Topic(writer, "Kilns", "A kiln fires hot.");
         var both = await Topic(writer, "Glaze", "A kiln fires glaze at the end.");
 
@@ -67,7 +77,7 @@ public sealed class PostSearchTests
     public async Task A_query_past_its_bound_or_a_page_past_fifty_is_refused_with_a_reason_and_two_pages_neither_overlap_nor_skip()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Writing(tangentSpace);
         var ids = new List<string>();
         for (var number = 0; number < 5; number++) ids.Add((await Topic(writer, "Lantern " + number, "A lantern.")).Id);
 
@@ -97,7 +107,7 @@ public sealed class PostSearchTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             services: services => services.Configure<DataRuntimeOptions>(options => options.LexicalReadinessInterval = TimeSpan.Zero),
             ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Writing(tangentSpace);
         var topic = await Topic(writer, "Copper lanterns", "How the glass is cut.");
         await Answer(writer, topic.Id, "Annealing matters most.");
 
@@ -126,7 +136,7 @@ public sealed class PostSearchTests
     public async Task A_tangent_space_started_over_a_restored_folder_whose_index_is_not_current_rebuilds_it_and_finds_its_posts()
     {
         await using var original = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = original.Services.GetRequiredService<WriteLoop>();
+        var writer = await Writing(original);
         var lantern = await Topic(writer, "Copper lanterns", "How the glass is cut.");
         var reply = await Answer(writer, lantern.Id, "Annealing matters most.");
 
