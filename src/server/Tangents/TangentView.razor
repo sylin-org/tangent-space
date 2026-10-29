@@ -57,7 +57,7 @@
         {
             <div class="topic-list-head@(Articles ? " topic-list-head-ruled" : "")">
                 <h2 class="topic-list-title">@ListTitle()</h2>
-                <span class="topic-list-order">@(Articles ? "Newest activity first" : "Latest activity")</span>
+                <span class="topic-list-order">latest activity first</span>
                 @if (Model.NewTopic is { } start)
                 {
                     <a class="tangent-new" href="@start">@PlusIcon()@(Articles ? "New article" : "New topic")</a>

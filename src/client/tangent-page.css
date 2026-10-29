@@ -167,7 +167,7 @@
 
 /* The list's head: what it holds, its order, and the start button. */
 .topic-list-head {
-  min-height: 36px;
+  min-height: 50px;
   padding-bottom: 14px;
   display: flex;
   align-items: center;
@@ -241,13 +241,13 @@
 
 .topic-table-people,
 .topic-row-people {
-  width: 88px;
+  width: 80px;
   flex: none;
 }
 
 .topic-table-replies,
 .topic-row-replies {
-  width: 96px;
+  width: 64px;
   flex: none;
   text-align: right;
 }
@@ -329,7 +329,7 @@
 .topic-flag,
 .agent-tag {
   margin-left: 6px;
-  padding: 2px 5px;
+  padding: 2px 4px 2px 5px;
   display: inline-block;
   vertical-align: 2px;
   border: 1px solid var(--ts-line);
@@ -347,8 +347,8 @@
 
 .topic-row-people {
   padding-top: 2px;
+  padding-left: 2px;
   display: flex;
-  gap: 4px;
 }
 
 /* A participant's mark: their avatar, or two letters of their handle in their tone's ink on its tint. */
@@ -373,7 +373,7 @@
 .author-mark {
   width: 24px;
   height: 24px;
-  font-size: 9px;
+  font-size: 10.5px;
 }
 
 .topic-row-replies {
@@ -466,7 +466,7 @@
 .reply-mark {
   width: 18px;
   height: 18px;
-  font-size: 7px;
+  font-size: 9.5px;
 }
 
 .reply-mark.mark-agent {
@@ -474,20 +474,37 @@
   box-shadow: 0 0 0 1px var(--ts-page), 0 0 0 2px var(--ts-agent-ring);
 }
 
-/* The faces of a Topic's recent authors, side by side; an agent's ring keeps clear of its neighbours. */
+/* The faces of a Topic's recent authors, overlapping, each parted from the next by a 2px ring of the surface; an
+ * agent's square ring sits inside it. */
 .face {
+  position: relative;
   width: 24px;
   height: 24px;
-  font-size: 9px;
+  font-size: 10px;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 2px var(--ts-surface);
 }
+
+/* The newest author's face lies on top, and each face overlaps the next only as far as its letters allow. */
+.face + .face {
+  margin-left: -3px;
+}
+
+.face:nth-child(1) { z-index: 3; }
+.face:nth-child(2) { z-index: 2; }
+.face:nth-child(3) { z-index: 1; }
 
 .face.mark-agent {
-  margin: 0 3px;
-  box-shadow: 0 0 0 1.5px var(--ts-surface), 0 0 0 2.5px var(--ts-agent-ring);
+  border: 1.5px solid var(--ts-agent-ring);
+  box-shadow: 0 0 0 2px var(--ts-surface);
 }
 
-.face.mark-agent:first-child {
-  margin-left: 3px;
+.topic-row:hover .face {
+  box-shadow: 0 0 0 2px var(--ts-hover);
+}
+
+.new-inline {
+  display: none;
 }
 
 /* The articles: the lead with its cover, date and read time, opening, author and latest-reply strip; the rest as rows.
@@ -507,16 +524,18 @@
   gap: 32px;
 }
 
-/* A lead without a cover image: a cover set like a book's, the Tangent's name over the title in display type and the
- * author, light on the image band, over the Tangent's edge; the same in both themes. */
+/* A lead without a cover image carries the Tangent's own: its tile and its name on the image band, over its edge,
+ * the same in both themes, with nothing set larger than the title beside it. */
 .article-cover {
   position: relative;
   width: 400px;
   height: 350px;
   flex: none;
-  padding: 28px 28px 34px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   overflow: hidden;
   border-radius: var(--ts-radius-image);
   background: var(--ts-image-band);
@@ -524,26 +543,24 @@
   text-decoration: none;
 }
 
+.tangent-tile-cover {
+  --tile: 88px;
+  --tile-edge: 6px;
+  border-radius: 18px;
+}
+
+.tangent-tile-cover .tangent-tile-letter {
+  font-size: 44px;
+}
+
 .article-cover-tangent {
-  font: 500 11px/1.3 var(--ts-font-mono);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  opacity: 0.72;
-}
-
-.article-cover-title {
-  margin-top: auto;
-  display: -webkit-box;
+  max-width: calc(100% - 48px);
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
-  font: 500 34px/1.08 var(--ts-font-display);
-  letter-spacing: -0.015em;
-}
-
-.article-cover-author {
-  margin-top: 16px;
-  font: italic 400 16px/1.3 var(--ts-font-display);
+  font: 500 12px/1.3 var(--ts-font-mono);
+  letter-spacing: 0.14em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
   opacity: 0.8;
 }
 
@@ -692,6 +709,19 @@
   flex: none;
   color: var(--ts-text-3);
   font-size: 12.5px;
+}
+
+/* Under 1200 the lead stacks: its cover above, its text the column's full width. */
+@media (max-width: 1199px) {
+  .article-lead {
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .article-cover {
+    width: 100%;
+    height: 200px;
+  }
 }
 
 /* The empty state: what is missing, and what the reader can do about it. */
@@ -922,18 +952,40 @@
   }
 
   .article-lead {
-    flex-direction: column;
-    gap: 18px;
+    gap: 16px;
   }
 
   .article-cover {
-    width: 100%;
-    height: 240px;
-    padding: 22px 22px 28px;
+    height: 56px;
+    padding: 0 16px 4px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    background: var(--tone-tint);
+    color: var(--tone-ink);
   }
 
-  .article-cover-title {
-    font-size: 28px;
+  .tangent-tile-cover {
+    --tile: 28px;
+    --tile-edge: 2px;
+    border-radius: 6px;
+  }
+
+  .tangent-tile-cover .tangent-tile-letter {
+    font-size: 16px;
+  }
+
+  .article-cover-edge {
+    height: 4px;
+  }
+
+  .new-inline {
+    display: inline;
+    margin-left: 4px;
+  }
+
+  .new-beside {
+    display: none;
   }
 
   .article-card-title,

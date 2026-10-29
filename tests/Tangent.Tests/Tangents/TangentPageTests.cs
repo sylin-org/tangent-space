@@ -302,7 +302,7 @@ public sealed class TangentPageTests
         Assert.Contains($"<li><a class=\"account-item\" href=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
         Assert.Contains("data-theme-choice=\"dark\"", readerHtml[..readerHtml.IndexOf("account-items", StringComparison.Ordinal)]);
         Assert.DoesNotContain("The studio", readerHtml);
-        Assert.Contains("<span class=\"new-label\">New</span>", readerHtml);
+        Assert.Contains("<span class=\"new-label new-beside\">New</span>", readerHtml);
     }
 
     [Fact]

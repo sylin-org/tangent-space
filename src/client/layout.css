@@ -472,10 +472,11 @@ h3 {
   background: var(--ts-hover);
 }
 
-/* In Ink a popover on raised is close to the page, so its edge is the connector's tone. */
+/* In Ink a popover on raised is close to the page, so it takes a lighter edge and a ring of the page around it. */
 :root[data-theme="dark"] .switcher-panel,
 :root[data-theme="dark"] .account-panel {
-  border-color: var(--ts-connector);
+  border-color: var(--ts-text-3);
+  box-shadow: 0 0 0 4px var(--ts-page), var(--ts-shadow-popover);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -483,7 +484,8 @@ h3 {
   :root:not([data-theme]) .account-panel,
   :root[data-theme="system"] .switcher-panel,
   :root[data-theme="system"] .account-panel {
-    border-color: var(--ts-connector);
+    border-color: var(--ts-text-3);
+    box-shadow: 0 0 0 4px var(--ts-page), var(--ts-shadow-popover);
   }
 }
 

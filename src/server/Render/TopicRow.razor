@@ -5,18 +5,17 @@
    with "New" when the reader has not seen it, the faces of its recent authors, its replies with how many Posts are
    new, and when it last gained a Post and from whom. In an articles Tangent it is an article: the lead, first on the
    first page, with its cover, date and read time, opening, author and latest-reply strip; the rest as rows. An
-   article without a cover image leads with a cover set like a book's: the Tangent's name, the title in display type
-   and the author, light on the image band, over the Tangent's edge. Zeros are said in words, and how many replies
-   are new is said the same way beside every count. *@
+   article without a cover image leads with the Tangent's own: its tile and name on the image band over its edge,
+   never the title again. Zeros are said in words, and how many replies are new is said the same way beside every
+   count. *@
 @if (Article)
 {
     <article class="@ArticleClass()">
         @if (Lead)
         {
             <a class="article-cover tone-@TangentTile.Tone" href="@Model.Address" tabindex="-1" aria-hidden="true">
+                <TangentTile Tile="@TangentTile" Size="cover" />
                 <span class="article-cover-tangent">@TangentName</span>
-                <span class="article-cover-title">@Model.Title</span>
-                <span class="article-cover-author">@Model.Author.Name</span>
                 <span class="article-cover-edge"></span>
             </a>
         }
@@ -46,7 +45,7 @@
             {
                 <a class="article-strip" href="@Model.Address">
                     @Mark(latest.Author, "author-mark")
-                    <span class="article-strip-line"><b>@latest.Author.Name</b> @latest.Line</span>
+                    <span class="article-strip-line"><b>@latest.Author.Name</b> @Clip(latest.Line, StripLimit)</span>
                     <span class="article-strip-count">@Replies()</span>
                     @NewReplies()
                 </a>
@@ -70,10 +69,13 @@ else
             {
                 <span class="topic-row-latest-reply">
                     @Mark(latest.Author, "reply-mark")
-                    <span class="topic-row-latest-line"><b>@latest.Author.Name</b> @latest.Line</span>
+                    <span class="topic-row-latest-line"><b>@latest.Author.Name</b> @Clip(latest.Line, PreviewLimit)@if (latest.New)
+                        {
+                            <span class="new-label new-inline">New</span>
+                        }</span>
                     @if (latest.New)
                     {
-                        <span class="new-label">New</span>
+                        <span class="new-label new-beside">New</span>
                     }
                 </span>
             }
@@ -125,6 +127,20 @@ else
 
     /// <summary>How many faces a row shows.</summary>
     private const int FaceLimit = 3;
+
+    /// <summary>The most characters of a latest reply a row's preview and a lead's strip show, cut at a word, so an
+    /// ellipsis follows a word and never a space.</summary>
+    private const int PreviewLimit = 56;
+
+    private const int StripLimit = 40;
+
+    /// <summary>Text cut at the last word within <paramref name="limit"/> characters, with an ellipsis after it.</summary>
+    public static string Clip(string text, int limit)
+    {
+        if (text.Length <= limit) return text;
+        var cut = text.LastIndexOf(' ', limit);
+        return text[..(cut > limit / 2 ? cut : limit)].TrimEnd(' ', ',', ';', ':', '.', '…') + "…";
+    }
 
     /// <summary>A time as the list shows it: the time of day on the page's day, the month and day in its year, the
     /// full date otherwise; in UTC, which the <c>datetime</c> beside it states.</summary>
@@ -187,7 +203,9 @@ else
             builder.OpenElement(4, "span");
             builder.AddAttribute(5, "class", "mark " + size + shape + " tone-" + Monogram.Tone(author.Id));
             builder.AddAttribute(6, "aria-hidden", "true");
-            builder.AddContent(7, Monogram.Letters(author.Handle));
+            // One letter where the mark is too small for two to read.
+            var letters = Monogram.Letters(author.Handle);
+            builder.AddContent(7, size == "reply-mark" ? letters[..1] : letters);
             builder.CloseElement();
         }
     };
