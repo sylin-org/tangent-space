@@ -1,19 +1,15 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using Koan.Core;
 using Koan.Data.Core;
 using Koan.Data.Core.Model;
-using Koan.Testing.Integration;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+namespace Tangent;
 
-namespace Tangent.SqlitePosture;
-
-/// <summary>A row the probe writes. It exists only here.</summary>
+/// <summary>A row the posture tests write. It exists only here.</summary>
 public sealed class ProbeRow : Entity<ProbeRow>
 {
     public string Lane { get; set; } = "";
@@ -21,18 +17,17 @@ public sealed class ProbeRow : Entity<ProbeRow>
     public int Number { get; set; }
 }
 
-/// <summary>Koan's SQLite posture at the pinned revision: concurrent single-row saves, what
-/// <see cref="EntityContext.Transaction"/> does inside a <see cref="BackgroundService"/>, and
-/// which transaction the driver begins by default. Each fact boots its own host over its own folder.</summary>
-public sealed class SqlitePostureProbe(ITestOutputHelper output)
+/// <summary>Koan's SQLite posture at the pinned revision, in the Tangent Space's own database: concurrent
+/// single-row saves, what <see cref="EntityContext.Transaction"/> does inside a <see cref="BackgroundService"/>,
+/// and which transaction the driver begins by default. Each fact starts its own Tangent Space.</summary>
+public sealed class SqlitePostureTests(ITestOutputHelper output)
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
     [Fact]
     public async Task Two_tasks_each_save_one_hundred_rows_without_a_failure()
     {
-        var folder = NewFolder();
-        await using var host = await Boot(folder);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var failures = new ConcurrentBag<Exception>();
 
         async Task SaveLane(string lane)
@@ -49,7 +44,7 @@ public sealed class SqlitePostureProbe(ITestOutputHelper output)
         clock.Stop();
 
         var rows = await ProbeRow.Count.Exact(Cancellation);
-        var (read, write) = Header(folder);
+        var (read, write) = Header(tangentSpace.DatabasePath);
         output.WriteLine($"rows={rows} failures={failures.Count} elapsed={clock.ElapsedMilliseconds}ms header[18,19]={read},{write}");
         foreach (var failure in failures) output.WriteLine(failure.ToString());
 
@@ -60,9 +55,10 @@ public sealed class SqlitePostureProbe(ITestOutputHelper output)
     [Fact]
     public async Task A_throw_between_two_saves_in_one_transaction_persists_neither()
     {
-        var folder = NewFolder();
         var probe = new TransactionProbe(ThrowBetween: true);
-        await using var host = await Boot(folder, services => services.AddSingleton(probe).AddHostedService<TransactionWorker>());
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            services: services => services.AddSingleton(probe).AddHostedService<TransactionWorker>(),
+            ct: Cancellation);
 
         var outcome = await probe.Outcome.Task.WaitAsync(TimeSpan.FromSeconds(30), Cancellation);
         output.WriteLine(outcome.ToString());
@@ -76,9 +72,10 @@ public sealed class SqlitePostureProbe(ITestOutputHelper output)
     [Fact]
     public async Task Two_saves_in_one_transaction_both_persist_on_commit()
     {
-        var folder = NewFolder();
         var probe = new TransactionProbe(ThrowBetween: false);
-        await using var host = await Boot(folder, services => services.AddSingleton(probe).AddHostedService<TransactionWorker>());
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            services: services => services.AddSingleton(probe).AddHostedService<TransactionWorker>(),
+            ct: Cancellation);
 
         var outcome = await probe.Outcome.Task.WaitAsync(TimeSpan.FromSeconds(30), Cancellation);
         output.WriteLine(outcome.ToString());
@@ -91,8 +88,7 @@ public sealed class SqlitePostureProbe(ITestOutputHelper output)
     [Fact]
     public async Task A_koan_transaction_writes_nothing_and_holds_no_sqlite_lock_before_commit()
     {
-        var folder = NewFolder();
-        await using var host = await Boot(folder);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await new ProbeRow { Id = "seed" }.Save(Cancellation);
 
         using (EntityContext.Transaction("probe"))
@@ -100,7 +96,7 @@ public sealed class SqlitePostureProbe(ITestOutputHelper output)
             await new ProbeRow { Id = "tracked" }.Save(Cancellation);
             Assert.Null(await ProbeRow.Get("tracked", Cancellation));
 
-            await using var other = new SqliteConnection($"Data Source={DatabasePath(folder)};Default Timeout=1");
+            await using var other = Connect(tangentSpace.DatabasePath, "Default Timeout=1");
             await other.OpenAsync(Cancellation);
             await using (var immediate = other.BeginTransaction(deferred: false))
             {
@@ -117,16 +113,14 @@ public sealed class SqlitePostureProbe(ITestOutputHelper output)
     [Fact]
     public async Task The_driver_default_transaction_is_immediate()
     {
-        var folder = NewFolder();
-        await using var host = await Boot(folder);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await new ProbeRow { Id = "seed" }.Save(Cancellation);
-        var path = DatabasePath(folder);
 
-        await using var first = new SqliteConnection($"Data Source={path}");
+        await using var first = Connect(tangentSpace.DatabasePath);
         await first.OpenAsync(Cancellation);
         await using var held = await first.BeginTransactionAsync(Cancellation);
 
-        await using var second = new SqliteConnection($"Data Source={path};Default Timeout=1");
+        await using var second = Connect(tangentSpace.DatabasePath, "Default Timeout=1");
         await second.OpenAsync(Cancellation);
         var clock = Stopwatch.StartNew();
         var locked = Assert.Throws<SqliteException>(() => second.BeginTransaction(deferred: false));
@@ -134,31 +128,15 @@ public sealed class SqlitePostureProbe(ITestOutputHelper output)
         output.WriteLine($"second BEGIN IMMEDIATE failed after {clock.ElapsedMilliseconds}ms: {locked.Message}");
     }
 
-    private static Task<IntegrationHost> Boot(string folder, Action<IServiceCollection>? more = null)
-        => KoanIntegrationHost.Configure()
-            .WithSetting("Koan:Data:Sources:Default:Adapter", "sqlite")
-            .WithSetting("Koan:Data:Sources:Default:ConnectionString", $"Data Source={DatabasePath(folder)}")
-            .ConfigureServices(services =>
-            {
-                services.AddKoan();
-                more?.Invoke(services);
-            })
-            .StartAsync(Cancellation);
-
-    private static string NewFolder()
-    {
-        var folder = Path.Combine(Path.GetTempPath(), "tangent-sqlite-posture", Guid.NewGuid().ToString("n"));
-        Directory.CreateDirectory(folder);
-        return folder;
-    }
-
-    private static string DatabasePath(string folder) => Path.Combine(folder, "probe.db");
+    /// <summary>A connection of the test's own, outside the driver's pool, so it holds no file once disposed.</summary>
+    private static SqliteConnection Connect(string databasePath, string more = "")
+        => new($"Data Source={databasePath};Pooling=False;{more}");
 
     /// <summary>Header bytes 18 and 19: the read and write versions, 1 for rollback and 2 for write-ahead.</summary>
-    private static (byte Read, byte Write) Header(string folder)
+    private static (byte Read, byte Write) Header(string databasePath)
     {
         var header = new byte[20];
-        using var file = new FileStream(DatabasePath(folder), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var file = new FileStream(databasePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         file.ReadExactly(header);
         return (header[18], header[19]);
     }

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <RootNamespace>Tangent.SqlitePosture</RootNamespace>
+    <RootNamespace>Tangent</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <IsTestProject>true</IsTestProject>
@@ -13,7 +13,6 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="[18.8.1]" />
     <PackageReference Include="xunit.v3" Version="[3.2.2]" />
     <PackageReference Include="xunit.runner.visualstudio" Version="[3.1.5]" PrivateAssets="all" />
-    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Testing.Hosting/Koan.Testing.Hosting.csproj" />
-    <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
+    <ProjectReference Include="../../src/server/Tangent.Server.csproj" />
   </ItemGroup>
 </Project>
