@@ -1,6 +1,7 @@
 // The screens the visual loop captures, and where the design reference draws each one.
 // A screen is a path under the base URL and the states it is captured in. A state is reached by a
-// query on the path, by settings the Tangent Space starts with, or by a click in the page; never by a dialog.
+// query on the path, by settings the Tangent Space starts with, by signing the capture persona in, or by a
+// click in the page; never by a dialog.
 
 import type { Theme } from '../appearance.ts'
 
@@ -19,7 +20,16 @@ export interface State {
   settings?: Readonly<Record<string, string>>
   /** A selector clicked once the page has settled; the state is what the click shows in the page. */
   click?: string
+  /** Signed in as the capture persona through Koan's test connector before the page opens. */
+  signedIn?: boolean
+  /** A path under the base URL whose requests are cancelled, so a click that would leave the page shows the
+   *  moment before the answer, such as a form on its way. */
+  cancel?: string
 }
+
+// Whom a signed-in state is captured as: a person who has signed in and not arrived yet, unless the state
+// itself arrives. The handle reaches the sign-in as the atproto connector's verified handle claim.
+export const capturePersona = { name: 'ada', did: 'did:plc:capture4persona', handle: 'ada.bsky.social' } as const
 
 export interface Screen {
   /** The path under the base URL, starting with a slash. */
@@ -32,10 +42,17 @@ export interface Screen {
 // door's states.
 export const screens: Readonly<Record<string, Screen>> = {
   door: { path: '/', states: [{ name: 'signed-out' }] },
-  // The handle form a visitor reads, and the same form with the connector's sanitized failure inline.
+  // The handle form a visitor reads, focused; on its way after Continue; after a sign-in that could not be
+  // verified, the typed handle kept; with a handle no account answers to; and, signed in, the first arrival.
   'sign-in': {
     path: '/sign-in',
-    states: [{ name: 'empty' }, { name: 'error', query: { failure: 'atproto_authentication_failed' } }],
+    states: [
+      { name: 'empty' },
+      { name: 'submitting', query: { handle: 'ada.bsky.social' }, click: '.sign-in-submit', cancel: '/auth/atproto/challenge' },
+      { name: 'verification-failed', query: { failure: 'atproto_authentication_failed', handle: 'ada.bsky.social' } },
+      { name: 'handle-not-found', query: { failure: 'handle_not_found', handle: 'ada.bsky.socail' } },
+      { name: 'arrival', signedIn: true },
+    ],
   },
 }
 

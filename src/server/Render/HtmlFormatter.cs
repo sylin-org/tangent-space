@@ -51,6 +51,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
             {
                 [nameof(Shell.Title)] = resource.Title(value),
                 [nameof(Shell.BaseUrl)] = _baseUrl.Resolve(http),
+                [nameof(Shell.Frame)] = resource.Frame?.Invoke(value),
                 [nameof(Shell.ChildContent)] = (RenderFragment)(builder =>
                 {
                     builder.OpenComponent(0, resource.Component);

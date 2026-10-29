@@ -16,6 +16,8 @@ pwsh scripts/tangent.ps1 <verb> [options], from any directory.
                              http://localhost:<port> unless the environment's
                              Koan__Web__ApplicationUrl names the base URL, and waits until
                              /health/live answers. Output goes to .local/launch/.
+                             It runs in Development unless the environment names another, since
+                             atproto sign-in at a loopback http address exists only in Development.
   stop                       Ends the Tangent Space this script launched: a clean stop on Linux and
                              macOS, a hard stop on Windows, which SQLite's journal recovers from
                              at the next start or backup.
@@ -137,6 +139,8 @@ switch ($Verb) {
         # The server listens on the port and, unless the operator's environment names the base URL, answers at it.
         $arguments = @("--urls=http://localhost:$Port")
         if (-not $env:Koan__Web__ApplicationUrl) { $arguments += "--Koan:Web:ApplicationUrl=http://localhost:$Port" }
+        # atproto's loopback client exists only in Development; outside it sign-in needs an https base URL.
+        if (-not $env:ASPNETCORE_ENVIRONMENT -and -not $env:DOTNET_ENVIRONMENT) { $env:ASPNETCORE_ENVIRONMENT = 'Development' }
         $start = @{
             RedirectStandardOutput = Join-Path $launchFolder 'tangent.log'
             RedirectStandardError = Join-Path $launchFolder 'tangent.error.log'

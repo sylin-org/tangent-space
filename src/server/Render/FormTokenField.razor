@@ -1,0 +1,6 @@
+@* The hidden field that carries a form's antiforgery token; every form a page posts holds one. *@
+<input type="hidden" name="@Token.Field" value="@Token.Value">
+
+@code {
+    [Parameter, EditorRequired] public FormToken Token { get; set; } = default!;
+}

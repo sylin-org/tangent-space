@@ -20,9 +20,9 @@ public sealed class ProfileReaderOptions
     public int MaximumResponseBytes { get; set; } = 64 * 1024;
 }
 
-/// <summary>A public profile as the profile service answered it: the DID it is for, the handle, and what the profile
-/// holds.</summary>
-public sealed record ProfileAnswer(string Did, string Handle, string? DisplayName, string? Description, string? Avatar);
+/// <summary>A public profile as the profile service answered it: the DID it is for and what the profile holds. The
+/// handle is not in it: the place shows the handle the connector verified at sign-in.</summary>
+public sealed record ProfileAnswer(string Did, string? DisplayName, string? Description, string? Avatar);
 
 /// <summary>Why a profile could not be read: the service did not answer in time, answered past the bound, refused, or
 /// answered something that is not this DID's profile. Nothing was cached.</summary>
@@ -35,7 +35,6 @@ public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions
 {
     private const int DisplayNameLimit = 640;
     private const int DescriptionLimit = 2560;
-    private const int HandleLimit = 253;
     private const int AvatarLimit = 2048;
 
     public async Task<ProfileAnswer> Read(string did, CancellationToken ct)
@@ -92,14 +91,11 @@ public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions
             var root = json.RootElement;
             if (Text(root, "did", int.MaxValue) != did)
                 throw new ProfileReadFailed($"The profile service answered another DID's profile for {did}.");
-            var handle = Text(root, "handle", HandleLimit + 1);
-            if (string.IsNullOrWhiteSpace(handle) || handle.Length > HandleLimit)
-                throw new ProfileReadFailed($"The profile of {did} carries no handle.");
             var avatar = Text(root, "avatar", AvatarLimit + 1);
             var avatarAddress = avatar is { Length: <= AvatarLimit }
                 && Uri.TryCreate(avatar, UriKind.Absolute, out var parsed)
-                && parsed.Scheme is "https" or "http" ? avatar : null;
-            return new ProfileAnswer(did, handle, Text(root, "displayName", DisplayNameLimit),
+                && parsed.Scheme == "https" ? avatar : null;
+            return new ProfileAnswer(did, Text(root, "displayName", DisplayNameLimit),
                 Text(root, "description", DescriptionLimit), avatarAddress);
         }
         catch (JsonException malformed)

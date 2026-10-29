@@ -69,6 +69,10 @@
     {
       "id": "Koan.Web.Auth.Connector.Atproto",
       "version": "1.0"
+    },
+    {
+      "id": "Koan.Web.Auth.Connector.Test",
+      "version": "1.0"
     }
   ],
   "directReferences": [
@@ -91,6 +95,10 @@
     {
       "kind": "project",
       "id": "Koan.Web.Auth.Connector.Atproto"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Web.Auth.Connector.Test"
     }
   ]
 }

@@ -1,0 +1,10 @@
+@* A panel's head: the place's mark and name over a band. A place with no landing image of its own gets the band
+   alone, never a picture it did not choose. *@
+<div class="panel-head">
+    <span class="panel-head-mark" aria-hidden="true">@Frame.Initial</span>
+    <span class="panel-head-name">@Frame.Place</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Frame Frame { get; set; } = default!;
+}

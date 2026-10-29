@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Koan.Web.Auth.Connector.Atproto;
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Render;
 using Tangent.Space;
@@ -10,9 +11,11 @@ namespace Tangent.Participants;
 
 /// <summary>The sign-in page, one resource both ways. A visitor reads the handle form, or as JSON the Koan connector's
 /// challenge to follow; the challenge comes back here signed in. A person who has not arrived yet reads the form that
-/// declares their kind, and posting it is their first arrival; a participant is sent where they were going. The first
-/// request that finds a signed-in person without a participant is where Tangent learns of a first arrival.</summary>
-public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, ILogger<SignInController> logger) : ControllerBase
+/// declares their kind, and posting it, with its antiforgery token, is their first arrival; a participant is sent
+/// where they were going. The first request that finds a signed-in person without a participant is where Tangent
+/// learns of a first arrival.</summary>
+public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAntiforgery antiforgery,
+    ILogger<SignInController> logger) : ControllerBase
 {
     /// <summary>The page's path under the base URL.</summary>
     public const string Path = "/sign-in";
@@ -23,14 +26,16 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, I
     private static readonly IReadOnlyList<string> Kinds = ["person", "agent"];
 
     [HttpGet(Path)]
-    public async Task<IActionResult> Get([FromQuery(Name = "return")] string? destination, [FromQuery] string? failure, CancellationToken ct)
+    public async Task<IActionResult> Get([FromQuery(Name = "return")] string? destination, [FromQuery] string? failure,
+        [FromQuery] string? handle, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var to = Destination(destination);
         var space = await Space(ct);
-        if (PersonId() is not { } personId) return Page(space, to, Participants.SignIn.Describe(failure), arrival: null);
+        if (PersonId() is not { } personId)
+            return Answer(Participants.SignIn.ForVisitor(space.Name, Door(), to, Challenge(to), handle, failure));
         if (await Participant.Get(personId, ct) is not null) return Redirect(to);
-        return Page(space, to, failure: null, Arrival(space));
+        return Answer(Arriving(space, to));
     }
 
     [HttpPost(Path)]
@@ -40,9 +45,19 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, I
         var to = Destination(destination);
         if (PersonId() is not { } personId)
             return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Arriving needs a signed-in person.", "sign-in").ToResult();
+        try
+        {
+            await antiforgery.ValidateRequestAsync(HttpContext);
+        }
+        catch (AntiforgeryValidationException)
+        {
+            return new Problem(StatusCodes.Status400BadRequest, "Open the form again",
+                "This form's token is missing or has expired, so nothing was declared.").ToResult();
+        }
+
         var space = await Space(ct);
         if (Declared(kind) is not { } declared)
-            return Page(space, to, "Choose whether you are a person or an agent.", Arrival(space), StatusCodes.Status400BadRequest);
+            return Answer(Arriving(space, to) with { Failure = "Choose whether you are a person or an agent." }, StatusCodes.Status400BadRequest);
 
         var outcome = await writer.Send(new FirstArrival(personId, Handle(), declared), ct);
         switch (outcome)
@@ -62,25 +77,29 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, I
         }
     }
 
-    private IActionResult Page(TangentSpace space, string to, string? failure, Arrival? arrival, int status = StatusCodes.Status200OK)
-    {
-        var comeBack = baseUrl.PathBase + Path + "?return=" + Uri.EscapeDataString(to);
-        var challenge = Configured() + ChallengePath + "?return=" + Uri.EscapeDataString(comeBack);
-        return new ObjectResult(new SignIn(space.Name, Configured() + "/", to, challenge, failure, arrival)) { StatusCode = status };
-    }
+    private static ObjectResult Answer(SignIn signIn, int status = StatusCodes.Status200OK) => new(signIn) { StatusCode = status };
 
-    private Arrival Arrival(TangentSpace space)
-        => new(Configured() + Path, Handle(), space.Admission.ToString().ToLowerInvariant(), Kinds);
+    private SignIn Arriving(TangentSpace space, string to)
+        => new(space.Name, Door(), to, Challenge(to),
+            Arrival: new Arrival(Configured() + Path, Handle(), space.Admission.ToString().ToLowerInvariant(), Kinds,
+                FormToken.For(HttpContext)));
+
+    /// <summary>The connector's challenge, coming back to this page with where the participant goes next.</summary>
+    private string Challenge(string to)
+        => Configured() + ChallengePath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path + "?return=" + Uri.EscapeDataString(to));
+
+    private string Door() => Configured() + "/";
 
     private string Configured() => baseUrl.Configured
         ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
 
-    /// <summary>Where the participant goes next: a path under the base URL the request names, or the door.</summary>
+    /// <summary>Where the participant goes next: a relative path under the base URL, of visible characters, without
+    /// scheme or authority; anything else is the door.</summary>
     private string Destination(string? requested)
     {
         var door = baseUrl.PathBase + "/";
-        if (string.IsNullOrEmpty(requested) || requested[0] != '/' || requested.StartsWith("//", StringComparison.Ordinal)
-            || requested.StartsWith("/\\", StringComparison.Ordinal) || requested.Contains('\\'))
+        if (requested is not { Length: > 0 } || requested[0] != '/' || requested.Length > 1 && requested[1] is '/' or '\\'
+            || !requested.All(c => c is > ' ' and <= '~' and not '\\'))
             return door;
         var path = new PathString(requested.Split('?', '#')[0]);
         return !baseUrl.PathBase.HasValue || path.StartsWithSegments(baseUrl.PathBase) ? requested : door;
@@ -95,6 +114,7 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, I
 
     private string? PersonId() => User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
 
+    /// <summary>The handle the connector verified both ways at this sign-in, or empty when it verified none.</summary>
     private string Handle() => User.FindFirst(AtprotoClaimTypes.Handle)?.Value ?? "";
 
     private static async Task<TangentSpace> Space(CancellationToken ct)

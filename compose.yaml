@@ -13,6 +13,8 @@ services:
     ports:
       - "127.0.0.1:5220:5220"
     environment:
+      # Must be the https address the place answers at: atproto sign-in needs one, and in Production the Tangent
+      # Space refuses to start at an http address.
       Koan__Web__ApplicationUrl: "http://localhost:5220"
       Tangent__DataFolder: "/state/data"
     volumes:

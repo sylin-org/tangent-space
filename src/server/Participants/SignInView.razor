@@ -1,13 +1,11 @@
-@* The sign-in page: the handle form for a visitor, or, once signed in, the form that declares a participant's
-   kind at their first arrival. Both are forms in the page; a failure shows inline above the field it concerns. *@
-<header class="masthead">
-    <a class="masthead-place" href="@Model.Door">
-        <span class="masthead-mark" aria-hidden="true">@Initial</span>
-        <span class="masthead-name">@Model.Name</span>
-    </a>
-</header>
+@using Tangent.Render
+@* The sign-in page: one panel in the page, headed by the place's mark and name. For a visitor it holds the handle form, with
+   the field focused; for a person who signed in and has not arrived, the form that declares their kind. A failure
+   of the sign-in shows above the form; a failure of the handle shows under the field it concerns. *@
 <main class="sign-in">
     <section class="sign-in-panel" aria-labelledby="sign-in-title">
+        <PanelHead Frame="@Frame(Model)" />
+        <div class="sign-in-body">
         @if (Model.Arrival is { } arrival)
         {
             <h1 id="sign-in-title" class="sign-in-title">Welcome to @Model.Name</h1>
@@ -25,7 +23,8 @@
             {
                 <p class="sign-in-failure" id="sign-in-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@arrival.Action">
+            <form class="sign-in-form" method="post" action="@arrival.Action" data-island="submitting">
+                <FormTokenField Token="@arrival.Token" />
                 <fieldset class="kind-choice" aria-describedby="@(Model.Failure is null ? "kind-note" : "sign-in-failure kind-note")">
                     <legend class="field-label">You are</legend>
                     <label class="kind-option">
@@ -45,7 +44,7 @@
                 </fieldset>
                 <p class="sign-in-note" id="kind-note">Shown beside your name. Nothing here checks it.</p>
                 <input type="hidden" name="return" value="@Model.Return">
-                <button type="submit" class="sign-in-submit">@(Joins(arrival) ? "Join " + Model.Name : "Apply to join")</button>
+                <button type="submit" class="sign-in-submit" data-busy-label="@(Joins(arrival) ? "Joining…" : "Applying…")">@(Joins(arrival) ? "Join " + Model.Name : "Apply to join")</button>
                 @if (!Joins(arrival))
                 {
                     <p class="sign-in-note">The proprietor admits new participants. You can read while you wait.</p>
@@ -55,25 +54,29 @@
         else
         {
             <h1 id="sign-in-title" class="sign-in-title">Sign in to reply and watch</h1>
-            <p class="sign-in-lede">Use your Bluesky handle, or any AT Protocol account.</p>
+            <p class="sign-in-lede">Use your Bluesky handle, or any AT&nbsp;Protocol&nbsp;account.</p>
             @if (Model.Failure is { } failure)
             {
                 <p class="sign-in-failure" id="sign-in-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()">
-                <label class="field" for="sign-in-handle">
-                    <span class="field-label">Handle</span>
+            <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()" data-island="submitting">
+                <div class="field">
+                    <label class="field-label" for="sign-in-handle">Handle</label>
                     <span class="field-input">
                         <span class="field-prefix" aria-hidden="true">@@</span>
-                        <input id="sign-in-handle" name="identifier" type="text" required
+                        <input id="sign-in-handle" name="identifier" type="text" required autofocus
                                autocomplete="username" autocapitalize="none" spellcheck="false"
-                               placeholder="yourname.bsky.social"
-                               aria-invalid="@(Model.Failure is null ? "false" : "true")"
-                               aria-describedby="@(Model.Failure is null ? null : "sign-in-failure")">
+                               placeholder="yourname.bsky.social" value="@Model.Handle"
+                               aria-invalid="@(Model.HandleFailure is null ? "false" : "true")"
+                               aria-describedby="@Described()">
                     </span>
-                </label>
+                    @if (Model.HandleFailure is { } refused)
+                    {
+                        <p class="field-failure" id="sign-in-handle-failure">@refused</p>
+                    }
+                </div>
                 <input type="hidden" name="return" value="@Model.ChallengeReturn()">
-                <button type="submit" class="sign-in-submit">Continue</button>
+                <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
             </form>
             <ul class="sign-in-gains">
                 <li>
@@ -94,13 +97,19 @@
                 <span>Reading doesn’t need an account.</span>
             </div>
         }
+        </div>
     </section>
 </main>
 
 @code {
     [Parameter, EditorRequired] public SignIn Model { get; set; } = default!;
 
-    private string Initial => Model.Name.Length > 0 ? char.ToUpperInvariant(Model.Name[0]).ToString() : "T";
+    /// <summary>The frame the shell draws around the page: the place, and "Sign in" as the only crumb.</summary>
+    public static Frame Frame(SignIn signIn) => new(signIn.Name, signIn.Door, [new Crumb("Sign in")]);
+
+    private string? Described()
+        => string.Join(' ', new[] { Model.Failure is null ? null : "sign-in-failure", Model.HandleFailure is null ? null : "sign-in-handle-failure" }
+            .Where(id => id is not null)) is { Length: > 0 } ids ? ids : null;
 
     private static bool Joins(Arrival arrival) => arrival.Admission == "join";
 }

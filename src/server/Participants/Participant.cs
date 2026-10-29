@@ -7,7 +7,7 @@ using Tangent.Writer;
 namespace Tangent.Participants;
 
 /// <summary>Tangent's facet on the Koan person: keyed by the person's id, with the handle the place shows, the profile
-/// cached from the PDS, the kind the participant declared, and their standing in the place. A person and an agent are
+/// cached from the public profile, the kind the participant declared, and their standing in the place. A person and an agent are
 /// the same row. Signing in through atproto makes the person's id their DID, so the id is the DID the profile is read
 /// for. The profile job runs on this row: one bounded read of the public profile, handed to the writer.</summary>
 [JobIdempotent(nameof(Id))]
@@ -51,15 +51,25 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         };
     }
 
+    /// <summary>Takes the handle the connector verified at this sign-in; empty when it verified none. True when it
+    /// changed.</summary>
+    public bool Verified(string handle)
+    {
+        if (handle.Length > SignIn.HandleLimit) throw new Refusal("A handle is at most 253 characters.");
+        if (handle == Handle) return false;
+        Handle = handle;
+        return true;
+    }
+
     /// <summary>Whether the cached profile was captured less than <see cref="Profile.Lifetime"/> before
     /// <paramref name="now"/>.</summary>
     public bool ProfileFresh(DateTimeOffset now) => Profile.CapturedAt is { } captured && now - captured < Profile.Lifetime;
 
-    /// <summary>Caches what the profile service answered, with the time of capture.</summary>
+    /// <summary>Caches what the profile service answered, with the time of capture. The handle is not the profile's to
+    /// change.</summary>
     public void Capture(ProfileAnswer answer, DateTimeOffset at)
     {
         if (answer.Did != Id) throw new Refusal($"The profile answered is {answer.Did}'s, not {Id}'s.");
-        Handle = answer.Handle;
         Profile = new Profile
         {
             DisplayName = answer.DisplayName,

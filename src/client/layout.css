@@ -134,6 +134,36 @@ h3 {
   z-index: 50;
 }
 
+/* The place: its mark (an image of its own, or its first letter on the accent) and its name in display type. */
+.masthead-place {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.masthead-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  font: 600 16px/1 var(--ts-font-display);
+}
+
+.masthead-name {
+  overflow: hidden;
+  font: 600 20px/1.2 var(--ts-font-display);
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .masthead-actions {
   margin-left: auto;
   display: flex;
@@ -169,13 +199,41 @@ h3 {
 }
 
 .path-crumbs {
-  margin-left: 34px;
+  margin: 0 0 0 34px;
+  padding: 0;
+  list-style: none;
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
   font: var(--ts-type-path);
   color: var(--ts-text-2);
+}
+
+.path-crumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.path-crumb a,
+.path-current {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  color: var(--ts-text-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.path-only {
+  color: var(--ts-text);
+}
+
+.path-separator {
+  color: var(--ts-text-3);
 }
 
 .path-actions {
@@ -242,7 +300,7 @@ h3 {
   align-items: center;
   gap: 24px;
   min-height: 72px;
-  padding: 20px var(--ts-page-gutter);
+  padding: 12px var(--ts-page-gutter);
   border-top: 1px solid var(--ts-line);
   color: var(--ts-text-3);
   font: var(--ts-type-ui);
@@ -262,6 +320,41 @@ h3 {
 
 .footer-end {
   margin-left: auto;
+}
+
+.footer-powered {
+  color: var(--ts-text-3);
+}
+
+/* The appearance switch: a segmented control of System, Light and Dark. */
+.appearance {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ts-line);
+  border-radius: 9px;
+}
+
+.segmented button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ts-text-3);
+  font: 500 12px/1 var(--ts-font-ui);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--ts-hover);
+  color: var(--ts-text);
+  font-weight: 600;
 }
 
 /* Under 1024 the rail folds behind a button in the path bar and opens in place. */
@@ -299,6 +392,20 @@ h3 {
     gap: 2px;
   }
 
+  .masthead-place {
+    gap: 10px;
+  }
+
+  .masthead-mark {
+    width: 26px;
+    height: 26px;
+    font-size: 15px;
+  }
+
+  .masthead-name {
+    font-size: 18px;
+  }
+
   .masthead-actions {
     gap: 0;
   }
@@ -322,6 +429,16 @@ h3 {
     flex: 1;
     margin-left: 26px;
     gap: 6px;
+    font-size: 12px;
+  }
+
+  .path-crumb a,
+  .path-current {
+    height: 40px;
+  }
+
+  .path-only {
+    font-weight: 500;
   }
 
   .path-actions {
@@ -346,6 +463,11 @@ h3 {
 
   .footer-end {
     margin-left: 0;
+  }
+
+  .segmented button {
+    height: 38px;
+    padding: 0 16px;
   }
 }
 

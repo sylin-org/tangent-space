@@ -54,3 +54,38 @@ test('a fragment that does not answer leaves the content as it was', async () =>
   await expect((mounted.island as unknown as { refresh(): Promise<void> }).refresh()).rejects.toThrow('503')
   expect(document.querySelector('main')!.innerHTML).toBe('<h1>Tangent Space</h1>')
 })
+
+test('the appearance island presses the saved theme and applies a choice', () => {
+  localStorage.setItem('tangent:appearance', 'dark')
+  document.body.innerHTML =
+    '<div data-island="appearance"><button data-theme-choice="system" aria-pressed="true">System</button>' +
+    '<button data-theme-choice="light" aria-pressed="false">Light</button>' +
+    '<button data-theme-choice="dark" aria-pressed="false">Dark</button></div>'
+
+  mountIslands(document)
+  const pressed = () => [...document.querySelectorAll('[aria-pressed="true"]')].map((button) => button.textContent)
+
+  expect(pressed()).toEqual(['Dark'])
+  document.querySelector<HTMLButtonElement>('[data-theme-choice="light"]')!.click()
+  expect(pressed()).toEqual(['Light'])
+  expect(document.documentElement.dataset.theme).toBe('light')
+  expect(localStorage.getItem('tangent:appearance')).toBe('light')
+})
+
+test('the submitting island marks the form busy once and takes no second submission', () => {
+  document.body.innerHTML =
+    '<form data-island="submitting"><button type="submit" data-busy-label="Continuing…">Continue</button></form>'
+  const form = document.querySelector('form')!
+  mountIslands(document)
+
+  const first = new Event('submit', { cancelable: true })
+  form.dispatchEvent(first)
+  const second = new Event('submit', { cancelable: true })
+  form.dispatchEvent(second)
+
+  expect(first.defaultPrevented).toBe(false)
+  expect(second.defaultPrevented).toBe(true)
+  expect(form.getAttribute('aria-busy')).toBe('true')
+  expect(form.querySelector('button')!.textContent).toBe('Continuing…')
+  expect(form.querySelector('button')!.getAttribute('aria-disabled')).toBe('true')
+})

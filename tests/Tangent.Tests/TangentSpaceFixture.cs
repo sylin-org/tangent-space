@@ -14,7 +14,7 @@ using Tangent.Space;
 namespace Tangent;
 
 /// <summary>One Tangent Space under test: the application's own composition — <c>AddKoan()</c> over the
-/// server's appsettings.json, so <see cref="TangentModule"/> and its options are the ones that run, and
+/// server's appsettings.json at <see cref="DefaultBaseUrl"/>, so <see cref="TangentModule"/> and its options are the ones that run, and
 /// Koan's pipeline serves under the configured base URL — in the Production environment the server runs in, on Kestrel at a free
 /// loopback port, with a new temp folder as its content root, so the data folder and the database land
 /// inside that folder, and the server's wwwroot as its web root. A test names any setting it needs;
@@ -25,6 +25,10 @@ namespace Tangent;
 /// fixture reads or writes another's database.</remarks>
 public sealed class TangentSpaceFixture : IAsyncDisposable
 {
+    /// <summary>The base URL a Tangent Space under test answers at unless the test names another: https, since
+    /// atproto sign-in outside Development needs an https base URL.</summary>
+    public const string DefaultBaseUrl = "https://tangent.test";
+
     private readonly WebApplication _application;
     private bool _stopped;
     private bool _disposed;
@@ -87,6 +91,7 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         });
         builder.Configuration
             .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false, reloadOnChange: false)
+            .AddInMemoryCollection(new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = DefaultBaseUrl })
             .AddInMemoryCollection(settings ?? new Dictionary<string, string?>());
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         // Registered before Koan's own startup filter, so the binding wraps the whole pipeline.

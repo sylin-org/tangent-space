@@ -30,13 +30,13 @@ public sealed class ProfileJobTests
         const string did = "did:plc:ada4example";
 
         // The first arrival submits the job.
-        using var arriving = await browser.SignIn("ada", did, Cancellation);
-        using var arrived = await browser.Client.PostAsync("/sign-in",
-            new FormUrlEncodedContent(new Dictionary<string, string> { ["kind"] = "person", ["return"] = "/" }), Cancellation);
+        using var arriving = await browser.SignIn("ada", did, Cancellation, handle: "ada.example");
+        using var arrived = await browser.Arrive("person", Cancellation);
         Assert.Equal(HttpStatusCode.SeeOther, arrived.StatusCode);
         var participant = await Captured(did);
 
-        Assert.Equal(ProfileStub.HandleOf(did), participant.Handle);
+        // The handle is the one the connector verified, never the profile service's.
+        Assert.Equal("ada.example", participant.Handle);
         Assert.Equal((ProfileStub.DisplayName, ProfileStub.Avatar), (participant.Profile.DisplayName, participant.Profile.Avatar));
         Assert.Equal("Writes things.", participant.Profile.Description);
         lock (committed) Assert.Contains(committed, commit => commit.Command is CaptureProfile);
@@ -44,7 +44,7 @@ public sealed class ProfileJobTests
         // Within the day: another run reads nothing, and a sign-in submits nothing.
         var again = await participant.Job.Submit(ct: Cancellation);
         Assert.Equal(JobStatus.Completed, (await again.Completion(Bound, Cancellation)).Status);
-        using var signedInAgain = await browser.SignIn("ada", did, Cancellation);
+        using var signedInAgain = await browser.SignIn("ada", did, Cancellation, handle: "ada.example");
         Assert.Equal(HttpStatusCode.OK, signedInAgain.StatusCode);
 
         Assert.Equal([did], stub.Requests);
@@ -67,11 +67,11 @@ public sealed class ProfileJobTests
             await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<Participant>(stored), Cancellation));
         using var browser = new Browser(tangentSpace);
 
-        using var signedIn = await browser.SignIn("stale", did, Cancellation);
+        using var signedIn = await browser.SignIn("stale", did, Cancellation, handle: "new.example");
         var participant = await Captured(did, after: stale);
 
         Assert.Equal("/", signedIn.RequestMessage!.RequestUri!.AbsolutePath);
-        Assert.Equal(ProfileStub.HandleOf(did), participant.Handle);
+        Assert.Equal("new.example", participant.Handle);
         Assert.Equal([did], stub.Requests);
     }
 

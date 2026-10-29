@@ -1,8 +1,10 @@
 import { createApp, type Component, type ComponentPublicInstance } from 'vue'
+import { appearance } from './appearance'
 import { fragment } from './fragment'
+import { submitting } from './submitting'
 
 // Every island a page can name in data-island, by that name.
-export const islands: Record<string, Component> = { fragment }
+export const islands: Record<string, Component> = { appearance, fragment, submitting }
 
 export interface MountedIsland {
   name: string

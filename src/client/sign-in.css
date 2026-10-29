@@ -1,31 +1,39 @@
-/* The sign-in page: the place's name in the masthead, then one panel in the page, never a dialog. The panel holds
- * the handle form, or, once a person has signed in, the form that declares their kind. Sizes follow the design
- * reference's sign-in screen: a 440 panel, 44px fields and button, the @ prefix inside the field. */
+/* The sign-in page: one panel in the page, never a dialog, headed by the place's mark and name. It holds the handle
+ * form, or, once a person has signed in, the form that declares their kind. Sizes follow the design reference's
+ * sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @ prefix inside the field. */
 
-.masthead-place {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ts-text);
-  text-decoration: none;
+/* A panel's head: the place's mark and name over a band of the surface, washed with the accent. */
+.panel-head {
+  position: relative;
+  height: 128px;
+  border-bottom: 1px solid var(--ts-line);
+  background:
+    linear-gradient(135deg, var(--ts-accent-soft), transparent 70%),
+    var(--ts-surface);
 }
 
-.masthead-mark {
-  width: 28px;
-  height: 28px;
-  flex: none;
+.panel-head-mark {
+  position: absolute;
+  left: 20px;
+  bottom: 16px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--ts-accent);
   color: var(--ts-on-accent);
-  font: 600 16px/1 var(--ts-font-display);
+  font: 600 18px/1 var(--ts-font-display);
 }
 
-.masthead-name {
+.panel-head-name {
+  position: absolute;
+  left: 62px;
+  right: 20px;
+  bottom: 18px;
   overflow: hidden;
-  font: 600 20px/1.2 var(--ts-font-display);
+  color: var(--ts-text);
+  font: 500 22px/1.2 var(--ts-font-display);
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -36,16 +44,20 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 88px var(--ts-page-gutter) 96px;
+  padding: 56px var(--ts-page-gutter) 72px;
 }
 
 .sign-in-panel {
   width: min(100%, 440px);
-  padding: 26px 24px 24px;
+  overflow: hidden;
   border: 1px solid var(--ts-line);
   border-radius: var(--ts-radius-dialog);
   background: var(--ts-raised);
   box-shadow: var(--ts-shadow-popover);
+}
+
+.sign-in-body {
+  padding: 22px 24px 24px;
 }
 
 .sign-in-title {
@@ -134,6 +146,12 @@
   color: var(--ts-text-3);
 }
 
+.field-failure {
+  margin: 0;
+  color: var(--ts-danger);
+  font: var(--ts-type-ui-small);
+}
+
 .sign-in-submit {
   width: 100%;
   height: 44px;
@@ -146,6 +164,32 @@
 
 .sign-in-submit:hover {
   background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
+}
+
+/* Submitted: the button reads its busy label beside a still ring and takes no second press. */
+.sign-in-submit[aria-disabled="true"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--ts-accent) 72%, var(--ts-raised));
+  cursor: progress;
+}
+
+.sign-in-submit[aria-disabled="true"]::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: sign-in-turn 0.8s linear infinite;
+}
+
+@keyframes sign-in-turn {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sign-in-gains {
@@ -261,7 +305,16 @@
     padding: 28px var(--ts-phone-gutter) 48px;
   }
 
-  .sign-in-panel {
-    padding: 22px 18px 20px;
+  .sign-in-body {
+    padding: 20px 18px 20px;
+  }
+
+  /* 16px keeps a phone from zooming into the field. */
+  .field-input input {
+    font-size: 16px;
+  }
+
+  .sign-in-foot a {
+    min-height: 44px;
   }
 }
