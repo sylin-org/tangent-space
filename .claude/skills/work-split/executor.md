@@ -10,6 +10,8 @@ Plan inside this session, then build. When you have enough information to act, a
 
 Verify as you go: establish the check the brief names early and run it on a cadence. Before reporting, audit every claim against a tool result from this session; report only work you can point to, and say plainly what is not verified. If a check fails, say so with its output.
 
+Bound every wait. Run each check in the foreground with a timeout of twice its expected duration, ten minutes at most; a background command is only for work you will not wait on before reporting, and you never end a turn waiting on one. A server that must outlive a command is started through `scripts/tangent.ps1 launch` and ended by `stop` in the same command, never by `Start-Process` from a command whose output is read. When a check times out, the hang is the finding: end what the command started (the pid file under `.local/launch/`, or the process list), report the command, where its output stopped and the processes it left, and do not re-run it blind.
+
 Commit on this branch when the package passes its checks, with a message that states the outcome; never push, never merge, never touch another branch. If you are blocked on something only Leo or the lead can decide, say so in your report and stop rather than guessing.
 
 Your final message is the report, for a reader who did not watch you work: outcome first, then each check with its command and result, what failed or is unverified, files changed, decisions the brief did not cover, questions. Complete sentences, no working shorthand.

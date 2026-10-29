@@ -41,6 +41,7 @@ A failure escalates one step at a time: the builder re-runs the failing check at
 - Independence is the point of a subagent review or score: the reviewer and the scorer never see the builder's reasoning.
 - Parallel sessions run in worktrees, at most four at once, each on its own branch cut from `dev`. An accepted package merges into `dev` with `--no-ff`, `dev` is pushed as it lands, and the package's worktree, branch and session are removed; no more branches exist than packages in flight. `main` fast-forwards from `dev` when a slice closes. Koan packages do the same against Koan's `dev`, and Tangent re-pins.
 - The lead keeps working while sessions run and reads their reports when they arrive; it intervenes when a session is off track or missing context, and never predicts a result.
+- Nothing waits without a bound: an executor runs its checks in the foreground with timeouts and never ends a turn waiting on a background result; the lead schedules one check after each executor starts and treats silence past it as a hang to diagnose and end (the `work-split` skill names the steps).
 - Koan work runs in the Koan checkout under Koan's contributor law, by a first-of-its-kind builder, and is reviewed at the lead's model.
 - Fast mode is for interactive, mechanical stretches on Opus 5.5 only; it changes speed, not the model.
 - The `Workflow` tool (ultracode) runs only on Leo's word, for slice-wide audits and reviews.
@@ -64,7 +65,7 @@ Dependencies: K1 before slice 0 closes; K2 before slice 1 closes (slice 1 compos
 | Package | After | Role | Group |
 | --- | --- | --- | --- |
 | 0.1 Server skeleton: `Sylin.Koan.App`, SQLite WAL with immediate write transactions, fixed port, trusted proxy, base URL under a path prefix, health | K1 or its experiment | first of its kind | A |
-| 0.2 The writer, and the Koan transaction proven inside a loop | 0.1 | first of its kind, xhigh | A |
+| 0.2 The writer, and the Koan transaction proven inside a loop | 0.11 | first of its kind, xhigh | A |
 | 0.3 The HTML projection: one DTO through a Razor component or JSON by `Accept`, fragments by header | 0.1 | first of its kind | A |
 | 0.4 Island bootstrap and the stream-driven fragment patch | 0.3 | repeat | A |
 | 0.5 Design foundation: tokens, fonts, layout, Paper and Ink, four accents | — | repeat | B |
@@ -73,6 +74,7 @@ Dependencies: K1 before slice 0 closes; K2 before slice 1 closes (slice 1 compos
 | 0.8 Test fixture on `Sylin.Koan.Testing.Hosting`, once under a path prefix | 0.1 | repeat | A |
 | 0.9 Lifecycle: one binary and one folder; build, launch, backup by `VACUUM INTO` and copy, restore; compose | — | repeat | B |
 | 0.10 Lexical search proven through the SQLite connector | 0.1 | explorer-grade, Sonnet 5.5 medium | A |
+| 0.11 Re-pin to Koan's `dev` with K1: adopt `Koan:Web:ApplicationUrl`, `Koan:Web:TrustedProxies` and the SQLite posture; delete what Koan now owns | K1, 0.9 | first of its kind | A |
 
 Group A is a chain from 0.1; group B is independent of it. Four sessions at once: 0.1 then its chain; 0.5 then 0.6; 0.7; 0.9. Slice 0 opens with its hardest unknowns — the transaction in a loop, the formatter, the island patch, the lexical index — because that is where a Koan correction, if one is needed, is cheapest to make.
 

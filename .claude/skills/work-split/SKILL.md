@@ -27,7 +27,11 @@ When the executor is run by hand — another machine, another account — the sa
 
 The lead keeps working while the executor runs, never predicts its result and never reads its transcript.
 
+The lead watches the clock, not the transcript. When the executor starts, the lead schedules one check for forty-five minutes later (`CronCreate`, one shot, with the executor's id and its output file in the prompt) and deletes it when the report arrives. A note that the executor is waiting on its own background work, an output file untouched for twenty minutes, or the check firing with no report is a hang, handled as §4 says, never waited out.
+
 ## 4. Verify
+
+A hang first, if there is one: `pwsh .claude/skills/work-split/orphans.ps1` lists the processes running from this repository whose parent is gone, with their age, worktree and command, and `-Stop` ends them; the tail of the executor's task output says where it stopped. An orphan holding the task open is ended, and the executor is told the cause as a finding and asked to fix it in the package; the executor resumes when its task closes.
 
 When the report arrives: read the diff on the branch, re-run the one relevant check where the report claims a pass, and compare every claim with evidence. A claim without a tool result is a finding.
 
