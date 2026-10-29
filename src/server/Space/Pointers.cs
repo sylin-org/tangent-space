@@ -1,7 +1,7 @@
 namespace Tangent.Space;
 
 /// <summary>One way the site points at its Tangent Space: what <see cref="Kind"/> of pointer it is, where it goes, in
-/// one sentence, and the text to place there, ready to copy.</summary>
+/// one sentence whose code is set between backticks, and the text to place there, ready to copy.</summary>
 public sealed record Pointer(string Kind, string Where, string Text);
 
 /// <summary>The pointers a site places so people and agents find its Tangent Space: a link on its pages, a file at its
@@ -45,9 +45,9 @@ public static class Pointers
         var site = SiteHost(address.Host);
         List<Pointer> pointers =
         [
-            new(Link, "In the <head> of your site’s pages.", $"<link rel=\"tangent\" href=\"{baseUrl}\">"),
-            new(WellKnown, $"Served at {address.Scheme}://{site}/.well-known/tangent as plain text, this one line.", baseUrl),
-            new(Txt, $"A TXT record named _tangent.{site} in your DNS.", $"_tangent.{site}. IN TXT \"{baseUrl}\"")
+            new(Link, "In the `<head>` of your site’s pages.", $"<link rel=\"tangent\" href=\"{baseUrl}\">"),
+            new(WellKnown, $"Served at `{address.Scheme}://{site}/.well-known/tangent` as plain text, this one line.", baseUrl),
+            new(Txt, $"A TXT record named `_tangent.{site}` in your DNS.", $"_tangent.{site}. IN TXT \"{baseUrl}\"")
         ];
         if (address.AbsolutePath != "/") pointers.Add(ProxyRule(address, upstream));
         return pointers;
@@ -73,10 +73,10 @@ public static class Pointers
         var path = Uri.UnescapeDataString(encoded);
         if (path.Contains('$') || path.Any(char.IsControl))
             return new Pointer(Proxy,
-                $"nginx cannot express the path {path} safely, since it reads $ as a variable; pass {path}/ unchanged to {upstream} on your reverse proxy by hand, with X-Forwarded-Proto and X-Forwarded-For, and list the proxy’s address under Koan:Web:TrustedProxies.",
+                $"nginx cannot express the path `{path}` safely, since it reads `$` as a variable; pass `{path}/` unchanged to `{upstream}` on your reverse proxy by hand, with `X-Forwarded-Proto` and `X-Forwarded-For`, and list the proxy’s address under `Koan:Web:TrustedProxies`.",
                 "");
         return new Pointer(Proxy,
-            $"In the server block for {address.Authority} on your reverse proxy; then list the proxy’s address under Koan:Web:TrustedProxies.",
+            $"In the server block for `{address.Authority}` on your reverse proxy; then list the proxy’s address under `Koan:Web:TrustedProxies`.",
             $$"""
             location = {{Nginx(path)}} {
                 return 308 {{Nginx(encoded + "/")}};

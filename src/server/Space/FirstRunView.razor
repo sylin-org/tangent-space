@@ -13,7 +13,7 @@
         @if (Model.Pointers is { } pointers)
         {
             <h1 id="first-run-title" class="sign-in-title">@Model.Name is ready</h1>
-            <p class="sign-in-lede">It answers at <a href="@Model.Door">@Model.BaseUrl</a>; place any one of these on your site.</p>
+            <p class="sign-in-lede">It answers at <a href="@Model.Door"><CodeText Text="@Model.BaseUrl" /></a>; place any one of these on your site.</p>
             <ol class="first-run-pointers">
                 @for (var index = 0; index < pointers.Count; index++)
                 {
@@ -28,7 +28,7 @@
                                         aria-describedby="@(id)-title" hidden>Copy</button>
                             }
                         </div>
-                        <p class="first-run-pointer-where">@pointer.Where</p>
+                        <p class="first-run-pointer-where"><CodedSentence Text="@pointer.Where" /></p>
                         @if (pointer.Text.Length > 0)
                         {
                             <pre class="first-run-snippet" id="@id" tabindex="0"><code>@pointer.Text</code></pre>
@@ -66,7 +66,7 @@
                         <label class="field-label" for="first-run-code">Setup code</label>
                         <span class="field-input first-run-code">
                             <input id="first-run-code" name="code" type="text" required autofocus="@(focus == "first-run-code")" autocomplete="off"
-                                   autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="40"
+                                   autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="40" value="@form.Code"
                                    aria-invalid="@(form.CodeFailure is null ? "false" : "true")"
                                    aria-describedby="@(form.CodeFailure is null ? "first-run-code-note" : "first-run-code-failure first-run-code-note")">
                         </span>
@@ -74,7 +74,7 @@
                         {
                             <p class="field-failure" id="first-run-code-failure">@codeFailure</p>
                         }
-                        <p class="first-run-note" id="first-run-code-note">Copy it from the “Setup code” line of this Tangent Space’s log; each start writes a new one.</p>
+                        <p class="first-run-note" id="first-run-code-note">Copy it from the “Setup code” line of the log; each start writes a new one.</p>
                     </div>
                 }
                 <div class="field">
@@ -93,7 +93,7 @@
                 </div>
                 <div class="field">
                     <span class="field-label" id="first-run-address-label">Base URL</span>
-                    <span class="first-run-address" aria-labelledby="first-run-address-label">@Model.BaseUrl</span>
+                    <span class="first-run-address" aria-labelledby="first-run-address-label"><CodeText Text="@Model.BaseUrl" /></span>
                     <p class="first-run-note">Where this Tangent Space answers, as its configuration says.</p>
                 </div>
                 <ConfigurationRoutes Setting="@Model.Setting" AsksCode="@form.AsksCode" />
@@ -156,7 +156,7 @@
         }
         else if (Model.Waiting is { } waiting)
         {
-            <h1 id="first-run-title" class="sign-in-title">This Tangent Space waits for its operator</h1>
+            <h1 id="first-run-title" class="sign-in-title">Waiting for its operator</h1>
             <p class="sign-in-lede">
                 @if (waiting.Handle.Length > 0)
                 {
@@ -171,11 +171,11 @@
                 Only
                 @if (waiting.OperatorHandle is { } operatorHandle)
                 {
-                    <strong>@("@" + operatorHandle)</strong> <span class="first-run-did">(<code>@Model.Operator</code>)</span>
+                    <strong>@("@" + operatorHandle)</strong> <span class="first-run-did">(<CodeText Text="@(Model.Operator ?? "")" />)</span>
                 }
                 else
                 {
-                    <code>@Model.Operator</code>
+                    <CodeText Text="@(Model.Operator ?? "")" />
                 }
                 can set it up.
             </p>
@@ -206,7 +206,7 @@
             </form>
             @if (Model.Operator is { } pinned)
             {
-                <p class="first-run-note first-run-first">Only the person whose DID is <code>@pinned</code> can set it up.</p>
+                <p class="first-run-note first-run-first">Only the person whose DID is <CodeText Text="@pinned" /> can set it up.</p>
             }
             else
             {
@@ -224,7 +224,7 @@
     /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and the account of
     /// whoever is signed in.</summary>
     public static Frame Frame(FirstRun firstRun)
-        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Ready")],
+        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Pointers")],
             firstRun.Reader is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null);
 
     private string PanelClass => Model.Challenge is not null || Model.Waiting is not null ? "sign-in-panel" : "sign-in-panel first-run-panel";

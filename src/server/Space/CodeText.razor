@@ -1,0 +1,29 @@
+@* Code inside a sentence, in the mono face: an address breaks only after a slash, never at a hyphen or inside a
+   name, so each run between slashes holds together and a break opportunity follows each slash. Written without
+   whitespace between its parts, so nothing is added to the code. *@
+@Render
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+
+    private RenderFragment Render => builder =>
+    {
+        var runs = Text.Split('/');
+        builder.OpenElement(0, "code");
+        builder.AddAttribute(1, "class", "code-text");
+        for (var index = 0; index < runs.Length; index++)
+        {
+            var last = index == runs.Length - 1;
+            builder.OpenElement(2, "span");
+            builder.AddAttribute(3, "class", "code-run");
+            builder.AddContent(4, last ? runs[index] : runs[index] + "/");
+            builder.CloseElement();
+            if (!last)
+            {
+                builder.OpenElement(5, "wbr");
+                builder.CloseElement();
+            }
+        }
+        builder.CloseElement();
+    };
+}
