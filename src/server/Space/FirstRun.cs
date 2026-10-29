@@ -41,13 +41,15 @@ public sealed record FirstRun(
 /// <see cref="Choices"/>: <c>me</c>, or <c>someone</c> with that participant's <c>handle</c>), <c>accountable</c>, the
 /// sender's statement that they are the person who answers for the place, <c>code</c>, the setup code, where
 /// <see cref="AsksCode"/>, and the form's <see cref="Token"/>. <see cref="Handle"/> is the signed-in person's verified
-/// handle, or empty; they become the operator. After a refusal it keeps what was sent, never the code, and says why:
-/// each field's failure under it, <see cref="Failure"/> above the form.</summary>
+/// handle, or empty; they become the operator. After a refusal it keeps what was sent, the typed code included, so the
+/// sender sees what was refused, and says why: each field's failure under it, <see cref="Failure"/> above the
+/// form.</summary>
 public sealed record FirstRunForm(
     string Action,
     FormToken Token,
     string Handle,
     bool AsksCode,
+    string? Code = null,
     string? Name = null,
     string Proprietor = FirstRunForm.Me,
     string? ProprietorHandle = null,

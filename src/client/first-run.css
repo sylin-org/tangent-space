@@ -12,29 +12,40 @@
   gap: 20px;
 }
 
-/* A reading measure for every sentence inside the card. */
+/* A reading measure for every sentence inside the card, and no word left alone on a last line. */
 .first-run .sign-in-lede,
 .first-run-note,
 .first-run-rule,
 .first-run-pointer-where,
 .first-run-configuration li {
   max-width: 68ch;
+  text-wrap: pretty;
 }
 
 .first-run-form .field {
   gap: 6px;
 }
 
-.first-run-note code,
 .first-run-address,
 .first-run-snippet {
   font-family: var(--ts-font-mono);
 }
 
-.first-run-note code {
-  font-size: 12px;
-  color: var(--ts-text-2);
-  overflow-wrap: anywhere;
+/* Code inside a sentence: the mono face in the text colour, a size under the sentence's; an address breaks only after
+ * a slash (each run between slashes holds together), never at a hyphen. */
+.first-run .code-text {
+  font-family: var(--ts-font-mono);
+  font-size: 0.92em;
+  color: var(--ts-text);
+  hyphens: none;
+}
+
+.first-run a .code-text {
+  color: inherit;
+}
+
+.first-run .code-run {
+  white-space: nowrap;
 }
 
 /* The base URL: shown, not edited; it reads as configuration. */
@@ -48,7 +59,10 @@
   background: var(--ts-surface);
   color: var(--ts-text);
   font-size: 14px;
-  overflow-wrap: anywhere;
+}
+
+.first-run-address .code-text {
+  font-size: inherit;
 }
 
 .first-run-note {
@@ -153,6 +167,7 @@
  * after a refusal that concerns it. */
 .first-run-handle {
   display: none;
+  margin-top: 10px;
 }
 
 .first-run-proprietor:has(input[value="someone"]:checked) .first-run-handle,
@@ -253,20 +268,7 @@
   gap: 6px;
 }
 
-.first-run-configuration code {
-  font-family: var(--ts-font-mono);
-  font-size: 12px;
-  color: var(--ts-text);
-  overflow-wrap: anywhere;
-}
 
-.first-run-rule code,
-.first-run-first code {
-  font-family: var(--ts-font-mono);
-  font-size: 12.5px;
-  color: var(--ts-text);
-  overflow-wrap: anywhere;
-}
 
 .first-run-operator-text {
   margin: 0;
@@ -401,6 +403,10 @@
   .first-run-copy {
     height: 44px;
     min-width: 44px;
+  }
+
+  .first-run-configuration summary {
+    min-height: 44px;
   }
 
   /* On a phone a snippet wraps rather than scrolls, so all of it shows before it is copied. */

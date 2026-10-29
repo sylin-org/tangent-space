@@ -80,9 +80,10 @@ export const screens: Readonly<Record<string, Screen>> = {
   // Before anyone signs in; signed in where the configuration names someone else as operator; signed in, the
   // form with its setup code field before anything is written, and refused for a wrong setup code; where the
   // configuration names the persona, the form refused for a proprietor handle no participant has; and established,
-  // the site's pointers for its operator.
+  // the site's pointers for its operator, under the name the persona gave the place.
   'first-run': {
     path: '/first-run',
+    placeName: 'Ada’s Notebook',
     states: [
       { name: 'arrival', place: 'unestablished' },
       { name: 'waiting', place: 'unestablished', signedIn: true, settings: { 'Tangent:Operator': captureOperator.did } },

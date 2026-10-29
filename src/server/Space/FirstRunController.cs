@@ -82,6 +82,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         var affirmed = accountable == Affirmed;
         var sent = Form(HttpContext, baseUrl, pinned is null) with
         {
+            Code = pinned is null ? code?.Trim() : null,
             Name = name?.Trim(),
             Proprietor = someone ? FirstRunForm.Someone : FirstRunForm.Me,
             ProprietorHandle = handle?.Trim(),

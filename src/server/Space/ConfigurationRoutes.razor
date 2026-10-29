@@ -6,11 +6,11 @@
     <ul>
         @if (AsksCode)
         {
-            <li>Set <code>@FirstRun.OperatorSetting</code> to your DID and restart, and no setup code is asked.</li>
+            <li>Set <CodeText Text="@FirstRun.OperatorSetting" /> to your DID and restart, and no setup code is asked.</li>
         }
         @if (Setting is { } setting)
         {
-            <li>Set <code>@setting</code> in appsettings.json, or <code>@setting.Replace(":", "__")</code> in the environment, and restart to answer elsewhere.</li>
+            <li>Set <CodeText Text="@setting" /> in <CodeText Text="appsettings.json" />, or <CodeText Text="@setting.Replace(":", "__")" /> in the environment, and restart to answer elsewhere.</li>
         }
     </ul>
 </details>
