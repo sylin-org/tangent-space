@@ -1,0 +1,63 @@
+@using System.Text.Json
+@using global::Tangent.Render
+@* Where a reader replies in a Topic, under its replies. A reader who may reply holds the form that posts to the Topic's
+   address: the page's form token and a TID minted as it renders, so a form sent twice posts once; the Post it answers,
+   which is the Post the page's address named when that is someone else's reply and not removed, and the Topic
+   otherwise, with the way back to replying to the Topic; and the body. The composer island keeps its words and gives
+   each Post a Reply action. A reader who may not reply reads the gate's sentence instead, and a visitor the way to
+   sign in. *@
+@if (Model.Gate is null && Model.Who is { } who && Model.Watching is { } watching)
+{
+    <section class="topic-reply" id="reply" aria-labelledby="reply-heading">
+        <h2 id="reply-heading" class="topic-replies-title">Reply</h2>
+        <form class="reply-form" method="post" action="@Model.Address" data-island="composer" data-props="@Props(who)">
+            <FormTokenField Token="@watching.Token" />
+            <input type="hidden" name="@PostWrites.IdField" value="@Tid.Mint(DateTimeOffset.UtcNow)" id="reply-form-id">
+            <input type="hidden" name="@PostWrites.ParentField" value="@Parent?.Id">
+            <p class="reply-form-to" data-reply-to hidden="@(Parent is null)">
+                Replying to <a href="@("#" + Parent?.Id)" data-reply-to-post>@Parent?.Author.Name</a> ·
+                <a href="@(Model.Address + "#reply")" data-reply-to-topic>reply to the topic instead</a>
+            </p>
+            <label class="field-label" for="reply-body">Your reply</label>
+            <textarea class="post-form-body" id="reply-body" name="@PostWrites.BodyField" rows="5" required></textarea>
+            <div class="post-form-actions">
+                <span class="post-form-as">Posting as <strong>@("@" + who.Handle)</strong></span>
+                <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Posting…">Post reply</button>
+            </div>
+        </form>
+    </section>
+}
+else if (Model.Gate is { } gate)
+{
+    <p class="topic-closed" data-gate="@gate">
+        @if (Model.SignIn is { } signIn && gate == global::Tangent.Access.Capabilities.SignIn)
+        {
+            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+        }
+        else
+        {
+            @PostWrites.Sentence(gate)
+        }
+    </p>
+}
+
+@code {
+    [Parameter, EditorRequired] public TopicPage Model { get; set; } = default!;
+
+    /// <summary>The Post the form answers: the reply the page's address named, where it named one by someone else that is
+    /// not removed; the address a reader lands on after replying names their own reply, and they go on replying to the
+    /// Topic, as they do at a tombstone's address.</summary>
+    private TopicPage.Post? Parent => Model.Anchor is { } anchor
+        ? Model.Replies.FirstOrDefault(reply => reply.Id == anchor && reply.Removed is null && reply.Author.Id != Model.Who?.Id)
+        : null;
+
+    /// <summary>The composer's props: whose drafts these are, the Topic they are kept under, and the prefix of a reply's
+    /// address, which its TID completes.</summary>
+    private string Props(TopicPage.Reader who) => JsonSerializer.Serialize(new
+    {
+        participant = who.Id,
+        scope = "topic:" + Model.Id,
+        locate = Model.Address + "/",
+        noun = "reply"
+    });
+}

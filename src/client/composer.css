@@ -1,0 +1,54 @@
+/* The composer: the reply form under a Topic's replies, with the Post it answers named above the body, and the line the
+ * composer island writes above the fields — a note while it sends or checks, a failure when the server refused or the
+ * outcome is not known. The new-topic form keeps its own panel. */
+
+.topic-reply {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ts-line);
+}
+
+.reply-form {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reply-form .post-form-body {
+  min-height: 132px;
+}
+
+.reply-form-to {
+  margin: 0;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+}
+
+.reply-form-to a {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.composer-status {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-input);
+  background: var(--ts-hover);
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+  text-wrap: pretty;
+}
+
+.composer-status[data-tone="failure"] {
+  border-color: var(--ts-danger);
+  background: var(--ts-danger-soft);
+  color: var(--ts-text);
+}
+
+.composer-reply-to {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}

@@ -3,7 +3,7 @@
    Post's Id rides in a hidden field, minted when the page was rendered, so a form sent twice starts one Topic. A reader
    who may not start a Topic here reads why above the form, whose fields are read-only and which has no button, and a
    visitor the way to sign in; a refusal of a field shows under that field, which takes the focus, and any other above
-   the form. *@
+   the form. For a participant who may post, the composer island keeps the words as a draft and sends them. *@
 <main class="sign-in post-form">
     <section class="sign-in-panel post-form-panel" aria-labelledby="new-topic-heading">
         <div class="sign-in-body">
@@ -26,7 +26,7 @@
             {
                 <p class="sign-in-failure" id="new-topic-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Action" data-island="submitting">
+            <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Composing ? "composer" : null)" data-props="@ComposerProps()">
                 <FormTokenField Token="@Model.Token" />
                 <input type="hidden" name="@PostWrites.IdField" value="@Model.Id">
                 <div class="field">
@@ -72,6 +72,21 @@
     [Parameter, EditorRequired] public NewTopicPage Model { get; set; } = default!;
 
     private bool Article => Model.Kind == PostWrites.Word(PostKind.Article);
+
+    /// <summary>Whether the composer island takes the form: for a participant who may start a Topic here.</summary>
+    private bool Composing => Model.Gate is null && Model.Who is not null;
+
+    /// <summary>The composer's props: whose drafts these are, the Tangent they are kept under, and the prefix of the
+    /// address that names a new Topic by its root's TID until its slug is known.</summary>
+    private string? ComposerProps() => Composing
+        ? System.Text.Json.JsonSerializer.Serialize(new
+        {
+            participant = Model.Who!.Id,
+            scope = "tangent:" + Model.Tangent,
+            locate = Model.TangentAddress + "/",
+            noun = Article ? "article" : "topic"
+        })
+        : null;
 
     /// <summary>The field the page opens on: the first one a refusal concerns, else the title.</summary>
     private string Focus => Model.TitleFailure is null && Model.BodyFailure is not null ? "new-topic-body" : "new-topic-title";

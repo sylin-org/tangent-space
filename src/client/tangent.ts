@@ -8,6 +8,7 @@ import './first-run.css'
 import './post-form.css'
 import './tangent-page.css'
 import './topic.css'
+import './composer.css'
 import './watch.css'
 import { mountIslands } from './islands'
 
