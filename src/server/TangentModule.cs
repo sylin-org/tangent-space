@@ -2,6 +2,7 @@ using Koan.Core;
 using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
+using Koan.Identity.Roles;
 using Koan.Web.Extensions;
 using Koan.Web.Hosting;
 using Koan.Web.Options;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Tangent.Access;
 using Tangent.Events;
 using Tangent.Lifecycle;
 using Tangent.Render;
@@ -81,6 +83,7 @@ public sealed class TangentModule : KoanModule
             await space.Save(ct);
         }
 
+        await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 

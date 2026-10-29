@@ -39,7 +39,15 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Identity",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Web",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Web.Auth.Abstractions",
       "version": "1.0"
     }
   ],
@@ -47,6 +55,10 @@
     {
       "kind": "project",
       "id": "Koan.Data.Connector.Sqlite"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Identity"
     },
     {
       "kind": "project",
