@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Koan.Data.Abstractions;
 using Koan.Data.Core.Sorting;
+using Koan.Identity.Roles;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -16,10 +17,10 @@ namespace Tangent.Tangents;
 /// <summary>The Tangent page, one resource both ways: the Tangent, its <c>can</c>, and one bounded page of its Topics
 /// with what is new to the reader marked, left to the formatter as HTML, a fragment or JSON. A reader without
 /// <see cref="Bit.View"/> on the Tangent receives its gate instead, and one for whom the Tangent is absent receives
-/// what an address with no Tangent receives. Every read is bounded and keyed: capability's rows, the Tangent, at most
-/// two reads of Topics, their latest replies by Id, the people on the page, the reader's checkpoints for those Topics,
-/// and the first <see cref="SwitcherLimit"/> Tangents by order with their overwrites for the switcher.</summary>
-public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBase
+/// what an address with no Tangent receives. Every read is bounded and keyed: the Tangent, then capability's rows, at
+/// most two reads of Topics, their latest replies by Id, the people on the page, the reader's checkpoints for those
+/// Topics, and the first <see cref="SwitcherLimit"/> Tangents by order with their overwrites for the switcher.</summary>
+public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
     public const string After = "after";
@@ -36,9 +37,12 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     public async Task<IActionResult> Get(string tangent, [FromQuery(Name = After)] string? after, CancellationToken ct)
     {
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
-        var capabilities = await Capabilities.Load(personId, tangent, null, ct);
+        // The Tangent's row is read before its overwrites: a Tangent found here committed after its audience was written.
+        // A missing Tangent's overwrites are not read, so an address no Tangent has takes no place in Koan's cache.
+        var found = await Tangent.Get(tangent, ct);
+        var capabilities = await Capabilities.Load(personId, found?.Id, null, ct);
         if (!capabilities.Exists) return Gated(capabilities.Gate(Bit.View) ?? Capabilities.Absent);
-        if (await Tangent.Get(tangent, ct) is not { } row) return Gated(Capabilities.Absent);
+        if (found is not { } row) return Gated(Capabilities.Absent);
 
         TopicList.Cursor? cursor = null;
         if (after is not null && (cursor = TopicList.Cursor.Parse(after)) is null)
@@ -51,8 +55,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var people = await People(page.Topics, latest.Values, ct);
         var seen = await Seen(reader, page.Topics, ct);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
-        var everyone = await Overwrite.Get(Overwrite.Key(row.Id, Overwrite.Everyone), ct);
-        var audience = space.Audience == Audience.Private || everyone?.AudienceStated() == Audience.Private
+        var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(roles, row.Id, ct) == Audience.Private
             ? Audience.Private
             : Audience.Public;
 

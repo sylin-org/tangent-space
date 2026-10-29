@@ -5,7 +5,8 @@ using Xunit;
 
 namespace Tangent.Access;
 
-/// <summary>The roles a first start seeds on Koan's RoleCollection, once.</summary>
+/// <summary>The roles a first start seeds on Koan's RoleCollection, once, and the administrator permission every start
+/// keeps on the administrator role.</summary>
 public sealed class RolesTests
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
@@ -39,6 +40,33 @@ public sealed class RolesTests
             Assert.Equal(Roles.MemberBits | Bit.Moderate, await BitsOf(Roles.Member));
             Assert.Equal(Bit.Post, await BitsOf(Roles.Everyone));
             Assert.Equal(Roles.ModeratorBits, await BitsOf(Roles.Moderator));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_start_gives_the_administrator_role_the_administrator_permission_it_lacks_and_takes_nothing_from_it()
+    {
+        var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
+        try
+        {
+            await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder), ct: Cancellation))
+            {
+                await first.Services.GetRequiredService<RoleCollection>()
+                    .SetPermissions(Roles.Administrator, ["global:Administrator", Bits.Token(Bit.ManageSpace)], Cancellation);
+                Assert.Equal(Bit.ManageSpace, await BitsOf(Roles.Administrator));
+            }
+
+            await using var second = await TangentSpaceFixture.StartAsync(Settings(dataFolder), ct: Cancellation);
+
+            var permissions = (await Role.Get(Roles.Administrator, Cancellation))!.Permissions;
+            Assert.Equal(new[] { "global:Administrator", Bits.Token(Bit.ManageSpace), RoleTokens.Administrator }.Order(StringComparer.Ordinal),
+                permissions.Order(StringComparer.Ordinal));
+            Assert.Equal(Bit.Administrator | Bit.ManageSpace, await BitsOf(Roles.Administrator));
         }
         finally
         {

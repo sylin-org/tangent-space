@@ -1,3 +1,4 @@
+using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Events;
 using Tangent.Participants;
@@ -24,15 +25,14 @@ public sealed class CommandGateTests
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Member], ct: Cancellation);
-        var everyone = Overwrite.ForAudience(Workshop, Audience.Public);
-        everyone.Deny = [nameof(Bit.Topic)];
-        Assert.IsType<Outcome<Overwrite>.Done>(await writer.Send(new Store<Overwrite>(everyone), Cancellation));
+        await tangentSpace.Services.GetRequiredService<RoleCollection>().Overwrite(Overwrites.Resource(Workshop), OverwriteSubjectKind.Role,
+            RoleTokens.Everyone, [Bits.Token(Bit.View)], [Bits.Token(Bit.Topic)], ct: Cancellation);
         var announced = 0;
         writer.Committed += _ => announced++;
 
         var refused = await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Not here", "Words.", "leo"), Cancellation);
 
-        Assert.Equal(Capabilities.Denied(Overwrite.Everyone, Bit.Topic), Assert.IsType<Outcome<Post>.Refused>(refused).Reason);
+        Assert.Equal(Capabilities.Denied(RoleTokens.Everyone, Bit.Topic), Assert.IsType<Outcome<Post>.Refused>(refused).Reason);
         Assert.Equal((0, 0, 0), (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced));
     }
 

@@ -4,8 +4,8 @@ using Tangent.Writer;
 
 namespace Tangent.Tangents;
 
-/// <summary>A subject area inside the Tangent Space, keyed by its slug. Its audience is the <c>everyone</c>
-/// <see cref="Overwrite"/> on it, not a field here.</summary>
+/// <summary>A subject area inside the Tangent Space, keyed by its slug. Its audience is the <c>everyone</c> overwrite on
+/// its resource (<see cref="Overwrites"/>), not a field here.</summary>
 public sealed class Tangent : Entity<Tangent>
 {
     public const int NameLimit = 80;
