@@ -89,8 +89,9 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
 
     private async Task Person(string id, string handle, string displayName, ParticipantKind kind, string role, CancellationToken ct)
     {
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle, Kind = kind }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null), At(1, 0, 0)), ct);
+        // Captured now, so a sign-in finds the profile fresh and no profile job reaches the network.
+        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle }), ct);
+        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null, AgentLabel: kind == ParticipantKind.Agent), DateTimeOffset.UtcNow), ct);
         await roles.Add(role, id, ct);
     }
 

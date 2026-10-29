@@ -1,11 +1,11 @@
 /* The sign-in page: one panel in the page, never a dialog, headed by the place's mark and name. It holds the handle
- * form, or, once a person has signed in, the form that declares their kind. Sizes follow the design reference's
- * sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @ prefix inside the field. */
+ * form. Sizes follow the design reference's sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @
+ * prefix inside the field. */
 
-/* A panel's head: the place's face, its atmosphere drawn in the accent on the surface, under the reference's
- * darkening gradient, with the mark and the name in the light ink the reference sets over a place's image. */
+/* A panel's head: the place's face. Its atmosphere is drawn in the accent across the upper part, fading out before
+ * the band; the mark and the name sit on the reference's dark ink band, in the light ink it sets over a place's
+ * image, in both themes. */
 .panel-head {
-  --panel-head-ink: #f3eee3;
   position: relative;
   height: 128px;
   overflow: hidden;
@@ -14,25 +14,29 @@
 
 .panel-head-atmosphere {
   position: absolute;
-  top: 10px;
+  top: 6px;
   right: -40px;
   margin: 0;
   color: var(--ts-accent);
   font: 400 13px/1.2 var(--ts-font-mono);
   opacity: 0.55;
   pointer-events: none;
+  mask-image: linear-gradient(180deg, #000 0, #000 46px, transparent 66px);
 }
 
-.panel-head-shade {
+.panel-head-band {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(10, 9, 8, 0.05) 20%, rgba(10, 9, 8, 0.8) 100%);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  background: var(--ts-image-band);
 }
 
 .panel-head-mark {
   position: absolute;
   left: 20px;
-  bottom: 16px;
+  bottom: 12px;
   width: 32px;
   height: 32px;
   display: grid;
@@ -41,16 +45,16 @@
   background: var(--ts-accent);
   color: var(--ts-on-accent);
   font: 600 18px/1 var(--ts-font-display);
-  box-shadow: 0 0 0 1px rgba(10, 9, 8, 0.25);
+  box-shadow: 0 0 0 1px var(--ts-image-edge);
 }
 
 .panel-head-name {
   position: absolute;
-  left: 62px;
+  left: 64px;
   right: 20px;
-  bottom: 18px;
+  bottom: 14px;
   overflow: hidden;
-  color: var(--panel-head-ink);
+  color: var(--ts-image-ink);
   font: 500 22px/1.2 var(--ts-font-display);
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
@@ -74,11 +78,6 @@
   box-shadow: var(--ts-shadow-popover);
 }
 
-/* The first arrival: wider, so the two kinds sit side by side. */
-.sign-in-panel-wide {
-  width: min(100%, 600px);
-}
-
 .sign-in-body {
   padding: 22px 24px 24px;
 }
@@ -92,11 +91,6 @@
 .sign-in-lede {
   margin: 4px 0 0;
   color: var(--ts-text-2);
-}
-
-.sign-in-lede strong {
-  color: var(--ts-text);
-  font-weight: 600;
 }
 
 .sign-in-failure {
@@ -190,13 +184,6 @@
   background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
 }
 
-/* Not ready yet: the form still needs a choice, and the button says which. */
-.sign-in-submit[data-state="pending"] {
-  background: var(--ts-hover);
-  color: var(--ts-text-2);
-  box-shadow: inset 0 0 0 1px var(--ts-line);
-}
-
 /* Submitted: the button keeps the accent and its contrast, reads its busy label beside a ring, and takes no second
  * press; the form says aria-busy. */
 .sign-in-submit[aria-disabled="true"] {
@@ -277,135 +264,28 @@
   font-size: 12.5px;
 }
 
-.kind-choice {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.kind-choice legend {
-  margin-bottom: 6px;
-}
-
-.kind-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.kind-option {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 14px 16px;
-  border: 1px solid var(--ts-line);
-  border-radius: var(--ts-radius-row);
-  background: var(--ts-page);
-  cursor: pointer;
-}
-
-.kind-option:has(input:checked) {
-  border-color: var(--ts-accent-line);
-  box-shadow: 0 0 0 3px var(--ts-accent-soft);
-}
-
-.kind-option input {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  margin: 0;
-  accent-color: var(--ts-accent);
-}
-
-/* The Person and Agent marks: a person's picture is round; an agent's is square with its ring. */
-.kind-mark {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  background: var(--ts-surface);
-  color: var(--ts-text);
-  font: 600 16px/1 var(--ts-font-ui);
-  box-shadow: inset 0 0 0 1px var(--ts-line);
-}
-
-.kind-mark-person {
-  border-radius: 50%;
-}
-
-.kind-mark-agent {
-  border-radius: 10px;
-  box-shadow: 0 0 0 2px var(--ts-page), 0 0 0 3.5px var(--ts-agent-ring);
-}
-
-.sign-in-switch {
-  margin: 16px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--ts-line);
-  font-size: 13.5px;
-}
-
-.sign-in-switch a {
-  color: var(--ts-text-2);
-}
-
-.kind-option-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.kind-option-name {
-  font-weight: 600;
-}
-
-.kind-option-detail {
-  color: var(--ts-text-2);
-  font-size: 13px;
-}
-
-.sign-in-note {
-  margin: 0;
-  color: var(--ts-text-3);
-  font-size: 12.5px;
-}
-
-/* The phone: the panel takes the width less the narrow gutter, nearer the masthead. */
+/* The phone: the panel takes the width less the narrow gutter, 32 below the path bar; a shorter head; 16px in the
+ * field, which keeps a phone from zooming into it; and the Bluesky link as a block of at least 44. */
 @media (max-width: 719px) {
   .sign-in {
-    padding: 28px var(--ts-phone-gutter) 48px;
+    padding: 32px var(--ts-phone-gutter) 48px;
   }
 
-  /* The first arrival: wider, so the two kinds sit side by side. */
-.sign-in-panel-wide {
-  width: min(100%, 600px);
-}
-
-.sign-in-body {
+  .sign-in-body {
     padding: 20px 18px 20px;
   }
 
-  /* 16px keeps a phone from zooming into the field. */
   .field-input input {
     font-size: 16px;
   }
 
   .sign-in-foot {
-    gap: 0;
+    gap: 2px;
   }
 
   .sign-in-foot a {
+    align-self: stretch;
     min-height: 44px;
-    margin: -10px 0 -8px;
-  }
-
-  .kind-options {
-    grid-template-columns: 1fr;
   }
 
   .panel-head {
@@ -413,6 +293,20 @@
   }
 
   .panel-head-atmosphere {
-    top: 2px;
+    top: 0;
+    mask-image: linear-gradient(180deg, #000 0, #000 22px, transparent 38px);
+  }
+
+  .panel-head-band {
+    height: 48px;
+  }
+
+  .panel-head-mark {
+    bottom: 8px;
+  }
+
+  .panel-head-name {
+    bottom: 10px;
+    font-size: 20px;
   }
 }

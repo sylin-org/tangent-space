@@ -39,10 +39,7 @@
                     </summary>
                     <div class="account-panel">
                         <p class="account-who"><span class="account-label">Signed in as</span><span class="who-handle">@("@" + who.Handle)</span></p>
-                        @if (who.SignOut is { } signOut)
-                        {
-                            <a class="account-sign-out" href="@signOut">Sign out</a>
-                        }
+                        <a class="account-sign-out" href="@who.SignOut">Sign out</a>
                     </div>
                 </details>
             </div>

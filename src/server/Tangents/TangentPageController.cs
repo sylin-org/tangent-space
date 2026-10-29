@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -68,7 +69,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             space.Name,
             configured + "/",
             reader is null ? null : new TangentPage.Reader(reader.Handle.Length > 0 ? reader.Handle : reader.Id, reader.Profile.Avatar,
-                configured + SignInController.SignOutPath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + "/t/" + row.Id))));
+                configured + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + "/t/" + row.Id))));
     }
 
     /// <summary>What a reader without <see cref="Bit.View"/> receives: a missing resource's answer where the Tangent

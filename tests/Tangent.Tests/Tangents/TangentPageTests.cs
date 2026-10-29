@@ -159,10 +159,15 @@ public sealed class TangentPageTests
         var html = await Html(browser.Client, "/t/" + Workshop);
         Assert.Contains("<span class=\"new-dot\" role=\"img\" aria-label=\"New\"></span>", html);
         Assert.Contains("<span class=\"new-label\">1 new</span>", html);
+        // The reader's account opens in the page, with the way to sign out and come back here.
+        Assert.Contains("<details class=\"account\">", html);
+        Assert.Contains($"<a class=\"account-sign-out\" href=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">Sign out</a>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
             Assert.All(Marks(json.RootElement).Values, mark => Assert.Equal((false, 0L), mark));
-        Assert.DoesNotContain("new-dot", await Html(tangentSpace.Client, "/t/" + Workshop));
+        var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop);
+        Assert.DoesNotContain("new-dot", visitorHtml);
+        Assert.DoesNotContain("class=\"account\"", visitorHtml);
     }
 
     [Fact]

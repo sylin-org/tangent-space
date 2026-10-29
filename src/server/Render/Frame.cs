@@ -11,7 +11,7 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
 
 /// <summary>Who is signed in, as the masthead shows them: their handle, their avatar where their profile has one, and
 /// where they sign out, coming back to the page they are on.</summary>
-public sealed record Who(string Handle, string? Avatar = null, string? SignOut = null)
+public sealed record Who(string Handle, string? Avatar, string SignOut)
 {
     /// <summary>The mark drawn without an avatar: the first letter of the handle.</summary>
     public string Initial => Handle.Length > 0 ? char.ToUpperInvariant(Handle[0]).ToString() : "?";
