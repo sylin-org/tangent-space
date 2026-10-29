@@ -14,6 +14,9 @@
   <ItemGroup>
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Jobs/Koan.Jobs.csproj" />
   </ItemGroup>
   <ItemGroup>
     <ClientSource Include="$(ClientRoot)**" Exclude="$(ClientRoot)node_modules/**;$(ClientRoot)tests/**" />

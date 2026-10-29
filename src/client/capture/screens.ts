@@ -32,6 +32,11 @@ export interface Screen {
 // door's states.
 export const screens: Readonly<Record<string, Screen>> = {
   door: { path: '/', states: [{ name: 'signed-out' }] },
+  // The handle form a visitor reads, and the same form with the connector's sanitized failure inline.
+  'sign-in': {
+    path: '/sign-in',
+    states: [{ name: 'empty' }, { name: 'error', query: { failure: 'atproto_authentication_failed' } }],
+  },
 }
 
 // The reference's screens by width, as file names under its screens/ folder. Each is drawn at one size

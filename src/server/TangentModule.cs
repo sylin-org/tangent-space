@@ -48,13 +48,15 @@ public sealed class TangentModule : KoanModule
 
         // The controllers of this assembly, whichever assembly hosts the composition.
         services.AddKoanControllersFrom<TangentModule>();
+        Participants.ParticipantsComposition.AddParticipants(services);
 
         // The HTML projection: each resource type names its component; the formatter goes first so a request
         // without a preference reads a page, and every other type keeps Koan's JSON.
         services.AddScoped<HtmlRenderer>();
         services.AddSingleton(new ResourceComponents()
             .Add<Door, DoorView>(door => door.Name, door => door.Version)
-            .Add<Problem, ProblemView>(problem => problem.Title));
+            .Add<Problem, ProblemView>(problem => problem.Title)
+            .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
         {
