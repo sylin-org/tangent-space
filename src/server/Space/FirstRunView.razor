@@ -202,7 +202,7 @@
     /// whoever is signed in, which is also their way out when the place is not theirs to set up.</summary>
     public static Frame Frame(FirstRun firstRun)
         => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Ready")],
-            firstRun.Reader is { } reader ? new Who(reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null);
+            firstRun.Reader is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null);
 
     private string PanelClass => Model.Challenge is not null || Model.Waiting is not null ? "sign-in-panel" : "sign-in-panel first-run-panel";
 

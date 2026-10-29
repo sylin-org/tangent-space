@@ -150,7 +150,8 @@ public sealed partial class FirstRunTests
         Assert.Contains("class=\"account-button\"", html);
         var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
         Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
-        Assert.Contains($"href=\"{WebUtility.HtmlEncode(signOut)}\">Sign out</a>", html);
+        Assert.Contains($"<a class=\"account-item\" href=\"{WebUtility.HtmlEncode(signOut)}\">", html);
+        Assert.Contains("</svg>Sign out</a>", html);
         Assert.False(json.RootElement.TryGetProperty("form", out _));
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
     }

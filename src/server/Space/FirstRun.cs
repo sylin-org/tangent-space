@@ -70,4 +70,4 @@ public sealed record FirstRunWaiting(string Handle);
 
 /// <summary>The signed-in person reading first run: the name to show, their handle, the highest role they hold where
 /// they hold one, their avatar, and where they sign out, coming back to first run.</summary>
-public sealed record FirstRunReader(string Name, string Handle, string? Role, string? Avatar, string SignOut);
+public sealed record FirstRunReader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);

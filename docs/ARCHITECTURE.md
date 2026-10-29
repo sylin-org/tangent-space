@@ -22,7 +22,7 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 | Need | Package | Used for |
 | --- | --- | --- |
 | Entities, queries, partitions, transactions; the SQLite posture (WAL, busy timeout, synchronous) and one native commit across entity types | `Sylin.Koan.Data.Core` on `Sylin.Koan.Data.Connector.Sqlite` | every table; the writer's one commit per command (`TransactionGuarantee.Atomic`); the audit partition for edit history |
-| The canonical base URL, served under its path and nothing outside it; trusted proxies for one hop | `Sylin.Koan.Web` (`Koan:Web:ApplicationUrl`, `Koan:Web:TrustedProxies`) | every absolute link; the `TangentSpace` row's `BaseUrl`; the reverse proxy's scheme |
+| The canonical base URL, served under its path and nothing outside it; trusted proxies for one hop | `Sylin.Koan.Web` (`Koan:Web:ApplicationUrl`, `Koan:Web:TrustedProxies`) | every absolute link, the pointers and the descriptor; the reverse proxy's scheme |
 | Durable person, external identities, sessions, audit, erasure | `Sylin.Koan.Identity` · `Sylin.Koan.Identity.Web` | the participant spine; the atproto DID as the person's external identity |
 | Roles with permissions, members and cached bags; effective access composed from contributors; the access explainer | `Sylin.Koan.Identity` | the Discord role model's roles and bags; the explainer names the deciding fact once brief 2 lands |
 | atproto sign-in and authorized sessions | `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | sign-in; record and blob operations under a participant's session |
@@ -64,7 +64,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 
 | Table | Key | Fields that matter |
 | --- | --- | --- |
-| `TangentSpace` | one row | name, `BaseUrl`, `ProprietorId` and `OperatorId` (set at first run), `Audience` (public, private), `Admission` (`join`, `apply`) with `NewAccountsAfterApproval`, `Appearance` (theme, accent), `Slots` (head, masthead, door intro, article header, footer), `Version` |
+| `TangentSpace` | one row, which exists once first run establishes it | name, `ProprietorId` and `OperatorId` (set at first run), `Audience` (public, private), `Admission` (`join`, `apply`) with `NewAccountsAfterApproval`, `Appearance` (theme, accent), `Slots` (head, masthead, door intro, article header, footer), `Version` |
 | `Tangent` | slug | name, description, default kind, order, `TopicCount` (raised by the command that starts a Topic); audience is its `everyone` overwrite |
 | `Post` | TID | `TangentId` on every row; `TopicId` (= Id on a root); `ParentId`; `OriginId`; `Slug`, `Kind`, `Title`, `CoverId` (root); `Body` (Markdown); `Version`; `Sequence`; `AuthorId`; `CreatedAt`; root carries `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned`, `LatestReplyId`, `LatestReplyAuthorId`, `RecentAuthorIds` (at most four); `Removed`, `RemovedBy`, `RemovedAt`. Pre-edit snapshots live in the audit partition |
 | `Participant` | the Koan person id | handle, `Profile` (display name, description, avatar, captured at), `Kind` (declared), `Standing`, `StandingUntil`, `StandingNote` |
@@ -75,7 +75,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 | `Receipt` | (`ConnectionId`, `PostId`) | `Version` delivered, status, remote reference, `At`, error |
 | `Reference` | id | `PostId`, `ConnectionId`, remote URI, kind (`reply`, `quote`, `mention`, `like`), author, `At` |
 
-Roles, role members, persons, sessions, grants and media are Koan's tables. `TangentSpace.BaseUrl` is the operator's `Koan:Web:ApplicationUrl` as Koan holds it, written at every start, so the row states where the place answers. Indexes: `Post(TangentId, ParentId, Pinned, LastActivityAt)` for topic lists, pinned and unpinned each one range; `Post(TopicId, Sequence)` for windows; `Post(TangentId, Slug)` for the slug check; `Event(Seq)`, unique; `Event(TargetId, Seq)`; the lexical index over `Post.Title` and `Post.Body`. A composite key is one string Id composed from its parts with `/`, which no part holds. A slug derives from the title at creation, deduplicated with a suffix, and never changes.
+Roles, role members, persons, sessions, grants and media are Koan's tables. The base URL is configuration alone — the operator's `Koan:Web:ApplicationUrl` as Koan holds it — and no row keeps a copy. Indexes: `Post(TangentId, ParentId, Pinned, LastActivityAt)` for topic lists, pinned and unpinned each one range; `Post(TopicId, Sequence)` for windows; `Post(TangentId, Slug)` for the slug check; `Event(Seq)`, unique; `Event(TargetId, Seq)`; the lexical index over `Post.Title` and `Post.Body`. A composite key is one string Id composed from its parts with `/`, which no part holds. A slug derives from the title at creation, deduplicated with a suffix, and never changes.
 
 ## 6. The log
 

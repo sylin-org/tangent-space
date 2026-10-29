@@ -173,7 +173,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
         var role = participant is null ? null : Roles.Word((await Capabilities.Load(personId, null, null, ct)).RoleIds);
         var signOut = Configured(baseUrl) + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path);
-        return new FirstRunReader(name, handle, role, participant?.Profile.Avatar, signOut);
+        return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut);
     }
 
     private static FirstRun Place(KoanWebBaseUrl baseUrl, string name, string? pinned)
