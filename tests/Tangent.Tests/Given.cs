@@ -1,5 +1,4 @@
 using Koan.Identity.Roles;
-using Koan.Web.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -15,14 +14,13 @@ namespace Tangent;
 /// on Koan's RoleCollection.</summary>
 public static class Given
 {
-    /// <summary>The Tangent Space's row, so the place is established: its name, the configured base URL, and the
-    /// audience and admission a proof needs.</summary>
+    /// <summary>The Tangent Space's row, so the place is established: its name, and the audience and admission a proof
+    /// needs.</summary>
     public static async Task<TangentSpace> AnEstablishedTangentSpace(TangentSpaceFixture tangentSpace, string name = "Tangent Space",
         Audience audience = Audience.Public, Admission admission = Admission.Join, CancellationToken ct = default)
     {
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Configured!;
-        var space = new TangentSpace { Name = name, BaseUrl = baseUrl, Audience = audience, Admission = admission };
+        var space = new TangentSpace { Name = name, Audience = audience, Admission = admission };
         Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), ct));
         return space;
     }

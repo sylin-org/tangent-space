@@ -150,6 +150,40 @@
   background: var(--ts-surface);
 }
 
+.first-run-accountable {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.first-run-accountable input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--ts-accent);
+}
+
+.first-run-code input {
+  font-family: var(--ts-font-mono);
+  letter-spacing: 0.04em;
+}
+
+.first-run-rule {
+  margin: 16px 0 8px;
+  color: var(--ts-text-2);
+  font-size: 13.5px;
+}
+
+.first-run-rule code,
+.first-run-first code {
+  font-family: var(--ts-font-mono);
+  font-size: 12.5px;
+  color: var(--ts-text);
+  overflow-wrap: anywhere;
+}
+
 .first-run-operator-text {
   margin: 0;
   color: var(--ts-text-2);

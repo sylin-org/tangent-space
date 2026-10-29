@@ -95,7 +95,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
     const tangentSpace = server ? await startTangentSpace(server, settings) : undefined
     try {
       if (tangentSpace && place !== 'unestablished')
-        await establish(tangentSpace.listening, place === 'persona' ? capturePersona : captureOperator, capturePlaceName)
+        await establish(tangentSpace.listening, place === 'persona' ? capturePersona : captureOperator, capturePlaceName, tangentSpace.setupCode)
       // A started Tangent Space is asked for at its base URL, which the browser maps to its loopback port.
       // A running one is asked for where --url says, and its pages link to the base URL it states.
       const pageBase = tangentSpace?.baseUrl ?? new URL(values.url!)

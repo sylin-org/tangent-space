@@ -43,7 +43,6 @@ public sealed class BackupTests(ITestOutputHelper output)
 
         Assert.Equal(restoredFolder, restored.DataFolder);
         Assert.Equal("The workshop's place", read?.Name);
-        Assert.Equal("https://backed-up.example", read?.BaseUrl);
         Assert.Equal(row.Version, read?.Version);
         Assert.Equal([1, 2, 3], await File.ReadAllBytesAsync(Path.Combine(restoredFolder, "media", "cover.bin"), Cancellation));
     }

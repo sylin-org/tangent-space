@@ -41,23 +41,36 @@ public static class Pointers
 
     /// <summary>An nginx rule for the server block of the site's host: the path without its slash goes to the path
     /// with it, and the path is passed on unchanged with the scheme and the client's address, since the Tangent
-    /// Space serves under its path itself and believes those headers only from the proxies it names.</summary>
+    /// Space serves under its path itself and believes those headers only from the proxies it names. A location
+    /// matches the decoded path, written as an nginx string; the redirect names the encoded path. nginx reads
+    /// <c>$</c> in a redirect as a variable and has no escape for it, so a path holding one, or a control character,
+    /// gets no rule, only the reason.</summary>
     private static Pointer ProxyRule(Uri address)
     {
-        var path = Uri.UnescapeDataString(address.AbsolutePath);
-        var quoted = path.Any(c => char.IsWhiteSpace(c) || c is ';' or '{' or '}' or '"') ? $"\"{path.Replace("\"", "\\\"")}\"" : path;
-        var folder = quoted.EndsWith('"') ? quoted[..^1] + "/\"" : quoted + "/";
+        var encoded = address.AbsolutePath;
+        var path = Uri.UnescapeDataString(encoded);
+        if (path.Contains('$') || path.Any(char.IsControl))
+            return new Pointer(Proxy,
+                $"nginx cannot express the path {path} safely, since it reads $ as a variable; pass {path}/ unchanged to {Upstream} on your reverse proxy by hand, with X-Forwarded-Proto and X-Forwarded-For, and list the proxy’s address under Koan:Web:TrustedProxies.",
+                "");
         return new Pointer(Proxy,
             $"In the server block for {address.Authority} on your reverse proxy; then list the proxy’s address under Koan:Web:TrustedProxies.",
             $$"""
-            location = {{quoted}} {
-                return 308 {{folder}};
+            location = {{Nginx(path)}} {
+                return 308 {{Nginx(encoded + "/")}};
             }
-            location {{folder}} {
+            location {{Nginx(path + "/")}} {
                 proxy_pass {{Upstream}};
                 proxy_set_header X-Forwarded-Proto $scheme;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             }
             """);
     }
+
+    /// <summary>A value as nginx reads it: bare when it holds nothing nginx's syntax treats specially, otherwise in
+    /// double quotes with <c>\</c> and <c>"</c> escaped.</summary>
+    private static string Nginx(string value)
+        => value.Any(c => char.IsWhiteSpace(c) || c is '"' or '\\' or '\'' or ';' or '{' or '}' or '#')
+            ? "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""
+            : value;
 }

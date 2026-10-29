@@ -65,19 +65,22 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'handle-not-found', query: { failure: 'handle_not_found', handle: 'ada.bsky.socail' } },
     ],
   },
-  // Before anyone signs in; signed in, the form before a name is written; the form refused for a proprietor
-  // handle no participant has; and established, the site's pointers for its operator.
+  // Before anyone signs in; signed in where the configuration names someone else as operator; signed in, the
+  // form with its setup code field before anything is written; where the configuration names the persona, the form
+  // refused for a proprietor handle no participant has; and established, the site's pointers for its operator.
   'first-run': {
     path: '/first-run',
     states: [
       { name: 'arrival', place: 'unestablished' },
+      { name: 'waiting', place: 'unestablished', signedIn: true, settings: { 'Tangent:Operator': captureOperator.did } },
       { name: 'form', place: 'unestablished', signedIn: true },
       {
         name: 'form-error',
         place: 'unestablished',
         signedIn: true,
+        settings: { 'Tangent:Operator': capturePersona.did },
+        check: ['#first-run-someone', '#first-run-accountable'],
         fill: { '#first-run-name': 'Field notes', '#first-run-handle': 'studio.example' },
-        check: ['#first-run-someone'],
         click: '.sign-in-submit',
       },
       { name: 'established', place: 'persona', signedIn: true },

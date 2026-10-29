@@ -23,18 +23,18 @@ public sealed class TangentSpaceFixtureTests
             new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://first.example" },
             services => services.AddSingleton<IKoanEndpointContributor, RowEndpoint>(),
             Cancellation);
-        await Given.AnEstablishedTangentSpace(first, ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(first, "https://first.example", ct: Cancellation);
         await using var second = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://second.example" },
             services => services.AddSingleton<IKoanEndpointContributor, RowEndpoint>(),
             Cancellation);
-        await Given.AnEstablishedTangentSpace(second, ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(second, "https://second.example", ct: Cancellation);
 
         try
         {
             Assert.Equal("https://first.example", await first.Client.GetStringAsync(RowRoute, Cancellation));
             Assert.Equal("https://second.example", await second.Client.GetStringAsync(RowRoute, Cancellation));
-            Assert.Equal("https://second.example", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.BaseUrl);
+            Assert.Equal("https://second.example", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name);
         }
         finally
         {
@@ -42,14 +42,15 @@ public sealed class TangentSpaceFixtureTests
         }
 
         Assert.Equal("https://second.example", await second.Client.GetStringAsync(RowRoute, Cancellation));
-        Assert.Equal("https://second.example", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.BaseUrl);
+        Assert.Equal("https://second.example", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name);
     }
 
-    /// <summary>Answers with the base URL of the row the request reads through Koan's Entity statics.</summary>
+    /// <summary>Answers with the name of the row the request reads through Koan's Entity statics, each place named
+    /// after its base URL.</summary>
     private sealed class RowEndpoint : IKoanEndpointContributor
     {
         public void Map(IEndpointRouteBuilder endpoints)
             => endpoints.MapGet(RowRoute, async (CancellationToken ct)
-                => (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.BaseUrl ?? "");
+                => (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.Name ?? "");
     }
 }

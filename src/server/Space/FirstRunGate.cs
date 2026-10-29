@@ -1,4 +1,5 @@
 using Koan.Web.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -12,7 +13,7 @@ public sealed class AnswersBeforeFirstRunAttribute : Attribute;
 /// JSON by <c>Accept</c>, whatever its address and method. Only the tree's own controllers are concerned, so Koan's
 /// routes (health, sign-in's challenge and callback) and static files answer as they are, and so does a controller
 /// marked <see cref="AnswersBeforeFirstRunAttribute"/>. One bounded read of the row by its key per request.</summary>
-public sealed class FirstRunGate(KoanWebBaseUrl baseUrl) : IAsyncResourceFilter
+public sealed class FirstRunGate(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, SetupCode setupCode) : IAsyncResourceFilter
 {
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
@@ -21,7 +22,7 @@ public sealed class FirstRunGate(KoanWebBaseUrl baseUrl) : IAsyncResourceFilter
             && !action.ControllerTypeInfo.IsDefined(typeof(AnswersBeforeFirstRunAttribute), inherit: false)
             && await TangentSpace.Get(TangentSpace.SingleRow, context.HttpContext.RequestAborted) is null)
         {
-            context.Result = FirstRunController.Answer(context.HttpContext, baseUrl);
+            context.Result = FirstRunController.Answer(context.HttpContext, baseUrl, options.Value, setupCode);
             return;
         }
 

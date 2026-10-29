@@ -28,25 +28,33 @@ public sealed partial class Browser : IDisposable
 
     /// <summary>Signs in through Koan's test connector as a persona whose subject is <paramref name="did"/>, coming back
     /// to the sign-in page, and answers with where the redirects ended. A <paramref name="handle"/> reaches the
-    /// sign-in as the verified handle claim the atproto connector carries.</summary>
-    public async Task<HttpResponseMessage> SignIn(string name, string did, CancellationToken ct, string? handle = null)
+    /// sign-in as the verified handle claim the atproto connector carries; <paramref name="under"/> is the base URL's
+    /// path, when it has one.</summary>
+    public async Task<HttpResponseMessage> SignIn(string name, string did, CancellationToken ct, string? handle = null, string under = "")
     {
         _jar.Add(_address, new Cookie(PersonaCookie, Uri.EscapeDataString(name + "|" + did)) { Path = "/" });
-        return await Follow(HttpMethod.Get, "/auth/test/challenge?return=" + Uri.EscapeDataString("/sign-in?return=/"), ct,
-            rewrite: target => handle is not null && target.AbsolutePath == Authorize
+        return await Follow(HttpMethod.Get, under + "/auth/test/challenge?return=" + Uri.EscapeDataString(under + "/sign-in?return=" + under + "/"), ct,
+            rewrite: target => handle is not null && target.AbsolutePath.EndsWith(Authorize, StringComparison.Ordinal)
                 ? new Uri(target + "&claim." + Uri.EscapeDataString("atproto:handle") + "=" + Uri.EscapeDataString(handle))
                 : target);
     }
 
     /// <summary>Sends the form the first-run page holds, with the form's token, as the page posts it: the place's name,
-    /// and the proprietor's handle when it is someone else.</summary>
-    public async Task<HttpResponseMessage> SetUp(string name, CancellationToken ct, string? proprietorHandle = null)
-        => await Post("/first-run", new Dictionary<string, string>
+    /// the proprietor's handle when it is someone else, the setup code when there is one, and the operator's
+    /// statement unless <paramref name="accountable"/> is false.</summary>
+    public async Task<HttpResponseMessage> SetUp(string name, CancellationToken ct, string? proprietorHandle = null, string? code = null,
+        bool accountable = true)
+    {
+        var fields = new Dictionary<string, string>
         {
             ["name"] = name,
             ["proprietor"] = proprietorHandle is null ? "me" : "someone",
             ["handle"] = proprietorHandle ?? ""
-        }, ct);
+        };
+        if (code is not null) fields["code"] = code;
+        if (accountable) fields["accountable"] = "yes";
+        return await Post("/first-run", fields, ct);
+    }
 
     /// <summary>Reads the page at <paramref name="path"/> and posts its form back to it with the form's token.</summary>
     private async Task<HttpResponseMessage> Post(string path, Dictionary<string, string> fields, CancellationToken ct)

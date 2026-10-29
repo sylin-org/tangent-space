@@ -13,6 +13,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl) : ControllerBase
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
-        return new Door(space.Name, baseUrl.Configured ?? space.BaseUrl, space.Version);
+        return new Door(space.Name, baseUrl.Configured ?? "", space.Version);
     }
 }

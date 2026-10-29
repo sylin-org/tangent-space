@@ -4,6 +4,7 @@ using Koan.Web.Auth.Connector.Atproto;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Render;
@@ -11,14 +12,16 @@ using Tangent.Writer;
 
 namespace Tangent.Space;
 
-/// <summary>First run, one resource both ways. Until the place is established, a visitor reads where to sign in and a
-/// signed-in person the form that establishes it; posting the form, with its antiforgery token, sends
-/// <see cref="Establish"/>, and once it commits the operator joins the administrator role and reads the site's
-/// pointers here. After that only the operator and the proprietor find anything at this address. Every other page
-/// of the tree answers this resource until the place is established (<see cref="FirstRunGate"/>).</summary>
+/// <summary>First run, one resource both ways. Until the place is established, a visitor reads where to sign in; a
+/// signed-in person who may set it up reads the form that establishes it, and anyone else reads who may. Who may: the
+/// person whose DID <c>Tangent:Operator</c> names, or, with none named, whoever types the setup code the server wrote
+/// to its log at this start. Posting the form, with its antiforgery token, sends <see cref="Establish"/>; once it
+/// commits the operator joins the administrator role and reads the site's pointers here. After that only the operator
+/// and the proprietor find anything at this address. Every other page of the tree answers this resource until the
+/// place is established (<see cref="FirstRunGate"/>).</summary>
 [AnswersBeforeFirstRun]
-public sealed class FirstRunController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAntiforgery antiforgery, RoleCollection roles,
-    ILogger<FirstRunController> logger) : ControllerBase
+public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, SetupCode setupCode,
+    WriteLoop writer, IAntiforgery antiforgery, RoleCollection roles, ILogger<FirstRunController> logger) : ControllerBase
 {
     /// <summary>The page's path under the base URL.</summary>
     public const string Path = "/first-run";
@@ -26,19 +29,23 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, WriteLoop writer,
     /// <summary>The configuration key the base URL is read from, which the page names as the place to change it.</summary>
     public const string Setting = TangentModule.BaseUrlKey;
 
+    /// <summary>The value the <c>accountable</c> field carries when the sender makes the statement.</summary>
+    public const string Affirmed = "yes";
+
     [HttpGet(Path)]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return Answer(HttpContext, baseUrl);
+        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return Answer(HttpContext, baseUrl, options.Value, setupCode);
         var personId = PersonId(User);
         if (personId is null || personId != space.OperatorId && personId != space.ProprietorId)
             return new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
-        return new ObjectResult(Place(baseUrl, space.Name) with { Pointers = Pointers.For(space.BaseUrl) });
+        return new ObjectResult(Place(baseUrl, space.Name, null) with { Pointers = Pointers.For(Configured(baseUrl)) });
     }
 
     [HttpPost(Path)]
-    public async Task<IActionResult> Post([FromForm] string? name, [FromForm] string? proprietor, [FromForm] string? handle, CancellationToken ct)
+    public async Task<IActionResult> Post([FromForm] string? name, [FromForm] string? proprietor, [FromForm] string? handle,
+        [FromForm] string? accountable, [FromForm] string? code, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
@@ -53,23 +60,39 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, WriteLoop writer,
                 "This form’s token is missing or has expired, so nothing was set up.").ToResult();
         }
 
+        var pinned = options.Value.Operator;
+        if (pinned is not null && pinned != personId)
+            return new Problem(StatusCodes.Status403Forbidden, "Not yours to set up",
+                $"Only the person whose DID is {pinned}, as {FirstRun.OperatorSetting} names, can set up this Tangent Space.").ToResult();
+
         var someone = proprietor == FirstRunForm.Someone;
         var named = Proprietor(handle);
-        var sent = Form(HttpContext, baseUrl) with
+        var affirmed = accountable == Affirmed;
+        var sent = Form(HttpContext, baseUrl, pinned is null) with
         {
             Name = name?.Trim(),
             Proprietor = someone ? FirstRunForm.Someone : FirstRunForm.Me,
-            ProprietorHandle = handle?.Trim()
+            ProprietorHandle = handle?.Trim(),
+            Accountable = affirmed
         };
+        if (pinned is null && !setupCode.Matches(code))
+            return Again(sent with
+            {
+                CodeFailure = string.IsNullOrWhiteSpace(code)
+                    ? "Write the setup code from this Tangent Space’s log."
+                    : "That is not the setup code this Tangent Space wrote to its log at its last start."
+            });
+        if (!affirmed)
+            return Again(sent with { AccountableFailure = "Confirm that you are the person who answers for this place." });
         if (someone && named is null)
             return Again(sent with { ProprietorFailure = "Write the handle of the participant whose place this is." });
 
-        var configured = Configured(baseUrl);
-        var outcome = await writer.Send(new Establish(personId, Handle(User), name ?? "", configured, someone ? named : null), ct);
+        var outcome = await writer.Send(new Establish(personId, Handle(User), name ?? "", someone ? named : null), ct);
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done:
-                // Koan's role write is not part of the writer's transaction: it follows the commit, and is idempotent.
+                // Koan's role write is not part of the writer's transaction: it follows the commit, and is idempotent;
+                // a start repairs it if this request never gets that far.
                 await roles.Add(Roles.Administrator, personId, ct);
                 if (await Participant.Get(personId, ct) is { } arrived) await ProfileCapture.SubmitWhenStale(arrived, logger, ct);
                 Response.Headers.Location = baseUrl.PathBase + Path;
@@ -80,6 +103,9 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, WriteLoop writer,
                 return Again(sent with { NameFailure = refused.Reason });
             case Outcome<TangentSpace>.Refused refused when named is not null && refused.Reason == Establish.NoParticipant(named):
                 return Again(sent with { ProprietorFailure = refused.Reason + " They sign in here once before they can be named." });
+            case Outcome<TangentSpace>.Refused refused when named is not null
+                && (refused.Reason == Establish.SharedHandle(named) || refused.Reason == Establish.Banned(named)):
+                return Again(sent with { ProprietorFailure = refused.Reason });
             case Outcome<TangentSpace>.Refused refused:
                 return Again(sent with { Failure = refused.Reason });
             case Outcome<TangentSpace>.Failed failed:
@@ -90,35 +116,34 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, WriteLoop writer,
     }
 
     /// <summary>The first-run resource for a request to a place that is not established: the challenge for a
-    /// visitor, the form for a signed-in person.</summary>
-    public static IActionResult Answer(HttpContext http, KoanWebBaseUrl baseUrl)
+    /// visitor, the form for a signed-in person who may set it up, and who may for anyone else.</summary>
+    public static IActionResult Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpaceOptions options, SetupCode setupCode)
     {
         http.Response.Headers.CacheControl = "no-store";
-        if (PersonId(http.User) is null)
-        {
-            var configured = Configured(baseUrl);
-            var comeBack = baseUrl.PathBase + Path;
-            return new ObjectResult(Place(baseUrl, TangentSpace.Unnamed) with
+        var pinned = options.Operator;
+        var place = Place(baseUrl, TangentSpace.Unnamed, pinned);
+        if (PersonId(http.User) is not { } personId)
+            return new ObjectResult(place with
             {
-                Challenge = configured + SignInController.ChallengePath + "?return=" + Uri.EscapeDataString(comeBack)
+                Challenge = Configured(baseUrl) + SignInController.ChallengePath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path)
             });
-        }
-
-        return new ObjectResult(Place(baseUrl, TangentSpace.Unnamed) with { Form = Form(http, baseUrl) });
+        if (pinned is not null && pinned != personId)
+            return new ObjectResult(place with { Waiting = new FirstRunWaiting(Handle(http.User)) });
+        return new ObjectResult(place with { Form = Form(http, baseUrl, pinned is null && setupCode.Required) });
     }
 
     /// <summary>The form again, keeping what was sent, with the reason it was refused.</summary>
     private ObjectResult Again(FirstRunForm form)
-        => new(Place(baseUrl, TangentSpace.Unnamed) with { Form = form }) { StatusCode = StatusCodes.Status400BadRequest };
+        => new(Place(baseUrl, TangentSpace.Unnamed, options.Value.Operator) with { Form = form }) { StatusCode = StatusCodes.Status400BadRequest };
 
-    private static FirstRun Place(KoanWebBaseUrl baseUrl, string name)
+    private static FirstRun Place(KoanWebBaseUrl baseUrl, string name, string? pinned)
     {
         var configured = Configured(baseUrl);
-        return new FirstRun(name, configured, Setting, configured + "/");
+        return new FirstRun(name, configured, Setting, configured + "/", pinned);
     }
 
-    private static FirstRunForm Form(HttpContext http, KoanWebBaseUrl baseUrl)
-        => new(Configured(baseUrl) + Path, FormToken.For(http), Handle(http.User));
+    private static FirstRunForm Form(HttpContext http, KoanWebBaseUrl baseUrl, bool asksCode)
+        => new(Configured(baseUrl) + Path, FormToken.For(http), Handle(http.User), asksCode);
 
     /// <summary>A proprietor handle as written, without the <c>@</c> a person may type and in the lower case handles
     /// are compared in; null when there is none or it is longer than a handle can be.</summary>

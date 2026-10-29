@@ -1,7 +1,6 @@
 using Koan.Web.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Space;
@@ -23,19 +22,13 @@ public sealed class TangentSpaceTests
     }
 
     [Fact]
-    public async Task First_run_records_the_base_url_normalised()
+    public async Task The_base_url_is_held_normalised()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = "HTTPS://Tangent.Example:443/Field%20Notes/" },
             ct: Cancellation);
-        var configured = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Configured!;
 
-        var outcome = await tangentSpace.Services.GetRequiredService<WriteLoop>()
-            .Send(new Establish("did:plc:leo4example", "leo.example", "Field notes", configured), Cancellation);
-
-        Assert.Equal("https://tangent.example/Field%20Notes", configured);
-        Assert.Equal(configured, Assert.IsType<Outcome<TangentSpace>.Done>(outcome).Result.BaseUrl);
-        Assert.Equal(configured, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.BaseUrl);
+        Assert.Equal("https://tangent.example/Field%20Notes", tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Configured);
     }
 
     [Fact]

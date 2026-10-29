@@ -192,7 +192,7 @@ public static class Backup
             if (occupied)
             {
                 var aside = FreeName(parent, Path.GetFileName(dataFolder) + "-before-restore-" + stamp);
-                Directory.Move(dataFolder, aside);
+                Move(dataFolder, aside);
                 movedAside = aside;
             }
             else if (Directory.Exists(dataFolder) && staged is not null)
@@ -200,7 +200,7 @@ public static class Backup
                 Directory.Delete(dataFolder); // empty: the move below needs its name
             }
 
-            if (staged is not null) Directory.Move(staged, dataFolder);
+            if (staged is not null) Move(staged, dataFolder);
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
@@ -225,7 +225,7 @@ public static class Backup
             return $"The data folder that was moved aside is at {movedAside}.";
         try
         {
-            Directory.Move(movedAside, dataFolder);
+            Move(movedAside, dataFolder);
             return $"The data folder was moved back from {movedAside} to {dataFolder}.";
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
@@ -290,6 +290,33 @@ public static class Backup
     }
 
     /// <summary><paramref name="name"/> under <paramref name="parent"/>, with a counter when that name is taken.</summary>
+    /// <summary>How many times a restore's folder move is tried, and the first pause between tries, which doubles up
+    /// to a second: about five seconds in all.</summary>
+    private const int MoveAttempts = 8;
+    private static readonly TimeSpan MovePause = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>Moves a folder, trying again for a moment when Windows still holds a file in it (an indexer or a virus
+    /// scanner reading what was just copied); the last failure is the one thrown.</summary>
+    private static void Move(string from, string to)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.Move(from, to);
+                return;
+            }
+            catch (Exception failure) when (attempt < MoveAttempts && Directory.Exists(from) && !Directory.Exists(to)
+                && failure is UnauthorizedAccessException or IOException { HResult: SharingViolation or LockViolation })
+            {
+                Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(1000, MovePause.TotalMilliseconds * (1 << (attempt - 1)))));
+            }
+        }
+    }
+
+    private const int SharingViolation = unchecked((int)0x80070020);
+    private const int LockViolation = unchecked((int)0x80070021);
+
     private static string FreeName(string parent, string name)
     {
         var path = Path.Combine(parent, name);
