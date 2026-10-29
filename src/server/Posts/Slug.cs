@@ -35,10 +35,13 @@ public static class Slug
         return value.Length == 0 ? "topic" : value;
     }
 
+    /// <summary>A slug with this number as its suffix, cut so the whole stays within the limit.</summary>
+    public static string WithSuffix(string slug, int suffix) => WithSuffix(slug, suffix.ToString(CultureInfo.InvariantCulture));
+
     /// <summary>A slug with this suffix, cut so the whole stays within the limit.</summary>
-    public static string WithSuffix(string slug, int suffix)
+    public static string WithSuffix(string slug, string suffix)
     {
-        var tail = "-" + suffix.ToString(CultureInfo.InvariantCulture);
+        var tail = "-" + suffix;
         var head = slug.Length + tail.Length <= Limit ? slug : slug[..(Limit - tail.Length)].TrimEnd('-');
         return head + tail;
     }

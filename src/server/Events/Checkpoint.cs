@@ -7,23 +7,22 @@ namespace Tangent.Events;
 /// watch it. The only per-participant state. Keyed by participant and scope.</summary>
 public sealed class Checkpoint : Entity<Checkpoint>
 {
-    public static string Key(string participantId, string scopeId) => participantId + "/" + scopeId;
+    public static string Key(string participantId, Scope scope) => participantId + "/" + scope;
 
     [Index(Name = "ix_checkpoint_participants")]
     public string ParticipantId { get; set; } = "";
 
-    /// <summary>A Tangent's slug, a Topic's Id, or the Tangent Space's row Id.</summary>
-    public string ScopeId { get; set; } = "";
+    public Scope Scope { get; set; } = Scope.Place;
 
     public long Seq { get; set; }
 
     public bool Watch { get; set; }
 
-    public static Checkpoint At(string participantId, string scopeId, long seq, bool watch = false) => new()
+    public static Checkpoint At(string participantId, Scope scope, long seq, bool watch = false) => new()
     {
-        Id = Key(participantId, scopeId),
+        Id = Key(participantId, scope),
         ParticipantId = participantId,
-        ScopeId = scopeId,
+        Scope = scope,
         Seq = seq,
         Watch = watch
     };

@@ -48,6 +48,7 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_slugs", Order = 1)]
     public string? Slug { get; set; }
 
+    /// <summary>Root only; a reply's Topic has the kind of its root.</summary>
     public PostKind Kind { get; set; }
 
     /// <summary>Root only.</summary>
@@ -117,8 +118,8 @@ public sealed class Post : Entity<Post>
     }
 
     /// <summary>A reply to this root, or a refusal: this Post is a root that is neither locked nor removed, the Id is a TID,
-    /// the body is within its limits and the author is named. The reply takes the Topic's next sequence, and the root's
-    /// counters and last activity move with it.</summary>
+    /// the body is within its limits and the author is named. The parent is the caller's, already known to be a Post of
+    /// this Topic. The reply takes the Topic's next sequence, and the root's counters and last activity move with it.</summary>
     public Post Reply(string id, string body, string authorId, string parentId, DateTimeOffset at)
     {
         if (ParentId is not null) throw new Refusal(NotARoot);
@@ -136,7 +137,6 @@ public sealed class Post : Entity<Post>
             TangentId = TangentId,
             TopicId = Id,
             ParentId = parentId,
-            Kind = Kind,
             Body = body,
             Sequence = LastSequence,
             AuthorId = authorId,
