@@ -48,7 +48,7 @@ Every write is a command on one queue, consumed by one loop. A handler builds th
 2. loads what the command names: the participant with standing, the role bag, the Tangent's overwrites, the target Post;
 3. asks `Capabilities.For(...)` and refuses with the explainer's reason when the verb is missing;
 4. calls the entity method; validation lives there;
-5. assigns sequences from in-memory high-water marks loaded at start — the Topic's from its root Post's `LastSequence`, the log's from the last `Event.Seq`; a command that does not commit gives its sequences back, so none is skipped;
+5. assigns sequences from in-memory high-water marks loaded at start — the Topic's from its root Post's `LastSequence`, the log's from the last `Event.Seq`; a command that does not commit gives its sequences back, so none is skipped, and after a commit whose outcome Koan cannot report the marks are reloaded from the store before the next command;
 6. saves the rows, the audit snapshot for an edit, and the Events, in the same transaction;
 7. commits, announces the commit in-process — the command and the sequences it took — and answers the sender with the resource and its `can`.
 

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Koan.Data.Abstractions.Failures;
+using Koan.Data.Core.Transactions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -6,8 +8,8 @@ using Xunit;
 namespace Tangent.Writer;
 
 /// <summary>The writer's proofs, each in its own Tangent Space: order and exactly-once, atomic failure, refusal,
-/// idempotency by Id, high-water marks across a restart, shutdown with commands pending, and what another connection
-/// sees before a commit.</summary>
+/// idempotency by Id, high-water marks across a restart, shutdown with commands pending, what another connection
+/// sees before a commit, and a commit whose outcome is unknown.</summary>
 public sealed class WriteLoopTests(ITestOutputHelper output)
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
@@ -92,18 +94,62 @@ public sealed class WriteLoopTests(ITestOutputHelper output)
     {
         await using var tangentSpace = await Start();
         var writer = Writer(tangentSpace);
+        var announced = new List<Committed>();
+        writer.Committed += announced.Add;
 
         var first = Assert.IsType<Outcome<Slip>.Done>(await writer.Send(new CreateSlip("same", "s", 0, "one"), Cancellation)).Result;
         var again = await writer.Send(new CreateSlip("same", "s", 0, "one"), Cancellation);
+        var announcedForBoth = announced.Count;
         var differs = await writer.Send(new CreateSlip("same", "s", 0, "two"), Cancellation);
         var after = Assert.IsType<Outcome<Slip>.Done>(await writer.Send(new CreateSlip("next", "s", 1, "three"), Cancellation)).Result;
 
+        // The replay answers with the existing slip and, having written nothing, is not announced.
         var existing = Assert.IsType<Outcome<Slip>.Done>(again).Result;
         Assert.Equal((first.Id, first.Sequence, first.Body), (existing.Id, existing.Sequence, existing.Body));
+        Assert.Equal(1, announcedForBoth);
         Assert.Contains("'same'", Assert.IsType<Outcome<Slip>.Conflict>(differs).Reason);
         Assert.Equal("one", (await Slip.Get("same", Cancellation))?.Body);
-        Assert.Equal(1, await Slip.Count.Exact(Cancellation) - 1);
+        Assert.Equal(2, await Slip.Count.Exact(Cancellation));
         Assert.Equal(2, after.Sequence);
+        Assert.Equal(2, announced.Count);
+    }
+
+    [Fact]
+    public async Task A_commit_whose_outcome_is_unknown_fails_its_sender_and_reloads_every_mark_before_the_next_command()
+    {
+        var loads = 0;
+        var counting = new HighWaterMark(CreateSlip.Mark, ct =>
+        {
+            Interlocked.Increment(ref loads);
+            return CreateSlip.HighWaterMark.Load(ct);
+        });
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:02" },
+            services => services.AddSingleton(counting),
+            Cancellation);
+        var writer = Writer(tangentSpace);
+        Assert.Equal(1, Assert.IsType<Outcome<Slip>.Done>(await writer.Send(new CreateSlip("first", "s", 0, "body"), Cancellation)).Result.Sequence);
+        var loadedAtStart = loads;
+
+        // Another connection holds the write lock, so the commit's BEGIN IMMEDIATE fails on the busy timeout, which
+        // Koan reports as an outcome it cannot know.
+        Outcome<Slip> blocked;
+        await using (var holder = new SqliteConnection($"Data Source={tangentSpace.DatabasePath};Pooling=False"))
+        {
+            await holder.OpenAsync(Cancellation);
+            await using var held = holder.BeginTransaction(deferred: false);
+            blocked = await writer.Send(new CreateSlip("blocked", "s", 1, "body"), Cancellation);
+        }
+
+        var next = await writer.Send(new CreateSlip("after", "s", 2, "body"), Cancellation);
+
+        var cause = Assert.IsType<TransactionException>(Assert.IsType<Outcome<Slip>.Failed>(blocked).Cause);
+        output.WriteLine($"{cause.CommitOutcome}: {cause.Message}");
+        Assert.Equal(DataCommitOutcome.Unknown, cause.CommitOutcome);
+        Assert.Equal(1, loadedAtStart);
+        Assert.Equal(2, loads);
+        Assert.Null(await Slip.Get("blocked", Cancellation));
+        Assert.Equal(2, Assert.IsType<Outcome<Slip>.Done>(next).Result.Sequence);
     }
 
     [Fact]

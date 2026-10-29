@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using Koan.Core.BackgroundServices;
+using Koan.Data.Abstractions.Failures;
 using Koan.Data.Core;
 using Koan.Data.Core.Transactions;
 
@@ -8,8 +9,8 @@ namespace Tangent.Writer;
 /// <summary>The writer: one queue, one loop, one transaction per command. A sender hands a command to
 /// <see cref="Send{TResult}"/> and awaits its outcome. The loop takes commands in arrival order and, for each, opens
 /// one atomic scope, runs the command, assigns its sequences from the high-water marks loaded once at start, commits,
-/// announces the commit to <see cref="Committed"/> and answers the sender. A command that is refused or throws leaves
-/// no row behind and the next command runs. This is the only code in the tree that opens a transaction. Koan
+/// announces a commit that wrote to <see cref="Committed"/> and answers the sender. A command that is refused or throws
+/// leaves no row behind and the next command runs. This is the only code in the tree that opens a transaction. Koan
 /// discovers it as a background service and starts and stops it with the host.</summary>
 public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configuration, IEnumerable<HighWaterMark> marks)
     : KoanBackgroundServiceBase(logger, configuration)
@@ -25,12 +26,13 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
     private readonly IReadOnlyList<HighWaterMark> _marks = marks.ToList();
     private Exception? _ended;
 
-    /// <summary>Raised in-process after each commit, on the loop, before the sender is answered. A subscriber returns at
-    /// once; what it throws is logged and changes nothing.</summary>
+    /// <summary>Raised in-process after each commit that wrote, on the loop, before the sender is answered. A
+    /// subscriber returns at once; what it throws is logged and changes nothing.</summary>
     public event Action<Committed>? Committed;
 
     /// <summary>Hands a command to the loop and answers with its outcome once it has run. <paramref name="ct"/> bounds
-    /// the sender's wait, not the command: once queued, the command runs.</summary>
+    /// the sender's wait, not the command: a queued command runs unless the writer stops first, and then its sender
+    /// receives the failure <see cref="Stopped"/>.</summary>
     public Task<Outcome<TResult>> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -54,19 +56,11 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
 
     public override async Task ExecuteCore(CancellationToken ct)
     {
-        Dictionary<string, long> committed;
+        var committed = new Dictionary<string, long>(StringComparer.Ordinal);
+        Exception ended = new OperationCanceledException(Stopped);
         try
         {
-            committed = await LoadMarks(ct);
-        }
-        catch (Exception failure)
-        {
-            End(failure);
-            throw;
-        }
-
-        try
-        {
+            await LoadMarks(committed, ct);
             while (await _queue.Reader.WaitToReadAsync(ct))
             {
                 // A stop is honoured at the command boundary: what is still queued never runs.
@@ -76,59 +70,90 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
+        catch (Exception failure)
+        {
+            // A mark that could not be loaded, at start or after a commit of unknown outcome: the loop ends.
+            ended = failure;
+            throw;
+        }
         finally
         {
-            End(new OperationCanceledException(Stopped));
+            End(ended);
         }
     }
 
-    /// <summary>Each mark once, from the bounded query its package supplies, before the first command runs.</summary>
-    private async Task<Dictionary<string, long>> LoadMarks(CancellationToken ct)
+    /// <summary>Each mark from the bounded query its package supplies: once before the first command, and again
+    /// after a commit whose outcome Koan could not report.</summary>
+    private async Task LoadMarks(Dictionary<string, long> committed, CancellationToken ct)
     {
-        var committed = new Dictionary<string, long>(StringComparer.Ordinal);
+        var loaded = new Dictionary<string, long>(StringComparer.Ordinal);
         foreach (var mark in _marks)
         {
-            if (!committed.TryAdd(mark.Name, await mark.Load(ct)))
+            if (!loaded.TryAdd(mark.Name, await mark.Load(ct)))
                 throw new InvalidOperationException($"Two high-water marks are named '{mark.Name}'.");
-            Logger.LogInformation("Writer high-water mark {Mark} starts at {Sequence}", mark.Name, committed[mark.Name]);
         }
 
-        return committed;
+        foreach (var (name, sequence) in loaded)
+        {
+            committed[name] = sequence;
+            Logger.LogInformation("Writer high-water mark {Mark} at {Sequence}", name, sequence);
+        }
     }
 
     /// <summary>One command: its own atomic scope, which never outlives it; a commit only for a result; the sender
-    /// answered after the scope is gone, so no sender continues inside it.</summary>
+    /// answered on every path out, after the scope is gone, so no sender continues inside it. A commit whose outcome
+    /// is unknown may have landed, so its sequences are not given back: every mark is reloaded from the store before
+    /// the next command runs.</summary>
     private async Task Run(IPending pending, Dictionary<string, long> committed, CancellationToken ct)
     {
+        var name = pending.Command.GetType().Name;
         var sequences = new Sequences(committed);
-        var done = false;
-        using (EntityContext.Transaction(pending.Command.GetType().Name, TransactionGuarantee.Atomic))
+        var wrote = false;
+        var landed = false;
+        var unknown = false;
+        try
         {
-            try
+            using (EntityContext.Transaction(name, TransactionGuarantee.Atomic))
             {
                 if (await pending.Run(sequences, ct))
                 {
-                    // The commit itself is not cut short by a stop: a command that reached it either commits or fails
-                    // on its own terms, bounded by the store's busy timeout.
-                    await EntityContext.Commit(CancellationToken.None);
-                    sequences.Keep();
-                    done = true;
+                    wrote = (EntityContext.Current?.TransactionCoordinator?.TrackedOperationCount ?? 0) > 0;
+                    try
+                    {
+                        // The commit itself is not cut short by a stop: a command that reached it either commits or
+                        // fails on its own terms, bounded by the store's busy timeout.
+                        await EntityContext.Commit(CancellationToken.None);
+                        sequences.Keep();
+                        landed = true;
+                    }
+                    catch (Exception failure)
+                    {
+                        unknown = !NothingLanded(failure);
+                        Logger.LogError(failure, "Writer could not commit {Command}; outcome {Outcome}", name, unknown ? "unknown" : "nothing landed");
+                        pending.Fail(failure);
+                    }
                 }
                 else
                 {
                     await EntityContext.Rollback(CancellationToken.None);
                 }
             }
-            catch (Exception failure)
-            {
-                Logger.LogError(failure, "Writer could not commit {Command}", pending.Command.GetType().Name);
-                pending.Fail(failure);
-            }
+        }
+        catch (Exception failure)
+        {
+            // Thrown before a commit was attempted: opening the scope, or discarding. Nothing landed.
+            Logger.LogError(failure, "Writer could not run {Command}", name);
+            pending.Fail(failure);
         }
 
-        if (done) Announce(new Committed(pending.Command, sequences.Taken));
+        if (landed && wrote) Announce(new Committed(pending.Command, sequences.Taken));
         pending.Answer();
+        if (unknown) await LoadMarks(committed, ct);
     }
+
+    /// <summary>Whether Koan reports that a failed commit left nothing durable; anything else may have landed.</summary>
+    private static bool NothingLanded(Exception failure) =>
+        failure is TransactionException { CommitOutcome: DataCommitOutcome.NotDispatched or DataCommitOutcome.NotCommitted };
 
     private void Announce(Committed committed)
     {
@@ -205,6 +230,6 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
     }
 }
 
-/// <summary>What the writer announces after a commit: the command that committed and the last sequence it took from
-/// each mark it touched.</summary>
+/// <summary>What the writer announces after a commit that wrote: the command that committed and the last sequence
+/// it took from each mark it touched.</summary>
 public sealed record Committed(object Command, IReadOnlyDictionary<string, long> Sequences);
