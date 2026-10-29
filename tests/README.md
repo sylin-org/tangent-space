@@ -1,6 +1,6 @@
 # Tests
 
-`Tangent.Tests` is the one test project. Its fixture, `TangentSpaceFixture`, starts the real application — `AddKoan()` over the server's `appsettings.json`, so `TangentModule`, its options and its pipeline contributors run as they do in production — on Kestrel at a free loopback port, with a new temp folder as its content root. Every test starts its own Tangent Space; none shares a port, a folder or a database, and the tests run in parallel. `rules/` holds the Node checks of the standing rules.
+`Tangent.Tests` is the one test project. Its fixture, `TangentSpaceFixture`, starts the real application — `AddKoan()` over the server's `appsettings.json`, so `TangentModule`, its options and its pipeline contributors run as they do in production — on Kestrel at a free loopback port, with a new temp folder as its content root and the server's `wwwroot`, copied beside the test binaries by the build, as its web root. Every test starts its own Tangent Space; none shares a port, a folder or a database, and the tests run in parallel. `rules/` holds the Node checks of the standing rules.
 
 ## Run
 

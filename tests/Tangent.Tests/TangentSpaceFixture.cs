@@ -17,8 +17,8 @@ namespace Tangent;
 /// server's appsettings.json, so <see cref="TangentModule"/>, its options and its pipeline contributors
 /// are the ones that run — in the Production environment the server runs in, on Kestrel at a free
 /// loopback port, with a new temp folder as its content root, so the data folder and the database land
-/// inside that folder. A test names any setting it needs; disposing the fixture stops the application
-/// and deletes the folder.</summary>
+/// inside that folder, and the server's wwwroot as its web root. A test names any setting it needs;
+/// disposing the fixture stops the application and deletes the folder.</summary>
 /// <remarks>Koan keeps one process-default host, and a test process runs several Tangent Spaces at once.
 /// Starting a fixture therefore binds Koan's ambient host to it for the calling test's flow
 /// (<see cref="AppHost.PushScope"/>), and every request it serves runs bound to it the same way, so no
@@ -81,6 +81,8 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             ContentRootPath = folder,
+            // The server's web root is wwwroot beside the binaries, where the client build is copied.
+            WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot"),
             EnvironmentName = Environments.Production
         });
         builder.Configuration

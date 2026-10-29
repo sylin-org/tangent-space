@@ -48,6 +48,9 @@ public sealed class TangentModule : KoanModule
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TrustedProxyPipelineContributor>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, BaseUrlPipelineContributor>());
 
+        // The controllers of this assembly, whichever assembly hosts the composition.
+        services.AddKoanControllersFrom<TangentModule>();
+
         // The HTML projection: each resource type names its component; the formatter goes first so a request
         // without a preference reads a page, and every other type keeps Koan's JSON.
         services.AddScoped<HtmlRenderer>();
@@ -67,9 +70,17 @@ public sealed class TangentModule : KoanModule
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)
     {
+        // The row records the base URL the operator configures; a start under another one moves it.
         var options = services.GetRequiredService<IOptions<TangentSpaceOptions>>().Value;
-        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is null)
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
+        if (space is null)
             await new TangentSpace { Name = "Tangent Space", BaseUrl = options.BaseUrl }.Save(ct);
+        else if (space.BaseUrl != options.BaseUrl)
+        {
+            space.BaseUrl = options.BaseUrl;
+            space.Version++;
+            await space.Save(ct);
+        }
 
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
