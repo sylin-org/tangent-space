@@ -384,7 +384,7 @@ public sealed partial class FirstRunTests
         var refused = await nobody.Content.ReadAsStringAsync(Cancellation);
 
         Assert.Equal(HttpStatusCode.BadRequest, nobody.StatusCode);
-        Assert.Contains($"<p class=\"field-failure\" id=\"first-run-handle-failure\">{WebUtility.HtmlEncode(Establish.NoParticipant("nobody.example"))}", refused);
+        Assert.Contains($"<p class=\"field-failure\" id=\"first-run-handle-failure\">{WebUtility.HtmlEncode(Establish.NoParticipant("nobody.example").TrimEnd('.'))}; they sign in here once before they can be named.</p>", refused);
         Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\"", refused);
         // The page opens on the field in error, and the standing hint gives way to the error that says the same.
         Assert.Matches("<input id=\"first-run-handle\"[^>]* autofocus", refused);

@@ -187,6 +187,9 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
           throw new Error(
             `The Tangent Space did not answer these requests, so the capture would not show its page; the browser must reach ${pageBase.origin} and its base URL ${baseUrl.origin}:\n${unanswered.join('\n')}`,
           )
+        // A page that opens on a field further down (autofocus on the field a refusal concerns) has scrolled to it;
+        // the whole page is captured from its top, so the sticky masthead sits where it does at the top.
+        await page.evaluate(() => window.scrollTo(0, 0))
         await page.screenshot({
           path: join(folder, `${width}-${theme}-${state.name}.png`),
           fullPage: true,

@@ -115,7 +115,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
             case Outcome<TangentSpace>.Refused { Reason: TangentSpace.NameRule } refused:
                 return await Again(sent with { NameFailure = refused.Reason });
             case Outcome<TangentSpace>.Refused refused when named is not null && refused.Reason == Establish.NoParticipant(named):
-                return await Again(sent with { ProprietorFailure = refused.Reason + " They sign in here once before they can be named." });
+                return await Again(sent with { ProprietorFailure = refused.Reason.TrimEnd('.') + "; they sign in here once before they can be named." });
             case Outcome<TangentSpace>.Refused refused when named is not null
                 && (refused.Reason == Establish.SharedHandle(named) || refused.Reason == Establish.Banned(named)):
                 return await Again(sent with { ProprietorFailure = refused.Reason });
