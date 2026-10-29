@@ -1,13 +1,7 @@
-/* The Tangent page: the head with the Tangent's tile, name, description and what the page holds; the rail with the
- * one list and who can read; the list, a table of Topics for a discussions Tangent and cards for an articles one;
- * the empty state; the way to older Topics. Sizes follow the design reference's screens 02, 03 and 21. */
-
-.tone-coral { --tone: var(--ts-tangent-coral); --tone-tint: var(--ts-tangent-coral-tint); --tone-ink: var(--ts-tangent-coral-ink); }
-.tone-amber { --tone: var(--ts-tangent-amber); --tone-tint: var(--ts-tangent-amber-tint); --tone-ink: var(--ts-tangent-amber-ink); }
-.tone-jade { --tone: var(--ts-tangent-jade); --tone-tint: var(--ts-tangent-jade-tint); --tone-ink: var(--ts-tangent-jade-ink); }
-.tone-sky { --tone: var(--ts-tangent-sky); --tone-tint: var(--ts-tangent-sky-tint); --tone-ink: var(--ts-tangent-sky-ink); }
-.tone-iris { --tone: var(--ts-tangent-iris); --tone-tint: var(--ts-tangent-iris-tint); --tone-ink: var(--ts-tangent-iris-ink); }
-.tone-rose { --tone: var(--ts-tangent-rose); --tone-tint: var(--ts-tangent-rose-tint); --tone-ink: var(--ts-tangent-rose-ink); }
+/* The Tangent page: the head with the Tangent's tile, name, description and counts; the rail with the one list and
+ * who can read; the list, a table of Topics with their latest reply for a discussions Tangent and articles under a
+ * lead for an articles one; the empty state; the way to older Topics. Sizes follow the design reference's screens
+ * 02, 03 and 21 and its component spec. */
 
 /* The head: a band of surface across the page, its content as wide as the layout below it. */
 .tangent-head {
@@ -21,31 +15,17 @@
   margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 24px;
 }
 
-.tangent-tile {
-  width: 64px;
-  height: 64px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: 13px;
-  background: var(--tone-tint);
+.tangent-tile-head {
+  --tile: 72px;
+  --tile-edge: 6px;
 }
 
-.tangent-tile-letter {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  color: var(--tone-ink);
-  font: 600 32px/1 var(--ts-font-display);
-}
-
-.tangent-tile-edge {
-  height: 5px;
-  background: var(--tone);
+.tangent-tile-head .tangent-tile-letter {
+  font-size: 34px;
+  font-weight: 600;
 }
 
 .tangent-head-text {
@@ -67,6 +47,11 @@
   max-width: 680px;
   color: var(--ts-text-2);
   font: italic 400 18px/1.4 var(--ts-font-display);
+}
+
+.tangent-meta b {
+  color: var(--ts-text);
+  font-weight: 600;
 }
 
 .tangent-meta {
@@ -246,7 +231,7 @@
 }
 
 .topic-table-latest,
-.topic-row-latest {
+.topic-row-activity {
   width: 96px;
   flex: none;
   text-align: right;
@@ -387,15 +372,96 @@
 }
 
 .new-label {
+  flex: none;
   color: var(--ts-accent);
   font: 700 11px/1.3 var(--ts-font-ui);
 }
 
-.topic-row-latest {
+.topic-row-activity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.topic-row-activity time {
   font: 600 13px/1.3 var(--ts-font-ui);
 }
 
-/* The articles: cards with the title in display type. */
+.topic-row-who {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ts-text-3);
+  font: 400 12px/1.3 var(--ts-font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-row-none {
+  color: var(--ts-text-3);
+  font: 400 12px/1.3 var(--ts-font-ui);
+}
+
+/* The latest reply, on the page's colour: who wrote it and its first words. */
+.topic-row-latest-reply {
+  margin-top: 12px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-page);
+  color: var(--ts-text-2);
+  font: 400 13px/1.45 var(--ts-font-ui);
+}
+
+.topic-row:hover .topic-row-latest-reply {
+  background: var(--ts-surface);
+}
+
+.topic-row-latest-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-row-latest-line b,
+.article-strip-line b {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.reply-mark {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+}
+
+.reply-mark.mark-agent {
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px var(--ts-page), 0 0 0 2px var(--ts-agent-ring);
+}
+
+/* The faces of a Topic's recent authors, overlapping. */
+.face {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  box-shadow: 0 0 0 2px var(--ts-surface);
+}
+
+.face + .face {
+  margin-left: -6px;
+}
+
+.face.mark-agent {
+  box-shadow: 0 0 0 2px var(--ts-surface), 0 0 0 3px var(--ts-agent-ring);
+}
+
+/* The articles: the lead with its cover, date and read time, opening, author and latest-reply strip; the rest as rows.
+ * An article without a cover image leads with its letter cover: its title's first letter on its tone. */
 .article-card {
   padding: 26px 0;
   border-bottom: 1px solid var(--ts-line);
@@ -405,12 +471,52 @@
   border-bottom: 0;
 }
 
+.article-lead {
+  padding: 28px 0;
+  display: flex;
+  gap: 32px;
+}
+
+.article-cover {
+  width: 320px;
+  height: 280px;
+  flex: none;
+  display: block;
+  text-decoration: none;
+}
+
+.tangent-tile-cover {
+  --tile: 280px;
+  --tile-edge: 6px;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--ts-radius-image);
+}
+
+.tangent-tile-cover .tangent-tile-letter {
+  font-size: 120px;
+  font-weight: 500;
+}
+
+.article-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .article-card-date {
   margin: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 6px;
   color: var(--ts-text-3);
   font: 400 13px/1.45 var(--ts-font-ui);
+}
+
+.article-card-date .topic-flag {
+  margin-left: 4px;
 }
 
 .article-card-title {
@@ -420,7 +526,7 @@
   overflow-wrap: anywhere;
 }
 
-.article-list > .article-card:first-child .article-card-title {
+.article-lead .article-card-title {
   margin-top: 10px;
   font-size: 34px;
   line-height: 1.1;
@@ -440,11 +546,21 @@
 .article-card-opening {
   margin: 10px 0 0;
   max-width: 680px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   color: var(--ts-text-2);
   font: 400 16px/1.55 var(--ts-font-display);
 }
 
-.article-card-foot {
+.article-lead .article-card-opening {
+  margin-top: 14px;
+  -webkit-line-clamp: 4;
+  font-size: 17px;
+}
+
+.article-card-author {
   margin: 14px 0 0;
   display: flex;
   flex-wrap: wrap;
@@ -454,23 +570,70 @@
   font: var(--ts-type-meta);
 }
 
-.article-card-foot .author-mark {
+.article-card-author .agent-tag {
+  margin-left: 0;
+}
+
+.article-card-name {
+  color: var(--ts-text-2);
+  font-weight: 600;
+}
+
+.article-lead .article-card-name {
+  color: var(--ts-text);
+  font-size: 14px;
+}
+
+.author-mark-small {
   width: 20px;
   height: 20px;
   font-size: 10px;
 }
 
-.article-card-foot .agent-tag {
-  margin-left: 0;
-}
-
-.article-card-author {
-  color: var(--ts-text-2);
-  font-weight: 600;
-}
-
-.article-card-foot .new-label {
+.author-mark-lead {
+  width: 28px;
+  height: 28px;
   font-size: 12px;
+}
+
+.article-card-author .new-label {
+  font-size: 12px;
+}
+
+.article-strip {
+  margin-top: auto;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-row);
+  background: var(--ts-surface);
+  color: var(--ts-text-2);
+  font: 400 13px/1.4 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.article-strip:hover {
+  background: var(--ts-hover);
+}
+
+.article-lead .article-card-author + .article-strip {
+  margin-top: 20px;
+}
+
+.article-strip-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-strip-count {
+  flex: none;
+  color: var(--ts-text-3);
+  font-size: 12.5px;
 }
 
 /* The empty state: what is missing, and what the reader can do about it. */
@@ -486,22 +649,11 @@
   text-align: center;
 }
 
-.topic-list-head-ruled + .topic-empty {
-  margin-top: 24px;
-}
-
 .topic-empty-title {
   margin: 0;
   color: var(--ts-text);
   font: var(--ts-type-card-title);
   font-size: 24px;
-}
-
-.topic-empty-text {
-  margin: 0;
-  max-width: 420px;
-  color: var(--ts-text-2);
-  font: var(--ts-type-ui);
 }
 
 .topic-empty .tangent-new {
@@ -552,19 +704,18 @@
     gap: 12px;
   }
 
-  .tangent-tile {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
+  .tangent-tile-head {
+    --tile: 44px;
+    --tile-edge: 4px;
   }
 
-  .tangent-tile-letter {
+  .tangent-tile-head .tangent-tile-letter {
     font-size: 22px;
     font-weight: 700;
   }
 
-  .tangent-tile-edge {
-    height: 4px;
+  .topic-empty-link {
+    display: none;
   }
 
   .tangent-head-text {
@@ -620,7 +771,7 @@
     grid-template-columns: 8px auto 1fr auto;
     grid-template-areas:
       "dot body body body"
-      ". people replies latest";
+      ". people replies activity";
     gap: 12px 12px;
     border: 1px solid var(--ts-line);
     border-radius: var(--ts-radius-card);
@@ -663,20 +814,58 @@
     font-size: 12.5px;
   }
 
-  .topic-row-latest {
-    grid-area: latest;
+  .topic-row-activity {
+    grid-area: activity;
     width: auto;
     align-self: center;
+  }
+
+  .topic-row-activity time {
     color: var(--ts-text-3);
     font: 400 12.5px/1.3 var(--ts-font-ui);
+  }
+
+  .topic-row-who {
+    display: none;
+  }
+
+  .topic-row-latest-reply {
+    align-items: flex-start;
+    padding: 10px;
+    font-size: 13.5px;
+  }
+
+  .topic-row-latest-line {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+
+  .topic-row-none {
+    font-size: 12.5px;
   }
 
   .topic-row-opening {
     font-size: 13.5px;
   }
 
+  .article-lead {
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .article-cover {
+    width: 100%;
+    height: 160px;
+  }
+
+  .tangent-tile-cover .tangent-tile-letter {
+    font-size: 72px;
+  }
+
   .article-card-title,
-  .article-list > .article-card:first-child .article-card-title {
+  .article-lead .article-card-title {
     font-size: 24px;
   }
 

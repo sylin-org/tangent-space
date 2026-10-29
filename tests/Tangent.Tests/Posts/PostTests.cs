@@ -54,6 +54,44 @@ public sealed class PostTests
     }
 
     [Fact]
+    public async Task A_title_whose_slug_is_a_tangents_own_page_takes_the_suffix_and_each_topic_started_raises_the_tangents_count()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var writer = await Started(tangentSpace);
+
+        var create = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Workshop, "New", "Where Topics start.", "leo"), Cancellation)).Result;
+        var settings = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Settings!", "Where the Tangent is set.", "leo"), Cancellation)).Result;
+        var plain = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Workshop, "New settings", "Neither.", "leo"), Cancellation)).Result;
+
+        Assert.Equal(("new-2", "settings-2", "new-settings"), (create.Slug, settings.Slug, plain.Slug));
+        Assert.Equal(3, (await Tangents.Tangent.Get(Workshop, Cancellation))!.TopicCount);
+        Assert.Equal(0, (await Tangents.Tangent.Get("articles", Cancellation))!.TopicCount);
+    }
+
+    [Fact]
+    public async Task A_reply_records_itself_as_the_topics_latest_and_its_author_first_among_at_most_four_recent_authors()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var writer = await Started(tangentSpace);
+        foreach (var id in new[] { "mara", "sam", "kim" }) await Given.AParticipant(tangentSpace, id, [Roles.Member], ct: Cancellation);
+        var topicId = Tids.Mint();
+        var started = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(topicId, Workshop, "Who is here", "Say hello.", "leo"), Cancellation)).Result;
+        Assert.Equal(["leo"], started.RecentAuthorIds);
+        Assert.Null(started.LatestReplyId);
+
+        string last = "";
+        foreach (var author in new[] { "ada", "mara", "leo", "sam", "kim", "sam" })
+        {
+            last = Tids.Mint();
+            Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(last, topicId, "Hello from " + author + ".", author), Cancellation));
+        }
+
+        var root = (await Post.Get(topicId, Cancellation))!;
+        Assert.Equal((last, "sam"), (root.LatestReplyId, root.LatestReplyAuthorId));
+        Assert.Equal(["sam", "kim", "leo", "mara"], root.RecentAuthorIds);
+    }
+
+    [Fact]
     public async Task Past_fifty_topics_with_one_slug_the_posts_own_id_is_the_suffix_and_the_slug_stays_within_the_limit()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);

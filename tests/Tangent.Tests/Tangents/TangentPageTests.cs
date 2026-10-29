@@ -72,7 +72,7 @@ public sealed class TangentPageTests
 
         var html = await Html(tangentSpace.Client, "/t/" + Workshop);
         Assert.Contains("<h1 id=\"tangent-title\" class=\"tangent-title\">The workshop</h1>", html);
-        Assert.Contains("<span aria-current=\"page\" class=\"path-current path-only\">The workshop</span>", html);
+        Assert.Contains("<summary class=\"switcher-button\" aria-current=\"page\" aria-label=\"The workshop, switch Tangent\">", html);
         Assert.Contains($"href=\"{BaseUrl}/t/{Workshop}/an-older-question\"", html);
         var order = new[] { "Read this first", "An older question", "A newer question" }.Select(title => html.IndexOf(title, StringComparison.Ordinal)).ToList();
         Assert.All(order, index => Assert.True(index > 0));
@@ -157,11 +157,11 @@ public sealed class TangentPageTests
         using (var json = await Json(browser.Client, "/t/" + Workshop))
             Assert.Equal((true, 1L), Marks(json.RootElement)[seen.Id]);
         var html = await Html(browser.Client, "/t/" + Workshop);
-        Assert.Contains("<span class=\"new-dot\" role=\"img\" aria-label=\"New\"></span>", html);
+        Assert.Contains("<span class=\"new-dot\" role=\"img\" aria-label=\"Unread\"></span>", html);
         Assert.Contains("<span class=\"new-label\">1 new</span>", html);
         // The reader's account opens in the page, with the way to sign out and come back here.
         Assert.Contains("<details class=\"account\">", html);
-        Assert.Contains($"<a class=\"account-sign-out\" href=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">Sign out</a>", html);
+        Assert.Contains($"<a class=\"account-item\" href=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">Sign out</a>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
             Assert.All(Marks(json.RootElement).Values, mark => Assert.Equal((false, 0L), mark));
@@ -220,7 +220,7 @@ public sealed class TangentPageTests
         var start = $"{BaseUrl}/t/{Workshop}/new";
 
         var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop);
-        Assert.Contains("<p class=\"topic-empty-title\">No topics yet</p>", visitorHtml);
+        Assert.Contains("<p class=\"topic-empty-title\">No topics yet.</p>", visitorHtml);
         Assert.DoesNotContain("tangent-new", visitorHtml);
         Assert.Contains($"href=\"{BaseUrl}/sign-in?return={Uri.EscapeDataString("/t/" + Workshop)}\"", visitorHtml);
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
@@ -230,12 +230,12 @@ public sealed class TangentPageTests
         }
 
         var newcomerHtml = await Html(newcomer.Client, "/t/" + Workshop);
-        Assert.Contains("No topics yet", newcomerHtml);
+        Assert.Contains("No topics yet.", newcomerHtml);
         Assert.DoesNotContain("tangent-new", newcomerHtml);
         Assert.DoesNotContain("/sign-in?return=", newcomerHtml);
 
         var memberHtml = await Html(member.Client, "/t/" + Workshop);
-        Assert.Contains("No topics yet", memberHtml);
+        Assert.Contains("No topics yet.", memberHtml);
         Assert.Contains($"<a class=\"tangent-new\" href=\"{start}\">", memberHtml);
         using (var json = await Json(member.Client, "/t/" + Workshop))
             Assert.Equal(start, json.RootElement.GetProperty("newTopic").GetString());
@@ -259,6 +259,66 @@ public sealed class TangentPageTests
         var after = await Tag(tangentSpace.Client, first.ETag);
         Assert.Equal(HttpStatusCode.OK, after.Status);
         Assert.NotEqual(first.ETag, after.ETag);
+    }
+
+    [Fact]
+    public async Task A_row_carries_its_latest_reply_and_recent_authors_and_the_frame_lists_the_tangents_the_reader_may_view_and_who_reads()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(
+            new CreateTangent("studio", "The studio", "", PostKind.Article, 2, Audience.Private, "leo"), Cancellation));
+        await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
+        var topic = await Started(writer, "A question", Start);
+        var reply = Tids.Mint();
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), topic.Id, "First.", "leo", At: Start.AddMinutes(1)), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(reply, topic.Id, "The **latest** word.", "ada", At: Start.AddMinutes(2)), Cancellation));
+
+        using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
+        {
+            var row = json.RootElement.GetProperty("topics")[0];
+            var latest = row.GetProperty("latest");
+            Assert.Equal((reply, "ada", "The latest word.", false), (latest.GetProperty("id").GetString(),
+                latest.GetProperty("author").GetProperty("id").GetString(), latest.GetProperty("line").GetString(), latest.GetProperty("new").GetBoolean()));
+            Assert.Equal(["ada", "leo"], row.GetProperty("people").EnumerateArray().Select(person => person.GetProperty("id").GetString()!).ToList());
+            Assert.Equal(1, row.GetProperty("readMinutes").GetInt32());
+            var tangents = json.RootElement.GetProperty("tangents").EnumerateArray().ToList();
+            Assert.Equal([(Workshop, 1)], tangents.Select(tangent => (tangent.GetProperty("slug").GetString()!, tangent.GetProperty("topicCount").GetInt32())).ToList());
+            Assert.Equal($"{BaseUrl}/sign-in?return={Uri.EscapeDataString("/t/" + Workshop)}", json.RootElement.GetProperty("signIn").GetString());
+        }
+
+        var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop);
+        Assert.Contains($"<a class=\"masthead-sign-in\" href=\"{BaseUrl}/sign-in?return={Uri.EscapeDataString("/t/" + Workshop)}\">Sign in</a>", visitorHtml);
+        Assert.Contains("<span class=\"switcher-item-detail\">Discussions · 1 topic</span>", WebUtility.HtmlDecode(visitorHtml));
+        Assert.DoesNotContain("The studio", visitorHtml);
+        Assert.Contains("<span class=\"topic-row-latest-line\"><b>ada.example</b> The latest word.</span>", visitorHtml);
+
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
+        var readerHtml = await Html(browser.Client, "/t/" + Workshop);
+        Assert.DoesNotContain("masthead-sign-in", readerHtml);
+        Assert.Contains(" · Member</span>", WebUtility.HtmlDecode(readerHtml));
+        Assert.Contains($"<li><a class=\"account-item\" href=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">Sign out</a></li>", readerHtml);
+        Assert.DoesNotContain("The studio", readerHtml);
+        Assert.Contains("<span class=\"new-label\">New</span>", readerHtml);
+    }
+
+    [Fact]
+    public void The_version_differs_across_midnight_utc_for_the_same_page_since_the_day_changes_how_its_times_read()
+    {
+        var at = new DateTimeOffset(2026, 10, 29, 15, 0, 0, TimeSpan.Zero);
+        var author = new TangentPage.Author("ada", "ada.example", "Ada", "person", null);
+        var topic = new TangentPage.Topic(Tids.Mint(), "a-question", "A question", "topic", $"{BaseUrl}/t/{Workshop}/a-question", author,
+            "Words.", 1, 0, at, at, false, false, null, [author], false, 0);
+        var today = new TangentPage(Workshop, "The workshop", "", "topic", "public", $"{BaseUrl}/t/{Workshop}", ["View"], [topic], null,
+            false, null, null, [], "Tangent Space", BaseUrl + "/", null, new DateOnly(2026, 10, 29));
+        var tomorrow = today with { Day = new DateOnly(2026, 10, 30) };
+
+        Assert.Equal(TangentPage.Version(today), TangentPage.Version(today with { }));
+        Assert.NotEqual(TangentPage.Version(today), TangentPage.Version(tomorrow));
+        Assert.Equal("3:00 PM", Render.TopicRow.When(at, today.Day));
+        Assert.Equal("Oct 29", Render.TopicRow.When(at, tomorrow.Day));
+        Assert.Equal("Oct 29, 2026", Render.TopicRow.When(at, new DateOnly(2027, 1, 1)));
     }
 
     /// <summary>The place every proof starts from: an administrator who sets up the public Tangent, and a member who

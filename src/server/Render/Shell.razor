@@ -2,8 +2,9 @@
    the base URL. The theme script blocks in <head> so the saved appearance applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in,
-   their account as a disclosure in the page with their handle and the way to sign out; the path bar whose elbow
-   hangs from the mark, and the footer with the appearance a visitor can choose. *@
+   their account opening in the page with their name, handle and role and the way to sign out, or for a visitor the
+   way to sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
+   in the page; and the footer with the appearance a visitor can choose. Nothing here is a dialog. *@
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,28 +23,33 @@
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
-        @if (frame.Who is { } who)
-        {
-            <div class="masthead-actions">
+        <div class="masthead-actions">
+            @if (frame.Who is { } who)
+            {
                 <details class="account">
-                    <summary class="account-button" aria-label="@("Account, @" + who.Handle)">
-                        @if (who.Avatar is { } avatar)
-                        {
-                            <img class="who-mark" src="@avatar" alt="">
-                        }
-                        else
-                        {
-                            <span class="who-mark" aria-hidden="true">@who.Initial</span>
-                        }
+                    <summary class="account-button" aria-label="@("Account, " + who.Name)">
+                        @Mark(who)
                         <svg class="account-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                     </summary>
                     <div class="account-panel">
-                        <p class="account-who"><span class="account-label">Signed in as</span><span class="who-handle">@("@" + who.Handle)</span></p>
-                        <a class="account-sign-out" href="@who.SignOut">Sign out</a>
+                        <div class="account-who">
+                            @Mark(who)
+                            <span class="account-names">
+                                <span class="account-name">@who.Name</span>
+                                <span class="who-handle">@("@" + who.Handle + (who.Role is { } role ? " · " + role : ""))</span>
+                            </span>
+                        </div>
+                        <ul class="account-items">
+                            <li><a class="account-item" href="@who.SignOut">Sign out</a></li>
+                        </ul>
                     </div>
                 </details>
-            </div>
-        }
+            }
+            else if (frame.SignIn is { } signIn)
+            {
+                <a class="masthead-sign-in" href="@signIn">Sign in</a>
+            }
+        </div>
     </header>
     <nav class="path-bar" aria-label="You are here">
         <span class="path-elbow" aria-hidden="true"></span>
@@ -53,7 +59,34 @@
                 var crumb = frame.Crumbs[index];
                 var last = index == frame.Crumbs.Count - 1;
                 <li class="path-crumb">
-                    @if (last)
+                    @if (crumb.Switcher is { } switcher)
+                    {
+                        <details class="switcher">
+                            <summary class="switcher-button" aria-current="@(last ? "page" : null)" aria-label="@(crumb.Label + ", switch Tangent")">
+                                <TangentTile Tile="@switcher.Tile" />
+                                <span class="switcher-label">@crumb.Label</span>
+                                <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
+                            </summary>
+                            <div class="switcher-panel">
+                                <p class="switcher-heading">Tangents</p>
+                                <ul class="switcher-items">
+                                    @foreach (var item in switcher.Tangents)
+                                    {
+                                        <li>
+                                            <a class="switcher-item" href="@item.Address" aria-current="@(item.Current ? "page" : null)">
+                                                <TangentTile Tile="@item.Tile" Size="menu" />
+                                                <span class="switcher-item-text">
+                                                    <span class="switcher-item-name">@item.Name</span>
+                                                    <span class="switcher-item-detail">@item.Detail</span>
+                                                </span>
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </details>
+                    }
+                    else if (last)
                     {
                         <span aria-current="page" class="@(frame.Crumbs.Count == 1 ? "path-current path-only" : "path-current")">@crumb.Label</span>
                     }
@@ -94,4 +127,24 @@ else
     [Parameter] public Frame? Frame { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>A participant's mark in the masthead: their avatar, or the first letter of their name.</summary>
+    private static RenderFragment Mark(Who who) => builder =>
+    {
+        if (who.Avatar is { } avatar)
+        {
+            builder.OpenElement(0, "img");
+            builder.AddAttribute(1, "class", "who-mark");
+            builder.AddAttribute(2, "src", avatar);
+            builder.AddAttribute(3, "alt", "");
+            builder.CloseElement();
+            return;
+        }
+
+        builder.OpenElement(4, "span");
+        builder.AddAttribute(5, "class", "who-mark");
+        builder.AddAttribute(6, "aria-hidden", "true");
+        builder.AddContent(7, who.Initial);
+        builder.CloseElement();
+    };
 }

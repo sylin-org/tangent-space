@@ -59,13 +59,15 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // A discussions Tangent and an articles Tangent, populated and empty, read by the persona, a member with some
-  // Topics new to them; the discussions Tangent also as a visitor reads it, and with the persona's account open.
+  // Topics new to them; the discussions Tangent also as a visitor reads it, with the persona's account open, and with
+  // the Tangent switcher open.
   tangent: {
     path: '/t/discussions',
     states: [
       { name: 'discussions', seed: 'tangent', signedIn: true },
       { name: 'discussions-visitor', seed: 'tangent' },
       { name: 'discussions-account', seed: 'tangent', signedIn: true, click: '.account-button' },
+      { name: 'discussions-switcher', seed: 'tangent', signedIn: true, click: '.switcher-button' },
       { name: 'discussions-empty', seed: 'tangent', signedIn: true, path: '/t/workshop' },
       { name: 'articles', seed: 'tangent', signedIn: true, path: '/t/articles' },
       { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },
