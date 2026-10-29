@@ -18,10 +18,7 @@ public sealed class BackupTests(ITestOutputHelper output)
         await using var original = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://backed-up.example" },
             ct: Cancellation);
-        var row = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        row!.Name = "The workshop's place";
-        row.Version++;
-        await row.Save(Cancellation);
+        var row = await Given.AnEstablishedTangentSpace(original, "The workshop's place", ct: Cancellation);
         var media = Path.Combine(original.DataFolder, "media", "cover.bin");
         Directory.CreateDirectory(Path.GetDirectoryName(media)!);
         await File.WriteAllBytesAsync(media, [1, 2, 3], Cancellation);

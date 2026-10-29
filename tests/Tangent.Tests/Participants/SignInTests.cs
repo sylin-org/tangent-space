@@ -134,10 +134,7 @@ public sealed class SignInTests
         Admission admission, string kind, ParticipantKind declared, Standing standing)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
-        space.Admission = admission;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        await Given.AnEstablishedTangentSpace(tangentSpace, admission: admission, ct: Cancellation);
         using var browser = new Browser(tangentSpace);
         const string did = "did:plc:grace4example";
 

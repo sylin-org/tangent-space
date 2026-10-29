@@ -10,8 +10,8 @@ import { chromium, type Browser } from 'playwright'
 import { storageKey } from '../appearance.ts'
 import { interrupted, onInterrupt } from './interrupt.ts'
 import { referencePackage, renderReference } from './reference.ts'
-import { capturePersona, captureThemes, nearestReadings, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
-import { doorOf, forward, resolveServer, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
+import { captureOperator, capturePersona, capturePlaceName, captureThemes, nearestReadings, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
+import { doorOf, establish, forward, resolveServer, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
 
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const viewportHeight: Record<Width, number> = { 1440: 960, 1024: 768, 390: 844 }
@@ -80,19 +80,22 @@ async function launch(args: string[] = []): Promise<{ browser: Browser; close():
 async function captureScreen(screen: Screen): Promise<string[]> {
   if (screen.states.some((state) => state.name === 'reference'))
     throw new Error('No state is named reference; that name marks the reference captures.')
-  // States that need the same settings share one Tangent Space.
+  // States that need the same settings and the same place share one Tangent Space.
   const groups = new Map<string, State[]>()
   for (const state of screen.states) {
-    const key = JSON.stringify(state.settings ?? {})
+    const key = JSON.stringify([state.settings ?? {}, state.place ?? 'established'])
     groups.set(key, [...(groups.get(key) ?? []), state])
   }
-  if (values.url && [...groups.keys()].some((key) => key !== '{}'))
-    throw new Error('A state of this screen needs settings the Tangent Space starts with; capture it without --url.')
+  if (values.url && screen.states.some((state) => state.settings || (state.place ?? 'established') !== 'established'))
+    throw new Error('A state of this screen needs settings or a place the Tangent Space starts with; capture it without --url.')
   const server = values.url ? undefined : resolveServer(root, values.server)
 
-  for (const [settings, states] of groups) {
-    const tangentSpace = server ? await startTangentSpace(server, JSON.parse(settings)) : undefined
+  for (const [key, states] of groups) {
+    const [settings, place] = JSON.parse(key) as [Record<string, string>, NonNullable<State['place']>]
+    const tangentSpace = server ? await startTangentSpace(server, settings) : undefined
     try {
+      if (tangentSpace && place !== 'unestablished')
+        await establish(tangentSpace.listening, place === 'persona' ? capturePersona : captureOperator, capturePlaceName)
       // A started Tangent Space is asked for at its base URL, which the browser maps to its loopback port.
       // A running one is asked for where --url says, and its pages link to the base URL it states.
       const pageBase = tangentSpace?.baseUrl ?? new URL(values.url!)
@@ -164,6 +167,8 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
         })
 
         await page.goto(target.href, { waitUntil: 'networkidle' })
+        for (const selector of state.check ?? []) await page.check(selector)
+        for (const [selector, value] of Object.entries(state.fill ?? {})) await page.fill(selector, value)
         if (state.click) {
           await page.click(state.click)
           await page.waitForLoadState('networkidle')

@@ -41,17 +41,27 @@ public sealed partial class Browser : IDisposable
     /// <summary>Declares a kind on the arrival form the sign-in page holds, with the form's token, as the page posts
     /// it.</summary>
     public async Task<HttpResponseMessage> Arrive(string kind, CancellationToken ct)
+        => await Post("/sign-in", new Dictionary<string, string> { ["kind"] = kind, ["return"] = "/" }, ct);
+
+    /// <summary>Sends the form the first-run page holds, with the form's token, as the page posts it: the place's name,
+    /// and the proprietor's handle when it is someone else.</summary>
+    public async Task<HttpResponseMessage> SetUp(string name, CancellationToken ct, string? proprietorHandle = null)
+        => await Post("/first-run", new Dictionary<string, string>
+        {
+            ["name"] = name,
+            ["proprietor"] = proprietorHandle is null ? "me" : "someone",
+            ["handle"] = proprietorHandle ?? ""
+        }, ct);
+
+    /// <summary>Reads the page at <paramref name="path"/> and posts its form back to it with the form's token.</summary>
+    private async Task<HttpResponseMessage> Post(string path, Dictionary<string, string> fields, CancellationToken ct)
     {
-        using var page = await Follow(HttpMethod.Get, "/sign-in", ct);
+        using var page = await Follow(HttpMethod.Get, path, ct);
         var html = await page.Content.ReadAsStringAsync(ct);
         var token = TokenField().Match(html);
-        if (!token.Success) throw new InvalidOperationException("The sign-in page holds no arrival form.");
-        return await Client.PostAsync("/sign-in", new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            [WebUtility.HtmlDecode(token.Groups["field"].Value)] = WebUtility.HtmlDecode(token.Groups["value"].Value),
-            ["kind"] = kind,
-            ["return"] = "/"
-        }), ct);
+        if (!token.Success) throw new InvalidOperationException($"The page at {path} holds no form.");
+        fields[WebUtility.HtmlDecode(token.Groups["field"].Value)] = WebUtility.HtmlDecode(token.Groups["value"].Value);
+        return await Client.PostAsync(path, new FormUrlEncodedContent(fields), ct);
     }
 
     /// <summary>Sends a request and follows its redirects as a browser does, answering with the last response.</summary>

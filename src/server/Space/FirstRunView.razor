@@ -1,0 +1,166 @@
+@using Tangent.Render
+@* First run: one panel in the page, headed by the place's mark and name. Before sign-in it holds the handle form, the
+   field focused; signed in, the form that names the place, shows the base URL with where it is configured, and says
+   whose place it is, with the button saying what is missing until the name is written; once established, the
+   pointers the site places, each ready to copy. A refusal of the form as a whole shows above it; one of a field,
+   under that field. *@
+<main class="sign-in first-run">
+    <section class="@PanelClass" aria-labelledby="first-run-title">
+        <PanelHead Frame="@Frame(Model)" />
+        <div class="sign-in-body">
+        @if (Model.Pointers is { } pointers)
+        {
+            <h1 id="first-run-title" class="sign-in-title">@Model.Name is ready</h1>
+            <p class="sign-in-lede">It answers at <a href="@Model.Door">@Model.BaseUrl</a>. Point your site at it in any one of these ways, whichever you can place.</p>
+            <ol class="first-run-pointers">
+                @for (var index = 0; index < pointers.Count; index++)
+                {
+                    var pointer = pointers[index];
+                    var id = "pointer-" + pointer.Kind;
+                    <li class="first-run-pointer" data-pointer="@pointer.Kind">
+                        <div class="first-run-pointer-head">
+                            <h2 class="first-run-pointer-title" id="@(id)-title">@Title(pointer)</h2>
+                            <button type="button" class="first-run-copy" data-island="copy" data-props="@("{\"target\":\"" + id + "\"}")"
+                                    aria-describedby="@(id)-title" hidden>Copy</button>
+                        </div>
+                        <p class="first-run-pointer-where">@pointer.Where</p>
+                        <pre class="first-run-snippet" id="@id" tabindex="0"><code>@pointer.Text</code></pre>
+                    </li>
+                }
+            </ol>
+            <p class="first-run-onward">
+                <a class="first-run-door" href="@Model.Door">Open @Model.Name</a>
+            </p>
+        }
+        else if (Model.Form is { } form)
+        {
+            <h1 id="first-run-title" class="sign-in-title">Set up your Tangent Space</h1>
+            <p class="sign-in-lede">
+                @if (form.Handle.Length > 0)
+                {
+                    <text>You’re signed in as <strong>@("@" + form.Handle)</strong>. Name the place and say whose it is; you’ll answer for it.</text>
+                }
+                else
+                {
+                    <text>You’re signed in. Name the place and say whose it is; you’ll answer for it.</text>
+                }
+            </p>
+            @if (form.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="first-run-failure" role="alert">@failure</p>
+            }
+            <form class="sign-in-form first-run-form" method="post" action="@form.Action" data-island="submitting">
+                <FormTokenField Token="@form.Token" />
+                <div class="field">
+                    <label class="field-label" for="first-run-name">Name</label>
+                    <span class="field-input">
+                        <input id="first-run-name" name="name" type="text" required maxlength="@TangentSpace.NameLimit" autofocus
+                               autocomplete="off" placeholder="Field notes" value="@form.Name"
+                               aria-invalid="@(form.NameFailure is null ? "false" : "true")"
+                               aria-describedby="@(form.NameFailure is null ? "first-run-name-note" : "first-run-name-failure first-run-name-note")">
+                    </span>
+                    @if (form.NameFailure is { } nameFailure)
+                    {
+                        <p class="field-failure" id="first-run-name-failure">@nameFailure</p>
+                    }
+                    <p class="sign-in-note" id="first-run-name-note">At the top of every page, and what agents read first.</p>
+                </div>
+                <div class="field">
+                    <span class="field-label" id="first-run-address-label">Base URL</span>
+                    <span class="first-run-address" aria-labelledby="first-run-address-label">@Model.BaseUrl</span>
+                    <p class="sign-in-note">Where this Tangent Space answers. It is configuration: change <code>@Model.Setting</code> in appsettings.json, or the <code>@Model.Setting.Replace(":", "__")</code> environment variable, and restart.</p>
+                </div>
+                <fieldset class="kind-choice first-run-proprietor" aria-describedby="first-run-proprietor-note">
+                    <legend class="field-label">Whose place is it?</legend>
+                    <div class="kind-options">
+                        <label class="kind-option" data-proprietor="me">
+                            <span class="kind-mark kind-mark-person" aria-hidden="true">@Initial(form.Handle)</span>
+                            <span class="kind-option-text">
+                                <span class="kind-option-name">Mine</span>
+                                <span class="kind-option-detail">@(form.Handle.Length > 0 ? "@" + form.Handle + " is its proprietor; your name fronts it." : "You are its proprietor; your name fronts it.")</span>
+                            </span>
+                            <input type="radio" name="proprietor" value="@FirstRunForm.Me" checked="@(form.Proprietor == FirstRunForm.Me)">
+                        </label>
+                        <label class="kind-option" data-proprietor="someone">
+                            <span class="kind-mark first-run-mark-someone" aria-hidden="true">@@</span>
+                            <span class="kind-option-text">
+                                <span class="kind-option-name">Someone else’s</span>
+                                <span class="kind-option-detail">A person, a company or an AI that has signed in here.</span>
+                            </span>
+                            <input type="radio" id="first-run-someone" name="proprietor" value="@FirstRunForm.Someone" checked="@(form.Proprietor == FirstRunForm.Someone)">
+                        </label>
+                    </div>
+                    <div class="field first-run-handle">
+                        <label class="field-label" for="first-run-handle">Their handle</label>
+                        <span class="field-input">
+                            <span class="field-prefix" aria-hidden="true">@@</span>
+                            <input id="first-run-handle" name="handle" type="text" maxlength="@Participants.SignIn.HandleLimit"
+                                   autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="studio.example.com"
+                                   value="@form.ProprietorHandle" aria-invalid="@(form.ProprietorFailure is null ? "false" : "true")"
+                                   aria-describedby="@(form.ProprietorFailure is null ? null : "first-run-handle-failure")">
+                        </span>
+                        @if (form.ProprietorFailure is { } proprietorFailure)
+                        {
+                            <p class="field-failure" id="first-run-handle-failure">@proprietorFailure</p>
+                        }
+                    </div>
+                    <p class="sign-in-note" id="first-run-proprietor-note">The proprietor’s voice fronts the place. Only a participant can be named, so they sign in here once first.</p>
+                </fieldset>
+                <div class="first-run-operator">
+                    <span class="field-label">Operator</span>
+                    <p class="first-run-operator-text">
+                        <strong>@(form.Handle.Length > 0 ? "You, @" + form.Handle : "You")</strong>, the person who answers for this place. You’ll hold every permission here.
+                    </p>
+                </div>
+                <button type="submit" class="sign-in-submit" data-state="pending" data-pending-label="Name your Tangent Space"
+                        data-ready-label="Set up the Tangent Space" data-busy-label="Setting up…">Name your Tangent Space</button>
+            </form>
+            <p class="sign-in-switch">
+                <a href="@form.SignOut">@(form.Handle.Length > 0 ? "Not @" + form.Handle + "? Use another account" : "Use another account")</a>
+            </p>
+        }
+        else
+        {
+            <h1 id="first-run-title" class="sign-in-title">Set up this Tangent Space</h1>
+            <p class="sign-in-lede">Sign in with the account that will run it. You’ll name the place, say whose it is, and answer for it.</p>
+            <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()" data-island="submitting">
+                <div class="field">
+                    <label class="field-label" for="first-run-sign-in-handle">Handle</label>
+                    <span class="field-input">
+                        <span class="field-prefix" aria-hidden="true">@@</span>
+                        <input id="first-run-sign-in-handle" name="identifier" type="text" required autofocus
+                               autocomplete="username" autocapitalize="none" spellcheck="false"
+                               placeholder="yourname.bsky.social">
+                    </span>
+                </div>
+                <input type="hidden" name="return" value="@Model.ChallengeReturn()">
+                <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
+            </form>
+            <p class="sign-in-note first-run-first">Use your Bluesky handle, or any AT&nbsp;Protocol account. Whoever finishes setting up first becomes its operator.</p>
+        }
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public FirstRun Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and who is signed in
+    /// once someone is.</summary>
+    public static Frame Frame(FirstRun firstRun)
+        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "Set up" : "Ready")],
+            firstRun.Who is { } who ? new Who(who) : null);
+
+    private string PanelClass => Model.Challenge is not null ? "sign-in-panel" : "sign-in-panel first-run-panel";
+
+    private static string Title(Pointer pointer) => pointer.Kind switch
+    {
+        Pointers.Link => "A link on your site’s pages",
+        Pointers.WellKnown => "A file at your site’s origin",
+        Pointers.Txt => "A DNS record",
+        Pointers.Proxy => "The reverse-proxy rule for the path",
+        _ => pointer.Kind
+    };
+
+    private static string Initial(string handle) => handle.Length > 0 ? char.ToUpperInvariant(handle[0]).ToString() : "?";
+}

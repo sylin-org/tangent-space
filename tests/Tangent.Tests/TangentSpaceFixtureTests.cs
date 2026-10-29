@@ -23,10 +23,12 @@ public sealed class TangentSpaceFixtureTests
             new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://first.example" },
             services => services.AddSingleton<IKoanEndpointContributor, RowEndpoint>(),
             Cancellation);
+        await Given.AnEstablishedTangentSpace(first, ct: Cancellation);
         await using var second = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://second.example" },
             services => services.AddSingleton<IKoanEndpointContributor, RowEndpoint>(),
             Cancellation);
+        await Given.AnEstablishedTangentSpace(second, ct: Cancellation);
 
         try
         {

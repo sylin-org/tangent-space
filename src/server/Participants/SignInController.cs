@@ -13,7 +13,8 @@ namespace Tangent.Participants;
 /// challenge to follow; the challenge comes back here signed in. A person who has not arrived yet reads the form that
 /// declares their kind, and posting it, with its antiforgery token, is their first arrival; a participant is sent
 /// where they were going. The first request that finds a signed-in person without a participant is where Tangent
-/// learns of a first arrival.</summary>
+/// learns of a first arrival. It answers as itself before first run, for a place that reads as unestablished.</summary>
+[AnswersBeforeFirstRun]
 public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, IAntiforgery antiforgery,
     ILogger<SignInController> logger) : ControllerBase
 {
@@ -125,5 +126,5 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl, WriteLoop writer, I
     private string Handle() => User.FindFirst(AtprotoClaimTypes.Handle)?.Value ?? "";
 
     private static async Task<TangentSpace> Space(CancellationToken ct)
-        => await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
+        => await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
 }

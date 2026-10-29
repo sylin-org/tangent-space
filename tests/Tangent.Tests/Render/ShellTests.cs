@@ -51,6 +51,7 @@ public sealed class ShellTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = BaseUrl }, ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
 
         var html = await Read(tangentSpace, fragment: false);
         var fragment = await Read(tangentSpace, fragment: true);

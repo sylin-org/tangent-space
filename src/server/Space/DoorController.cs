@@ -1,9 +1,11 @@
+using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Tangent.Space;
 
-/// <summary>The door: one bounded read of the one row, left to the formatter as HTML, a fragment or JSON.</summary>
-public sealed class DoorController : ControllerBase
+/// <summary>The door: one bounded read of the one row, left to the formatter as HTML, a fragment or JSON, at the base
+/// URL the operator configures.</summary>
+public sealed class DoorController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     [HttpGet("/")]
     [HttpHead("/")]
@@ -11,6 +13,6 @@ public sealed class DoorController : ControllerBase
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
-        return new Door(space.Name, space.BaseUrl, space.Version);
+        return new Door(space.Name, baseUrl.Configured ?? space.BaseUrl, space.Version);
     }
 }
