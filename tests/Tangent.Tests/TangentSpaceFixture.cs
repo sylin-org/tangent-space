@@ -57,7 +57,7 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         Action<IServiceCollection>? services = null,
         CancellationToken ct = default)
     {
-        var folder = Path.Combine(Path.GetTempPath(), "tangent-tests", Guid.CreateVersion7().ToString("n"));
+        var folder = Path.Combine(Path.GetTempPath(), "tangent-fixture-" + Guid.CreateVersion7().ToString("n"));
         Directory.CreateDirectory(folder);
         WebApplication application;
         try
