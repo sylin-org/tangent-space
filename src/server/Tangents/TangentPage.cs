@@ -57,7 +57,7 @@ public sealed partial record TangentPage(
     /// <summary>The signed-in participant reading the page, and where they sign out, coming back to this page.</summary>
     public sealed record Reader(string Handle, string? Avatar, string SignOut);
 
-    /// <summary>The version the page's <c>ETag</c> carries: a digest of everything the page says, so the same page for
+    /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so the same page for
     /// the same reader answers the same tag, and a new Post, a moved checkpoint or a changed <c>can</c> changes it.</summary>
     public static long Version(TangentPage page)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;

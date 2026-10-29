@@ -176,19 +176,19 @@ public sealed class TangentPageTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         var writer = await Place(tangentSpace);
         Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(
-            new CreateTangent("back-room", "Back room", "", PostKind.Topic, 2, Audience.Private, "leo"), Cancellation));
+            new CreateTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, "leo"), Cancellation));
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
 
         // A member of the place, where the Tangent's everyone overwrite denies View: the word 1.3 defines, absent,
         // in the answer an address without a Tangent gets.
-        var absent = await Problem(browser.Client, "/t/back-room");
+        var absent = await Problem(browser.Client, "/t/studio");
         var missing = await Problem(browser.Client, "/t/nowhere");
         Assert.Equal((HttpStatusCode.NotFound, "application/problem+json", Capabilities.Absent), (absent.Status, absent.MediaType, absent.Gate));
         Assert.Equal(missing, absent);
         // A visitor on the private Tangent of a public place: absent too, by the order access resolves in.
-        Assert.Equal(missing, await Problem(tangentSpace.Client, "/t/back-room"));
+        Assert.Equal(missing, await Problem(tangentSpace.Client, "/t/studio"));
 
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.Audience = Audience.Private;
