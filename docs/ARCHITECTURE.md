@@ -42,15 +42,13 @@ Koan work the tree depends on, each a scoped brief: scoped overwrites with deny 
 
 ## 3. The write path
 
-Every write is a command on one queue, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — hands it to the writer and awaits its outcome: the result, a refusal with its reason, a conflict, or the failure. The loop:
+Every write is a command on one queue, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — hands it to the writer and awaits its outcome: the result, a refusal with its reason, a conflict, or the failure. The loop takes commands in arrival order and, for each:
 
-1. opens one transaction (`EntityContext.Transaction`, immediate on SQLite);
-2. loads what the command names: the participant with standing, the role bag, the Tangent's overwrites, the target Post;
-3. asks `Capabilities.For(...)` and refuses with the explainer's reason when the verb is missing;
-4. calls the entity method; validation lives there;
-5. assigns sequences from in-memory high-water marks loaded at start — the Topic's from its root Post's `LastSequence`, the log's from the last `Event.Seq`; a command that does not commit gives its sequences back, so none is skipped, and after a commit whose outcome Koan cannot report the marks are reloaded from the store before the next command;
-6. saves the rows, the audit snapshot for an edit, and the Events, in the same transaction;
-7. commits, announces the commit in-process — the command and the sequences it took — and answers the sender with the resource and its `can`.
+1. opens one atomic scope (`EntityContext.Transaction` with `TransactionGuarantee.Atomic`; SQLite begins the immediate transaction at commit, so the command's reads see the committed state and the serial loop keeps them consistent);
+2. runs the command, which loads what it names — the participant with standing, the role bag, the Tangent's overwrites, the target Post — asks `Capabilities.For(...)` and refuses with the explainer's reason when the verb is missing, and calls the entity method, where validation lives;
+3. assigns the sequences the command asks for from in-memory high-water marks loaded once at start — the log's from the last `Event.Seq`; a Topic's comes from its root Post's `LastSequence`, read and advanced inside the command — and keeps them only on commit, so a command that does not commit skips none; after a commit whose outcome Koan cannot report, the marks are reloaded from the store before the next command;
+4. commits the rows, the audit snapshot for an edit and the Events together, as one native transaction or nothing;
+5. announces a commit that wrote — the command and the sequences it took — in-process, and answers the sender with the resource and its `can`. A command that is refused or throws leaves no row behind and the next command runs; at a stop, the command in flight ends on its own terms and every queued command is answered as not run.
 
 No lock exists in application code. **Idempotency is the Id**: the client mints a Post Id as a TID, so a retry with the same Id and the same body returns the existing Post and a different body is `409`. **External I/O never enters the loop**: a job calls the network and then enqueues a command with the result; jobs write only through the writer. The root Post is the Topic's state — `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned` — so a Topic has no row of its own.
 
