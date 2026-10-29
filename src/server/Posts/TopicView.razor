@@ -44,6 +44,7 @@
             <span aria-hidden="true">·</span>
             <span>@TopicRow.Count(Model.ReplyCount, "reply", "replies", "No replies yet")</span>
         </p>
+        <Tangent.Events.WatchForm Model="@Model.Watching" />
         <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Anchor="@(Model.Anchor == Model.Root.Id)" />
         <section class="topic-replies" aria-labelledby="topic-replies-title">
             <div class="topic-replies-head">
@@ -67,6 +68,7 @@
             {
                 <TopicPost Model="@reply" Today="@Model.Day" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" />
             }
+            <Tangent.Events.TopicSeenForm Model="@Model.Seen" />
             @if (Model.Newer is { } newer)
             {
                 <nav class="topic-pages" aria-label="Newer replies">

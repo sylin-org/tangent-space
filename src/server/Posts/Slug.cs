@@ -10,8 +10,8 @@ public static class Slug
     public const int Limit = 64;
 
     /// <summary>The segments under a Tangent's address that are its own pages, never a Topic's slug: where a Topic is
-    /// started and the Tangent's settings.</summary>
-    public static readonly IReadOnlySet<string> Reserved = new HashSet<string>(StringComparer.Ordinal) { "new", "settings" };
+    /// started, the Tangent's settings, and where the reader watches it.</summary>
+    public static readonly IReadOnlySet<string> Reserved = new HashSet<string>(StringComparer.Ordinal) { "new", "settings", "watch" };
 
     /// <summary>The slug a title yields: letters and digits of any script, lowercased and stripped of their marks, every
     /// other run of characters one hyphen. A title with no letter or digit yields <c>topic</c>.</summary>

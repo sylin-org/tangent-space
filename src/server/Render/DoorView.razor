@@ -85,6 +85,7 @@
                             }
                         </div>
                         <p class="tangent-description">@Sentence(news)</p>
+                        <Tangent.Events.WatchedNews Model="@news.Watched" />
                         @Items("Replies to you", news.Replies)
                         @Items("Mentions of you", news.Mentions)
                         @Items("New articles", news.Articles)

@@ -1,0 +1,17 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* The seen control at the end of a Topic's window, while the window continues from the reader's checkpoint and
+   reaches past it: a button that moves the checkpoint through the window's last sequence. The seen island posts it by
+   itself once the end of the window has been on screen. *@
+@if (Model is { } seen)
+{
+    <form class="topic-seen" method="post" action="@seen.Action" data-island="seen">
+        <FormTokenField Token="@seen.Token" />
+        <input type="hidden" name="@CheckpointController.ThroughField" value="@seen.Through.ToString(CultureInfo.InvariantCulture)">
+        <button type="submit" class="topic-seen-button">Mark seen</button>
+    </form>
+}
+
+@code {
+    [Parameter] public TopicSeen? Model { get; set; }
+}

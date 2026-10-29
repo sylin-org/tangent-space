@@ -41,8 +41,8 @@ export interface State {
   seed?: string
   /** Signed in as the capture persona through Koan's test connector before the page opens. */
   signedIn?: boolean
-  /** A path under the base URL whose requests are cancelled, so a click that would leave the page shows the
-   *  moment before the answer, such as a form on its way. */
+  /** A path under the base URL whose requests are cancelled: a click that would leave the page shows the moment
+   *  before the answer, such as a form on its way, and a post an island sends by itself changes nothing. */
   cancel?: string
 }
 
@@ -202,21 +202,48 @@ export const screens: Readonly<Record<string, Screen>> = {
   // fortieth reply, marked in the middle of its window, the composer replying to it; a Topic with a reply a moderator
   // removed; and a Topic without replies. Then the composer: her reply typed and the page opened again, which brings
   // it back; a reply of nothing but spaces, refused above the field; a locked Topic, whose gate she reads instead; and
-  // last, since it writes, a reply sent through the composer, which lands on the reply's address.
+  // last, since it writes, a reply sent through the composer, which lands on the reply's address. A signed-in state
+  // cancels the seen post the seen island sends once the window's end is on screen, so its control stays on the page
+  // and every width and theme reads the same checkpoints.
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
     states: [
-      { name: 'populated', seed: 'topic', signedIn: true },
+      { name: 'populated', seed: 'topic', signedIn: true, cancel: '/t/discussions/what-kind-of-discussions/seen' },
       { name: 'populated-visitor', seed: 'topic' },
-      { name: 'long', seed: 'topic', signedIn: true, path: '/t/discussions/notes-from-the-repair-workshop' },
-      { name: 'anchored', seed: 'topic', signedIn: true, path: '/t/discussions/notes-from-the-repair-workshop/3mwdfsj6d226g' },
-      { name: 'tombstone', seed: 'topic', signedIn: true, path: '/t/discussions/is-a-visible-repair-a-better-repair' },
-      { name: 'empty-replies', seed: 'topic', signedIn: true, path: '/t/discussions/a-quiet-question' },
+      {
+        name: 'long',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/notes-from-the-repair-workshop',
+        cancel: '/t/discussions/notes-from-the-repair-workshop/seen',
+      },
+      {
+        name: 'anchored',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/notes-from-the-repair-workshop/3mwdfsj6d226g',
+        cancel: '/t/discussions/notes-from-the-repair-workshop/seen',
+      },
+      {
+        name: 'tombstone',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/is-a-visible-repair-a-better-repair',
+        cancel: '/t/discussions/is-a-visible-repair-a-better-repair/seen',
+      },
+      {
+        name: 'empty-replies',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/a-quiet-question',
+        cancel: '/t/discussions/a-quiet-question/seen',
+      },
       {
         name: 'composer-restored',
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/a-quiet-question',
+        cancel: '/t/discussions/a-quiet-question/seen',
         fill: { '#reply-body': 'Mornings, before anyone else is in.' },
         reload: true,
       },
@@ -225,15 +252,23 @@ export const screens: Readonly<Record<string, Screen>> = {
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/a-quiet-question',
+        cancel: '/t/discussions/a-quiet-question/seen',
         fill: { '#reply-body': '   ' },
         click: '.post-form-submit',
         waitFor: 'form[data-composer="refused"]',
       },
-      { name: 'locked', seed: 'topic-locked', signedIn: true, path: '/t/discussions/the-kiln-schedule-is-settled' },
+      {
+        name: 'locked',
+        seed: 'topic-locked',
+        signedIn: true,
+        path: '/t/discussions/the-kiln-schedule-is-settled',
+        cancel: '/t/discussions/the-kiln-schedule-is-settled/seen',
+      },
       {
         name: 'replied',
         seed: 'topic',
         signedIn: true,
+        cancel: '/t/discussions/what-kind-of-discussions/seen',
         fill: { '#reply-body': 'Fridays it is. I’ll bring a link about glue.' },
         click: '.post-form-submit',
         waitFor: 'article.post.is-anchor',

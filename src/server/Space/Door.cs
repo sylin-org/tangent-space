@@ -32,12 +32,14 @@ public sealed record Door(
     public int Api => 1;
 
     /// <summary>What is new to a signed-in reader: the place checkpoint the door read past (<see cref="From"/>, zero
-    /// when they have none) and the sequence it read through (<see cref="Through"/>); replies to them, mentions of them,
-    /// what is new in each Tangent and the new articles. <see cref="CaughtUp"/> is the form that moves the place
+    /// when they have none) and the sequence it read through (<see cref="Through"/>); first the Topics and Tangents they
+    /// watch that hold something new, then replies to them, mentions of them, what is new in each Tangent and the new
+    /// articles. <see cref="CaughtUp"/> is the form that moves the place
     /// checkpoint to <see cref="Through"/>, present while there is news.</summary>
     public sealed record Since(
         long From,
         long Through,
+        IReadOnlyList<Watched> Watched,
         Group Replies,
         Group Mentions,
         IReadOnlyList<InTangent> PerTangent,
@@ -54,6 +56,11 @@ public sealed record Door(
 
     /// <summary>One new Post: who wrote it, the Topic and Tangent it is in, its address, its first words and when.</summary>
     public sealed record NewPost(string PostId, TangentPage.Author Who, string Topic, string Tangent, string Address, string Line, DateTimeOffset At);
+
+    /// <summary>A Topic or a Tangent the reader watches that holds new Posts: its scope (<c>topic</c> or <c>tangent</c>),
+    /// its name, the Tangent it is in (itself, for a Tangent), its address, how many of its Posts are new, and whether
+    /// that is a lower bound.</summary>
+    public sealed record Watched(string Scope, string Name, string Tangent, string Address, int New, bool AtLeast);
 
     /// <summary>What is new in one Tangent: its Topics and its replies.</summary>
     public sealed record InTangent(string Slug, string Name, string Address, int Topics, int Replies, bool AtLeast);

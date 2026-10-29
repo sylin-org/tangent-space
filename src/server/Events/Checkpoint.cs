@@ -7,6 +7,10 @@ namespace Tangent.Events;
 /// watch it. The only per-participant state. Keyed by participant and scope.</summary>
 public sealed class Checkpoint : Entity<Checkpoint>
 {
+    /// <summary>The sequence of a checkpoint that has seen nothing in its scope yet, as a watch leaves it when it comes
+    /// before any reading: every sequence of the log and of a Topic, its root's zero among them, is past it.</summary>
+    public const long Nothing = -1;
+
     public static string Key(string participantId, Scope scope) => participantId + "/" + scope;
 
     [Index(Name = "ix_checkpoint_participants")]
