@@ -35,7 +35,7 @@ A hang first, if there is one: `pwsh .claude/skills/work-split/orphans.ps1` list
 
 When the report arrives: read the diff on the branch, re-run the one relevant check where the report claims a pass, and compare every claim with evidence. A claim without a tool result is a finding.
 
-For a screen, run the `visual-loop` skill now: the `scorer` agent and, within 0.3 of the gate, the same agent with `model: "sonnet"` as the second scorer.
+For a screen, confirm the captures exist and look at them; until Leo calls the polish stage the screen is not scored, and its row goes into `docs/SCREENS.md` as owing the gate. At the polish stage, run the `visual-loop` skill: the `scorer` agent and, within 0.3 of the gate, the same agent with `model: "sonnet"` as the second scorer.
 
 Then the review: the `reviewer` agent with the diff and the brief, and `effort: "xhigh"` for a spine package, Connections and any Koan change. No agent runs on Fable unless Leo names it for the package. The reviewer sees no reasoning from the executor or the lead.
 

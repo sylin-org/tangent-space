@@ -100,7 +100,7 @@ Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4, 1.6 and 1.8 together wh
 
 The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), export through the renderer (7), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, feeds, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, the operator declaration, `did:web`, appearance. Explorer-grade: references through Constellation, the A2A card.
 
-A slice closes when its packages are done, every screen in it holds the visual gate, and FEATURES says so.
+A slice closes when its packages work and FEATURES says so. Until Leo calls the polish stage, screens are built from the frame and the existing components, captured, and listed in `docs/SCREENS.md` as owing the visual gate; the polish stage holds every one of them to it.
 
 ## What is measured, slice by slice
 
