@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -210,6 +211,96 @@ public sealed class StreamTests
     {
         using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         while (streams.Count("").InAll > 0) await Task.Delay(50, bound.Token);
+    }
+
+    [Fact]
+    public async Task A_stream_whose_reader_may_not_view_the_rows_arriving_still_sends_its_heartbeat_on_time()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        await using var stream = await Streamed.Open(ada.Client, EventsController.Path);
+        Assert.Equal("open", (await stream.Any()).Comment);
+        var opened = Stopwatch.StartNew();
+
+        // A row Ada may not see every three seconds, for longer than the heartbeat's interval.
+        using var stop = new CancellationTokenSource();
+        var written = 0;
+        var hidden = Task.Run(async () =>
+        {
+            try
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    await Started(writer, Leo, "Studio note " + ++written, "Only for us.", Studio);
+                    await Task.Delay(TimeSpan.FromSeconds(3), stop.Token);
+                }
+            }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            {
+            }
+        });
+        var frame = await stream.Any();
+        var elapsed = opened.Elapsed;
+        await stop.CancelAsync();
+        await hidden;
+
+        Assert.Equal(("heartbeat", ""), (frame.Comment, frame.Data));
+        Assert.InRange(elapsed, EventsController.Heartbeat - TimeSpan.FromSeconds(1), EventsController.Heartbeat + TimeSpan.FromSeconds(3));
+        Assert.True(written >= 4, $"{written} hidden rows were written while the stream waited.");
+    }
+
+    [Fact]
+    public async Task Positions_move_only_to_rows_the_reader_may_see_or_past_a_whole_scan_of_hidden_ones_and_catching_up_ends_at_its_bound_to_be_resumed()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        var visitor = Agent(tangentSpace);
+
+        var first = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var start = (await Send(visitor, HttpMethod.Get, EventsController.Path, json: true)).Json;
+        var at = start.GetProperty("through").GetInt64();
+        Assert.Equal((await Created(first)).Seq, at);
+
+        // Rows the visitor may not see arrive between two polls: the position stays where it was.
+        for (var count = 1; count <= 3; count++) await Started(writer, Leo, "Studio note " + count, "Only for us.", Studio);
+        foreach (var path in new[] { EventsController.Path + "?since=" + at, EventsController.Path })
+        {
+            var poll = (await Send(visitor, HttpMethod.Get, path, json: true)).Json;
+            Assert.Empty(poll.GetProperty("events").EnumerateArray());
+            Assert.Equal((at, BaseUrl + "/events?since=" + at), (poll.GetProperty("through").GetInt64(), poll.GetProperty("next").GetString()));
+        }
+
+        // A whole scan of them: the poll moves to the scan's end, so it never stalls, and says more may follow.
+        for (var count = 4; count <= EventsController.ScanLimit + 3; count++) await Started(writer, Leo, "Studio note " + count, "Only for us.", Studio);
+        var past = (await Event.All(Cancellation)).Where(e => e.Seq > at).OrderBy(e => e.Seq).ToList();
+        var scanEnd = past[EventsController.ScanLimit - 1].Seq;
+        var full = (await Send(visitor, HttpMethod.Get, EventsController.Path + "?since=" + at, json: true)).Json;
+        Assert.Empty(full.GetProperty("events").EnumerateArray());
+        Assert.Equal((scanEnd, true), (full.GetProperty("through").GetInt64(), full.GetProperty("more").GetBoolean()));
+
+        // The door's window holds nothing the visitor may see: it names its own newest row, never the log's start.
+        var door = (await Send(visitor, HttpMethod.Get, "/", json: true)).Json.GetProperty("poll");
+        var head = past[^1].Seq;
+        Assert.Equal((head, BaseUrl + "/events?since=" + head), (door.GetProperty("through").GetInt64(), door.GetProperty("next").GetString()));
+
+        // A stream catching up from the same place reads one scan, says where it reached, and ends.
+        string resume;
+        await using (var stream = await Streamed.Open(visitor, EventsController.Path + "?since=" + at))
+        {
+            Assert.Equal("open", (await stream.Any()).Comment);
+            var reached = await stream.Any();
+            Assert.Equal(("", scanEnd), (reached.Data, reached.Seq));
+            await Assert.ThrowsAsync<EndOfStreamException>(stream.Any);
+            resume = reached.Id!;
+        }
+
+        await using var resumed = await Streamed.Open(visitor, EventsController.Path, lastEventId: resume);
+        Assert.Equal("open", (await resumed.Any()).Comment);
+        var open = await Started(writer, Bea, "An open question", "Anyone?");
+        Assert.Equal(open.Id, (await resumed.Next()).Json.GetProperty("post").GetString());
     }
 
     private static async Task<Event> Created(Post post)

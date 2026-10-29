@@ -183,6 +183,41 @@ test('the transport falls back from the stream to the poll, delivering its rows,
   expect(modes).toEqual(['stopped', 'stream', 'poll', 'door', 'stopped'])
 })
 
+test('a frame with an id and no row moves the position past a scan of hidden rows, and the next stream resumes there', async () => {
+  const fetched: string[] = []
+  const delivered: LiveEvent[][] = []
+  const encoder = new TextEncoder()
+  const transport = createLiveTransport({
+    events,
+    door,
+    random: () => 0,
+    timings: { retryMinMs: 1, retryMaxMs: 4 },
+    fetch: (async (url: string) => {
+      fetched.push(url)
+      if (fetched.length > 1) return stream([])
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(': open\n\nid: 210\n\n'))
+          controller.close()
+        },
+      })
+      return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } })
+    }) as typeof fetch,
+    onEvents: (rows) => {
+      delivered.push(rows)
+      return true
+    },
+  })
+
+  transport.start({ since: 10 })
+  await vi.waitFor(() => expect(fetched.length).toBe(2), { timeout: 5000 })
+  transport.stop()
+
+  expect(fetched).toEqual([`${events}?since=10`, `${events}?since=210`])
+  expect(delivered).toEqual([])
+  expect(transport.snapshot().since).toBe(210)
+})
+
 test('on a Tangent the island falls back to the door and fetches the list of Topics again when the door has moved', async () => {
   vi.spyOn(Math, 'random').mockReturnValue(0)
   document.body.innerHTML =

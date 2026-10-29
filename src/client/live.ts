@@ -339,7 +339,15 @@ export function createLiveTransport(options: TransportOptions) {
         id = ''
         data = []
         frameBytes = 0
-        if (!payload) return
+        if (!payload) {
+          // A frame with an id and no row: the stream read a whole scan with nothing for this page, and it resumes past it.
+          if (!named) return
+          const past = Number(named)
+          if (!sequence(past)) throw new Error('invalid-frame-id')
+          if (since === null || past > since) since = past
+          run.failures = 0
+          return
+        }
         const event = validateEvent(JSON.parse(payload))
         if (named && named !== String(event.seq)) throw new Error('invalid-frame-id')
         await acceptEvents(run, req, [event], event.seq)

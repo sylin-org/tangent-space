@@ -120,7 +120,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
         // Read through the newest event in a Tangent the reader may view, their own included; an event in a Tangent
         // they may not view moves nothing they can see.
-        var through = Math.Max(since, window.Concat(targeted).Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max());
+        var newestViewable = window.Concat(targeted).Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
+        var through = Math.Max(since, newestViewable);
         Door.Since? news = null;
         if (reader is not null)
         {
@@ -165,8 +166,14 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
                 Roles.Word(place.RoleIds), reader.Profile.Avatar, configured + AuthConstants.Routes.Logout + "?return=" + back),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            new Door.Position(through, configured + EventsController.Path + "?" + EventsController.Since + "=" + through.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+            Resume(configured, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0))));
     }
+
+    /// <summary>Where the reader asks again: the poll past the newest event the door read that they may view, or, where its
+    /// whole window held none, past the window's newest, so the position never reaches back before what the door read and
+    /// says of hidden events only that a whole window of them passed.</summary>
+    private static Door.Position Resume(string configured, long at)
+        => new(at, configured + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     /// <summary>Marks the door seen: moves the signed-in reader's place checkpoint to the sequence in the
     /// <see cref="Through"/> field, never backwards, and sends them back to the door. The form answers to

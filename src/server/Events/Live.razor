@@ -35,6 +35,10 @@
     /// <summary>Whether a Topic's page shows its newest window, where a new reply is appended.</summary>
     [Parameter] public bool Newest { get; set; }
 
+    private long? _since;
+
+    protected override async Task OnInitializedAsync() => _since = await Position.Since(CancellationToken.None);
+
     private string Props()
     {
         var configured = BaseUrl.Configured
@@ -43,7 +47,7 @@
         {
             events = configured + EventsController.Path,
             door = configured + "/",
-            since = Position.Since,
+            since = _since,
             page = Page,
             tangent = Tangent,
             topic = Topic,

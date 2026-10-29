@@ -14,7 +14,8 @@ namespace Tangent.Space;
 /// with <c>atLeast</c>; nothing is a total over the log. Every link is absolute under the base URL. <see cref="Who"/>
 /// is the signed-in reader and <see cref="SignIn"/> where a visitor signs in; <see cref="Day"/> is the UTC day the
 /// times are written for. <see cref="Poll"/> is where the reader asks for what happens after this door: the poll past the
-/// newest event the door read that the reader may see, which the stream at the same address also answers.
+/// newest event the door read that the reader may see, or past the newest of its window where the window held none of
+/// those, which the stream at the same address also answers.
 /// <c>api</c> is the stability promise an agent reads.</summary>
 public sealed record Door(
     string Name,

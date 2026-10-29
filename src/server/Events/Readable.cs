@@ -1,3 +1,5 @@
+using Koan.Data.Abstractions;
+using Koan.Data.Core.Sorting;
 using Tangent.Access;
 
 namespace Tangent.Events;
@@ -15,6 +17,10 @@ public sealed class Readable(string? participantId)
 {
     /// <summary>How long a stream holds what it read of a reader's capabilities before it reads them again.</summary>
     public static readonly TimeSpan Refresh = TimeSpan.FromSeconds(1);
+
+    /// <summary>The most rows one read of the log for a reader takes: a poll's page, a stream's catch-up, where a reader
+    /// begins.</summary>
+    public const int ScanLimit = 200;
 
     private readonly Dictionary<string, bool> _tangents = new(StringComparer.Ordinal);
     private DateTimeOffset _read = DateTimeOffset.MinValue;
@@ -53,6 +59,20 @@ public sealed class Readable(string? participantId)
     public bool Reaches(Event row) => row.TangentId is { } tangent
         ? _tangents.GetValueOrDefault(tangent)
         : _place && (row.Kind == EventKind.SpaceChanged || (participantId is not null && row.TargetId == participantId));
+
+    /// <summary>Where a reader begins on the log at <paramref name="head"/>: the newest row through it that reaches them,
+    /// among the newest <see cref="ScanLimit"/>, or <paramref name="head"/> itself only when none of those reaches them,
+    /// so the position says nothing of hidden rows but that a whole scan of them passed. One bounded read of the log's
+    /// sequence index, and what capability reads for the Tangents it names.</summary>
+    public static async Task<long> Newest(string? participantId, long head, CancellationToken ct)
+    {
+        var rows = await Event.Query(e => e.Seq <= head,
+            new QueryDefinition { Page = 1, PageSize = ScanLimit }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
+        if (rows.Count == 0) return 0;
+        var readable = new Readable(participantId);
+        await readable.Prepare(rows, ct);
+        return rows.FirstOrDefault(readable.Reaches)?.Seq ?? head;
+    }
 
     /// <summary>Whether a row changes what someone may read.</summary>
     private static bool Changes(Event row)
