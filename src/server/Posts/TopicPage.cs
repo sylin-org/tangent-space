@@ -56,7 +56,9 @@ public sealed record TopicPage(
     /// Post where they have none. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
     /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is where the reader
     /// takes it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
-    /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.</summary>
+    /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
+    /// <see cref="Report"/> is the form that reports it to the moderators, for a signed-in reader, on a Post that is not
+    /// removed.</summary>
     public sealed record Post(
         string Id,
         long Sequence,
@@ -73,7 +75,12 @@ public sealed record TopicPage(
         IReadOnlyList<string> Can,
         string? Edit,
         string? TakeOnATangent = null,
-        TopicPage.Taken? Taken = null);
+        TopicPage.Taken? Taken = null,
+        TopicPage.Report? Report = null);
+
+    /// <summary>The form that reports one Post: where it posts, the TID minted for it when the page was rendered, so a
+    /// form sent twice is one report, and its antiforgery token. It takes <c>id</c> and <c>body</c>, the reason.</summary>
+    public sealed record Report(string Action, string Id, Render.FormToken Token);
 
     /// <summary>A participant a body mentions: their DID, which the body's link names, their handle now, and their
     /// address.</summary>

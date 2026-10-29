@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using Koan.Data.Core;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 using Tangent.Space;
+using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Lifecycle;
@@ -18,7 +20,10 @@ public sealed class BackupTests(ITestOutputHelper output)
         await using var original = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://backed-up.example" },
             ct: Cancellation);
-        var row = await Given.AnEstablishedTangentSpace(original, "The workshop's place", ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(original, "The workshop's place", ct: Cancellation);
+        // The place as first run leaves it, with its moderators' Tangent, so the restored start has nothing to create.
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await original.Services.GetRequiredService<WriteLoop>().Send(new CreateModeratorsTangent(), Cancellation));
+        var row = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         var media = Path.Combine(original.DataFolder, "media", "cover.bin");
         Directory.CreateDirectory(Path.GetDirectoryName(media)!);
         await File.WriteAllBytesAsync(media, [1, 2, 3], Cancellation);

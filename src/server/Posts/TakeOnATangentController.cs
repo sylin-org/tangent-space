@@ -168,7 +168,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
     }
 
     /// <summary>The origin's author and the participants its body mentions, in one keyed read, by participant Id.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(Post origin, CancellationToken ct)
+    internal static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(Post origin, CancellationToken ct)
     {
         var ids = origin.MentionedIds.Prepend(origin.AuthorId).Distinct(StringComparer.Ordinal).ToList();
         return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>

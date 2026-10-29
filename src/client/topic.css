@@ -269,6 +269,43 @@
   background: var(--ts-hover);
 }
 
+/* Report: a disclosure among a Post's actions that opens a short form in the page. */
+.post-report {
+  margin: 2px 0 0 -8px;
+}
+
+.post-report > summary {
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+}
+
+.post-report > summary::-webkit-details-marker {
+  display: none;
+}
+
+.post-report-form {
+  margin: 8px 0 0 8px;
+  display: grid;
+  gap: 8px;
+  max-width: 560px;
+}
+
+.post-report-form .post-report-body {
+  min-height: 88px;
+}
+
+.post-report-note {
+  margin: 0;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+}
+
+.post-report-submit {
+  width: fit-content;
+  padding: 0 18px;
+}
+
 .topic-replies-head {
   margin-top: 18px;
   display: flex;

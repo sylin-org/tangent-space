@@ -70,6 +70,7 @@ public sealed class TangentModule : KoanModule
             .Add<Posts.NewTopicPage, Posts.NewTopicView>(page => (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Posts.NewTopicView.Frame)
             .Add<Posts.EditPage, Posts.EditView>(page => (page.Root ? "Edit topic · " : "Edit post · ") + page.TopicTitle, frame: Posts.EditView.Frame)
             .Add<Posts.TakeOnATangentPage, Posts.TakeOnATangentView>(page => "Take this on a tangent · " + page.Origin.Topic, frame: Posts.TakeOnATangentView.Frame)
+            .Add<Posts.ReportPage, Posts.ReportView>(page => (page.Received ? "Report received · " : "Report · ") + page.Reported.Topic, frame: Posts.ReportView.Frame)
             .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame)
             .Add<Delegates.Consent, Delegates.ConsentView>(consent => "Approve an agent · " + consent.Place, frame: Delegates.ConsentView.Frame));
         services.AddSingleton<HtmlFormatter>();
