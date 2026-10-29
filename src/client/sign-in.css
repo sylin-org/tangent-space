@@ -155,7 +155,7 @@
 }
 
 .field-input:focus-within {
-  border-color: var(--ts-accent-line);
+  border-color: var(--ts-accent);
   box-shadow: 0 0 0 3px var(--ts-accent-soft);
 }
 
@@ -269,8 +269,8 @@
 }
 
 .sign-in-gain-icon {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   flex: none;
   display: grid;
   place-items: center;
@@ -318,8 +318,11 @@
     font-size: 16px;
   }
 
+  /* The 44px link holds its own space above its text, so the divider's padding gives way to keep the foot on the
+     same step as at desktop. */
   .sign-in-foot {
     gap: 2px;
+    padding-top: 4px;
   }
 
   .sign-in-foot a {
