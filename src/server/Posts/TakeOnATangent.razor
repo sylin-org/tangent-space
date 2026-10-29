@@ -1,0 +1,32 @@
+@* Take this on a tangent on one Post of a Topic: where the reader takes it, offered on a Post that is not removed to a
+   reader who may start a Topic somewhere, and the Topics taken on a tangent from it that the reader may view, newest
+   first, "at least" past the bound. *@
+@if (Model.TakeOnATangent is { } take)
+{
+    <div class="post-actions">
+        <a class="post-action" href="@take">Take this on a tangent</a>
+    </div>
+}
+@if (Model.Taken is { } taken)
+{
+    <p class="post-parent post-taken">
+        @Heading(taken)
+        @for (var index = 0; index < taken.Topics.Count; index++)
+        {
+            var topic = taken.Topics[index];
+            @(index == 0 ? " " : " · ")<a href="@topic.Address">@topic.Title</a>@(" in " + topic.Tangent + (topic.Removed ? " (removed)" : ""))
+        }
+    </p>
+}
+
+@code {
+    [Parameter, EditorRequired] public TopicPage.Post Model { get; set; } = default!;
+
+    /// <summary>How many Topics were taken from the Post, in words: the number the page shows, or "at least" one more
+    /// than it shows where more are.</summary>
+    private static string Heading(TopicPage.Taken taken)
+    {
+        var count = taken.AtLeast ? taken.Topics.Count + 1 : taken.Topics.Count;
+        return "Taken on a tangent in " + (taken.AtLeast ? "at least " : "") + count + (count == 1 ? " topic:" : " topics:");
+    }
+}
