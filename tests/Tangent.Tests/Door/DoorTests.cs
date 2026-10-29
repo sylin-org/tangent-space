@@ -63,9 +63,9 @@ public sealed class DoorTests(ITestOutputHelper output)
         var since = await Mark(writer, Reader);
 
         var reply = await Replied(writer, mine, "ada");
-        var other = await Started(writer, Workshop, "Ada asks", "ada");
+        var other = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
+            new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](at://{Reader}).", "ada"), Cancellation)).Result;
         var article = await Started(writer, Articles, "On lanterns", "leo", PostKind.Article);
-        Assert.IsType<Outcome<Event>.Done>(await writer.Send(new Mentioned(Workshop, other.Id, other.Id, "ada", Reader), Cancellation));
         var own = await Replied(writer, other, Reader, body: "My own words in reply.");
         var through = await Event.HighWaterMark.Load(Cancellation);
 

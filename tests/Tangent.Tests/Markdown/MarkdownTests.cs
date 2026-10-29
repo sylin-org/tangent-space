@@ -1,4 +1,5 @@
 using AngleSharp.Html.Parser;
+using Tangent.Participants;
 using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -6,8 +7,9 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Posts;
 
 /// <summary>A body's Markdown as HTML: the blocks and inlines a body uses rendered as expected; raw HTML, unsafe links
-/// and unsafe images neutralised; an image with an emphasis-only caption made a figure; and a body that would render
-/// too large or too deep, or mention too many identities, refused at write with nothing kept.</summary>
+/// and unsafe images neutralised; a single line break kept; an image with an emphasis-only caption made a figure; and a
+/// body that would render too large — every mention at its longest — or too deep, that would parse slowly, or that
+/// mentions too many identities, refused at write with nothing kept.</summary>
 public sealed class MarkdownTests
 {
     [Fact]
@@ -16,7 +18,7 @@ public sealed class MarkdownTests
         var html = MarkdownHtml.Render(
             "# A heading\n\n## A smaller one\n\nSome *emphasis* and **strong** words.\n\n- one\n- two\n\n1. first\n2. second\n\n"
             + "> A quote.\n\n| Day | Who |\n| --- | --- |\n| Friday | Lumen |\n\nInline `code` and a block:\n\n```\nlet x = 1 < 2;\n```\n\n"
-            + "[A link](https://example.org/story \"The story\") and a [path](/t/workshop).");
+            + "[A link](https://example.org/story \"The story\") and a [path](/t/workshop).\nA second line.").Html();
 
         Assert.Contains("<h1>A heading</h1>", html);
         Assert.Contains("<h2>A smaller one</h2>", html);
@@ -30,7 +32,8 @@ public sealed class MarkdownTests
         Assert.Contains("<code>code</code>", html);
         Assert.Contains("<pre><code>let x = 1 &lt; 2;\n</code></pre>", html);
         Assert.Contains("<a href=\"https://example.org/story\" title=\"The story\">A link</a>", html);
-        Assert.Contains("<a href=\"/t/workshop\">path</a>", html);
+        // A single line break is kept as a break.
+        Assert.Contains("<a href=\"/t/workshop\">path</a>.<br>\nA second line.</p>", html);
     }
 
     [Fact]
@@ -39,7 +42,7 @@ public sealed class MarkdownTests
         var html = MarkdownHtml.Render("<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n"
             + "[script](javascript:alert%281%29) [entity](javascript&#58;alert(1)) [protocol](//evil.example/x) [back](https:\\\\evil.example)\n\n"
             + "![data](data:image/svg+xml;base64,PHN2Zz4=) ![remote](http://evil.example/pixel.png) ![local](/media/123)\n\n"
-            + "<div style=\"position:fixed\">out</div> **bold**");
+            + "<div style=\"position:fixed\">out</div> **bold**").Html();
 
         // Raw HTML is shown as its own text: no element of it reaches the page, and no attribute but the allowed ones.
         var document = new HtmlParser().ParseDocument("<body>" + html + "</body>");
@@ -65,7 +68,7 @@ public sealed class MarkdownTests
             (image.GetAttribute("loading"), image.GetAttribute("decoding"), image.GetAttribute("referrerpolicy"))));
 
         var figures = new HtmlParser().ParseDocument("<body>" + MarkdownHtml.Render("![First](/media/first) *Same paragraph*\n\n"
-            + "![Second](/media/second)\n\n*Next paragraph*\n\n![Third](/media/third)\n\n*Prose* with more words.") + "</body>").QuerySelectorAll("figure");
+            + "![Second](/media/second)\n\n*Next paragraph*\n\n![Third](/media/third)\n\n*Prose* with more words.").Html() + "</body>").QuerySelectorAll("figure");
         Assert.Equal(["Same paragraph", "Next paragraph"], figures.Select(figure => figure.QuerySelector("figcaption")!.TextContent).ToList());
     }
 
@@ -95,9 +98,39 @@ public sealed class MarkdownTests
 
         Assert.Equal(Post.TooManyMentions, Assert.IsType<Outcome<Post>.Refused>(
             await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Everyone", crowded, Ada), Cancellation)).Reason);
+
+        // One identity mentioned over and over: every mention is measured at its longest rendering, whatever handle Bea
+        // holds when it is read, so the body is refused — on lines of their own by the rendered size, and as one paragraph
+        // already by its brackets.
+        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new RecordHandle(Bea, new string('b', 243) + ".bsky"), Cancellation));
+        var repeated = Fill($"[x](at://{Bea})\n\n");
+        var paragraph = Fill($"[x](at://{Bea}) ");
+        Assert.True(MarkdownHtml.Tractable(repeated));
+        Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(
+            await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Bea", repeated, Ada), Cancellation)).Reason);
+        Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
+            await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Bea", paragraph, Ada), Cancellation)).Reason);
+
+        // Sixty-four kilobytes of unclosed links would take Markdig seconds to parse; the structure check refuses the body
+        // where its command is built, in a few milliseconds and before any parse.
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var unclosed = PostBody.Of(string.Concat(Enumerable.Repeat("[a](", 16_384)));
+        watch.Stop();
+        Assert.Equal(Post.BodyTooIntricate, unclosed.Refusal);
+        Assert.True(watch.ElapsedMilliseconds < 500, $"Judging the body took {watch.ElapsedMilliseconds} ms.");
+        Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
+            await writer.Send(new Reply(Tids.Mint(), root.Id, unclosed, Bea), Cancellation)).Reason);
+        Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
+            await writer.Send(new EditPost(root.Id, 1, string.Concat(Enumerable.Repeat("*a_", 3000)), null, Ada), Cancellation)).Reason);
+        Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
+            await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Brackets", new string('[', 3000), Ada), Cancellation)).Reason);
         Assert.Equal(before, await Counted());
         Assert.Equal(("How do you hang yours?", 1L), ((await Post.Get(root.Id, Cancellation))?.Body, (await Post.Get(root.Id, Cancellation))?.Version));
         Assert.Equal(PostWrites.About.Body, PostWrites.Concerning(Post.BodyRendersTooLong));
         Assert.Equal(PostWrites.About.Body, PostWrites.Concerning(Post.TooManyMentions));
+        Assert.Equal(PostWrites.About.Body, PostWrites.Concerning(Post.BodyTooIntricate));
     }
+
+    /// <summary>A unit repeated to just under the body's limit.</summary>
+    private static string Fill(string unit) => string.Concat(Enumerable.Repeat(unit, (Post.BodyLimit - 16) / unit.Length));
 }

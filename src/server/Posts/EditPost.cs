@@ -14,12 +14,13 @@ namespace Tangent.Posts;
 /// overwrite. In the same commit the Post as it stood goes to the audit partition, the Post takes the new words and
 /// its version rises, and <see cref="EventKind.PostEdited"/> is appended with the new version, with one
 /// <see cref="EventKind.Mention"/> per participant the new body mentions and the old did not
-/// (<see cref="Mentions.Notify"/>). Safe to repeat: when the
+/// (<see cref="Mentions.Notify"/>); the body is judged where the command is built (<see cref="PostBody"/>), never in
+/// the writer. Safe to repeat: when the
 /// Post already says what the command says, at any version, it answers with the Post and writes nothing.</summary>
 public sealed record EditPost(
     string PostId,
     long Version,
-    string Body,
+    PostBody Body,
     string? Title,
     string EditorId,
     DateTimeOffset? At = null) : ICommand<Post>
@@ -38,12 +39,12 @@ public sealed record EditPost(
         if (!capabilities.Holds(Bit.EditOwn) && !capabilities.Holds(Bit.Moderate))
             return new Outcome<Post>.Refused(capabilities.Gate(Bit.EditOwn)!);
 
-        if (post.Unchanged(Body, Title)) return new Outcome<Post>.Done(post);
+        if (post.Unchanged(Body.Text, Title)) return new Outcome<Post>.Done(post);
         if (post.Version != Version) return new Outcome<Post>.Conflict(Stale(post.Version));
 
         var at = At ?? DateTimeOffset.UtcNow;
         await AuditPartition.Snapshot(post, post.Version, ct);
-        var before = post.Body;
+        var before = post.MentionedIds.ToList();
         post.Edit(Body, Title);
         await post.Save(ct);
         await Event.Next(sequences, EventKind.PostEdited, at,

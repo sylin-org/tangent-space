@@ -76,7 +76,7 @@ public static class TopicWindow
 
     /// <summary>What a Post weighs in a window: its fields as JSON carries them, a removed Post without its body, and
     /// what the participants its body mentions may weigh.</summary>
-    public static int Weight(Post post) => (post.Removed ? 0 : Mentions.In(post.Body).Count * Mentions.Weight) + JsonSerializer.SerializeToUtf8Bytes(new
+    public static int Weight(Post post) => post.MentionedIds.Count * Mentions.Weight + JsonSerializer.SerializeToUtf8Bytes(new
     {
         post.Id,
         post.ParentId,

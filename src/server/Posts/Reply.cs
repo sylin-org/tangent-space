@@ -15,11 +15,11 @@ namespace Tangent.Posts;
 /// the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
 /// gate, so a replay is safe; a Post of this Topic holding the Id with a different parent, body or author is a conflict,
 /// and a Post anywhere else holding it is refused with <see cref="Post.IdTaken"/>, which says nothing of that
-/// Post.</summary>
+/// Post. The body is judged where the command is built (<see cref="PostBody"/>), never in the writer.</summary>
 public sealed record Reply(
     string Id,
     string TopicId,
-    string Body,
+    PostBody Body,
     string AuthorId,
     string? ParentId = null,
     DateTimeOffset? At = null) : ICommand<Post>
@@ -52,12 +52,12 @@ public sealed record Reply(
         await Event.Next(sequences, EventKind.PostCreated, at,
             tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
             targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version).Save(ct);
-        await Mentions.Notify(sequences, reply, reply.AuthorId, null, at, ct);
+        await Mentions.Notify(sequences, reply, reply.AuthorId, [], at, ct);
         return new Outcome<Post>.Done(reply);
     }
 
     /// <summary>Whether the existing row is this request: the same Topic, parent, body and author.</summary>
     private bool Same(Post existing) =>
         existing.TopicId == TopicId && existing.ParentId == (ParentId ?? TopicId)
-        && existing.Body == Body && existing.AuthorId == AuthorId;
+        && existing.Body == Body.Text && existing.AuthorId == AuthorId;
 }

@@ -161,7 +161,7 @@ public static class PostWrites
     public static About Concerning(string reason) => reason switch
     {
         Post.NeedsTitle or Post.TitleTooLong => About.Title,
-        Post.NeedsBody or Post.BodyTooLong or Post.BodyHasNul or Post.BodyRendersTooLong or Post.TooManyMentions => About.Body,
+        Post.NeedsBody or Post.BodyTooLong or Post.BodyHasNul or Post.BodyRendersTooLong or Post.TooManyMentions or Post.BodyTooIntricate => About.Body,
         Post.NeedsTid or Post.NeedsTangent or Post.NeedsAuthor or Post.NotARoot or Post.TopicLocked or Post.TopicRemoved
             or Post.NoTitleOnReply or Post.PostRemoved or Post.NeedsRemover or Post.IdTaken or Reply.NoParent or KindRule or VersionRule
             => About.Sent,

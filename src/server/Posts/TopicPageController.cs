@@ -86,7 +86,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 
         var people = await People(window.Replies.Prepend(root).ToList(), ct);
         var configured = Configured();
-        var mentioned = await Mentions.Resolve(window.Replies.Prepend(root).Where(post => !post.Removed).Select(post => post.Body), configured, ct);
+        var mentioned = await Mentions.Resolve(window.Replies.Prepend(root), configured, ct);
         var tangentAddress = configured + "/t/" + Uri.EscapeDataString(tangentRow.Id);
         var address = tangentAddress + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
         var topicCan = rows.For(root);
@@ -138,7 +138,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             address,
             Person(people, post.AuthorId),
             post.Removed ? null : post.Body,
-            post.Removed ? [] : Mentions.Of(post.Body, mentioned),
+            post.Removed ? [] : Mentions.Of(post, mentioned),
             post.CreatedAt,
             post.Version,
             parent,

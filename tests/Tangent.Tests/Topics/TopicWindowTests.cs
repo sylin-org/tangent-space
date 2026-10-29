@@ -79,7 +79,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
 
         var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop + "/an-opening-question");
         Assert.Contains("<h1 class=\"topic-title\">An opening question</h1>", visitorHtml);
-        Assert.Contains("<p>First line.\nSecond &lt;b&gt;line&lt;/b&gt;.</p>", visitorHtml);
+        Assert.Contains("<p>First line.<br>\nSecond &lt;b&gt;line&lt;/b&gt;.</p>", visitorHtml);
         var order = new[] { "First line.", "Agreed.", "Thanks, Leo.", "And one more." }.Select(text => visitorHtml.IndexOf(text, StringComparison.Ordinal)).ToList();
         Assert.All(order, index => Assert.True(index > 0));
         Assert.Equal(order.Order().ToList(), order);

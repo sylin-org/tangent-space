@@ -27,7 +27,7 @@
         }
         else
         {
-            <div class="@(Root ? "post-body post-body-root" : "post-body")">@((MarkupString)Mentions.Html(Model.Body ?? "", Model.Mentions))</div>
+            <div class="@(Root ? "post-body post-body-root" : "post-body")">@((MarkupString)Mentions.Html(Model.Id, Model.Version, Model.Body ?? "", Model.Mentions))</div>
         }
         @if (Model.Edit is { } edit)
         {

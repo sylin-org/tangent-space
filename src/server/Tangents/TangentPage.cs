@@ -90,11 +90,12 @@ public sealed partial record TangentPage(
         return Math.Max(1, (words + WordsPerMinute - 1) / WordsPerMinute);
     }
 
-    /// <summary>The opening words of a Markdown body as plain text on one line (<see cref="MarkdownHtml.PlainText"/>), cut
-    /// at a word within <see cref="OpeningLimit"/> characters.</summary>
-    public static string Opening(string body)
+    /// <summary>The opening words of a Post's body as plain text on one line, each mention of a participant among
+    /// <paramref name="people"/> their current handle (<see cref="Mentions.PlainText"/>), cut at a word within
+    /// <see cref="OpeningLimit"/> characters.</summary>
+    public static string Opening(Post post, IReadOnlyDictionary<string, Author> people)
     {
-        var text = MarkdownHtml.PlainText(body);
+        var text = Mentions.PlainText(post, people);
         if (text.Length <= OpeningLimit) return text;
         var cut = text.LastIndexOf(' ', OpeningLimit);
         return text[..(cut > OpeningLimit / 2 ? cut : OpeningLimit)].TrimEnd(',', ';', ':', '.', ' ') + "…";

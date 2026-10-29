@@ -135,7 +135,7 @@ public sealed class MentionTests
         Assert.Equal((root.Id, Ada, "A lantern question", BaseUrl + TopicPath(root)),
             (item.GetProperty("postId").GetString(), item.GetProperty("who").GetProperty("id").GetString(),
                 item.GetProperty("topic").GetString(), item.GetProperty("address").GetString()));
-        Assert.Equal("What do you think, @bea?", item.GetProperty("line").GetString());
+        Assert.Equal("What do you think, @bea4writes.example?", item.GetProperty("line").GetString());
 
         var html = WebUtility.HtmlDecode((await Send(bea.Client, HttpMethod.Get, "/")).Body);
         Assert.Contains("1 mention of you", html);
@@ -143,6 +143,29 @@ public sealed class MentionTests
         // Ada, who wrote it, has no mention waiting.
         using var ada = await SignedIn(tangentSpace, Ada);
         Assert.Equal(0, (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions").GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task The_door_and_the_tangent_page_show_a_mention_as_the_participants_current_handle()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        using var bea = await SignedIn(tangentSpace, Bea);
+        await Started(writer, Ada, "A lantern question", $"{Mention(Bea, "ada.example")} has a question about [@ghost](at://{Ghost}).");
+        using var visitor = Agent(tangentSpace);
+
+        async Task<(string Door, string Opening)> Lines()
+        {
+            var door = await Send(bea.Client, HttpMethod.Get, "/", json: true);
+            var page = await Send(visitor, HttpMethod.Get, "/t/" + Workshop, json: true);
+            return (door.Json.GetProperty("news").GetProperty("mentions").GetProperty("posts")[0].GetProperty("line").GetString()!,
+                page.Json.GetProperty("topics")[0].GetProperty("opening").GetString()!);
+        }
+
+        Assert.Equal(("@bea4writes.example has a question about @ghost.", "@bea4writes.example has a question about @ghost."), await Lines());
+
+        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new RecordHandle(Bea, "bea.renamed.example"), Cancellation));
+        Assert.Equal(("@bea.renamed.example has a question about @ghost.", "@bea.renamed.example has a question about @ghost."), await Lines());
     }
 
     /// <summary>The mention events of one Post, in the order of the log.</summary>

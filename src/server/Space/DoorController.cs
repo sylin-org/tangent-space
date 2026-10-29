@@ -99,7 +99,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             new[] { space.ProprietorId, reader?.Id }
                 .Concat(replies.Concat(mentions).Concat(articles).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
-                .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId))),
+                .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
+                .Concat(replies.Take(ItemLimit).Concat(mentions.Take(ItemLimit)).Concat(articles.Take(ItemLimit)).Select(e => posts[e.PostId!])
+                    .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds)),
             ct);
 
         var configured = Configured();
@@ -207,7 +209,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             var root = posts[e.TopicId!];
             var topic = TopicAddress(root);
             return new Door.NewPost(post.Id, Person(people, e.ActorId ?? post.AuthorId), root.Title ?? "", Name(tangents, root.TangentId),
-                post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id), TangentPage.Opening(post.Body), e.At);
+                post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id), TangentPage.Opening(post, people), e.At);
         }).ToList());
 
     /// <summary>A Topic on the front page, new to the reader by the door's own rule: as many of its Posts as the
@@ -223,7 +225,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             Word(root.Kind),
             TopicAddress(root),
             Person(people, root.AuthorId),
-            TangentPage.Opening(root.Body),
+            TangentPage.Opening(root, people),
             TangentPage.ReadTime(root.Body),
             root.ReplyCount,
             root.CreatedAt,

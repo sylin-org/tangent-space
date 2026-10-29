@@ -1,101 +1,183 @@
+using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Ganss.Xss;
 using Markdig;
+using Markdig.Renderers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
 namespace Tangent.Posts;
 
-/// <summary>Markdown to HTML that is safe to place in a page, and to plain text. CommonMark with pipe tables; raw HTML
-/// in the source is shown as text. A link or image whose target is not safe — anything but an absolute
-/// <c>http</c> or <c>https</c> URL with a host, a root-relative path or a fragment, and never with a control character,
-/// a backslash or a leading <c>//</c> — points at <c>#</c>, and such an image becomes a link. What Markdig writes then
-/// passes an allow-list: paragraphs, breaks, rules, headings, quotes, lists, code, emphasis, strikethrough, links,
-/// images and tables; the attributes <c>href</c>, <c>src</c>, <c>alt</c> and <c>title</c>; the schemes <c>http</c>
-/// and <c>https</c>; no style. Every image loads lazily and sends no referrer. An image followed by emphasis alone, in
-/// its paragraph or the next, becomes a figure with that caption. A caller may rewrite or unwrap links by their target
-/// before any of this (<see cref="Render"/>). Pure: no I/O, no state.</summary>
+/// <summary>Markdown to HTML that is safe to place in a page, and to plain text, from one parse. CommonMark with pipe
+/// tables, and a single line break kept as a break; raw HTML in the source is shown as text. A link or image whose
+/// target is not safe — anything but an absolute <c>http</c> or <c>https</c> URL with a host, a root-relative path or a
+/// fragment, and never with a control character, a backslash or a leading <c>//</c> — points at <c>#</c>, and such an
+/// image becomes a link. What Markdig writes then passes an allow-list: paragraphs, breaks, rules, headings, quotes,
+/// lists, code, emphasis, strikethrough, links, images and tables; the attributes <c>href</c>, <c>src</c>, <c>alt</c> and
+/// <c>title</c>; the schemes <c>http</c> and <c>https</c>; no style. Every image loads lazily and sends no referrer. An
+/// image followed by emphasis alone, in its paragraph or the next, becomes a figure with that caption. A caller may
+/// hold links by their target (<see cref="Render"/>): each is left out of the parse's result and given its target and
+/// words when the result is written out (<see cref="Rendered.Html"/>, <see cref="Rendered.PlainText"/>), so one parse
+/// serves every later answer. <see cref="Tractable"/> refuses, by a linear count, the structures that make Markdig's
+/// parse grow with the square of their size. Pure: no I/O.</summary>
 public static class MarkdownHtml
 {
-    /// <summary>The most UTF-8 bytes rendered HTML may hold, before and after figures are made.</summary>
+    /// <summary>The most UTF-8 bytes rendered HTML may hold, every held link written at its longest.</summary>
     public const int HtmlLimit = 512 * 1024;
 
-    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().DisableHtml().Build();
+    /// <summary>The most UTF-8 bytes one held link is written in; a longer one is written as its own words.</summary>
+    public const int LinkLimit = 4096;
+
+    /// <summary>The most characters link destinations may scan in all: for each <c>](</c>, the run after it up to the next
+    /// whitespace (to the line's end after <c>&lt;</c>).</summary>
+    public const long DestinationWork = 1_000_000;
+
+    /// <summary>The most the open brackets of the paragraphs may weigh: the sum of each paragraph's count, squared.</summary>
+    public const long BracketWork = 4_000_000;
+
+    /// <summary>The most the emphasis runs of the paragraphs may weigh: the sum of each paragraph's count of runs of
+    /// <c>*</c> or <c>_</c>, squared.</summary>
+    public const long EmphasisWork = 4_000_000;
+
+    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
+        .UsePipeTables().UseSoftlineBreakAsHardlineBreak().DisableHtml().Build();
 
     private static readonly HtmlSanitizer Sanitizer = CreateSanitizer();
 
-    /// <summary>What a caller makes of a link: <see cref="Url"/> its new target, or null to leave its words in place
-    /// without a link; <see cref="Words"/> the words that replace its own, or null to keep them.</summary>
-    public sealed record Link(string? Url, string? Words);
+    /// <summary>The target a held link carries through the parse: this process's own, which no input can know.</summary>
+    private static readonly string HeldPrefix = "https://held.invalid/" + Guid.NewGuid().ToString("N") + "/";
 
-    /// <summary>The HTML for <paramref name="markdown"/>. <paramref name="links"/> is asked about each link that is not an
-    /// image, by its target, and answers null to leave it as written. A rewritten target is held to the same safety as
-    /// any other.</summary>
-    public static string Render(string markdown, Func<string, Link?>? links = null)
-    {
-        var html = Sanitized(markdown, links);
-        return Figured(html) ? FigureCaptions(html) : html;
-    }
+    private static readonly Regex HeldAnchor = new("<a href=\"" + Regex.Escape(HeldPrefix) + "(\\d+)\">(.*?)</a>",
+        RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
-    /// <summary>Whether <paramref name="markdown"/> renders at all — Markdig refuses elements nested deeper than its
-    /// limit — and within <see cref="HtmlLimit"/>, before and after figures are made. Markdown that fits renders and
-    /// projects without a throw.</summary>
-    public static bool Fits(string markdown)
+    /// <summary>A held link's place in the plain text: NUL never survives Markdig's parse, which makes it U+FFFD.</summary>
+    private static readonly Regex HeldWords = new("\0(\\d+)\0", RegexOptions.CultureInvariant);
+
+    private static readonly Regex Tags = new("<[^>]*>", RegexOptions.CultureInvariant);
+
+    private static long _parses;
+
+    /// <summary>How many times this process has parsed Markdown.</summary>
+    public static long Parses => Interlocked.Read(ref _parses);
+
+    /// <summary>What a caller writes for a held link: its target and its words.</summary>
+    public sealed record Link(string Url, string Words);
+
+    /// <summary>A piece of a rendered result: words as they stand, or a held link (<see cref="Held"/> its index) with
+    /// its own words as the source wrote them.</summary>
+    public sealed record Piece(string Text, int Held = -1);
+
+    /// <summary>One parse's result: the HTML and the plain text in pieces, and the targets of the held links by index.
+    /// <see cref="HtmlBytes"/> is what the HTML weighs with every held link as its own words; <see cref="Fits"/> says
+    /// whether it stays within <see cref="HtmlLimit"/> with every held link written at <see cref="LinkLimit"/>.</summary>
+    public sealed class Rendered(IReadOnlyList<Piece> html, IReadOnlyList<Piece> plain, IReadOnlyList<string> held)
     {
-        try
+        public IReadOnlyList<string> Held { get; } = held;
+
+        public long HtmlBytes { get; } = html.Sum(piece => (long)Encoding.UTF8.GetByteCount(piece.Text));
+
+        public bool Fits => HtmlBytes + (long)Held.Count * LinkLimit <= HtmlLimit;
+
+        /// <summary>The HTML, each held link written as <paramref name="link"/> answers for its target: an anchor to a safe
+        /// URL with those words, within <see cref="LinkLimit"/>; otherwise, or where it answers null, its own words.</summary>
+        public string Html(Func<string, Link?>? link = null)
         {
-            var html = Sanitized(markdown, null);
-            if (Encoding.UTF8.GetByteCount(html) > HtmlLimit) return false;
-            return !Figured(html) || Encoding.UTF8.GetByteCount(FigureCaptions(html)) <= HtmlLimit;
+            var builder = new StringBuilder();
+            foreach (var piece in html)
+            {
+                if (piece.Held >= 0 && link?.Invoke(Held[piece.Held]) is { } written && SafeUrl(written.Url))
+                {
+                    var anchor = "<a href=\"" + WebUtility.HtmlEncode(written.Url) + "\">" + WebUtility.HtmlEncode(written.Words) + "</a>";
+                    if (Encoding.UTF8.GetByteCount(anchor) <= LinkLimit)
+                    {
+                        builder.Append(anchor);
+                        continue;
+                    }
+                }
+
+                builder.Append(piece.Text);
+            }
+
+            return builder.ToString();
         }
-        catch (ArgumentException)
+
+        /// <summary>The visible words on one line, each held link as <paramref name="words"/> answers for its target, or
+        /// its own words: no syntax, no link targets, runs of whitespace as one space.</summary>
+        public string PlainText(Func<string, string?>? words = null)
         {
-            return false;
+            var builder = new StringBuilder();
+            foreach (var piece in plain)
+                builder.Append(piece.Held >= 0 && words?.Invoke(Held[piece.Held]) is { } replaced ? replaced : piece.Text);
+            return string.Join(' ', builder.ToString().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         }
     }
 
-    /// <summary>The visible words of <paramref name="markdown"/> on one line: no syntax, no link targets, runs of
-    /// whitespace as one space.</summary>
-    public static string PlainText(string markdown)
+    /// <summary>Whether Markdig parses <paramref name="markdown"/> in time proportional to its size: within
+    /// <see cref="DestinationWork"/>, <see cref="BracketWork"/> and <see cref="EmphasisWork"/>. Fenced code is not
+    /// counted; every other line is, and a paragraph runs to a blank line or a fence, which counts more than Markdig
+    /// would and never less. One pass over the text.</summary>
+    public static bool Tractable(string markdown)
     {
-        var rendered = Markdown.ToPlainText(markdown, Pipeline);
-        return string.Join(' ', rendered.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        long destinations = 0, bracketWork = 0, emphasisWork = 0, brackets = 0, runs = 0;
+        char? fence = null;
+        foreach (var line in markdown.Split('\n'))
+        {
+            var start = 0;
+            while (start < line.Length && start < 3 && line[start] == ' ') start++;
+            var fenceLine = line.Length - start >= 3 && line[start] is '`' or '~' && line[start + 1] == line[start] && line[start + 2] == line[start];
+            if (fenceLine || fence is not null || string.IsNullOrWhiteSpace(line))
+            {
+                bracketWork += brackets * brackets;
+                emphasisWork += runs * runs;
+                brackets = runs = 0;
+                if (fenceLine) fence = fence is null ? line[start] : fence == line[start] ? null : fence;
+                continue;
+            }
+
+            // The index of the next whitespace at or after each position, so each destination is measured in one step.
+            var next = new int[line.Length + 1];
+            next[line.Length] = line.Length;
+            for (var index = line.Length - 1; index >= 0; index--) next[index] = char.IsWhiteSpace(line[index]) ? index : next[index + 1];
+            for (var index = 0; index < line.Length; index++)
+            {
+                var c = line[index];
+                if (c == '[') brackets++;
+                else if (c is '*' or '_' && (index == 0 || line[index - 1] != c)) runs++;
+                else if (c == '(' && index > 0 && line[index - 1] == ']')
+                {
+                    var from = index + 1;
+                    while (from < line.Length && line[from] is ' ' or '\t') from++;
+                    destinations += from < line.Length && line[from] == '<' ? line.Length - from : next[from] - from;
+                }
+            }
+        }
+
+        bracketWork += brackets * brackets;
+        emphasisWork += runs * runs;
+        return destinations <= DestinationWork && bracketWork <= BracketWork && emphasisWork <= EmphasisWork;
     }
 
-    /// <summary>The targets of the links in <paramref name="markdown"/> that are not images, in order; a link inside code
-    /// is code, not a link.</summary>
-    public static IReadOnlyList<string> Links(string markdown)
-        => Markdown.Parse(markdown, Pipeline).Descendants<LinkInline>()
-            .Where(link => !link.IsImage)
-            .Select(Target).OfType<string>().ToList();
-
-    private static string? Target(LinkInline link) => link.GetDynamicUrl is null ? link.Url : link.GetDynamicUrl();
-
-    private static string Sanitized(string markdown, Func<string, Link?>? links)
+    /// <summary>Parses <paramref name="markdown"/> once into its HTML and plain text, holding each link that is not an
+    /// image whose target <paramref name="hold"/> answers true for. Throws <see cref="ArgumentException"/> where Markdig
+    /// refuses elements nested deeper than its limit; ask <see cref="Tractable"/> first, since a refused parse costs as
+    /// much as any.</summary>
+    public static Rendered Render(string markdown, Func<string, bool>? hold = null)
     {
+        Interlocked.Increment(ref _parses);
         var document = Markdown.Parse(markdown, Pipeline);
-        if (links is not null)
+        var held = new List<(LinkInline Link, string Target)>();
+        if (hold is not null)
         {
             foreach (var link in document.Descendants<LinkInline>().Where(link => !link.IsImage).ToList())
             {
-                if (Target(link) is not { } target || links(target) is not { } rewrite) continue;
-                if (rewrite.Words is { } words)
-                {
-                    while (link.FirstChild is { } child) child.Remove();
-                    link.AppendChild(new LiteralInline(words));
-                }
-
-                if (rewrite.Url is { } url)
-                {
-                    link.Url = url;
-                    link.GetDynamicUrl = null;
-                }
-                else
-                {
-                    Unwrap(link);
-                }
+                if (Target(link) is not { } target || !hold(target)) continue;
+                link.Url = HeldPrefix + held.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                link.GetDynamicUrl = null;
+                link.Title = null;
+                held.Add((link, target));
             }
         }
 
@@ -107,20 +189,56 @@ public static class MarkdownHtml
             link.IsImage = false;
         }
 
-        return Sanitizer.Sanitize(document.ToHtml(Pipeline));
-    }
+        var html = Sanitizer.Sanitize(document.ToHtml(Pipeline));
+        if (Encoding.UTF8.GetByteCount(html) <= HtmlLimit && Figured(html)) html = FigureCaptions(html);
 
-    /// <summary>Puts a link's words where the link was, without the link.</summary>
-    private static void Unwrap(LinkInline link)
-    {
-        while (link.FirstChild is { } child)
+        for (var index = 0; index < held.Count; index++)
         {
-            child.Remove();
-            link.InsertBefore(child);
+            var link = held[index].Link;
+            while (link.FirstChild is { } child) child.Remove();
+            link.AppendChild(new LiteralInline("\0" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\0"));
         }
 
-        link.Remove();
+        var labels = new Dictionary<int, string>();
+        foreach (Match match in HeldAnchor.Matches(html)) labels.TryAdd(int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), match.Groups[2].Value);
+        return new Rendered(Pieces(html, HeldAnchor, match => match.Groups[2].Value), Pieces(Plain(document), HeldWords, match => Words(labels, match)),
+            held.Select(entry => entry.Target).ToList());
     }
+
+    /// <summary>A held link's own words in the plain text: its words in the HTML, without their tags.</summary>
+    private static string Words(IReadOnlyDictionary<int, string> labels, Match match)
+    {
+        var index = int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        return labels.TryGetValue(index, out var label) ? WebUtility.HtmlDecode(Tags.Replace(label, "")) : "";
+    }
+
+    private static List<Piece> Pieces(string text, Regex held, Func<Match, string> words)
+    {
+        var pieces = new List<Piece>();
+        var at = 0;
+        foreach (Match match in held.Matches(text))
+        {
+            if (match.Index > at) pieces.Add(new Piece(text[at..match.Index]));
+            pieces.Add(new Piece(words(match), int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)));
+            at = match.Index + match.Length;
+        }
+
+        if (at < text.Length) pieces.Add(new Piece(text[at..]));
+        return pieces;
+    }
+
+    /// <summary>The document as plain text, the way Markdig writes it without HTML.</summary>
+    private static string Plain(MarkdownDocument document)
+    {
+        using var writer = new StringWriter();
+        var renderer = new HtmlRenderer(writer) { EnableHtmlForBlock = false, EnableHtmlForInline = false, EnableHtmlEscape = false };
+        Pipeline.Setup(renderer);
+        renderer.Render(document);
+        writer.Flush();
+        return writer.ToString();
+    }
+
+    private static string? Target(LinkInline link) => link.GetDynamicUrl is null ? link.Url : link.GetDynamicUrl();
 
     /// <summary>Whether the HTML may hold an image with a caption: both an image and emphasis occur in it.</summary>
     private static bool Figured(string html)
