@@ -13,7 +13,7 @@ services:
     ports:
       - "127.0.0.1:5220:5220"
     environment:
-      Tangent__BaseUrl: "http://localhost:5220"
+      Koan__Web__ApplicationUrl: "http://localhost:5220"
       Tangent__DataFolder: "/state/data"
     volumes:
       - state:/state

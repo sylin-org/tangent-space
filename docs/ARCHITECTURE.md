@@ -21,7 +21,8 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 
 | Need | Package | Used for |
 | --- | --- | --- |
-| Entities, queries, partitions, transactions | `Sylin.Koan.Data.Core` on `Sylin.Koan.Data.Connector.Sqlite` | every table; the audit partition for edit history |
+| Entities, queries, partitions, transactions; the SQLite posture (WAL, busy timeout, synchronous) and one native commit across entity types | `Sylin.Koan.Data.Core` on `Sylin.Koan.Data.Connector.Sqlite` | every table; the writer's one commit per command (`TransactionGuarantee.Atomic`); the audit partition for edit history |
+| The canonical base URL, served under its path and nothing outside it; trusted proxies for one hop | `Sylin.Koan.Web` (`Koan:Web:ApplicationUrl`, `Koan:Web:TrustedProxies`) | every absolute link; the `TangentSpace` row's `BaseUrl`; the reverse proxy's scheme |
 | Durable person, external identities, sessions, audit, erasure | `Sylin.Koan.Identity` · `Sylin.Koan.Identity.Web` | the participant spine; the atproto DID as the person's external identity |
 | Roles with permissions, members and cached bags; effective access composed from contributors; the access explainer | `Sylin.Koan.Identity` | the Discord role model; the `gate` reason |
 | atproto sign-in and authorized sessions | `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | sign-in; record and blob operations under a participant's session |
@@ -37,7 +38,7 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 
 Not referenced, by decision: `Sylin.Koan.Tenancy` (one Tangent Space per process), `Sylin.Koan.Mcp` (no MCP server), `Sylin.Koan.Data.SoftDelete` (a removed Post is a visible tombstone, not a hidden row), `Sylin.Koan.Data.Backup` (shelved by Koan; backup is the folder).
 
-Koan work the tree depends on, each a scoped brief: SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL in `Koan.Web`; scoped overwrites with deny in `Koan.Identity`; atproto content operations in the connector with service-auth verification and `did:web` on the issuer keys; lexical search in `Koan.Data`. Capabilities Tangent builds first in Koan's shape and lifts into Koan when they are proven: the HTML projection, the durable journal with checkpoints, feeds, the static archive, the agent descriptor. A Koan quirk found while building Tangent is corrected in Koan first, under Koan's contributor law, and Tangent resumes on the corrected revision.
+Koan work the tree depends on, each a scoped brief: scoped overwrites with deny in `Koan.Identity`; atproto content operations in the connector with service-auth verification and `did:web` on the issuer keys; lexical search in `Koan.Data`. Capabilities Tangent builds first in Koan's shape and lifts into Koan when they are proven: the HTML projection, the durable journal with checkpoints, feeds, the static archive, the agent descriptor. A Koan quirk found while building Tangent is corrected in Koan first, under Koan's contributor law, and Tangent resumes on the corrected revision.
 
 ## 3. The write path
 
@@ -76,7 +77,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 | `Receipt` | (`ConnectionId`, `PostId`) | `Version` delivered, status, remote reference, `At`, error |
 | `Reference` | id | `PostId`, `ConnectionId`, remote URI, kind (`reply`, `quote`, `mention`, `like`), author, `At` |
 
-Roles, role members, persons, sessions, grants and media are Koan's tables. Indexes: `Post(TangentId, ParentId, LastActivityAt)` for topic lists; `Post(TopicId, Sequence)` for windows; `Event(Seq)`; `Event(TargetId, Seq)`; the lexical index over `Post.Title` and `Post.Body`. A slug derives from the title at creation, deduplicated with a suffix, and never changes.
+Roles, role members, persons, sessions, grants and media are Koan's tables. `TangentSpace.BaseUrl` is the operator's `Koan:Web:ApplicationUrl` as Koan holds it, written at every start, so the row states where the place answers. Indexes: `Post(TangentId, ParentId, LastActivityAt)` for topic lists; `Post(TopicId, Sequence)` for windows; `Event(Seq)`; `Event(TargetId, Seq)`; the lexical index over `Post.Title` and `Post.Body`. A slug derives from the title at creation, deduplicated with a suffix, and never changes.
 
 ## 6. The log
 
@@ -148,7 +149,7 @@ Feeds are a Render output, not a Connection. Inbound replies arrive as `Referenc
 
 ## 11. Discovery
 
-A Tangent Space answers at its **base URL** — scheme, host, optional path — set at first run. Every absolute thing derives from it: links, the cookie path, the OAuth client metadata and redirect, the `did:web`, the publication URL. `tangent.<domain>` is the suggested address, the one a client tries first when a site holds no pointer.
+A Tangent Space answers at its **base URL** — scheme, host, optional path — the operator's `Koan:Web:ApplicationUrl`, which Koan normalises once and serves under: routes, static files and health answer under its path and nothing outside it, and `Koan:Web:TrustedProxies` names the reverse proxies whose forwarded scheme and client address are believed, for one hop. Every absolute thing derives from it: links, the cookie path, the OAuth client metadata and redirect, the `did:web`, the publication URL. `tangent.<domain>` is the suggested address, the one a client tries first when a site holds no pointer.
 
 Pointers live on the site, since `/.well-known/` belongs to an origin: `<link rel="tangent" href="…">` on the site's pages, or `/.well-known/tangent` at the site origin, or a `_tangent` TXT record. The Tangent Space serves its own descriptor at `<base>/tangent.json` — address, identity, publication, `"api": 1` — and `<base>/llms.txt`. The first-run page prints the pointer snippets and, for a path install, the reverse-proxy rule.
 
@@ -182,4 +183,11 @@ One fixture: the real process on a loopback port over a temp folder, run at leas
 
 ## 15. Settled in slice 0
 
-Four questions the foundation slice answers with an afternoon each: a Koan transaction across several entity saves inside a background loop; the HTML formatter beside Koan's JSON projection; a Vue island mounting into server HTML with a stream-driven fragment patch; lexical search through Koan's SQLite connector. A Koan answer that falls short is corrected in Koan.
+Four questions the foundation slice set out to answer with an afternoon each, and how each stands:
+
+- **A Koan transaction across several entity saves inside a background loop.** Settled: `EntityContext.Transaction(name, TransactionGuarantee.Atomic)` commits saves of two entity types from a `BackgroundService` in one native `BEGIN IMMEDIATE … COMMIT` on the SQLite route, and a throw before the commit persists neither; `tests/Tangent.Tests/SqlitePostureTests.cs` holds the facts.
+- **The HTML formatter beside Koan's JSON projection.** Settled: `HtmlFormatter` is the first MVC output formatter and claims only the types `ResourceComponents` registers, so the door answers as a page, a fragment or Koan's JSON by `Accept` and the fragment header; `tests/Tangent.Tests/Render/ShellTests.cs`.
+- **A Vue island mounting into server HTML with a fragment patch.** Settled for the patch: the fragment island mounts beside the server's HTML and refreshes its host from the resource's URL with the fragment header. The event stream that will drive the patch arrives with the log.
+- **Lexical search through Koan's SQLite connector.** Open: it waits on Koan's lexical search over entity fields and is proven when that lands.
+
+A Koan answer that falls short is corrected in Koan.

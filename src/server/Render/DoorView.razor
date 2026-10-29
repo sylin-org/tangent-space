@@ -1,10 +1,8 @@
 @using System.Text.Json
-@using Microsoft.Extensions.Options
 @using Tangent.Space
-@inject IOptions<TangentSpaceOptions> Options
 @* The fragment island: the door reads as rendered here, and once the page script mounts it, it can refresh
-   itself from this component alone at the door's URL, from the configured base URL the shell's links use. *@
-<main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Options.Value.BaseUrl + "/" })">
+   itself from this component alone at the door's URL under the base URL the row records. *@
+<main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Model.BaseUrl + "/" })">
     <h1>@Model.Name</h1>
     <p><a href="@Model.BaseUrl">@Model.BaseUrl</a></p>
 </main>

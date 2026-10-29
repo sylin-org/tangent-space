@@ -1,6 +1,6 @@
 # Tests
 
-`Tangent.Tests` is the one test project. Its fixture, `TangentSpaceFixture`, starts the real application — `AddKoan()` over the server's `appsettings.json`, so `TangentModule`, its options and its pipeline contributors run as they do in production — on Kestrel at a free loopback port, with a new temp folder as its content root and the server's `wwwroot`, copied beside the test binaries by the build, as its web root. Every test starts its own Tangent Space; none shares a port, a folder or a database, and the tests run in parallel. `rules/` holds the Node checks of the standing rules.
+`Tangent.Tests` is the one test project. Its fixture, `TangentSpaceFixture`, starts the real application — `AddKoan()` over the server's `appsettings.json`, so `TangentModule` and its options run as they do in production and Koan's pipeline serves under the configured base URL — on Kestrel at a free loopback port, with a new temp folder as its content root and the server's `wwwroot`, copied beside the test binaries by the build, as its web root. Every test starts its own Tangent Space; none shares a port, a folder or a database, and the tests run in parallel. `rules/` holds the Node checks of the standing rules.
 
 ## Run
 
@@ -21,7 +21,7 @@ Tests are grouped by noun, in folders that mirror `src/server` (`Space/` holds t
 public async Task Under_a_base_url_path_the_routes_answer_only_under_the_path()
 {
     await using var tangentSpace = await TangentSpaceFixture.StartAsync(
-        new Dictionary<string, string?> { ["Tangent:BaseUrl"] = "https://tangent.example/notes" },
+        new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://tangent.example/notes" },
         ct: TestContext.Current.CancellationToken);
 
     var response = await tangentSpace.Client.GetAsync("/notes/health/live", TestContext.Current.CancellationToken);

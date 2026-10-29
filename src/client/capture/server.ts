@@ -1,5 +1,5 @@
 // Starts a Tangent Space for one capture run the way the test fixture does: the real server on a loopback
-// port it chooses itself, over a new temp folder that holds its data, with any Tangent:* settings a state needs.
+// port it chooses itself, over a new temp folder that holds its data, with any settings a state needs.
 
 import { spawn, spawnSync } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -46,7 +46,7 @@ export function doorOf(baseUrl: URL): URL {
 
 export async function startTangentSpace(server: string, settings: Readonly<Record<string, string>> = {}): Promise<TangentSpace> {
   const folder = await mkdtemp(join(tmpdir(), 'tangent-capture-'))
-  const all: Record<string, string> = { 'Tangent:BaseUrl': captureBaseUrl, 'Tangent:DataFolder': join(folder, 'data'), ...settings }
+  const all: Record<string, string> = { 'Koan:Web:ApplicationUrl': captureBaseUrl, 'Tangent:DataFolder': join(folder, 'data'), ...settings }
   // Port 0: the server binds a free port itself and reports it, so no other process can hold it in between.
   const environment: Record<string, string> = { ...(process.env as Record<string, string>), ASPNETCORE_URLS: 'http://127.0.0.1:0' }
   for (const [key, value] of Object.entries(all)) environment[key.replaceAll(':', '__')] = value
@@ -92,7 +92,7 @@ export async function startTangentSpace(server: string, settings: Readonly<Recor
     ]).finally(() => clearTimeout(timer))
 
     // The address answers as this run's Tangent Space: its door states the base URL this run configured.
-    const baseUrl = new URL(all['Tangent:BaseUrl'])
+    const baseUrl = new URL(all['Koan:Web:ApplicationUrl'])
     const door = new URL(doorOf(baseUrl).pathname, listening)
     let stated: URL | undefined
     while (!stated) {

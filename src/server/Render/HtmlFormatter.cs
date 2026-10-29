@@ -1,9 +1,8 @@
 using System.Text;
+using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Mvc.Formatters;
-using Microsoft.Extensions.Options;
-using Tangent.Space;
 
 namespace Tangent.Render;
 
@@ -20,12 +19,12 @@ public sealed class HtmlFormatter : TextOutputFormatter
     private const string ModelParameter = "Model";
 
     private readonly ResourceComponents _components;
-    private readonly IOptions<TangentSpaceOptions> _options;
+    private readonly KoanWebBaseUrl _baseUrl;
 
-    public HtmlFormatter(ResourceComponents components, IOptions<TangentSpaceOptions> options)
+    public HtmlFormatter(ResourceComponents components, KoanWebBaseUrl baseUrl)
     {
         _components = components;
-        _options = options;
+        _baseUrl = baseUrl;
         SupportedMediaTypes.Add("text/html");
         SupportedEncodings.Add(Encoding.UTF8);
     }
@@ -51,7 +50,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
             var shell = ParameterView.FromDictionary(new Dictionary<string, object?>
             {
                 [nameof(Shell.Title)] = resource.Title(value),
-                [nameof(Shell.BaseUrl)] = _options.Value.BaseUrl,
+                [nameof(Shell.BaseUrl)] = _baseUrl.Resolve(http),
                 [nameof(Shell.ChildContent)] = (RenderFragment)(builder =>
                 {
                     builder.OpenComponent(0, resource.Component);

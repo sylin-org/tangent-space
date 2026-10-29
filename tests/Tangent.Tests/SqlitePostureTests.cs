@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Koan.Data.Core;
 using Koan.Data.Core.Model;
+using Koan.Data.Core.Transactions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -17,15 +18,21 @@ public sealed class ProbeRow : Entity<ProbeRow>
     public int Number { get; set; }
 }
 
-/// <summary>Koan's SQLite posture at the pinned revision, in the Tangent Space's own database: concurrent
-/// single-row saves, what <see cref="EntityContext.Transaction"/> does inside a <see cref="BackgroundService"/>,
-/// and which transaction the driver begins by default. Each fact starts its own Tangent Space.</summary>
+/// <summary>A second entity type the atomic-scope tests save beside <see cref="ProbeRow"/>. It exists only here.</summary>
+public sealed class ProbeMark : Entity<ProbeMark>
+{
+    public string Note { get; set; } = "";
+}
+
+/// <summary>Koan's SQLite posture in the Tangent Space's own database: write-ahead logging, the busy timeout, and
+/// what a scope opened with <see cref="TransactionGuarantee.Atomic"/> does inside a <see cref="BackgroundService"/>,
+/// the writer's shape. Each fact starts its own Tangent Space.</summary>
 public sealed class SqlitePostureTests(ITestOutputHelper output)
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task Two_tasks_each_save_one_hundred_rows_without_a_failure()
+    public async Task Two_tasks_each_save_one_hundred_rows_without_a_failure_in_write_ahead_mode()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var failures = new ConcurrentBag<Exception>();
@@ -50,10 +57,31 @@ public sealed class SqlitePostureTests(ITestOutputHelper output)
 
         Assert.Empty(failures);
         Assert.Equal(200, rows);
+        Assert.Equal((2, 2), (read, write));
     }
 
     [Fact]
-    public async Task A_throw_between_two_saves_in_one_transaction_persists_neither()
+    public async Task The_busy_timeout_bounds_a_wait_for_a_lock_another_connection_holds()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:02" },
+            ct: Cancellation);
+        await new ProbeRow { Id = "seed" }.Save(Cancellation);
+
+        await using var holder = Connect(tangentSpace.DatabasePath);
+        await holder.OpenAsync(Cancellation);
+        await using var held = holder.BeginTransaction(deferred: false);
+
+        var clock = Stopwatch.StartNew();
+        var refused = await Assert.ThrowsAnyAsync<Exception>(() => new ProbeRow { Id = "blocked" }.Save(Cancellation));
+        clock.Stop();
+        output.WriteLine($"the save failed after {clock.ElapsedMilliseconds}ms: {refused.GetType().Name}: {refused.Message}");
+
+        Assert.InRange(clock.Elapsed, TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
+    public async Task An_atomic_scope_that_throws_between_two_saves_of_two_entity_types_persists_neither()
     {
         var probe = new TransactionProbe(ThrowBetween: true);
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
@@ -65,12 +93,12 @@ public sealed class SqlitePostureTests(ITestOutputHelper output)
 
         var thrown = Assert.IsType<InvalidOperationException>(outcome.Thrown);
         Assert.Equal(TransactionWorker.ThrownBetween, thrown.Message);
-        Assert.False(outcome.FirstPersisted);
-        Assert.False(outcome.SecondPersisted);
+        Assert.False(outcome.RowPersisted);
+        Assert.False(outcome.MarkPersisted);
     }
 
     [Fact]
-    public async Task Two_saves_in_one_transaction_both_persist_on_commit()
+    public async Task An_atomic_scope_commits_two_saves_of_two_entity_types_together()
     {
         var probe = new TransactionProbe(ThrowBetween: false);
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
@@ -81,56 +109,13 @@ public sealed class SqlitePostureTests(ITestOutputHelper output)
         output.WriteLine(outcome.ToString());
 
         Assert.Null(outcome.Thrown);
-        Assert.True(outcome.FirstPersisted);
-        Assert.True(outcome.SecondPersisted);
-    }
-
-    [Fact]
-    public async Task A_koan_transaction_writes_nothing_and_holds_no_sqlite_lock_before_commit()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        await new ProbeRow { Id = "seed" }.Save(Cancellation);
-
-        using (EntityContext.Transaction("probe"))
-        {
-            await new ProbeRow { Id = "tracked" }.Save(Cancellation);
-            Assert.Null(await ProbeRow.Get("tracked", Cancellation));
-
-            await using var other = Connect(tangentSpace.DatabasePath, "Default Timeout=1");
-            await other.OpenAsync(Cancellation);
-            await using (var immediate = other.BeginTransaction(deferred: false))
-            {
-                await immediate.CommitAsync(Cancellation);
-            }
-            output.WriteLine("BEGIN IMMEDIATE on another connection succeeded while EntityContext.Transaction held a tracked save.");
-
-            await EntityContext.Commit(Cancellation);
-        }
-
-        Assert.NotNull(await ProbeRow.Get("tracked", Cancellation));
-    }
-
-    [Fact]
-    public async Task The_driver_default_transaction_is_immediate()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        await new ProbeRow { Id = "seed" }.Save(Cancellation);
-
-        await using var first = Connect(tangentSpace.DatabasePath);
-        await first.OpenAsync(Cancellation);
-        await using var held = await first.BeginTransactionAsync(Cancellation);
-
-        await using var second = Connect(tangentSpace.DatabasePath, "Default Timeout=1");
-        await second.OpenAsync(Cancellation);
-        var clock = Stopwatch.StartNew();
-        var locked = Assert.Throws<SqliteException>(() => second.BeginTransaction(deferred: false));
-        clock.Stop();
-        output.WriteLine($"second BEGIN IMMEDIATE failed after {clock.ElapsedMilliseconds}ms: {locked.Message}");
+        Assert.False(outcome.RowVisibleBeforeCommit);
+        Assert.True(outcome.RowPersisted);
+        Assert.True(outcome.MarkPersisted);
     }
 
     /// <summary>A connection of the test's own, outside the driver's pool, so it holds no file once disposed.</summary>
-    private static SqliteConnection Connect(string databasePath, string more = "")
-        => new($"Data Source={databasePath};Pooling=False;{more}");
+    private static SqliteConnection Connect(string databasePath) => new($"Data Source={databasePath};Pooling=False");
 
     /// <summary>Header bytes 18 and 19: the read and write versions, 1 for rollback and 2 for write-ahead.</summary>
     private static (byte Read, byte Write) Header(string databasePath)
@@ -147,9 +132,9 @@ public sealed record TransactionProbe(bool ThrowBetween)
     public TaskCompletionSource<TransactionOutcome> Outcome { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 }
 
-public sealed record TransactionOutcome(Exception? Thrown, bool FirstPersisted, bool SecondPersisted);
+public sealed record TransactionOutcome(Exception? Thrown, bool RowVisibleBeforeCommit, bool RowPersisted, bool MarkPersisted);
 
-/// <summary>The writer's shape: a background loop that saves twice inside one Koan transaction.</summary>
+/// <summary>The writer's shape: a background loop that saves a row and a mark inside one atomic scope.</summary>
 public sealed class TransactionWorker(TransactionProbe probe) : BackgroundService
 {
     public const string ThrownBetween = "thrown between the two saves";
@@ -157,13 +142,15 @@ public sealed class TransactionWorker(TransactionProbe probe) : BackgroundServic
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         Exception? thrown = null;
+        var rowVisibleBeforeCommit = false;
         try
         {
-            using (EntityContext.Transaction("writer"))
+            using (EntityContext.Transaction("writer", TransactionGuarantee.Atomic))
             {
-                await new ProbeRow { Id = "first" }.Save(ct);
+                await new ProbeRow { Id = "row" }.Save(ct);
                 if (probe.ThrowBetween) throw new InvalidOperationException(ThrownBetween);
-                await new ProbeRow { Id = "second" }.Save(ct);
+                await new ProbeMark { Id = "mark" }.Save(ct);
+                rowVisibleBeforeCommit = await ProbeRow.Get("row", ct) is not null;
                 await EntityContext.Commit(ct);
             }
         }
@@ -174,7 +161,8 @@ public sealed class TransactionWorker(TransactionProbe probe) : BackgroundServic
 
         probe.Outcome.SetResult(new TransactionOutcome(
             thrown,
-            await ProbeRow.Get("first", ct) is not null,
-            await ProbeRow.Get("second", ct) is not null));
+            rowVisibleBeforeCommit,
+            await ProbeRow.Get("row", ct) is not null,
+            await ProbeMark.Get("mark", ct) is not null));
     }
 }

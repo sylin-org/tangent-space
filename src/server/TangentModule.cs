@@ -1,15 +1,14 @@
-using System.Net;
 using Koan.Core;
 using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
 using Koan.Web.Extensions;
 using Koan.Web.Hosting;
+using Koan.Web.Options;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Tangent.Lifecycle;
 using Tangent.Render;
@@ -18,36 +17,26 @@ using Tangent.Space;
 namespace Tangent;
 
 /// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder,
-/// the request pipeline, the HTML projection, and the first start.</summary>
+/// the HTML projection, and the first start.</summary>
 public sealed class TangentModule : KoanModule
 {
+    /// <summary>The key Koan reads the base URL from. A Tangent Space always has one: its row records it and
+    /// every absolute link derives from it, so Koan's request-derived posture is never enough here.</summary>
+    public const string BaseUrlKey = "Koan:Web:ApplicationUrl";
+
     public override void Register(IServiceCollection services)
     {
         services.AddKoanOptions<TangentSpaceOptions>(TangentSpaceOptions.Configuration)
-            .PostConfigure(options =>
-            {
-                if (TangentSpaceOptions.TryNormalizeBaseUrl(options.BaseUrl, out var baseUrl)) options.BaseUrl = baseUrl;
-            })
-            .Validate(options => TangentSpaceOptions.TryParseBaseUrl(options.BaseUrl, out _),
-                "Tangent:BaseUrl must be an absolute http or https URL: scheme, host and an optional path.")
-            .Validate(options => !TangentSpaceOptions.EncodesSeparator(options.BaseUrl),
-                "Tangent:BaseUrl must not encode a path separator (%2F): write the path as plain segments.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
-                "Tangent:DataFolder must name a folder.")
-            .Validate(options => options.TrustedProxy is null || IPAddress.TryParse(options.TrustedProxy, out _),
-                "Tangent:TrustedProxy must be the one IP address of the immediate reverse proxy.")
-            .Validate<IConfiguration>((options, configuration) => options.TrustedProxy is null
-                || (TangentSpaceOptions.TryParseBaseUrl(options.BaseUrl, out var baseUrl)
-                    && baseUrl.Scheme == Uri.UriSchemeHttps
-                    && string.Equals(configuration["AllowedHosts"], baseUrl.Host, StringComparison.OrdinalIgnoreCase)),
-                "A trusted proxy requires an https Tangent:BaseUrl and AllowedHosts equal to its host name.");
+                "Tangent:DataFolder must name a folder.");
+
+        services.AddOptions<KoanWebOptions>()
+            .Validate(options => !string.IsNullOrWhiteSpace(options.ApplicationUrl),
+                $"{BaseUrlKey} must be set to the base URL the Tangent Space answers at: scheme, host and an optional path.");
 
         services.AddOptions<SqliteOptions>()
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((sqlite, tangent, environment) =>
                 sqlite.ConnectionString = "Data Source=" + tangent.Value.DatabasePath(environment.ContentRootPath));
-
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, TrustedProxyPipelineContributor>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IKoanWebPipelineContributor, BaseUrlPipelineContributor>());
 
         // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
         services.AddHostedService<RunningMark>();
@@ -75,13 +64,14 @@ public sealed class TangentModule : KoanModule
     public override async Task Start(IServiceProvider services, CancellationToken ct)
     {
         // The row records the base URL the operator configures; a start under another one moves it.
-        var options = services.GetRequiredService<IOptions<TangentSpaceOptions>>().Value;
+        var baseUrl = services.GetRequiredService<KoanWebBaseUrl>().Configured
+            ?? throw new InvalidOperationException($"{BaseUrlKey} must be set to the base URL the Tangent Space answers at.");
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
         if (space is null)
-            await new TangentSpace { Name = "Tangent Space", BaseUrl = options.BaseUrl }.Save(ct);
-        else if (space.BaseUrl != options.BaseUrl)
+            await new TangentSpace { Name = "Tangent Space", BaseUrl = baseUrl }.Save(ct);
+        else if (space.BaseUrl != baseUrl)
         {
-            space.BaseUrl = options.BaseUrl;
+            space.BaseUrl = baseUrl;
             space.Version++;
             await space.Save(ct);
         }
@@ -95,25 +85,9 @@ public sealed class TangentModule : KoanModule
         var contentRoot = services.GetRequiredService<IHostEnvironment>().ContentRootPath;
         var addresses = services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
         services.GetRequiredService<ILogger<TangentModule>>().LogInformation(
-            "Tangent Space at {BaseUrl}; listening on {Addresses}; data folder {DataFolder}; SQLite journal {Journal}",
-            options.BaseUrl,
+            "Tangent Space at {BaseUrl}; listening on {Addresses}; data folder {DataFolder}",
+            services.GetRequiredService<KoanWebBaseUrl>().Configured,
             string.Join(" ", addresses),
-            options.DataFolderPath(contentRoot),
-            SqliteJournal(options.DatabasePath(contentRoot)));
-    }
-
-    /// <summary>The persistent journal mode SQLite recorded in header bytes 18 and 19: 1 is rollback, 2 is write-ahead.</summary>
-    private static string SqliteJournal(string databasePath)
-    {
-        if (!File.Exists(databasePath)) return "no database file";
-        Span<byte> header = stackalloc byte[20];
-        using var file = new FileStream(databasePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        if (file.Read(header) < header.Length) return "header too short";
-        return (header[18], header[19]) switch
-        {
-            (1, 1) => "rollback (header 1 1)",
-            (2, 2) => "wal (header 2 2)",
-            var (read, write) => $"unknown (header {read} {write})"
-        };
+            options.DataFolderPath(contentRoot));
     }
 }

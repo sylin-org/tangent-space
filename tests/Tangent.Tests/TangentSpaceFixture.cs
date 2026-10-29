@@ -14,8 +14,8 @@ using Tangent.Space;
 namespace Tangent;
 
 /// <summary>One Tangent Space under test: the application's own composition — <c>AddKoan()</c> over the
-/// server's appsettings.json, so <see cref="TangentModule"/>, its options and its pipeline contributors
-/// are the ones that run — in the Production environment the server runs in, on Kestrel at a free
+/// server's appsettings.json, so <see cref="TangentModule"/> and its options are the ones that run, and
+/// Koan's pipeline serves under the configured base URL — in the Production environment the server runs in, on Kestrel at a free
 /// loopback port, with a new temp folder as its content root, so the data folder and the database land
 /// inside that folder, and the server's wwwroot as its web root. A test names any setting it needs;
 /// disposing the fixture stops the application and deletes the folder.</summary>
@@ -51,7 +51,7 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
     public string DatabasePath => Options.DatabasePath(Folder);
 
     /// <summary>Builds and starts a Tangent Space. <paramref name="settings"/> override the server's
-    /// appsettings.json (<c>Tangent:BaseUrl</c> above all); <paramref name="services"/> adds registrations
+    /// appsettings.json (<c>Koan:Web:ApplicationUrl</c> above all); <paramref name="services"/> adds registrations
     /// after the application's own. Not an async method, so the binding it makes stays on the caller's flow.</summary>
     public static Task<TangentSpaceFixture> StartAsync(
         IReadOnlyDictionary<string, string?>? settings = null,

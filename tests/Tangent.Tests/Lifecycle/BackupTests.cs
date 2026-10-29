@@ -16,7 +16,7 @@ public sealed class BackupTests(ITestOutputHelper output)
     public async Task A_backup_taken_while_it_runs_restores_into_a_fresh_folder_that_serves_the_same_row()
     {
         await using var original = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Tangent:BaseUrl"] = "https://backed-up.example" },
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://backed-up.example" },
             ct: Cancellation);
         var row = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         row!.Name = "The workshop's place";
@@ -38,7 +38,7 @@ public sealed class BackupTests(ITestOutputHelper output)
         await using var restored = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?>
             {
-                ["Tangent:BaseUrl"] = "https://backed-up.example",
+                ["Koan:Web:ApplicationUrl"] = "https://backed-up.example",
                 ["Tangent:DataFolder"] = restoredFolder
             },
             ct: Cancellation);

@@ -29,11 +29,28 @@ public sealed class ShellTests
         Assert.NotEmpty(await response.Content.ReadAsByteArrayAsync(Cancellation));
     }
 
+    [Theory]
+    [InlineData("/tangent.css")]
+    [InlineData("/theme.js")]
+    [InlineData("/tangent.js")]
+    public async Task Under_a_base_url_path_each_linked_file_answers_only_under_the_path(string path)
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = "https://www.example.com/notes" }, ct: Cancellation);
+
+        using var under = await tangentSpace.Client.GetAsync("/notes" + path, Cancellation);
+        using var outside = await tangentSpace.Client.GetAsync(path, Cancellation);
+
+        Assert.Equal(HttpStatusCode.OK, under.StatusCode);
+        Assert.NotEmpty(await under.Content.ReadAsByteArrayAsync(Cancellation));
+        Assert.Equal(HttpStatusCode.NotFound, outside.StatusCode);
+    }
+
     [Fact]
     public async Task The_door_links_the_files_and_renders_the_fragment_island()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Tangent:BaseUrl"] = BaseUrl }, ct: Cancellation);
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = BaseUrl }, ct: Cancellation);
 
         var html = await Read(tangentSpace, fragment: false);
         var fragment = await Read(tangentSpace, fragment: true);
