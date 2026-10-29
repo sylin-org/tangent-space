@@ -14,7 +14,8 @@ namespace Tangent.Participants;
 /// <summary>A stand-in for the public profile service on a loopback port, recording every request it receives. Under
 /// <c>/answer/</c> it answers a profile for the DID asked; under <c>/stall/</c> it never answers; under
 /// <c>/overflow/</c> it answers without end; under <c>/plain-avatar/</c> it answers a profile whose avatar is an
-/// http address. Each is a base address for <c>Tangent:Profile:BaseAddress</c>.</summary>
+/// http address; under <c>/automated/</c> a profile that labels itself a bot, as the profile view carries the record's
+/// self-labels, beside a labeler's label that does not count. Each is a base address for <c>Tangent:Profile:BaseAddress</c>.</summary>
 public sealed class ProfileStub : IAsyncDisposable
 {
     public const string DisplayName = "Ada Lovelace";
@@ -37,6 +38,8 @@ public sealed class ProfileStub : IAsyncDisposable
     public Uri Overflowing => new(Address, "overflow/");
 
     public Uri PlainAvatar => new(Address, "plain-avatar/");
+
+    public Uri AgentLabelled => new(Address, "automated/");
 
     /// <summary>The DIDs asked for, one per request, in arrival order.</summary>
     public IReadOnlyCollection<string> Requests => _requests;
@@ -63,6 +66,22 @@ public sealed class ProfileStub : IAsyncDisposable
         {
             var did = stub.Record(http);
             return Results.Json(new { did, handle = HandleOf(did), displayName = DisplayName, avatar = "http://cdn.example/avatar/ada.jpg" });
+        });
+        application.MapGet("/automated/" + read, (HttpContext http) =>
+        {
+            var did = stub.Record(http);
+            var profile = "at://" + did + "/app.bsky.actor.profile/self";
+            return Results.Json(new
+            {
+                did,
+                handle = HandleOf(did),
+                displayName = DisplayName,
+                labels = new object[]
+                {
+                    new { src = "did:plc:somelabeler", uri = "at://" + did, val = "porn", cts = "2026-10-01T00:00:00.000Z" },
+                    new { src = did, uri = profile, cid = "bafyreiprofile", val = "bot", cts = "2026-10-01T00:00:00.000Z" }
+                }
+            });
         });
         application.MapGet("/stall/" + read, async (HttpContext http) =>
         {

@@ -27,8 +27,8 @@ export interface State {
   cancel?: string
 }
 
-// Whom a signed-in state is captured as: a person who has signed in and not arrived yet, unless the state
-// itself arrives. The handle reaches the sign-in as the atproto connector's verified handle claim.
+// Whom a signed-in state is captured as; the sign-in makes them a participant. The handle reaches the sign-in as
+// the atproto connector's verified handle claim.
 export const capturePersona = { name: 'ada', did: 'did:plc:capture4persona', handle: 'ada.bsky.social' } as const
 
 export interface Screen {
@@ -43,8 +43,7 @@ export interface Screen {
 export const screens: Readonly<Record<string, Screen>> = {
   door: { path: '/', states: [{ name: 'signed-out' }] },
   // The handle form a visitor reads, focused; on its way after Continue; after a sign-in that could not be
-  // verified, the typed handle kept; with a handle no account answers to; and, signed in, the first arrival
-  // before a kind is chosen and once one is.
+  // verified, the typed handle kept; and with a handle no account answers to.
   'sign-in': {
     path: '/sign-in',
     states: [
@@ -52,8 +51,6 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'submitting', query: { handle: 'ada.bsky.social' }, click: '.sign-in-submit', cancel: '/auth/atproto/challenge' },
       { name: 'verification-failed', query: { failure: 'atproto_authentication_failed', handle: 'ada.bsky.social' } },
       { name: 'handle-not-found', query: { failure: 'handle_not_found', handle: 'ada.bsky.socail' } },
-      { name: 'arrival', signedIn: true },
-      { name: 'arrival-chosen', signedIn: true, click: '.kind-option[data-kind="person"]' },
     ],
   },
 }

@@ -7,11 +7,11 @@ The design foundation every page of a Tangent Space stands on, and its islands, 
 | `tokens.css` | The design tokens as `--ts-*` custom properties: type scale, radii, layout sizes, shadows, Paper and Ink, the four Tangent Space accents (gold, jade, iris, copper), the six Tangent tones and the role colours. Values are the design reference's, held there by the token parity test. |
 | `fonts.css` and `fonts/` | Newsreader (variable: weight 200–800, optical size 6–72), Schibsted Grotesk (variable: weight 400–900) and IBM Plex Mono (400 and 500), Latin and Latin Extended, as files in the tree declared with `@font-face`. Nothing is fetched from a font service, so pages render offline and captures are deterministic. The files come from the Fontsource packages in `devDependencies`; their licence texts sit beside them. |
 | `layout.css` | The frame: base elements, the masthead with the place's mark and name, the path bar with its elbow and crumbs, the layout grid with its rail, the footer with its appearance switch, and the breakpoints. |
-| `sign-in.css` | The sign-in page: the one panel, headed by the place's mark and name, that holds the handle form or the declaration of kind, its failures and its busy button. |
+| `sign-in.css` | The sign-in page: the one panel, headed by the place's mark and name, that holds the handle form, its failures and its busy button. |
 | `appearance.ts` | System, Light or Dark, set as `data-theme` on `<html>` and remembered per browser in `localStorage`; the accent as `data-accent`. |
 | `theme.ts` | The theme entry, built to `theme.js`: a classic script that restores the saved appearance before the first paint. |
 | `tangent.ts` | The page entry, built to `tangent.js` and `tangent.css`: a module that imports the stylesheets and mounts the islands. |
-| `islands/` | The islands: `index.ts` holds the registry, every island by its `data-island` name, and mounts them; `fragment.ts` is the fragment island, `appearance.ts` the footer's System, Light and Dark switch, and `submitting.ts` a form that says where it stands: what it still needs, ready, or on its way. |
+| `islands/` | The islands: `index.ts` holds the registry, every island by its `data-island` name, and mounts them; `fragment.ts` is the fragment island, `appearance.ts` the footer's System, Light and Dark switch, and `submitting.ts` a form that shows it is on its way. |
 
 ## Build and test
 

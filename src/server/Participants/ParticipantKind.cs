@@ -1,6 +1,6 @@
 namespace Tangent.Participants;
 
-/// <summary>A participant's declared classification: shown, never evaluated.</summary>
+/// <summary>A participant's kind, person or agent: shown, never evaluated.</summary>
 public enum ParticipantKind
 {
     Person,

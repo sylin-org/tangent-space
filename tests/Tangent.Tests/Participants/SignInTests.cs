@@ -85,14 +85,13 @@ public sealed class SignInTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         using var browser = new Browser(tangentSpace);
-        using var arriving = await browser.SignIn("ret", "did:plc:ret4example", Cancellation);
-        using var arrived = await browser.Arrive("person", Cancellation);
+        using var signedIn = await browser.SignIn("ret", "did:plc:ret4example", Cancellation);
 
         using var visitor = await tangentSpace.Client.SendAsync(Json("/sign-in?return=" + destination), Cancellation);
         using var visiting = JsonDocument.Parse(await visitor.Content.ReadAsStringAsync(Cancellation));
         using var participant = await browser.Client.SendAsync(Json("/sign-in?return=" + destination), Cancellation);
 
-        Assert.Equal(HttpStatusCode.SeeOther, arrived.StatusCode);
+        Assert.NotNull(await Participant.Get("did:plc:ret4example", Cancellation));
         Assert.Equal("/", visiting.RootElement.GetProperty("return").GetString());
         Assert.Equal(HttpStatusCode.Redirect, participant.StatusCode);
         Assert.Equal("/", participant.Headers.Location?.OriginalString);
@@ -118,7 +117,7 @@ public sealed class SignInTests
         using var landed = await browser.SignIn("ada.example", did, Cancellation);
 
         Assert.Equal(HttpStatusCode.OK, landed.StatusCode);
-        Assert.Equal("/sign-in", landed.RequestMessage!.RequestUri!.AbsolutePath);
+        Assert.Equal("/", landed.RequestMessage!.RequestUri!.AbsolutePath);
         var person = await Person.Get(did, Cancellation);
         Assert.NotNull(person);
         var links = await ExternalIdentityLink.Query(link => link.IdentityId == did, Cancellation);
@@ -128,10 +127,10 @@ public sealed class SignInTests
     }
 
     [Theory]
-    [InlineData(Admission.Join, "agent", ParticipantKind.Agent, Standing.Admitted)]
-    [InlineData(Admission.Apply, "person", ParticipantKind.Person, Standing.Applied)]
-    public async Task The_first_arrival_creates_one_participant_with_the_declared_kind_and_the_standing_the_admission_gives(
-        Admission admission, string kind, ParticipantKind declared, Standing standing)
+    [InlineData(Admission.Join, Standing.Admitted)]
+    [InlineData(Admission.Apply, Standing.Applied)]
+    public async Task A_first_sign_in_creates_one_participant_with_no_form_a_person_with_the_standing_the_admission_gives(
+        Admission admission, Standing standing)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
@@ -141,78 +140,26 @@ public sealed class SignInTests
         using var browser = new Browser(tangentSpace);
         const string did = "did:plc:grace4example";
 
-        using var arriving = await browser.SignIn("grace", did, Cancellation, handle: "grace.example");
-        var page = await arriving.Content.ReadAsStringAsync(Cancellation);
-        using var asJson = await browser.Client.SendAsync(Json("/sign-in"), Cancellation);
-        using var arrival = JsonDocument.Parse(await asJson.Content.ReadAsStringAsync(Cancellation));
-        Assert.Null(await Participant.Get(did, Cancellation));
-        Assert.Contains("name=\"kind\" value=\"person\"", page);
-        Assert.Contains("name=\"kind\" value=\"agent\"", page);
-        Assert.Equal(admission.ToString().ToLowerInvariant(), arrival.RootElement.GetProperty("arrival").GetProperty("admission").GetString());
-        Assert.Equal($"{BaseUrl}/sign-in", arrival.RootElement.GetProperty("arrival").GetProperty("action").GetString());
-        Assert.Equal("grace.example", arrival.RootElement.GetProperty("arrival").GetProperty("handle").GetString());
-        Assert.Contains("You’re signed in as <strong>@grace.example</strong>", page);
-        Assert.Contains("<span class=\"who-handle\">@grace.example</span>", page);
-        Assert.Contains("Not @grace.example? Use another handle", page);
-        Assert.Equal($"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/sign-in?return=" + Uri.EscapeDataString("/"))}",
-            arrival.RootElement.GetProperty("arrival").GetProperty("signOut").GetString());
+        using var signedIn = await browser.SignIn("grace", did, Cancellation, handle: "grace.example");
 
-        using var declaredKind = await browser.Arrive(kind, Cancellation);
-
-        Assert.Equal(HttpStatusCode.SeeOther, declaredKind.StatusCode);
-        Assert.Equal("/", declaredKind.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
+        Assert.Equal("/", signedIn.RequestMessage!.RequestUri!.AbsolutePath);
         var participant = await Participant.Get(did, Cancellation);
         Assert.NotNull(participant);
-        Assert.Equal((declared, standing, "grace.example"), (participant.Kind, participant.Standing, participant.Handle));
+        Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel, standing, "grace.example"),
+            (participant.Kind, participant.KindSource, participant.Standing, participant.Handle));
         var logged = Assert.Single(await Event.All(Cancellation));
         Assert.Equal((EventKind.StandingChanged, did, did), (logged.Kind, logged.ActorId, logged.TargetId));
 
-        // A second sign-in by the same person creates nothing and appends nothing: the page sends them on.
+        // A second sign-in by the same person creates nothing and appends nothing.
         using var again = await browser.SignIn("grace", did, Cancellation, handle: "grace.example");
         using var onward = await browser.Client.SendAsync(Json("/sign-in?return=%2Ft%2Fworkshop"), Cancellation);
 
-        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
         Assert.Equal("/", again.RequestMessage!.RequestUri!.AbsolutePath);
         Assert.Equal(HttpStatusCode.Redirect, onward.StatusCode);
         Assert.Equal("/t/workshop", onward.Headers.Location?.OriginalString);
         Assert.Equal(1, await Participant.Count.Exact(Cancellation));
         Assert.Equal(1, await Event.Count.Exact(Cancellation));
-    }
-
-    [Fact]
-    public async Task Arriving_without_a_kind_answers_the_form_again_with_the_reason_inline_and_writes_nothing()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        using var browser = new Browser(tangentSpace);
-        const string did = "did:plc:lin4example";
-        using var arriving = await browser.SignIn("lin.example", did, Cancellation);
-
-        using var undeclared = await browser.Arrive("robot", Cancellation);
-        var page = await undeclared.Content.ReadAsStringAsync(Cancellation);
-
-        Assert.Equal(HttpStatusCode.BadRequest, undeclared.StatusCode);
-        Assert.Contains("role=\"alert\">Choose whether you are a person or an agent.</p>", page);
-        Assert.Contains("name=\"kind\" value=\"agent\"", page);
-        Assert.Null(await Participant.Get(did, Cancellation));
-        Assert.Equal(0, await Event.Count.Exact(Cancellation));
-    }
-
-    [Fact]
-    public async Task An_arrival_posted_without_the_forms_token_is_refused_and_declares_nothing()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        using var browser = new Browser(tangentSpace);
-        const string did = "did:plc:forged4example";
-        using var arriving = await browser.SignIn("forged", did, Cancellation);
-
-        using var forged = await browser.Client.PostAsync("/sign-in",
-            new FormUrlEncodedContent(new Dictionary<string, string> { ["kind"] = "agent", ["return"] = "/" }), Cancellation);
-        var problem = await forged.Content.ReadAsStringAsync(Cancellation);
-
-        Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
-        Assert.Contains("Open the form again", problem);
-        Assert.Null(await Participant.Get(did, Cancellation));
-        Assert.Equal(0, await Event.Count.Exact(Cancellation));
     }
 
     private static HttpRequestMessage Json(string path)
