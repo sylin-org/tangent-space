@@ -335,6 +335,58 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         Assert.Contains("This topic is locked; it takes no new replies.", await Html(browser.Client, $"/t/{Workshop}/a-removal"));
     }
 
+    [Fact]
+    public async Task In_a_locked_or_removed_topic_no_reply_holds_post_with_the_topics_gate_and_an_open_topics_replies_are_unchanged()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
+        var topic = await Started(writer, "A closing", "The opening.");
+        var leos = await Replied(writer, topic, "Leo's reply.", Leo, 1);
+        var readers = await Replied(writer, topic, "The reader's reply.", Reader, 2);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
+
+        async Task<List<List<string>>> ReplyCans()
+        {
+            using var json = await Json(browser.Client, $"/t/{Workshop}/a-closing");
+            return json.RootElement.GetProperty("replies").EnumerateArray().Select(reply => Strings(reply.GetProperty("can"))).ToList();
+        }
+
+        var open = await ReplyCans();
+        Assert.Equal(["View", "Post", "Topic"], open[0]);
+        Assert.Equal(["View", "Post", "Topic", "EditOwn", "RemoveOwn"], open[1]);
+
+        // The gate each reply's Post carries, from the same pure function the page asks, over the reader's rows.
+        var participant = (await Participant.Get(Reader, Cancellation))!;
+        var member = Bits.Tokens(Roles.MemberBits).Append(Roles.Member).ToList();
+        var place = new TangentSpace { Audience = Audience.Public };
+        string? Gate(Post reply, Post root) => Capabilities.For(participant, member, place, [], DateTimeOffset.UtcNow, reply, root).Gate(Bit.Post);
+
+        var root = (await Post.Get(topic.Id, Cancellation))!;
+        root.Locked = true;
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(root), Cancellation));
+        var locked = await ReplyCans();
+        Assert.All(locked, can => Assert.DoesNotContain("Post", can));
+        Assert.Equal(["View", "Topic", "EditOwn", "RemoveOwn"], locked[1]);
+        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Locked, Gate(reply, root)));
+
+        root.Locked = false;
+        root.Removed = true;
+        root.RemovedBy = Leo;
+        root.RemovedAt = Start.AddMinutes(5);
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(root), Cancellation));
+        var removed = await ReplyCans();
+        Assert.All(removed, can => Assert.DoesNotContain("Post", can));
+        Assert.Equal(["View", "Topic", "EditOwn", "RemoveOwn"], removed[1]);
+        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Removed, Gate(reply, root)));
+
+        root.Removed = false;
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(root), Cancellation));
+        Assert.Equal(open, await ReplyCans());
+        Assert.All([leos, readers], reply => Assert.Null(Gate(reply, root)));
+    }
+
     /// <summary>The place every proof starts from: established, with an administrator who sets up the public Tangent,
     /// and a member who starts its Topics.</summary>
     private static async Task<WriteLoop> Place(TangentSpaceFixture tangentSpace)

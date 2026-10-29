@@ -127,7 +127,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         IReadOnlyDictionary<string, TangentPage.Author> people, Checkpoint? seen, Participant? reader)
     {
         var address = topicAddress + "/" + Uri.EscapeDataString(post.Id);
-        var can = rows.For(post);
+        var can = rows.For(post, root);
         var editable = can.Holds(Bit.EditOwn) || can.Holds(Bit.RemoveOwn) || can.Holds(Bit.Moderate);
         var parent = post.ParentId is { } parentId && parentId != root.Id ? parentId : null;
         return new TopicPage.Post(
@@ -200,7 +200,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     private sealed record ReaderRows(Participant? Participant, IReadOnlyList<string> Tokens, TangentSpace Space,
         IReadOnlyList<Overwrite> Overwrites, DateTimeOffset Now)
     {
-        public Capabilities For(Post? post) => Capabilities.For(Participant, Tokens, Space, Overwrites, Now, post);
+        public Capabilities For(Post? post, Post? root = null) => Capabilities.For(Participant, Tokens, Space, Overwrites, Now, post, root);
     }
 
     private static async Task<ReaderRows> Rows(string? personId, string tangentId, CancellationToken ct)
