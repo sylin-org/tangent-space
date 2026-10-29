@@ -84,9 +84,11 @@ public sealed partial class DiscoveryTests
         Assert.Contains("Device flow", text);
         Assert.Contains("`delegate`", text);
         Assert.Contains("consent page", text);
+        var stated = JsonDocument.Parse(await tangentSpace.Client.GetStringAsync("/tangent.json", Cancellation)).RootElement.GetProperty("address").GetString();
+        Assert.Contains($"send `resource={stated}`", text);
         var addresses = Addresses().Matches(text).Select(match => match.Value).ToList();
         Assert.NotEmpty(addresses);
-        Assert.All(addresses, address => Assert.StartsWith("https://tangent.test/", address));
+        Assert.All(addresses, address => Assert.True(address == "https://tangent.test" || address.StartsWith("https://tangent.test/", StringComparison.Ordinal), address));
         Assert.DoesNotContain(Leo, text);
     }
 
@@ -189,7 +191,9 @@ public sealed partial class DiscoveryTests
         Assert.Equal($"{baseUrl}/.well-known/oauth-authorization-server",
             descriptorJson.RootElement.GetProperty("delegated").GetProperty("authorizationServer").GetString());
         Assert.Equal(HttpStatusCode.OK, llms.StatusCode);
-        Assert.All(Addresses().Matches(llmsText).Select(match => match.Value), address => Assert.StartsWith($"{baseUrl}/", address));
+        Assert.All(Addresses().Matches(llmsText).Select(match => match.Value),
+            address => Assert.True(address == baseUrl || address.StartsWith($"{baseUrl}/", StringComparison.Ordinal), address));
+        Assert.Contains($"send `resource={baseUrl}`", llmsText);
         Assert.Contains($"{baseUrl}/tangent.json", llmsText);
 
         foreach (var outside in new[] { "/", "/tangent.json", "/llms.txt", "/notesx/tangent.json" })

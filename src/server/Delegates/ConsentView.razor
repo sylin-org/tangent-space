@@ -1,0 +1,85 @@
+@using Tangent.Render
+@using Tangent.Space
+@* The consent page: one panel in the page, headed by the place's mark and name. Asked for a code, it holds the code
+   field, focused, with what it found wrong under it; with a request waiting, it says who decides and what the client
+   may do, and holds approve and deny, each a form with its token; once decided, it says what follows. A request by
+   the shared client is never named, since any device or agent may show its codes. *@
+<main class="sign-in consent">
+    <section class="sign-in-panel" aria-labelledby="consent-title">
+        <PanelHead Frame="@Frame(Model)" />
+        <div class="sign-in-body">
+        @if (Model.Decision is { } decision)
+        {
+            <h1 id="consent-title" class="sign-in-title">Let this agent act as you?</h1>
+            <p class="sign-in-lede">
+                @if (decision.Code is { } deviceCode)
+                {
+                    <text>The device or agent that showed you the code <strong>@deviceCode</strong> asks to act as you in @Model.Place.</text>
+                }
+                else
+                {
+                    <text><strong>@decision.Client</strong> asks to act as you in @Model.Place.</text>
+                }
+            </p>
+            <p class="first-run-rule">It reads and acts here as <strong>@Handle</strong>, with everything you can do, and never more.</p>
+            @if (decision.Code is not null)
+            {
+                <p class="first-run-note consent-shared">Any device or agent can show a code like this one, so this page can’t name it: approve only a code you just asked for.</p>
+            }
+            @if (decision.Redirect is { } redirect)
+            {
+                <p class="first-run-note consent-redirect">That name is the one it gave itself. Once you decide, it continues at <CodeText Text="@redirect" />.</p>
+            }
+            <form class="sign-in-form consent-approve" method="post" action="@decision.Approve" data-island="submitting">
+                <FormTokenField Token="@decision.Token" />
+                <button type="submit" class="sign-in-submit" data-busy-label="Approving…">Approve</button>
+            </form>
+            <form class="consent-deny" method="post" action="@decision.Deny">
+                <FormTokenField Token="@decision.Token" />
+                <p class="first-run-onward"><button type="submit" class="first-run-switch">Deny</button></p>
+            </form>
+        }
+        else if (Model.Done)
+        {
+            <h1 id="consent-title" class="sign-in-title">You’ve decided</h1>
+            <p class="sign-in-lede">If you approved, go back to the device or agent: it acts as you here now. If you denied, it was told no and holds nothing.</p>
+            <p class="first-run-note first-run-first">You can close this page.</p>
+            <p class="first-run-onward">
+                <a class="first-run-door" href="@Model.Door">Open @Model.Place</a>
+            </p>
+        }
+        else if (Model.Entry is { } entry)
+        {
+            <h1 id="consent-title" class="sign-in-title">Let an agent act as you</h1>
+            <p class="sign-in-lede">Enter the code your device or agent shows you.</p>
+            <form class="sign-in-form" method="get" action="@entry.Action" data-island="submitting">
+                <div class="field">
+                    <label class="field-label" for="consent-code">Code</label>
+                    <span class="field-input">
+                        <input id="consent-code" name="@entry.Field" type="text" required autofocus autocomplete="off"
+                               autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX" maxlength="32" value="@entry.Code"
+                               aria-invalid="@(entry.Failure is null ? "false" : "true")"
+                               aria-describedby="@(entry.Failure is null ? "consent-code-note" : "consent-code-failure consent-code-note")">
+                    </span>
+                    @if (entry.Failure is { } failure)
+                    {
+                        <p class="field-failure" id="consent-code-failure">@failure</p>
+                    }
+                    <p class="first-run-note" id="consent-code-note">Whatever you approve acts here as <strong>@Handle</strong>.</p>
+                </div>
+                <button type="submit" class="sign-in-submit" data-busy-label="Looking…">Continue</button>
+            </form>
+        }
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public Consent Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and the account of
+    /// whoever decides.</summary>
+    public static Frame Frame(Consent consent) => new(consent.Place, consent.Door, [new Crumb("Approve an agent")], consent.Reader);
+
+    private string Handle => Model.Reader is { } reader ? "@" + reader.Handle : "you";
+}

@@ -1,8 +1,11 @@
 using Koan.Data.Core;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
+using Koan.Web.Auth.Server.Protocol;
+using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
+using Tangent.Delegates;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -16,7 +19,7 @@ namespace Tangent.Capture;
 /// Compiled only into the host the capture script builds for itself (<c>-p:TangentCaptureHost=true</c>), beside Koan's
 /// test connector; no other build carries it. Each seed is fixed — names, words, times and TIDs — so two rounds render
 /// the same pages. The capture persona is a member whose checkpoints leave some Topics new to them.</summary>
-public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles, KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The capture persona of <c>src/client/capture/screens.ts</c>.</summary>
     private const string Persona = "did:plc:capture4persona";
@@ -25,13 +28,47 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
     private const string Lumen = "did:plc:capture4lumen";
     private const string Mara = "did:plc:capture4mara";
 
+    /// <summary>The code the consent screen's request waits under, as Koan's server stores it; a device shows it as
+    /// BCDF-GHJK.</summary>
+    private const string ConsentCode = "BCDFGHJK";
+
+    /// <summary>The code a self-registered client's request waits under; a device shows it as CDFG-HJKM.</summary>
+    private const string OtherClientCode = "CDFGHJKM";
+
     [HttpPost("/capture/seed/{name}")]
     public async Task<IActionResult> Seed(string name, CancellationToken ct)
     {
-        if (name != "tangent") return NotFound();
-        await TangentScreen(ct);
-        return NoContent();
+        switch (name)
+        {
+            case "tangent":
+                await TangentScreen(ct);
+                return NoContent();
+            case "consent":
+                await ConsentScreen(ct);
+                return NoContent();
+            default:
+                return NotFound();
+        }
     }
+
+    /// <summary>Two requests waiting under fixed codes for an hour, Koan's own rows saved as its server saves them: one
+    /// by the shared client, which the page shows, and one by a self-registered client, which it refuses.</summary>
+    private async Task ConsentScreen(CancellationToken ct)
+    {
+        await Waiting("capture-consent-device", ConsentCode, DelegateClient.Id, ct);
+        await Waiting("capture-consent-other", OtherClientCode, "dcr_capture", ct);
+    }
+
+    private Task Waiting(string id, string code, string clientId, CancellationToken ct)
+        => new DeviceCode
+        {
+            Id = id,
+            UserCode = code,
+            ClientId = clientId,
+            Resource = baseUrl.Configured ?? "",
+            Status = DeviceCode.StatusPending,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(1)
+        }.Save(ct);
 
     /// <summary>A place with a discussions Tangent and an articles Tangent with Topics, an empty one of each, and
     /// people who wrote them.</summary>

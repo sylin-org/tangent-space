@@ -3,7 +3,6 @@ using Koan.Identity.Roles;
 using Koan.Web.Auth.Connector.Atproto;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -18,14 +17,15 @@ namespace Tangent.Space;
 /// <summary>First run, one resource both ways. Until the place is established, a visitor reads where to sign in; a
 /// signed-in person who may set it up reads the form that establishes it, and anyone else reads who may. Who may: the
 /// person whose DID <c>Tangent:Operator</c> names, or, with none named, whoever types the setup code the server wrote
-/// to its log at this start. Posting the form, with its antiforgery token, sends <see cref="Establish"/>; once it
+/// to its log at this start. Posting the form under <see cref="FormToken.Validate"/>, with its antiforgery token from a
+/// session, sends <see cref="Establish"/>; once it
 /// commits the operator joins the administrator role and reads the site's pointers here. After that only the operator
 /// and the proprietor find anything at this address, and a form posted to it is refused as already set up before
 /// anything else is asked; to everyone else it answers as a missing resource. Every other page of the tree answers
 /// this resource until the place is established (<see cref="FirstRunGate"/>).</summary>
 [AnswersBeforeFirstRun]
 public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, SetupCode setupCode,
-    WriteLoop writer, IAntiforgery antiforgery, RoleCollection roles, IServer server, ILogger<FirstRunController> logger) : ControllerBase
+    WriteLoop writer, RoleCollection roles, IServer server, ILogger<FirstRunController> logger) : ControllerBase
 {
     /// <summary>The page's path under the base URL.</summary>
     public const string Path = "/first-run";
@@ -62,15 +62,9 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
                 : NotHere();
         if (PersonId(User) is not { } personId)
             return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Setting up the Tangent Space needs a signed-in person.", Capabilities.SignIn).ToResult();
-        try
-        {
-            await antiforgery.ValidateRequestAsync(HttpContext);
-        }
-        catch (AntiforgeryValidationException)
-        {
+        if (!await FormToken.Validate(HttpContext))
             return new Problem(StatusCodes.Status400BadRequest, "Open the form again",
                 "This form’s token is missing or has expired, so nothing was set up.").ToResult();
-        }
 
         var pinned = options.Value.Operator;
         if (pinned is not null && pinned != personId)

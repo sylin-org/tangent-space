@@ -21,7 +21,8 @@ using Tangent.Writer;
 namespace Tangent;
 
 /// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder,
-/// the HTML projection, first run's gate, and what every start makes sure of: the roles and first run.</summary>
+/// the HTML projection, first run's gate, the delegated agent door, and what every start makes sure of: the roles, first
+/// run and the pre-registered client.</summary>
 public sealed class TangentModule : KoanModule
 {
     /// <summary>The key Koan reads the base URL from. A Tangent Space always has one: every absolute link derives from
@@ -54,6 +55,7 @@ public sealed class TangentModule : KoanModule
         // The controllers of this assembly, whichever assembly hosts the composition.
         services.AddKoanControllersFrom<TangentModule>();
         Participants.ParticipantsComposition.AddParticipants(services);
+        Delegates.DelegatesComposition.AddDelegates(services);
 
         // The HTML projection: each resource type names its component; the formatter goes first so a request
         // without a preference reads a page, and every other type keeps Koan's JSON.
@@ -63,7 +65,8 @@ public sealed class TangentModule : KoanModule
             .Add<Problem, ProblemView>(problem => problem.Title)
             .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignInView.Frame)
             .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame)
-            .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame));
+            .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame)
+            .Add<Delegates.Consent, Delegates.ConsentView>(consent => "Approve an agent · " + consent.Place, frame: Delegates.ConsentView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
         {
@@ -80,6 +83,7 @@ public sealed class TangentModule : KoanModule
     {
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);
+        await Delegates.DelegateClient.Seed(services, ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 
