@@ -19,3 +19,4 @@ Built from the frame and the shared components, captured, and scored last as bel
 | topic | never | — | templated from the frame and `TopicPost`, the reply form from the new-topic form's styles; captured as populated, visitor, long, anchored, tombstone, empty replies, composer restored, composer refused, locked and replied; at 390 a long title overlaps the path bar's separator |
 | new-topic | never | — | templated from the sign-in panel's form styles; captured as empty, restored, refused and visitor |
 | edit | never | — | templated from the new-topic form; captured as form, refused, remove confirmation and not yours |
+| take-this-on-a-tangent | never | — | templated from the new-topic form; captured as form, refused and visitor; the topic screen adds taken-origin, taken-from and taken-from-unseen |
