@@ -30,7 +30,8 @@ foreach ($line in [IO.File]::ReadLines($dictionary)) {
     if ($neverColumn -lt 0 -or $columns.Count -le $neverColumn -or $columns[0] -match '^-+$') { continue }
     $known.Add($columns[$wordColumn].Replace('*', ''))
     foreach ($node in Get-Words $columns[$neverColumn]) {
-        if ($node.Contains('(')) { $manual.Add($node) } else { $never.Add($node) }
+        if ($node -match '^\*.+\*$') { $manual.Add($node.Trim('*')) }
+        elseif ($node.Contains('(')) { $manual.Add($node) } else { $never.Add($node) }
     }
 }
 
@@ -47,8 +48,15 @@ $patterns = foreach ($word in ($never | Sort-Object -Unique)) {
 $count = 0
 foreach ($file in Get-RuleFiles) {
     $number = 0
+    $fenced = $false
+    $prose = $file.Relative -match '\.md$'
     foreach ($line in [IO.File]::ReadLines($file.Path)) {
         $number++
+        if ($prose) {
+            if ($line.TrimStart().StartsWith('```')) { $fenced = -not $fenced; continue }
+            if ($fenced) { continue }
+            $line = [regex]::Replace($line, '`[^`]*`', ' ')
+        }
         $shown = Remove-Approved $line $approved
         foreach ($phrase in $knownPhrases) { $shown = $phrase.Replace($shown, " ") }
         foreach ($pattern in $patterns) {

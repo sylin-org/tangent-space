@@ -1,24 +1,21 @@
-# Shared by the rule checks: lists the plain files of the tree.
+# Shared by the rule checks: lists the prose and source files of the tree.
 # Each file comes back as @{ Path = <full path>; Relative = <path from the tree base, forward slashes> }.
 
 $script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'poc'
 $script:ExcludedDirectories = '.git', 'node_modules', 'bin', 'obj'
 $script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md'
-$script:BinaryExtensions = '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.svg', '.woff', '.woff2', '.ttf', '.otf',
-    '.zip', '.gz', '.tar', '.7z', '.pdf', '.dll', '.exe', '.pdb', '.sqlite', '.db', '.mp3', '.mp4', '.webm', '.wasm', '.map'
+$script:TextExtensions = '.md', '.cs', '.razor', '.ts', '.vue', '.js', '.mjs', '.json', '.ps1', '.yaml', '.yml', '.css', '.html'
+$script:TextNames = 'Dockerfile'
 
 function Get-TreeBase {
     [IO.Path]::GetDirectoryName($PSScriptRoot)
 }
 
-function Test-BinaryFile([string]$Path) {
-    if ($script:BinaryExtensions -contains [IO.Path]::GetExtension($Path).ToLowerInvariant()) { return $true }
-    $stream = [IO.File]::OpenRead($Path)
-    try {
-        $buffer = New-Object byte[] 8192
-        $count = $stream.Read($buffer, 0, $buffer.Length)
-        return [Array]::IndexOf($buffer, [byte]0, 0, $count) -ge 0
-    } finally { $stream.Dispose() }
+# Only prose and source files are read: not a licence text, not git configuration, not a root dotfile.
+function Test-TextFile([string]$Path, [bool]$AtBase) {
+    $name = [IO.Path]::GetFileName($Path)
+    if ($AtBase -and $name.StartsWith('.')) { return $false }
+    ($script:TextExtensions -contains [IO.Path]::GetExtension($Path).ToLowerInvariant()) -or ($script:TextNames -contains $name)
 }
 
 function Get-RuleFiles {
@@ -35,7 +32,7 @@ function Get-RuleFiles {
             if ([IO.Directory]::Exists($node)) {
                 if ($script:ExcludedDirectories -contains $name) { continue }
                 $pending.Push($node)
-            } elseif (-not (Test-BinaryFile $node)) {
+            } elseif (Test-TextFile $node ($directory -eq $base)) {
                 @{ Path = $node; Relative = $relative }
             }
         }
