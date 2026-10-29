@@ -76,10 +76,16 @@
     /// <summary>Whether the composer island takes the form: for a participant who may start a Topic here.</summary>
     private bool Composing => Model.Gate is null && Model.Who is not null;
 
-    /// <summary>The composer's props: whose drafts these are and the Tangent they are kept under. A new Topic's address
-    /// depends on the slug its title yields, so no address names it by TID alone.</summary>
+    /// <summary>The composer's props: whose drafts these are, the Tangent they are kept under, and the prefix of the
+    /// address that names a new Topic by its root's TID until its slug is known.</summary>
     private string? ComposerProps() => Composing
-        ? System.Text.Json.JsonSerializer.Serialize(new { participant = Model.Who!.Id, scope = "tangent:" + Model.Tangent, noun = Article ? "article" : "topic" })
+        ? System.Text.Json.JsonSerializer.Serialize(new
+        {
+            participant = Model.Who!.Id,
+            scope = "tangent:" + Model.Tangent,
+            locate = Model.TangentAddress + "/",
+            noun = Article ? "article" : "topic"
+        })
         : null;
 
     /// <summary>The field the page opens on: the first one a refusal concerns, else the title.</summary>

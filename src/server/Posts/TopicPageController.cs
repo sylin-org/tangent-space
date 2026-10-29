@@ -20,7 +20,8 @@ namespace Tangent.Posts;
 /// Post, marked; at the root's own address, from the start, the root marked. Reading moves no checkpoint: a signed-in
 /// reader's page carries the form that moves it through what the page shows (<see cref="CheckpointController"/>). A reader without <see cref="Bit.View"/> on the Tangent receives its gate,
 /// and one for whom the Tangent is absent — or an address no Topic or Post of this Topic answers — receives what an
-/// address with nothing at it receives. Every read is bounded and keyed: the Tangent; the rows capability is computed
+/// address with nothing at it receives. At <c>/t/{tangent}/{tid}</c>, where no Topic has that slug, the root with that TID
+/// answers a redirect to its Topic's address. Every read is bounded and keyed: the Tangent; the rows capability is computed
 /// from, once for the page; the root by slug; the anchor by Id; at most two ranges of the window index; the reader's
 /// checkpoint on the Topic; and the people on the page.</summary>
 public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
@@ -59,7 +60,16 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var place = rows.For(null);
         if (!place.Exists) return Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
         if (inTangent is not { } tangentRow) return Gated(Capabilities.Absent);
-        if (!Slug.IsValid(topic) || await TopicWindow.Topic(tangentRow.Id, topic, ct) is not { } root) return Gated(Capabilities.Absent);
+        if (!Slug.IsValid(topic)) return Gated(Capabilities.Absent);
+        if (await TopicWindow.Topic(tangentRow.Id, topic, ct) is not { } root)
+        {
+            // A segment no Topic's slug names, in a TID's shape, is the TID of a Topic's root: it answers a redirect to
+            // the Topic's address, so a sender who minted the TID finds the Topic it started without knowing its slug.
+            // A slug is read first, so a slug that looks like a TID names its own Topic.
+            if (postId is null && Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentRow.Id)
+                return Redirect(Configured() + "/t/" + Uri.EscapeDataString(tangentRow.Id) + "/" + Uri.EscapeDataString(started.Slug ?? started.Id));
+            return Gated(Capabilities.Absent);
+        }
 
         Post? anchor = null;
         if (postId is not null)

@@ -81,6 +81,55 @@ public sealed partial class ReplyFormTests
     }
 
     [Fact]
+    public async Task At_a_removed_replys_address_the_form_answers_the_topic_and_never_the_tombstone()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var root = await Started(writer, Ada, "Glazes", "Which one cracks least?");
+        var gone = await Replied(writer, root, Ada, "Said and taken back.");
+        var row = (await Post.Get(gone.Id, Cancellation))!;
+        row.Removed = true;
+        row.RemovedBy = Ada;
+        row.RemovedAt = DateTimeOffset.UtcNow;
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(row), Cancellation));
+        using var bea = await SignedIn(tangentSpace, Bea);
+
+        var (atTombstone, _) = await Page(bea.Client, PostPath(root, gone));
+
+        var form = ReplyFormOf(atTombstone);
+        Assert.Contains("<input type=\"hidden\" name=\"parent\" />", form);
+        Assert.Contains("<p class=\"reply-form-to\" data-reply-to hidden>", form);
+    }
+
+    [Fact]
+    public async Task A_topics_root_tid_under_its_tangent_answers_a_redirect_to_the_topic_while_a_slug_that_looks_like_a_tid_names_its_own_topic()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var root = await Started(writer, Ada, "Kiln days", "First and third Thursday.");
+        var reply = await Replied(writer, root, Bea, "Noted.");
+        var elsewhere = await Started(writer, Ada, "Wicks", "Cotton or hemp?", Articles);
+        // A Topic whose title yields a slug in a TID's shape: its slug names it, whatever TID it equals.
+        var lookalike = await Started(writer, Bea, Tids.Mint(), "A title that is a TID.");
+        using var visitor = Agent(tangentSpace);
+
+        var found = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/" + root.Id, json: true);
+        var ofReply = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/" + reply.Id, json: true);
+        var ofOtherTangent = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/" + elsewhere.Id, json: true);
+        var unknown = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/" + Tids.Mint(), json: true);
+        var bySlug = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/" + lookalike.Slug, json: true);
+
+        Assert.Equal((HttpStatusCode.Found, BaseUrl + TopicPath(root)), (found.Status, found.Location));
+        Assert.Equal(HttpStatusCode.NotFound, ofReply.Status);
+        Assert.Equal(HttpStatusCode.NotFound, ofOtherTangent.Status);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.Status);
+        Assert.True(Tid.IsValid(lookalike.Slug));
+        Assert.Equal((HttpStatusCode.OK, lookalike.Id), (bySlug.Status, bySlug.Json.GetProperty("id").GetString()));
+        var landed = await Send(visitor, HttpMethod.Get, new Uri(found.Location!).AbsolutePath, json: true);
+        Assert.Equal(root.Id, landed.Json.GetProperty("id").GetString());
+    }
+
+    [Fact]
     public async Task A_reader_who_may_not_reply_reads_the_gates_sentence_and_holds_no_form()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);

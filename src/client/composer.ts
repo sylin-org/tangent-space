@@ -46,10 +46,38 @@ export function isTid(value: unknown): value is string {
   return typeof value === 'string' && tidShape.test(value)
 }
 
-// Where a participant's draft for a scope is kept: the Topic (topic:{id}), the Post a reply answers (post:{id}),
-// or the Tangent a Topic starts in (tangent:{slug}).
+// Where a participant's draft for a scope is kept: the Topic (topic:{id}), the Post a reply answers, under its Topic
+// (topic:{id}:post:{id}), or the Tangent a Topic starts in (tangent:{slug}).
 export function draftKey(participant: string, scope: string): string {
   return `tangent:draft:${encodeURIComponent(participant)}:${scope}`
+}
+
+// The scope of a reply to one Post of a Topic, kept under the Topic so the Topic's page finds it even when that Post
+// is not in its window.
+export function postScope(topicScope: string, post: string): string {
+  return `${topicScope}:post:${post}`
+}
+
+// Every draft a participant keeps in a scope and in the scopes under it — a Topic's own and those of replies to its
+// Posts — by key, the scope's own first. Without storage there are none.
+export function draftsUnder(participant: string, scope: string): { key: string; draft: Draft }[] {
+  const own = draftKey(participant, scope)
+  const under = own + ':post:'
+  const keys: string[] = []
+  try {
+    const storage = store()
+    for (let index = 0; storage && index < storage.length; index++) {
+      const key = storage.key(index)
+      if (key === own || key?.startsWith(under)) keys.push(key!)
+    }
+  } catch {
+    return []
+  }
+  keys.sort((a, b) => (a === own ? -1 : b === own ? 1 : a.localeCompare(b)))
+  return keys.flatMap((key) => {
+    const draft = readDraft(key)
+    return draft ? [{ key, draft }] : []
+  })
 }
 
 function store(): Storage | null {
@@ -139,12 +167,17 @@ export async function send(action: string, fields: URLSearchParams, timeout: num
   return { kind: 'uncertain' }
 }
 
-// Asks whether a Post is at its address: found, not found, or not known.
-export async function reconcile(address: string, timeout: number): Promise<Settled> {
+// Asks whether the Post with this TID is at its address: found, where the answer names the TID as the Topic it reads
+// (a new Topic's root, after the redirect from its TID to its slug) or as the Post it was opened around (a reply);
+// not found, where nothing answers there or what answers is another Post; or not known.
+export async function reconcile(address: string, id: string, timeout: number): Promise<Settled> {
   try {
     const response = await bounded(address, { method: 'GET', headers: { Accept: 'application/json' } }, timeout)
-    if (response.ok) return { kind: 'posted', address }
     if (response.status === 404) return { kind: 'missing' }
+    if (response.ok) {
+      const page = (await response.json()) as { id?: unknown; anchor?: unknown }
+      return page.id === id || page.anchor === id ? { kind: 'posted', address: response.url || address } : { kind: 'missing' }
+    }
   } catch {}
   return { kind: 'uncertain' }
 }

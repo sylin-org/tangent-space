@@ -176,6 +176,8 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
 
         await page.goto(target.href, { waitUntil: 'networkidle' })
         for (const selector of state.check ?? []) await page.check(selector)
+        for (const [selector, value] of Object.entries(state.values ?? {}))
+          await page.$eval(selector, (field, given) => ((field as HTMLInputElement).value = given), value)
         for (const [selector, value] of Object.entries(state.fill ?? {})) {
           if (value === setupCodeFill && !setupCode) throw new Error(`The ${state.name} state types the setup code, and the server logged none.`)
           await page.fill(selector, value === setupCodeFill ? setupCode! : value)

@@ -29,6 +29,9 @@ export interface State {
   fill?: Readonly<Record<string, string>>
   /** Radio buttons or checkboxes checked once the page has settled, before any click. */
   check?: readonly string[]
+  /** Hidden fields given a value before any fill, by selector, such as a form's TID, so a state that writes repeats
+   *  one Post in every width and theme rather than adding another. */
+  values?: Readonly<Record<string, string>>
   /** Reloaded once the fields are filled, before any click, so the state is what the page keeps of them. */
   reload?: boolean
   /** A selector clicked once the page has settled; the state is what the click shows in the page. */
@@ -202,9 +205,10 @@ export const screens: Readonly<Record<string, Screen>> = {
   // fortieth reply, marked in the middle of its window, the composer replying to it; a Topic with a reply a moderator
   // removed; and a Topic without replies. Then the composer: her reply typed and the page opened again, which brings
   // it back; a reply of nothing but spaces, refused above the field; a locked Topic, whose gate she reads instead; and
-  // last, since it writes, a reply sent through the composer, which lands on the reply's address. A signed-in state
-  // cancels the seen post the seen island sends once the window's end is on screen, so its control stays on the page
-  // and every width and theme reads the same checkpoints.
+  // last, since it writes, a reply sent through the composer, which lands on the reply's address; it carries the same
+  // TID in every width and theme, so the server's idempotency keeps it one Post. A signed-in state cancels the seen
+  // post the seen island sends once the window's end is on screen, so its control stays on the page and every width
+  // and theme reads the same checkpoints.
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
     states: [
@@ -269,6 +273,7 @@ export const screens: Readonly<Record<string, Screen>> = {
         seed: 'topic',
         signedIn: true,
         cancel: '/t/discussions/what-kind-of-discussions/seen',
+        values: { '#reply-form-id': '3mwfixedrep22' },
         fill: { '#reply-body': 'Fridays it is. I’ll bring a link about glue.' },
         click: '.post-form-submit',
         waitFor: 'article.post.is-anchor',
