@@ -39,7 +39,7 @@ A failure escalates one step at a time: the builder re-runs the failing check at
 - One package, one session, one model. Split a package only when its pieces are independent — no piece needs another's result, and none touch the same files.
 - Fan out for bulk: an audit across many files, a review of a whole slice, research across many sources. A fan-out costs roughly fifteen times a conversation; it is for breadth, never for a chain.
 - Independence is the point of a subagent review or score: the reviewer and the scorer never see the builder's reasoning.
-- Parallel sessions run in worktrees, at most four at once, each on its own branch; merging is Leo's call.
+- Parallel sessions run in worktrees, at most four at once, each on its own branch cut from `dev`. An accepted package merges into `dev` with `--no-ff`, `dev` is pushed as it lands, and the package's worktree, branch and session are removed; no more branches exist than packages in flight. `main` fast-forwards from `dev` when a slice closes. Koan packages do the same against Koan's `dev`, and Tangent re-pins.
 - The lead keeps working while sessions run and reads their reports when they arrive; it intervenes when a session is off track or missing context, and never predicts a result.
 - Koan work runs in the Koan checkout under Koan's contributor law, by a first-of-its-kind builder, and is reviewed at the lead's model.
 - Fast mode is for interactive, mechanical stretches on Opus 5.5 only; it changes speed, not the model.
