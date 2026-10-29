@@ -164,14 +164,30 @@ h3 {
   white-space: nowrap;
 }
 
-/* Who is signed in: their picture, round, or the first letter of their handle, and the handle. */
-.masthead-who {
+/* The account: the signed-in participant's picture, round, or the first letter of their handle, with a chevron; it
+ * opens in the page, under the masthead, with their handle and the way to sign out. Never a dialog. */
+.account {
+  position: relative;
+}
+
+.account-button {
+  height: 44px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
-  color: var(--ts-text-2);
-  font: var(--ts-type-ui-small);
+  gap: 6px;
+  padding: 0 4px;
+  border-radius: 22px;
+  color: var(--ts-text-3);
+  list-style: none;
+}
+
+.account-button::-webkit-details-marker {
+  display: none;
+}
+
+.account-button:hover,
+.account[open] .account-button {
+  background: var(--ts-hover);
 }
 
 .who-mark {
@@ -187,10 +203,62 @@ h3 {
   object-fit: cover;
 }
 
+.account-button:hover .who-mark,
+.account[open] .who-mark {
+  background: var(--ts-line);
+}
+
+.account-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 248px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-raised);
+  box-shadow: var(--ts-shadow-popover);
+}
+
+.account-who {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-label {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
 .who-handle {
   overflow: hidden;
+  color: var(--ts-text);
+  font: var(--ts-type-ui-large);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.account-sign-out {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text);
+  font: var(--ts-type-ui-small);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.account-sign-out:hover {
+  background: var(--ts-hover);
 }
 
 .masthead-actions {
@@ -499,12 +567,19 @@ h3 {
     padding: 0 16px;
   }
 
-  .masthead-who {
-    padding-right: 10px;
+  .account-button {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
   }
 
-  .who-handle {
-    max-width: 140px;
+  .account-chevron {
+    display: none;
+  }
+
+  .who-mark {
+    width: 30px;
+    height: 30px;
   }
 }
 

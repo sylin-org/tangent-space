@@ -9,9 +9,9 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
     public string Initial => Place.Length > 0 ? char.ToUpperInvariant(Place[0]).ToString() : "T";
 }
 
-/// <summary>Who is signed in, as the masthead shows them: their handle, and their avatar where their profile has
-/// one.</summary>
-public sealed record Who(string Handle, string? Avatar = null)
+/// <summary>Who is signed in, as the masthead shows them: their handle, their avatar where their profile has one, and
+/// where they sign out, coming back to the page they are on.</summary>
+public sealed record Who(string Handle, string? Avatar = null, string? SignOut = null)
 {
     /// <summary>The mark drawn without an avatar: the first letter of the handle.</summary>
     public string Initial => Handle.Length > 0 ? char.ToUpperInvariant(Handle[0]).ToString() : "?";

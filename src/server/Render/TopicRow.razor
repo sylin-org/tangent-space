@@ -1,0 +1,118 @@
+@using System.Globalization
+@using Tangent.Tangents
+@* One Topic in a Tangent's list. In a discussions Tangent it is a row of the table: a dot when it is new to the
+   reader, its title with any pin or lock, who started it and its opening words, the author's mark, its replies with
+   how many Posts are new, and when it last gained a Post. In an articles Tangent it is a card: the date, the title in
+   display type, the opening words, the author and the replies. Either way the whole of it leads to the Topic. *@
+@if (Article)
+{
+    <article class="article-card@(Model.New ? " is-new" : "")">
+        <p class="article-card-date">
+            <time datetime="@Iso(Model.CreatedAt)">@When(Model.CreatedAt)</time>
+            @Flags()
+        </p>
+        <h3 class="article-card-title"><a href="@Model.Address">@Model.Title</a></h3>
+        @if (Model.Opening.Length > 0)
+        {
+            <p class="article-card-opening">@Model.Opening</p>
+        }
+        <p class="article-card-foot">
+            @Mark(Model.Author, "author-mark")
+            <span class="article-card-author">@Model.Author.Name</span>@AgentTag()
+            <span aria-hidden="true">·</span>
+            <span>@(Model.ReplyCount == 0 ? "No replies yet" : Count(Model.ReplyCount, "reply", "replies"))</span>
+            @if (Model.New)
+            {
+                <span class="new-label">@NewWords()</span>
+            }
+        </p>
+    </article>
+}
+else
+{
+    <a class="topic-row@(Model.New ? " is-new" : "")" href="@Model.Address">
+        <span class="topic-row-dot">
+            @if (Model.New)
+            {
+                <span class="new-dot" role="img" aria-label="New"></span>
+            }
+        </span>
+        <span class="topic-row-body">
+            <span class="topic-row-title">@Model.Title @Flags()</span>
+            <span class="topic-row-opening"><span class="topic-row-author">@Model.Author.Name</span>@AgentTag()@(Model.Opening.Length > 0 ? ": " + Model.Opening : "")</span>
+        </span>
+        <span class="topic-row-people">@Mark(Model.Author, "author-mark")</span>
+        <span class="topic-row-replies">
+            <span class="topic-row-count">@Model.ReplyCount.ToString(CultureInfo.InvariantCulture)<span class="topic-row-count-word">@(Model.ReplyCount == 1 ? " reply" : " replies")</span></span>
+            @if (Model.New)
+            {
+                <span class="new-label">@NewWords()</span>
+            }
+        </span>
+        <span class="topic-row-latest"><time datetime="@Iso(Model.LastActivityAt)">@When(Model.LastActivityAt)</time></span>
+    </a>
+}
+
+@code {
+    [Parameter, EditorRequired] public TangentPage.Topic Model { get; set; } = default!;
+
+    /// <summary>Whether the Topic is drawn as an article's card rather than a row of the table.</summary>
+    [Parameter] public bool Article { get; set; }
+
+    /// <summary>A time as the list shows it: the time of day for today, the month and day for this year, the full
+    /// date otherwise; in UTC, which the <c>datetime</c> beside it states.</summary>
+    public static string When(DateTimeOffset at, DateTimeOffset now)
+    {
+        var utc = at.ToUniversalTime();
+        var today = now.ToUniversalTime();
+        if (utc.Date == today.Date) return utc.ToString("h:mm tt", CultureInfo.InvariantCulture);
+        return utc.Year == today.Year
+            ? utc.ToString("MMM d", CultureInfo.InvariantCulture)
+            : utc.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+    }
+
+    public static string Count(int count, string one, string many)
+        => count.ToString(CultureInfo.InvariantCulture) + " " + (count == 1 ? one : many);
+
+    private static string When(DateTimeOffset at) => When(at, DateTimeOffset.UtcNow);
+
+    private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+    /// <summary>"New" for a Topic the reader has seen none of, otherwise how many of its Posts are new to them.</summary>
+    private string NewWords() => Model.NewPosts > Model.ReplyCount ? "New" : Model.NewPosts.ToString(CultureInfo.InvariantCulture) + " new";
+
+    private RenderFragment AgentTag() => builder =>
+    {
+        if (Model.Author.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"agent-tag\">Agent</span>");
+    };
+
+    private RenderFragment Flags() => builder =>
+    {
+        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"topic-flag\">Pinned</span>");
+        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"topic-flag\">Locked</span>");
+    };
+
+    /// <summary>A participant's mark: their avatar, or the first letter of their name; round for a person, square for
+    /// an agent.</summary>
+    public static RenderFragment Mark(TangentPage.Author author, string size) => builder =>
+    {
+        var shape = author.Kind == "agent" ? " mark-agent" : "";
+        if (author.Avatar is { Length: > 0 } avatar)
+        {
+            builder.OpenElement(0, "img");
+            builder.AddAttribute(1, "class", "mark " + size + shape);
+            builder.AddAttribute(2, "src", avatar);
+            builder.AddAttribute(3, "alt", "");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(4, "span");
+            builder.AddAttribute(5, "class", "mark " + size + shape);
+            builder.AddAttribute(6, "aria-hidden", "true");
+            var name = author.Name.TrimStart('@');
+            builder.AddContent(7, name.Length > 0 ? char.ToUpperInvariant(name[0]).ToString() : "?");
+            builder.CloseElement();
+        }
+    };
+}

@@ -1,0 +1,686 @@
+/* The Tangent page: the head with the Tangent's tile, name, description and what the page holds; the rail with the
+ * one list and who can read; the list, a table of Topics for a discussions Tangent and cards for an articles one;
+ * the empty state; the way to older Topics. Sizes follow the design reference's screens 02, 03 and 21. */
+
+.tone-coral { --tone: var(--ts-tangent-coral); --tone-tint: var(--ts-tangent-coral-tint); --tone-ink: var(--ts-tangent-coral-ink); }
+.tone-amber { --tone: var(--ts-tangent-amber); --tone-tint: var(--ts-tangent-amber-tint); --tone-ink: var(--ts-tangent-amber-ink); }
+.tone-jade { --tone: var(--ts-tangent-jade); --tone-tint: var(--ts-tangent-jade-tint); --tone-ink: var(--ts-tangent-jade-ink); }
+.tone-sky { --tone: var(--ts-tangent-sky); --tone-tint: var(--ts-tangent-sky-tint); --tone-ink: var(--ts-tangent-sky-ink); }
+.tone-iris { --tone: var(--ts-tangent-iris); --tone-tint: var(--ts-tangent-iris-tint); --tone-ink: var(--ts-tangent-iris-ink); }
+.tone-rose { --tone: var(--ts-tangent-rose); --tone-tint: var(--ts-tangent-rose-tint); --tone-ink: var(--ts-tangent-rose-ink); }
+
+/* The head: a band of surface across the page, its content as wide as the layout below it. */
+.tangent-head {
+  padding: 32px 0 28px;
+  background: var(--ts-surface);
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.tangent-head-inner {
+  width: min(100% - 2 * var(--ts-page-gutter), var(--ts-home-container));
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.tangent-tile {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 13px;
+  background: var(--tone-tint);
+}
+
+.tangent-tile-letter {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--tone-ink);
+  font: 600 32px/1 var(--ts-font-display);
+}
+
+.tangent-tile-edge {
+  height: 5px;
+  background: var(--tone);
+}
+
+.tangent-head-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tangent-title {
+  margin: 0;
+  font: 500 42px/1.05 var(--ts-font-display);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.tangent-description {
+  margin: 0;
+  max-width: 680px;
+  color: var(--ts-text-2);
+  font: italic 400 18px/1.4 var(--ts-font-display);
+}
+
+.tangent-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+  font-weight: 400;
+}
+
+.tangent-audience {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tangent-layout {
+  margin-top: 32px;
+}
+
+/* The rail: the one list there is, and who can read. */
+.rail-heading-spaced {
+  margin-top: 30px;
+}
+
+.rail-views {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-views a {
+  height: 36px;
+  margin: 0 -10px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui);
+  text-decoration: none;
+}
+
+.rail-views a:hover {
+  background: var(--ts-hover);
+}
+
+.rail-views a[aria-current="page"] {
+  background: var(--ts-hover);
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.rail-audience {
+  display: flex;
+  gap: 10px;
+}
+
+.rail-audience-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text-2);
+}
+
+.rail-audience-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.rail-audience-name {
+  color: var(--ts-text);
+  font: 600 14px/1.35 var(--ts-font-ui);
+}
+
+.rail-audience-note {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+/* The list's head: what it holds, its order, and the start button. */
+.topic-list-head {
+  min-height: 36px;
+  padding-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topic-list-head-ruled {
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.topic-list-title {
+  margin: 0;
+  color: var(--ts-text-2);
+  font: 600 13px/1.4 var(--ts-font-ui);
+  letter-spacing: 0;
+}
+
+.topic-list-order {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.topic-list-order::before {
+  content: "·";
+  margin-right: 10px;
+}
+
+.tangent-new {
+  height: 36px;
+  margin-left: auto;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  font: 600 13px/1 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.tangent-new:hover {
+  background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
+}
+
+/* The table of Topics. */
+.topic-table {
+  overflow: hidden;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-surface);
+}
+
+.topic-table-heading {
+  height: 38px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid var(--ts-line);
+  color: var(--ts-text-3);
+  font: var(--ts-type-caps);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.topic-table-topic {
+  flex: 1;
+  padding-left: 26px;
+}
+
+.topic-table-people,
+.topic-row-people {
+  width: 64px;
+  flex: none;
+}
+
+.topic-table-replies,
+.topic-row-replies {
+  width: 64px;
+  flex: none;
+  text-align: right;
+}
+
+.topic-table-latest,
+.topic-row-latest {
+  width: 96px;
+  flex: none;
+  text-align: right;
+}
+
+.topic-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topic-rows > li + li {
+  border-top: 1px solid var(--ts-line);
+}
+
+.topic-row {
+  padding: 16px 18px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.topic-row:hover {
+  background: var(--ts-hover);
+}
+
+.topic-row:focus-visible {
+  outline-offset: -2px;
+}
+
+.topic-row-dot {
+  width: 8px;
+  flex: none;
+  padding-top: 8px;
+}
+
+.new-dot {
+  width: 8px;
+  height: 8px;
+  display: block;
+  border-radius: 50%;
+  background: var(--ts-accent);
+}
+
+.topic-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topic-row-title {
+  font: 700 17px/1.35 var(--ts-font-ui);
+  overflow-wrap: anywhere;
+}
+
+.topic-row-opening {
+  margin-top: 2px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ts-text-2);
+  font: 400 13px/1.5 var(--ts-font-ui);
+}
+
+.topic-row-author {
+  color: var(--ts-text-2);
+}
+
+.topic-flag,
+.agent-tag {
+  margin-left: 6px;
+  padding: 2px 5px;
+  display: inline-block;
+  vertical-align: 2px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-tag);
+  color: var(--ts-text-3);
+  font: var(--ts-type-tag);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agent-tag {
+  border-color: var(--ts-agent-line);
+  color: var(--ts-agent);
+}
+
+.topic-row-people {
+  padding-top: 2px;
+  display: flex;
+}
+
+.mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ts-hover);
+  color: var(--ts-text);
+  font-family: var(--ts-font-ui);
+  font-weight: 600;
+  object-fit: cover;
+}
+
+.mark-agent {
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--ts-surface), 0 0 0 2px var(--ts-agent-ring);
+}
+
+.author-mark {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.topic-row-replies {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.topic-row-count {
+  font: 600 15px/1.3 var(--ts-font-ui);
+}
+
+.topic-row-count-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.new-label {
+  color: var(--ts-accent);
+  font: 700 11px/1.3 var(--ts-font-ui);
+}
+
+.topic-row-latest {
+  font: 600 13px/1.3 var(--ts-font-ui);
+}
+
+/* The articles: cards with the title in display type. */
+.article-card {
+  padding: 26px 0;
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.article-card:last-child {
+  border-bottom: 0;
+}
+
+.article-card-date {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  color: var(--ts-text-3);
+  font: 400 13px/1.45 var(--ts-font-ui);
+}
+
+.article-card-title {
+  margin: 8px 0 0;
+  font: 500 27px/1.15 var(--ts-font-display);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.article-list > .article-card:first-child .article-card-title {
+  margin-top: 10px;
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.article-card-title a {
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.article-card-title a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ts-line);
+}
+
+.article-card-opening {
+  margin: 10px 0 0;
+  max-width: 680px;
+  color: var(--ts-text-2);
+  font: 400 16px/1.55 var(--ts-font-display);
+}
+
+.article-card-foot {
+  margin: 14px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.article-card-foot .author-mark {
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+}
+
+.article-card-foot .agent-tag {
+  margin-left: 0;
+}
+
+.article-card-author {
+  color: var(--ts-text-2);
+  font-weight: 600;
+}
+
+.article-card-foot .new-label {
+  font-size: 12px;
+}
+
+/* The empty state: what is missing, and what the reader can do about it. */
+.topic-empty {
+  padding: 48px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-surface);
+  text-align: center;
+}
+
+.topic-list-head-ruled + .topic-empty {
+  margin-top: 24px;
+}
+
+.topic-empty-title {
+  margin: 0;
+  color: var(--ts-text);
+  font: var(--ts-type-card-title);
+  font-size: 24px;
+}
+
+.topic-empty-text {
+  margin: 0;
+  max-width: 420px;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui);
+}
+
+.topic-empty .tangent-new {
+  margin: 12px 0 0;
+}
+
+.topic-empty-link {
+  margin-top: 8px;
+  font: 600 14px/1.4 var(--ts-font-ui);
+}
+
+/* The way to older Topics and back. */
+.topic-pages {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.topic-pages a {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-surface);
+  color: var(--ts-text);
+  font: 600 13px/1 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.topic-pages a:hover {
+  background: var(--ts-hover);
+}
+
+.topic-pages-next {
+  margin-left: auto;
+}
+
+/* The phone: a smaller head, Topics as cards, and no start button, since phones read and reply. */
+@media (max-width: 719px) {
+  .tangent-head {
+    padding: 20px 0;
+  }
+
+  .tangent-head-inner {
+    width: calc(100% - 2 * var(--ts-phone-gutter));
+    gap: 12px;
+  }
+
+  .tangent-tile {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .tangent-tile-letter {
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .tangent-tile-edge {
+    height: 4px;
+  }
+
+  .tangent-head-text {
+    gap: 3px;
+  }
+
+  .tangent-title {
+    font-size: 28px;
+    line-height: 1.2;
+  }
+
+  .tangent-description {
+    font-size: 16px;
+  }
+
+  .tangent-meta {
+    color: var(--ts-text-3);
+    font-size: 12.5px;
+  }
+
+  .tangent-layout {
+    margin-top: 20px;
+  }
+
+  .tangent-new {
+    display: none;
+  }
+
+  .topic-table {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .topic-table-heading {
+    display: none;
+  }
+
+  .topic-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .topic-rows > li + li {
+    border-top: 0;
+  }
+
+  .topic-row {
+    padding: 16px 14px;
+    display: grid;
+    grid-template-columns: 8px auto 1fr auto;
+    grid-template-areas:
+      "dot body body body"
+      ". people replies latest";
+    gap: 12px 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-surface);
+  }
+
+  .topic-row-dot { grid-area: dot; }
+  .topic-row-body { grid-area: body; }
+
+  .topic-row-people {
+    grid-area: people;
+    width: auto;
+    padding-top: 0;
+  }
+
+  .topic-row-replies {
+    grid-area: replies;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    color: var(--ts-text-3);
+    font-size: 12.5px;
+    text-align: left;
+  }
+
+  .topic-row-count {
+    font: 400 12.5px/1.3 var(--ts-font-ui);
+  }
+
+  .topic-row-count-word {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .topic-row-replies .new-label {
+    font-size: 12.5px;
+  }
+
+  .topic-row-latest {
+    grid-area: latest;
+    width: auto;
+    align-self: center;
+    color: var(--ts-text-3);
+    font: 400 12.5px/1.3 var(--ts-font-ui);
+  }
+
+  .topic-row-opening {
+    font-size: 13.5px;
+  }
+
+  .article-card-title,
+  .article-list > .article-card:first-child .article-card-title {
+    font-size: 24px;
+  }
+
+  .topic-empty {
+    padding: 36px 20px;
+  }
+}

@@ -1,7 +1,8 @@
 @* The page around one resource's component: the stylesheet and the two scripts every page loads, absolute from
    the base URL. The theme script blocks in <head> so the saved appearance applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A resource
-   that names a frame is drawn inside it: the masthead with the place's mark and name, the path bar whose elbow
+   that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in,
+   their account as a disclosure in the page with their handle and the way to sign out; the path bar whose elbow
    hangs from the mark, and the footer with the appearance a visitor can choose. *@
 <!DOCTYPE html>
 <html lang="en">
@@ -24,17 +25,26 @@
         @if (frame.Who is { } who)
         {
             <div class="masthead-actions">
-                <span class="masthead-who">
-                    @if (who.Avatar is { } avatar)
-                    {
-                        <img class="who-mark" src="@avatar" alt="">
-                    }
-                    else
-                    {
-                        <span class="who-mark" aria-hidden="true">@who.Initial</span>
-                    }
-                    <span class="who-handle">@("@" + who.Handle)</span>
-                </span>
+                <details class="account">
+                    <summary class="account-button" aria-label="@("Account, @" + who.Handle)">
+                        @if (who.Avatar is { } avatar)
+                        {
+                            <img class="who-mark" src="@avatar" alt="">
+                        }
+                        else
+                        {
+                            <span class="who-mark" aria-hidden="true">@who.Initial</span>
+                        }
+                        <svg class="account-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
+                    </summary>
+                    <div class="account-panel">
+                        <p class="account-who"><span class="account-label">Signed in as</span><span class="who-handle">@("@" + who.Handle)</span></p>
+                        @if (who.SignOut is { } signOut)
+                        {
+                            <a class="account-sign-out" href="@signOut">Sign out</a>
+                        }
+                    </div>
+                </details>
             </div>
         }
     </header>

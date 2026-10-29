@@ -4,6 +4,7 @@ import './fonts.css'
 import './tokens.css'
 import './layout.css'
 import './sign-in.css'
+import './tangent-page.css'
 import { mountIslands } from './islands'
 
 mountIslands(document)
