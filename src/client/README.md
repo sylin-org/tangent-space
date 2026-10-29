@@ -22,6 +22,22 @@ npm test
 
 `npm run build` type-checks and writes `dist/tangent.css`, `dist/tangent.js` and `dist/fonts/`. URLs inside the stylesheet are relative, so the files can be served under any path of the base URL. `npm test` builds the stylesheet in memory and checks that every token in `tests/reference/tokens.css` and `tests/reference/tokens.json`, the design reference's tokens kept verbatim, is declared in the same block with the same value.
 
+## Captures for the visual loop
+
+```
+npm ci
+npx playwright install chromium
+npm run capture -- door
+```
+
+Playwright is a devDependency, and `npx playwright install chromium` fetches its Chromium: the one download, Playwright's own. `npm run capture -- <screen>` type-checks `capture/`, builds `src/server` and starts it the way the test fixture starts a Tangent Space — on a free loopback port over a new temp data folder, with any `Tangent:*` settings a state names — then stops it and deletes the folder. Pages render with the base URL `http://tangent.localhost`, which the browser maps to that port, so no capture shows the port. `--url <base URL>` captures a Tangent Space that is already running instead; `--server <path>` starts a published `Tangent.Server` instead of building one.
+
+Every screen is captured at 1440, 1024 and 390 wide, in light and dark (the device's colour scheme emulated and the stored theme choice set), in every state the registry declares: device scale factor 1, animations off, the network idle and `document.fonts.ready` awaited. Only the Tangent Space answers the browser; any other request is refused. A page that opens a dialog fails the round. The output is `.dream-loop/<screen>/<n>/<width>-<theme>-<state>.png` at the repository root, `<n>` the next round for that screen, with a `README.md` describing the round; `.dream-loop/` is ignored by git, and a failed round leaves no folder.
+
+`capture/screens.ts` is the registry. `screens` names each screen's path and its states; a state is reached by a query, by settings the Tangent Space starts with, or by a click in the page. `references` names the reference's file for a screen at each width the reference draws it: 1440 for every reference screen, 390 for the three phone screens.
+
+The design reference is configured, never part of the tree: put the package (the folder holding `screens/`, `spec/` and `tokens/`) at `.dream-loop/reference`, or set `TANGENT_REFERENCE` to its folder; the script says so when neither is there. Beside the captures it renders the reference's screen for each width and theme as `<width>-<theme>-reference.png`, at the size the screen is drawn, with the reference's font requests answered by the bundled fonts so it renders offline in the same typefaces. The round's `README.md` names each width the reference does not draw and each screen it does not have — the door, take this on a tangent, bring your agent, consent, connections. A screen the reference has and Tangent does not yet, such as `sign-in`, gets a round of the reference alone.
+
 ## A page
 
 ```html

@@ -8,12 +8,15 @@
   },
   "scripts": {
     "build": "tsc --noEmit && vite build",
+    "capture": "tsc -p capture && node capture/capture.ts",
     "test": "vitest run"
   },
   "devDependencies": {
     "@fontsource-variable/newsreader": "^5.3.0",
     "@fontsource-variable/schibsted-grotesk": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@types/node": "^26.6.6",
+    "playwright": "^1.64.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
