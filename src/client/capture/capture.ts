@@ -73,7 +73,9 @@ console.log(`Round ${round} of ${name}: ${finished}`)
 
 async function launch(args: string[] = []): Promise<{ browser: Browser; close(): Promise<void> }> {
   // The run handles interrupts itself, so Playwright does not exit before the round and the server are undone.
-  const browser = await chromium.launch({ args, handleSIGINT: false, handleSIGTERM: false })
+  // Text is smoothed in greyscale: subpixel smoothing fringes glyphs with colours no token holds, and a scorer
+  // reading the captures would take them for the page's own.
+  const browser = await chromium.launch({ args: ['--disable-lcd-text', ...args], handleSIGINT: false, handleSIGTERM: false })
   const forget = onInterrupt(() => browser.close())
   return { browser, close: () => (forget(), browser.close()) }
 }
