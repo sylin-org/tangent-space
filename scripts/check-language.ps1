@@ -38,7 +38,7 @@ if ($never.Count -eq 0) { Write-Violation 'docs/LANGUAGE.md' 1 $rule 'no Never c
 if ($manual.Count -gt 0) { 'manual: {0}' -f (($manual | Sort-Object -Unique) -join '; ') }
 
 # A dictionary word is removed from the line first, so a phrase such as "The door" does not report its parts.
-$knownPhrases = @($known | Sort-Object Length -Descending | ForEach-Object { New-WordRegex $_ })
+$knownPhrases = @($known | Sort-Object Length -Descending | ForEach-Object { New-WordRegex $_ -Plural })
 $approved = Get-Approvals 'check-language.approved'
 $patterns = foreach ($word in ($never | Sort-Object -Unique)) {
     [pscustomobject]@{ Word = $word; Regex = New-WordRegex $word -Plural }

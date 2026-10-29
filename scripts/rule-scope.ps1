@@ -61,7 +61,7 @@ function Write-Violation([string]$Relative, [int]$Line, [string]$Rule, [string]$
 
 # A regex for a word or phrase as a whole word, with an optional plural s when asked.
 function New-WordRegex([string]$Word, [switch]$Plural) {
-    $body = [regex]::Escape($Word) -replace '\ ', '\s+'
+    $body = [regex]::Escape($Word).Replace('\ ', '\s+')
     $tail = if ($Plural) { 's?' } else { '' }
     [regex]::new('(?<![\p{L}\p{N}_])' + $body + $tail + '(?![\p{L}\p{N}_])', 'IgnoreCase')
 }
