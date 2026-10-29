@@ -4,8 +4,8 @@ using Tangent.Writer;
 
 namespace Tangent.Space;
 
-/// <summary>Appends the event a mention leaves on the log, one per mentioned participant as its target, the way the
-/// command that writes a Post with a mention will: numbered by the writer, inside its transaction.</summary>
+/// <summary>Appends a mention event on its own, numbered by the writer inside its transaction, for a proof that needs one
+/// the commands that write a Post would not write: a mention whose target may no longer view its Tangent.</summary>
 public sealed record Mentioned(string TangentId, string TopicId, string PostId, string ActorId, string TargetId) : ICommand<Event>
 {
     public async Task<Outcome<Event>> Run(Sequences sequences, CancellationToken ct)

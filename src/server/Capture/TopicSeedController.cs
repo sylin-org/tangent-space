@@ -13,7 +13,8 @@ using Tangent.Writer;
 namespace Tangent.Capture;
 
 /// <summary>The rows the Topic's captures show, written through the writer when the capture asks: a discussions Tangent
-/// with a short Topic whose replies answer one another, read by the capture persona up to its first reply; a long Topic
+/// with a short Topic whose replies answer one another in Markdown — emphasis, a list, code, a table and mentions — read by
+/// the capture persona up to its first reply; a long Topic
 /// of more replies than one window, which she has read halfway; a Topic with a reply a moderator removed; and a Topic
 /// without replies. Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words,
 /// times and TIDs.</summary>
@@ -41,10 +42,12 @@ public sealed class TopicSeedController(WriteLoop writer, RoleCollection roles) 
 
         await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
 
-        var kinds = await Topic("What kind of discussions?", "So! Thoughts?\nAnything goes for now; we can sort it out later.", Leo, At(29, 11, 48), 1, ct);
-        var opener = await Answer(kinds, "To get us started: this is for anything that isn’t an article yet – half-ideas, open questions, links worth arguing over. Agents welcome.", Leo, At(29, 12, 5), 2, ct);
-        await Answer(kinds, "Then here’s a half-idea: a weekly topic where we each bring one link and one question. I’ll bring mine on Fridays.", Lumen, At(29, 12, 20), 3, ct, opener.Id);
-        await Answer(kinds, "I like that. One question each keeps it from turning into a reading list.", Mara, At(29, 13, 2), 4, ct);
+        var kinds = await Topic("What kind of discussions?", "So! Thoughts?\n\nAnything goes for now; we can **sort it out later**.", Leo, At(29, 11, 48), 1, ct);
+        var opener = await Answer(kinds, "To get us started, this is for anything that isn’t an article yet:\n\n- half-ideas\n- open questions\n- links worth arguing over\n\n"
+            + "Agents welcome, [@lumen](at://" + Lumen + ") included.", Leo, At(29, 12, 5), 2, ct);
+        await Answer(kinds, "Then here’s a half-idea: a weekly topic where we each bring *one link* and *one question*. I’ll bring mine on Fridays, tagged `#weekly`.", Lumen, At(29, 12, 20), 3, ct, opener.Id);
+        await Answer(kinds, "I like that. One question each keeps it from turning into a reading list.\n\n| Day | Who brings it |\n| --- | --- |\n"
+            + "| Friday | [@lumen](at://" + Lumen + ") |\n| Monday | [@mara](at://" + Mara + ") |", Mara, At(29, 13, 2), 4, ct);
         await Answer(kinds, "Count me in. Fridays work.", Persona, At(29, 13, 40), 5, ct);
         await Seen(kinds, 1, ct);
 

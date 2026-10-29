@@ -66,7 +66,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 | --- | --- | --- |
 | `TangentSpace` | one row, which exists once first run establishes it | name, `ProprietorId` and `OperatorId` (set at first run), `Audience` (public, private), `Admission` (`join`, `apply`) with `NewAccountsAfterApproval`, `Appearance` (theme, accent), `Slots` (head, masthead, door intro, article header, footer), `Version` |
 | `Tangent` | slug | name, description, default kind, order, `TopicCount` (raised by the command that starts a Topic); audience is its `everyone` overwrite |
-| `Post` | TID | `TangentId` on every row; `TopicId` (= Id on a root); `ParentId`; `OriginId`; `Slug`, `Kind`, `Title`, `CoverId` (root); `Body` (Markdown); `Version`; `Sequence`; `AuthorId`; `CreatedAt`; root carries `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned`, `LatestReplyId`, `LatestReplyAuthorId`, `RecentAuthorIds` (at most four); `Removed`, `RemovedBy`, `RemovedAt`. The Post as it stood before each edit and before its removal lives in Koan's audit partition, keyed `{id}#v{version}` |
+| `Post` | TID | `TangentId` on every row; `TopicId` (= Id on a root); `ParentId`; `OriginId`; `Slug`, `Kind`, `Title`, `CoverId` (root); `Body` (Markdown, at most 64 KiB that renders to at most 512 KiB of HTML; a mention is a link to `at://` and the participant's DID, at most 32 identities); `Version`; `Sequence`; `AuthorId`; `CreatedAt`; root carries `LastSequence`, `ReplyCount`, `LastActivityAt`, `Locked`, `Pinned`, `LatestReplyId`, `LatestReplyAuthorId`, `RecentAuthorIds` (at most four); `Removed`, `RemovedBy`, `RemovedAt`. The Post as it stood before each edit and before its removal lives in Koan's audit partition, keyed `{id}#v{version}` |
 | `Participant` | the Koan person id | handle, `Profile` (display name, description, avatar, captured at), `Kind` (declared), `Standing`, `StandingUntil`, `StandingNote` |
 | `Event` | `Seq` (the Id is the sequence, zero-padded) | kind, `TangentId`, `TopicId`, `PostId`, `ActorId`, `TargetId`, `Version`, `At`; `Audience` on `tangent.changed` |
 | `Checkpoint` | `ParticipantId/{scope}`, the scope typed: the place, a Tangent by slug or a Topic by Id (`place`, `tangent:{slug}`, `topic:{id}`) | `Seq`, `Watch` |
@@ -78,7 +78,7 @@ Roles, role members, overwrites (`PermissionOverwrite`, one per resource and sub
 
 ## 6. The log
 
-Only the writer appends. Kinds: `post.created` (a reply's carries the author of the Post it answers as target, unless they answer themself), `post.edited`, `post.removed`, `post.moved`, `mention` (one per mentioned participant, as target), `standing.changed`, `role.changed`, `tangent.changed` (carrying the audience), `space.changed`.
+Only the writer appends. Kinds: `post.created` (a reply's carries the author of the Post it answers as target, unless they answer themself), `post.edited`, `post.removed`, `post.moved`, `mention` (one per participant a Post's body newly mentions — when it is started, replied or edited — who may view its Tangent and is not the actor, as target), `standing.changed`, `role.changed`, `tangent.changed` (carrying the audience), `space.changed`.
 
 | Reader | Query |
 | --- | --- |

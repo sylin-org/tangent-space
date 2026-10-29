@@ -23,6 +23,8 @@ public sealed class Post : Entity<Post>
     public const string NeedsBody = "A Post's body holds at least one visible character.";
     public const string BodyTooLong = "A Post's body holds at most 64 KiB of UTF-8.";
     public const string BodyHasNul = "A Post's body holds no NUL character.";
+    public const string BodyRendersTooLong = "A Post's body renders to at most 512 KiB of HTML, its elements nested no deeper than the renderer allows.";
+    public const string TooManyMentions = "A Post's body mentions at most 32 identities.";
     public const string NeedsTitle = "A Topic's title holds at least one visible character.";
     public const string TitleTooLong = "A Topic's title holds at most 200 characters.";
     public const string NeedsTangent = "A Topic starts in a Tangent.";
@@ -68,7 +70,8 @@ public sealed class Post : Entity<Post>
     /// <summary>An article's lead image. Root only.</summary>
     public string? CoverId { get; set; }
 
-    /// <summary>Markdown. Found by its words.</summary>
+    /// <summary>Markdown, rendered to safe HTML where it is shown (<see cref="MarkdownHtml"/>); a mention is a link to
+    /// <c>at://</c> and a DID (<see cref="Mentions"/>). Found by its words.</summary>
     [Lexical]
     public string Body { get; set; } = "";
 
@@ -214,6 +217,8 @@ public sealed class Post : Entity<Post>
         if (string.IsNullOrWhiteSpace(body)) throw new Refusal(NeedsBody);
         if (body.Contains('\0')) throw new Refusal(BodyHasNul);
         if (Encoding.UTF8.GetByteCount(body) > BodyLimit) throw new Refusal(BodyTooLong);
+        if (!MarkdownHtml.Fits(body)) throw new Refusal(BodyRendersTooLong);
+        if (Mentions.In(body).Count > Mentions.Limit) throw new Refusal(TooManyMentions);
     }
 
     public static void CheckTitle(string? title)

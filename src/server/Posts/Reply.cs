@@ -8,7 +8,8 @@ namespace Tangent.Posts;
 /// <summary>Replies in a Topic: a Post carrying the root's Tangent and Topic and the Topic's next sequence, the root's
 /// counters and last activity moved in the same commit, and <see cref="EventKind.PostCreated"/> appended with them,
 /// its target the parent's author unless the author replies to their own Post, so a reply reaches whom it answers
-/// through the log's target index. The parent is the root unless a Post of this Topic is named. The Topic exists for
+/// through the log's target index, and one <see cref="EventKind.Mention"/> per participant the body mentions
+/// (<see cref="Mentions.Notify"/>). The parent is the root unless a Post of this Topic is named. The Topic exists for
 /// the author, who holds <see cref="Bit.View"/> in its Tangent, or the command answers that no Topic has the Id; the
 /// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a locked or removed one, or is refused with
 /// the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
@@ -51,6 +52,7 @@ public sealed record Reply(
         await Event.Next(sequences, EventKind.PostCreated, at,
             tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
             targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version).Save(ct);
+        await Mentions.Notify(sequences, reply, reply.AuthorId, null, at, ct);
         return new Outcome<Post>.Done(reply);
     }
 

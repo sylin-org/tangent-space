@@ -41,7 +41,9 @@ public sealed record TopicPage(
     DateOnly Day)
 {
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
-    /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. A removed Post
+    /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is
+    /// the Markdown as written, and <see cref="Mentions"/> are the participants it mentions as they are now, which the
+    /// HTML renders as links reading their current handles. A removed Post
     /// is a tombstone that keeps its place, author and time, carries no body and says who removed it and when.
     /// <see cref="New"/> marks a Post a signed-in reader has not seen — past their checkpoint on the Topic, or every
     /// Post where they have none. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
@@ -52,6 +54,7 @@ public sealed record TopicPage(
         string Address,
         TangentPage.Author Author,
         string? Body,
+        IReadOnlyList<Mention> Mentions,
         DateTimeOffset CreatedAt,
         long Version,
         string? ParentId,
@@ -60,6 +63,10 @@ public sealed record TopicPage(
         bool New,
         IReadOnlyList<string> Can,
         string? Edit);
+
+    /// <summary>A participant a body mentions: their DID, which the body's link names, their handle now, and their
+    /// address.</summary>
+    public sealed record Mention(string Id, string Handle, string Address);
 
     /// <summary>Who removed a Post and when.</summary>
     public sealed record Removal(TangentPage.Author By, DateTimeOffset At);

@@ -25,6 +25,11 @@
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Jobs/Koan.Jobs.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- A body's Markdown to HTML (BSD-2-Clause) and the allow-list that HTML passes through (MIT, on AngleSharp). -->
+    <PackageReference Include="Markdig" Version="[1.4.0]" />
+    <PackageReference Include="HtmlSanitizer" Version="[9.2.1039]" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- The rows a visual capture shows, seeded on the capture's request; only the capture host carries them. -->
     <Compile Remove="Capture/**" Condition="'$(TangentCaptureHost)' != 'true'" />
   </ItemGroup>

@@ -2,9 +2,9 @@
 @using Tangent.Posts
 @* One Post of a Topic: its author's mark, name, handle and agent tag, "New" where the reader has not seen it, and when
    it was written, linked to the Post's own address; for a reply to a Post other than the root, the way to that Post;
-   the body as escaped plain text with its line breaks kept; and "Edit" where the reader may edit or remove it. A
-   removed Post is a tombstone in the same place: its author and time, who removed it, and no body. The root reads
-   larger. The Post the address named is marked. *@
+   the body's Markdown as safe HTML, each mention a link reading the participant's current handle; and "Edit" where
+   the reader may edit or remove it. A removed Post is a tombstone in the same place: its author and time, who removed
+   it, and no body. The root reads larger. The Post the address named is marked. *@
 <article id="@Model.Id" class="@Classes()" aria-current="@(Anchor ? "true" : null)">
     @TopicRow.Mark(Model.Author, Root ? "post-mark-root" : "post-mark")
     <div class="post-main">
@@ -27,7 +27,7 @@
         }
         else
         {
-            <div class="@(Root ? "post-body post-body-root" : "post-body")">@Lines(Model.Body ?? "")</div>
+            <div class="@(Root ? "post-body post-body-root" : "post-body")">@((MarkupString)Mentions.Html(Model.Body ?? "", Model.Mentions))</div>
         }
         @if (Model.Edit is { } edit)
         {
@@ -59,17 +59,6 @@
     private RenderFragment AgentTag() => builder =>
     {
         if (Model.Author.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"agent-tag\">Agent</span>");
-    };
-
-    /// <summary>A body as escaped plain text, each of its line breaks a break in the page.</summary>
-    private static RenderFragment Lines(string body) => builder =>
-    {
-        var lines = body.ReplaceLineEndings("\n").Split('\n');
-        for (var index = 0; index < lines.Length; index++)
-        {
-            if (index > 0) builder.AddMarkupContent(0, "<br>");
-            builder.AddContent(1, lines[index]);
-        }
     };
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
