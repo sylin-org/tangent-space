@@ -54,7 +54,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Topic window: bounded, lock-free, cursors are sequence numbers, anchor first | topic | `ConversationService.Window`, `WindowPlanner`, `History` (harvest) | — | M | doing |
+| Topic window: bounded, lock-free, cursors are sequence numbers, anchor first | topic | `ConversationService.Window`, `WindowPlanner`, `History` (harvest) | — | M | done |
 | Post, reply, edit, remove through the writer: TID ids, pre-edit snapshots in the audit partition, visible tombstones | topic | `PostChanges` snapshot chain (harvest) | audit partition | M | doing |
 | Markdown body, sanitized HTML, mentions as identity-bearing links resolved at render | topic | `PostMarkup` (harvest) | — | S | todo |
 | The composer island: drafts in `localStorage` by scope; an uncertain submit reconciles by `GET` of the minted Id; never auto-posts | topic | `composables/conversation.ts` intents (harvest) | — | S | todo |
