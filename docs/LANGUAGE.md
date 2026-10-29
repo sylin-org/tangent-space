@@ -15,6 +15,21 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Article** | A Topic whose root Post is a published piece. | `Post.Kind = Article` | same as its Topic | Blog post, *Page*, Story |
 | **Base URL** | Scheme, host and optional path where the Tangent Space answers; every absolute link derives from it. `tangent.<domain>` is the suggested address, not a rule. | `TangentSpace.BaseUrl`, configured as Koan's `Koan:Web:ApplicationUrl` | — | Origin (for this), *Root*, *Prefix* |
 
+## The writer
+
+| Word | Meaning | Code | URL | Never |
+| --- | --- | --- | --- | --- |
+| **Writer** | The one write path: one queue, one loop, one atomic transaction per command. The only code that opens a transaction. | `WriteLoop` in `Tangent.Writer` | — | *Service* (for this), *Handler* (for this), *Pipeline*, *Bus* |
+| **Command** | A value handed to the writer naming one change and carrying what it needs, its Id included. Data, never I/O. | `ICommand<T>` | — | *Request* (for this), *Action*, *Mutation*, *Operation* |
+| **Sender** | Whoever hands a command to the writer and awaits its outcome: a page handler or a job. | — | — | *Caller*, *Client* (for this), *Producer* |
+| **Queue** | The writer's bounded line of commands, in arrival order, inside the process. | the channel inside `WriteLoop`; `WriteLoop.QueueBound` | — | *Bus*, *Mailbox*, *Inbox* (for this) |
+| **Outcome** | What a sender receives: done with the result, refused with its reason, a conflict, or failed with its cause. | `Outcome<T>` — `Done`, `Refused`, `Conflict`, `Failed` | — | *Result* (for the whole), *Response*, *Status* (for this) |
+| **Refusal** | An entity's no, with its reason; nothing is written. | `Refusal` thrown by an entity; `Outcome<T>.Refused` | — | *Error* (for this), *Rejection*, *Validation error* |
+| **Conflict** | The same Id with a different body: the existing row stands. | `Outcome<T>.Conflict`; `409` on the wire | — | *Duplicate*, *Collision* |
+| **Sequence** | A number the writer assigns from a high-water mark and keeps only on commit: a Topic's and the log's. | `Sequences`; `Post.Sequence`, `Event.Seq` | — | *Counter*, *Ordinal*, *Version* (for this) |
+| **High-water mark** | The last sequence committed under a name, loaded once when the writer starts. | `HighWaterMark` | — | *Counter*, *Watermark* |
+| **Committed** | What the writer announces inside the process after a commit: the command and the sequences it took. | `WriteLoop.Committed`; the `Committed` record | — | *Event* (for this), *Notification* (for this), *Message* |
+
 ## People
 
 | Word | Meaning | Code | URL | Never |

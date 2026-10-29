@@ -166,7 +166,8 @@ src/server/
   Posts/          Post, Markdown, slugs, topic queries, windows, media references
   Participants/   Participant facet, standing, profile cache job, the proof bridge, profile page
   Access/         bits, Capabilities.For
-  Events/         Event, the writer, the stream, the door, checkpoints
+  Writer/         the one write path: commands, outcomes, the loop, high-water marks
+  Events/         Event, the stream, the door, checkpoints
   Render/         components, HTML formatter, fragments, feeds, archive sink, slots
   Connections/    Connection, Receipt, Reference, dispatch; Atproto/ Webmention/ Mastodon/
   Lifecycle/      backup, restore, export, archive, retirement
