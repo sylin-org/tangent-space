@@ -20,3 +20,6 @@
 
 # The client build output, served by the server as static files.
 src/server/wwwroot/
+
+# The published executable and the data folder created beside it.
+publish/

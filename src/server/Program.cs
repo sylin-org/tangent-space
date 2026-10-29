@@ -1,4 +1,7 @@
 using Koan.Core;
+using Tangent.Lifecycle;
+
+if (LifecycleCommand.Parse(args) is { } lifecycle) return lifecycle.Run(AppContext.BaseDirectory);
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
@@ -14,3 +17,4 @@ if (builder.Configuration["urls"] is null
 builder.Services.AddKoan();
 var app = builder.Build();
 await app.RunAsync();
+return 0;

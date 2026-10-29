@@ -33,4 +33,5 @@ public async Task Under_a_base_url_path_the_routes_answer_only_under_the_path()
 - **Services.** The `services` argument adds registrations after the application's own, such as a hosted worker the test observes.
 - **HTTP.** `Client` sends requests to the address the Tangent Space listens on.
 - **Entities.** `StartAsync` binds Koan's ambient host to the new Tangent Space for the rest of the test method, and every request the Tangent Space serves runs bound to it, so `TangentSpace.Get(...)` and the other `Entity` statics read that Tangent Space's database. A test that starts two reads from the later one; it wraps reads of the earlier one in `using (AppHost.PushScope(earlier.Services))`.
+- **Stopping.** `StopAsync` stops the Tangent Space and keeps its folder, so a test can read what it left behind, such as a backup to restore.
 - **Never** name a port, write outside `tangentSpace.Folder`, or switch off parallel test runs. The fixture deletes its folder when it is disposed, so `await using` is required.

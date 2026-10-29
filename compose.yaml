@@ -1,0 +1,27 @@
+# One Tangent Space in a container on 5220, reachable from this machine only, its data folder in the `state`
+# volume. Back up while it runs, then copy the backup out:
+#   docker compose exec tangent /app/Tangent.Server backup /state/backups
+#   docker compose cp tangent:/state/backups ./backups
+# Restore while it is stopped (--replace moves the current data folder aside inside the volume):
+#   docker compose stop tangent
+#   docker compose run --rm tangent restore /state/backups/<backup> --replace
+name: tangent-space
+services:
+  tangent:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:5220:5220"
+    environment:
+      Tangent__BaseUrl: "http://localhost:5220"
+      Tangent__DataFolder: "/state/data"
+    volumes:
+      - state:/state
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  state:
