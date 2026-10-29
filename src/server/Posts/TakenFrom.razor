@@ -1,0 +1,24 @@
+@* Where a Topic was taken on a tangent from: for a reader who may view the origin, a link to it — who wrote it, its
+   Topic and Tangent — or to its tombstone where it is removed; for anyone else, that it was taken from a post they
+   cannot see, and nothing of it. Nothing for a Topic started on its own. *@
+@if (Model is { } origin)
+{
+    <p class="topic-meta topic-taken-from">
+        @if (origin.Absent)
+        {
+            <span>Taken on a tangent from a post you can’t see</span>
+        }
+        else if (origin.Removed)
+        {
+            <span>Taken on a tangent from <a href="@origin.Address">a removed post</a> in @origin.Topic · @origin.Tangent</span>
+        }
+        else
+        {
+            <span>Taken on a tangent from <a href="@origin.Address">a post by @origin.Author</a> in @origin.Topic · @origin.Tangent</span>
+        }
+    </p>
+}
+
+@code {
+    [Parameter] public TopicPage.Origin? Model { get; set; }
+}

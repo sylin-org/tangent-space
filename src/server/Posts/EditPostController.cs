@@ -191,7 +191,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             personId is null ? configured + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             configured + "/",
-            await PostWrites.Reader(personId, capabilities, configured, here, ct));
+            await PostWrites.Reader(personId, capabilities, configured, here, ct),
+            BodyOptional: row.ParentId is null && row.OriginId is not null);
     }
 
     private string Address(Post root, Post row) => PostWrites.Address(Configured(), root.TangentId, root.Slug ?? root.Id, row.Id);

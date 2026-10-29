@@ -50,7 +50,7 @@
                     }
                     <div class="field">
                         <label class="field-label" for="edit-body">Post</label>
-                        <textarea class="post-form-body" id="edit-body" name="@PostWrites.BodyField" rows="12" required
+                        <textarea class="post-form-body" id="edit-body" name="@PostWrites.BodyField" rows="12" required="@(!Model.BodyOptional)"
                                   autofocus="@(Model.Gate is null && Focus == "edit-body")" readonly="@(Model.Gate is not null)"
                                   aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
                                   aria-describedby="@(Model.BodyFailure is null ? null : "edit-body-failure")">@Model.Body</textarea>

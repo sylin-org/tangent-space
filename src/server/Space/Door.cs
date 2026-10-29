@@ -37,8 +37,9 @@ public sealed record Door(
     /// <summary>What is new to a signed-in reader: the place checkpoint the door read past (<see cref="From"/>, zero
     /// when they have none) and the sequence it read through (<see cref="Through"/>); first the Topics and Tangents they
     /// watch that hold something new, then replies to them, mentions of them, what is new in each Tangent and the new
-    /// articles. <see cref="CaughtUp"/> is the form that moves the place
-    /// checkpoint to <see cref="Through"/>, present while there is news.</summary>
+    /// articles; <see cref="Taken"/> holds the Topics taken on a tangent from their Posts, which are not replies.
+    /// <see cref="CaughtUp"/> is the form that moves the place checkpoint to <see cref="Through"/>, present while there
+    /// is news.</summary>
     public sealed record Since(
         long From,
         long Through,
@@ -47,10 +48,11 @@ public sealed record Door(
         Group Mentions,
         IReadOnlyList<InTangent> PerTangent,
         Group Articles,
-        CaughtUp? CaughtUp)
+        CaughtUp? CaughtUp,
+        Group? Taken = null)
     {
         /// <summary>Whether nothing is new to the reader.</summary>
-        public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0;
+        public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0;
     }
 
     /// <summary>How many of a kind are new, whether that is a lower bound because the window the door read was full,

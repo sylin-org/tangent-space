@@ -1,0 +1,33 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* The door's Topics taken on a tangent from the reader's Posts, after the mentions of them: how many, "at least" where
+   the door could not finish counting, and the newest as rows — who took it, the new Topic and its Tangent, its first
+   words and when. Nothing where there are none. *@
+@if (Model is { Count: > 0 } group)
+{
+    <h3 class="rail-heading rail-heading-spaced">Taken on a tangent from your posts · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
+    <ul class="topic-rows door-taken">
+        @foreach (var post in group.Posts)
+        {
+            <li @key="post.PostId">
+                <a class="topic-row is-new" href="@post.Address">
+                    <span class="topic-row-dot"><span class="new-dot" role="img" aria-label="Unread"></span></span>
+                    <span class="topic-row-body">
+                        <span class="topic-row-title">@post.Topic</span>
+                        <span class="topic-row-opening"><span class="topic-row-author">@post.Who.Name</span>@(post.Line.Length > 0 ? ": " + post.Line : "")</span>
+                    </span>
+                    <span class="topic-row-people">@TopicRow.Mark(post.Who, "face")</span>
+                    <span class="topic-row-replies"><span class="topic-row-none">@post.Tangent</span></span>
+                    <span class="topic-row-activity"><time datetime="@post.At.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@TopicRow.When(post.At, Today)</time></span>
+                </a>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter] public Door.Group? Model { get; set; }
+
+    /// <summary>The UTC day the door's times are written for.</summary>
+    [Parameter, EditorRequired] public DateOnly Today { get; set; }
+}

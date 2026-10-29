@@ -16,7 +16,8 @@ namespace Tangent.Posts;
 /// it, so the page never offers to skip a reply it did not show, and <see cref="Watching"/> the form that
 /// sets or clears their watch flag on it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
-/// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for.</summary>
+/// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for. <see cref="TakenFrom"/> is
+/// where a Topic taken on a tangent was taken from, as the reader may know it.</summary>
 public sealed record TopicPage(
     string Id,
     string Slug,
@@ -43,7 +44,8 @@ public sealed record TopicPage(
     string Door,
     string? SignIn,
     TopicPage.Reader? Who,
-    DateOnly Day)
+    DateOnly Day,
+    TopicPage.Origin? TakenFrom = null)
 {
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
     /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is
@@ -52,7 +54,9 @@ public sealed record TopicPage(
     /// is a tombstone that keeps its place, author and time, carries no body and says who removed it and when.
     /// <see cref="New"/> marks a Post a signed-in reader has not seen — past their checkpoint on the Topic, or every
     /// Post where they have none. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
-    /// it is edited or removed, present only where they may do either.</summary>
+    /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is where the reader
+    /// takes it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
+    /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.</summary>
     public sealed record Post(
         string Id,
         long Sequence,
@@ -67,11 +71,30 @@ public sealed record TopicPage(
         Removal? Removed,
         bool New,
         IReadOnlyList<string> Can,
-        string? Edit);
+        string? Edit,
+        string? TakeOnATangent = null,
+        TopicPage.Taken? Taken = null);
 
     /// <summary>A participant a body mentions: their DID, which the body's link names, their handle now, and their
     /// address.</summary>
     public sealed record Mention(string Id, string Handle, string Address);
+
+    /// <summary>Where a Topic was taken on a tangent from. For a reader who may view the origin: its address — a
+    /// tombstone's where it is <see cref="Removed"/> — the title of its Topic, the name of its Tangent and who wrote it.
+    /// For anyone else it is <see cref="Absent"/>, and says nothing more.</summary>
+    public sealed record Origin(bool Absent, string? Address, string? Topic, string? Tangent, string? Author, bool Removed)
+    {
+        public static Origin Unseen { get; } = new(true, null, null, null, null, false);
+    }
+
+    /// <summary>The Topics taken on a tangent from one Post that the reader may view, newest first, bounded;
+    /// <see cref="Count"/> is how many the page found that they may view, and <see cref="AtLeast"/> says more may be
+    /// than it found.</summary>
+    public sealed record Taken(IReadOnlyList<TakenTopic> Topics, int Count, bool AtLeast);
+
+    /// <summary>One Topic taken on a tangent from a Post: its title, address and Tangent's name, and whether its root is
+    /// removed.</summary>
+    public sealed record TakenTopic(string Title, string Address, string Tangent, bool Removed);
 
     /// <summary>Who removed a Post and when.</summary>
     public sealed record Removal(TangentPage.Author By, DateTimeOffset At);
