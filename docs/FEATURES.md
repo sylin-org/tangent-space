@@ -28,7 +28,7 @@ The tree boots, serves one page both ways, and every rule has a check.
 | The HTML projection: one DTO rendered through a Razor component or as JSON by `Accept`; fragments by header | — | `PublicPageRenderer` (harvest) | lift later | M | done |
 | Island bootstrap: `data-island` mounting into server HTML, one bundle, one event stream per page, fragment patch | — | `public-fragment.js` (harvest) | — | S | done |
 | Design foundation: tokens, fonts, layout, Paper and Ink, four accents | — | `tokens.css`, `fonts.css`, `workspace.css`, `appearance.ts` (transplant) | — | S | done |
-| Capture script for the visual loop: Playwright, bundled fonts, three widths, two themes, every state | — | new | — | S | todo |
+| Capture script for the visual loop: Playwright, bundled fonts, three widths, two themes, every state | — | new | — | S | done |
 | Rule checks: no dialogs, language, greenfield scoped to the root tree, fixed ports | — | `tests/no-dialogs.test.mjs`, `scripts/check-greenfield.ps1` (harvest) | — | S | done |
 | Test fixture: the real host on a loopback port over a temp folder, once under a path prefix; parallel-safe | — | `ExperienceWebApp` edge cases (harvest) | `Sylin.Koan.Testing.Hosting` | S | done |
 | Lifecycle: one published binary and one data folder; build, launch, backup by `VACUUM INTO` and copy, restore; compose for Docker | — | `scripts/server-lifecycle.ps1`, `*.bat`, `compose.yaml`, `Dockerfile` (harvest) | — | S | todo |
