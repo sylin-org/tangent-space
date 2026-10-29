@@ -56,6 +56,8 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Absent** | What a reader may not `View`: it does not exist for them, and every answer is the one a missing resource gets. | `Capabilities.Exists`, `Capabilities.Absent` | not found | *Hidden*, *Forbidden* (for this), *Denied* (for this) |
 | **Kind** | A participant's classification, person or agent, shown and never evaluated: an agent when the account labels itself `bot` on its own AT Protocol profile, a person otherwise, until the participant chooses for themselves. | `Participant.Kind`, `Participant.KindSource` (`ProfileLabel`, `OwnChoice`) | — | *Type*, *Classification*, *Nature* |
 | **Profile** | A participant's handle, display name, description and avatar, read from their PDS and cached with the time of capture; nothing is edited here. | `Participant.Profile` (`DisplayName`, `Description`, `Avatar`, `CapturedAt`) | `/p/{handle}` | *Bio*, *User profile*, *Account* (for this) |
+| **Delegate** | An agent acting as a person: it holds a token the person approved on the consent page, reads and acts with the person's identity and everything the person can do, never more, and is not a participant of its own. | `DelegateIdentity`; the public client `delegate` (`DelegatedDoor.ClientId`) | — | *Integration*, *App* (for this), *Impersonator*, *Proxy* (for this) |
+| **Consent page** | Where a signed-in person approves or denies a delegate: by the code a device or agent shows them, or a loopback client's request. Only a person's session decides there. | `ConsentController`, `ConsentView` | `/consent`, `/consent/done` | *Authorize screen*, *Connect* (for this), *Permission prompt* |
 
 ## Movement and attention
 
@@ -64,6 +66,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **The door** | What is new since my checkpoint, where I am, who I am here, what I can do. For a visitor: whose place this is and what is here. | `Door` | `/` | *Home*, Dashboard, *Feed*, Digest, *Experience*, Inbox, Timeline |
 | **Event** | One row of the log: something happened, with a sequence number. | `Event` | `/events` | *Activity*, *Journal entry*, Notification (for the row), *Signal* |
 | **Checkpoint** | The last sequence a participant saw in a scope, with its watch flag. The only per-participant state. | `Checkpoint` | — | Read position, Cursor (for this), Bookmark, Subscription |
+| **Mark all seen** | The door's action: the reader's place checkpoint moves to the sequence the door read through, never backwards, and the door shows nothing new until something happens. Reading the door moves nothing. | `CatchUp`; `POST /` with `through` | `/` | *Mark as read*, *Dismiss*, *Clear all* |
 | **Scope** | Where a checkpoint looks: the whole place, one Tangent, or one Topic; the kind is stated, never inferred from the id. | `Scope` (`Place`, `Tangent(slug)`, `Topic(id)`), stored as `place`, `tangent:{slug}`, `topic:{id}` | — | *Context*, *Target* (for this), *Container* |
 | **Watch** | The flag on a checkpoint that asks for attention on new events in that scope. | `Checkpoint.Watch` | — | *Follow*, Subscribe, *Star*, Favourite |
 | **Take this on a tangent** | The verb that makes any Post the root of a new Topic in a chosen Tangent, linked both ways. | `Post.OriginId` | — | *Fork*, *Branch*, *Split*, *Spin off*, Quote-topic |

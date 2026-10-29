@@ -47,7 +47,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | The door as one resource: for a visitor, whose place this is, what is featured, what is alive; signed in, since my checkpoints — replies to me, mentions, new per Tangent, new articles — who is around, what I can do | door signed-out, door signed-in | `ExperienceDigest`, `AttentionCompiler` (harvest); `SpaceHero`, `ContinueReading`, `ForumSidebar` (harvest) | — | L | done |
 | The Tangent page: topics with what is new marked, bounded | tangent | `TopicList`, `TopicRow`, `DirectorySummaries` (harvest) | — | S | done |
 | Discovery: `tangent.json`, `llms.txt`, `<link rel="tangent">` on the site, `/.well-known/tangent` at the site origin, `_tangent` TXT; the reverse-proxy rule for a path install | — | new | — | S | done |
-| The delegated agent door: the consent page for `Koan.Web.Auth.Server`, the Device flow, a pre-registered public client; `llms.txt` says how | consent | new | `Sylin.Koan.Web.Auth.Server`, `Sylin.Koan.Security.Trust` | S | doing |
+| The delegated agent door: the consent page for `Koan.Web.Auth.Server`, the Device flow, a pre-registered public client; `llms.txt` says how | consent | new | `Sylin.Koan.Web.Auth.Server`, `Sylin.Koan.Security.Trust` | S | done |
 | Phone layouts for the door and the Tangent | door, tangent at 390 | `mobile-reader.css` (transplant) | — | S | todo |
 
 ### 2 · Conversation
