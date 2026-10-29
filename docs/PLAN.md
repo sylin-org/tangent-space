@@ -88,15 +88,32 @@ Group A is a chain from 0.1; group B is independent of it. Four sessions at once
 | 1.2 Sign-in through the atproto connector, the person reconciled, the participant facet, the profile job, declared kind | 1.1 | repeat |
 | 1.3 Access: roles seeded, overwrites, `Capabilities.For`, `can` on every resource, `gate` from the explainer | 1.1; K2 composes | first of its kind, xhigh |
 | 1.4 First run: operator, name, base URL, proprietor and operator, pointer snippets | 1.2 | repeat |
-| 1.5 The door, as one resource, both ways; the visual loop on its two states | 1.1–1.3, D | first of its kind |
-| 1.6 The Tangent page; the visual loop | 1.1, 1.3 | repeat |
+| 1.5 The door, as one resource, both ways | 1.1–1.3 | first of its kind |
+| 1.6 The Tangent page | 1.1, 1.3 | repeat |
 | 1.7 Discovery: `tangent.json`, `llms.txt`, the site's pointers, the proxy rule | 1.4 | explorer-grade |
 | 1.8 The delegated agent door: the consent page, the Device flow, a pre-registered client | 1.2 | repeat |
-| 1.9 Phone layouts for the door and the Tangent; the visual loop | 1.5, 1.6 | repeat |
+| 1.9 Phone layouts for the door and the Tangent | the polish stage | repeat |
+| 1.10 Access on Koan's overwrites: Tangent's own overwrite step lifted onto K2's resolution and explainer | K2, 1.3 | repeat |
 
-Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4, 1.6 and 1.8 together while the lead builds 1.5; 1.7 and 1.9 last.
+Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1.5, 1.7 and 1.8 together, with K2 in the Koan checkout beside them; 1.10 once K2 merges. Phone layouts are visual work and wait for the polish stage; until then every screen is captured at 390 and must read there without a horizontal scroll.
 
-## Slices 2 to 9
+## Slice 2, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 2.1 The topic window: a Topic as one resource, bounded, cursors are sequence numbers, anchor first; plain bodies until 2.3 | 1.6 | first of its kind |
+| 2.2 The write verbs over HTTP: start a Topic, reply, edit, remove through the writer; TID ids as idempotency keys; pre-edit snapshots in the audit partition; visible tombstones | 1.8 | first of its kind, xhigh |
+| 2.3 Markdown: sanitized HTML, mentions as identity-bearing links resolved at render, `mention` events written with the Post | 2.2 | repeat |
+| 2.4 The composer island: drafts by scope, an uncertain submit reconciled by `GET` of the minted Id, never auto-posts | 2.1, 2.2 | first of its kind |
+| 2.5 Checkpoints and the watch flag: reading a Topic moves its checkpoint; watch on a Tangent or a Topic | 2.1 | repeat |
+| 2.6 Live: the event stream, one per page, the fragment patch; the door as the poll | 2.1, 1.5 | repeat |
+| 2.7 Take this on a tangent: choose the Tangent, a root Post with an origin, linked both ways | 2.2, 2.4 | first of its kind |
+| 2.8 Reports: a Post taken on a tangent into the moderators' Tangent, with the origin | 2.7 | repeat |
+| 2.9 Phone layout for the topic | the polish stage | repeat |
+
+Parallel once slice 1 lands: 2.1 and 2.2 together; then 2.3, 2.4 and 2.5; then 2.6 and 2.7; 2.8 last.
+
+## Later slices
 
 The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), export through the renderer (7), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, feeds, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, the operator declaration, `did:web`, appearance. Explorer-grade: references through Constellation, the A2A card.
 

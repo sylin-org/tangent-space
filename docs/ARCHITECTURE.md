@@ -79,11 +79,11 @@ Roles, role members, persons, sessions, grants and media are Koan's tables. The 
 
 ## 6. The log
 
-Only the writer appends. Kinds: `post.created`, `post.edited`, `post.removed`, `post.moved`, `mention` (one per mentioned participant, as target), `standing.changed`, `role.changed`, `tangent.changed` (carrying the audience), `space.changed`.
+Only the writer appends. Kinds: `post.created` (a reply's carries the author of the Post it answers as target, unless they answer themself), `post.edited`, `post.removed`, `post.moved`, `mention` (one per mentioned participant, as target), `standing.changed`, `role.changed`, `tangent.changed` (carrying the audience), `space.changed`.
 
 | Reader | Query |
 | --- | --- |
-| The door | events since my checkpoints, filtered by `can.view`, grouped: replies to me, mentions, new per Tangent, new articles; for a visitor, the front page: whose place, what is featured, what is alive |
+| The door | one window of the newest events and the newest that target me, past my place checkpoint and my checkpoints for the Topic and Tangent of each, filtered by `can.view`, grouped: replies to me, mentions, new per Tangent, new articles; below it, and alone for a visitor or a reader with nothing new, the front page from the same window: whose place, what is featured, what is alive, who is around |
 | Notifications | the subset where I am the target; reading advances the checkpoint |
 | The stream | `GET /events?since=` as server-sent events; the same URL without the stream header is the poll |
 | Feeds | public `post.created` per Tangent and for articles, rendered as Atom and JSON Feed |
@@ -151,7 +151,7 @@ Feeds are a Render output, not a Connection. Inbound replies arrive as `Referenc
 
 A Tangent Space answers at its **base URL** — scheme, host, optional path — the operator's `Koan:Web:ApplicationUrl`, which Koan normalises once and serves under: routes, static files and health answer under its path and nothing outside it, and `Koan:Web:TrustedProxies` names the reverse proxies whose forwarded scheme and client address are believed, for one hop. Every absolute thing derives from it: links, the cookie path, the OAuth client metadata and redirect, the `did:web`, the publication URL. `tangent.<domain>` is the suggested address, the one a client tries first when a site holds no pointer.
 
-Pointers live on the site, since `/.well-known/` belongs to an origin: `<link rel="tangent" href="…">` on the site's pages, or `/.well-known/tangent` at the site origin, or a `_tangent` TXT record. The Tangent Space serves its own descriptor at `<base>/tangent.json` — address, identity, publication, `"api": 1` — and `<base>/llms.txt`. The first-run page prints the pointer snippets and, for a path install, the reverse-proxy rule.
+Pointers live on the site, since `/.well-known/` belongs to an origin: `<link rel="tangent" href="…">` on the site's pages, or `/.well-known/tangent` at the site origin, or a `_tangent` TXT record. The Tangent Space serves its own descriptor at `<base>/tangent.json` — name, address, audience, `"api": 1`, the delegated door (the authorization server's description and the public client `delegate`), links to the door and to `llms.txt`, and for a public place its proprietor and operator; the installation's `did:web` and its publication join it with their packages — and `<base>/llms.txt`, which says in a few lines how to read the place and how to act as a person's delegate. Both carry an `ETag` of their body and a five-minute cache lifetime, and a private place's files name nobody. The first-run page prints the pointer snippets and, for a path install, the reverse-proxy rule.
 
 ## 12. Background work
 

@@ -61,7 +61,7 @@ public sealed class TangentModule : KoanModule
         // without a preference reads a page, and every other type keeps Koan's JSON.
         services.AddScoped<HtmlRenderer>();
         services.AddSingleton(new ResourceComponents()
-            .Add<Door, DoorView>(door => door.Name, door => door.Version)
+            .Add<Door, DoorView>(door => door.Name, Door.Version, DoorView.Frame)
             .Add<Problem, ProblemView>(problem => problem.Title)
             .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignInView.Frame)
             .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame)
