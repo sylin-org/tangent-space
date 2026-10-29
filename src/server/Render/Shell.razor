@@ -1,4 +1,6 @@
-@* The page around one resource's component: the two links every page loads, absolute from the base URL. *@
+@* The page around one resource's component: the stylesheet and the two scripts every page loads, absolute from
+   the base URL. The theme script blocks in <head> so the saved appearance applies before the first paint; the
+   page script is a module, deferred by nature, that mounts the islands once the document is parsed. *@
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +8,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@Title</title>
     <link rel="stylesheet" href="@(BaseUrl)/tangent.css">
-    <script src="@(BaseUrl)/tangent.js" defer></script>
+    <script src="@(BaseUrl)/theme.js"></script>
+    <script type="module" src="@(BaseUrl)/tangent.js"></script>
 </head>
 <body>
 @ChildContent
