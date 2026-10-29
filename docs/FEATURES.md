@@ -27,7 +27,7 @@ The tree boots, serves one page both ways, and every rule has a check.
 | The writer: one queue, one loop, one transaction per command, sequences from high-water marks; the Koan transaction proven inside a loop | — | `ConversationService.Writes` ordering (harvest) | `EntityContext.Transaction` | M | todo |
 | The HTML projection: one DTO rendered through a Razor component or as JSON by `Accept`; fragments by header | — | `PublicPageRenderer` (harvest) | lift later | M | todo |
 | Island bootstrap: `data-island` mounting into server HTML, one bundle, one event stream per page, fragment patch | — | `public-fragment.js` (harvest) | — | S | todo |
-| Design foundation: tokens, fonts, layout, Paper and Ink, four accents | — | `tokens.css`, `fonts.css`, `workspace.css`, `appearance.ts` (transplant) | — | S | todo |
+| Design foundation: tokens, fonts, layout, Paper and Ink, four accents | — | `tokens.css`, `fonts.css`, `workspace.css`, `appearance.ts` (transplant) | — | S | done |
 | Capture script for the visual loop: Playwright, bundled fonts, three widths, two themes, every state | — | new | — | S | todo |
 | Rule checks: no dialogs, language, greenfield scoped to the root tree, fixed ports | — | `tests/no-dialogs.test.mjs`, `scripts/check-greenfield.ps1` (harvest) | — | S | done |
 | Test fixture: the real host on a loopback port over a temp folder, once under a path prefix; parallel-safe | — | `ExperienceWebApp` edge cases (harvest) | `Sylin.Koan.Testing.Hosting` | S | todo |
