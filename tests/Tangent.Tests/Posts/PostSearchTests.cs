@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Text.Json;
 using Koan.Core.Diagnostics;
+using Koan.Data.Core;
 using Microsoft.Data.Sqlite;
 using Tangent.Space;
 using Koan.Core.Observability.Health;
@@ -14,7 +15,7 @@ using Xunit;
 
 namespace Tangent.Posts;
 
-/// <summary>Posts found by their words through Koan's lexical index over the SQLite connector: title and body, ranking
+/// <summary>Posts found by their words through Koan's lexical index over the SQLite connector: title and body, order
 /// and snippets, the bounds, the index in the composition facts and in readiness, and the rebuild at start over a
 /// restored folder.</summary>
 public sealed class PostSearchTests
@@ -77,6 +78,9 @@ public sealed class PostSearchTests
         Assert.Equal(PostSearch.NeedsPage, Assert.IsType<PostSearch.Answer.Refused>(await PostSearch.Run("lantern", 0, 2, Cancellation)).Reason);
         Assert.Equal(PostSearch.NeedsText, Assert.IsType<PostSearch.Answer.Refused>(await PostSearch.Run(" -- ", ct: Cancellation)).Reason);
         Assert.IsType<PostSearch.Answer.Found>(await PostSearch.Run("lantern", 1, PostSearch.PageLimit, Cancellation));
+        Assert.Equal(PostSearch.NeedsPage, Assert.IsType<PostSearch.Answer.Refused>(await PostSearch.Run("lantern", PostSearch.PageNumberLimit + 1, PostSearch.PageLimit, Cancellation)).Reason);
+        Assert.Equal(PostSearch.NeedsPage, Assert.IsType<PostSearch.Answer.Refused>(await PostSearch.Run("lantern", 50_000_000, PostSearch.PageLimit, Cancellation)).Reason);
+        Assert.Empty(Assert.IsType<PostSearch.Answer.Found>(await PostSearch.Run("lantern", PostSearch.PageNumberLimit, PostSearch.PageLimit, Cancellation)).Hits);
 
         var first = await Found("lantern", 1, 2);
         var second = await Found("lantern", 2, 2);
@@ -89,7 +93,10 @@ public sealed class PostSearchTests
     [Fact]
     public async Task The_composition_facts_name_the_post_index_with_its_provider_and_fields_and_readiness_reports_it_current_after_writes()
     {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        // A zero interval makes the probe after the writes measure, where the default would answer the start-time reading.
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            services: services => services.Configure<DataRuntimeOptions>(options => options.LexicalReadinessInterval = TimeSpan.Zero),
+            ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var topic = await Topic(writer, "Copper lanterns", "How the glass is cut.");
         await Answer(writer, topic.Id, "Annealing matters most.");
@@ -112,7 +119,7 @@ public sealed class PostSearchTests
             if (index is null) await Task.Delay(100, Cancellation);
         }
 
-        Assert.StartsWith("sqlite:current:", index);
+        Assert.Equal("sqlite:current:2/2", index);
     }
 
     [Fact]
