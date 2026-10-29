@@ -153,7 +153,7 @@ Pointers live on the site, since `/.well-known/` belongs to an origin: `<link re
 
 ## 12. Background work
 
-Koan jobs, each a reader that writes through the writer: profile capture, handle resolution, connection dispatch, reference polling, media processing, archive rendering. Backup and restore are verbs of the executable, not jobs: `Tangent.Server backup` takes a `VACUUM INTO` snapshot of the data folder with a hashed manifest, and `restore` puts one back, refusing a folder a running Tangent Space has marked. Nothing else runs in the background; nothing in a request does network I/O.
+Koan jobs, each a reader that writes through the writer: profile capture, handle resolution, connection dispatch, reference polling, media processing, archive rendering. At start, one service on Koan's background base asks whether the Post index covers every Post and has Koan rebuild it when a restored folder left it behind; it writes no row. Backup and restore are verbs of the executable, not jobs: `Tangent.Server backup` takes a `VACUUM INTO` snapshot of the data folder with a hashed manifest, and `restore` puts one back, refusing a folder a running Tangent Space has marked. Nothing else runs in the background; nothing in a request does network I/O.
 
 ## 13. Folders
 
@@ -187,6 +187,6 @@ Four questions the foundation slice set out to answer with an afternoon each, an
 - **A Koan transaction across several entity saves inside a background loop.** Settled: `EntityContext.Transaction(name, TransactionGuarantee.Atomic)` commits saves of two entity types from a `BackgroundService` in one native `BEGIN IMMEDIATE … COMMIT` on the SQLite route, and a throw before the commit persists neither; `tests/Tangent.Tests/SqlitePostureTests.cs` holds the facts.
 - **The HTML formatter beside Koan's JSON projection.** Settled: `HtmlFormatter` is the first MVC output formatter and claims only the types `ResourceComponents` registers, so the door answers as a page, a fragment or Koan's JSON by `Accept` and the fragment header; `tests/Tangent.Tests/Render/ShellTests.cs`.
 - **A Vue island mounting into server HTML with a fragment patch.** Settled for the patch: the fragment island mounts beside the server's HTML and refreshes its host from the resource's URL with the fragment header. The event stream that will drive the patch arrives with the log.
-- **Lexical search through Koan's SQLite connector.** Open: it waits on Koan's lexical search over entity fields and is proven when that lands.
+- **Lexical search through Koan's SQLite connector.** Settled: `Post.Title` and `Post.Body` carry Koan's `[Lexical]`, the connector keeps an FTS5 index in step with every commit, `PostSearch` answers a bounded page, best first, with marked snippets, and a start checks the index and rebuilds it through Koan when a restored folder left it behind; `tests/Tangent.Tests/Posts/PostSearchTests.cs`.
 
 A Koan answer that falls short is corrected in Koan.

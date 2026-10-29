@@ -70,6 +70,8 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Version** | A Post's content version, raised by every edit; receipts key on it. | `Post.Version` | — | *Revision*, *Edition*, *Generation* |
 | **Slug** | The URL name of a Topic, from its title at creation, never renamed. | `Post.Slug` | — | *Key*, Permalink, Handle (for this) |
 | **TID** | atproto's timestamp identifier: thirteen characters, sortable by time, minted by the client as a Post's Id and the idempotency key of its command. | `Tid` (the shape check); `Post.Id` | `/t/{tangent}/{topic}/{post}` | *UUID* (for a Post), *Sequence* (for this) |
+| **Search** | The Posts whose title or body hold the words of a text, best first; bounded in text, page and snippet; reads only. | `PostSearch.Run`; the Post index is Koan's lexical index over `Post.Title` and `Post.Body` | `/search` | *Query* (for this), *Lookup*, *Find* (for this) |
+| **Snippet** | The marked words of a Post around a search's matches, a bounded window wide. | `PostSearch.Hit.Snippet` | — | *Excerpt* (for this), *Highlight*, *Preview* (for this) |
 | **Media** | A file a Post references, stored once by content hash on Koan.Media. | `MediaEntity<…>` | — | Attachment, *Upload*, *Asset*, Blob (outside atproto) |
 | **Cover** | An article's lead image. | `Post.CoverId` | — | Hero, Banner, Featured image |
 

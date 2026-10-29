@@ -32,7 +32,7 @@ The tree boots, serves one page both ways, and every rule has a check.
 | Rule checks: no dialogs, language, greenfield scoped to the root tree, fixed ports | — | `tests/no-dialogs.test.mjs`, `scripts/check-greenfield.ps1` (harvest) | — | S | done |
 | Test fixture: the real host on a loopback port over a temp folder, once under a path prefix; parallel-safe | — | `ExperienceWebApp` edge cases (harvest) | `Sylin.Koan.Testing.Hosting` | S | done |
 | Lifecycle: one published binary and one data folder; build, launch, backup by `VACUUM INTO` and copy, restore; compose for Docker | — | `scripts/server-lifecycle.ps1`, `*.bat`, `compose.yaml`, `Dockerfile` (harvest) | — | S | done |
-| Lexical search proven through the SQLite connector | — | — | brief 4 | S | todo |
+| Lexical search proven through the SQLite connector | — | — | `Sylin.Koan.Data.Core` (`[Lexical]`) on the SQLite connector | S | done |
 
 ### 1 · The door and the names
 
