@@ -58,7 +58,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 
 **The page is the API.** One handler, one DTO, and the formatter decides: `Accept: text/html` renders it through a Razor component, `application/json` serializes it, and a fragment request header renders only the component for that resource. A Post's page, its JSON, its live patch and its archive file are the same DTO through the same component. Agents fetch the URL a person shares; `llms.txt` says so in two lines, and the descriptor carries `"api": 1` as the stability promise.
 
-`ETag` is `Post.Version` or `Event.Seq`; a page assembled from many rows, such as the Tangent page, carries a hash of its DTO, so a new Post, a moved checkpoint or a changed `can` changes it. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`, or the deciding overwrite or missing role in one sentence; what the reader may not view is absent and answers as not found.
+`ETag` is `Post.Version` or `Event.Seq`; a page assembled from many rows, such as the Tangent page, carries a hash of its DTO, so a new Post, a moved checkpoint or a changed `can` changes it. A page that carries a signed-in reader's forms carries a fresh antiforgery token and is never stored or revalidated. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`, or the deciding overwrite or missing role in one sentence; what the reader may not view is absent and answers as not found.
 
 ## 5. Data
 
@@ -82,7 +82,7 @@ Only the writer appends. Kinds: `post.created` (a reply's carries the author of 
 
 | Reader | Query |
 | --- | --- |
-| The door | one window of the newest events and the newest that target me, past my place checkpoint and my checkpoints for the Topic and Tangent of each, filtered by `can.view`, grouped: replies to me, mentions, new per Tangent, new articles; below it, and alone for a visitor or a reader with nothing new, the front page from the same window: whose place, what is featured, what is alive, who is around |
+| The door | one window of the newest events and the newest that target me, past my place checkpoint and my checkpoints for the Topic and Tangent of each (a mention past the place's and the Tangent's alone, since an edit can mention me in a Post I read before), filtered by `can.view`, grouped: first the Topics and Tangents I watch that hold something new, by the watch flag on those checkpoints, then replies to me, mentions, new per Tangent, new articles; below it, and alone for a visitor or a reader with nothing new, the front page from the same window: whose place, what is featured, what is alive, who is around |
 | Notifications | the subset where I am the target; reading advances the checkpoint |
 | The stream | `GET /events?since=` as server-sent events; the same URL without the stream header is the poll |
 | Feeds | public `post.created` per Tangent and for articles, rendered as Atom and JSON Feed |

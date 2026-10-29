@@ -1,0 +1,19 @@
+@using global::Tangent.Render
+@* The watch toggle of a Tangent or a Topic, for a signed-in reader: whether they watch it, and the button that posts
+   the opposite flag. A visitor has none. *@
+@if (Model is { } watching)
+{
+    <form class="watch-form" method="post" action="@watching.Action">
+        <FormTokenField Token="@watching.Token" />
+        <input type="hidden" name="@CheckpointController.WatchField" value="@(watching.Watch ? "false" : "true")">
+        @if (watching.Watch)
+        {
+            <span class="new-label">Watching</span>
+        }
+        <button type="submit" class="watch-button">@(watching.Watch ? "Stop watching" : "Watch")</button>
+    </form>
+}
+
+@code {
+    [Parameter] public Watching? Model { get; set; }
+}

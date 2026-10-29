@@ -20,7 +20,11 @@ namespace Tangent.Space;
 /// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
 /// those Topics and Tangents; and the people it shows. An event is new to the reader when it is past their place
 /// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
-/// not their own, and in a Tangent they may view; an event in a Tangent they may not view does not exist for them.
+/// not their own, and in a Tangent they may view; an event in a Tangent they may not view does not exist for them. A
+/// mention is not judged by the Topic's checkpoint: that counts the Topic's Posts as they arrived, and an edit can
+/// mention the reader in a Post they read long before, so a mention is new by its own place in the log alone.
+/// The Topics and Tangents among the news that the reader watches, by the watch flag on those same checkpoints, are
+/// listed first.
 /// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
 /// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
 /// rule, and its writers <see cref="Door.Around"/>. A reader without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
@@ -72,14 +76,16 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             .Where(e => e.Kind is EventKind.PostCreated or EventKind.Mention && Viewable(e.TangentId) && e.PostId is not null && e.TopicId is not null)
             .ToList();
         var posts = await Posts(concerning, ct);
-        var seen = reader is null ? new Dictionary<string, long>() : await Seen(reader.Id, concerning, ct);
+        var seen = reader is null ? new Dictionary<string, Checkpoint>() : await Seen(reader.Id, concerning, ct);
 
         bool New(Event e) =>
             reader is not null && e.Seq > since && e.ActorId != reader.Id && Viewable(e.TangentId)
             && posts.TryGetValue(e.PostId ?? "", out var post) && !post.Removed
             && posts.TryGetValue(e.TopicId ?? "", out var root) && !root.Removed
-            && (!seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Topic(root.Id)), out var topicSeen) || post.Sequence > topicSeen)
-            && (!seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Tangent(root.TangentId)), out var tangentSeen) || e.Seq > tangentSeen);
+            && (e.Kind == EventKind.Mention
+                || !seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Topic(root.Id)), out var topicSeen) || post.Sequence > topicSeen.Seq)
+            && (!seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Tangent(root.TangentId)), out var tangentSeen) || e.Seq > tangentSeen.Seq);
+        bool Watched(Scope scope) => reader is not null && seen.TryGetValue(Checkpoint.Key(reader.Id, scope), out var checkpoint) && checkpoint.Watch;
 
         var created = window.Where(e => e.Kind == EventKind.PostCreated && Viewable(e.TangentId)).ToList();
         var active = created.Select(e => e.TopicId).OfType<string>().Distinct(StringComparer.Ordinal)
@@ -118,6 +124,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             news = new Door.Since(
                 since,
                 through,
+                WatchedNews(fresh, Watched, posts, tangents, partial),
                 Group(replies, targetedFull, posts, tangents, people),
                 Group(mentions, targetedFull, posts, tangents, people),
                 fresh.GroupBy(e => e.TangentId!, StringComparer.Ordinal)
@@ -259,14 +266,31 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
         return (await Post.Get(ids, ct)).OfType<Post>().ToDictionary(post => post.Id, StringComparer.Ordinal);
     }
 
+    /// <summary>The watched Topics and Tangents among the new Posts, each with how many of them it holds, the one whose
+    /// newest Post is newest first: a Topic the reader watches, then the Tangent they watch, by the same order.</summary>
+    private IReadOnlyList<Door.Watched> WatchedNews(IReadOnlyList<Event> fresh, Func<Scope, bool> watched, IReadOnlyDictionary<string, Post> posts,
+        IReadOnlyDictionary<string, Tangents.Tangent> tangents, bool atLeast)
+    {
+        var topics = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal)
+            .Where(topic => watched(Scope.Topic(topic.Key)))
+            .Select(topic => (Newest: topic.Max(e => e.Seq), Item: new Door.Watched("topic", posts[topic.Key].Title ?? "",
+                Name(tangents, posts[topic.Key].TangentId), TopicAddress(posts[topic.Key]), topic.Count(), atLeast)));
+        var inTangents = fresh.GroupBy(e => e.TangentId!, StringComparer.Ordinal)
+            .Where(tangent => watched(Scope.Tangent(tangent.Key)))
+            .Select(tangent => (Newest: tangent.Max(e => e.Seq), Item: new Door.Watched("tangent", Name(tangents, tangent.Key),
+                Name(tangents, tangent.Key), Address(tangent.Key), tangent.Count(), atLeast)));
+        return topics.OrderByDescending(topic => topic.Newest).Concat(inTangents.OrderByDescending(tangent => tangent.Newest))
+            .Select(watch => watch.Item).ToList();
+    }
+
     /// <summary>The reader's checkpoints for the Topics and Tangents the events are in, by key, in one keyed read.</summary>
-    private static async Task<IReadOnlyDictionary<string, long>> Seen(string readerId, IReadOnlyList<Event> events, CancellationToken ct)
+    private static async Task<IReadOnlyDictionary<string, Checkpoint>> Seen(string readerId, IReadOnlyList<Event> events, CancellationToken ct)
     {
         var keys = events.Select(e => Checkpoint.Key(readerId, Scope.Topic(e.TopicId!)))
             .Concat(events.Select(e => Checkpoint.Key(readerId, Scope.Tangent(e.TangentId!))))
             .Distinct(StringComparer.Ordinal).ToList();
-        if (keys.Count == 0) return new Dictionary<string, long>();
-        return (await Checkpoint.Get(keys, ct)).OfType<Checkpoint>().ToDictionary(checkpoint => checkpoint.Id, checkpoint => checkpoint.Seq, StringComparer.Ordinal);
+        if (keys.Count == 0) return new Dictionary<string, Checkpoint>();
+        return (await Checkpoint.Get(keys, ct)).OfType<Checkpoint>().ToDictionary(checkpoint => checkpoint.Id, StringComparer.Ordinal);
     }
 
     /// <summary>Everyone the door shows, in one keyed read, by participant Id.</summary>

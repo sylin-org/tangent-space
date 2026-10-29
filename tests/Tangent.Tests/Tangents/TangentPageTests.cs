@@ -328,7 +328,7 @@ public sealed class TangentPageTests
         var topic = new TangentPage.Topic(Tids.Mint(), "a-question", "A question", "topic", $"{BaseUrl}/t/{Workshop}/a-question", author,
             "Words.", 1, 0, at, at, false, false, null, [author], false, 0);
         var today = new TangentPage(Workshop, "The workshop", "", "topic", "public", $"{BaseUrl}/t/{Workshop}", ["View"], [topic], null,
-            false, null, null, [], "Tangent Space", BaseUrl + "/", null, new DateOnly(2026, 10, 29));
+            false, null, null, null, [], "Tangent Space", BaseUrl + "/", null, new DateOnly(2026, 10, 29));
         var tomorrow = today with { Day = new DateOnly(2026, 10, 30) };
 
         Assert.Equal(TangentPage.Version(today), TangentPage.Version(today with { }));
