@@ -179,7 +179,7 @@ public sealed partial class DiscoveryTests
         var llmsText = await llms.Content.ReadAsStringAsync(Cancellation);
 
         Assert.Equal(HttpStatusCode.OK, door.StatusCode);
-        Assert.Equal(baseUrl, doorJson.RootElement.GetProperty("baseUrl").GetString());
+        Assert.Equal($"{baseUrl}/", doorJson.RootElement.GetProperty("address").GetString());
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         Assert.Contains($"{baseUrl}/tangent.js", await page.Content.ReadAsStringAsync(Cancellation));
         Assert.Equal(HttpStatusCode.OK, descriptor.StatusCode);
