@@ -46,7 +46,9 @@ public sealed class SignInTests
         Assert.Contains("data-island=\"appearance\"", html);
         Assert.DoesNotContain("role=\"alert\"", html);
         Assert.DoesNotContain("<dialog", html);
-        Assert.Equal($"{BaseUrl}/auth/atproto/challenge?return={Uri.EscapeDataString(comeBack)}", json.RootElement.GetProperty("challenge").GetString());
+        Assert.Contains($"<input type=\"hidden\" name=\"failure\" value=\"{WebUtility.HtmlEncode(comeBack)}\" data-carry=\"identifier\" data-carry-as=\"handle\" />", html);
+        Assert.Equal($"{BaseUrl}/auth/atproto/challenge?return={Uri.EscapeDataString(comeBack)}&failure={Uri.EscapeDataString(comeBack)}",
+            json.RootElement.GetProperty("challenge").GetString());
         Assert.Equal("/", json.RootElement.GetProperty("return").GetString());
         Assert.False(json.RootElement.TryGetProperty("arrival", out _));
         Assert.False(json.RootElement.TryGetProperty("failure", out _));
@@ -55,25 +57,60 @@ public sealed class SignInTests
         Assert.Equal($"{BaseUrl}/auth/atproto/callback", metadata.RootElement.GetProperty("redirect_uris")[0].GetString());
     }
 
-    [Fact]
-    public async Task The_error_states_render_the_failure_inline_keep_the_handle_and_never_echo_the_query()
+    [Theory]
+    [InlineData("handle_unresolved", true, "No AT Protocol account answers to this handle. Check its spelling and continue.")]
+    [InlineData("provider_unreachable", false, "Your account’s provider couldn’t be reached. Continue to try again in a moment.")]
+    [InlineData("access_denied", false, "The sign-in was declined on your provider’s page. Continue to try again.")]
+    [InlineData("callback_mismatch", false, "The sign-in came back without the request it began with. Continue to start again.")]
+    [InlineData("sign_in_failed", false, "Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.")]
+    [InlineData("<b>provider said</b>", false, "Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.")]
+    public async Task Each_failure_code_renders_its_words_inline_and_keeps_the_typed_handle(string code, bool ofHandle, string words)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var query = "/sign-in?error=" + Uri.EscapeDataString(code) + "&handle=ada.bsky.social";
 
-        var unverified = WebUtility.HtmlDecode(await Read(tangentSpace, $"/sign-in?failure={SignIn.VerificationFailed}&handle=ada.bsky.social", "text/html"));
-        using var json = JsonDocument.Parse(await Read(tangentSpace, "/sign-in?failure=" + SignIn.VerificationFailed, "application/json"));
-        var notFound = await Read(tangentSpace, $"/sign-in?failure={SignIn.HandleNotFound}&handle=nobody.example", "text/html");
-        var other = await Read(tangentSpace, "/sign-in?failure=" + Uri.EscapeDataString("<b>provider said</b>") + "&handle=" + Uri.EscapeDataString("a b"), "text/html");
+        var html = WebUtility.HtmlDecode(await Read(tangentSpace, query, "text/html"));
+        using var json = JsonDocument.Parse(await Read(tangentSpace, query, "application/json"));
 
-        Assert.Contains("<p class=\"sign-in-failure\" id=\"sign-in-failure\" role=\"alert\">Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.</p>", unverified);
-        Assert.Contains("value=\"ada.bsky.social\" aria-invalid=\"false\" aria-describedby=\"sign-in-failure\"", unverified);
-        Assert.Equal("Your provider didn’t confirm the sign-in. Continue, then approve it on your provider’s page.", json.RootElement.GetProperty("failure").GetString());
-        Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\" aria-describedby=\"sign-in-handle-failure\"", notFound);
-        Assert.Contains("<p class=\"field-failure\" id=\"sign-in-handle-failure\">No AT Protocol account answers to this handle.", notFound);
-        Assert.DoesNotContain("role=\"alert\"", notFound);
-        Assert.Contains("role=\"alert\">Sign-in could not be completed. Check your handle and continue to try again.</p>", other);
-        Assert.DoesNotContain("provider said", other);
-        Assert.DoesNotContain("value=\"a b\"", other);
+        Assert.Contains("value=\"ada.bsky.social\"", html);
+        Assert.DoesNotContain("provider said", html);
+        if (ofHandle)
+        {
+            Assert.Contains($"<p class=\"field-failure\" id=\"sign-in-handle-failure\">{words}</p>", html);
+            Assert.Contains("aria-invalid=\"true\" aria-describedby=\"sign-in-handle-failure\"", html);
+            Assert.DoesNotContain("role=\"alert\"", html);
+            Assert.Equal(words, json.RootElement.GetProperty("handleFailure").GetString());
+        }
+        else
+        {
+            Assert.Contains($"<p class=\"sign-in-failure\" id=\"sign-in-failure\" role=\"alert\">{words}</p>", html);
+            Assert.Contains("aria-invalid=\"false\" aria-describedby=\"sign-in-failure\"", html);
+            Assert.Equal(words, json.RootElement.GetProperty("failure").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task A_sign_in_refused_at_the_provider_comes_back_to_the_sign_in_page_with_the_typed_handle_and_its_words()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        using var browser = new Browser(tangentSpace);
+        var landing = "/sign-in?return=%2F&handle=ada.bsky.social";
+
+        // The challenge as the page's form sends it, then the provider answering our state with a refusal.
+        using var challenged = await browser.Client.GetAsync(
+            "/auth/test/challenge?return=" + Uri.EscapeDataString("/sign-in?return=%2F") + "&failure=" + Uri.EscapeDataString(landing), Cancellation);
+        var authorize = challenged.Headers.Location!;
+        var state = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(new Uri(BaseUrl), authorize).Query)["state"].ToString();
+        using var refused = await browser.Client.GetAsync("/auth/test/callback?error=access_denied&state=" + Uri.EscapeDataString(state), Cancellation);
+        using var page = await browser.Follow(HttpMethod.Get, refused.Headers.Location!.OriginalString, Cancellation);
+        var html = WebUtility.HtmlDecode(await page.Content.ReadAsStringAsync(Cancellation));
+
+        Assert.Equal(HttpStatusCode.Redirect, challenged.StatusCode);
+        Assert.Equal(landing + "&error=access_denied", refused.Headers.Location!.OriginalString);
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("role=\"alert\">The sign-in was declined on your provider’s page. Continue to try again.</p>", html);
+        Assert.Contains("value=\"ada.bsky.social\"", html);
+        Assert.Equal(0, await Participant.Count.Exact(Cancellation));
     }
 
     [Theory]

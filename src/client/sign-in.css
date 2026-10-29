@@ -26,7 +26,7 @@
 .panel-head-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 25%, var(--ts-image-band) 92%);
+  background: linear-gradient(180deg, transparent 20%, var(--ts-image-band) 76%);
 }
 
 .panel-head-mark {
