@@ -60,8 +60,9 @@ public static class Origins
     }
 
     /// <summary>The Topics taken on a tangent from each of <paramref name="origins"/> that the reader may view, by origin
-    /// Id, newest first, at most <see cref="TakenLimit"/> each, saying "at least" where more are; an origin with none is
-    /// not in the answer. One range of <c>ix_post_origins</c> per origin, at most <see cref="TakenRead"/> rows, then the
+    /// Id, newest first, at most <see cref="TakenLimit"/> each, with how many of those read the reader may view, and
+    /// "at least" where more than the bound are or the read was full, since more they may view can lie past it; an
+    /// origin with none is not in the answer. One range of <c>ix_post_origins</c> per origin, at most <see cref="TakenRead"/> rows, then the
     /// Tangents of what was found by Id and their overwrites from Koan's cache.</summary>
     public static async Task<IReadOnlyDictionary<string, TopicPage.Taken>> From(IReadOnlyList<Post> origins, string? personId, string configured,
         CancellationToken ct)
@@ -90,7 +91,8 @@ public static class Origins
                     PostWrites.TopicAddress(configured, post.TangentId, post.Slug ?? post.Id),
                     tangents[post.TangentId].Name,
                     post.Removed)).ToList(),
-                viewable.Count > TakenLimit);
+                viewable.Count,
+                viewable.Count > TakenLimit || rows.Count == TakenRead);
         }
 
         return taken;

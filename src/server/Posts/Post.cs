@@ -141,7 +141,7 @@ public sealed class Post : Entity<Post>
         if (string.IsNullOrWhiteSpace(authorId)) throw new Refusal(NeedsAuthor);
         CheckTitle(title);
         var text = RootBody(body, originId);
-        if (text.Length > 0) CheckBody(body);
+        if (originId is null || text.Length > 0) CheckBody(body);
         return new Post
         {
             Id = id,
@@ -203,12 +203,14 @@ public sealed class Post : Entity<Post>
         Body == body && (ParentId is null ? title is null || Title == title.Trim() : string.IsNullOrEmpty(title));
 
     /// <summary>Changes the body, and a root's title when one is sent, and raises <see cref="Version"/>, or a refusal: the
-    /// Post is not removed, the body and title are within their limits, and a reply is sent no title. The pre-edit
+    /// Post is not removed, the body and title are within their limits, and a reply is sent no title. A root taken on a
+    /// tangent may keep no body of its author's own (<see cref="RootBody"/>); every other Post needs one. The pre-edit
     /// snapshot is the caller's, taken before this.</summary>
     public void Edit(PostBody body, string? title)
     {
         if (Removed) throw new Refusal(PostRemoved);
-        CheckBody(body);
+        var text = ParentId is null ? RootBody(body, OriginId) : body.Text;
+        if (OriginId is null || ParentId is not null || text.Length > 0) CheckBody(body);
         if (ParentId is not null && !string.IsNullOrEmpty(title)) throw new Refusal(NoTitleOnReply);
         if (ParentId is null && title is not null)
         {
@@ -216,8 +218,8 @@ public sealed class Post : Entity<Post>
             Title = title.Trim();
         }
 
-        Body = body.Text;
-        MentionedIds = [.. body.Mentioned];
+        Body = text;
+        MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [];
         Version = checked(Version + 1);
     }
 

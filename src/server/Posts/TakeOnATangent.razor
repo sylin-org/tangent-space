@@ -22,11 +22,8 @@
 @code {
     [Parameter, EditorRequired] public TopicPage.Post Model { get; set; } = default!;
 
-    /// <summary>How many Topics were taken from the Post, in words: the number the page shows, or "at least" one more
-    /// than it shows where more are.</summary>
+    /// <summary>How many Topics were taken from the Post, in words: the number the page found, "at least" before it
+    /// where more may be.</summary>
     private static string Heading(TopicPage.Taken taken)
-    {
-        var count = taken.AtLeast ? taken.Topics.Count + 1 : taken.Topics.Count;
-        return "Taken on a tangent in " + (taken.AtLeast ? "at least " : "") + count + (count == 1 ? " topic:" : " topics:");
-    }
+        => "Taken on a tangent in " + (taken.AtLeast ? "at least " : "") + taken.Count + (taken.Count == 1 && !taken.AtLeast ? " topic:" : " topics:");
 }

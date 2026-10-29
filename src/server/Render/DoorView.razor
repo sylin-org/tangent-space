@@ -4,7 +4,7 @@
 @using Tangent.Tangents
 @* The door: whose place this is, in the head with what it holds; the Tangents the reader may view and who is around in
    the rail; and in the column, for a signed-in reader with news, what is new since they were here — one sentence,
-   then replies to them, mentions of them, the new articles and what is new in each Tangent, with the form that marks
+   then replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
    in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address. *@
@@ -88,6 +88,7 @@
                         <Tangent.Events.WatchedNews Model="@news.Watched" />
                         @Items("Replies to you", news.Replies)
                         @Items("Mentions of you", news.Mentions)
+                        <TakenNews Model="@news.Taken" Today="@Model.Day" />
                         @Items("New articles", news.Articles)
                         @if (news.PerTangent.Count > 0)
                         {
@@ -148,6 +149,7 @@
         var parts = new List<string>();
         if (news.Replies.Count > 0) parts.Add(Words(news.Replies.Count, news.Replies.AtLeast, "reply", "replies") + " to you");
         if (news.Mentions.Count > 0) parts.Add(Words(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
+        if (news.Taken is { Count: > 0 } taken) parts.Add(Words(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
         foreach (var tangent in news.PerTangent)
             parts.Add(Words(tangent.Topics + tangent.Replies, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
         if (news.Articles.Count > 0) parts.Add(Words(news.Articles.Count, news.Articles.AtLeast, "new article", "new articles"));

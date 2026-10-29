@@ -97,16 +97,21 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
 
         var fresh = window.Where(e => e.Kind == EventKind.PostCreated && New(e)).ToList();
         var freshIn = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal).ToDictionary(topic => topic.Key, topic => topic.Count(), StringComparer.Ordinal);
-        var replies = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e)).ToList();
+        // A Topic taken on a tangent from the reader's Post targets them too; its root is not a reply, so it is a group of
+        // its own.
+        bool TakenOnATangent(Event e) => posts.TryGetValue(e.PostId ?? "", out var post) && post is { ParentId: null, OriginId: not null };
+        var replies = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e) && !TakenOnATangent(e)).ToList();
+        var taken = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e) && TakenOnATangent(e)).ToList();
         var mentions = targeted.Where(e => e.Kind == EventKind.Mention && e.TargetId == reader?.Id && New(e)).ToList();
         var articles = fresh.Where(e => e.PostId == e.TopicId && posts[e.TopicId!].Kind == PostKind.Article).ToList();
 
         var people = await People(
             new[] { space.ProprietorId, reader?.Id }
-                .Concat(replies.Concat(mentions).Concat(articles).Select(e => e.ActorId))
+                .Concat(replies.Concat(mentions).Concat(articles).Concat(taken).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
                 .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
-                .Concat(replies.Take(ItemLimit).Concat(mentions.Take(ItemLimit)).Concat(articles.Take(ItemLimit)).Select(e => posts[e.PostId!])
+                .Concat(replies.Take(ItemLimit).Concat(mentions.Take(ItemLimit)).Concat(articles.Take(ItemLimit)).Concat(taken.Take(ItemLimit))
+                    .Select(e => posts[e.PostId!])
                     .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds)),
             ct);
 
@@ -132,7 +137,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
                         byTangent.Count(e => e.PostId == e.TopicId), byTangent.Count(e => e.PostId != e.TopicId), partial))
                     .ToList(),
                 Group(articles, partial, posts, tangents, people),
-                null);
+                null,
+                Group(taken, targetedFull, posts, tangents, people));
             // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
             // other door of a signed-in reader is theirs alone to cache.
             if (!news.Quiet) news = news with { CaughtUp = new Door.CaughtUp(door, through, FormToken.For(HttpContext)) };

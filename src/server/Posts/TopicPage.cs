@@ -88,8 +88,9 @@ public sealed record TopicPage(
     }
 
     /// <summary>The Topics taken on a tangent from one Post that the reader may view, newest first, bounded;
-    /// <see cref="AtLeast"/> where more are than it holds.</summary>
-    public sealed record Taken(IReadOnlyList<TakenTopic> Topics, bool AtLeast);
+    /// <see cref="Count"/> is how many the page found that they may view, and <see cref="AtLeast"/> says more may be
+    /// than it found.</summary>
+    public sealed record Taken(IReadOnlyList<TakenTopic> Topics, int Count, bool AtLeast);
 
     /// <summary>One Topic taken on a tangent from a Post: its title, address and Tangent's name, and whether its root is
     /// removed.</summary>

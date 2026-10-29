@@ -202,6 +202,82 @@ public sealed class TakeOnATangentTests
         Assert.DoesNotContain("Bea starts early.", removedRoot.Body);
     }
 
+    [Fact]
+    public async Task Only_a_root_taken_on_a_tangent_starts_or_is_edited_without_a_body_of_its_own()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
+        using var ada = await SignedIn(tangentSpace, Ada);
+        const string form = "/t/" + Workshop + "/new";
+
+        var bare = await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Nothing to say", "", Ada), Cancellation);
+        var bareJson = await Json(ada, form, form, new { id = Tids.Mint(), title = "Nothing to say", body = "" });
+        var bareReply = await writer.Send(new Reply(Tids.Mint(), topic.Id, "", Ada), Cancellation);
+        var taken = await Taken(writer, Ada, topic, Workshop, "Lanterns elsewhere");
+        var retitled = await writer.Send(new EditPost(taken.Id, taken.Version, "", "Lanterns, elsewhere", Ada), Cancellation);
+        var emptied = await writer.Send(new EditPost(topic.Id, topic.Version, "", "Lanterns at dawn", Ada), Cancellation);
+
+        Assert.Equal(Post.NeedsBody, Assert.IsType<Outcome<Post>.Refused>(bare).Reason);
+        Assert.Equal(HttpStatusCode.BadRequest, bareJson.Status);
+        Assert.Equal(Post.NeedsBody, bareJson.Json.GetProperty("detail").GetString());
+        Assert.Equal(Post.NeedsBody, Assert.IsType<Outcome<Post>.Refused>(bareReply).Reason);
+        Assert.Equal("", taken.Body);
+        var edited = Assert.IsType<Outcome<Post>.Done>(retitled).Result;
+        Assert.Equal(("Lanterns, elsewhere", "", 2L), (edited.Title, edited.Body, edited.Version));
+        Assert.Equal(Post.NeedsBody, Assert.IsType<Outcome<Post>.Refused>(emptied).Reason);
+        Assert.Equal(("Lanterns at dusk", "Who lights theirs first?"), ((await Post.Get(topic.Id, Cancellation))?.Title, (await Post.Get(topic.Id, Cancellation))?.Body));
+    }
+
+    [Fact]
+    public async Task A_topic_taken_from_a_readers_post_is_a_group_of_its_own_on_their_door_and_never_a_reply()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.ATangent(tangentSpace, Garden, ct: Cancellation);
+        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(writer, topic, Bea, "I do, at six.");
+        var answer = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), topic.Id, "Six is early.", Ada, reply.Id), Cancellation)).Result;
+        using var bea = await SignedIn(tangentSpace, Bea);
+        var before = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
+
+        var taken = await Taken(writer, Ada, reply, Garden, "Six o’clock lanterns");
+        var door = await Send(bea.Client, HttpMethod.Get, "/", json: true);
+        var page = await Send(bea.Client, HttpMethod.Get, "/");
+
+        var news = door.Json.GetProperty("news");
+        Assert.Equal((1, answer.Id), (before.GetProperty("replies").GetProperty("count").GetInt32(),
+            before.GetProperty("replies").GetProperty("posts")[0].GetProperty("postId").GetString()));
+        Assert.Equal((1, answer.Id), (news.GetProperty("replies").GetProperty("count").GetInt32(),
+            news.GetProperty("replies").GetProperty("posts")[0].GetProperty("postId").GetString()));
+        Assert.Equal((1, taken.Id), (news.GetProperty("taken").GetProperty("count").GetInt32(),
+            news.GetProperty("taken").GetProperty("posts")[0].GetProperty("postId").GetString()));
+        var html = WebUtility.HtmlDecode(page.Body);
+        Assert.Contains("1 reply to you, 1 topic taken on a tangent from your posts", html);
+        Assert.Contains("Taken on a tangent from your posts · 1", html);
+    }
+
+    [Fact]
+    public async Task At_least_is_said_when_topics_the_reader_may_not_view_fill_the_read()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Root, [Roles.Administrator], ct: Cancellation);
+        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
+        for (var open = 1; open <= 6; open++) await Taken(writer, Bea, topic, Workshop, "Open " + open, at: Start.AddMinutes(open));
+        for (var hidden = 1; hidden <= 7; hidden++) await Taken(writer, Root, topic, Studio, "Hidden " + hidden, at: Start.AddHours(1).AddMinutes(hidden));
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var json = await Send(ada.Client, HttpMethod.Get, TopicPath(topic), json: true);
+        var page = await Send(ada.Client, HttpMethod.Get, TopicPath(topic));
+
+        var taken = Taken(json.Json, topic.Id);
+        Assert.Equal((true, 5), (taken.GetProperty("atLeast").GetBoolean(), taken.GetProperty("count").GetInt32()));
+        Assert.Equal(["Open 6", "Open 5", "Open 4", "Open 3", "Open 2"], Titles(taken));
+        Assert.Contains("Taken on a tangent in at least 5 topics:", page.Body);
+        Assert.DoesNotContain("Hidden", json.Body + page.Body);
+    }
+
     private static readonly DateTimeOffset Start = new(2026, 10, 1, 9, 0, 0, TimeSpan.Zero);
 
     /// <summary>A Topic taken on a tangent from <paramref name="origin"/> into <paramref name="tangent"/>, through the
