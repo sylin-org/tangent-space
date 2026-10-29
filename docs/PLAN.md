@@ -103,3 +103,28 @@ A slice closes when its packages are done, every screen in it holds the visual g
 ## What is measured, slice by slice
 
 After each slice the lead records in its report: packages completed and by which role; reviewer findings per package; visual-loop rounds per screen; escalations and what resolved them; Koan corrections made. Two slices of that are an effort sweep in practice: a role whose packages pass review first time at `high` is tried at `medium`; a role that escalates is moved up a model, not up an effort. The role table changes only on that evidence.
+
+## Slice 0 report
+
+Closed 29 October 2026 at `e664cb0`, `main` fast-forwarded from `dev`.
+
+| Package | Role, model, effort | Review rounds with findings | Visual rounds | Escalations | Koan |
+| --- | --- | --- | --- | --- | --- |
+| 0.1 Server skeleton | first of its kind, Fable high | 1 | — | — | K1 briefs 1 and 2 written from its probes |
+| 0.7 Rule checks | explorer-grade, Sonnet medium | 1 (parser gaps) | — | — | — |
+| 0.5 Design foundation | repeat, Opus high | 1 | — | — | — |
+| 0.3 HTML projection | first of its kind, Fable high | 1 (any-method 404, exception to problem, ETag per representation, HEAD, encoded path) | — | — | non-sealed DTO loses negotiation: queued |
+| 0.8 Test fixture | repeat, Opus high | 1 (binding test) | — | — | `KoanIntegrationHost` cannot host Kestrel: queued |
+| 0.4 Island bootstrap | repeat, Opus high | 1 | — | — | static files under a path: fixed by K1b |
+| 0.6 Capture script | repeat, Opus high | 1 | — | — | — |
+| 0.9 Lifecycle | repeat, Opus high | 2 (restore under a running server) | — | — | — |
+| 0.11 Re-pin | first of its kind, Fable high | 2 (launch held the caller's pipe; the handle change was permanent) | — | the hang: guardrails added | adopts K1a and K1b |
+| 0.2 The writer | first of its kind, Fable xhigh | 1 (unknown commit outcome, replay announced, scope opening, a sentence) | — | — | Communication's entity-bound events do not carry a generic commit: noted |
+| 0.10 Lexical search | explorer-grade, Sonnet medium | 1 (page overflow, cached reading, a forbidden word) | — | — | page overflow in `LexicalQuery`: queued; count-only `Status`: queued |
+| K1a SQLite posture and atomic commit | first of its kind (Koan), Fable high | 1 (busy timeout and the driver's timeout, one native unit per connection identity, simultaneous saves) | — | — | DATA-0158 |
+| K1b Canonical base URL | first of its kind (Koan), Fable high | 2 (six findings, then a `:80` issuer mismatch) | — | — | WEB-0078 |
+| K4 Lexical search | first of its kind (Koan), Fable high | 1 (missing-index refusal, a warning, bounded readiness) | — | — | DATA-0159 |
+
+No screen in this slice reached the visual loop: the door's skeleton has no reference and waits on its mock. Every package needed one review round; two needed two. No package escalated to Leo on its content; the one escalation was the 0.11 hang, answered by the no-unbounded-wait rule, the executor preamble, the lead's scheduled check and the orphan finder. Koan corrections made: K1a, K1b, K4; queued for its status task: the non-sealed DTO guard, a web-capable test host, the `TenancyAmbient` flake, the SqliteVec fixture posture, the MCP `ResourceUri` contract, the `LexicalQuery` page overflow, the count-only lexical `Status`, two `CS0419` and three `CS1573` warnings, the PostgreSQL suite's host-spelling timeouts, and the test output root shared across checkouts.
+
+Reading for the effort sweep: Fable at `high` and `xhigh` and Opus at `high` each passed review on the second round at most, with one round the norm; Sonnet at `medium` did the same on explorer-grade packages. Nothing here moves a role yet; the second slice decides.
