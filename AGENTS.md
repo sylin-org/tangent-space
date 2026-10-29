@@ -17,7 +17,8 @@ The repository root is the product: .NET 10 on Koan for the server, Razor compon
 - **Ports are fixed.** The server listens on 5220 or the port an operator names.
 - **A screen is not done below the visual gate.** Run the `visual-loop` skill on every change a participant can see; the gate is a mean of 8.5 with no dimension below 7, scored by an independent reviewer.
 - **Verification is lean.** One relevant build or check plus the affected happy path; focused extra checks only for an observed failure.
-- Commits happen when Leo says so; nothing is pushed without his word. Never `git reset --hard`, `git clean` or replace a checkout wholesale.
+- **Work runs in packages, by role.** [docs/PLAN.md](docs/PLAN.md) assigns every package a role with a model and an effort; the `work-split` skill applies it before a package starts. One package, one session, one model; a fresh-context reviewer before Leo's commit word.
+- Commits happen when Leo says so, with one standing exception: an executor session commits on its own branch when its package passes its checks. Nothing is merged or pushed without his word. Never `git reset --hard`, `git clean` or replace a checkout wholesale.
 
 ## Koan
 

@@ -35,7 +35,7 @@ Mean ≥ 8.5, no dimension below 7, no hard-gate failure, at every width, theme 
 
 ## Scorer
 
-Spawn a subagent with a fresh context. Give it only: the captures, the reference captures, the relevant `spec/` sections, this rubric. Never the builder's reasoning or diff. It returns a scorecard per width and theme. If any mean falls within 0.3 of the gate, spawn a second scorer; the lower result stands.
+Spawn the `scorer` agent (`.claude/agents/scorer.md`: Opus 5.5 at high, a fresh context). Give it only: the captures, the reference captures, the relevant `spec/` sections, this rubric. Never the builder's reasoning or diff. It returns a scorecard per width and theme. If any mean falls within 0.3 of the gate, spawn it again with `model: "sonnet"` — a different family — and the lower result stands.
 
 ## Loop
 
