@@ -1,6 +1,6 @@
 # Feature map
 
-What the tree at the root contains when it is done, in the order it is built. Every line is judged against [BRIEF](BRIEF.md) and shaped by [ARCHITECTURE](ARCHITECTURE.md); the harvest column names the unit [HARVEST](HARVEST.md) carries, or `new` when nothing does; the Koan column names the package used or the brief the line waits on. A screen is done when the `visual-loop` skill passes it. Sizes: S is a day, M a few days, L a week or more.
+What the tree at the root contains when it is done, in the order it is built. Every line is judged against [BRIEF](BRIEF.md) and shaped by [ARCHITECTURE](ARCHITECTURE.md); the harvest column names the unit [HARVEST](HARVEST.md) carries, or `new` when nothing does; the Koan column names the package used or the brief the line waits on. A line is done when it works; until Leo calls the polish stage its screens are captured and listed in [SCREENS](SCREENS.md) as owing the visual gate, which the `visual-loop` skill holds them to at that stage. Sizes: S is a day, M a few days, L a week or more.
 
 Status: `todo` · `doing` · `done`. Everything is `todo` on 28 October 2026.
 
@@ -44,10 +44,10 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | atproto sign-in; the person reconciled from the DID; the participant facet; profile capture as a job; declared kind only | sign-in | `Identity/*` minus classification and the capture inference (harvest) | `Sylin.Koan.Web.Auth.Connector.Atproto`, `Sylin.Koan.Identity` | M | done |
 | Access: Koan roles seeded (`everyone`, member, moderator), overwrites, `Capabilities.For`, `can` on every resource, `gate` from the explainer | — | `TangentPermissions` catalog, `AccessEvaluator` reason table (harvest) | `Sylin.Koan.Identity`; brief 2 | M | done |
 | First run: the operator signs in, names the Tangent Space, sets the base URL, declares proprietor and operator; the page prints the site's pointer snippets | first-run | `OnboardingPanel`, `FirstArrival`, `ServerGovernance` (harvest) | — | S | done |
-| The door as one resource: for a visitor, whose place this is, what is featured, what is alive; signed in, since my checkpoints — replies to me, mentions, new per Tangent, new articles — who is around, what I can do | door signed-out, door signed-in | `ExperienceDigest`, `AttentionCompiler` (harvest); `SpaceHero`, `ContinueReading`, `ForumSidebar` (harvest) | — | L | todo |
+| The door as one resource: for a visitor, whose place this is, what is featured, what is alive; signed in, since my checkpoints — replies to me, mentions, new per Tangent, new articles — who is around, what I can do | door signed-out, door signed-in | `ExperienceDigest`, `AttentionCompiler` (harvest); `SpaceHero`, `ContinueReading`, `ForumSidebar` (harvest) | — | L | doing |
 | The Tangent page: topics with what is new marked, bounded | tangent | `TopicList`, `TopicRow`, `DirectorySummaries` (harvest) | — | S | done |
-| Discovery: `tangent.json`, `llms.txt`, `<link rel="tangent">` on the site, `/.well-known/tangent` at the site origin, `_tangent` TXT; the reverse-proxy rule for a path install | — | new | — | S | todo |
-| The delegated agent door: the consent page for `Koan.Web.Auth.Server`, the Device flow, a pre-registered public client; `llms.txt` says how | consent | new | `Sylin.Koan.Web.Auth.Server`, `Sylin.Koan.Security.Trust` | S | todo |
+| Discovery: `tangent.json`, `llms.txt`, `<link rel="tangent">` on the site, `/.well-known/tangent` at the site origin, `_tangent` TXT; the reverse-proxy rule for a path install | — | new | — | S | doing |
+| The delegated agent door: the consent page for `Koan.Web.Auth.Server`, the Device flow, a pre-registered public client; `llms.txt` says how | consent | new | `Sylin.Koan.Web.Auth.Server`, `Sylin.Koan.Security.Trust` | S | doing |
 | Phone layouts for the door and the Tangent | door, tangent at 390 | `mobile-reader.css` (transplant) | — | S | todo |
 
 ### 2 · Conversation
