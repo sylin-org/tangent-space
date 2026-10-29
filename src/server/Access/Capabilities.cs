@@ -78,9 +78,11 @@ public sealed class Capabilities
     /// <see cref="Bit.View"/> on a public place comes from. <paramref name="overwrites"/> are the Tangent's; the
     /// Tangent Space itself has none. <paramref name="now"/> decides whether a timeout has ended. <paramref name="post"/>
     /// is the Topic's root for a question about the Topic, the Post itself for a question about that Post, and null
-    /// for a Tangent or the place.</summary>
+    /// for a Tangent or the place. <paramref name="root"/> is the Topic's root for a question about a reply: a locked or
+    /// removed root drops <see cref="Bit.Post"/> on every reply of its Topic with that gate, while the reply's own
+    /// removal governs everything else.</summary>
     public static Capabilities For(Participant? participant, IEnumerable<string> tokens, TangentSpace space,
-        IReadOnlyList<Overwrite> overwrites, DateTimeOffset now, Post? post = null)
+        IReadOnlyList<Overwrite> overwrites, DateTimeOffset now, Post? post = null, Post? root = null)
     {
         var missing = new Dictionary<Bit, string>();
         var held = Bits.All;
@@ -118,7 +120,10 @@ public sealed class Capabilities
             return new Capabilities(Bit.None, false, missing, roleIds);
         }
 
-        if (post is { Locked: true }) Drop(Bit.Post, Locked);
+        // Replying is judged by the Topic, whose state lives on its root; everything else by the Post itself.
+        var topic = root ?? post;
+        if (topic is { Locked: true }) Drop(Bit.Post, Locked);
+        if (topic is { Removed: true }) Drop(Bit.Post, Removed);
         if (post is { Removed: true }) Drop(Bits.All, Removed);
 
         foreach (var bit in Bits.Each)
