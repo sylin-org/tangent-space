@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Tangent.Access;
 using Tangent.Events;
 using Tangent.Writer;
 using Xunit;
@@ -13,11 +14,21 @@ public sealed class PostTests
 
     private const string Workshop = "the-workshop";
 
+    /// <summary>The workshop and the articles Tangents, public, with leo and ada as members; then the writer.</summary>
+    private static async Task<WriteLoop> Started(TangentSpaceFixture tangentSpace)
+    {
+        await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
+        await Given.ATangent(tangentSpace, "articles", ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Member], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
+        return tangentSpace.Services.GetRequiredService<WriteLoop>();
+    }
+
     [Fact]
     public async Task A_topic_started_by_command_is_a_root_post_with_a_slug_from_its_title_deduplicated_in_its_tangent_and_appends_post_created()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
         var firstId = Tids.Mint();
         var secondId = Tids.Mint();
         var elsewhereId = Tids.Mint();
@@ -46,7 +57,7 @@ public sealed class PostTests
     public async Task Past_fifty_topics_with_one_slug_the_posts_own_id_is_the_suffix_and_the_slug_stays_within_the_limit()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
         var title = new string('a', Slug.Limit + 10);
         var slugs = new List<string>();
         string lastId = "";
@@ -69,7 +80,7 @@ public sealed class PostTests
     public async Task A_reply_by_command_carries_the_roots_tangent_and_topic_takes_the_next_sequence_moves_the_root_and_appends_post_created()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
         var topicId = Tids.Mint();
         var startedAt = new DateTimeOffset(2026, 10, 29, 9, 0, 0, TimeSpan.Zero);
         var repliedAt = startedAt.AddMinutes(5);
@@ -101,7 +112,7 @@ public sealed class PostTests
     public async Task A_reply_whose_parent_is_missing_or_in_another_topic_is_refused_and_writes_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
         var announced = 0;
         writer.Committed += _ => announced++;
         var topicId = Tids.Mint();
@@ -126,10 +137,10 @@ public sealed class PostTests
     }
 
     [Fact]
-    public async Task A_reply_on_a_locked_or_removed_topic_is_refused_with_its_reason_and_writes_nothing_the_log_included()
+    public async Task A_reply_on_a_locked_or_removed_topic_is_refused_with_the_gate_word_and_writes_nothing_the_log_included()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
         var announced = 0;
         writer.Committed += _ => announced++;
         var at = DateTimeOffset.UtcNow;
@@ -145,8 +156,8 @@ public sealed class PostTests
         var onRemoved = await writer.Send(new Reply(Tids.Mint(), removed.Id, "Still?", "ada"), Cancellation);
         var onNothing = await writer.Send(new Reply(Tids.Mint(), Tids.Mint(), "Anyone?", "ada"), Cancellation);
 
-        Assert.Equal(Post.TopicLocked, Assert.IsType<Outcome<Post>.Refused>(onLocked).Reason);
-        Assert.Equal(Post.TopicRemoved, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
+        Assert.Equal(Capabilities.Locked, Assert.IsType<Outcome<Post>.Refused>(onLocked).Reason);
+        Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
         Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(onNothing).Reason);
         Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced));
         Assert.Equal((0L, 0), ((await Post.Get(locked.Id, Cancellation))!.LastSequence, (await Post.Get(locked.Id, Cancellation))!.ReplyCount));
@@ -156,7 +167,7 @@ public sealed class PostTests
     public async Task A_post_command_whose_id_exists_answers_with_the_existing_row_for_the_same_request_and_a_conflict_for_a_different_one_and_neither_writes()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
         var announced = 0;
         writer.Committed += _ => announced++;
         var topicId = Tids.Mint();
@@ -202,7 +213,7 @@ public sealed class PostTests
     public async Task A_body_over_64_KiB_with_a_NUL_or_empty_is_refused()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
         var topicId = Tids.Mint();
         Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(topicId, Workshop, "Limits", "Within them.", "leo"), Cancellation));
 
@@ -227,7 +238,7 @@ public sealed class PostTests
     public async Task A_post_whose_id_is_not_a_tid_is_refused()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var writer = await Started(tangentSpace);
 
         var refused = await writer.Send(new StartTopic("not-a-tid", Workshop, "Shape", "Any.", "leo"), Cancellation);
 

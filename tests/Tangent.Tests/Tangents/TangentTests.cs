@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
@@ -17,6 +18,7 @@ public sealed class TangentTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         var announced = new List<Committed>();
         writer.Committed += announced.Add;
         var at = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
@@ -46,6 +48,7 @@ public sealed class TangentTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
 
         var first = Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Public, "leo"), Cancellation)).Result;
         var again = await writer.Send(new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Public, "leo"), Cancellation);
@@ -62,6 +65,7 @@ public sealed class TangentTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
 
         var refused = await writer.Send(new CreateTangent("The Workshop", "The workshop", "", PostKind.Topic, 1, Audience.Public, "leo"), Cancellation);
 

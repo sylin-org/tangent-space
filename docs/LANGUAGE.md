@@ -46,6 +46,8 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Role** | Discord's model: a named set of permissions with members, on Koan.Identity. | Koan `Role` (`role:…`) | `/settings/roles` | *Group*, *Tier*, Rank, *Level* |
 | **Overwrite** | A per-Tangent allow and deny for a role or a participant, resolved in Discord's order. | `Overwrite` | `/t/{tangent}/settings/access` | *Override*, *Exception*, Grant (for this), ACL |
 | **Standing** | A participant's state in the Tangent Space: admitted, applied, timed out, banned. Place-wide. | `Participant.Standing`, `StandingUntil`, `StandingNote` | `/settings/people` | Membership, Restriction, *Case*, Suspension, Status (for this) |
+| **Bit** | One permission of the model: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate`, `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all. On a role as Koan's `global:` token, on an overwrite by name. | `Bit`, `Bits` | — | *Right*, *Privilege*, *Claim* (for this), *Scope* (for this) |
+| **Absent** | What a reader may not `View`: it does not exist for them, and every answer is the one a missing resource gets. | `Capabilities.Exists`, `Capabilities.Absent` | not found | *Hidden*, *Forbidden* (for this), *Denied* (for this) |
 | **Kind** | A participant's declared classification, person or agent, shown and never evaluated. | `Participant.Kind` | — | *Type*, *Classification*, *Nature* |
 | **Profile** | A participant's handle, display name, description and avatar, read from their PDS and cached with the time of capture; nothing is edited here. | `Participant.Profile` (`DisplayName`, `Description`, `Avatar`, `CapturedAt`) | `/p/{handle}` | *Bio*, *User profile*, *Account* (for this) |
 
@@ -60,7 +62,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Watch** | The flag on a checkpoint that asks for attention on new events in that scope. | `Checkpoint.Watch` | — | *Follow*, Subscribe, *Star*, Favourite |
 | **Take this on a tangent** | The verb that makes any Post the root of a new Topic in a chosen Tangent, linked both ways. | `Post.OriginId` | — | *Fork*, *Branch*, *Split*, *Spin off*, Quote-topic |
 | **Can** | The verbs a participant holds on a resource, computed per request and attached to every resource. | `can: string[]` | — | Permissions (on a resource), Rights, Abilities, *Allowed* |
-| **Gate** | The one reason, from Koan's access explainer, when a main verb is missing. | `gate` | — | *Error*, Denial, Reason code |
+| **Gate** | The one reason when a verb is missing: the first step that dropped it — `sign-in`, `apply`, `timed-out`, `locked`, `removed` — or the deciding overwrite or missing role, in one sentence. | `Capabilities.Gate`; `gate` on the wire | — | *Error*, Denial, Reason code |
 
 ## Content
 
@@ -70,6 +72,8 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Version** | A Post's content version, raised by every edit; receipts key on it. | `Post.Version` | — | *Revision*, *Edition*, *Generation* |
 | **Slug** | The URL name of a Topic, from its title at creation, never renamed. | `Post.Slug` | — | *Key*, Permalink, Handle (for this) |
 | **TID** | atproto's timestamp identifier: thirteen characters, sortable by time, minted by the client as a Post's Id and the idempotency key of its command. | `Tid` (the shape check); `Post.Id` | `/t/{tangent}/{topic}/{post}` | *UUID* (for a Post), *Sequence* (for this) |
+| **Search** | The Posts whose title or body hold the words of a text, best first; bounded in text, page and snippet; reads only. | `PostSearch.Run`; the Post index is Koan's lexical index over `Post.Title` and `Post.Body` | `/search` | *Query* (for this), *Lookup*, *Find* (for this) |
+| **Snippet** | The marked words of a Post around a search's matches, a bounded window wide. | `PostSearch.Hit.Snippet` | — | *Excerpt* (for this), *Highlight*, *Preview* (for this) |
 | **Media** | A file a Post references, stored once by content hash on Koan.Media. | `MediaEntity<…>` | — | Attachment, *Upload*, *Asset*, Blob (outside atproto) |
 | **Cover** | An article's lead image. | `Post.CoverId` | — | Hero, Banner, Featured image |
 

@@ -32,7 +32,7 @@ The tree boots, serves one page both ways, and every rule has a check.
 | Rule checks: no dialogs, language, greenfield scoped to the root tree, fixed ports | — | `tests/no-dialogs.test.mjs`, `scripts/check-greenfield.ps1` (harvest) | — | S | done |
 | Test fixture: the real host on a loopback port over a temp folder, once under a path prefix; parallel-safe | — | `ExperienceWebApp` edge cases (harvest) | `Sylin.Koan.Testing.Hosting` | S | done |
 | Lifecycle: one published binary and one data folder; build, launch, backup by `VACUUM INTO` and copy, restore; compose for Docker | — | `scripts/server-lifecycle.ps1`, `*.bat`, `compose.yaml`, `Dockerfile` (harvest) | — | S | done |
-| Lexical search proven through the SQLite connector | — | — | brief 4 | S | todo |
+| Lexical search proven through the SQLite connector | — | — | `Sylin.Koan.Data.Core` (`[Lexical]`) on the SQLite connector | S | done |
 
 ### 1 · The door and the names
 
@@ -42,7 +42,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Nouns and tables: `TangentSpace`, `Tangent`, `Post` with the root as Topic, `Participant` facet, `Overwrite`, `Event`, `Checkpoint` | — | `Space`, `Tangent`, `Topic`, `Post`, `ActivityJournal`, `ReadPosition` (harvest) | `Sylin.Koan.Data.Core` | M | done |
 | atproto sign-in; the person reconciled from the DID; the participant facet; profile capture as a job; declared kind only | sign-in | `Identity/*` minus classification and the capture inference (harvest) | `Sylin.Koan.Web.Auth.Connector.Atproto`, `Sylin.Koan.Identity` | M | todo |
-| Access: Koan roles seeded (`everyone`, member, moderator), overwrites, `Capabilities.For`, `can` on every resource, `gate` from the explainer | — | `TangentPermissions` catalog, `AccessEvaluator` reason table (harvest) | `Sylin.Koan.Identity`; brief 2 | M | todo |
+| Access: Koan roles seeded (`everyone`, member, moderator), overwrites, `Capabilities.For`, `can` on every resource, `gate` from the explainer | — | `TangentPermissions` catalog, `AccessEvaluator` reason table (harvest) | `Sylin.Koan.Identity`; brief 2 | M | done |
 | First run: the operator signs in, names the Tangent Space, sets the base URL, declares proprietor and operator; the page prints the site's pointer snippets | first-run | `OnboardingPanel`, `FirstArrival`, `ServerGovernance` (harvest) | — | S | todo |
 | The door as one resource: for a visitor, whose place this is, what is featured, what is alive; signed in, since my checkpoints — replies to me, mentions, new per Tangent, new articles — who is around, what I can do | door signed-out, door signed-in | `ExperienceDigest`, `AttentionCompiler` (harvest); `SpaceHero`, `ContinueReading`, `ForumSidebar` (harvest) | — | L | todo |
 | The Tangent page: topics with what is new marked, bounded | tangent | `TopicList`, `TopicRow`, `DirectorySummaries` (harvest) | — | S | todo |

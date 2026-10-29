@@ -146,7 +146,8 @@ public sealed class BackupTests(ITestOutputHelper output)
         await process.WaitForExitAsync(Cancellation).WaitAsync(TimeSpan.FromSeconds(60), Cancellation);
         var text = string.Concat(await written);
         output.WriteLine($"{string.Join(' ', arguments)} -> {process.ExitCode}: {text}");
-        Assert.Equal(expectedExitCode, process.ExitCode);
+        Assert.True(process.ExitCode == expectedExitCode,
+            $"{string.Join(' ', arguments)} exited {process.ExitCode}, not {expectedExitCode}: {text}");
         return text;
     }
 }

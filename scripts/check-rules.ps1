@@ -9,7 +9,7 @@ $base = [IO.Path]::GetDirectoryName($PSScriptRoot)
 $checks = @(
     @{ Name = 'language';   Command = { & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-language.ps1') } }
     @{ Name = 'greenfield'; Command = { & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-greenfield.ps1') } }
-    @{ Name = 'no-dialogs'; Command = { & node --test (Join-Path $base 'tests/rules') 2>&1 } }
+    @{ Name = 'no-dialogs'; Command = { & node --test (Join-Path $base 'tests/rules/*.test.mjs') 2>&1 } }
     @{ Name = 'ports';      Command = { & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-ports.ps1') } }
 )
 

@@ -9,7 +9,7 @@ The lead plans; an executor builds in a session of its own; the lead verifies an
 
 ## 1. Choose
 
-Take the next package from `FEATURES.md` whose dependencies in `PLAN.md` are met. Assign its role by the plan's rule: first of its kind → Fable 5.1 `high` (`xhigh` for the writer, the evaluator, Koan transaction semantics); a repeat → Opus 5.5 `high`; explorer-grade → Sonnet 5.5 `medium`; mechanical → Haiku 5.5 `low`. A package whose brief would mostly retell what the lead already knows stays with the lead.
+Take the next package from `FEATURES.md` whose dependencies in `PLAN.md` are met. Assign its role by the plan's rule: first of its kind → Opus 5.5 `high` (`xhigh` for the writer, the evaluator, Koan transaction semantics); a repeat → Opus 5.5 `high`; explorer-grade → Sonnet 5.5 `medium`; mechanical → Haiku 5.5 `low`. A package whose brief would mostly retell what the lead already knows stays with the lead.
 
 ## 2. Brief
 
@@ -17,7 +17,7 @@ Write it from [brief.md](brief.md) — the FEATURES rows, the outcome, the area,
 
 ## 3. Start the executor
 
-`mcp__ccd_session__start_session` with `context: "fresh"`, `use_worktree: true`, `branch_name` and `name` set to the package id (`0-7-rule-checks`), `title` set to the package name, `model` set to the role's model id (`claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`), `effort` set to the role's effort, `wake_when_done: true`, `source_branch` set to the lead's own branch whenever it is ahead of the repository's default branch (a worktree is cut from the default branch otherwise, and the executor would read the wrong tree), `prompt` set to the brief and `background` to the preamble's five lines of context. `initiation` follows the conversation: `user_asked` when Leo has told the lead to run the package, `offer` otherwise. A Koan package starts with `cwd` at the Koan checkout and `use_worktree: false`, on a branch the executor creates there.
+`mcp__ccd_session__start_session` with `context: "fresh"`, `use_worktree: true`, `branch_name` and `name` set to the package id (`0-7-rule-checks`), `title` set to the package name, `model` set to the role's model id (`claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`), `effort` set to the role's effort, `wake_when_done: true`, `source_branch` set to the lead's own branch whenever it is ahead of the repository's default branch (a worktree is cut from the default branch otherwise, and the executor would read the wrong tree), `prompt` set to the brief and `background` to the preamble's five lines of context. `initiation` follows the conversation: `user_asked` when Leo has told the lead to run the package, `offer` otherwise. A Koan package starts with `cwd` at the Koan checkout and `use_worktree: false`, on a branch the executor creates there.
 
 When the app cannot create a worktree (its registry fails on this machine while `HOME` is unset), start the session with `use_worktree: false` and open the brief with a workspace section: the executor runs `git worktree add -b claude/<package> .local/worktrees/<package> dev` from the shared checkout, confirms the head commit, works only in that folder, and — for a package that builds — makes the Koan checkout visible there with a directory junction to `.local/upstream/koan-framework`. It commits on that branch and never runs git in the shared checkout again.
 
@@ -37,7 +37,7 @@ When the report arrives: read the diff on the branch, re-run the one relevant ch
 
 For a screen, run the `visual-loop` skill now: the `scorer` agent and, within 0.3 of the gate, the same agent with `model: "sonnet"` as the second scorer.
 
-Then the review: the `reviewer` agent with the diff and the brief, and `model: "fable"` for the writer, the evaluator, Connections and any Koan change. The reviewer sees no reasoning from the executor or the lead.
+Then the review: the `reviewer` agent with the diff and the brief, and `effort: "xhigh"` for a spine package, Connections and any Koan change. No agent runs on Fable unless Leo names it for the package. The reviewer sees no reasoning from the executor or the lead.
 
 ## 5. Feed back or accept
 

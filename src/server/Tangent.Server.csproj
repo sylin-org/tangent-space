@@ -13,12 +13,13 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web/Koan.Web.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj" />
-    <!-- Koan's sign-in simulator: active in Development by Koan's rule, and outside it only where
-         Koan:Web:Auth:TestProvider:Enabled says so, as the tests and the visual captures do. -->
-    <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Test/Koan.Web.Auth.Connector.Test.csproj" />
-    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Identity/Koan.Identity.csproj" />
+    <!-- Koan's sign-in simulator, only in the host the visual capture builds for itself into
+         .local/capture-host with -p:TangentCaptureHost=true; no other build sets the property, so the server's
+         own build and publish never carry it. -->
+    <ProjectReference Condition="'$(TangentCaptureHost)' == 'true'" Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Test/Koan.Web.Auth.Connector.Test.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Jobs/Koan.Jobs.csproj" />
   </ItemGroup>
   <ItemGroup>

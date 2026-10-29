@@ -24,7 +24,7 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 | Entities, queries, partitions, transactions; the SQLite posture (WAL, busy timeout, synchronous) and one native commit across entity types | `Sylin.Koan.Data.Core` on `Sylin.Koan.Data.Connector.Sqlite` | every table; the writer's one commit per command (`TransactionGuarantee.Atomic`); the audit partition for edit history |
 | The canonical base URL, served under its path and nothing outside it; trusted proxies for one hop | `Sylin.Koan.Web` (`Koan:Web:ApplicationUrl`, `Koan:Web:TrustedProxies`) | every absolute link; the `TangentSpace` row's `BaseUrl`; the reverse proxy's scheme |
 | Durable person, external identities, sessions, audit, erasure | `Sylin.Koan.Identity` · `Sylin.Koan.Identity.Web` | the participant spine; the atproto DID as the person's external identity |
-| Roles with permissions, members and cached bags; effective access composed from contributors; the access explainer | `Sylin.Koan.Identity` | the Discord role model; the `gate` reason |
+| Roles with permissions, members and cached bags; effective access composed from contributors; the access explainer | `Sylin.Koan.Identity` | the Discord role model's roles and bags; the explainer names the deciding fact once brief 2 lands |
 | atproto sign-in and authorized sessions | `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | sign-in; record and blob operations under a participant's session |
 | OAuth 2.1 authorization server: code with PKCE, Device flow, loopback DCR, consent seam, revocable grants, persisted ES256 keys | `Sylin.Koan.Web.Auth.Server` | the delegated agent door; the installation's signing keys |
 | ES256 issuer, JWKS, inbound bearer scheme | `Sylin.Koan.Security.Trust` | credentials minted by the proof bridge; bearer validation |
@@ -45,7 +45,7 @@ Koan work the tree depends on, each a scoped brief: scoped overwrites with deny 
 Every write is a command on one queue, consumed by one loop. A handler builds the command — `Reply { PostId, TopicId, Body, Author }` — hands it to the writer and awaits its outcome: the result, a refusal with its reason, a conflict, or the failure. The loop takes commands in arrival order and, for each:
 
 1. opens one atomic scope (`EntityContext.Transaction` with `TransactionGuarantee.Atomic`; SQLite begins the immediate transaction at commit, so the command's reads see the committed state and the serial loop keeps them consistent);
-2. runs the command, which loads what it names — the participant with standing, the role bag, the Tangent's overwrites, the target Post — asks `Capabilities.For(...)` and refuses with the explainer's reason when the verb is missing, and calls the entity method, where validation lives;
+2. runs the command, which loads what it names — the participant with standing, the role bag, the Tangent's overwrites, the target Post — asks `Capabilities.For(...)` before it answers anything else — refusing with the gate word when the verb is missing, and answering as for a missing resource when the actor may not `View` — and calls the entity method, where validation lives;
 3. assigns the sequences the command asks for from in-memory high-water marks loaded once at start — the log's from the last `Event.Seq`; a Topic's comes from its root Post's `LastSequence`, read and advanced inside the command — and keeps them only on commit, so a command that does not commit skips none; after a commit whose outcome Koan cannot report, the marks are reloaded from the store before the next command;
 4. commits the rows, the audit snapshot for an edit and the Events together, as one native transaction or nothing;
 5. announces a commit that wrote — the command and the sequences it took — in-process, and answers the sender with the resource and its `can`. A command that is refused or throws leaves no row behind and the next command runs; at a stop, the command in flight ends on its own terms and every queued command is answered as not run.
@@ -58,7 +58,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 
 **The page is the API.** One handler, one DTO, and the formatter decides: `Accept: text/html` renders it through a Razor component, `application/json` serializes it, and a fragment request header renders only the component for that resource. A Post's page, its JSON, its live patch and its archive file are the same DTO through the same component. Agents fetch the URL a person shares; `llms.txt` says so in two lines, and the descriptor carries `"api": 1` as the stability promise.
 
-`ETag` is `Post.Version` or `Event.Seq`. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` word the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`.
+`ETag` is `Post.Version` or `Event.Seq`. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`, or the deciding overwrite or missing role in one sentence; what the reader may not view is absent and answers as not found.
 
 ## 5. Data
 
@@ -97,13 +97,15 @@ Visibility applies at read: an event in a Tangent the reader cannot view does no
 
 Discord's model, on Koan's roles, resolved in Discord's order.
 
-- **Bits**: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate` (edit or remove any, lock, pin, move, take on a tangent anywhere), `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all.
-- **Base** is the union of the participant's roles; every bag holds `everyone`.
+- **Bits**: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate` (edit or remove any, lock, pin, move, take on a tangent anywhere), `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all, and no overwrite grants or denies it. On a Koan role a bit is the permission token `global:` followed by its name, which Koan compiles into the bag; in an overwrite it is the name alone.
+- **Roles** are seeded at first start on Koan's `RoleCollection`, each once, left as the proprietor sets it and returned when gone: `everyone` with no bits of its own, `role:member`, `role:moderator`, and `role:administrator` with `Administrator`.
+- **Base** is the union of the bits in the participant's bag and the `everyone` role's own, which Koan's bag does not carry, with `View` for everyone where the settings row's `Audience` is public: the row is the one statement of the place's audience, and no role carries it.
 - **Overwrites**, in order: `everyone` deny then allow → role denies then allows → the participant's own deny then allow. A Tangent's audience is nothing more than `View` in its `everyone` overwrite.
-- **Standing precedes everything**: banned sees nothing; timed out keeps `View`; applied holds `View` where the Tangent Space is public. A visitor is `everyone` with `View` alone on a public place.
-- **`can`** is the bits the participant holds on this resource plus authorship and state: `EditOwn` applies to my Post; nothing applies to a removed Post; `Post` is absent on a locked Topic.
+- **Standing precedes everything**: banned sees nothing; timed out keeps `View` until `StandingUntil` passes, when the participant reads as admitted; applied holds `View` where the Tangent Space is public. A visitor is `everyone` with `View` alone on a public place.
+- **Absent**: what a reader may not `View` does not exist for them. Without `View` on the place or the Tangent — banned, a visitor on a private place or Tangent, a participant an overwrite denies — every verb carries the one reason `absent`, nothing else is said, and a command answers what it answers for a missing resource.
+- **`can`** is the bits the participant holds on this resource plus authorship and state: `EditOwn` and `RemoveOwn` apply to my Post; nothing applies to a removed Post; `Post` is absent on a locked Topic.
 
-`Capabilities.For(participant, space, tangent, post?)` is one pure function over Koan's effective access and Tangent's overwrites; its tests enumerate the table. The `gate` word is the explainer's answer for the missing verb. The browser and every agent render `can` and compute nothing.
+`Capabilities.For(participant, tokens, space, overwrites, now, post?)` is one pure function over Koan's bag with the `everyone` role beside it, the settings row, the Tangent's overwrites and the time; a command loads those with bounded reads and asks it inside its `Run` before it answers anything else; its tests enumerate the table. It resolves in this order: standing, `View` on the Tangent, lock and removal, the base and overwrites for the other bits, authorship. The `gate` is the first step that dropped the verb: `sign-in`, `apply`, `timed-out`, `absent`, `locked` or `removed` where standing, audience or state decided, the deciding overwrite where one did, and the absence of a role otherwise. The browser and every agent render `can` and compute nothing.
 
 ## 8. Rendering
 
@@ -153,7 +155,7 @@ Pointers live on the site, since `/.well-known/` belongs to an origin: `<link re
 
 ## 12. Background work
 
-Koan jobs, each a reader that writes through the writer: profile capture, handle resolution, connection dispatch, reference polling, media processing, archive rendering. Backup and restore are verbs of the executable, not jobs: `Tangent.Server backup` takes a `VACUUM INTO` snapshot of the data folder with a hashed manifest, and `restore` puts one back, refusing a folder a running Tangent Space has marked. Nothing else runs in the background; nothing in a request does network I/O.
+Koan jobs, each a reader that writes through the writer: profile capture, handle resolution, connection dispatch, reference polling, media processing, archive rendering. At start, one service on Koan's background base asks whether the Post index covers every Post and has Koan rebuild it when a restored folder left it behind; it writes no row. Backup and restore are verbs of the executable, not jobs: `Tangent.Server backup` takes a `VACUUM INTO` snapshot of the data folder with a hashed manifest, and `restore` puts one back, refusing a folder a running Tangent Space has marked. Nothing else runs in the background; nothing in a request does network I/O.
 
 ## 13. Folders
 
@@ -187,6 +189,6 @@ Four questions the foundation slice set out to answer with an afternoon each, an
 - **A Koan transaction across several entity saves inside a background loop.** Settled: `EntityContext.Transaction(name, TransactionGuarantee.Atomic)` commits saves of two entity types from a `BackgroundService` in one native `BEGIN IMMEDIATE … COMMIT` on the SQLite route, and a throw before the commit persists neither; `tests/Tangent.Tests/SqlitePostureTests.cs` holds the facts.
 - **The HTML formatter beside Koan's JSON projection.** Settled: `HtmlFormatter` is the first MVC output formatter and claims only the types `ResourceComponents` registers, so the door answers as a page, a fragment or Koan's JSON by `Accept` and the fragment header; `tests/Tangent.Tests/Render/ShellTests.cs`.
 - **A Vue island mounting into server HTML with a fragment patch.** Settled for the patch: the fragment island mounts beside the server's HTML and refreshes its host from the resource's URL with the fragment header. The event stream that will drive the patch arrives with the log.
-- **Lexical search through Koan's SQLite connector.** Open: it waits on Koan's lexical search over entity fields and is proven when that lands.
+- **Lexical search through Koan's SQLite connector.** Settled: `Post.Title` and `Post.Body` carry Koan's `[Lexical]`, the connector keeps an FTS5 index in step with every commit, `PostSearch` answers a bounded page, best first, with marked snippets, and a start checks the index and rebuilds it through Koan when a restored folder left it behind; `tests/Tangent.Tests/Posts/PostSearchTests.cs`.
 
 A Koan answer that falls short is corrected in Koan.

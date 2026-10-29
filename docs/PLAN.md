@@ -6,14 +6,16 @@ How the tree is built: in packages, by roles that each have a model and an effor
 
 | Role | Does | Model | Effort | Runs as |
 | --- | --- | --- | --- | --- |
-| **Lead** | Product and architecture decisions, ADRs, briefs for every package, reading results, Koan design, the conversation with Leo | Claude Fable 5.1 | high; xhigh only while deciding the writer, the capability evaluator or Koan transaction semantics | the main session |
-| **Builder, first of its kind** | A package that establishes a pattern the tree has not got yet: the writer, the HTML projection, the evaluator, the door, the first Connection package, anything in Koan | Claude Fable 5.1 | high | a session of its own, in a worktree |
+| **Lead** | Product and architecture decisions, ADRs, briefs for every package, reading results, Koan design, the conversation with Leo | Claude Opus 5.5 | high; xhigh only while deciding a spine question or Koan semantics | the main session |
+| **Builder, first of its kind** | A package that establishes a pattern the tree has not got yet: the writer, the HTML projection, the evaluator, the door, the first Connection package, anything in Koan | Claude Opus 5.5 | high; xhigh for a spine package or Koan semantics | a session of its own, in a worktree |
 | **Builder, repeat** | A package that repeats an established pattern: a second settings screen, a second Connection package, feeds, a phone layout | Claude Opus 5.5 | high, set explicitly (its own default is medium) | a session of its own, in a worktree |
 | **Explorer** | Finds and reads: inventories, Koan source lookups, "where is X handled", research with the web | Claude Sonnet 5.5 | medium | the project's `Explore` agent (`.claude/agents/explore.md`), which pins Sonnet at medium; the built-in Explore would run on the session's own model |
 | **Mechanic** | Bulk, checkable edits from an exact instruction: a rename sweep, language-check fixes, fixture data, test scaffolds from a spec | Claude Haiku 5.5 | low, medium when the instruction has judgment in it | a subagent |
 | **Scorer** | The visual loop's independent judgment on captures | Claude Opus 5.5 | high | the `scorer` agent (`.claude/agents/scorer.md`), given only captures, reference, spec and rubric |
 | **Second scorer** | The tie-break within 0.3 of the gate | Claude Sonnet 5.5 | high | the same agent run with `model: "sonnet"` — a different family |
-| **Reviewer** | Correctness review of a package before Leo's commit word; the spine's and Koan's reviews | Claude Opus 5.5; Claude Fable 5.1 for the writer, the evaluator, Connections and any Koan change | high | the `reviewer` agent (`.claude/agents/reviewer.md`), given the diff and the brief, never the builder's reasoning |
+| **Reviewer** | Correctness review of a package before Leo's commit word; the spine's and Koan's reviews | Claude Opus 5.5 | high; xhigh for a spine package, Connections and any Koan change | the `reviewer` agent (`.claude/agents/reviewer.md`), given the diff and the brief, never the builder's reasoning |
+
+Claude Fable 5.1 is held back: from 29 October 2026 no role runs on it unless Leo names it for a package, because its quota is spent faster than the work it buys over Opus at `high` or `xhigh`; slice 0's packages built on Fable are the record of what it did.
 
 Rates, first-party API, per million tokens in and out: Fable 5.1 $10 / $50 · Opus 5.5 $4 / $20 · Sonnet 5.5 $2 / $10 · Haiku 5.5 $0.10 / $0.50 (prompts up to 100K). A builder session is one model for its whole life; a model switch happens between sessions, never inside one.
 
@@ -103,3 +105,28 @@ A slice closes when its packages are done, every screen in it holds the visual g
 ## What is measured, slice by slice
 
 After each slice the lead records in its report: packages completed and by which role; reviewer findings per package; visual-loop rounds per screen; escalations and what resolved them; Koan corrections made. Two slices of that are an effort sweep in practice: a role whose packages pass review first time at `high` is tried at `medium`; a role that escalates is moved up a model, not up an effort. The role table changes only on that evidence.
+
+## Slice 0 report
+
+Closed 29 October 2026 at `e664cb0`, `main` fast-forwarded from `dev`.
+
+| Package | Role, model, effort | Review rounds with findings | Visual rounds | Escalations | Koan |
+| --- | --- | --- | --- | --- | --- |
+| 0.1 Server skeleton | first of its kind, Fable high | 1 | — | — | K1 briefs 1 and 2 written from its probes |
+| 0.7 Rule checks | explorer-grade, Sonnet medium | 1 (parser gaps) | — | — | — |
+| 0.5 Design foundation | repeat, Opus high | 1 | — | — | — |
+| 0.3 HTML projection | first of its kind, Fable high | 1 (any-method 404, exception to problem, ETag per representation, HEAD, encoded path) | — | — | non-sealed DTO loses negotiation: queued |
+| 0.8 Test fixture | repeat, Opus high | 1 (binding test) | — | — | `KoanIntegrationHost` cannot host Kestrel: queued |
+| 0.4 Island bootstrap | repeat, Opus high | 1 | — | — | static files under a path: fixed by K1b |
+| 0.6 Capture script | repeat, Opus high | 1 | — | — | — |
+| 0.9 Lifecycle | repeat, Opus high | 2 (restore under a running server) | — | — | — |
+| 0.11 Re-pin | first of its kind, Fable high | 2 (launch held the caller's pipe; the handle change was permanent) | — | the hang: guardrails added | adopts K1a and K1b |
+| 0.2 The writer | first of its kind, Fable xhigh | 1 (unknown commit outcome, replay announced, scope opening, a sentence) | — | — | Communication's entity-bound events do not carry a generic commit: noted |
+| 0.10 Lexical search | explorer-grade, Sonnet medium | 1 (page overflow, cached reading, a forbidden word) | — | — | page overflow in `LexicalQuery`: queued; count-only `Status`: queued |
+| K1a SQLite posture and atomic commit | first of its kind (Koan), Fable high | 1 (busy timeout and the driver's timeout, one native unit per connection identity, simultaneous saves) | — | — | DATA-0158 |
+| K1b Canonical base URL | first of its kind (Koan), Fable high | 2 (six findings, then a `:80` issuer mismatch) | — | — | WEB-0078 |
+| K4 Lexical search | first of its kind (Koan), Fable high | 1 (missing-index refusal, a warning, bounded readiness) | — | — | DATA-0159 |
+
+No screen in this slice reached the visual loop: the door's skeleton has no reference and waits on its mock. Every package needed one review round; two needed two. No package escalated to Leo on its content; the one escalation was the 0.11 hang, answered by the no-unbounded-wait rule, the executor preamble, the lead's scheduled check and the orphan finder. Koan corrections made: K1a, K1b, K4; queued for its status task: the non-sealed DTO guard, a web-capable test host, the `TenancyAmbient` flake, the SqliteVec fixture posture, the MCP `ResourceUri` contract, the `LexicalQuery` page overflow, the count-only lexical `Status`, two `CS0419` and three `CS1573` warnings, the PostgreSQL suite's host-spelling timeouts, and the test output root shared across checkouts.
+
+Reading for the effort sweep: Fable at `high` and `xhigh` and Opus at `high` each passed review on the second round at most, with one round the norm; Sonnet at `medium` did the same on explorer-grade packages. Nothing here moves a role yet; the second slice decides.
