@@ -51,13 +51,15 @@ public sealed class Post : Entity<Post>
     /// <summary>Root only; a reply's Topic has the kind of its root.</summary>
     public PostKind Kind { get; set; }
 
-    /// <summary>Root only.</summary>
+    /// <summary>Root only. Found by its words.</summary>
+    [Lexical]
     public string? Title { get; set; }
 
     /// <summary>An article's lead image. Root only.</summary>
     public string? CoverId { get; set; }
 
-    /// <summary>Markdown.</summary>
+    /// <summary>Markdown. Found by its words.</summary>
+    [Lexical]
     public string Body { get; set; } = "";
 
     /// <summary>Raised by every edit.</summary>
