@@ -1,0 +1,5 @@
+<Project>
+  <!-- Koan is consumed from source. A project reference carries no package build assets, so Koan's
+       composition targets are imported here; they write koan.lock.json beside each application project. -->
+  <Import Project="$(KoanSourceRoot)/src/Koan.Core/build/Sylin.Koan.Core.targets" />
+</Project>
