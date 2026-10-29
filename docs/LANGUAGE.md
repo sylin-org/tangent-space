@@ -78,7 +78,12 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | Word | Meaning | Code | URL | Never |
 | --- | --- | --- | --- | --- |
 | **Body** | A Post's Markdown. A mention is a link whose target carries the identity. | `Post.Body` | — | *Text*, *Content*, *Markup*, *Facets* |
-| **Version** | A Post's content version, raised by every edit; receipts key on it. | `Post.Version` | — | *Revision*, *Edition*, *Generation* |
+| **Mention** | A link in a body whose target is a participant's identity (`at://` and their DID), shown as their current handle; it writes one `mention` event to each newly mentioned participant who may view the Tangent. | `Mentions`, `Post.MentionedIds`, `EventKind.Mention` | — | *Tag* (for this), *Ping*, *At-reply* |
+| **Tombstone** | A removed Post kept in its place: author and time stay, the body is gone, and who removed it is said. | `Post.Removed`, `RemovedBy`, `RemovedAt` | — | *Deleted post*, *Placeholder* |
+| **Snapshot** | The copy of a Post as it stood before an edit or a removal, kept in Koan's audit partition under `{id}#v{version}`. | `AuditPartition.Snapshot` | — | *Backup* (for this), *History entry* |
+| **Window** | One bounded run of a Topic's replies in sequence order, cut by count and by bytes, with cursors to the older and newer runs; opened at the reader's first unread or around an anchor. | `TopicWindow`, `WindowPlanner` | `/t/{tangent}/{topic}` | *Page* (for this), *Thread view*, *Feed* |
+| **Anchor** | The Post a window opens around when its address is followed. | `TopicPage.Anchor` | `/t/{tangent}/{topic}/{post}` | *Permalink* (for this), *Jump target* |
+| **Draft** | Words a person has typed into the composer and not yet posted, kept in their browser by scope until the server confirms the Post. | `composer.ts` | — | *Unsaved post*, *Pending* (for this) |
 | **Slug** | The URL name of a Topic, from its title at creation, never renamed. | `Post.Slug` | — | *Key*, Permalink, Handle (for this) |
 | **Opening** | A Topic's first words on a list row: the root's body as plain text, cut short. | `TopicRow.Opening` | — | *Excerpt*, *Preview* (for this), *Teaser* |
 | **TID** | atproto's timestamp identifier: thirteen characters, sortable by time, minted by the client as a Post's Id and the idempotency key of its command. | `Tid` (the shape check); `Post.Id` | `/t/{tangent}/{topic}/{post}` | *UUID* (for a Post), *Sequence* (for this) |
