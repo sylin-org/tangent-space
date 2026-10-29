@@ -17,7 +17,8 @@ namespace Tangent.Delegates;
 /// here with everything they can do. A loopback client's request arrives under its <c>rid</c> instead and shows the
 /// name it registered and where it returns. Approve and deny post to Koan's request endpoint, which answers the client;
 /// the person lands on the done page, which says what they decided as <see cref="ConsentPage.Outcome"/> reads it. No
-/// name a client chose is ever shown for a code: only the shared client is allowed the Device flow. Only a person's
+/// name a client chose is ever shown for a code: only the shared client is allowed the Device flow, and a code whose
+/// client Koan does not allow it is refused under the field, with nothing to approve. Only a person's
 /// session decides: a delegate's bearer request is refused here, and Koan decides its own endpoints by the session
 /// alone.</summary>
 public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
@@ -51,6 +52,9 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
         if (rid is null && code is null) return Ok(page with { Entry = Entry() });
 
         var lookup = await ConsentPage.Find(HttpContext, rid ?? code, ct);
+        if (lookup.Request is { UserCode: not null } device && !await AllowedTheDeviceFlow(device.ClientId, ct))
+            return Again(page, code ?? device.UserCode, StatusCodes.Status400BadRequest,
+                "This code was not issued for this Tangent Space’s device door, so it can’t be approved here.");
         if (lookup.Request is { } pending) return Ok(page with { Decision = Decision(pending) });
         if (code is null || rid is not null)
             return lookup.Throttled
@@ -87,6 +91,11 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
         return new ConsentDecision(new Uri(origin, pending.Approve).AbsoluteUri, new Uri(origin, pending.Deny).AbsoluteUri,
             FormToken.For(HttpContext), pending.UserCode, pending.UserCode is null ? pending.ClientName : null, pending.RedirectUri);
     }
+
+    /// <summary>Whether Koan allows the client the Device flow now. A code a client asked for while it was allowed, or
+    /// before Koan asked, may still wait; one whose client is not allowed it now is refused, never approved.</summary>
+    private static async Task<bool> AllowedTheDeviceFlow(string clientId, CancellationToken ct)
+        => (await OAuthClient.Get(clientId, ct))?.AllowsGrant(OAuthGrantTypes.DeviceCode) == true;
 
     private ConsentEntry Entry(string? code = null, string? failure = null) => new(Configured() + Path, CodeField, code, failure);
 
