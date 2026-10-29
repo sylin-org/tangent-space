@@ -2,17 +2,16 @@ using System.Net;
 using Koan.Core;
 using Koan.Core.Modules;
 using Koan.Web.Auth.Connector.Atproto.Options;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.DataProtection.KeyManagement;
-using Microsoft.AspNetCore.DataProtection.Repositories;
+using Koan.Web.Options;
 using Microsoft.Extensions.Options;
 using Tangent.Space;
 
 namespace Tangent.Participants;
 
 /// <summary>What participants need composed: the profile reader with its bounds; the atproto connector's session
-/// store and ASP.NET's data-protection key ring inside the data folder, so sessions and cookies survive a new
-/// binary or container and a backup of the folder carries them; and antiforgery for the forms a page posts.</summary>
+/// store and the data-protection key ring, through Koan's <c>Koan:Web:KeyRingDirectory</c>, inside the data folder, so
+/// sessions and cookies survive a new binary or container and a backup of the folder carries them; and antiforgery
+/// for the forms a page posts.</summary>
 public static class ParticipantsComposition
 {
     /// <summary>The atproto sessions' folder inside the data folder.</summary>
@@ -20,9 +19,6 @@ public static class ParticipantsComposition
 
     /// <summary>The data-protection key ring's folder inside the data folder.</summary>
     public const string KeyFolder = "keys";
-
-    /// <summary>The name data protection isolates this application's keys by, the same wherever the binary runs.</summary>
-    public const string ProtectionName = "Tangent Space";
 
     public static IServiceCollection AddParticipants(this IServiceCollection services)
     {
@@ -45,12 +41,10 @@ public static class ParticipantsComposition
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((atproto, tangent, environment) =>
                 atproto.SessionDirectory = Path.Combine(tangent.Value.DataFolderPath(environment.ContentRootPath), SessionFolder));
 
-        services.AddDataProtection().SetApplicationName(ProtectionName);
-        services.AddOptions<KeyManagementOptions>()
-            .Configure<IOptions<TangentSpaceOptions>, IHostEnvironment, ILoggerFactory>((keys, tangent, environment, logging) =>
-                keys.XmlRepository = new FileSystemXmlRepository(
-                    Directory.CreateDirectory(Path.Combine(tangent.Value.DataFolderPath(environment.ContentRootPath), KeyFolder)),
-                    logging));
+        // Koan persists the ring there, remembers the application's name in it and creates it at start.
+        services.AddOptions<KoanWebOptions>()
+            .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((web, tangent, environment) =>
+                web.KeyRingDirectory = Path.Combine(tangent.Value.DataFolderPath(environment.ContentRootPath), KeyFolder));
 
         services.AddAntiforgery();
         return services;

@@ -74,7 +74,9 @@ test('the appearance island presses the saved theme and applies a choice', () =>
 
 test('the submitting island marks the form busy once and takes no second submission', () => {
   document.body.innerHTML =
-    '<form data-island="submitting"><button type="submit" data-busy-label="Continuing…">Continue</button></form>'
+    '<form data-island="submitting"><input name="identifier" value="ada.bsky.social">' +
+    '<input type="hidden" name="failure" value="/sign-in?return=%2F" data-carry="identifier" data-carry-as="handle">' +
+    '<button type="submit" data-busy-label="Continuing…">Continue</button></form>'
   const form = document.querySelector('form')!
   mountIslands(document)
 
@@ -86,6 +88,8 @@ test('the submitting island marks the form busy once and takes no second submiss
   expect(first.defaultPrevented).toBe(false)
   expect(second.defaultPrevented).toBe(true)
   expect(form.getAttribute('aria-busy')).toBe('true')
+  expect(form.querySelector('input')!.readOnly).toBe(true)
+  expect(form.querySelector<HTMLInputElement>('input[name="failure"]')!.value).toBe('/sign-in?return=%2F&handle=ada.bsky.social')
   expect(form.querySelector('button')!.textContent).toBe('Continuing…')
   expect(form.querySelector('button')!.getAttribute('aria-disabled')).toBe('true')
 })

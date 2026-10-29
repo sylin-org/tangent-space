@@ -52,6 +52,9 @@ export const capturePlaceName = 'Tangent Space'
 export interface Screen {
   /** The path under the base URL, starting with a slash. */
   path: string
+  /** The name first run gives the place before the screen's states open; capturePlaceName unless the screen names
+   *  its own, as one that shows the place's face does. */
+  placeName?: string
   states: readonly State[]
 }
 
@@ -60,15 +63,18 @@ export interface Screen {
 // door's states.
 export const screens: Readonly<Record<string, Screen>> = {
   door: { path: '/', states: [{ name: 'signed-out' }] },
-  // The handle form a visitor reads, focused; on its way after Continue; after a sign-in that could not be
-  // verified, the typed handle kept; and with a handle no account answers to.
+  // The handle form a visitor reads, focused; on its way after Continue; and back from a failed sign-in with Koan's
+  // code and the typed handle kept: one the provider did not confirm, one refused on the provider's page, and a
+  // handle no account answers to.
   'sign-in': {
     path: '/sign-in',
+    placeName: 'Lantern Works',
     states: [
       { name: 'empty' },
       { name: 'submitting', query: { handle: 'ada.bsky.social' }, click: '.sign-in-submit', cancel: '/auth/atproto/challenge' },
-      { name: 'verification-failed', query: { failure: 'atproto_authentication_failed', handle: 'ada.bsky.social' } },
-      { name: 'handle-not-found', query: { failure: 'handle_not_found', handle: 'ada.bsky.socail' } },
+      { name: 'sign-in-failed', query: { error: 'sign_in_failed', handle: 'ada.bsky.social' } },
+      { name: 'access-denied', query: { error: 'access_denied', handle: 'ada.bsky.social' } },
+      { name: 'handle-unresolved', query: { error: 'handle_unresolved', handle: 'ada.bsky.socail' } },
     ],
   },
   // Before anyone signs in; signed in where the configuration names someone else as operator; signed in, the

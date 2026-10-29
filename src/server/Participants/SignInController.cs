@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Space;
@@ -7,8 +8,9 @@ namespace Tangent.Participants;
 
 /// <summary>The sign-in page, one resource both ways. A visitor reads the handle form, or as JSON the Koan connector's
 /// challenge to follow; the challenge comes back here signed in, the first sign-in having made the person a
-/// participant on the way, and a signed-in person is sent where they were going. It answers as itself before first
-/// run, for a place that reads as unestablished.</summary>
+/// participant on the way, and a signed-in person is sent where they were going. A failed sign-in comes back here
+/// with Koan's sanitized code in <c>error</c>. It answers as itself before first run, for a place that reads as
+/// unestablished.</summary>
 [AnswersBeforeFirstRun]
 public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
@@ -19,19 +21,23 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
     public const string ChallengePath = "/auth/atproto/challenge";
 
     [HttpGet(Path)]
-    public async Task<IActionResult> Get([FromQuery(Name = "return")] string? destination, [FromQuery] string? failure,
+    public async Task<IActionResult> Get([FromQuery(Name = "return")] string? destination, [FromQuery] string? error,
         [FromQuery] string? handle, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var to = Destination(destination);
         if (User.Identity?.IsAuthenticated == true && User.FindFirst(ClaimTypes.NameIdentifier) is not null) return Redirect(to);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        return new ObjectResult(Participants.SignIn.ForVisitor(space.Name, Configured() + "/", to, Challenge(to), handle, failure));
+        return new ObjectResult(Participants.SignIn.ForVisitor(space.Name, Configured() + "/", to, Challenge(to), handle, error));
     }
 
-    /// <summary>The connector's challenge, coming back to this page with where the participant goes next.</summary>
+    /// <summary>The connector's challenge, coming back to this page with where the participant goes next, signed in
+    /// or failed (WEB-0080).</summary>
     private string Challenge(string to)
-        => Configured() + ChallengePath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path + "?return=" + Uri.EscapeDataString(to));
+    {
+        var here = Uri.EscapeDataString(baseUrl.PathBase + Path + "?return=" + Uri.EscapeDataString(to));
+        return Configured() + ChallengePath + "?return=" + here + "&" + AuthConstants.Query.Failure + "=" + here;
+    }
 
     private string Configured() => baseUrl.Configured
         ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
