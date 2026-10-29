@@ -27,6 +27,9 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>Its place among the Tangents, lowest first.</summary>
     public int Order { get; set; }
 
+    /// <summary>How many Topics were started here, raised in the commit that starts one.</summary>
+    public int TopicCount { get; set; }
+
     /// <summary>A Tangent, or a refusal: the slug has the slug's shape and the name and description are within their limits.</summary>
     public static Tangent Create(string slug, string name, string description, PostKind defaultKind, int order)
     {
@@ -36,6 +39,9 @@ public sealed class Tangent : Entity<Tangent>
         if (description.Length > DescriptionLimit) throw new Refusal(DescriptionTooLong);
         return new Tangent { Id = slug, Name = name.Trim(), Description = description, DefaultKind = defaultKind, Order = order };
     }
+
+    /// <summary>Counts a Topic started here.</summary>
+    public void TopicStarted() => TopicCount = checked(TopicCount + 1);
 
     /// <summary>Whether this row says what the command says.</summary>
     public bool Same(string name, string description, PostKind defaultKind, int order) =>

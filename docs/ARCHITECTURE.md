@@ -58,7 +58,7 @@ A request is resolved once in the pipeline: session or bearer → person → rol
 
 **The page is the API.** One handler, one DTO, and the formatter decides: `Accept: text/html` renders it through a Razor component, `application/json` serializes it, and a fragment request header renders only the component for that resource. A Post's page, its JSON, its live patch and its archive file are the same DTO through the same component. Agents fetch the URL a person shares; `llms.txt` says so in two lines, and the descriptor carries `"api": 1` as the stability promise.
 
-`ETag` is `Post.Version` or `Event.Seq`. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`, or the deciding overwrite or missing role in one sentence; what the reader may not view is absent and answers as not found.
+`ETag` is `Post.Version` or `Event.Seq`; a page assembled from many rows, such as the Tangent page, carries a hash of its DTO, so a new Post, a moved checkpoint or a changed `can` changes it. Public pages are cacheable by a proxy. A private Tangent Space sends `noindex` and serves visitors only the sign-in page. Errors are one shape, RFC 9457 `problem+json`, carrying the same `gate` the door shows: `sign-in`, `apply`, `timed-out`, `locked`, `removed`, or the deciding overwrite or missing role in one sentence; what the reader may not view is absent and answers as not found.
 
 ## 5. Data
 
