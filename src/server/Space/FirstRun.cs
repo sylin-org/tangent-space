@@ -8,14 +8,12 @@ namespace Tangent.Space;
 /// operator configured with the <see cref="Setting"/> that holds it, and the <see cref="Door"/>. Before sign-in it
 /// carries <see cref="Challenge"/>, the Koan connector's atproto challenge, which comes back here signed in; signed in,
 /// <see cref="Form"/>, which establishes the place; once the place is established, for its operator and its
-/// proprietor, <see cref="Pointers"/>, what the site places to point at it. <see cref="Who"/> is the handle of whoever
-/// is signed in.</summary>
+/// proprietor, <see cref="Pointers"/>, what the site places to point at it.</summary>
 public sealed record FirstRun(
     string Name,
     string BaseUrl,
     string Setting,
     string Door,
-    string? Who = null,
     string? Challenge = null,
     FirstRunForm? Form = null,
     IReadOnlyList<Pointer>? Pointers = null)
@@ -34,13 +32,11 @@ public sealed record FirstRun(
 /// <see cref="Choices"/>: <c>me</c>, or <c>someone</c> with that participant's <c>handle</c>) and the form's
 /// <see cref="Token"/>. <see cref="Handle"/> is the signed-in person's verified handle, or empty; they become the
 /// operator. After a refusal it keeps what was sent and says why: <see cref="NameFailure"/> and
-/// <see cref="ProprietorFailure"/> under their fields, <see cref="Failure"/> above the form. <see cref="SignOut"/>
-/// signs this person out and comes back here, for someone who meant another account.</summary>
+/// <see cref="ProprietorFailure"/> under their fields, <see cref="Failure"/> above the form.</summary>
 public sealed record FirstRunForm(
     string Action,
     FormToken Token,
     string Handle,
-    string SignOut,
     string? Name = null,
     string Proprietor = FirstRunForm.Me,
     string? ProprietorHandle = null,

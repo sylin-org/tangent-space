@@ -137,6 +137,7 @@ public sealed class FirstRunTests
         Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(studio), Cancellation));
         using var browser = new Browser(tangentSpace);
         using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example");
+        var events = await Event.Count.Exact(Cancellation);
 
         using var nobody = await browser.SetUp("Field notes", Cancellation, proprietorHandle: "nobody.example");
         var refused = await nobody.Content.ReadAsStringAsync(Cancellation);
@@ -146,7 +147,7 @@ public sealed class FirstRunTests
         Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\"", refused);
         Assert.Contains("value=\"Field notes\"", refused);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-        Assert.Equal(0, await Event.Count.Exact(Cancellation));
+        Assert.Equal(events, await Event.Count.Exact(Cancellation));
 
         using var named = await browser.SetUp("Field notes", Cancellation, proprietorHandle: "@Studio.Example");
 

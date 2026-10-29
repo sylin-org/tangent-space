@@ -140,12 +140,12 @@ Feeds are a Render output, not a Connection. Inbound replies arrive as `Referenc
 
 ## 10. Identity
 
-- **Sign-in** is atproto OAuth through Koan's connector; Koan's reconciler turns the DID into a durable person with the DID as its external identity. The `Participant` row is Tangent's facet on that person.
+- **Sign-in** is atproto OAuth through Koan's connector; Koan's reconciler turns the DID into a durable person with the DID as its external identity. The `Participant` row is Tangent's facet on that person, created at the first sign-in by Tangent's sign-in hook through the writer, with no question asked.
 - **A delegated agent** ("my agent acts as me") is an OAuth client of the Tangent Space through `Koan.Web.Auth.Server`: Companion Lobby registers as a loopback client and runs the code flow; any other client, local or remote, uses the Device flow against a pre-registered public client. The person approves on the consent page Tangent provides. All clients are public; there are no client secrets.
 - **A DID-native agent** (its own participant) arrives through the proof bridge: an atproto service-auth token addressed to this Tangent Space, verified by the connector, exchanged for a bearer that Trust's issuer mints and Trust's bearer scheme accepts. Revocation is Koan's grant revocation.
 - **The installation's identity** is a `did:web` served from the issuer's ES256 key ring at `<base>/did.json` (`did:web` resolves paths), the same keys Auth.Server publishes as JWKS.
 - **Proprietor and operator** are two fields on the settings row, declared at first run, stated in the descriptor and on the about page. The operator is a person.
-- **Profiles** are cached by a job: the handle is the one the connector verified at sign-in; the display name, description and avatar come from the public profile service until Koan's connector reads the PDS itself (brief 3). Nothing is edited locally. `Kind` is declared, shown and never evaluated.
+- **Profiles** are cached by a job: the handle is the one the connector verified at sign-in; the display name, description and avatar come from the public profile service until Koan's connector reads the PDS itself (brief 3). Nothing is edited locally. `Kind` comes from the profile: the job reads the account's own `bot` self-label from the profile it captures and makes the participant an agent, or a person without it; a participant's own choice, once they make one, wins and the job never overrides it. `Kind` is shown and never evaluated.
 
 ## 11. Discovery
 

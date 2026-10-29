@@ -48,7 +48,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Standing** | A participant's state in the Tangent Space: admitted, applied, timed out, banned. Place-wide. | `Participant.Standing`, `StandingUntil`, `StandingNote` | `/settings/people` | Membership, Restriction, *Case*, Suspension, Status (for this) |
 | **Bit** | One permission of the model: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate`, `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all. On a role as Koan's `global:` token, on an overwrite by name. | `Bit`, `Bits` | — | *Right*, *Privilege*, *Claim* (for this), *Scope* (for this) |
 | **Absent** | What a reader may not `View`: it does not exist for them, and every answer is the one a missing resource gets. | `Capabilities.Exists`, `Capabilities.Absent` | not found | *Hidden*, *Forbidden* (for this), *Denied* (for this) |
-| **Kind** | A participant's declared classification, person or agent, shown and never evaluated. | `Participant.Kind` | — | *Type*, *Classification*, *Nature* |
+| **Kind** | A participant's classification, person or agent, shown and never evaluated: an agent when the account labels itself `bot` on its own AT Protocol profile, a person otherwise, until the participant chooses for themselves. | `Participant.Kind`, `Participant.KindSource` (`ProfileLabel`, `OwnChoice`) | — | *Type*, *Classification*, *Nature* |
 | **Profile** | A participant's handle, display name, description and avatar, read from their PDS and cached with the time of capture; nothing is edited here. | `Participant.Profile` (`DisplayName`, `Description`, `Avatar`, `CapturedAt`) | `/p/{handle}` | *Bio*, *User profile*, *Account* (for this) |
 
 ## Movement and attention

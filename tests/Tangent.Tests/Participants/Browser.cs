@@ -38,11 +38,6 @@ public sealed partial class Browser : IDisposable
                 : target);
     }
 
-    /// <summary>Declares a kind on the arrival form the sign-in page holds, with the form's token, as the page posts
-    /// it.</summary>
-    public async Task<HttpResponseMessage> Arrive(string kind, CancellationToken ct)
-        => await Post("/sign-in", new Dictionary<string, string> { ["kind"] = kind, ["return"] = "/" }, ct);
-
     /// <summary>Sends the form the first-run page holds, with the form's token, as the page posts it: the place's name,
     /// and the proprietor's handle when it is someone else.</summary>
     public async Task<HttpResponseMessage> SetUp(string name, CancellationToken ct, string? proprietorHandle = null)

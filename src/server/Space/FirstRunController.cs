@@ -34,7 +34,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, WriteLoop writer,
         var personId = PersonId(User);
         if (personId is null || personId != space.OperatorId && personId != space.ProprietorId)
             return new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
-        return new ObjectResult(Place(baseUrl, space.Name, Handle(User)) with { Pointers = Pointers.For(space.BaseUrl) });
+        return new ObjectResult(Place(baseUrl, space.Name) with { Pointers = Pointers.For(space.BaseUrl) });
     }
 
     [HttpPost(Path)]
@@ -98,32 +98,27 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, WriteLoop writer,
         {
             var configured = Configured(baseUrl);
             var comeBack = baseUrl.PathBase + Path;
-            return new ObjectResult(Place(baseUrl, TangentSpace.Unnamed, null) with
+            return new ObjectResult(Place(baseUrl, TangentSpace.Unnamed) with
             {
                 Challenge = configured + SignInController.ChallengePath + "?return=" + Uri.EscapeDataString(comeBack)
             });
         }
 
-        var form = Form(http, baseUrl);
-        return new ObjectResult(Place(baseUrl, TangentSpace.Unnamed, form.Handle) with { Form = form });
+        return new ObjectResult(Place(baseUrl, TangentSpace.Unnamed) with { Form = Form(http, baseUrl) });
     }
 
     /// <summary>The form again, keeping what was sent, with the reason it was refused.</summary>
     private ObjectResult Again(FirstRunForm form)
-        => new(Place(baseUrl, TangentSpace.Unnamed, form.Handle) with { Form = form }) { StatusCode = StatusCodes.Status400BadRequest };
+        => new(Place(baseUrl, TangentSpace.Unnamed) with { Form = form }) { StatusCode = StatusCodes.Status400BadRequest };
 
-    private static FirstRun Place(KoanWebBaseUrl baseUrl, string name, string? who)
+    private static FirstRun Place(KoanWebBaseUrl baseUrl, string name)
     {
         var configured = Configured(baseUrl);
-        return new FirstRun(name, configured, Setting, configured + "/", who is { Length: > 0 } ? who : null);
+        return new FirstRun(name, configured, Setting, configured + "/");
     }
 
     private static FirstRunForm Form(HttpContext http, KoanWebBaseUrl baseUrl)
-    {
-        var configured = Configured(baseUrl);
-        var signOut = configured + SignInController.SignOutPath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path);
-        return new FirstRunForm(configured + Path, FormToken.For(http), Handle(http.User), signOut);
-    }
+        => new(Configured(baseUrl) + Path, FormToken.For(http), Handle(http.User));
 
     /// <summary>A proprietor handle as written, without the <c>@</c> a person may type and in the lower case handles
     /// are compared in; null when there is none or it is longer than a handle can be.</summary>
