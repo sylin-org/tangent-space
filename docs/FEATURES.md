@@ -56,7 +56,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Topic window: bounded, lock-free, cursors are sequence numbers, anchor first | topic | `ConversationService.Window`, `WindowPlanner`, `History` (harvest) | — | M | done |
 | Post, reply, edit, remove through the writer: TID ids, pre-edit snapshots in the audit partition, visible tombstones | topic | `PostChanges` snapshot chain (harvest) | audit partition | M | done |
-| Markdown body, sanitized HTML, mentions as identity-bearing links resolved at render | topic | `PostMarkup` (harvest) | — | S | doing |
+| Markdown body, sanitized HTML, mentions as identity-bearing links resolved at render | topic | `PostMarkup` (harvest) | — | S | done |
 | The composer island: drafts in `localStorage` by scope; an uncertain submit reconciles by `GET` of the minted Id; never auto-posts | topic | `composables/conversation.ts` intents (harvest) | — | S | done |
 | Live: the event stream, one per page, fragment patch; the door as the poll | topic | `activity/transport.ts` framing (harvest) | `Sylin.Koan.Web.Sse`, `Sylin.Koan.Communication` | M | todo |
 | Take this on a tangent: choose the Tangent, a root Post with an origin, linked both ways | topic | new | — | S | todo |
