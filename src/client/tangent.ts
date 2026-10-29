@@ -6,6 +6,7 @@ import './layout.css'
 import './sign-in.css'
 import './first-run.css'
 import './tangent-page.css'
+import './topic.css'
 import { mountIslands } from './islands'
 
 mountIslands(document)

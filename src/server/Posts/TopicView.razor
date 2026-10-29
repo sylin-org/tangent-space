@@ -1,0 +1,115 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* The Topic page: the rail with the way back to the Tangent and the replies this window holds; then the title with
+   any pin or lock, when it started and how many replies it has, the root, and one window of replies in order, with
+   the way to the older window above them and to the newer below. A Topic without replies says so in one sentence; a
+   locked Topic says it takes no new replies; a visitor is shown where to sign in to reply. Zeros are said in words. *@
+<div class="layout layout-reading topic-layout">
+    <aside class="rail" aria-label="In this Tangent">
+        <h2 class="rail-heading">@Model.Tangent.Name</h2>
+        <ul class="rail-views">
+            <li><a href="@Model.Tangent.Address">@(Article ? "All articles" : "All topics")</a></li>
+            @if (Model.NewTopic is { } start)
+            {
+                <li><a href="@start">@(Article ? "New article" : "New topic")</a></li>
+            }
+        </ul>
+        @if (Model.Replies.Count > 0)
+        {
+            <h2 class="rail-heading rail-heading-spaced">In this window</h2>
+            <ul class="topic-rail-replies">
+                @foreach (var reply in Model.Replies)
+                {
+                    <li>
+                        <a href="@("#" + reply.Id)" aria-current="@(reply.Id == Model.Anchor ? "true" : null)">
+                            @TopicRow.Mark(reply.Author, "author-mark")
+                            <span class="topic-rail-reply-text">
+                                <span class="topic-rail-reply-name">@reply.Author.Name</span>
+                                <span class="topic-rail-reply-time">@TopicRow.When(reply.CreatedAt, Model.Day)</span>
+                            </span>
+                            @if (reply.New)
+                            {
+                                <span class="new-label">New</span>
+                            }
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    </aside>
+    <main class="topic-main">
+        <h1 class="topic-title">@Model.Title@Flags()</h1>
+        <p class="topic-meta">
+            <span>Started <time datetime="@Model.Root.CreatedAt.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@TopicRow.When(Model.Root.CreatedAt, Model.Day)</time></span>
+            <span aria-hidden="true">·</span>
+            <span>@TopicRow.Count(Model.ReplyCount, "reply", "replies", "No replies yet")</span>
+        </p>
+        <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Anchor="@(Model.Anchor == Model.Root.Id)" />
+        <section class="topic-replies" aria-labelledby="topic-replies-title">
+            <div class="topic-replies-head">
+                <h2 id="topic-replies-title" class="topic-replies-title">Replies</h2>
+                @if (Model.From is { } from && Model.Through is { } through)
+                {
+                    <span class="topic-replies-range">@Range(from, through)</span>
+                }
+            </div>
+            @if (Model.Older is { } older)
+            {
+                <nav class="topic-pages" aria-label="Older replies">
+                    <a href="@older">← Older replies</a>
+                </nav>
+            }
+            @if (Model.Replies.Count == 0)
+            {
+                <p class="topic-replies-empty">@(Model.ReplyCount == 0 ? "No replies yet." : "Nothing further this way.")</p>
+            }
+            @foreach (var reply in Model.Replies)
+            {
+                <TopicPost Model="@reply" Today="@Model.Day" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" />
+            }
+            @if (Model.Newer is { } newer)
+            {
+                <nav class="topic-pages" aria-label="Newer replies">
+                    <a class="topic-pages-next" href="@newer">Newer replies →</a>
+                </nav>
+            }
+        </section>
+        @if (Model.Locked)
+        {
+            <p class="topic-closed">This topic is locked; it takes no new replies.</p>
+        }
+        else if (Model.SignIn is { } signIn && Model.Gate == global::Tangent.Access.Capabilities.SignIn)
+        {
+            <p class="topic-closed"><a href="@signIn">Sign in to reply</a></p>
+        }
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TopicPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent and the Topic as crumbs; and who
+    /// reads, or where a visitor signs in.</summary>
+    public static Frame Frame(TopicPage page)
+    {
+        var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
+        return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn);
+    }
+
+    private bool Article => Model.Kind == "article";
+
+    /// <summary>The replies the window holds, by their place in the Topic.</summary>
+    private static string Range(long from, long through) => from == through
+        ? "#" + from.ToString(CultureInfo.InvariantCulture)
+        : "#" + from.ToString(CultureInfo.InvariantCulture) + "–" + through.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>The name of the author of the Post a reply answers, where this window holds that Post.</summary>
+    private string? ParentAuthor(TopicPage.Post reply)
+        => reply.ParentId is { } parent ? Model.Replies.FirstOrDefault(post => post.Id == parent)?.Author.Name : null;
+
+    private RenderFragment Flags() => builder =>
+    {
+        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"topic-flag\">Pinned</span>");
+        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"topic-flag\">Locked</span>");
+    };
+}

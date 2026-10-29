@@ -155,6 +155,21 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },
     ],
   },
+  // A short Topic whose replies answer one another, read by the persona up to its first reply, and as a visitor
+  // reads it; a long Topic of more replies than two windows, opened at the persona's first unread with the older
+  // window a cursor away; the same Topic at the address of its fortieth reply, marked in the middle of its window; a
+  // Topic with a reply a moderator removed; and a Topic without replies.
+  topic: {
+    path: '/t/discussions/what-kind-of-discussions',
+    states: [
+      { name: 'populated', seed: 'topic', signedIn: true },
+      { name: 'populated-visitor', seed: 'topic' },
+      { name: 'long', seed: 'topic', signedIn: true, path: '/t/discussions/notes-from-the-repair-workshop' },
+      { name: 'anchored', seed: 'topic', signedIn: true, path: '/t/discussions/notes-from-the-repair-workshop/3mwdfsj6d226g' },
+      { name: 'tombstone', seed: 'topic', signedIn: true, path: '/t/discussions/is-a-visible-repair-a-better-repair' },
+      { name: 'empty-replies', seed: 'topic', signedIn: true, path: '/t/discussions/a-quiet-question' },
+    ],
+  },
 }
 
 // The reference's screens by width, as file names under its screens/ folder. Each is drawn at one size

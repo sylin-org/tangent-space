@@ -1,0 +1,256 @@
+/* The Topic page: the rail with the replies the window holds, the title, the root read large, and the replies in
+   order between the ways to the older and the newer window. */
+.topic-layout {
+  margin-top: 40px;
+}
+
+.topic-rail-replies {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topic-rail-replies a {
+  margin: 0 -8px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.topic-rail-replies a:hover,
+.topic-rail-replies a[aria-current="true"] {
+  background: var(--ts-hover);
+}
+
+.topic-rail-reply-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.topic-rail-reply-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-rail-reply-time {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.topic-title {
+  margin: 0;
+  font: var(--ts-type-topic-title);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.topic-title .topic-flag {
+  vertical-align: 10px;
+}
+
+.topic-meta {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+  font-weight: 400;
+}
+
+/* One Post: the mark beside its head, body and actions. */
+.post {
+  padding-top: 16px;
+  display: flex;
+  gap: 12px;
+}
+
+.post-root {
+  margin-top: 26px;
+  padding-bottom: 14px;
+  gap: 14px;
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.post.is-anchor {
+  margin: 12px -12px 0;
+  padding: 12px;
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-accent-soft);
+  box-shadow: inset 3px 0 0 var(--ts-accent);
+}
+
+.post-mark {
+  width: 36px;
+  height: 36px;
+  font-size: 13px;
+}
+
+.post-mark-root {
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+}
+
+.post-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.post-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.post-author {
+  font: var(--ts-type-ui-large);
+  font-size: 14px;
+}
+
+.post-root .post-author {
+  font-size: 15px;
+}
+
+.post-head .agent-tag {
+  margin-left: 0;
+}
+
+.post-handle {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.post-time {
+  margin-left: auto;
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+  text-decoration: none;
+}
+
+.post-time:hover {
+  text-decoration: underline;
+}
+
+.post-parent {
+  margin-top: 2px;
+  display: inline-block;
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.post-body {
+  margin-top: 6px;
+  font: var(--ts-type-reply-body);
+  overflow-wrap: anywhere;
+}
+
+.post-body-root {
+  font: 400 22px/1.45 var(--ts-font-display);
+}
+
+.post-removed {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--ts-line);
+  border-radius: var(--ts-radius-row);
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+  font-style: italic;
+}
+
+.post-actions {
+  margin: 6px 0 0 -8px;
+  display: flex;
+  gap: 2px;
+}
+
+.post-action {
+  height: 32px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 7px;
+  color: var(--ts-text-2);
+  font: 600 13px/1 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.post-action:hover {
+  background: var(--ts-hover);
+}
+
+.topic-replies-head {
+  margin-top: 18px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.topic-replies-title {
+  margin: 0;
+  font: 600 22px/1.1 var(--ts-font-display);
+}
+
+.topic-replies-range {
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+  font-weight: 400;
+}
+
+.topic-replies-empty,
+.topic-closed {
+  margin: 20px 0 0;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui);
+}
+
+.topic-closed {
+  padding-top: 16px;
+  border-top: 1px solid var(--ts-line);
+}
+
+.topic-closed a {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+/* The phone: the narrow gutter and a smaller title and root. */
+@media (max-width: 719px) {
+  .topic-layout {
+    width: calc(100% - 2 * var(--ts-phone-gutter));
+    margin-top: 24px;
+  }
+
+  .topic-title {
+    font-size: 30px;
+  }
+
+  .post-body-root {
+    font-size: 19px;
+  }
+
+  .post-mark-root {
+    width: 36px;
+    height: 36px;
+  }
+
+  .post-mark {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+}
