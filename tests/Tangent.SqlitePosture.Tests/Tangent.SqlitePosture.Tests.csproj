@@ -14,8 +14,6 @@
     <PackageReference Include="xunit.v3" Version="[3.2.2]" />
     <PackageReference Include="xunit.runner.visualstudio" Version="[3.1.5]" PrivateAssets="all" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Testing.Hosting/Koan.Testing.Hosting.csproj" />
-    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Core/Koan.Core.csproj" />
-    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Data.Core/Koan.Data.Core.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Data/Sqlite/Koan.Data.Connector.Sqlite.csproj" />
   </ItemGroup>
 </Project>

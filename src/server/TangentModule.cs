@@ -19,6 +19,10 @@ public sealed class TangentModule : KoanModule
     public override void Register(IServiceCollection services)
     {
         services.AddKoanOptions<TangentSpaceOptions>(TangentSpaceOptions.Configuration)
+            .PostConfigure(options =>
+            {
+                if (TangentSpaceOptions.TryNormalizeBaseUrl(options.BaseUrl, out var baseUrl)) options.BaseUrl = baseUrl;
+            })
             .Validate(options => TangentSpaceOptions.TryParseBaseUrl(options.BaseUrl, out _),
                 "Tangent:BaseUrl must be an absolute http or https URL: scheme, host and an optional path.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
