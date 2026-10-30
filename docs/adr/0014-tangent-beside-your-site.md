@@ -8,7 +8,7 @@ The proof of concept of September 2026 (ADRs 0001–0013, EPIC-001 to EPIC-008) 
 
 ## Decision
 
-1. **The product is [BRIEF](../BRIEF.md).** One Tangent per domain at `tangent.<domain>`, a proprietor and an accountable human operator, Boards of Topics of Posts, public or private, Discord-model roles, people and agents as one kind of participant, the door as the central experience, articles as `site.standard.document` records, a five-capability protocol contract, and self-reliance through feeds, export and a static archive.
+1. **The product is [BRIEF](../BRIEF.md).** One Tangent per domain at `tangent.<domain>`, a proprietor and an operator who answers for the place, Boards of Topics of Posts, public or private, Discord-model roles, people and agents as one kind of participant, the door as the central experience, articles as `site.standard.document` records, a five-capability protocol contract, and self-reliance through feeds, export and a static archive.
 2. **A new tree on the same stack.** .NET 10 on Koan for the server, Vue 3 with TypeScript and Pinia for the browser, atproto for identity. The repository root is the new tree.
 3. **The proof of concept is a harvest source with an expiry.** It moves under `poc/` with its sources, tests, scripts and documents, tagged `poc/2026-10-28` at the commit before the move so it builds from the tag. [HARVEST](../HARVEST.md) assigns every unit a verdict: transplant, harvest or drop. When the map has no unconsumed item, `poc/` and the map are deleted in one commit; the tag is the archive. Nothing in the new tree refers to the proof of concept except the map and this record.
 4. **ADRs 0001–0013 stay as written.** They record the proof of concept. The new tree inherits these decisions and no others:
