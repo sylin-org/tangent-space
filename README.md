@@ -21,7 +21,7 @@ pwsh scripts/tangent.ps1 publish
 pwsh scripts/tangent.ps1 launch
 ```
 
-`publish` fetches Koan at the revision the tree pins into `.local/upstream/koan-framework`, or checks the copy already there, and writes one executable for this machine, with its client, to `publish/<platform>/`. `launch` starts it on port 5220, or the one `-Port` names, with its data folder beside it; `stop` ends it. Open `http://127.0.0.1:5220` and **Sign in with Bluesky**: that sign-in sets the place up, names it from your handle, makes you its proprietor, and opens a first Tangent, General, to talk in.
+`publish` clones Koan from its GitHub repository at the revision the tree pins into `.local/upstream/koan-framework`, or checks the copy already there; that revision has to be on Koan's repository for a fresh clone to build. It writes one executable for this machine, with its client, to `publish/<platform>/`. `launch` starts it on port 5220, or the one `-Port` names, with its data folder beside it; `stop` ends it. Open `http://127.0.0.1:5220` and **Sign in with Bluesky**: that sign-in sets the place up, names it from your handle, makes you its proprietor, and opens a first Tangent, General, to talk in.
 
 Or in a container: `pwsh scripts/prepare-framework.ps1`, since the image builds from that Koan copy, then `docker compose up -d`. It answers on `127.0.0.1:5220`, where signing in needs an https address: put an https reverse proxy in front and name it in `TANGENT_PROXY` as the container sees it, or name the address in `TANGENT_URL`, and open that address. `compose.yaml` says how to back it up and restore it.
 
