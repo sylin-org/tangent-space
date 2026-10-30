@@ -33,7 +33,7 @@
                 @if (who.Notifications is { } unseen)
                 {
                     <a class="masthead-unseen" href="@unseen.Address" hidden="@(unseen.Count == 0)" aria-label="@Unseen(unseen.Count, unseen.AtLeast)"
-                       data-island="unseen" data-props="@JsonSerializer.Serialize(new { reader = who.Id, count = unseen.Count, atLeast = unseen.AtLeast, through = unseen.Through })">
+                       data-island="unseen" data-props="@JsonSerializer.Serialize(new { reader = who.Id, count = unseen.Count, atLeast = unseen.AtLeast, through = unseen.Through, applications = unseen.Applications })">
                         <svg class="masthead-unseen-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@((MarkupString)NotificationsIcon)</svg>
                         <span class="masthead-unseen-count">@unseen.Badge</span>
                     </a>

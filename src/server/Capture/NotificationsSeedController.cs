@@ -16,7 +16,8 @@ namespace Tangent.Capture;
 /// <summary>The rows the notifications' captures show, written through the writer when the capture asks: the capture
 /// persona's Topic in the discussions, with Mara's reply to it from before she last opened her notifications; then,
 /// since, Lumen's reply, Lumen's Topic that mentions her, Mara's Topic taken on a tangent from hers into the workshop,
-/// and Leo making her a moderator. <c>notifications-unseen</c> puts her notifications checkpoint back at Mara's reply, or
+/// Leo making her a moderator, and, once the place says apply, Wren's application, which she now decides.
+/// <c>notifications-unseen</c> puts her notifications checkpoint back at Mara's reply, or
 /// before everything where the place has no such reply, before every width and theme, since opening them moves it.
 /// Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
 public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
@@ -25,6 +26,7 @@ public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection
     private const string Leo = "did:plc:capture4leo";
     private const string Lumen = "did:plc:capture4lumen";
     private const string Mara = "did:plc:capture4mara";
+    private const string Wren = "did:plc:capture4wren";
 
     [HttpPost("/capture/seed/notifications")]
     public async Task<IActionResult> Seed(CancellationToken ct)
@@ -52,6 +54,12 @@ public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection
         await Write(new StartTopic(Tid(At(29, 15, 10), 5), "workshop", "Introductions for people too",
             "The same three lines work for us: who you are, what you make, what you won’t take on.", Mara, At: At(29, 15, 10), OriginId: intro.Id), ct);
         await Write(new ChangeRole(Leo, Persona, Roles.Moderator, Give: true, At(29, 16, 0)), ct);
+
+        var applying = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
+        applying.Admission = Admission.Apply;
+        await Write(new Keep<TangentSpace>(applying), ct);
+        await Write(new FirstArrival(Wren, "wren.bsky.social", At(29, 17, 30)), ct);
+        await Write(new CaptureProfile(new ProfileAnswer(Wren, "Wren Hale", null, null, AgentLabel: false), DateTimeOffset.UtcNow), ct);
 
         await Unseen(ct);
         return NoContent();

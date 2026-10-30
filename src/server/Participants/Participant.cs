@@ -40,6 +40,12 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     [Index(Name = "ix_participant_applications")]
     public DateTimeOffset? AppliedAt { get; set; }
 
+    /// <summary>The log's sequence of the arrival that made the participant an applicant, while their application waits;
+    /// null for everyone else, and once it is admitted or declined. The applications that wait are one range of
+    /// <c>ix_participant_waiting</c>, newest first, which is how they reach whoever decides them.</summary>
+    [Index(Name = "ix_participant_waiting")]
+    public long? WaitingSeq { get; set; }
+
     /// <summary>The refusal a decision meets for a participant whose standing is not an application's.</summary>
     public const string NotAnApplication = "Only an application waiting or declined is decided.";
 
@@ -75,6 +81,10 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         };
     }
 
+    /// <summary>Records that the participant's arrival took the log's sequence <paramref name="seq"/>: where they
+    /// applied, their application waits at it.</summary>
+    public void Arrived(long seq) => WaitingSeq = Standing == Standing.Applied ? seq : null;
+
     /// <summary>Admits an applicant, waiting or declined: they stand admitted and their application is closed. False,
     /// with nothing changed, for one who stands admitted at <paramref name="now"/>, a timeout that has ended among them;
     /// a timed-out or banned participant is refused with <see cref="NotAnApplication"/>.</summary>
@@ -85,18 +95,21 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         if (standing is not (Standing.Applied or Standing.Declined)) throw new Refusal(NotAnApplication);
         Standing = Standing.Admitted;
         AppliedAt = null;
+        WaitingSeq = null;
         return true;
     }
 
     /// <summary>Declines a waiting application: the applicant keeps reading what a visitor reads, the application stays
-    /// listed as declined, and a later <see cref="Admit"/> reverses it. False, with nothing changed, for one already
-    /// declined; anyone else is refused with <see cref="NotAnApplication"/>, read at <paramref name="now"/>.</summary>
+    /// listed as declined and no longer waits, and a later <see cref="Admit"/> reverses it. False, with nothing changed,
+    /// for one already declined; anyone else is refused with <see cref="NotAnApplication"/>, read at
+    /// <paramref name="now"/>.</summary>
     public bool Decline(DateTimeOffset now)
     {
         var standing = StandingAt(now);
         if (standing == Standing.Declined) return false;
         if (standing != Standing.Applied) throw new Refusal(NotAnApplication);
         Standing = Standing.Declined;
+        WaitingSeq = null;
         return true;
     }
 

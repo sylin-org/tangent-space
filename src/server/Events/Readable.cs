@@ -5,9 +5,11 @@ using Tangent.Access;
 namespace Tangent.Events;
 
 /// <summary>Which rows of the log reach one reader, by the rule the door reads by: a row in a Tangent reaches them where
-/// they may view that Tangent, and is absent otherwise; a row in no Tangent reaches them where it changed the place, or
-/// where it names them as its target. A poll asks once; a stream holds the answers for each Tangent it has met and
-/// asks again for all of them when <see cref="Refresh"/> has passed since it last asked, or at once when a row it is
+/// they may view that Tangent, and is absent otherwise; a row in no Tangent reaches them where it changed the place,
+/// where it names them as its target, or where it is an application (<see cref="Application"/>) and they hold
+/// <see cref="Bit.ManageStanding"/> in the place, which <see cref="Decides"/> says. A poll asks once; a stream holds the
+/// answers for each Tangent it has met and asks again for all of them, the place's among them, when
+/// <see cref="Refresh"/> has passed since it last asked, or at once when a row it is
 /// about to send changed a standing, a role, a Tangent or the place, so a reader who loses <see cref="Bit.View"/>
 /// receives nothing more from that Tangent from the first row past the change that the writer commits more than
 /// <see cref="Refresh"/> after it, and from the very next row where the change is itself in the log. Each ask is the bounded,
@@ -25,6 +27,7 @@ public sealed class Readable(string? participantId)
     private readonly Dictionary<string, bool> _tangents = new(StringComparer.Ordinal);
     private DateTimeOffset _read = DateTimeOffset.MinValue;
     private bool _place = true;
+    private bool _decides;
     private bool _placeRead;
 
     /// <summary>Whether the reader may still read the place: false once a refresh found the place absent to them, when
@@ -43,11 +46,7 @@ public sealed class Readable(string? participantId)
             _read = now;
         }
 
-        if (!_placeRead && rows.Any(row => row.TangentId is null))
-        {
-            _place = (await Capabilities.Load(participantId, null, null, ct)).Exists;
-            _placeRead = true;
-        }
+        if (!_placeRead && rows.Any(row => row.TangentId is null)) await ReadPlace(ct);
 
         var missing = rows.Select(row => row.TangentId).OfType<string>().Distinct(StringComparer.Ordinal)
             .Where(id => !_tangents.ContainsKey(id)).ToList();
@@ -55,10 +54,22 @@ public sealed class Readable(string? participantId)
         foreach (var (id, capabilities) in await Capabilities.LoadEach(participantId, missing, ct)) _tangents[id] = capabilities.Exists;
     }
 
+    /// <summary>Whether the reader holds <see cref="Bit.ManageStanding"/> in the place, and so decides applications: what
+    /// <see cref="Prepare"/> read of the place, or one read of it now where it read none.</summary>
+    public async Task<bool> Decides(CancellationToken ct)
+    {
+        if (!_placeRead) await ReadPlace(ct);
+        return _decides;
+    }
+
     /// <summary>Whether <paramref name="row"/> reaches the reader; <see cref="Prepare"/> has read what it needs.</summary>
     public bool Reaches(Event row) => row.TangentId is { } tangent
         ? _tangents.GetValueOrDefault(tangent)
-        : _place && (row.Kind == EventKind.SpaceChanged || (participantId is not null && row.TargetId == participantId));
+        : _place && (row.Kind == EventKind.SpaceChanged || (participantId is not null && row.TargetId == participantId)
+                     || (_decides && Application(row)));
+
+    /// <summary>Whether <paramref name="row"/> is an application: an arrival that left the newcomer applied.</summary>
+    public static bool Application(Event row) => row is { Kind: EventKind.StandingChanged, Standing: Participants.Standing.Applied };
 
     /// <summary>Where a reader begins on the log at <paramref name="head"/>: the newest row through it that reaches them,
     /// among the newest <see cref="ScanLimit"/>, or <paramref name="head"/> itself only when none of those reaches them,
@@ -72,6 +83,15 @@ public sealed class Readable(string? participantId)
         var readable = new Readable(participantId);
         await readable.Prepare(rows, ct);
         return rows.FirstOrDefault(readable.Reaches)?.Seq ?? head;
+    }
+
+    /// <summary>What the reader holds in the place: whether it exists for them, and whether they decide applications.</summary>
+    private async Task ReadPlace(CancellationToken ct)
+    {
+        var place = await Capabilities.Load(participantId, null, null, ct);
+        _place = place.Exists;
+        _decides = place.Holds(Bit.ManageStanding);
+        _placeRead = true;
     }
 
     /// <summary>Whether a row changes what someone may read.</summary>

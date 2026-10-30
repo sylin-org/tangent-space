@@ -52,8 +52,10 @@ public sealed class Event : Entity<Event>
     /// <summary>The Offer made, on <see cref="EventKind.OfferMade"/>.</summary>
     public string? OfferId { get; set; }
 
-    /// <summary>The standing a change left its target with, on <see cref="EventKind.StandingChanged"/> when someone
-    /// else changed it: admitted them, declined their application, timed them out, banned them or lifted either.</summary>
+    /// <summary>The standing a change left its target with, on <see cref="EventKind.StandingChanged"/>: the one their
+    /// arrival gave them, admitted or applied, or the one someone else's decision left: admitted them, declined their
+    /// application, timed them out, banned them or lifted either. An arrival that leaves them applied is an application
+    /// (<see cref="Readable.Application"/>).</summary>
     public Participants.Standing? Standing { get; set; }
 
     /// <summary>The standing the target held before that change, beside <see cref="Standing"/>: what tells a lift from an

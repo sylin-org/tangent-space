@@ -16,13 +16,14 @@ namespace Tangent.Events;
 /// <summary>The signed-in reader's notifications at <see cref="Notifications.Path"/>, one resource both ways
 /// (<see cref="NotificationsPage"/>): a page of them newest first (<see cref="Notifications.Read"/>), continued from a
 /// sealed cursor that is refused with 400 when it does not open, each one line about one thing — the Post, the Topic, the
-/// door, the reader's profile, or where the place answers — with an open Offer's two answers inline. The person opening
-/// them in their own session moves their notifications checkpoint through the newest the page shows
-/// (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past it; it never moves backwards, and
-/// it decides no Offer. The mark is handed to the writer only where its queue is not full and is never waited on: the page
-/// answers whatever becomes of it, and a later opening makes good one that did not land. A delegate reads them as its
-/// person does and moves nothing, since seen means the person saw them. The page is never stored. A visitor is asked to
-/// sign in, and a reader without <see cref="Bit.View"/> on the place receives its gate.</summary>
+/// door, the reader's profile, where the place answers, or, for an application that waits, the applications — with an
+/// open Offer's two answers inline. The person opening them in their own session moves their notifications checkpoint
+/// through the newest the page shows (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past
+/// it; it never moves backwards, and it decides no Offer and no application. The mark is handed to the writer only where
+/// its queue is not full and is never waited on: the page answers whatever becomes of it, and a later opening makes good
+/// one that did not land. A delegate reads them as its person does and moves nothing, since seen means the person saw
+/// them. The page is never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the
+/// place receives its gate.</summary>
 public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
@@ -119,6 +120,10 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
                         Line = post.Removed ? "" : TangentPage.Opening(post, people),
                         Removed = post.Removed
                     };
+                case EventKind.StandingChanged when Readable.Application(e):
+                    // Someone applied, and waits for whoever decides: the reader, among them.
+                    return new NotificationsPage.Entry(e.Seq, NotificationsPage.Kinds.Application, isNew, e.At, who,
+                        baseAddress + ApplicationsController.Path);
                 case EventKind.StandingChanged:
                     // Who admitted the reader or lifted their timeout or ban is named, as the door names them; who
                     // declined, timed out or banned them is not.

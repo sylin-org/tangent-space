@@ -16,7 +16,8 @@ namespace Tangent.Space;
 /// times are written for. <see cref="Poll"/> is where the reader asks for what happens after this door: the poll past the
 /// newest event the door read that the reader may see, or past the newest of its window where the window held none of
 /// those, which the stream at the same address also answers. For the place's operator, <see cref="Offers"/> are the
-/// open Offers they decide, shown first; for anyone else there are none, and the field is absent. <see cref="NewTangent"/> is where a
+/// open Offers they decide, shown first; for anyone else there are none, and the field is absent. For whoever decides
+/// applications, <see cref="Applications"/> says how many wait and where they are decided. <see cref="NewTangent"/> is where a
 /// Tangent is created, present only for a reader who may create one. <see cref="Gate"/> is why the reader may not write
 /// in the place, absent where they may: for an applicant, that their application is waiting, or was declined, and for a
 /// participant timed out, until when (<see cref="Until"/>), which the page says in one sentence.
@@ -45,6 +46,10 @@ public sealed record Door(
 
     /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
     public IReadOnlyList<Offered>? Offers { get; init; }
+
+    /// <summary>How many applications wait and where they are decided: present only for a reader who holds
+    /// <c>ManageStanding</c> in the place, and only while one waits.</summary>
+    public Waiting? Applications { get; init; }
 
     /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
     public string? AllTangents { get; init; }
@@ -122,6 +127,10 @@ public sealed record Door(
     /// as addresses to post to, each carrying the Id in the <c>offer</c> field, and the form's antiforgery token.</summary>
     public sealed record Offered(string Offer, string Kind, string Subject, long? Count, DateTimeOffset? Since, string Use, string Decline,
         FormToken Token);
+
+    /// <summary>How many applications wait, whether that is a lower bound because the read was full, and the address of
+    /// the applications, where each is admitted or declined.</summary>
+    public sealed record Waiting(int Count, bool AtLeast, string Address);
 
     /// <summary>A Tangent the reader may view: its slug, name, kind, address, how many Topics were started there, and
     /// how many of its Posts are new to the reader.</summary>

@@ -17,10 +17,15 @@ export function label(count: number, atLeast: boolean): string {
   return `${atLeast ? 'At least ' : ''}${count} ${count === 1 && !atLeast ? 'new notification' : 'new notifications'}`
 }
 
+// The standing an arrival leaves an applicant with, as the stream writes it.
+export const applied = 'Applied'
+
 // How many of the reader's notifications they have not seen, in the masthead: the server's count, raised by one for each
 // row the page's stream delivers past where the count reads through that targets the reader and that someone else did,
-// the rule the server counts by; the stream only delivers rows that reach the reader. Hidden while it is zero. It
-// only ever counts up: opening the notifications is what brings it down, on the next page.
+// and, for a reader whose count holds the applications that wait (applications), by one for each application, the
+// rule the server counts by; the stream only delivers rows that reach the reader, and an application only to whoever
+// decides it. Hidden while it is zero. It only ever counts up: opening the notifications is what brings it down, on the
+// next page, as does a decision about an application, which the next page no longer counts.
 export const unseen = defineComponent({
   name: 'UnseenIsland',
   props: {
@@ -29,6 +34,7 @@ export const unseen = defineComponent({
     count: { type: Number, default: 0 },
     atLeast: { type: Boolean, default: false },
     through: { type: Number, default: 0 },
+    applications: { type: Boolean, default: false },
   },
   setup(props, { expose }) {
     let count = props.count
@@ -48,7 +54,8 @@ export const unseen = defineComponent({
       for (const row of rows) {
         if (row.seq <= through) continue
         through = row.seq
-        if (row.target === props.reader && row.actor !== props.reader) raised++
+        if (row.actor === props.reader) continue
+        if (row.target === props.reader || (props.applications && row.kind === 'standing.changed' && row.standing === applied)) raised++
       }
       if (raised === 0) return
       count += raised
