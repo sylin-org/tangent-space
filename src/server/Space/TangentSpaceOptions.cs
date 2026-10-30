@@ -1,7 +1,8 @@
 namespace Tangent.Space;
 
 /// <summary>What an operator configures under the <c>Tangent</c> section: the folder that holds the Tangent
-/// Space's data, and the account that sets it up. Where it answers is learned (<see cref="PlaceAddress"/>).</summary>
+/// Space's data, the account that sets it up, and the archive it is retired to. Where it answers is learned
+/// (<see cref="PlaceAddress"/>).</summary>
 public sealed class TangentSpaceOptions
 {
     public const string Configuration = "Tangent";
@@ -15,6 +16,10 @@ public sealed class TangentSpaceOptions
     /// <summary>The account that may set up the Tangent Space at first run: its handle, with or without <c>@</c>, or
     /// its DID. Unset, the first person to sign in sets it up. It matters only until the place is set up.</summary>
     public string? Operator { get; set; }
+
+    /// <summary>The archive this Tangent Space answers from, retired, resolved against the executable's folder unless
+    /// absolute (<see cref="Lifecycle.Retirement"/>). Unset, it is not retired.</summary>
+    public string? Archive { get; set; }
 
     /// <summary>The configured operator as first run names them: their DID, or their handle without its <c>@</c> in the
     /// lower case handles are written in; null when none is configured.</summary>

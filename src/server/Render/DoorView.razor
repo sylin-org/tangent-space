@@ -13,8 +13,8 @@
    it seen and, while they have notifications they have not seen, how many, linked to them — and then the front page:
    the featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front
    page, with how many notifications they have not seen, linked to them, while there are some. A count the door could not finish reads "at least". The whole door is the
-   fragment island's host, so it refreshes itself from its own address. *@
-<main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Model.Address })">
+   fragment island's host, so it refreshes itself from its own address, unless it stands alone, with nothing to refresh from. *@
+<main data-island="@(Standalone ? null : "fragment")" data-props="@(Standalone ? null : JsonSerializer.Serialize(new { url = Model.Address }))">
     <section class="tangent-head" aria-labelledby="door-title">
         <div class="tangent-head-inner">
             <TangentTile Tile="@(new Tile(Tile.Tones[0], Initial))" Size="head" />
@@ -207,7 +207,7 @@
                 </div>
             }
             @Shelf("door-featured", "Featured", Model.Featured)
-            @Shelf("door-alive", "Alive now", Model.Alive)
+            @Shelf("door-alive", Standalone ? "Last alive" : "Alive now", Model.Alive)
         </div>
     </div>
     <Tangent.Events.Live Page="door" />
@@ -215,6 +215,8 @@
 
 @code {
     [Parameter, EditorRequired] public Door Model { get; set; } = default!;
+
+    [CascadingParameter(Name = nameof(Standalone))] public bool Standalone { get; set; }
 
     /// <summary>The frame the shell draws around the door: the place, with the place itself as the one crumb, and who
     /// reads, or where a visitor signs in.</summary>

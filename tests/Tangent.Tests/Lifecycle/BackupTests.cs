@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Tangent.Lifecycle;
 
-/// <summary>The executable's <c>backup</c> and <c>restore</c> verbs, run as an operator runs them: the server
+/// <summary>The executable's <c>backup</c>, <c>restore</c> and <c>archive</c> verbs, run as an operator runs them: the server
 /// executable as its own process, pointed at a fixture's data folder.</summary>
 public sealed class BackupTests(ITestOutputHelper output)
 {
@@ -150,6 +150,32 @@ public sealed class BackupTests(ITestOutputHelper output)
 
     /// <summary>Runs the server executable with <paramref name="arguments"/>, asserts its exit code and returns
     /// what it wrote.</summary>
+    [Fact]
+    public async Task The_archive_verb_renders_a_stopped_place_and_refuses_a_running_one()
+    {
+        const string address = "https://kept.example";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = address }, ct: Cancellation);
+        var space = await Given.AnEstablishedTangentSpace(tangentSpace, "The kept place", ct: Cancellation);
+        await Given.ATangent(tangentSpace, "workshop", ct: Cancellation);
+        space.Address = address;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(space), Cancellation));
+        var folder = Path.Combine(tangentSpace.Folder, "archive");
+        string[] named = [$"--Tangent:DataFolder={tangentSpace.DataFolder}", $"--Koan:Web:ApplicationUrl={address}"];
+
+        Assert.Contains("in use by a running Tangent Space", await Server(1, ["archive", folder, .. named]));
+        Assert.False(Directory.Exists(folder));
+        await tangentSpace.StopAsync(Cancellation);
+
+        Assert.Contains(address, await Server(0, ["archive", folder, named[0]]));
+        Assert.Contains("The kept place", await File.ReadAllTextAsync(Path.Combine(folder, "index.html"), Cancellation));
+        Assert.True(File.Exists(Path.Combine(folder, "t", "workshop", "feed.atom")));
+        Assert.Contains("not empty", await Server(1, ["archive", folder, .. named]));
+        Assert.False(File.Exists(Path.Combine(tangentSpace.DataFolder, RunningMark.FileName)));
+        await Server(2, "archive", folder, "--replace");
+        Assert.Contains("no Tangent Space", await Server(1, "archive", Path.Combine(tangentSpace.Folder, "elsewhere"), $"--Tangent:DataFolder={Path.Combine(tangentSpace.Folder, "nothing")}"));
+    }
+
     private async Task<string> Server(int expectedExitCode, params string[] arguments)
     {
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")

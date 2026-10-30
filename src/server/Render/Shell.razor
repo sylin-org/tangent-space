@@ -10,7 +10,8 @@
    notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
    in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. A page a visitor may
-   read carries in its head the card a link to it previews. Nothing here is a dialog. *@
+   read carries in its head the card a link to it previews. A page of the place's archive opens with the one line that says it is retired.
+   Nothing here is a dialog. *@
 <!DOCTYPE html>
 <html lang="en" data-accent="@Accent">
 <head>
@@ -33,6 +34,10 @@
     }
 </head>
 <body>
+@if (Retired is { } retired)
+{
+    <p class="retired-line">@retired</p>
+}
 @if (Frame is { } frame)
 {
     <header class="masthead">
@@ -193,6 +198,9 @@ else
 
     /// <summary>The card's head block, already encoded (<see cref="Koan.Web.OpenGraph.IOpenGraphCardRenderer.RenderHead"/>).</summary>
     [Parameter] public string? Card { get; set; }
+
+    /// <summary>The one line a page of the place's archive opens with.</summary>
+    [Parameter] public string? Retired { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
