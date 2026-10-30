@@ -12,13 +12,13 @@ pwsh scripts/tangent.ps1 <verb> [options], from any directory.
                              folder; the data folder is created beside the executable on the
                              first start.
   launch [-Port <port>]      Starts the published executable, or `dotnet run` when nothing is
-                             published, on port 5220 or the one given, answering at
-                             http://127.0.0.1:<port> unless the environment's
-                             Koan__Web__ApplicationUrl names the base URL, and waits until
-                             /health/live answers. Output goes to .local/launch/.
+                             published, on port 5220 or the one given, and waits until
+                             /health/live answers. Output goes to .local/launch/. Open it at
+                             http://127.0.0.1:<port>, where atproto's loopback client returns:
+                             the place takes the address its first run completes on as its own,
+                             and offers its operator the public address it is later reached at.
                              It runs in Development unless the environment names another, since
-                             atproto sign-in at a loopback http address exists only in Development,
-                             and answers at 127.0.0.1, where atproto's loopback client returns.
+                             atproto sign-in at a loopback http address exists only in Development.
   stop                       Ends the Tangent Space this script launched: a clean stop on Linux and
                              macOS, a hard stop on Windows, which SQLite's journal recovers from
                              at the next start or backup.
@@ -137,11 +137,10 @@ switch ($Verb) {
         if (Test-Live $Port) { throw "Something already answers on port $Port; choose another with -Port." }
         New-Item -ItemType Directory -Force -Path $launchFolder | Out-Null
         $executable = Get-PublishedExecutable
-        # The server listens on the port and, unless the operator's environment names the base URL, answers at it.
         $arguments = @("--urls=http://localhost:$Port")
-        # atproto's loopback client returns to 127.0.0.1, so the place answers there and the sign-in's cookies match.
+        # atproto's loopback client returns to 127.0.0.1, so the place is opened there and the sign-in's cookies match;
+        # an address the operator's environment configures wins.
         $address = if ($env:Koan__Web__ApplicationUrl) { $env:Koan__Web__ApplicationUrl } else { "http://127.0.0.1:$Port" }
-        if (-not $env:Koan__Web__ApplicationUrl) { $arguments += "--Koan:Web:ApplicationUrl=$address" }
         # atproto's loopback client exists only in Development; outside it sign-in needs an https base URL.
         if (-not $env:ASPNETCORE_ENVIRONMENT -and -not $env:DOTNET_ENVIRONMENT) { $env:ASPNETCORE_ENVIRONMENT = 'Development' }
         $start = @{

@@ -2,6 +2,7 @@
 @using Koan.Web.Hosting
 @inject PagePosition Position
 @inject KoanWebBaseUrl BaseUrl
+@inject IHttpContextAccessor Http
 @* The live updater's island, one per page: it streams the log from where the page's request found it and patches the
    page as rows that concern it arrive — on a Topic, a new reply appended at the newest window or announced by the
    notice below the replies, and a Post edited or removed fetched again in place; on a Tangent, its list of Topics;
@@ -41,12 +42,11 @@
 
     private string Props()
     {
-        var configured = BaseUrl.Configured
-            ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+        var address = BaseUrl.Resolve(Http.HttpContext ?? throw new InvalidOperationException("The live updater renders inside a request."));
         return JsonSerializer.Serialize(new
         {
-            events = configured + EventsController.Path,
-            door = configured + "/",
+            events = address + EventsController.Path,
+            door = address + "/",
             since = _since,
             page = Page,
             tangent = Tangent,

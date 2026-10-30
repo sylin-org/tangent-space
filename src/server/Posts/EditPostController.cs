@@ -162,7 +162,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
 
     private async Task<EditPage> Page(Post root, Post row, Capabilities capabilities, string? personId, CancellationToken ct)
     {
-        var configured = Configured();
+        var baseAddress = BaseAddress();
         var address = Address(root, row);
         var here = baseUrl.PathBase + "/t/" + root.TangentId + "/" + (root.Slug ?? root.Id) + "/" + row.Id + "/" + EditSegment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
@@ -174,9 +174,9 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             address,
             root.TangentId,
             tangent?.Name ?? root.TangentId,
-            PostWrites.TangentAddress(configured, root.TangentId),
+            PostWrites.TangentAddress(baseAddress, root.TangentId),
             root.Title ?? "",
-            PostWrites.TopicAddress(configured, root.TangentId, root.Slug ?? root.Id),
+            PostWrites.TopicAddress(baseAddress, root.TangentId, root.Slug ?? root.Id),
             row.ParentId is null,
             row.ParentId is null ? row.Title : null,
             row.Body,
@@ -188,15 +188,14 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             capabilities.Can,
             editable ? null : capabilities.Gate(Bit.EditOwn),
             removable ? null : capabilities.Gate(Bit.RemoveOwn),
-            personId is null ? configured + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
+            personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
-            configured + "/",
-            await PostWrites.Reader(personId, capabilities, configured, here, ct),
+            baseAddress + "/",
+            await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
             BodyOptional: row.ParentId is null && row.OriginId is not null);
     }
 
-    private string Address(Post root, Post row) => PostWrites.Address(Configured(), root.TangentId, root.Slug ?? root.Id, row.Id);
+    private string Address(Post root, Post row) => PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, row.Id);
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

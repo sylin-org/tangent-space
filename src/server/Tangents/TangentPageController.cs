@@ -60,7 +60,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
             ? Audience.Private
             : Audience.Public;
 
-        var configured = Configured();
+        var baseAddress = BaseAddress();
         var address = Address(row.Id);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + row.Id);
         // A signed-in reader's page carries the watch form with a fresh antiforgery token, so it is never stored or
@@ -80,13 +80,13 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
             cursor is not null,
             capabilities.Holds(Bit.Topic) ? address + "/" + NewTopicSegment : null,
             token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, watched, token),
-            reader is null ? configured + SignInController.Path + "?return=" + back : null,
+            reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             await Viewable(personId, row, ct),
             space.Name,
-            configured + "/",
+            baseAddress + "/",
             reader is null ? null : new TangentPage.Reader(
                 reader.Id, Named(reader).Name, Named(reader).Handle, Role(capabilities), reader.Profile.Avatar,
-                configured + AuthConstants.Routes.Logout + "?return=" + back),
+                baseAddress + AuthConstants.Routes.Logout + "?return=" + back),
             DateOnly.FromDateTime(DateTime.UtcNow)));
     }
 
@@ -185,7 +185,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
             row.Id == current.Id ? current.TopicCount : row.TopicCount)).ToList();
     }
 
-    private string Address(string slug) => Configured() + "/t/" + Uri.EscapeDataString(slug);
+    private string Address(string slug) => BaseAddress() + "/t/" + Uri.EscapeDataString(slug);
 
     /// <summary>The sequence the reader last saw in each of the page's Topics, by Topic Id, in one keyed read of their
     /// checkpoints; empty for a visitor. A Topic without a checkpoint is absent from the answer.</summary>
@@ -204,6 +204,5 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
 
     private static string Word(PostKind kind) => kind.ToString().ToLowerInvariant();
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

@@ -3,14 +3,16 @@ using Tangent.Writer;
 
 namespace Tangent.Space;
 
-/// <summary>The one settings row: the name of the place, whose place it is, who answers for it, who may read and how
-/// one joins, and how it looks. Where it answers is configuration, Koan's <c>Koan:Web:ApplicationUrl</c>, never a copy
-/// here. It exists once first run establishes it; until then the
-/// place reads as <see cref="Unestablished"/>.</summary>
+/// <summary>The one settings row: the name of the place, whose place it is, who answers for it, where it answers when
+/// no URL is configured, who may read and how one joins, and how it looks. It exists once first run establishes it;
+/// until then the place reads as <see cref="Unestablished"/>.</summary>
 public sealed class TangentSpace : Entity<TangentSpace>
 {
     /// <summary>The identity of the single row.</summary>
     public const string SingleRow = "tangent-space";
+
+    /// <summary>The refusal an address that is not an origin meets.</summary>
+    public const string AddressRule = "The address is an origin: a scheme, a host and a port, with nothing after them.";
 
     /// <summary>The name a place shows before first run names it.</summary>
     public const string Unnamed = "New Tangent Space";
@@ -71,6 +73,18 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// null only for a place established before first run created one, until the next start creates it.</summary>
     public string? ModeratorsTangentId { get; set; }
 
+    /// <summary>The origin the place took as its base URL, which Koan holds as the URL it accepted
+    /// (<see cref="PlaceAddress"/>): the one its setter's sign-in completed on, or one its operator used from an Offer; null
+    /// until then, when each request's own origin is the base URL. A configured <c>Koan:Web:ApplicationUrl</c> wins over
+    /// it.</summary>
+    public string? Address { get; set; }
+
+    /// <summary>Whether the place's address is local: none yet, or a loopback host, which only this machine reaches.</summary>
+    public bool AddressIsLocal() => IsLocal(Address);
+
+    /// <summary>Whether <paramref name="address"/> is local: none, or a loopback host.</summary>
+    public static bool IsLocal(string? address) => address is null || new Uri(address).IsLoopback;
+
     /// <summary>Who may read: anyone, or participants the place admitted.</summary>
     public Audience Audience { get; set; } = Audience.Public;
 
@@ -90,6 +104,19 @@ public sealed class TangentSpace : Entity<TangentSpace>
         if (ModeratorsTangentId is not null) throw new InvalidOperationException("This Tangent Space already has its moderators' Tangent.");
         ModeratorsTangentId = tangentId;
         Version = checked(Version + 1);
+    }
+
+    /// <summary>Takes <paramref name="origin"/> as the place's address, a change to the row; false, with nothing
+    /// changed, when it already is.</summary>
+    public bool TakeAddress(string origin)
+    {
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http")
+            || !string.Equals(uri.GetLeftPart(UriPartial.Authority), origin, StringComparison.OrdinalIgnoreCase))
+            throw new Refusal(AddressRule);
+        if (Address == origin) return false;
+        Address = origin;
+        Version = checked(Version + 1);
+        return true;
     }
 
     /// <summary>Raised by every change to the row.</summary>

@@ -10,11 +10,11 @@ The operator, on their own computer or a hosted machine.
 | --- | --- | --- |
 | Get the tree | The README says what Tangent Space is and points at the documents. It doesn't say how to run one. | missing: a short "Run your own" section (package 5.6) |
 | Build from a fresh clone | `scripts/prepare-framework.ps1` clones Koan from GitHub at the pinned revision. That revision has not been pushed, so a fresh clone cannot build. | missing: Koan's `dev` pushed (Leo's word) |
-| Start it | `pwsh scripts/tangent.ps1 publish`, then `launch`: one executable, one data folder, port 5220. Or `docker compose up -d`. | works; compose still asks for an address up front (package 1.13 removes it) |
+| Start it | `pwsh scripts/tangent.ps1 publish`, then `launch`: one executable, one data folder, port 5220. Or `docker compose up -d`. Neither asks for an address. | works |
 | First visit | One button, **Sign in with Bluesky**; the account chooser is Bluesky's own. Accounts on another server sign in by handle, behind "Use another server". | works (1.14) |
 | Setting up | The first sign-in, or the account `Tangent:Operator` names, sets the place up. It is named from the handle ("Leo's Tangent Space"); the setter becomes proprietor, operator and administrator; they land on the ready page. | works (1.12, 1.14) |
 | The ready page | It prints the three pointers a site places to point at the Tangent Space. On a loopback address no site can use them: the DNS record reads `_tangent.127.0.0.1`. | friction: show them once the place has a public address, and say so until then (package 5.6) |
-| The address | It is learned from the address setup happens on. When the place is reached at a public `https` address while its own is local, the operator gets an offer to use it. | in flight (package 1.13) |
+| The address | It is learned from the address setup happens on. When the place is reached at a public `https` address while its own is local, the operator's door offers it: Use it, or Not this one. A proxy on the same machine is believed as it is. | works (1.13) |
 
 ## 2 · Shaping the place
 

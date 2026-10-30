@@ -48,7 +48,7 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop write
         var root = found.Root!;
         return await writer.Send(new CatchUpTopic(personId, root.Id, through), ct) switch
         {
-            Outcome<Checkpoint>.Done { Result: var checkpoint } => Moved(checkpoint, PostWrites.TopicAddress(Configured(), root.TangentId, root.Slug ?? root.Id)),
+            Outcome<Checkpoint>.Done { Result: var checkpoint } => Moved(checkpoint, PostWrites.TopicAddress(BaseAddress(), root.TangentId, root.Slug ?? root.Id)),
             Outcome<Checkpoint>.Refused { Reason: CatchUpTopic.NoTopic } => PostWrites.Absent(),
             Outcome<Checkpoint>.Refused { Reason: var reason } => NotASequence(reason),
             Outcome<Checkpoint>.Failed { Cause: var cause } => throw new InvalidOperationException($"Marking {tangent}/{topic} seen failed.", cause),
@@ -75,8 +75,8 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop write
             return new Problem(StatusCodes.Status400BadRequest, "Not a watch flag", $"The {WatchField} field is true or false.").ToResult();
 
         var (scope, address) = found.Root is { } root
-            ? (Scope.Topic(root.Id), PostWrites.TopicAddress(Configured(), root.TangentId, root.Slug ?? root.Id))
-            : (Scope.Tangent(found.Tangent.Id), PostWrites.TangentAddress(Configured(), found.Tangent.Id));
+            ? (Scope.Topic(root.Id), PostWrites.TopicAddress(BaseAddress(), root.TangentId, root.Slug ?? root.Id))
+            : (Scope.Tangent(found.Tangent.Id), PostWrites.TangentAddress(BaseAddress(), found.Tangent.Id));
         return await writer.Send(new SetWatch(personId, scope, watch), ct) switch
         {
             Outcome<Checkpoint>.Done { Result: var checkpoint } => Moved(checkpoint, address),
@@ -110,6 +110,5 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop write
     private static IActionResult NotASequence(string detail)
         => new Problem(StatusCodes.Status400BadRequest, "Not a sequence of this topic", detail).ToResult();
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

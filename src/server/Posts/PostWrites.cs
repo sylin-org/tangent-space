@@ -158,14 +158,14 @@ public static class PostWrites
         return mayWrite ? PostBody.Of(text) : PostBody.Unjudged(text);
     }
 
-    public static string TangentAddress(string configured, string tangent) => configured + "/t/" + Uri.EscapeDataString(tangent);
+    public static string TangentAddress(string baseUrl, string tangent) => baseUrl + "/t/" + Uri.EscapeDataString(tangent);
 
-    public static string TopicAddress(string configured, string tangent, string topic)
-        => TangentAddress(configured, tangent) + "/" + Uri.EscapeDataString(topic);
+    public static string TopicAddress(string baseUrl, string tangent, string topic)
+        => TangentAddress(baseUrl, tangent) + "/" + Uri.EscapeDataString(topic);
 
     /// <summary>A Post's address, which the Topic answers opened around it: <c>/t/{tangent}/{topic}/{post}</c>.</summary>
-    public static string Address(string configured, string tangent, string topic, string post)
-        => TopicAddress(configured, tangent, topic) + "/" + Uri.EscapeDataString(post);
+    public static string Address(string baseUrl, string tangent, string topic, string post)
+        => TopicAddress(baseUrl, tangent, topic) + "/" + Uri.EscapeDataString(post);
 
     /// <summary>What a refusal's reason concerns: the title's and body's rules, the rest of what was sent, or a gate.</summary>
     public static About Concerning(string reason) => reason switch
@@ -254,13 +254,13 @@ public static class PostWrites
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
     /// path under the base URL; null for a visitor.</summary>
-    public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string configured, string back, CancellationToken ct)
+    public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string baseUrl, string back, CancellationToken ct)
     {
         if (personId is null) return null;
         var participant = await Participant.Get(personId, ct);
         var handle = participant?.Handle is { Length: > 0 } stored ? stored : personId;
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
         return new Who(personId, name, handle, Roles.Word(capabilities.RoleIds), participant?.Profile.Avatar,
-            configured + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back));
+            baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back));
     }
 }

@@ -113,6 +113,8 @@ public sealed class FirstRunTests
         Assert.NotNull(space);
         Assert.Equal(("Leo's Tangent Space", Leo, Leo), (space.Name, space.ProprietorId, space.OperatorId));
         Assert.Equal((Audience.Public, Admission.Join), (space.Audience, space.Admission));
+        // A configured URL wins, so the sign-in's origin is not taken as the place's address.
+        Assert.Null(space.Address);
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
         var log = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Select(e => (e.Kind, e.ActorId)).ToList();
         // Leo arrived at sign-in; the moderators' Tangent is created with the place.

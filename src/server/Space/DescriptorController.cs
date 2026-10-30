@@ -34,8 +34,7 @@ public sealed class DescriptorController(KoanWebBaseUrl baseUrl) : ControllerBas
     public async Task<IActionResult> Llms(CancellationToken ct)
         => ServedFile.Answer(HttpContext, LlmsText.Of(await Row(ct), Address), "text/plain; charset=utf-8");
 
-    private string Address => baseUrl.Configured
-        ?? throw new InvalidOperationException($"{TangentModule.BaseUrlKey} must be set to the base URL the Tangent Space answers at.");
+    private string Address => baseUrl.Resolve(HttpContext);
 
     private static async Task<TangentSpace> Row(CancellationToken ct)
         => await TangentSpace.Get(TangentSpace.SingleRow, ct)

@@ -15,7 +15,8 @@ namespace Tangent.Space;
 /// is the signed-in reader and <see cref="SignIn"/> where a visitor signs in; <see cref="Day"/> is the UTC day the
 /// times are written for. <see cref="Poll"/> is where the reader asks for what happens after this door: the poll past the
 /// newest event the door read that the reader may see, or past the newest of its window where the window held none of
-/// those, which the stream at the same address also answers.
+/// those, which the stream at the same address also answers. For the place's operator, <see cref="Offers"/> are the
+/// open Offers they decide, shown first; for anyone else there are none, and the field is absent.
 /// <c>api</c> is the stability promise an agent reads.</summary>
 public sealed record Door(
     string Name,
@@ -34,6 +35,9 @@ public sealed record Door(
     Door.Position Poll)
 {
     public int Api => 1;
+
+    /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
+    public IReadOnlyList<Offered>? Offers { get; init; }
 
     /// <summary>What is new to a signed-in reader: the place checkpoint the door read past (<see cref="From"/>, zero
     /// when they have none) and the sequence it read through (<see cref="Through"/>); first the Topics and Tangents they
@@ -74,6 +78,13 @@ public sealed record Door(
     /// <summary>The form that marks the door seen: where it posts, the sequence it carries in the <c>through</c> field,
     /// and its antiforgery token.</summary>
     public sealed record CaughtUp(string Action, long Through, FormToken Token);
+
+    /// <summary>One open Offer as its decider reads it: the Offer's Id, what it would do (<c>address</c>: use
+    /// <see cref="Subject"/>, an origin, as the place's address), and the evidence Koan holds since this process started —
+    /// how many requests arrived on it and since when, absent after a restart until it is seen again; then its two answers
+    /// as addresses to post to, each carrying the Id in the <c>offer</c> field, and the form's antiforgery token.</summary>
+    public sealed record Offered(string Offer, string Kind, string Subject, long? Count, DateTimeOffset? Since, string Use, string Decline,
+        FormToken Token);
 
     /// <summary>A Tangent the reader may view: its slug, name, kind, address, how many Topics were started there, and
     /// how many of its Posts are new to the reader.</summary>

@@ -46,7 +46,7 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
         Response.Headers.CacheControl = "no-store";
         if (DelegateIdentity.Delegated(HttpContext)) return NotByDelegate().ToResult();
         if (PersonId(User) is not { } personId)
-            return Redirect(Configured() + SignInController.Path + "?return=" + Uri.EscapeDataString(Here(code, rid)));
+            return Redirect(BaseAddress() + SignInController.Path + "?return=" + Uri.EscapeDataString(Here(code, rid)));
 
         var page = await Page(personId, ct);
         if (rid is null && code is null) return Ok(page with { Entry = Entry() });
@@ -87,12 +87,12 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
     /// it returns.</summary>
     private ConsentDecision Decision(PendingConsent pending)
     {
-        var origin = new Uri(Configured());
+        var origin = new Uri(BaseAddress());
         return new ConsentDecision(new Uri(origin, pending.Approve).AbsoluteUri, new Uri(origin, pending.Deny).AbsoluteUri,
             FormToken.For(HttpContext), pending.UserCode, pending.UserCode is null ? pending.ClientName : null, pending.RedirectUri);
     }
 
-    private ConsentEntry Entry(string? code = null, string? failure = null) => new(Configured() + Path, CodeField, code, failure);
+    private ConsentEntry Entry(string? code = null, string? failure = null) => new(BaseAddress() + Path, CodeField, code, failure);
 
     /// <summary>The code form again, keeping what was typed, with why nothing was found.</summary>
     private ObjectResult Again(Consent page, string code, int status, string failure)
@@ -105,7 +105,7 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
     private async Task<Consent> Page(string? personId, CancellationToken ct)
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        return new Consent(space.Name, Configured() + "/", personId is null ? null : await Reader(personId, ct));
+        return new Consent(space.Name, BaseAddress() + "/", personId is null ? null : await Reader(personId, ct));
     }
 
     /// <summary>The signed-in person as the account menu shows them, signing out back to the consent page.</summary>
@@ -116,7 +116,7 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
             : User.FindFirst(Koan.Web.Auth.Connector.Atproto.AtprotoClaimTypes.Handle)?.Value is { Length: > 0 } claimed ? claimed : personId;
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
         var role = participant is null ? null : Roles.Word((await Capabilities.Load(personId, null, null, ct)).RoleIds);
-        var signOut = Configured() + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path);
+        var signOut = BaseAddress() + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path);
         return new Who(personId, name, handle, role, participant?.Profile.Avatar, signOut);
     }
 
@@ -125,8 +125,7 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
         => baseUrl.PathBase + Path + (rid is { Length: > 0 and <= Carried } ? "?" + RequestField + "=" + Uri.EscapeDataString(rid)
             : code is { Length: > 0 and <= 32 } ? "?" + CodeField + "=" + Uri.EscapeDataString(code) : "");
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 
     private static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;

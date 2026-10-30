@@ -66,7 +66,7 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
             Id = id,
             UserCode = code,
             ClientId = clientId,
-            Resource = baseUrl.Configured ?? "",
+            Resource = baseUrl.Resolve(HttpContext),
             Status = DeviceCode.StatusPending,
             ExpiresUtc = DateTimeOffset.UtcNow.AddHours(1)
         }.Save(ct);
