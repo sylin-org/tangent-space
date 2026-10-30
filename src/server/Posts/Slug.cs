@@ -4,7 +4,7 @@ using System.Text;
 namespace Tangent.Posts;
 
 /// <summary>The URL name of a Topic or a Tangent: lowercase letters and digits joined by single hyphens, at most
-/// <see cref="Limit"/> characters. A Topic's derives from its title at creation; a Tangent's is given.</summary>
+/// <see cref="Limit"/> characters. A Topic's derives from its title at creation, a Tangent's from its name; neither changes.</summary>
 public static class Slug
 {
     public const int Limit = 64;
@@ -13,9 +13,9 @@ public static class Slug
     /// started, the Tangent's settings, and where the reader watches it.</summary>
     public static readonly IReadOnlySet<string> Reserved = new HashSet<string>(StringComparer.Ordinal) { "new", "settings", "watch" };
 
-    /// <summary>The slug a title yields: letters and digits of any script, lowercased and stripped of their marks, every
-    /// other run of characters one hyphen. A title with no letter or digit yields <c>topic</c>.</summary>
-    public static string From(string title)
+    /// <summary>The slug a title or a name yields: letters and digits of any script, lowercased and stripped of their
+    /// marks, every other run of characters one hyphen. A title with no letter or digit yields <paramref name="otherwise"/>.</summary>
+    public static string From(string title, string otherwise = "topic")
     {
         var slug = new StringBuilder(title.Length);
         var pendingHyphen = false;
@@ -36,7 +36,7 @@ public static class Slug
         }
 
         var value = slug.ToString().Normalize(NormalizationForm.FormC).TrimEnd('-');
-        return value.Length == 0 ? "topic" : value;
+        return value.Length == 0 ? otherwise : value;
     }
 
     /// <summary>A slug with this number as its suffix, cut so the whole stays within the limit.</summary>

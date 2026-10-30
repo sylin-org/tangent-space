@@ -33,8 +33,10 @@ public sealed record CreateTangent(
 
     /// <summary>The answer at the bound on the number of Tangents: Koan's bound on the overwrites one subject holds,
     /// since each Tangent holds one <c>everyone</c> overwrite, named by its <paramref name="setting"/>.</summary>
-    public static string AtBound(string setting) =>
-        $"This Tangent Space holds as many Tangents as {setting} allows; raise that setting to create another.";
+    public static string AtBound(string setting) => AtBoundOpening + $"{setting} allows; raise that setting to create another.";
+
+    /// <summary>How <see cref="AtBound"/> begins, whatever the setting.</summary>
+    public const string AtBoundOpening = "This Tangent Space holds as many Tangents as ";
 
     /// <summary>Writes the Tangent's audience, its <c>everyone</c> overwrite, over whatever overwrite of <c>everyone</c>
     /// the slug holds, before the transaction that creates the Tangent opens, since Koan commits an overwrite only outside
@@ -84,6 +86,7 @@ public sealed record CreateTangent(
         if (await Overwrites.AudienceOf(Collection(), Slug, ct) != Audience) return new Outcome<Tangent>.Refused(NoAudience);
 
         var at = At ?? DateTimeOffset.UtcNow;
+        tangent.LoggedAudience = Audience;
         await tangent.Save(ct);
         await Event.Next(sequences, EventKind.TangentChanged, at, tangentId: tangent.Id, actorId: ActorId, audience: Audience).Save(ct);
         return new Outcome<Tangent>.Done(tangent);

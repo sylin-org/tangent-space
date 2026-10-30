@@ -1042,3 +1042,16 @@
     padding: 36px 20px;
   }
 }
+
+/* The door rail's way to create a Tangent, under the list, for whoever may. */
+.rail-new {
+  margin-top: 6px;
+  display: inline-flex;
+  color: var(--ts-text-2);
+  font: 600 13px/1.4 var(--ts-font-ui);
+  text-decoration: none;
+}
+
+.rail-new:hover {
+  text-decoration: underline;
+}

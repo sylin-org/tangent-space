@@ -1,9 +1,10 @@
 @using System.Globalization
 @using global::Tangent.Render
-@* The Tangent page: its head with the Tangent's tile, name, description and how many Topics were started here, then
-   the rail and the list. A discussions Tangent lists its Topics as a table, an articles Tangent as articles under a
-   lead. An empty list says so in one sentence with one next step: the start button for a reader who can start a
-   Topic, signing in for a visitor, neither on a phone, which reads and replies. Zeros are said in words. *@
+@* The Tangent page: its head with the Tangent's tile, name, description and how many Topics were started here, and
+   its settings for a reader who may change them, then the rail and the list. A discussions Tangent lists its Topics as
+   a table, an articles Tangent as articles under a lead. An empty list says so in one sentence with one next step: the
+   start button for a reader who can start a Topic, signing in for a visitor, neither on a phone, which reads and
+   replies. Zeros are said in words. *@
 <section class="tangent-head@(Articles ? " tangent-head-articles" : "")" aria-labelledby="tangent-title">
     <div class="tangent-head-inner">
         <TangentTile Tile="@Tile.For(Model.Slug, Model.Name)" Size="@(Articles ? "head-articles" : "head")" />
@@ -20,7 +21,16 @@
                 }
                 <span class="tangent-audience">@AudienceIcon(12)@AudienceLine()</span>
             </p>
-            <Tangent.Events.WatchForm Model="@Model.Watching" />
+            @if (Model.Watching is not null || Model.Settings is not null)
+            {
+                <div class="tangent-head-actions">
+                    <Tangent.Events.WatchForm Model="@Model.Watching" />
+                    @if (Model.Settings is { } settings)
+                    {
+                        <a class="watch-button tangent-settings" href="@settings">Settings</a>
+                    }
+                </div>
+            }
         </div>
     </div>
 </section>
@@ -113,12 +123,13 @@
     [Parameter, EditorRequired] public TangentPage Model { get; set; } = default!;
 
     /// <summary>The frame the shell draws around the page: the place; the Tangent as the one crumb, a switcher listing
-    /// the Tangents the reader may view; and who reads, or where a visitor signs in.</summary>
+    /// the Tangents the reader may view and, for one who may, where a new one is created; and who reads, or where a
+    /// visitor signs in.</summary>
     public static Frame Frame(TangentPage page)
     {
         var switcher = new Switcher(Tile.For(page.Slug, page.Name), page.Tangents
             .Select(tangent => new SwitcherItem(tangent.Name, tangent.Address, Detail(tangent), Tile.For(tangent.Slug, tangent.Name), tangent.Slug == page.Slug))
-            .ToList(), page.Door);
+            .ToList(), page.Door, page.NewTangent);
         var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
         return new(page.Place, page.Door, [new Crumb(page.Name, page.Address, switcher)], who, page.SignIn);
     }

@@ -29,9 +29,6 @@ public static class ModeratorsTangent
     /// <summary>Its place among the Tangents: after every other.</summary>
     public const int Order = int.MaxValue;
 
-    /// <summary>How many numbered suffixes are tried when another Tangent holds the slug.</summary>
-    public const int SuffixBound = 50;
-
     /// <summary>The bits the moderator role's overwrite allows there.</summary>
     public const Bit ModeratorBits = Bit.View | Bit.Post | Bit.Topic;
 
@@ -42,18 +39,9 @@ public static class ModeratorsTangent
     /// <summary>The answer when every slug tried is another Tangent's.</summary>
     public const string NoSlug = "Every slug tried for the moderators' Tangent belongs to another Tangent.";
 
-    /// <summary>The slug it takes: <see cref="Slug"/>, or the first numbered suffix of it that no Tangent holds, each
-    /// one keyed read; null past <see cref="SuffixBound"/>.</summary>
-    public static async Task<string?> FreeSlug(CancellationToken ct)
-    {
-        for (var suffix = 1; suffix <= SuffixBound; suffix++)
-        {
-            var candidate = suffix == 1 ? Slug : Posts.Slug.WithSuffix(Slug, suffix);
-            if (await Tangents.Tangent.Get(candidate, ct) is null) return candidate;
-        }
-
-        return null;
-    }
+    /// <summary>The slug it takes: <see cref="Slug"/>, or the first numbered suffix of it that no Tangent holds
+    /// (<see cref="Tangents.Tangent.FreeSlug"/>).</summary>
+    public static Task<string?> FreeSlug(CancellationToken ct) => Tangents.Tangent.FreeSlug(Slug, ct);
 
     /// <summary>Writes its access on <paramref name="slug"/>'s resource, over whatever overwrites of the two subjects the
     /// resource holds: <c>everyone</c> denied <see cref="Bit.View"/>, the moderator role allowed
@@ -72,6 +60,7 @@ public static class ModeratorsTangent
     {
         var tangent = Tangents.Tangent.Create(slug, Name, Description, PostKind.Topic, Order);
         if (!await HasAccess(slug, ct)) throw new Refusal(NoAccess);
+        tangent.LoggedAudience = Audience.Private;
         await tangent.Save(ct);
         await Event.Next(sequences, EventKind.TangentChanged, at, tangentId: tangent.Id, actorId: actorId, audience: Audience.Private).Save(ct);
         return tangent;

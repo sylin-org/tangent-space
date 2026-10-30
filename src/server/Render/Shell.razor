@@ -4,7 +4,7 @@
    that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in,
    their account opening in the page with their name, handle and role and the way to sign out, or for a visitor the
    way to sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
-   in the page; and the footer with the appearance a visitor can choose. Nothing here is a dialog. *@
+   in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. Nothing here is a dialog. *@
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -96,6 +96,10 @@
                                     }
                                 </ul>
                                 <a class="switcher-all" href="@switcher.All">@Icon(AllIcon)All Tangents</a>
+                                @if (switcher.New is { } created)
+                                {
+                                    <a class="switcher-all" href="@created">@Icon(NewIcon)New Tangent</a>
+                                }
                             </div>
                         </details>
                     }
@@ -144,6 +148,7 @@ else
     private const string AppearanceIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
     private const string SignOutIcon = "<path d=\"M8 4.5H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3\"></path><path d=\"M12.5 6.5L16 10l-3.5 3.5\"></path><path d=\"M16 10H8\"></path>";
     private const string CheckIcon = "<path d=\"M5 10.5l3.2 3.2L15 7\"></path>";
+    private const string NewIcon = "<path d=\"M10 4.5v11M4.5 10h11\"></path>";
     private const string AllIcon = "<rect x=\"3.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"3.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect>";
 
     /// <summary>A menu item's 16px icon, drawn in the text's colour and hidden from assistive technology.</summary>

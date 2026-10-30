@@ -19,9 +19,9 @@ public sealed record Who(string Id, string Name, string Handle, string? Role, st
 /// <see cref="Switcher"/> is a Tangent's, drawn with its tile and opening the list of Tangents in the page.</summary>
 public sealed record Crumb(string Label, string? Address = null, Switcher? Switcher = null);
 
-/// <summary>The Tangent crumb's list: the current Tangent's tile, the Tangents the reader may view, and where all the
-/// Tangents are, the door.</summary>
-public sealed record Switcher(Tile Tile, IReadOnlyList<SwitcherItem> Tangents, string All);
+/// <summary>The Tangent crumb's list: the current Tangent's tile, the Tangents the reader may view, where all the
+/// Tangents are, the door, and where a new one is created, for a reader who may create one.</summary>
+public sealed record Switcher(Tile Tile, IReadOnlyList<SwitcherItem> Tangents, string All, string? New = null);
 
 /// <summary>One Tangent in the switcher: its name, address, kind and count in words, tile, and whether it is the page's.</summary>
 public sealed record SwitcherItem(string Name, string Address, string Detail, Tile Tile, bool Current);

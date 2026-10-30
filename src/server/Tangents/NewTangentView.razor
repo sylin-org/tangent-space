@@ -1,0 +1,71 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* The form that creates a Tangent: one panel in the page that asks for a name. What else a Tangent has stands at its
+   default, said in one quiet line that opens in place to the description, the kind and the audience, each a choice the
+   person may change; it opens by itself when a refusal concerns one of them or one was changed. A reader who may not
+   create a Tangent reads why above the form, whose fields are read-only and which has no button, and a visitor the way
+   to sign in; a refusal of a field shows under that field, and any other above the form. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="new-tangent-heading">
+        <div class="sign-in-body">
+            <p class="post-form-where">In <a href="@Model.Door">@Model.Place</a></p>
+            <h1 id="new-tangent-heading" class="sign-in-title">New Tangent</h1>
+            @if (Model.Gate is { } gate)
+            {
+                <p class="sign-in-failure" id="new-tangent-failure" role="alert" data-gate="@gate">
+                    @if (Model.SignIn is { } signIn)
+                    {
+                        @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                    }
+                    else
+                    {
+                        @PostWrites.Sentence(gate)
+                    }
+                </p>
+            }
+            else if (Model.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="new-tangent-failure" role="alert">@failure</p>
+            }
+            <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Model.Gate is null ? "submitting" : null)">
+                <FormTokenField Token="@Model.Token" />
+                <div class="field">
+                    <label class="field-label" for="new-tangent-name">Name</label>
+                    <span class="field-input">
+                        <input id="new-tangent-name" name="@TangentWrites.NameField" type="text" required maxlength="@Tangent.NameLimit" autocomplete="off"
+                               autofocus="@(Model.Gate is null && Model.DescriptionFailure is null)" readonly="@(Model.Gate is not null)" value="@Model.Name"
+                               placeholder="The workshop"
+                               aria-invalid="@(Model.NameFailure is null ? "false" : "true")"
+                               aria-describedby="@(Model.NameFailure is null ? null : "new-tangent-name-failure")">
+                    </span>
+                    @if (Model.NameFailure is { } nameFailure)
+                    {
+                        <p class="field-failure" id="new-tangent-name-failure">@nameFailure</p>
+                    }
+                </div>
+                <TangentChoices Prefix="new-tangent" Description="@Model.Description" Kind="@Model.Kind" Audience="@Model.Audience"
+                                Kinds="@Model.Kinds" Audiences="@Model.Audiences" DescriptionFailure="@Model.DescriptionFailure"
+                                ReadOnly="@(Model.Gate is not null)" Quiet="true" />
+                @if (Model.Gate is null)
+                {
+                    <div class="post-form-actions">
+                        @if (Model.Who is { } who)
+                        {
+                            <span class="post-form-as">Created by <strong>@("@" + who.Handle)</strong></span>
+                        }
+                        <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Creating…">Create</button>
+                    </div>
+                }
+            </form>
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public NewTangentPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and the form as crumbs, and who reads, or where a
+    /// visitor signs in.</summary>
+    public static Frame Frame(NewTangentPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("New Tangent")], page.Who, page.SignIn);
+}

@@ -13,7 +13,9 @@ namespace Tangent.Tangents;
 /// Tangent; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
 /// Tangents the reader may view, this one among them, with the Topics started in each. <see cref="Place"/>,
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
-/// its times are written for.</summary>
+/// its times are written for. <see cref="Settings"/> is where the Tangent's settings are changed, present only for a
+/// reader who may change them; <see cref="NewTangent"/> is where a Tangent is created, present only for a reader who
+/// may create one.</summary>
 public sealed partial record TangentPage(
     string Slug,
     string Name,
@@ -32,7 +34,9 @@ public sealed partial record TangentPage(
     string Place,
     string Door,
     TangentPage.Reader? Who,
-    DateOnly Day)
+    DateOnly Day,
+    string? Settings = null,
+    string? NewTangent = null)
 {
     /// <summary>The most characters of a body the page carries as a Topic's <see cref="Topic.Opening"/> or a reply's
     /// <see cref="Latest.Line"/>.</summary>

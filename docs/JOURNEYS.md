@@ -23,8 +23,8 @@ The proprietor and the people they trust.
 | Step | What happens | State |
 | --- | --- | --- |
 | The first door after setup | One Tangent, the private moderators' Tangent, and "Nothing written here yet". There is nowhere public to talk, and anyone else who signs in sees no Tangent at all. | missing: a first Tangent made at setup (package 5.6) |
-| Create a Tangent | No page or route creates one; only tests do. | in flight (package 5.5) |
-| A Tangent's name, description, kind, order and audience | No settings. | in flight (package 5.5) |
+| Create a Tangent | **New Tangent** on the door's rail and in the Tangent switcher, for whoever holds `ManageSpace`: one field, the name; the rest defaulted behind one quiet disclosure. | works (5.5); on a phone the door hides its rail, so New Tangent is reached from a Tangent's switcher, held for the polish stage |
+| A Tangent's name, description, kind, order and audience | **Settings** on a Tangent's page, for whoever holds `ManageTangent` or `ManageSpace`: the name (its address stays), description, default kind and audience; moving it among the others needs `ManageSpace`. The moderators' Tangent keeps its access. | works (5.5) |
 | The place's name and description | Set from the handle at setup; nothing changes them. | missing (package 5.6) |
 | Appearance: accent, light or dark | Each reader picks System, Light or Dark for themselves; the place has no accent of its own. | missing (slice 9) |
 | Roles and permissions | Seeded roles: `everyone`, member, moderator, administrator. Setup makes the proprietor an administrator, and nothing makes anyone a moderator. | missing: making a participant a moderator or an administrator, then the role editor (packages 5.3, 5.1) |
