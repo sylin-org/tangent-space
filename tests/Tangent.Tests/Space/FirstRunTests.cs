@@ -4,7 +4,6 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Koan.Identity.Roles;
-using Koan.Security.Trust.Issuer;
 using Koan.Web.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,8 +17,8 @@ using Xunit;
 namespace Tangent.Space;
 
 /// <summary>First run: every page answers it until the place is established; the first person to sign in, or the
-/// account the configuration names by handle or DID, sets it up in one action, under the name their handle gives it,
-/// and becomes its proprietor, operator and administrator; the page then prints the site's pointers.</summary>
+/// account the configuration names by handle or DID, sets it up by signing in, under the name their handle gives it,
+/// and becomes its proprietor, operator and administrator; first run then prints the site's pointers.</summary>
 public sealed class FirstRunTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
@@ -54,65 +53,62 @@ public sealed class FirstRunTests
             var (htmlStatus, html) = await Read(tangentSpace, path, "text/html");
             var (jsonStatus, body) = await Read(tangentSpace, path, "application/json");
             using var json = JsonDocument.Parse(body);
+            var page = WebUtility.HtmlDecode(html);
 
             Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (htmlStatus, jsonStatus));
             Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Set up this Tangent Space</h1>", html);
-            Assert.Contains($"<form class=\"sign-in-form\" method=\"get\" action=\"{BaseUrl}/auth/atproto/challenge\" data-island=\"submitting\">", html);
+            // The one action signs in with Bluesky: the challenge, coming back to first run, naming no account.
+            Assert.Matches(BlueskyAction("/first-run"), page);
+            // An account on another server signs in by its handle, behind a quiet disclosure.
+            Assert.Matches(AnotherServer("first-run-sign-in-handle", "/first-run"), page);
             Assert.Contains("<span class=\"panel-head-name\">New Tangent Space</span>", html);
-            // Nothing before setup shows the base URL or the key that holds it, or asks for anything but the handle.
+            // Nothing before setup shows the base URL or the key that holds it.
             Assert.DoesNotContain(Code(BaseUrl), html);
             Assert.DoesNotContain(TangentModule.BaseUrlKey, html);
-            Assert.DoesNotContain("<details", html);
+            Assert.DoesNotContain("<dialog", html);
             Assert.DoesNotContain("can set it up", html);
             Assert.Equal(TangentSpace.Unnamed, json.RootElement.GetProperty("name").GetString());
             Assert.Equal(BaseUrl + "/", json.RootElement.GetProperty("door").GetString());
             Assert.Equal(challenge, json.RootElement.GetProperty("challenge").GetString());
+            Assert.Equal(Tangent.Participants.SignIn.AnotherServerText, json.RootElement.GetProperty("anotherServer").GetString());
             Assert.False(json.RootElement.TryGetProperty("baseUrl", out _));
             Assert.False(json.RootElement.TryGetProperty("setting", out _));
             Assert.False(json.RootElement.TryGetProperty("operator", out _));
-            Assert.False(json.RootElement.TryGetProperty("setUp", out _));
         }
 
         var (liveStatus, live) = await Read(tangentSpace, "/health/live", "application/json");
         var (signInStatus, signIn) = await Read(tangentSpace, "/sign-in", "text/html");
+        var (_, signInBody) = await Read(tangentSpace, "/sign-in?return=%2Ft%2Fworkshop", "application/json");
+        using var signInJson = JsonDocument.Parse(signInBody);
         using var stylesheet = await tangentSpace.Client.GetAsync("/tangent.css", Cancellation);
 
         Assert.Equal(HttpStatusCode.OK, liveStatus);
         Assert.DoesNotContain("challenge", live);
         Assert.Equal(HttpStatusCode.OK, signInStatus);
         Assert.Contains("Sign in to reply and watch", signIn);
+        // Before setup the sign-in page sends everyone on to first run, wherever they were going.
+        Assert.Equal("/first-run", signInJson.RootElement.GetProperty("return").GetString());
         Assert.Equal(HttpStatusCode.OK, stylesheet.StatusCode);
         Assert.Equal("text/css", stylesheet.Content.Headers.ContentType?.MediaType);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
     }
 
     [Fact]
-    public async Task An_unconfigured_place_is_set_up_by_one_post_from_the_first_person_to_sign_in_who_becomes_its_proprietor_operator_and_administrator()
+    public async Task An_unconfigured_place_is_set_up_by_the_first_sign_in_whose_signer_becomes_its_proprietor_operator_and_administrator_and_reads_its_pointers()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        var (_, signInPage) = await Read(tangentSpace, "/sign-in", "application/json");
+        var comeBack = ComeBack(signInPage);
         using var browser = new Browser(tangentSpace);
-        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org");
-        using var action = await browser.Follow(HttpMethod.Get, "/first-run", Cancellation);
-        var page = WebUtility.HtmlDecode(await action.Content.ReadAsStringAsync(Cancellation));
-        var (_, body) = await Read(browser, "/first-run");
-        using var json = JsonDocument.Parse(body);
-        var setUp = json.RootElement.GetProperty("setUp");
 
-        Assert.Contains("You’re signed in as <strong>@leo.sylin.org</strong>", page);
-        Assert.Contains(">Set up Leo's Tangent Space</button>", page);
-        // One action: the form holds its token and the button, and nothing to fill or tick.
-        Assert.Equal(1, Regex.Count(page, "<input "));
-        Assert.Contains("<input type=\"hidden\" name=\"__RequestVerificationToken", page);
-        Assert.DoesNotContain(Code(BaseUrl), page);
-        Assert.DoesNotContain(TangentModule.BaseUrlKey, page);
-        Assert.Equal(("Leo's Tangent Space", "leo.sylin.org", $"{BaseUrl}/first-run"),
-            (setUp.GetProperty("name").GetString(), setUp.GetProperty("handle").GetString(), setUp.GetProperty("action").GetString()));
-        Assert.False(json.RootElement.TryGetProperty("baseUrl", out _));
+        using var landed = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org", comeBack: comeBack);
+        var pointers = WebUtility.HtmlDecode(await landed.Content.ReadAsStringAsync(Cancellation));
 
-        using var established = await browser.SetUp(Cancellation);
-
-        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
-        Assert.Equal("/first-run", established.Headers.Location?.OriginalString);
+        // Signed in through the sign-in page, the setter lands on first run's ready page.
+        Assert.Equal("/sign-in?return=" + Uri.EscapeDataString("/first-run"), comeBack);
+        Assert.Equal((HttpStatusCode.OK, "/first-run"), (landed.StatusCode, landed.RequestMessage!.RequestUri!.AbsolutePath));
+        Assert.Contains("Leo's Tangent Space is ready", pointers);
+        Assert.Contains($"<link rel=\"tangent\" href=\"{BaseUrl}\">", pointers);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         Assert.NotNull(space);
         Assert.Equal(("Leo's Tangent Space", Leo, Leo), (space.Name, space.ProprietorId, space.OperatorId));
@@ -128,14 +124,9 @@ public sealed class FirstRunTests
         var administrator = await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation);
         Assert.Contains(Leo, administrator!.Members);
 
-        using var ready = await browser.Follow(HttpMethod.Get, "/first-run", Cancellation);
-        var pointers = WebUtility.HtmlDecode(await ready.Content.ReadAsStringAsync(Cancellation));
         var (descriptorStatus, descriptor) = await Read(tangentSpace, "/tangent.json", "application/json");
         var (visitorStatus, _) = await Read(tangentSpace, "/first-run", "text/html");
 
-        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
-        Assert.Contains("Leo's Tangent Space is ready", pointers);
-        Assert.Contains($"<link rel=\"tangent\" href=\"{BaseUrl}\">", pointers);
         Assert.Equal(HttpStatusCode.OK, descriptorStatus);
         Assert.Equal("Leo's Tangent Space", JsonDocument.Parse(descriptor).RootElement.GetProperty("name").GetString());
         Assert.Equal(HttpStatusCode.NotFound, visitorStatus);
@@ -146,58 +137,54 @@ public sealed class FirstRunTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, "@Leo.Sylin.Org")), ct: Cancellation);
         var (_, visitor) = await Read(tangentSpace, "/first-run", "text/html");
-        using var browser = new Browser(tangentSpace);
-        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org");
-        var (_, body) = await Read(browser, "/first-run");
+        var (_, body) = await Read(tangentSpace, "/first-run", "application/json");
         using var json = JsonDocument.Parse(body);
+        using var browser = new Browser(tangentSpace);
+
+        using var landed = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org", comeBack: FirstRunController.Path);
 
         Assert.Matches(@"Only\s+<strong>@leo\.sylin\.org</strong>\s+can set it up\.", visitor);
         Assert.Equal("leo.sylin.org", json.RootElement.GetProperty("operator").GetString());
-        Assert.Equal("Leo's Tangent Space", json.RootElement.GetProperty("setUp").GetProperty("name").GetString());
-
-        using var established = await browser.SetUp(Cancellation);
-
-        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, landed.StatusCode);
+        Assert.Contains("Leo's Tangent Space is ready", WebUtility.HtmlDecode(await landed.Content.ReadAsStringAsync(Cancellation)));
         Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
     }
 
     [Fact]
-    public async Task A_configured_handle_another_account_does_not_hold_shows_it_the_waiting_page_and_refuses_its_post()
+    public async Task Anyone_but_a_configured_handle_lands_on_the_waiting_page_and_sets_nothing_up_and_the_handles_own_sign_in_sets_it_up()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, "leo.sylin.org")), ct: Cancellation);
         using var ada = new Browser(tangentSpace);
-        using var signedIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
 
-        using var page = await ada.Follow(HttpMethod.Get, "/", Cancellation);
+        using var page = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example", comeBack: FirstRunController.Path);
         var html = await page.Content.ReadAsStringAsync(Cancellation);
         var (_, body) = await Read(ada, "/first-run");
         using var json = JsonDocument.Parse(body);
 
-        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Equal((HttpStatusCode.OK, "/first-run"), (page.StatusCode, page.RequestMessage!.RequestUri!.AbsolutePath));
         Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Waiting for its operator</h1>", html);
         Assert.Contains("You’re signed in as <strong>@ada.example</strong>, and this place is still being set up: check back soon.", html);
         Assert.Matches(@"Only\s+<strong>@leo\.sylin\.org</strong>\s+can set it up\.", html);
         Assert.DoesNotContain("first-run-did", html);
         Assert.DoesNotContain("<form", html);
-        Assert.DoesNotContain("__RequestVerificationToken", html);
         Assert.Equal("leo.sylin.org", json.RootElement.GetProperty("operator").GetString());
         Assert.Equal(("ada.example", "leo.sylin.org"),
             (json.RootElement.GetProperty("waiting").GetProperty("handle").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
-        Assert.False(json.RootElement.TryGetProperty("setUp", out _));
+        Assert.False(json.RootElement.TryGetProperty("challenge", out _));
         // The way out is the frame's account: its menu signs this person out and comes back to first run.
         var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
         Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
         Assert.Contains($"<a class=\"account-item\" href=\"{WebUtility.HtmlEncode(signOut)}\">", html);
         Assert.Contains($"<a class=\"first-run-switch\" href=\"{WebUtility.HtmlEncode(signOut)}\">Use another account</a>", html);
-
-        // Ada's own agent, posting as her with a bearer, which needs no form token, is refused all the same.
-        using var refused = await AsBearer(tangentSpace, Ada);
-        using var problem = JsonDocument.Parse(await refused.Content.ReadAsStringAsync(Cancellation));
-
-        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-        Assert.Equal("Not yours to set up", problem.RootElement.GetProperty("title").GetString());
-        Assert.Equal($"Only @leo.sylin.org, as {FirstRun.OperatorSetting} names, can set up this Tangent Space.", problem.RootElement.GetProperty("detail").GetString());
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
+        Assert.DoesNotContain(Ada, (await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation))!.Members);
+
+        using var leo = new Browser(tangentSpace);
+        using var ready = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org", comeBack: FirstRunController.Path);
+
+        Assert.Contains("Leo's Tangent Space is ready", WebUtility.HtmlDecode(await ready.Content.ReadAsStringAsync(Cancellation)));
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        Assert.Equal(("Leo's Tangent Space", Leo, Leo), (space?.Name, space?.ProprietorId, space?.OperatorId));
     }
 
     [Fact]
@@ -205,11 +192,11 @@ public sealed class FirstRunTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, Leo)), ct: Cancellation);
         using var ada = new Browser(tangentSpace);
-        using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
-        using var unknown = await ada.Follow(HttpMethod.Get, "/", Cancellation);
-        var beforeLeo = await unknown.Content.ReadAsStringAsync(Cancellation);
-        using var leo = new Browser(tangentSpace);
-        using var leoIn = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example");
+        using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example", comeBack: FirstRunController.Path);
+        var beforeLeo = await adaIn.Content.ReadAsStringAsync(Cancellation);
+        // Leo has arrived without setting the place up, as when his sign-in's setup did not complete.
+        Assert.IsType<Outcome<Participant>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>()
+            .Send(new FirstArrival(Leo, "leo.example"), Cancellation));
 
         using var known = await ada.Follow(HttpMethod.Get, "/", Cancellation);
         var afterLeo = await known.Content.ReadAsStringAsync(Cancellation);
@@ -220,53 +207,65 @@ public sealed class FirstRunTests
         Assert.Matches($@"Only\s+<strong>@leo\.example</strong>\s+<span class=""first-run-did"">\({Regex.Escape(Code(Leo))}\)</span>\s+can set it up\.", afterLeo);
         Assert.Equal((Leo, "leo.example"),
             (json.RootElement.GetProperty("operator").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
+        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
 
-        using var established = await leo.SetUp(Cancellation);
+        using var leo = new Browser(tangentSpace);
+        using var ready = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example", comeBack: FirstRunController.Path);
 
-        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
+        Assert.Equal((HttpStatusCode.OK, "/first-run"), (ready.StatusCode, ready.RequestMessage!.RequestUri!.AbsolutePath));
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         Assert.Equal(("Leo's Tangent Space", Leo, Leo), (space?.Name, space?.ProprietorId, space?.OperatorId));
     }
 
     [Fact]
-    public async Task A_form_kept_open_past_first_run_is_refused_as_already_set_up_for_the_operator_and_answers_missing_to_anyone_else()
+    public async Task A_sign_in_to_an_established_place_changes_nothing_about_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        using var leo = new Browser(tangentSpace);
+        (await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example", comeBack: FirstRunController.Path)).Dispose();
+        var established = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        var events = await Event.Count.Exact(Cancellation);
+
+        using var again = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example", comeBack: FirstRunController.Path);
+        using var ada = new Browser(tangentSpace);
+        using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
+
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        Assert.Equal((HttpStatusCode.OK, "/"), (adaIn.StatusCode, adaIn.RequestMessage!.RequestUri!.AbsolutePath));
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        Assert.Equal((established?.Name, established?.OperatorId, established?.Version), (space?.Name, space?.OperatorId, space?.Version));
+        // Ada's arrival is the one thing written.
+        Assert.Equal(events + 1, await Event.Count.Exact(Cancellation));
+        Assert.Equal([Leo], (await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation))!.Members);
+    }
+
+    [Fact]
+    public async Task Of_two_sign_ins_at_once_to_an_unconfigured_place_one_sets_it_up_and_the_other_lands_where_first_run_sends_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
         using var leo = new Browser(tangentSpace);
         using var ada = new Browser(tangentSpace);
-        using var leoIn = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example");
-        using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
-        var leoForm = await leo.Token("/first-run", Cancellation);
-        var adaForm = await ada.Token("/first-run", Cancellation);
-        using var established = await leo.SetUp(Cancellation);
-        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
-        var events = await Event.Count.Exact(Cancellation);
 
-        using var operatorAgain = await Stale(leo, leoForm, "application/json");
-        using var operatorPage = await Stale(leo, leoForm, "text/html");
-        using var participant = await Stale(ada, adaForm, "application/json");
-        using var visitor = await tangentSpace.Client.PostAsync("/first-run", new FormUrlEncodedContent(new Dictionary<string, string>()), Cancellation);
-        using var problem = JsonDocument.Parse(await operatorAgain.Content.ReadAsStringAsync(Cancellation));
+        var landed = await Task.WhenAll(
+            leo.SignIn("leo", Leo, Cancellation, handle: "leo.example", comeBack: FirstRunController.Path),
+            ada.SignIn("ada", Ada, Cancellation, handle: "ada.example", comeBack: FirstRunController.Path));
+        try
+        {
+            var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+            Assert.NotNull(space);
+            var (winner, loser) = space.OperatorId == Leo ? (landed[0], landed[1]) : (landed[1], landed[0]);
 
-        Assert.Equal(HttpStatusCode.Conflict, operatorAgain.StatusCode);
-        Assert.Equal("application/problem+json", operatorAgain.Content.Headers.ContentType?.MediaType);
-        Assert.Equal("Already set up", problem.RootElement.GetProperty("title").GetString());
-        Assert.Equal($"{Establish.AlreadyEstablished} Its pointers are at {BaseUrl}/first-run.", problem.RootElement.GetProperty("detail").GetString());
-        Assert.Equal(HttpStatusCode.Conflict, operatorPage.StatusCode);
-        Assert.Contains($"{BaseUrl}/first-run", await operatorPage.Content.ReadAsStringAsync(Cancellation));
-        Assert.Equal(HttpStatusCode.NotFound, participant.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, visitor.StatusCode);
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        Assert.Equal(("Leo's Tangent Space", Leo), (space?.Name, space?.OperatorId));
-        Assert.Equal(events, await Event.Count.Exact(Cancellation));
-    }
-
-    /// <summary>Posts the first-run action a browser kept open, with the token it carried then.</summary>
-    private static async Task<HttpResponseMessage> Stale(Browser browser, Dictionary<string, string> token, string mediaType)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/first-run") { Content = new FormUrlEncodedContent(token) };
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(mediaType));
-        return await browser.Client.SendAsync(request, Cancellation);
+            Assert.Contains(space.OperatorId, new[] { Leo, Ada });
+            Assert.Equal(HttpStatusCode.OK, winner.StatusCode);
+            Assert.Contains($"{space.Name} is ready", WebUtility.HtmlDecode(await winner.Content.ReadAsStringAsync(Cancellation)));
+            Assert.Equal(HttpStatusCode.NotFound, loser.StatusCode);
+            Assert.Single(await Event.All(Cancellation), e => e.Kind == EventKind.SpaceChanged);
+            Assert.Equal([space.OperatorId!], (await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation))!.Members);
+        }
+        finally
+        {
+            foreach (var response in landed) response.Dispose();
+        }
     }
 
     [Fact]
@@ -502,20 +501,25 @@ public sealed class FirstRunTests
         return (response.StatusCode, await response.Content.ReadAsStringAsync(Cancellation));
     }
 
-    /// <summary>Posts the first-run action as an agent acting for <paramref name="did"/> does: with a bearer the place's
-    /// issuer minted for it, no session and no form token, following no redirect.</summary>
-    private static async Task<HttpResponseMessage> AsBearer(TangentSpaceFixture tangentSpace, string did)
-    {
-        var token = tangentSpace.Services.GetRequiredService<IIssuer>().Issue(new TrustClaims { Subject = did }, TimeSpan.FromMinutes(5), audience: BaseUrl);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/first-run")
-        {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>()),
-            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) }
-        };
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
-        return await agent.SendAsync(request, Cancellation);
-    }
+    /// <summary>Where a challenge comes back to, as the page's JSON carries it.</summary>
+    private static string ComeBack(string body)
+        => Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
+            new Uri(JsonDocument.Parse(body).RootElement.GetProperty("challenge").GetString()!).Query)["return"].ToString();
+
+    /// <summary>The action that signs in with Bluesky, in a decoded page: a form to the connector's challenge that
+    /// carries only where it comes back, so it names no account.</summary>
+    private static string BlueskyAction(string comeBack)
+        => $@"<form class=""sign-in-form"" method=""get"" action=""{Regex.Escape(BaseUrl)}/auth/atproto/challenge"" data-island=""submitting"">\s*"
+            + $@"<input type=""hidden"" name=""return"" value=""{Regex.Escape(comeBack)}"" />\s*"
+            + @"<button type=""submit"" class=""sign-in-submit"" data-busy-label=""Continuing…"">Sign in with Bluesky</button>\s*</form>";
+
+    /// <summary>The handle form for an account on another server, in a decoded page, closed behind its disclosure: a
+    /// form to the same challenge that sends the typed handle as its identifier.</summary>
+    private static string AnotherServer(string field, string comeBack)
+        => @"<details class=""sign-in-other"">\s*<summary class=""sign-in-other-toggle"">Use another server</summary>\s*"
+            + $@"<form class=""sign-in-form"" method=""get"" action=""{Regex.Escape(BaseUrl)}/auth/atproto/challenge"" data-island=""submitting"">[\s\S]*?"
+            + $@"<input id=""{field}"" name=""identifier"" type=""text"" required[\s\S]*?"
+            + $@"<input type=""hidden"" name=""return"" value=""{Regex.Escape(comeBack)}"" />[\s\S]*?</form>\s*</details>";
 
     /// <summary>Keeps every formatted log line of the host it is added to.</summary>
     private sealed class Lines(ConcurrentQueue<string> lines) : ILoggerProvider, ILogger

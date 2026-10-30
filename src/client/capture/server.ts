@@ -202,26 +202,14 @@ export async function signIn(listening: URL, persona: Persona): Promise<Map<stri
   return session
 }
 
-/** Establishes the place through first run as a persona, the way the page does: signs them in, reads the one action's
- *  token from the first-run resource as JSON, and posts it. The place takes its name from the persona's handle. */
+/** Establishes the place through first run as a persona, the way a person does: signs them in, which sets the place
+ *  up, and reads the site's pointers from the first-run resource as JSON. The place takes its name from the persona's
+ *  handle. */
 export async function establish(listening: URL, persona: Persona): Promise<void> {
   const jar = await signIn(listening, persona)
-  const cookies = () => [...jar].map(([key, value]) => `${key}=${value}`).join('; ')
-  const page = await fetch(new URL('/first-run', listening), { headers: { accept: 'application/json', cookie: cookies() } })
-  if (!page.ok) throw new Error(`The first-run page answered ${page.status} ${page.statusText}.`)
-  for (const set of page.headers.getSetCookie()) {
-    const pair = set.split(';')[0]
-    const split = pair.indexOf('=')
-    jar.set(pair.slice(0, split).trim(), pair.slice(split + 1))
-  }
-  const { setUp } = (await page.json()) as { setUp?: { token?: { field?: string; value?: string } } }
-  if (!setUp?.token?.field || !setUp.token.value) throw new Error(`The first-run page holds no action for ${persona.name}.`)
-  const posted = await fetch(new URL('/first-run', listening), {
-    method: 'POST',
-    redirect: 'manual',
-    headers: { cookie: cookies(), 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ [setUp.token.field]: setUp.token.value }),
-  })
-  if (posted.status !== 303) throw new Error(`First run as ${persona.name} answered ${posted.status}:
-${await posted.text()}`)
+  const cookie = [...jar].map(([key, value]) => `${key}=${value}`).join('; ')
+  const page = await fetch(new URL('/first-run', listening), { headers: { accept: 'application/json', cookie } })
+  if (!page.ok) throw new Error(`First run as ${persona.name} answered ${page.status} ${page.statusText}.`)
+  const { pointers } = (await page.json()) as { pointers?: unknown[] }
+  if (!pointers) throw new Error(`Signing ${persona.name} in did not set the place up.`)
 }

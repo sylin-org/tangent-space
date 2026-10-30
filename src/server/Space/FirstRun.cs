@@ -6,18 +6,17 @@ namespace Tangent.Space;
 /// <summary>First run as a resource, in the one state the request finds it. Every state carries the place's
 /// <see cref="Name"/> (<see cref="TangentSpace.Unnamed"/> until first run names it), the <see cref="Door"/>, and, where
 /// the configuration names the account that may set the place up, that account as <see cref="Operator"/>: its handle
-/// without the <c>@</c>, or its DID; with none named, the first person to sign in sets it up. Before sign-in it carries
-/// <see cref="Challenge"/>, the Koan connector's atproto challenge, which comes back here signed in; signed in as
-/// someone who may set it up, <see cref="SetUp"/>, the one action that establishes it; signed in as anyone else,
-/// <see cref="Waiting"/>; once the place is established, for its operator and its proprietor, the <see cref="BaseUrl"/>
-/// it answers at and the <see cref="Pointers"/>, what the site places to point at it. <see cref="Reader"/> is whoever is
+/// without the <c>@</c>, or its DID; with none named, the first person to sign in sets it up. For a visitor, and for
+/// someone signed in who may set it up, it carries <see cref="Challenge"/>, the Koan connector's atproto challenge,
+/// whose sign-in sets the place up and comes back here; signed in as anyone else, <see cref="Waiting"/>; once the place
+/// is established, for its operator and its proprietor, the <see cref="BaseUrl"/> it answers at and the
+/// <see cref="Pointers"/>, what the site places to point at it. <see cref="Reader"/> is whoever is
 /// signed in, as the account menu shows them, with where they sign out.</summary>
 public sealed record FirstRun(
     string Name,
     string Door,
     string? Operator = null,
     string? Challenge = null,
-    FirstRunSetUp? SetUp = null,
     FirstRunWaiting? Waiting = null,
     string? BaseUrl = null,
     IReadOnlyList<Pointer>? Pointers = null,
@@ -26,21 +25,18 @@ public sealed record FirstRun(
     /// <summary>The configuration key that names the account that may set the place up.</summary>
     public const string OperatorSetting = "Tangent:Operator";
 
-    /// <summary>The challenge's address without its query: where the handle form sends the handle.</summary>
+    /// <summary>Beside <see cref="Challenge"/>, how to sign in with an account on a server other than Bluesky's.</summary>
+    public string? AnotherServer => Challenge is null ? null : Participants.SignIn.AnotherServerText;
+
+    /// <summary>The challenge's address without its query: where the sign-in forms go.</summary>
     public string ChallengeAddress() => (Challenge ?? "").Split('?', 2)[0];
 
-    /// <summary>The address the challenge comes back to, as the handle form carries it.</summary>
+    /// <summary>The address the challenge comes back to, as the sign-in forms carry it.</summary>
     public string ChallengeReturn()
         => Challenge is not null && QueryHelpers.ParseQuery(new Uri(Challenge).Query).TryGetValue("return", out var value)
             ? value.ToString()
             : "";
 }
-
-/// <summary>The one action that establishes the place: a post to <see cref="Action"/> with the form's
-/// <see cref="Token"/>, which a bearer's post needs no token for. The place takes <see cref="Name"/>, derived from
-/// <see cref="Handle"/>, the handle the signed-in account's sign-in verified (empty where none was), and the account
-/// becomes its proprietor and its operator. After a refusal it says why in <see cref="Failure"/>.</summary>
-public sealed record FirstRunSetUp(string Action, FormToken Token, string Handle, string Name, string? Failure = null);
 
 /// <summary>A signed-in person who may not set the place up, since the configuration names another account: they
 /// signed in as <see cref="Handle"/> (empty when the connector verified none), and <see cref="OperatorHandle"/> is the

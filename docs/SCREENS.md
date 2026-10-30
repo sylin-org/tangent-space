@@ -2,9 +2,7 @@
 
 The screens that hold the visual gate — a mean of 8.5 with no dimension below 7 and no off-system value, at every width, theme and state — as the `visual-loop` skill records them. Each row is the lower of the two scorers' results when the second scorer ran. This file holds current scores only.
 
-| Screen | Mean | Lowest dimension | Widths | Themes | Commit | Date |
-| --- | --- | --- | --- | --- | --- | --- |
-| sign-in | 8.50 light, 8.56 dark | Character, 7.5 in light | 1440, 1024, 390 | light, dark | `3e95365` | 29 October 2026 |
+No screen holds it now.
 
 ## Owing the gate
 
@@ -12,7 +10,8 @@ Built from the frame and the shared components, captured, and scored last as bel
 
 | Screen | Last scored | Result | Where it stood |
 | --- | --- | --- | --- |
-| first-run | 29 October 2026, round 25 | 8.50 everywhere (first scorer); 8.3–8.5 (second) | one action now, templated from the sign-in panel; captured as visitor, set up, waiting and pointers, unscored |
+| sign-in | 29 October 2026, `3e95365` | 8.50 light, 8.56 dark; Character 7.5 in light | the Bluesky action now, the handle form behind a disclosure; captured as empty, submitting, another server, sign-in failed, access denied and handle unresolved, unscored |
+| first-run | 29 October 2026, round 25 | 8.50 everywhere (first scorer); 8.3–8.5 (second) | signing in sets the place up, templated from the sign-in panel; captured as visitor, waiting and ready, unscored |
 | tangent | 29 October 2026, round 12 | 8.19–8.31 desktop, 8.56–8.63 phone | the no-cover article lead, participant marks, the 1024 band |
 | door | never | — | templated from the frame, `TangentTile` and `TopicRow`; captured as visitor, signed-in with news and quiet |
 | consent | never | — | templated from the sign-in panel; captured as code, request, code error, code refused and done |

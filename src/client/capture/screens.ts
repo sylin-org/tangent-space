@@ -78,29 +78,29 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
     ],
   },
-  // The handle form a visitor reads, focused; on its way after Continue; and back from a failed sign-in with Koan's
-  // code and the typed handle kept: one the provider did not confirm, one refused on the provider's page, and a
-  // handle no account answers to.
+  // What a visitor reads: the action that signs in with Bluesky; on its way once pressed; the handle form for another
+  // server, opened; and back from a failed sign-in with Koan's code: one through Bluesky that the provider did not
+  // confirm, and by handle, the typed handle kept, one refused on the provider's page and a handle no account answers to.
   'sign-in': {
     path: '/sign-in',
     states: [
       { name: 'empty' },
-      { name: 'submitting', query: { handle: 'ada.bsky.social' }, click: '.sign-in-submit', cancel: '/auth/atproto/challenge' },
-      { name: 'sign-in-failed', query: { error: 'sign_in_failed', handle: 'ada.bsky.social' } },
+      { name: 'submitting', click: '.sign-in-submit', cancel: '/auth/atproto/challenge' },
+      { name: 'another-server', click: '.sign-in-other-toggle' },
+      { name: 'sign-in-failed', query: { error: 'sign_in_failed' } },
       { name: 'access-denied', query: { error: 'access_denied', handle: 'ada.bsky.social' } },
       { name: 'handle-unresolved', query: { error: 'handle_unresolved', handle: 'ada.bsky.socail' } },
     ],
   },
-  // A visitor, before anyone signs in; signed in, the one action that sets the place up; signed in where the
-  // configuration names someone else's handle as operator, waiting; and established by the persona, the site's
-  // pointers for its operator, under the name her handle gives the place.
+  // A visitor, before anyone signs in, whose sign-in sets the place up; signed in where the configuration names
+  // someone else's handle as operator, waiting; and set up by the persona's sign-in, ready, with the site's pointers
+  // for its operator, under the name her handle gives the place.
   'first-run': {
     path: '/first-run',
     states: [
       { name: 'visitor', place: 'unestablished' },
-      { name: 'set-up', place: 'unestablished', signedIn: true },
       { name: 'waiting', place: 'unestablished', signedIn: true, settings: { 'Tangent:Operator': captureOperator.handle } },
-      { name: 'pointers', place: 'persona', signedIn: true },
+      { name: 'ready', place: 'persona', signedIn: true },
     ],
   },
   // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the

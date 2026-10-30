@@ -1,5 +1,5 @@
-/* The sign-in page: one panel in the page, never a dialog, headed by the place's mark and name. It holds the handle
- * form. Sizes follow the design reference's sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @
+/* The sign-in page: one panel in the page, never a dialog, headed by the place's mark and name. It holds the action
+ * that signs in with Bluesky and, behind a disclosure, the handle form. Sizes follow the design reference's sign-in screen: a 440 panel, a 128 head, 44px fields and button, the @
  * prefix inside the field. */
 
 /* A panel's head: one band of the reference's dark ink in both themes, the place's atmosphere drawn in the accent
@@ -251,6 +251,25 @@
   }
 }
 
+/* Another server: a quiet disclosure under the action, opening the handle form in place. */
+.sign-in-other {
+  margin-top: 14px;
+}
+
+.sign-in-other-toggle {
+  width: fit-content;
+  color: var(--ts-text-2);
+  font: 600 13.5px/1.4 var(--ts-font-ui);
+}
+
+.sign-in-other-toggle:hover {
+  color: var(--ts-text);
+}
+
+.sign-in-other .sign-in-form {
+  margin-top: 12px;
+}
+
 .sign-in-gains {
   margin: 20px 0 0;
   padding: 0;
@@ -316,6 +335,15 @@
 
   .field-input input {
     font-size: 16px;
+  }
+
+  /* A tap target of 44 that keeps the disclosure's marker. */
+  .sign-in-other-toggle {
+    line-height: 44px;
+  }
+
+  .sign-in-other {
+    margin-top: 2px;
   }
 
   /* The 44px link holds its own space above its text, so the divider's padding gives way to keep the foot on the

@@ -97,6 +97,7 @@ Group A is a chain from 0.1; group B is independent of it. Four sessions at once
 | 1.11 Tangent on Koan's K6 and K7: the pin moves, the delegated agent door composes Koan's resource edge and consent seam, and Tangent's own copies of them go | K6, K7, 1.8 | repeat |
 | 1.12 First run without questions: one action sets the place up, `Tangent:Operator` names the operator by handle or DID, the name comes from the handle | 1.4, 2.8 | repeat |
 | 1.13 The address learned and offered: a notification to the operator carries an Offer to use the address requests arrive on | 1.12 | first of its kind |
+| 1.14 Sign in with Bluesky, and signing in sets the place up: one button starts at bsky.social, another server by handle, and the sign-in itself establishes the place | 1.12 | repeat |
 
 Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1.5, 1.7 and 1.8 together, with K2 in the Koan checkout beside them; 1.10 once K2 merges. Phone layouts are visual work and wait for the polish stage; until then every screen is captured at 390 and must read there without a horizontal scroll.
 

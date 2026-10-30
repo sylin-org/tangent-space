@@ -1,9 +1,9 @@
 @using Tangent.Render
-@* First run: one panel in the page, headed by the place's mark and name. Before sign-in it holds the handle form, the
-   field focused, and says who may set the place up where the configuration names someone; signed in as someone who
-   may, the one action that sets it up under the name it will take; signed in as anyone else, who may and the way to
-   another account; once established, the pointers the site places, each ready to copy. Every hint is one sentence; a
-   refusal shows above the action. *@
+@* First run: one panel in the page, headed by the place's mark and name. Before setup it holds the one action, signing
+   in with Bluesky, whose sign-in sets the place up, with the handle form for an account on another server behind a
+   disclosure, and says who may set the place up where the configuration names someone; signed in as anyone else, who
+   may and the way to another account; once established, the pointers the site places, each ready to copy. Every hint
+   is one sentence. *@
 <main class="sign-in first-run">
     <section class="@PanelClass" aria-labelledby="first-run-title">
         <PanelHead Frame="@Frame(Model)" />
@@ -37,28 +37,6 @@
             <p class="first-run-onward">
                 <a class="first-run-door" href="@Model.Door">Open @Model.Name</a>
             </p>
-        }
-        else if (Model.SetUp is { } setUp)
-        {
-            <h1 id="first-run-title" class="sign-in-title">Set up this Tangent Space</h1>
-            <p class="sign-in-lede">
-                @if (setUp.Handle.Length > 0)
-                {
-                    <text>You’re signed in as <strong>@("@" + setUp.Handle)</strong>, and setting it up makes the place yours, with every permission here.</text>
-                }
-                else
-                {
-                    <text>You’re signed in, and setting it up makes the place yours, with every permission here.</text>
-                }
-            </p>
-            @if (setUp.Failure is { } failure)
-            {
-                <p class="sign-in-failure" id="first-run-failure" role="alert">@failure</p>
-            }
-            <form class="sign-in-form" method="post" action="@setUp.Action" data-island="submitting">
-                <FormTokenField Token="@setUp.Token" />
-                <button type="submit" class="sign-in-submit" data-busy-label="Setting up…">Set up @setUp.Name</button>
-            </form>
         }
         else if (Model.Waiting is { } waiting)
         {
@@ -100,20 +78,27 @@
         else
         {
             <h1 id="first-run-title" class="sign-in-title">Set up this Tangent Space</h1>
-            <p class="sign-in-lede">Sign in with the account that will run it, and setting it up takes one step.</p>
+            <p class="sign-in-lede">Sign in with the account that will run it to set it up.</p>
             <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()" data-island="submitting">
-                <div class="field">
-                    <label class="field-label" for="first-run-sign-in-handle">Handle</label>
-                    <span class="field-input">
-                        <span class="field-prefix" aria-hidden="true">@@</span>
-                        <input id="first-run-sign-in-handle" name="identifier" type="text" required autofocus
-                               autocomplete="username" autocapitalize="none" spellcheck="false"
-                               placeholder="yourname.bsky.social">
-                    </span>
-                </div>
                 <input type="hidden" name="return" value="@Model.ChallengeReturn()">
-                <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
+                <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Sign in with Bluesky</button>
             </form>
+            <details class="sign-in-other">
+                <summary class="sign-in-other-toggle">Use another server</summary>
+                <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()" data-island="submitting">
+                    <div class="field">
+                        <label class="field-label" for="first-run-sign-in-handle">Handle</label>
+                        <span class="field-input">
+                            <span class="field-prefix" aria-hidden="true">@@</span>
+                            <input id="first-run-sign-in-handle" name="identifier" type="text" required
+                                   autocomplete="username" autocapitalize="none" spellcheck="false"
+                                   placeholder="you.example.com">
+                        </span>
+                    </div>
+                    <input type="hidden" name="return" value="@Model.ChallengeReturn()">
+                    <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
+                </form>
+            </details>
             @if (Model.Operator is { } named)
             {
                 <p class="first-run-note first-run-first">
