@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Web.OpenGraph;
 using Tangent.Posts;
 
 namespace Tangent.Tangents;
@@ -117,13 +118,20 @@ public sealed partial record TangentPage(
     /// <summary>The opening words of a Post's body as plain text on one line, each mention of a participant among
     /// <paramref name="people"/> their current handle (<see cref="Mentions.PlainText"/>), cut at a word within
     /// <see cref="OpeningLimit"/> characters.</summary>
-    public static string Opening(Post post, IReadOnlyDictionary<string, Author> people)
+    public static string Opening(Post post, IReadOnlyDictionary<string, Author> people) => Opening(Mentions.PlainText(post, people));
+
+    /// <summary>The opening words of plain text, cut at a word within <see cref="OpeningLimit"/> characters.</summary>
+    public static string Opening(string text)
     {
-        var text = Mentions.PlainText(post, people);
         if (text.Length <= OpeningLimit) return text;
         var cut = text.LastIndexOf(' ', OpeningLimit);
         return text[..(cut > OpeningLimit / 2 ? cut : OpeningLimit)].TrimEnd(',', ';', ':', '.', ' ') + "…";
     }
+
+    /// <summary>What a link to the Tangent previews, where a visitor may read it, which is where it has <see cref="Feeds"/>:
+    /// its name, its description, its address and the place's name, all read for the page.</summary>
+    public static SocialCard? Card(TangentPage page)
+        => page.Feeds is null ? null : new SocialCard(page.Name, page.Description, Url: page.Address, SiteName: page.Place);
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();

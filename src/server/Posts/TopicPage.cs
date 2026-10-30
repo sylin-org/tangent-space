@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Koan.Web.OpenGraph;
 using Tangent.Render;
 using Tangent.Tangents;
 
@@ -118,6 +119,16 @@ public sealed record TopicPage(
     /// settings, for one who holds <c>ManageSpace</c>, and how many of their notifications they have not seen.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
         Events.Notifications.Unseen? Notifications = null);
+
+    /// <summary>What a link to the Topic, or to a Post in it, previews, where a visitor may read it, which is where it has
+    /// <see cref="Feeds"/>: its title, its root's opening with no one named, none where the root is removed, its address, and
+    /// the place's name, all read for the page. An article is said to be one.</summary>
+    public static SocialCard? Card(TopicPage page) => page.Feeds is null ? null : new SocialCard(
+        page.Title,
+        page.Root.Body is { } body ? TangentPage.Opening(Mentions.Unnamed(page.Root.Id, page.Root.Version, body)) : null,
+        Url: page.Address,
+        Type: page.Kind == PostWrites.Word(PostKind.Article) ? "article" : null,
+        SiteName: page.Place);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so the same window for
     /// a visitor on the same day answers the same tag, and a reply, an edit, a removal, a changed <c>can</c> or a new day

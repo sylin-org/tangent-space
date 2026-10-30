@@ -1,5 +1,6 @@
 using System.Text;
 using Koan.Web.Hosting;
+using Koan.Web.OpenGraph;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Mvc.Formatters;
@@ -27,11 +28,13 @@ public sealed class HtmlFormatter : TextOutputFormatter
 
     private readonly ResourceComponents _components;
     private readonly KoanWebBaseUrl _baseUrl;
+    private readonly IOpenGraphCardRenderer _cards;
 
-    public HtmlFormatter(ResourceComponents components, KoanWebBaseUrl baseUrl)
+    public HtmlFormatter(ResourceComponents components, KoanWebBaseUrl baseUrl, IOpenGraphCardRenderer cards)
     {
         _components = components;
         _baseUrl = baseUrl;
+        _cards = cards;
         SupportedMediaTypes.Add("text/html");
         SupportedEncodings.Add(Encoding.UTF8);
     }
@@ -48,13 +51,14 @@ public sealed class HtmlFormatter : TextOutputFormatter
         var renderer = http.RequestServices.GetRequiredService<HtmlRenderer>();
         var fragment = IsFragment(http.Request);
         var accent = fragment ? "" : await Appearance.OfRequest(http);
+        var card = fragment || resource.Card?.Invoke(value) is not { } values ? null : _cards.RenderHead(values, http.Request);
         var html = fragment
             ? await renderer.Dispatcher.InvokeAsync(async () =>
             {
                 var alone = ParameterView.FromDictionary(new Dictionary<string, object?> { [ModelParameter] = value });
                 return (await renderer.RenderComponentAsync(resource.Component, alone)).ToHtmlString();
             })
-            : await Whole(renderer, resource, value, _baseUrl.Resolve(http), accent, resource.Frame?.Invoke(value));
+            : await Whole(renderer, resource, value, _baseUrl.Resolve(http), accent, resource.Frame?.Invoke(value), card: card);
         await http.Response.WriteAsync(html, selectedEncoding, http.RequestAborted);
     }
 
@@ -62,13 +66,14 @@ public sealed class HtmlFormatter : TextOutputFormatter
     /// at <paramref name="baseUrl"/>. A <paramref name="standalone"/> page opens with no server and counts on no
     /// script.</summary>
     public static Task<string> Whole(HtmlRenderer renderer, ResourceComponent resource, object value, string baseUrl, string accent, Frame? frame,
-        bool standalone = false) => renderer.Dispatcher.InvokeAsync(async () =>
+        bool standalone = false, string? card = null) => renderer.Dispatcher.InvokeAsync(async () =>
     {
         var shell = ParameterView.FromDictionary(new Dictionary<string, object?>
         {
             [nameof(Shell.Title)] = resource.Title(value),
             [nameof(Shell.BaseUrl)] = baseUrl,
             [nameof(Shell.Accent)] = accent,
+            [nameof(Shell.Card)] = card,
             [nameof(Shell.Frame)] = frame,
             [nameof(Shell.Standalone)] = standalone,
             [nameof(Shell.ChildContent)] = (RenderFragment)(builder =>
