@@ -64,6 +64,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Checkpoints and the watch flag | topic | `ReadPosition`, `Watches` (harvest) | — | S | done |
 | Reports: a Post taken on a tangent into the moderators' Tangent, with the origin | topic | `ReportPanel` (harvest) | — | S | done |
 | Phone layout for the topic | topic at 390 | `mobile-reader.css` (transplant) | — | S | todo |
+| Mentions a person can type: a typed `@handle` of a participant here becomes a mention when the Post is written, so it targets them as a DID link does | topic | — | — | S | todo |
 
 ### 3 · Articles and publication
 
@@ -101,6 +102,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | The place's settings (general) at `/settings`, offered in the account menu to whoever holds `ManageSpace`: the place's name and description, `space.changed` on a change; the sections' frame the later settings join | Tangent Space settings (general) | new | — | S | done |
 | A first Tangent at setup: first run creates *General*, public and of discussions, beside the moderators' Tangent, so the place can be talked in from its first minute | door | new | — | S | done |
 | Any number of Tangents and members: a role's members are Koan's rows; access on a Tangent reads only the overwrites the reader's bag meets there; a move reads the Tangents a page at a time; the door, the switcher, `/t`, take this on a tangent and a profile read every Tangent the reader may view a page at a time; the moderators' Tangent is on the door for whoever may view it; a profile's approvals page | door, tangents, tangent, profile, take-this-on-a-tangent | new | `Sylin.Koan.Identity` (SEC-0030) | S | done |
+| The place's own audience: whoever holds `ManageSpace` sets the Tangent Space public or private; a private place sends noindex and serves visitors only the sign-in page | Tangent Space settings (general) | — | — | S | todo |
 
 ### 6 · Attention
 
@@ -108,7 +110,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Notifications: the events where I am the target, that someone else did and that I may view, at `/notifications` a page at a time from a sealed cursor, each one line one click from what it is about, an open Offer with its two answers; my own opening of them, never my delegate's, moves my notifications checkpoint without waiting on the writer, and every page's masthead counts what lies past it among what I may view, "at least" past 99, raised live by the page's stream; the door names them, with how many, while there are some. No preference scored five, so none is built | notifications, door, every page's masthead | `NotificationsPage`, `ParticipantPreferences` (harvest) | — | S | done |
 | An application reaches whoever decides it: while it waits, everyone who holds `ManageStanding` when they read counts it among their notifications, on every page's masthead and live from their stream, finds who applied and when on `/notifications`, one click from the applications, and reads on their door how many wait; it is seen as every notification is, and a decision by any decider ends it for all; an arrival writes one row and one event however many may decide | notifications, door, every page's masthead | new | — | S | done |
-| Watching: the flag on a checkpoint; one line on the door | door | `FollowButton` (harvest) | — | S | todo |
+| Watching: the flag on a checkpoint; one line on the door | door | `FollowButton` (harvest) | — | S | done |
 | Search across titles and bodies, bounded, with header suggestions | search | `SearchBox`, `SearchPage` (transplant) | brief 4 | S | todo |
 
 ### 7 · Self-reliance
@@ -116,7 +118,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | Export a Tangent or the Tangent Space as readable HTML with data and media, streamed, through the one renderer | settings export | new | lift later | M | todo |
-| Backup and restore of the folder, verified by restoring | — | `scripts/server-lifecycle.ps1` (harvest) | — | S | todo |
+| Backup and restore of the folder, verified by restoring | — | `scripts/server-lifecycle.ps1` (harvest) | — | S | done |
 | Static archive: every public page and feed rendered to a folder with the same URLs; retirement mode | — | new | lift later | M | todo |
 
 ### 8 · Agents
