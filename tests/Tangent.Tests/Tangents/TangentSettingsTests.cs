@@ -113,8 +113,8 @@ public sealed class TangentSettingsTests
         var closed = await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop(audience: "private"));
 
         Assert.Equal(HttpStatusCode.SeeOther, closed.Status);
-        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(roles, "workshop", Cancellation));
-        var everyone = Assert.Single(await roles.Overwrites(Overwrites.Resource("workshop"), Cancellation));
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf("workshop", Cancellation));
+        var everyone = Assert.Single((await roles.Overwrites(Overwrites.Resource("workshop"), ct: Cancellation)).Items);
         Assert.Empty(everyone.Allow);
         Assert.Equal([Bits.Token(Bit.View)], everyone.Deny);
         var logged = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last();
@@ -125,7 +125,7 @@ public sealed class TangentSettingsTests
 
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop(audience: "public"))).Status);
 
-        Assert.Equal(Audience.Public, await Overwrites.AudienceOf(roles, "workshop", Cancellation));
+        Assert.Equal(Audience.Public, await Overwrites.AudienceOf("workshop", Cancellation));
         Assert.Equal(Audience.Public, (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last().Audience);
         Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, "/t/workshop", json: true)).Status);
     }
@@ -163,7 +163,6 @@ public sealed class TangentSettingsTests
         var writer = await Place(tangentSpace);
         Assert.Equal(ModeratorsTangent.Slug, Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation)).Result.Id);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         using var leo = await SignedIn(tangentSpace, Leo);
         using var mo = await SignedIn(tangentSpace, Mo);
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -184,7 +183,7 @@ public sealed class TangentSettingsTests
         Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed), (asJson.Status, asJson.Json.GetProperty("detail").GetString()));
         var moved = await Json(leo, Path, Path, new { move = "earlier" });
         Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed), (moved.Status, moved.Json.GetProperty("detail").GetString()));
-        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(roles, ModeratorsTangent.Slug, Cancellation));
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(ModeratorsTangent.Slug, Cancellation));
         Assert.Equal(ModeratorsTangent.Name, (await Tangent.Get(ModeratorsTangent.Slug, Cancellation))!.Name);
 
         var renamed = await Form(leo, Path, Path, new() { ["name"] = "Moderation", ["description"] = "Reports and talk.", ["kind"] = "topic" });
@@ -276,7 +275,7 @@ public sealed class TangentSettingsTests
         Assert.Equal(HttpStatusCode.OK, closed.Status);
         Assert.Contains("workshop is private now, and no longer shows for you.", WebUtility.HtmlDecode(closed.Body));
         Assert.Contains($"href=\"{BaseUrl}/\">Go to the door</a>", closed.Body);
-        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(roles, "workshop", Cancellation));
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf("workshop", Cancellation));
         var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
         Assert.Equal((EventKind.TangentChanged, "workshop", Bea, Audience.Private), (logged.Kind, logged.TangentId, logged.ActorId, logged.Audience));
         Assert.Equal(Audience.Private, (await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
@@ -330,7 +329,7 @@ public sealed class TangentSettingsTests
             (closed.Json.GetProperty("saved").GetString(), closed.Json.GetProperty("door").GetString()));
         foreach (var property in new[] { "slug", "description", "audience", "order", "address", "settings", "can" })
             Assert.False(closed.Json.TryGetProperty(property, out _), property);
-        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(roles, "workshop", Cancellation));
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf("workshop", Cancellation));
     }
 
     [Fact]

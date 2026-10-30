@@ -7,8 +7,9 @@ using Tangent.Posts;
 namespace Tangent.Participants;
 
 /// <summary>One bounded page of a participant's Posts, newest first, read through <c>ix_post_authors</c>
-/// (<c>AuthorId</c>, <c>CreatedAt</c>): only Posts in the Tangents the caller names and none removed, so a Post the reader
-/// may not view is never read and nothing past it is said. A page holds at most <see cref="PageSize"/> Posts and continues
+/// (<c>AuthorId</c>, <c>CreatedAt</c>): only Posts in the Tangents the reader may view and none removed, so a Post the
+/// reader may not view is never read and nothing past it is said. The store is told the smaller of the two sets the caller
+/// names, the Tangents the reader may view or the others, to keep or to leave out, and nothing where none is left out. A page holds at most <see cref="PageSize"/> Posts and continues
 /// from a <see cref="Cursor"/>, the place of the last Post a page held, so a Post present for the whole read is on
 /// exactly one page. Nothing is counted. Reads only and takes no lock.</summary>
 public static class RecentPosts
@@ -39,20 +40,28 @@ public static class RecentPosts
         public override string ToString() => At.UtcTicks.ToString(CultureInfo.InvariantCulture) + "." + Id;
     }
 
-    /// <summary>The page of <paramref name="authorId"/>'s Posts in <paramref name="tangentIds"/> after
-    /// <paramref name="after"/>, or the first page: one read, limited to one more than the page, which says whether a
-    /// next page exists. No Tangent named reads nothing.</summary>
-    public static async Task<Page> Read(string authorId, IReadOnlyList<string> tangentIds, Cursor? after, CancellationToken ct)
+    /// <summary>The page of <paramref name="authorId"/>'s Posts in <paramref name="viewable"/>, the Tangents the reader
+    /// may view, and in none of <paramref name="others"/>, every other Tangent, after <paramref name="after"/>, or the first
+    /// page: one read, limited to one more than the page, which says whether a next page exists. Whatever the store
+    /// answers, the page keeps only Posts in <paramref name="viewable"/> and continues from the last of those, so a
+    /// Tangent that changed while the sets were read never shows and is never named; such a page can be short. No Tangent
+    /// viewable reads nothing.</summary>
+    public static async Task<Page> Read(string authorId, IReadOnlySet<string> viewable, IReadOnlyCollection<string> others, Cursor? after,
+        CancellationToken ct)
     {
-        if (tangentIds.Count == 0) return new Page([], null);
-        var filters = new List<Filter> { Filter.On(FieldPath.Of(nameof(Post.TangentId)), FilterOperator.In, FilterValue.Many([.. tangentIds])) };
+        if (viewable.Count == 0) return new Page([], null);
+        var tangent = FieldPath.Of(nameof(Post.TangentId));
+        var filters = new List<Filter>();
+        if (others.Count > 0)
+            filters.Add(viewable.Count <= others.Count
+                ? Filter.On(tangent, FilterOperator.In, FilterValue.Many([.. viewable]))
+                : Filter.On(tangent, FilterOperator.Nin, FilterValue.Many([.. others])));
         if (after is not null) filters.Add(Seek(after));
-        var query = new QueryDefinition { Filter = Filter.All([.. filters]), Page = 1, PageSize = PageSize + 1 }
+        var query = new QueryDefinition { Filter = filters.Count == 0 ? null : Filter.All([.. filters]), Page = 1, PageSize = PageSize + 1 }
             .WithSort<Post>(sort => sort.OrderByDescending(post => post.CreatedAt).ThenByDescending(post => post.Id));
         var rows = await Post.Query(post => post.AuthorId == authorId && !post.Removed, query, ct);
-        return rows.Count > PageSize
-            ? new Page(rows.Take(PageSize).ToList(), Cursor.After(rows[PageSize - 1]))
-            : new Page(rows, null);
+        var kept = rows.Take(PageSize).Where(post => viewable.Contains(post.TangentId)).ToList();
+        return new Page(kept, rows.Count > PageSize && kept.Count > 0 ? Cursor.After(kept[^1]) : null);
     }
 
     /// <summary>The Posts after the cursor in the order a page reads them: written no later than the cursor's Post,

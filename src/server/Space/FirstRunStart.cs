@@ -28,7 +28,7 @@ public static class FirstRunStart
 
         if (space.OperatorId is not { } administrator) return;
         var roles = services.GetRequiredService<RoleCollection>();
-        if ((await roles.Get(Roles.Administrator, ct))?.Members.Contains(administrator) == true) return;
+        if ((await roles.Bag(administrator, authenticated: true, ct)).InRole(Roles.Administrator)) return;
         await roles.Add(Roles.Administrator, administrator, ct);
         logger.LogInformation("The operator {Operator} was not a member of {Role}; this start made them one", administrator, Roles.Administrator);
     }

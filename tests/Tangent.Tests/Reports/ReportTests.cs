@@ -393,8 +393,8 @@ public sealed partial class ReportTests
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         var tangent = await Tangents.Tangent.Get(Moderators, Cancellation);
         Assert.Equal((ModeratorsTangent.Name, ModeratorsTangent.Order), (tangent?.Name, tangent?.Order));
-        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(roles, Moderators, Cancellation));
-        var moderator = Assert.Single(await roles.Overwrites(Overwrites.Resource(Moderators), Cancellation),
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(Moderators, Cancellation));
+        var moderator = Assert.Single((await roles.Overwrites(Overwrites.Resource(Moderators), ct: Cancellation)).Items,
             row => row.SubjectKind == OverwriteSubjectKind.Role && row.SubjectId == Roles.Moderator);
         Assert.Equal(Bits.Tokens(Bit.View | Bit.Post | Bit.Topic).Order(), moderator.Allow.Order());
     }

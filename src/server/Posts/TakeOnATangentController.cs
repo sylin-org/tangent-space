@@ -1,4 +1,5 @@
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Participants;
@@ -17,7 +18,7 @@ namespace Tangent.Posts;
 /// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Post the reader may not view and one no row
 /// has answer alike. A Tangent chosen that no row has, or that is absent to the reader, is refused in one sentence
 /// that says neither.</summary>
-public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
 {
     /// <summary>The segment under a Post's address where it is taken on a tangent.</summary>
     public const string Segment = "tangent";
@@ -27,17 +28,25 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
     /// <summary>The field that names the Tangent chosen, by slug.</summary>
     public const string TangentField = "tangent";
 
+    /// <summary>The query parameter that carries the cursor of the page of Tangents to choose from.</summary>
+    public const string After = "after";
+
     /// <summary>What a choice of a Tangent that is not one the reader may start a Topic in is told.</summary>
     public const string ChooseListed = "Choose one of the Tangents listed.";
 
     [HttpGet(Route)]
-    public async Task<IActionResult> Get([FromRoute] string tangent, [FromRoute] string topic, [FromRoute] string post, CancellationToken ct)
+    public async Task<IActionResult> Get([FromRoute] string tangent, [FromRoute] string topic, [FromRoute] string post,
+        [FromQuery(Name = After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
-        return Ok(await Page(found, personId, null, ct));
+        ViewableTangents.Cursor? cursor = null;
+        if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
+            return new Problem(StatusCodes.Status400BadRequest, "Not a page of these Tangents",
+                $"The {After} parameter is the cursor a page of this form names as its next.").ToResult();
+        return Ok(await Page(found, personId, null, cursor, ct));
     }
 
     [HttpPost(Route)]
@@ -114,7 +123,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
     {
         var (found, unseen) = await PostWrites.Locate(personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
         if (found is null) return unseen!;
-        var page = await Page(found, personId, fields.GetValueOrDefault(TangentField), ct) with
+        var page = await Page(found, personId, fields.GetValueOrDefault(TangentField), null, ct) with
         {
             Title = fields.GetValueOrDefault(PostWrites.TitleField),
             Body = fields.GetValueOrDefault(PostWrites.BodyField)
@@ -123,12 +132,14 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         return new ObjectResult(refusal(page)) { StatusCode = status };
     }
 
-    /// <summary>The form for the Post the address names: the Tangents the reader may start a Topic in — among the first
-    /// by order (<see cref="Origins.Destinations"/>), with the origin's own where they may start one there — one chosen:
-    /// <paramref name="chosen"/> where it is among them, else the origin's Tangent, else the first. The gate is
-    /// <see cref="Capabilities.Removed"/> for a tombstone, and where no Tangent is listed, the origin's Tangent's reason
-    /// the reader may not start a Topic there.</summary>
-    private async Task<TakeOnATangentPage> Page(PostWrites.Located found, string? personId, string? chosen, CancellationToken ct)
+    /// <summary>The form for the Post the address names: a page of the Tangents the reader may start a Topic in, after
+    /// <paramref name="after"/> or from the first (<see cref="Origins.Destinations"/>), with the origin's own where they
+    /// may start one there and <paramref name="chosen"/> where they may start one there, and the next page and the first a
+    /// link away; one chosen: <paramref name="chosen"/> where it is among them, else the origin's Tangent, else the first.
+    /// The gate is <see cref="Capabilities.Removed"/> for a tombstone, and where no Tangent is listed, the origin's
+    /// Tangent's reason the reader may not start a Topic there.</summary>
+    private async Task<TakeOnATangentPage> Page(PostWrites.Located found, string? personId, string? chosen, ViewableTangents.Cursor? after,
+        CancellationToken ct)
     {
         var origin = found.Post!;
         var root = found.Root!;
@@ -139,8 +150,12 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         var address = topicAddress + "/" + Uri.EscapeDataString(origin.Id);
         var back = baseUrl.PathBase + "/t/" + found.Tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + origin.Id + "/" + Segment;
 
-        var destinations = (await Origins.Destinations(personId, ct)).ToList();
+        var listed = await Origins.Destinations(personId, after, Origins.DestinationLimit, ct);
+        var destinations = listed.Tangents.ToList();
         if (here.Holds(Bit.Topic) && destinations.All(row => row.Id != found.Tangent.Id)) destinations.Add(found.Tangent);
+        if (personId is not null && chosen is not null && Slug.IsValid(chosen) && destinations.All(row => row.Id != chosen)
+            && await Tangents.Tangent.Get(chosen, ct) is { } kept && (await Capabilities.Load(personId, kept.Id, null, ct)).Holds(Bit.Topic))
+            destinations.Add(kept);
         var choices = destinations.Select(row => new TakeOnATangentPage.Choice(row.Id, row.Name, PostWrites.Word(row.DefaultKind))).ToList();
         var choice = choices.FirstOrDefault(listed => listed.Slug == chosen)
                      ?? choices.FirstOrDefault(listed => listed.Slug == found.Tangent.Id)
@@ -164,7 +179,11 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
             found.Rows.Space.Name,
             baseAddress + "/",
-            await PostWrites.Reader(personId, here, baseAddress, back, ct));
+            await PostWrites.Reader(personId, here, baseAddress, back, ct))
+        {
+            More = listed.Next is { } next ? address + "/" + Segment + "?" + After + "=" + Uri.EscapeDataString(next.Seal(protection)) : null,
+            First = after is null ? null : address + "/" + Segment
+        };
     }
 
     /// <summary>The origin's author and the participants its body mentions, in one keyed read, by participant Id.</summary>

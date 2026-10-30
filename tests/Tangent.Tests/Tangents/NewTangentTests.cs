@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
@@ -40,8 +39,7 @@ public sealed class NewTangentTests
         var row = await Tangent.Get("the-garden", Cancellation);
         Assert.NotNull(row);
         Assert.Equal(("The garden", "", PostKind.Topic, 3), (row.Name, row.Description, row.DefaultKind, row.Order));
-        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
-        Assert.Equal(Audience.Public, await Overwrites.AudienceOf(roles, "the-garden", Cancellation));
+        Assert.Equal(Audience.Public, await Overwrites.AudienceOf("the-garden", Cancellation));
         var logged = Assert.Single(await Event.All(Cancellation), e => e.TangentId == "the-garden");
         Assert.Equal((EventKind.TangentChanged, Leo, Audience.Public, before + 1), (logged.Kind, logged.ActorId, logged.Audience, logged.Seq));
         var landed = await Send(leo.Client, HttpMethod.Get, "/t/the-garden");

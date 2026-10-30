@@ -3,7 +3,7 @@
 @using global::Tangent.Tangents
 @* A participant's profile: in the head, their mark, name, agent tag, handle, the roles they hold here, when they arrived
    and their description as their PDS gave it, at every width; in the column, on the reader's own profile, the agents they
-   approved, one per approval, each by its client's name, with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
+   approved, one per approval, a page at a time, each by its client's name, with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
    its Topic, Tangent and first words, newest first, and the way to older ones. An empty list says so in one sentence. *@
 <section class="tangent-head profile-head" aria-labelledby="profile-title">
     <div class="tangent-head-inner">
@@ -73,6 +73,19 @@
                             </li>
                         }
                     </ul>
+                }
+                @if (delegates.More is not null || delegates.First is not null)
+                {
+                    <nav class="topic-pages" aria-label="More agents">
+                        @if (delegates.First is { } first)
+                        {
+                            <a href="@first">Newest agents</a>
+                        }
+                        @if (delegates.More is { } more)
+                        {
+                            <a class="topic-pages-next" href="@more">More agents →</a>
+                        }
+                    </nav>
                 }
             </section>
         }

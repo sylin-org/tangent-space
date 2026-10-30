@@ -1,4 +1,5 @@
 using Koan.Data.Abstractions;
+using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Model;
 using Koan.Data.Core.Sorting;
 using Tangent.Posts;
@@ -84,6 +85,33 @@ public sealed class Tangent : Entity<Tangent>
         var last = await Query(tangent => tangent.Order < Space.ModeratorsTangent.Order,
             new QueryDefinition { Page = 1, PageSize = 1 }.WithSort<Tangent>(sort => sort.OrderByDescending(tangent => tangent.Order)), ct);
         return last.Count == 0 ? 1 : last[0].Order + 1;
+    }
+
+    /// <summary>The Tangents in their order — by order, then slug — or in the reverse where <paramref name="earlier"/>,
+    /// past the place <paramref name="after"/> names as a stored order and slug where it names one, the one
+    /// <paramref name="aside"/> names left out; at most <paramref name="take"/>. One read, a seek on the stored values.</summary>
+    public static async Task<IReadOnlyList<Tangent>> InOrder((int Order, string Id)? after, bool earlier, string? aside, int take,
+        CancellationToken ct)
+    {
+        var query = new QueryDefinition { Filter = after is { } place ? Beyond(place, earlier) : null, Page = 1, PageSize = take }
+            .WithSort<Tangent>(sort =>
+            {
+                if (earlier) sort.OrderByDescending(row => row.Order).ThenByDescending(row => row.Id);
+                else sort.OrderBy(row => row.Order).ThenBy(row => row.Id);
+            });
+        var left = aside ?? "";
+        return await Query(row => row.Id != left, query, ct);
+    }
+
+    /// <summary>The Tangents before or after a stored order and slug in the Tangents' order.</summary>
+    private static Filter Beyond((int Order, string Id) place, bool earlier)
+    {
+        var order = FieldPath.Of(nameof(Order));
+        var id = FieldPath.Of(nameof(Id));
+        var beyond = earlier ? FilterOperator.Lt : FilterOperator.Gt;
+        return Filter.Any(
+            Filter.On(order, beyond, FilterValue.Of(place.Order)),
+            Filter.All(Filter.On(order, FilterOperator.Eq, FilterValue.Of(place.Order)), Filter.On(id, beyond, FilterValue.Of(place.Id))));
     }
 
     private static void Check(string name, string description)

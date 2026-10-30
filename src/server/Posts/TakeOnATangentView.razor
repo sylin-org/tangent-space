@@ -1,7 +1,7 @@
 @using System.Globalization
 @using global::Tangent.Render
 @* The form that takes a Post on a tangent: one panel in the page, quoting the Post — who wrote it, when, and its words
-   cut short, or that it is removed — then the Tangents the reader may start a Topic in, one chosen, a title, and words
+   cut short, or that it is removed — then a page of the Tangents the reader may start a Topic in, the rest a link away, one chosen, a title, and words
    of their own, which they may leave out. The new root's Id rides in a hidden field, minted when the page was
    rendered, so a form sent twice starts one Topic. A reader who may not take it anywhere reads why above the form,
    whose fields are read-only and which has no button, and a visitor the way to sign in; a refusal of a field shows
@@ -55,6 +55,19 @@
                                 </label>
                             }
                         </div>
+                        @if (Model.First is not null || Model.More is not null)
+                        {
+                            <nav class="topic-pages" aria-label="More Tangents">
+                                @if (Model.First is { } first)
+                                {
+                                    <a href="@first">First Tangents</a>
+                                }
+                                @if (Model.More is { } more)
+                                {
+                                    <a class="topic-pages-next" href="@more">More Tangents →</a>
+                                }
+                            </nav>
+                        }
                         @if (Model.ChoiceFailure is { } choiceFailure)
                         {
                             <p class="field-failure" id="take-tangent-failure">@choiceFailure</p>

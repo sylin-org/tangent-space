@@ -1,7 +1,5 @@
 using Koan.Core.Hosting.App;
-using Koan.Data.Abstractions;
 using Koan.Data.Core;
-using Koan.Data.Core.Sorting;
 using Koan.Identity.Roles;
 using Tangent.Access;
 using Tangent.Events;
@@ -46,9 +44,8 @@ public sealed record ChangeTangent(
     /// command again writes the audience anew.</summary>
     public const string NoAudience = "The Tangent’s audience could not be put in place, so nothing was changed; send it again.";
 
-    /// <summary>The most Tangents a move reads to renumber their order: a Tangent Space's bound on Tangents
-    /// (ARCHITECTURE §5).</summary>
-    public const int OrderRead = 1000;
+    /// <summary>The most Tangents one read of a move takes: a page of the Tangents in their order.</summary>
+    public const int OrderPage = 100;
 
     /// <summary>Whether <see cref="Prepare"/> judged the actor may make this change, before any audience it wrote could
     /// take their own <see cref="Bit.View"/> away; <see cref="Run"/> follows in the same turn of the loop and keeps that
@@ -66,7 +63,7 @@ public sealed record ChangeTangent(
     {
         if (await Tangent.Get(Slug, ct) is not { } tangent) return;
         var roles = Collection();
-        var actual = await Overwrites.AudienceOf(roles, Slug, ct);
+        var actual = await Overwrites.AudienceOf(Slug, ct);
         if (await Judge(actual, ct) is not null) return;
         try { tangent.Change(Name ?? tangent.Name, Description ?? tangent.Description, DefaultKind ?? tangent.DefaultKind); }
         catch (Refusal) { return; }
@@ -83,7 +80,7 @@ public sealed record ChangeTangent(
     public async Task<Outcome<Tangent>> Run(Sequences sequences, CancellationToken ct)
     {
         if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(NoTangent);
-        var actual = await Overwrites.AudienceOf(Collection(), Slug, ct);
+        var actual = await Overwrites.AudienceOf(Slug, ct);
         if (!_judged && await Judge(actual, ct) is { } refusal) return new Outcome<Tangent>.Refused(refusal);
 
         var changed = tangent.Change(Name ?? tangent.Name, Description ?? tangent.Description, DefaultKind ?? tangent.DefaultKind);
@@ -116,27 +113,50 @@ public sealed record ChangeTangent(
     }
 
     /// <summary>Moves <paramref name="tangent"/> one place among the Tangents in their order, the moderators' Tangent
-    /// left after every other, and numbers them from one in that order, saving each row whose order changes, the moved
-    /// one among them; one bounded read. Answers false where it is already first or last, and nothing is saved.</summary>
+    /// left after every other: it and its neighbour that way change places, and the Tangents are numbered from one in that
+    /// order, saving each row whose order changes, the moved one among them, up to the first Tangent past the pair whose
+    /// stored order already comes after the last number given, which with every Tangent after it keeps its order. They are
+    /// read a page of <see cref="OrderPage"/> at a time, each page continuing from the stored order and slug of the last
+    /// Tangent the one before read, never from a number given since, and the reading stops there, so a move reads the
+    /// Tangents before the pair and at most a page past it, however many the place holds. Answers false where it is
+    /// already first or last, and nothing is saved.</summary>
     private static async Task<bool> Reorder(Tangent tangent, Move move, string? moderators, CancellationToken ct)
     {
-        var rows = (await Tangent.All(new QueryDefinition { Page = 1, PageSize = OrderRead }
-                .WithSort<Tangent>(sort => sort.OrderBy(row => row.Order).ThenBy(row => row.Id)), ct))
-            .Where(row => row.Id != moderators)
-            .Select(row => row.Id == tangent.Id ? tangent : row)
-            .ToList();
-        var from = rows.FindIndex(row => row.Id == tangent.Id);
-        var to = from + (move == Tangents.Move.Earlier ? -1 : 1);
-        if (from < 0 || to < 0 || to >= rows.Count) return false;
-        (rows[from], rows[to]) = (rows[to], rows[from]);
-        for (var index = 0; index < rows.Count; index++)
+        var earlier = move == Tangents.Move.Earlier;
+        if ((await Tangent.InOrder((tangent.Order, tangent.Id), earlier, moderators, 1, ct)).FirstOrDefault() is not { } neighbour) return false;
+        var (first, second) = earlier ? (tangent, neighbour) : (neighbour, tangent);
+        var number = 0;
+        var placed = false;
+        (int Order, string Id)? last = null;
+        while (true)
         {
-            if (rows[index].Order == index + 1 && rows[index] != tangent) continue;
-            rows[index].Order = index + 1;
-            await rows[index].Save(ct);
+            var page = await Tangent.InOrder(last, earlier: false, moderators, OrderPage, ct);
+            if (page.Count > 0) last = (page[^1].Order, page[^1].Id);
+            foreach (var row in page)
+            {
+                if (row.Id == second.Id) continue;
+                if (row.Id == first.Id)
+                {
+                    await Number(first);
+                    await Number(second);
+                    placed = true;
+                    continue;
+                }
+
+                if (placed && row.Order > number) return true;
+                await Number(row);
+            }
+
+            if (page.Count < OrderPage) return true;
         }
 
-        return true;
+        async Task Number(Tangent row)
+        {
+            number++;
+            if (row.Order == number && row != tangent) return;
+            row.Order = number;
+            await row.Save(ct);
+        }
     }
 
     private static RoleCollection Collection() => AppHost.GetRequiredService<RoleCollection>(nameof(ChangeTangent));

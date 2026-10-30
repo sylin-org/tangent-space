@@ -48,9 +48,9 @@ public sealed class TangentTests(ITestOutputHelper output)
         Assert.Equal(("The workshop", "Where things get made", PostKind.Topic, 2), (stored.Name, stored.Description, stored.DefaultKind, stored.Order));
 
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
-        var everyone = Assert.Single(await roles.Overwrites(Overwrites.Resource("the-workshop"), Cancellation));
+        var everyone = Assert.Single((await roles.Overwrites(Overwrites.Resource("the-workshop"), ct: Cancellation)).Items);
         Assert.Equal((OverwriteSubjectKind.Role, RoleTokens.Everyone), (everyone.SubjectKind, everyone.SubjectId));
-        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(roles, "the-workshop", Cancellation));
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf("the-workshop", Cancellation));
         Assert.Contains(Bits.Token(Bit.View), everyone.Deny);
 
         var logged = Assert.Single(await Event.All(Cancellation));
@@ -101,7 +101,6 @@ public sealed class TangentTests(ITestOutputHelper output)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
@@ -133,7 +132,7 @@ public sealed class TangentTests(ITestOutputHelper output)
             new CreateTangent("studio", "The studio", "Behind the door.", PostKind.Topic, 2, Audience.Private, "leo"),
             async ct =>
             {
-                between = (await Overwrites.AudienceOf(roles, "studio", ct), await Tangent.Get("studio", ct));
+                between = (await Overwrites.AudienceOf("studio", ct), await Tangent.Get("studio", ct));
                 await Read("between");
             }), Cancellation);
         Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", "leo"), Cancellation));
@@ -190,8 +189,8 @@ public sealed class TangentTests(ITestOutputHelper output)
         Assert.Equal("den", Assert.IsType<Outcome<Tangent>.Done>(replaced).Result.Id);
         Assert.Equal(["den"], (await Tangent.All(Cancellation)).Select(tangent => tangent.Id).ToList());
         Assert.Equal(1, await Event.Count.Exact(Cancellation));
-        Assert.Equal((null, Audience.Public, Audience.Private), (await Overwrites.AudienceOf(roles, "studio", Cancellation),
-            await Overwrites.AudienceOf(roles, "corner", Cancellation), await Overwrites.AudienceOf(roles, "den", Cancellation)));
+        Assert.Equal((null, Audience.Public, Audience.Private), (await Overwrites.AudienceOf("studio", Cancellation),
+            await Overwrites.AudienceOf("corner", Cancellation), await Overwrites.AudienceOf("den", Cancellation)));
         foreach (var slug in new[] { "studio", "corner", "den" })
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "/t/" + slug);
@@ -202,33 +201,10 @@ public sealed class TangentTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>The number of Tangents is a bound of the place: each holds one everyone overwrite, and Koan bounds the
-    /// overwrites one subject holds. At the bound a create is refused with the setting to raise, and writes nothing.</summary>
     [Fact]
-    public async Task A_create_past_the_bound_on_tangents_is_refused_with_the_setting_to_raise_and_writes_nothing()
+    public async Task A_create_refused_for_its_fields_writes_no_audience()
     {
-        const string bound = "Koan:Identity:Roles:MaxOverwritesPerSubject";
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?> { [bound] = "2" }, ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
-        await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
-
-        Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("one", "One", "", PostKind.Topic, 1, Audience.Public, "leo"), Cancellation));
-        Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("two", "Two", "", PostKind.Topic, 2, Audience.Private, "leo"), Cancellation));
-        var third = await writer.Send(new CreateTangent("three", "Three", "", PostKind.Topic, 3, Audience.Private, "leo"), Cancellation);
-
-        var refused = Assert.IsType<Outcome<Tangent>.Refused>(third).Reason;
-        Assert.Equal(CreateTangent.AtBound(bound), refused);
-        Assert.Contains(bound, refused);
-        Assert.Equal((2, 2), (await Tangent.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
-        Assert.Empty(await roles.Overwrites(Overwrites.Resource("three"), Cancellation));
-    }
-
-    [Fact]
-    public async Task A_create_refused_for_its_fields_writes_no_audience_and_holds_no_place_under_the_bound()
-    {
-        const string bound = "Koan:Identity:Roles:MaxOverwritesPerSubject";
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?> { [bound] = "1" }, ct: Cancellation);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
@@ -238,10 +214,8 @@ public sealed class TangentTests(ITestOutputHelper output)
 
         Assert.Equal(Tangent.NeedsName, Assert.IsType<Outcome<Tangent>.Refused>(blank).Reason);
         Assert.Equal(Tangent.DescriptionTooLong, Assert.IsType<Outcome<Tangent>.Refused>(long_).Reason);
-        Assert.Empty(await roles.Overwrites(Overwrites.Resource("s1"), Cancellation));
-        Assert.Empty(await roles.Overwrites(Overwrites.Resource("s2"), Cancellation));
-        // With a bound of one, the refused creates held no place: the next real create still fits.
-        Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("three", "Three", "", PostKind.Topic, 3, Audience.Private, "leo"), Cancellation));
+        Assert.Empty((await roles.Overwrites(Overwrites.Resource("s1"), ct: Cancellation)).Items);
+        Assert.Empty((await roles.Overwrites(Overwrites.Resource("s2"), ct: Cancellation)).Items);
     }
 
     /// <summary>Runs <paramref name="Command"/>, with <paramref name="Probe"/> between its step outside the transaction

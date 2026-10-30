@@ -35,8 +35,8 @@ public sealed class Capabilities
     /// not the participant's own, or where no Post is in question.</summary>
     public const string NotYours = "not yours";
 
-    /// <summary>The resource resolution names where no overwrite is in question: the place, which has none, or a Tangent
-    /// without any. The bag alone decides there.</summary>
+    /// <summary>The resource resolution names where no Tangent is in question: the place, which has no overwrites. The
+    /// bag alone decides there.</summary>
     private const string Place = "place";
 
     private readonly Dictionary<Bit, string> _missing;
@@ -84,18 +84,20 @@ public sealed class Capabilities
     /// <paramref name="tokens"/> are Koan's bag for the participant (<see cref="RoleBag.Tokens"/>), the anonymous bag for
     /// a visitor: their roles and the permissions those roles grant, the <see cref="Roles.Everyone"/> role's among them.
     /// <paramref name="space"/> states the place's audience, which is where everyone's <see cref="Bit.View"/> on a public
-    /// place comes from. <paramref name="overwrites"/> are Koan's overwrites on the Tangent's resource
-    /// (<see cref="Overwrites.Resource"/>); the Tangent Space itself has none. <paramref name="now"/> decides whether a
+    /// place comes from. <paramref name="tangentId"/> is the Tangent asked about, null for the place; its resource
+    /// (<see cref="Overwrites.Resource"/>) is the one the overwrites are resolved on. <paramref name="overwrites"/> are
+    /// Koan's overwrites there, those the bag meets (<see cref="RoleCollection.OverwritesFor"/>) or any superset of them;
+    /// the Tangent Space itself has none. <paramref name="now"/> decides whether a
     /// timeout or an overwrite has ended. <paramref name="post"/> is the Topic's root for a question about the Topic, the
     /// Post itself for a question about that Post, and null for a Tangent or the place. <paramref name="root"/> is the
     /// Topic's root for a question about a reply: a locked or removed root drops <see cref="Bit.Post"/> on every reply of
     /// its Topic with that gate, while the reply's own removal governs everything else.</summary>
-    public static Capabilities For(Participant? participant, IEnumerable<string> tokens, TangentSpace space,
+    public static Capabilities For(Participant? participant, IEnumerable<string> tokens, TangentSpace space, string? tangentId,
         IReadOnlyList<PermissionOverwrite> overwrites, DateTimeOffset now, Post? post = null, Post? root = null)
     {
         var held = tokens as IReadOnlyCollection<string> ?? tokens.ToList();
         var bag = new RoleBag(participant?.Id, participant is not null, held.Where(token => !Granted(token)), held.Where(Granted));
-        return For(participant, space, Resolve(participant, bag, space, overwrites, now), now, post, root);
+        return For(participant, space, Resolve(participant, bag, space, tangentId, overwrites, now), now, post, root);
 
         static bool Granted(string token) => token.StartsWith(RoleTokens.GlobalPrefix, StringComparison.Ordinal);
     }
@@ -168,16 +170,17 @@ public sealed class Capabilities
     internal sealed record Resolved(Bit Granted, IReadOnlyList<(Bit Bit, string Reason)> Withheld, IReadOnlyList<string> RoleIds);
 
     /// <summary>Koan's resolution in Discord's order (<see cref="RoleBag.On"/>) over the bag, with everyone's
-    /// <see cref="Bit.View"/> on a public place in its base, and the overwrites on the Tangent's resource, which they
-    /// name; an administrator holds every bit and no overwrite touches it. For each bit withheld, Koan's deciding fact in
+    /// <see cref="Bit.View"/> on a public place in its base, and the overwrites on the resource of
+    /// <paramref name="tangentId"/>, or on the place where it names no Tangent; an administrator holds every bit and no
+    /// overwrite touches it. For each bit withheld, Koan's deciding fact in
     /// Tangent's words: the overwrite whose deny decided it, by its subject, or that no role grants it.</summary>
-    private static Resolved Resolve(Participant? participant, RoleBag bag, TangentSpace space,
+    private static Resolved Resolve(Participant? participant, RoleBag bag, TangentSpace space, string? tangentId,
         IReadOnlyList<PermissionOverwrite> overwrites, DateTimeOffset now)
     {
         var view = Bits.Token(Bit.View);
         if (space.Audience == Audience.Public && !bag.Permissions.Contains(view, StringComparer.Ordinal))
             bag = new RoleBag(bag.PersonId, bag.IsAuthenticated, bag.Roles, [.. bag.Permissions, view]);
-        var here = bag.On(overwrites.Count == 0 ? Place : overwrites[0].ResourceId, overwrites, now);
+        var here = bag.On(ResourceOf(tangentId) ?? Place, overwrites, now);
         var granted = here.IsAdministrator ? Bits.All : Bits.InTokens(here.Permissions);
         var withheld = Bits.Each.Where(bit => !granted.HasFlag(bit))
             .Select(bit => (bit, Reason(here.Explain(Bits.Token(bit)), bit))).ToList();
@@ -199,17 +202,17 @@ public sealed class Capabilities
 
     /// <summary>The rows what one participant holds in one Tangent, or in the place where <paramref name="tangentId"/> is
     /// null, is computed from, each read bounded and without a lock: the participant's row, Koan's cached bag for them,
-    /// the settings row, and the Tangent's overwrites from Koan's cache (<see cref="OverwritesOf"/>). A participant
-    /// without a row is a visitor. The
-    /// bag and the overwrites are resolved once, so <see cref="Rows.For"/> answers for the Tangent and each of its Posts
-    /// without another read. A page that answers for a Tangent reads the Tangent's row before these: a Tangent it finds
-    /// is one whose audience is already among the overwrites read here.</summary>
+    /// the settings row, and the Tangent's overwrites the bag meets, from Koan's cache (<see cref="OverwritesOf"/>). A
+    /// participant without a row is a visitor. The bag and the overwrites are resolved once, so <see cref="Rows.For"/>
+    /// answers for the Tangent and each of its Posts without another read. A page that answers for a Tangent reads the
+    /// Tangent's row before these: a Tangent it finds is one whose audience is already among the overwrites read
+    /// here.</summary>
     public static async Task<Rows> LoadRows(string? participantId, string? tangentId, CancellationToken ct)
     {
         var reader = await Reader(participantId, ct);
-        var overwrites = await OverwritesOf(reader.Roles, tangentId, ct);
+        var overwrites = await OverwritesOf(reader, tangentId, ct);
         var now = DateTimeOffset.UtcNow;
-        return new Rows(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, overwrites, now), now);
+        return new Rows(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, tangentId, overwrites, now), now);
     }
 
     /// <summary>What one participant holds on each of several Tangents, from the reads <see cref="LoadRows"/> makes once
@@ -222,18 +225,24 @@ public sealed class Capabilities
         var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
         foreach (var id in tangentIds.Distinct(StringComparer.Ordinal))
         {
-            var overwrites = await OverwritesOf(reader.Roles, id, ct);
-            each[id] = For(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, overwrites, now), now, null, null);
+            var overwrites = await OverwritesOf(reader, id, ct);
+            each[id] = For(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, id, overwrites, now), now, null, null);
         }
 
         return each;
     }
 
-    /// <summary>The overwrites on a Tangent's resource, from Koan's cache. An id that cannot be a Tangent's slug, the
-    /// place's null among them, names no Tangent and so no resource: none is read for it, and it is answered as a missing
-    /// Tangent is.</summary>
-    private static async Task<IReadOnlyList<PermissionOverwrite>> OverwritesOf(RoleCollection roles, string? tangentId, CancellationToken ct)
-        => tangentId is null || !Slug.IsValid(tangentId) ? [] : await roles.Overwrites(Overwrites.Resource(tangentId), ct);
+    /// <summary>The overwrites on a Tangent's resource that the reader's bag meets, from Koan's cache: those of the bag's
+    /// roles, <c>everyone</c> among them, and the reader's own (<see cref="RoleCollection.OverwritesFor"/>), however many
+    /// the resource holds for others. An id that names no resource (<see cref="ResourceOf"/>) reads none, and is
+    /// answered as a missing Tangent is.</summary>
+    private static async Task<IReadOnlyList<PermissionOverwrite>> OverwritesOf(ReaderRows reader, string? tangentId, CancellationToken ct)
+        => ResourceOf(tangentId) is { } resource ? await reader.Roles.OverwritesFor(reader.Bag, resource, ct) : [];
+
+    /// <summary>The resource a Tangent's overwrites are written on; null for the place's null and for an id that cannot
+    /// be a Tangent's slug, which names no Tangent.</summary>
+    private static string? ResourceOf(string? tangentId)
+        => tangentId is null || !Slug.IsValid(tangentId) ? null : Overwrites.Resource(tangentId);
 
     /// <summary>The rows one reader's capabilities in one Tangent are computed from, read once, with the bag and the
     /// overwrites resolved.</summary>

@@ -361,7 +361,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         var participant = (await Participant.Get(Reader, Cancellation))!;
         var member = Bits.Tokens(Roles.MemberBits).Append(Roles.Member).ToList();
         var place = new TangentSpace { Audience = Audience.Public };
-        string? Gate(Post reply, Post root) => Capabilities.For(participant, member, place, [], DateTimeOffset.UtcNow, reply, root).Gate(Bit.Post);
+        string? Gate(Post reply, Post root) => Capabilities.For(participant, member, place, reply.TangentId, [], DateTimeOffset.UtcNow, reply, root).Gate(Bit.Post);
 
         var root = (await Post.Get(topic.Id, Cancellation))!;
         root.Locked = true;

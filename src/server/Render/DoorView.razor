@@ -5,7 +5,7 @@
 @using Tangent.Posts
 @using Tangent.Space
 @using Tangent.Tangents
-@* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the Tangents the reader may view, where a new one is
+@* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
    answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a signed-in reader
    with news, what is new since they were here — one sentence, then who admitted them, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
@@ -48,6 +48,10 @@
                     </li>
                 }
             </ul>
+            @if (Model.AllTangents is { } all)
+            {
+                <a class="rail-new" href="@all">All Tangents</a>
+            }
             @if (Model.NewTangent is { } created)
             {
                 <a class="rail-new" href="@created">New Tangent</a>

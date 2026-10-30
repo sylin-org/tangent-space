@@ -86,7 +86,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   // holding the first Tangent and the moderators'. Then the persona as the operator of a place reached at a public
   // origin while it has no address: the Offer on her door, with its evidence and its two answers; where Use it lands, first run's
   // pointers under the origin she used; and her door once she said Not this one. Last, the persona arriving at a place
-  // whose admission says apply: her door says her application is waiting.
+  // whose admission says apply: her door says her application is waiting. And the persona as a moderator of a place of
+  // sixty Tangents after its first: the first page of them, the moderators' Tangent after it, and the way to all of them.
   door: {
     path: '/',
     states: [
@@ -100,6 +101,17 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'offer-used', seed: 'offer-used', place: 'persona', signedIn: true, settings: offerSettings, path: '/first-run' },
       { name: 'offer-declined', seed: 'offer-declined', place: 'persona', signedIn: true, settings: offerSettings },
       { name: 'applicant', seed: 'apply', signedIn: true },
+      { name: 'many-tangents', seed: 'many-tangents', signedIn: true },
+    ],
+  },
+  // Every Tangent the persona may view in a place of sixty after its first: the first page, the page after it, and the
+  // first page as a visitor reads it.
+  tangents: {
+    path: '/t',
+    states: [
+      { name: 'first-page', seed: 'many-tangents', signedIn: true },
+      { name: 'next-page', seed: 'many-tangents', signedIn: true, click: '.topic-pages-next', waitFor: '.topic-pages a:not(.topic-pages-next)' },
+      { name: 'visitor', seed: 'many-tangents' },
     ],
   },
   // What a visitor reads: the action that signs in with Bluesky; on its way once pressed; the handle form for another
@@ -245,7 +257,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   // A discussions Tangent and an articles Tangent, populated and empty, read by the persona, a member with some
   // Topics new to them; the discussions Tangent also as a visitor reads it, with the persona's account open, with
   // the Tangent switcher open, and with the switcher open for the persona as the one who set the place up, who is
-  // offered its settings and a new Tangent.
+  // offered its settings and a new Tangent; and with the switcher open in a place of sixty Tangents after its first,
+  // which lists the first page of them and sends the reader to all of them.
   tangent: {
     path: '/t/discussions',
     states: [
@@ -257,6 +270,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'discussions-empty', seed: 'tangent', signedIn: true, path: '/t/workshop' },
       { name: 'articles', seed: 'tangent', signedIn: true, path: '/t/articles' },
       { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },
+      { name: 'many-switcher', seed: 'many-tangents', signedIn: true, path: '/t/tangent-01', click: '.switcher-button' },
     ],
   },
   // A short Topic whose replies answer one another, read by the persona up to its first reply, with the composer empty

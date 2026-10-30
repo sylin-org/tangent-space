@@ -9,7 +9,7 @@ Status: `todo` · `doing` · `done`. Everything is `todo` on 28 October 2026.
 | Brief | Koan home | Needed by |
 | --- | --- | --- |
 | 1 · SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL | `Koan.Data.Connector.Sqlite`, `Koan.Web` | slice 0; in the pin since Koan `7ba505e49` |
-| 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1; in the pin since Koan `943e6358a` (SEC-0021), Tangent resolving on it since package 1.10 |
+| 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1; in the pin since Koan `943e6358a` (SEC-0021), Tangent resolving on it since package 1.10; members as rows and every bound on its reads since Koan `dae95ecea` (SEC-0030), package 5.7 |
 | 3 · atproto content: records, blobs, resolution, AppView reads; service-auth verification; `did:web` on the issuer keys | `Koan.Web.Auth.Connector.Atproto`, Trust, Auth.Server — names assigned by Koan | slice 3 and the bridge in slice 8 |
 | 4 · Lexical search over entity fields | `Koan.Data` | slice 6 |
 
@@ -100,6 +100,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Tangent settings: name, description, default kind, order, and the audience as the `everyone` overwrite; the moderators' Tangent's audience and order fixed | tangent settings | `TopicSettingsPanel`, `AccessPanel` (harvest) | — | S | done |
 | The place's settings (general) at `/settings`, offered in the account menu to whoever holds `ManageSpace`: the place's name and description, `space.changed` on a change; the sections' frame the later settings join | Tangent Space settings (general) | new | — | S | done |
 | A first Tangent at setup: first run creates *General*, public and of discussions, beside the moderators' Tangent, so the place can be talked in from its first minute | door | new | — | S | done |
+| Any number of Tangents and members: a role's members are Koan's rows; access on a Tangent reads only the overwrites the reader's bag meets there; a move reads the Tangents a page at a time; the door, the switcher, `/t`, take this on a tangent and a profile read every Tangent the reader may view a page at a time; the moderators' Tangent is on the door for whoever may view it; a profile's approvals page | door, tangents, tangent, profile, take-this-on-a-tangent | new | `Sylin.Koan.Identity` (SEC-0030) | S | done |
 
 ### 6 · Attention
 
@@ -136,7 +137,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 ## Screens
 
-The visual loop runs on each, at 1440, 1024 and 390, in light and dark: door signed-out, door signed-in, tangent (discussions), tangent (articles), topic, article, article editor, new topic, new Tangent, profile, notifications, search, sign-in, consent, first-run, bring your agent, Tangent Space settings (general, admission, applications, appearance, tangents, people, roles, export), Tangent settings (details, access), connections. Current scores live in [SCREENS](SCREENS.md) once the first screen passes.
+The visual loop runs on each, at 1440, 1024 and 390, in light and dark: door signed-out, door signed-in, tangents, tangent (discussions), tangent (articles), topic, article, article editor, new topic, new Tangent, profile, notifications, search, sign-in, consent, first-run, bring your agent, Tangent Space settings (general, admission, applications, appearance, tangents, people, roles, export), Tangent settings (details, access), connections. Current scores live in [SCREENS](SCREENS.md) once the first screen passes.
 
 ## Not built
 

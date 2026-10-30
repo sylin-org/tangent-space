@@ -31,22 +31,14 @@ public sealed record CreateTangent(
     /// Tangent could not exist for exactly its audience; sending the command again writes the audience anew.</summary>
     public const string NoAudience = "The Tangent's audience could not be put in place, so the Tangent was not created; send it again.";
 
-    /// <summary>The answer at the bound on the number of Tangents: Koan's bound on the overwrites one subject holds,
-    /// since each Tangent holds one <c>everyone</c> overwrite, named by its <paramref name="setting"/>.</summary>
-    public static string AtBound(string setting) => AtBoundOpening + $"{setting} allows; raise that setting to create another.";
-
-    /// <summary>How <see cref="AtBound"/> begins, whatever the setting.</summary>
-    public const string AtBoundOpening = "This Tangent Space holds as many Tangents as ";
-
     /// <summary>Writes the Tangent's audience, its <c>everyone</c> overwrite, over whatever overwrite of <c>everyone</c>
     /// the slug holds, before the transaction that creates the Tangent opens, since Koan commits an overwrite only outside
     /// one: from the instant the Tangent's row commits, it exists for nobody its audience excludes. Only where
     /// <see cref="Run"/> goes on to create it — the place exists for the actor, who holds <see cref="Bit.ManageSpace"/>,
     /// the slug is a slug, the name and description are a Tangent's and no Tangent has the slug — so an existing
-    /// Tangent's audience stands and a command <see cref="Run"/> refuses writes nothing. At Koan's bound on overwrites the command is refused with the setting to raise, and
-    /// writes nothing. A command that is refused or fails after this leaves the overwrite on a resource no Tangent has:
-    /// every address there answers as for a missing Tangent whatever its overwrites say, and the next create of that
-    /// slug writes its own audience over it.</summary>
+    /// Tangent's audience stands and a command <see cref="Run"/> refuses writes nothing. A command that is refused or fails
+    /// after this leaves the overwrite on a resource no Tangent has: every address there answers as for a missing Tangent
+    /// whatever its overwrites say, and the next create of that slug writes its own audience over it.</summary>
     public async Task Prepare(CancellationToken ct)
     {
         var capabilities = await Capabilities.Load(ActorId, null, null, ct);
@@ -54,14 +46,7 @@ public sealed record CreateTangent(
         if (await Tangent.Get(Slug, ct) is not null) return;
         try { Tangent.Create(Slug, Name, Description, DefaultKind, Order); }
         catch (Refusal) { return; }
-        try
-        {
-            await Overwrites.SetAudience(Collection(), Slug, Audience, ct);
-        }
-        catch (RoleBoundException bound)
-        {
-            throw new Refusal(AtBound(bound.ConfigurationKey));
-        }
+        await Overwrites.SetAudience(Collection(), Slug, Audience, ct);
     }
 
     /// <summary>Creates the Tangent where the actor may, and only where Koan's rows state exactly the audience asked
@@ -74,7 +59,7 @@ public sealed record CreateTangent(
 
         if (await Tangent.Get(Slug, ct) is { } existing)
         {
-            var audience = await Overwrites.AudienceOf(Collection(), Slug, ct);
+            var audience = await Overwrites.AudienceOf(Slug, ct);
             return existing.Same(Name, Description, DefaultKind, Order) && audience == Audience
                 ? new Outcome<Tangent>.Done(existing)
                 : new Outcome<Tangent>.Conflict($"Tangent '{Slug}' already exists with different fields.");
@@ -83,7 +68,7 @@ public sealed record CreateTangent(
         if (capabilities.Gate(Bit.ManageSpace) is { } gate) return new Outcome<Tangent>.Refused(gate);
 
         var tangent = Tangent.Create(Slug, Name, Description, DefaultKind, Order);
-        if (await Overwrites.AudienceOf(Collection(), Slug, ct) != Audience) return new Outcome<Tangent>.Refused(NoAudience);
+        if (await Overwrites.AudienceOf(Slug, ct) != Audience) return new Outcome<Tangent>.Refused(NoAudience);
 
         var at = At ?? DateTimeOffset.UtcNow;
         tangent.LoggedAudience = Audience;
