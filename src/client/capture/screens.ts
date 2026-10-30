@@ -110,7 +110,7 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/t',
     states: [
       { name: 'first-page', seed: 'many-tangents', signedIn: true },
-      { name: 'next-page', seed: 'many-tangents', signedIn: true, query: { after: '50.tangent-49' } },
+      { name: 'next-page', seed: 'many-tangents', signedIn: true, click: '.topic-pages-next', waitFor: '.topic-pages a:not(.topic-pages-next)' },
       { name: 'visitor', seed: 'many-tangents' },
     ],
   },

@@ -1,4 +1,5 @@
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Participants;
@@ -17,7 +18,7 @@ namespace Tangent.Posts;
 /// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Post the reader may not view and one no row
 /// has answer alike. A Tangent chosen that no row has, or that is absent to the reader, is refused in one sentence
 /// that says neither.</summary>
-public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
 {
     /// <summary>The segment under a Post's address where it is taken on a tangent.</summary>
     public const string Segment = "tangent";
@@ -42,7 +43,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         ViewableTangents.Cursor? cursor = null;
-        if (after is not null && (cursor = ViewableTangents.Cursor.Parse(after)) is null)
+        if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
             return new Problem(StatusCodes.Status400BadRequest, "Not a page of these Tangents",
                 $"The {After} parameter is the cursor a page of this form names as its next.").ToResult();
         return Ok(await Page(found, personId, null, cursor, ct));
@@ -180,7 +181,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
             baseAddress + "/",
             await PostWrites.Reader(personId, here, baseAddress, back, ct))
         {
-            More = listed.Next is { } next ? address + "/" + Segment + "?" + After + "=" + Uri.EscapeDataString(next.ToString()) : null,
+            More = listed.Next is { } next ? address + "/" + Segment + "?" + After + "=" + Uri.EscapeDataString(next.Seal(protection)) : null,
             First = after is null ? null : address + "/" + Segment
         };
     }

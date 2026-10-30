@@ -329,6 +329,28 @@ public sealed class ProfileTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, own + "?agents=0", json: true)).Status);
     }
 
+    /// <summary>Whatever the store answers — as when a Tangent changed while the Tangents the reader may view were read
+    /// and the store was not told to leave it out — a page keeps only Posts in the Tangents the reader may view and
+    /// continues from the last of those, so it never names another; it can be short.</summary>
+    [Fact]
+    public async Task A_page_keeps_only_viewable_posts_and_continues_from_the_last_it_keeps()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        await Started(writer, Leo, "Older", "Body.");
+        for (var index = 0; index < RecentPosts.PageSize + 5; index++) await Started(writer, Leo, "Studio " + index, "Body.", Studio);
+        var newest = await Started(writer, Leo, "Newest", "Body.");
+        var viewable = new HashSet<string>([Workshop], StringComparer.Ordinal);
+
+        var first = await RecentPosts.Read(Leo, viewable, [], null, Cancellation);
+        Assert.Equal([newest.Id], first.Posts.Select(post => post.Id));
+        Assert.Equal(newest.Id, first.Next?.Id);
+        var second = await RecentPosts.Read(Leo, viewable, [], first.Next, Cancellation);
+        Assert.Empty(second.Posts);
+        Assert.Null(second.Next);
+    }
+
     /// <summary>Whether the answer leaves the member out, as a null one is.</summary>
     private static bool Missing(JsonElement value, string name) => !value.TryGetProperty(name, out var member) || member.ValueKind == JsonValueKind.Null;
 

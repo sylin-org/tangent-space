@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
@@ -122,10 +123,14 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
     public async Task The_door_and_the_list_of_tangents_reach_those_the_reader_may_view_past_sixty_others()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
+        // Orders dense from one: sixty Tangents Ada may not view, then sixty she may.
         for (var index = 1; index <= 120; index++)
-            await Given.ATangent(tangentSpace, Slug(index), index <= 60 ? Audience.Private : Audience.Public, ct: Cancellation);
+            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateTangent(Slug(index), "Tangent " + index, "", PostKind.Topic,
+                index, index <= 60 ? Audience.Private : Audience.Public, Leo), Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
@@ -137,7 +142,16 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         var first = (await Send(ada.Client, HttpMethod.Get, all.PathAndQuery, json: true)).Json;
         Assert.Equal(Enumerable.Range(61, 50).Select(Slug), Slugs(first.GetProperty("tangents")));
         var next = new Uri(first.GetProperty("next").GetString()!);
-        Assert.Contains(Slug(110), next.Query);
+        // The cursor is sealed: it holds neither the last Tangent's order nor its slug, and nothing forged or altered is
+        // taken.
+        var sealedCursor = Uri.UnescapeDataString(next.Query[(TangentsController.After.Length + 2)..]);
+        Assert.DoesNotContain("110", sealedCursor);
+        Assert.DoesNotContain(Slug(110), sealedCursor);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, "/t?after=110." + Slug(110), json: true)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, "/t?after=1." + Slug(1), json: true)).Status);
+        var altered = sealedCursor[..^2] + (sealedCursor[^2] == 'A' ? 'B' : 'A') + sealedCursor[^1];
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(ada.Client, HttpMethod.Get, "/t?after=" + Uri.EscapeDataString(altered), json: true)).Status);
         var second = (await Send(ada.Client, HttpMethod.Get, next.PathAndQuery, json: true)).Json;
         Assert.Equal(Enumerable.Range(111, 10).Select(Slug), Slugs(second.GetProperty("tangents")));
         Assert.True(Missing(second, "next"));
@@ -166,6 +180,16 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         Assert.Equal(ModeratorsTangent.Slug, asMo[^1]);
         Assert.Contains("/t/" + ModeratorsTangent.Slug, (await Send(mo.Client, HttpMethod.Get, "/")).Body);
         Assert.DoesNotContain(ModeratorsTangent.Slug, Slugs((await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("tangents")));
+    }
+
+    /// <summary>A reading that meets a Tangent twice, as one moved while the reading went on can be met, keeps it once.</summary>
+    [Fact]
+    public void A_tangent_read_twice_in_one_reading_is_kept_once()
+    {
+        var read = new HashSet<string>(StringComparer.Ordinal);
+        Tangents.Tangent Row(string slug) => Tangents.Tangent.Create(slug, slug, "", PostKind.Topic, 1);
+        Assert.Equal(["a", "b"], ViewableTangents.Fresh([Row("a"), Row("b")], read).Select(row => row.Id));
+        Assert.Equal(["c"], ViewableTangents.Fresh([Row("b"), Row("c")], read).Select(row => row.Id));
     }
 
     private static List<string> Slugs(System.Text.Json.JsonElement tangents)

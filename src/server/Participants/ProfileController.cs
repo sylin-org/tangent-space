@@ -62,7 +62,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
 
         var whole = await ViewableTangents.All(personId, ct);
         var tangents = whole.Tangents.ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
-        var page = await RecentPosts.Read(subject.Id, tangents.Keys, whole.Others, cursor, ct);
+        var page = await RecentPosts.Read(subject.Id, tangents.Keys.ToHashSet(StringComparer.Ordinal), whole.Others, cursor, ct);
         var roots = await Roots(page.Posts, ct);
         var people = await Mentioned(page.Posts, ct);
         var held = (await roles.ForPerson(subject.Id, ct)).Where(role => role.Key != Roles.Everyone).Select(role => role.Name)
@@ -108,7 +108,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             address,
             place.Can,
             place.Gate(Bit.Post),
-            page.Posts.Where(post => tangents.ContainsKey(post.TangentId)).Select(post => Written(post, roots, tangents, people, baseAddress)).ToList(),
+            page.Posts.Select(post => Written(post, roots, tangents, people, baseAddress)).ToList(),
             page.Next is { } next ? address + "?" + Before + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             approvals,

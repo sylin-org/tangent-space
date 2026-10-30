@@ -42,9 +42,11 @@ public static class RecentPosts
 
     /// <summary>The page of <paramref name="authorId"/>'s Posts in <paramref name="viewable"/>, the Tangents the reader
     /// may view, and in none of <paramref name="others"/>, every other Tangent, after <paramref name="after"/>, or the first
-    /// page: one read, limited to one more than the page, which says whether a next page exists. No Tangent viewable reads
-    /// nothing.</summary>
-    public static async Task<Page> Read(string authorId, IReadOnlyCollection<string> viewable, IReadOnlyCollection<string> others, Cursor? after,
+    /// page: one read, limited to one more than the page, which says whether a next page exists. Whatever the store
+    /// answers, the page keeps only Posts in <paramref name="viewable"/> and continues from the last of those, so a
+    /// Tangent that changed while the sets were read never shows and is never named; such a page can be short. No Tangent
+    /// viewable reads nothing.</summary>
+    public static async Task<Page> Read(string authorId, IReadOnlySet<string> viewable, IReadOnlyCollection<string> others, Cursor? after,
         CancellationToken ct)
     {
         if (viewable.Count == 0) return new Page([], null);
@@ -58,9 +60,8 @@ public static class RecentPosts
         var query = new QueryDefinition { Filter = filters.Count == 0 ? null : Filter.All([.. filters]), Page = 1, PageSize = PageSize + 1 }
             .WithSort<Post>(sort => sort.OrderByDescending(post => post.CreatedAt).ThenByDescending(post => post.Id));
         var rows = await Post.Query(post => post.AuthorId == authorId && !post.Removed, query, ct);
-        return rows.Count > PageSize
-            ? new Page(rows.Take(PageSize).ToList(), Cursor.After(rows[PageSize - 1]))
-            : new Page(rows, null);
+        var kept = rows.Take(PageSize).Where(post => viewable.Contains(post.TangentId)).ToList();
+        return new Page(kept, rows.Count > PageSize && kept.Count > 0 ? Cursor.After(kept[^1]) : null);
     }
 
     /// <summary>The Posts after the cursor in the order a page reads them: written no later than the cursor's Post,
