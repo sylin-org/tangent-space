@@ -14,8 +14,8 @@ public sealed record Poll(long Since, long Through, bool More, IReadOnlyList<Pol
     /// <summary>One row of the log as the stream and the poll send it: its sequence, what happened, the Tangent, Topic and
     /// Post it happened to, who did it and whom it concerns, the Post's version, when, the audience a Tangent has
     /// after a <see cref="EventKind.TangentChanged"/>, the Offer an <see cref="EventKind.OfferMade"/> made, the standing
-    /// a change left its target with and the one it held before, on a <see cref="EventKind.StandingChanged"/> someone
-    /// else made, and the role given or taken, on a <see cref="EventKind.RoleChanged"/>.</summary>
+    /// an arrival gave or a change left its target with, and the one a change found, on a
+    /// <see cref="EventKind.StandingChanged"/>, and the role given or taken, on a <see cref="EventKind.RoleChanged"/>.</summary>
     public sealed record Row(long Seq, string Kind, string? Tangent, string? Topic, string? Post, string? Actor, string? Target,
         long? Version, DateTimeOffset At, Audience? Audience, string? Offer = null, Participants.Standing? Standing = null,
         Participants.Standing? Before = null, string? Role = null, bool? Given = null)
