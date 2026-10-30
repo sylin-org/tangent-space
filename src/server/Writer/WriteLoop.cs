@@ -41,6 +41,16 @@ public sealed class WriteLoop(ILogger<WriteLoop> logger, IConfiguration configur
         return _queue.Writer.TryWrite(pending) ? pending.Outcome.Task.WaitAsync(ct) : SendWhenFree(pending, ct);
     }
 
+    /// <summary>Hands a command to the loop only where the queue has room, never waiting for it: null, and the command
+    /// never runs, when the queue is full or the writer has stopped. For work a later attempt makes good, so that no
+    /// sender piles up behind a busy writer.</summary>
+    public Task<Outcome<TResult>>? TrySend<TResult>(ICommand<TResult> command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var pending = new Pending<TResult>(command, Logger);
+        return _queue.Writer.TryWrite(pending) ? pending.Outcome.Task : null;
+    }
+
     private async Task<Outcome<TResult>> SendWhenFree<TResult>(Pending<TResult> pending, CancellationToken ct)
     {
         try

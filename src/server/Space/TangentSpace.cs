@@ -80,7 +80,10 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public string? Address { get; set; }
 
     /// <summary>Whether the place's address is local: none yet, or a loopback host, which only this machine reaches.</summary>
-    public bool AddressIsLocal() => Address is null || new Uri(Address).IsLoopback;
+    public bool AddressIsLocal() => IsLocal(Address);
+
+    /// <summary>Whether <paramref name="address"/> is local: none, or a loopback host.</summary>
+    public static bool IsLocal(string? address) => address is null || new Uri(address).IsLoopback;
 
     /// <summary>Who may read: anyone, or participants the place admitted.</summary>
     public Audience Audience { get; set; } = Audience.Public;

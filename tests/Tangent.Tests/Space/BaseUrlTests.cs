@@ -150,6 +150,42 @@ public sealed class BaseUrlTests
         Assert.Contains($"<link rel=\"tangent\" href=\"{origin}\">", pointers);
     }
 
+    [Fact(Skip = "Holds once Tangent's pin carries Koan's K11, where a stored address the host cannot use is not held; at Koan 2d7ddb15e this Production start is refused, naming the store.")]
+    public async Task A_place_that_kept_an_http_loopback_address_in_development_starts_in_production_and_offers_its_public_origin()
+    {
+        var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
+        try
+        {
+            await using (var local = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation,
+                environment: "Development"))
+            {
+                await Reached.APlace(local, Leo, address: null, Cancellation);
+                await local.Services.GetRequiredService<KoanWebBaseUrl>().Accept("http://127.0.0.1:5220", Cancellation);
+                Assert.Equal("http://127.0.0.1:5220", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
+            }
+
+            await using (var moved = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
+            {
+                Assert.Null(moved.Services.GetRequiredService<KoanWebBaseUrl>().Current);
+                await Reached.On(moved, "https://tangent.example.org", Cancellation);
+                await Reached.Settled(moved, Cancellation);
+                Assert.Equal("https://tangent.example.org", Assert.Single(await Offers.Offer.All(Cancellation)).Subject);
+            }
+
+            await using var configured = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?>
+            {
+                ["Tangent:DataFolder"] = dataFolder,
+                [TangentModule.BaseUrlKey] = "https://configured.example"
+            }, ct: Cancellation);
+            Assert.Equal("https://configured.example", configured.Services.GetRequiredService<KoanWebBaseUrl>().Current);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
+        }
+    }
+
     private static Dictionary<string, string?> Settings(string dataFolder, string baseUrl)
         => new() { ["Tangent:DataFolder"] = dataFolder, ["Koan:Web:ApplicationUrl"] = baseUrl };
 }

@@ -13,6 +13,10 @@ namespace Tangent.Space;
 /// transaction.</summary>
 public sealed class PlaceAddress(WriteLoop writer) : IApplicationUrlStore
 {
+    /// <summary>How long a save waits for the writer. The wait is the store's own and never the request's: once the
+    /// writer has the command it commits whatever becomes of the request, and Koan must then hold what it kept.</summary>
+    public static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
     /// <summary>The Offer being used on this flow, which <see cref="Save"/> runs in place of a plain keep.</summary>
     private static readonly AsyncLocal<Using?> Pending = new();
 
@@ -20,17 +24,33 @@ public sealed class PlaceAddress(WriteLoop writer) : IApplicationUrlStore
 
     public async Task<string?> Load(CancellationToken ct) => (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.Address;
 
+    /// <summary>Keeps <paramref name="applicationUrl"/> through the writer, waiting at most <see cref="Bound"/>, whatever
+    /// becomes of the request <paramref name="ct"/> belongs to.</summary>
     public async Task Save(string applicationUrl, CancellationToken ct)
+    {
+        using var bound = new CancellationTokenSource(Bound);
+        try
+        {
+            await Keep(applicationUrl, bound.Token);
+        }
+        catch (OperationCanceledException) when (bound.IsCancellationRequested)
+        {
+            throw new TimeoutException($"The writer did not keep {applicationUrl} as the place's address within {Bound.TotalSeconds} seconds; "
+                + "if it keeps it later, the next start, or the next post of the Offer that offered it, holds it.");
+        }
+    }
+
+    private async Task Keep(string applicationUrl, CancellationToken bound)
     {
         if (Pending.Value is { } use)
         {
-            use.Outcome = await writer.Send(use.Command with { Address = applicationUrl }, ct);
+            use.Outcome = await writer.Send(use.Command with { Address = applicationUrl }, bound);
             if (use.Outcome is not Outcome<Offer>.Done)
                 throw new InvalidOperationException($"Using the offer {use.Command.OfferId} kept nothing: {use.Outcome}.");
             return;
         }
 
-        switch (await writer.Send(new KeepAddress(applicationUrl), ct))
+        switch (await writer.Send(new KeepAddress(applicationUrl), bound))
         {
             case Outcome<TangentSpace>.Done:
                 return;
@@ -43,8 +63,9 @@ public sealed class PlaceAddress(WriteLoop writer) : IApplicationUrlStore
 
     /// <summary>Uses an Offer of an address, in this order: Koan validates the origin; <see cref="Save"/> hands
     /// <paramref name="command"/> to the writer, which judges the Offer and, in one transaction, keeps the address and
-    /// accepts the Offer; only once that commits does Koan hold the origin. A refusal or a failure at any step leaves the
-    /// Offer open and the address unchanged. Answers the command's outcome, or the failure Koan met before it ran.</summary>
+    /// accepts the Offer; only once that commits does Koan hold the origin, and a request that ends meanwhile changes
+    /// neither, since the writer is awaited on the store's own bound. A refusal or a failure at any step leaves the Offer
+    /// open and the address unchanged. Answers the command's outcome, or the failure Koan met before it ran.</summary>
     public static async Task<Outcome<Offer>> Use(KoanWebBaseUrl baseUrl, UseOffer command, CancellationToken ct)
     {
         var use = new Using(command);

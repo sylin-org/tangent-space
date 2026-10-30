@@ -20,7 +20,8 @@ export interface TangentSpace {
 // Every capture shows this base URL whatever port the server listens on, so captures do not differ by port.
 // It is https, as atproto sign-in needs outside Development; the browser's requests to it are answered by the
 // server's loopback http address through forward(), which passes them on as a proxy does, naming the scheme and
-// host they came on. A state that configures no URL declares that proxy, and the place takes the URL from it.
+// host they came on. The place believes a proxy on its own machine, so where a state configures no URL it takes
+// the URL from it.
 export const captureBaseUrl = 'https://tangent.localhost'
 
 // The public origin a capture's place is also reached at, which it offers its operator as its address
@@ -150,8 +151,8 @@ export interface Forwarded {
   body: Buffer
 }
 
-/** The headers a proxy adds for a request that came to `url`: the scheme and host it came on. The Tangent Space believes
- *  them only where a state declares the loopback proxy (`Koan:Web:TrustedProxies`). */
+/** The headers a proxy adds for a request that came to `url`: the scheme and host it came on, which the Tangent Space
+ *  believes from loopback (`Koan:Web:TrustedProxies`). */
 export function forwarded(url: URL): Record<string, string> {
   return { 'x-forwarded-proto': url.protocol.replace(/:$/, ''), 'x-forwarded-host': url.host }
 }

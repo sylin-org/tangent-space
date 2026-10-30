@@ -5,19 +5,18 @@ using Xunit;
 
 namespace Tangent.Space;
 
-/// <summary>What a proof of the place's address starts from: a Tangent Space with no URL configured, whose loopback
-/// proxy Koan believes, so a request says which origin it arrived on through the proxy's forwarded scheme and host; a
-/// request on an origin; and the writer settled, so whatever a request handed it has run.</summary>
+/// <summary>What a proof of the place's address starts from: a Tangent Space with no URL configured, which believes a
+/// proxy on loopback as it does by default, so a request says which origin it arrived on through the proxy's forwarded
+/// scheme and host; a request on an origin; and the writer settled, so whatever a request handed it has run.</summary>
 public static class Reached
 {
-    /// <summary>No base URL configured, a proxy on loopback declared, Koan's test connector on, and no profile job
-    /// reaching the network; with <paramref name="more"/> besides.</summary>
+    /// <summary>No base URL configured, Koan's test connector on, and no profile job reaching the network; with
+    /// <paramref name="more"/> besides.</summary>
     public static Dictionary<string, string?> Unconfigured(params (string Key, string Value)[] more)
     {
         var settings = new Dictionary<string, string?>
         {
             [TangentModule.BaseUrlKey] = "",
-            ["Koan:Web:TrustedProxies:0"] = "127.0.0.1",
             ["Koan:Web:Auth:TestProvider:Enabled"] = "true",
             ["Tangent:Profile:BaseAddress"] = "http://127.0.0.1:1/",
             ["Tangent:Profile:Timeout"] = "00:00:01"

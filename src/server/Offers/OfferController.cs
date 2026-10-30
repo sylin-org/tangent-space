@@ -14,7 +14,8 @@ namespace Tangent.Offers;
 /// carry the address the site's pointers must now name; the person signs in again there. <b>Not this one</b> declines it
 /// and lands on the door, offering the next origin seen where there is one. To anyone but the place's operator an
 /// Offer does not exist, and the answer is a missing resource's. A second post of the same answer changes nothing
-/// and lands where the first did.</summary>
+/// and lands where the first did, and where the address the first one kept is not the one Koan holds — its request
+/// ended after the writer kept it — Koan is made to hold it.</summary>
 public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, AddressOffers offers) : ControllerBase
 {
     public const string UsePath = "/offers/use";
@@ -29,17 +30,17 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
     {
         var (refusal, personId, row) = await Posted(offer, ct);
         if (refusal is not null) return refusal;
-        if (row!.State == OfferState.Accepted) return Landed();
+        if (row!.State == OfferState.Accepted) return await Landed(row, ct);
         if (row.State != OfferState.Open || baseUrl.IsConfigured) return NoLongerOpen();
 
         switch (await PlaceAddress.Use(baseUrl, new UseOffer(row.Id, personId!, row.Subject), ct))
         {
             case Outcome<Offer>.Done:
-                return Landed();
+                return await Landed(row, ct);
             case Outcome<Offer>.Refused { Reason: Decision.NoOffer }:
                 return Absent();
             case Outcome<Offer>.Refused { Reason: Offer.NotOpen }:
-                return (await Offer.Get(row.Id, ct))?.State == OfferState.Accepted ? Landed() : NoLongerOpen();
+                return (await Offer.Get(row.Id, ct))?.State == OfferState.Accepted ? await Landed(row, ct) : NoLongerOpen();
             case Outcome<Offer>.Refused refused:
                 return new Problem(StatusCodes.Status409Conflict, "Not used", refused.Reason).ToResult();
             case Outcome<Offer>.Failed failed:
@@ -92,9 +93,13 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
         return (null, personId, row);
     }
 
-    /// <summary>Where Use it lands: first run's pointers, on the address the request came on.</summary>
-    private IActionResult Landed()
+    /// <summary>Where Use it lands: first run's pointers, on the address the request came on, once Koan holds the address
+    /// the row keeps from <paramref name="offer"/>.</summary>
+    private async Task<IActionResult> Landed(Offer offer, CancellationToken ct)
     {
+        if (!baseUrl.IsConfigured && (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.Address is { } kept
+            && kept == offer.Subject && baseUrl.Accepted != kept)
+            await baseUrl.Accept(kept, ct);
         Response.Headers.Location = baseUrl.PathBase + FirstRunController.Path;
         return StatusCode(StatusCodes.Status303SeeOther);
     }

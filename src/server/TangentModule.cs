@@ -87,7 +87,7 @@ public sealed class TangentModule : KoanModule
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);
         await Delegates.DelegateClient.Seed(services, ct);
-        services.GetRequiredService<Offers.AddressOffers>().Start();
+        await services.GetRequiredService<Offers.AddressOffers>().Start(ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 

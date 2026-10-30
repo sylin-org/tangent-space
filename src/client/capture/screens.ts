@@ -63,13 +63,10 @@ export interface Screen {
 // The consent screen's Tangent Space: Koan's server lets its code look-ups through as often as a capture asks.
 const consentSettings = { 'Koan:Web:Auth:Server:UserCodeVerificationRateLimitPerMinute': '1000' } as const
 
-// A Tangent Space with no URL configured, in Production, behind the capture's loopback proxy, which it believes: it
-// answers at the base URL the proxy names, and offers its operator the public origin it is also reached at.
-const offerSettings = {
-  'Koan:Web:ApplicationUrl': '',
-  'Koan:Web:TrustedProxies:0': '127.0.0.1',
-  ASPNETCORE_ENVIRONMENT: 'Production',
-} as const
+// A Tangent Space with no URL configured, in Production, behind the capture's loopback proxy, which it believes as it
+// believes any proxy on its own machine: it answers at the base URL the proxy names, and offers its operator the
+// public origin it is also reached at.
+const offerSettings = { 'Koan:Web:ApplicationUrl': '', ASPNETCORE_ENVIRONMENT: 'Production' } as const
 
 // A screen's name is its name in docs/FEATURES.md "Screens", lowercase, with hyphens between words:
 // "Tangent Space settings (general)" is tangent-space-settings-general. The door's two screens are the

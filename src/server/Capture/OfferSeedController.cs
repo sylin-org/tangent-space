@@ -9,8 +9,8 @@ using Tangent.Writer;
 namespace Tangent.Capture;
 
 /// <summary>An Offer of an address, made the way every one is made, for the captures of the operator's door: fourteen
-/// requests arrive on <see cref="Origin"/> through the capture's loopback proxy, which the state's settings declare, and
-/// the place, with no URL configured and no address yet, offers it to its operator. For <c>offer-used</c> the operator
+/// requests arrive on <see cref="Origin"/> through the capture's loopback proxy, which the place believes, and the
+/// place, with no URL configured and no address yet, offers it to its operator. For <c>offer-used</c> the operator
 /// then uses it, and for <c>offer-declined</c> declines it, as their answers do. Compiled only into the capture host,
 /// like <see cref="CaptureSeedController"/>.</summary>
 public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, WriteLoop writer, IServer server) : ControllerBase
@@ -72,6 +72,6 @@ public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, WriteLoop writer
             await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
         }
 
-        throw new InvalidOperationException($"No offer of {Origin} was made; the state's settings must leave the URL unconfigured and declare the loopback proxy.");
+        throw new InvalidOperationException($"No offer of {Origin} was made; the state's settings must leave the URL unconfigured.");
     }
 }

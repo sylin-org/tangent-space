@@ -45,6 +45,65 @@ public sealed class OfferTests
     }
 
     [Fact]
+    public async Task With_nothing_else_configured_a_proxy_on_loopback_is_believed_and_the_public_origin_it_names_is_offered()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = "" }, ct: Cancellation);
+        await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
+
+        await Reached.On(tangentSpace, Public, Cancellation);
+        await Reached.Settled(tangentSpace, Cancellation);
+
+        var offer = Assert.Single(await Offer.All(Cancellation));
+        Assert.Equal((Public, Leo, OfferState.Open), (offer.Subject, offer.DeciderId, offer.State));
+    }
+
+    [Fact]
+    public async Task An_origin_seen_before_setup_is_offered_once_the_sign_in_sets_the_place_up()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await Reached.On(tangentSpace, Public, Cancellation, times: 2);
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Empty(await Offer.All(Cancellation));
+
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example", comeBack: FirstRunController.Path)).Dispose();
+        await Reached.Settled(tangentSpace, Cancellation);
+
+        var offer = Assert.Single(await Offer.All(Cancellation));
+        Assert.Equal((Public, Leo, OfferState.Open), (offer.Subject, offer.DeciderId, offer.State));
+        Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.OperatorId);
+    }
+
+    [Fact]
+    public async Task A_new_origin_that_meets_a_full_writer_is_dropped_without_waiting_and_offered_later()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var release = new TaskCompletionSource();
+        var held = writer.Send(new Hold(release.Task), Cancellation);
+        var queued = new List<Task<Outcome<bool>>>();
+        while (queued.Count <= WriteLoop.QueueBound && writer.TrySend(new Hold(Task.CompletedTask)) is { } sent) queued.Add(sent);
+        Assert.InRange(queued.Count, WriteLoop.QueueBound - 1, WriteLoop.QueueBound);
+
+        // The request that brings the origin goes on at once, and its offer is not queued behind the writer.
+        using (var bounded = CancellationTokenSource.CreateLinkedTokenSource(Cancellation))
+        {
+            bounded.CancelAfter(TimeSpan.FromSeconds(10));
+            await Reached.On(tangentSpace, Public, bounded.Token);
+        }
+        release.SetResult();
+        await held;
+        await Task.WhenAll(queued);
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Empty(await Offer.All(Cancellation));
+
+        await tangentSpace.Services.GetRequiredService<AddressOffers>().OfferNext(Cancellation);
+        Assert.Equal(Public, Assert.Single(await Offer.All(Cancellation)).Subject);
+    }
+
+    [Fact]
     public async Task Loopback_private_unspecified_and_http_origins_make_no_offer_and_neither_does_a_repeat()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
@@ -193,6 +252,59 @@ public sealed class OfferTests
     }
 
     [Fact]
+    public async Task A_request_that_ends_once_the_writer_has_its_use_still_leaves_the_origin_held_and_a_later_post_holds_an_address_kept_but_not_held()
+    {
+        await using (var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation))
+        {
+            await APlaceWithNews(tangentSpace);
+            await Reached.On(tangentSpace, Public, Cancellation);
+            await Reached.Settled(tangentSpace, Cancellation);
+            var offer = Assert.Single(await Offer.All(Cancellation));
+            var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+            var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
+
+            // The writer is busy, the use is queued behind it, and the request that sent it ends.
+            var release = new TaskCompletionSource();
+            var held = writer.Send(new Hold(release.Task), Cancellation);
+            using var request = new CancellationTokenSource();
+            var used = PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, Leo, Public), request.Token);
+            request.Cancel();
+            release.SetResult();
+            await held;
+
+            Assert.IsType<Outcome<Offer>.Done>(await used);
+            Assert.Equal(Public, baseUrl.Current);
+            Assert.Equal(Public, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
+            Assert.Equal(OfferState.Accepted, (await Offer.Get(offer.Id, Cancellation))!.State);
+        }
+
+        // An address the row keeps from a used offer that Koan does not hold, as when a use's hold was lost: the next post
+        // of that offer holds it.
+        await using var kept = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await APlaceWithNews(kept);
+        var keptWriter = kept.Services.GetRequiredService<WriteLoop>();
+        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
+        space.Address = Public;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await keptWriter.Send(new Store<TangentSpace>(space), Cancellation));
+        var accepted = Offer.Make(OfferKind.Address, Public, Leo, DateTimeOffset.UtcNow);
+        accepted.Accept(DateTimeOffset.UtcNow);
+        Assert.IsType<Outcome<Offer>.Done>(await keptWriter.Send(new Store<Offer>(accepted), Cancellation));
+        // Something new to Leo, so his door holds a form to take a token from.
+        Assert.IsType<Outcome<Post>.Done>(await keptWriter.Send(
+            new StartTopic(Tids.Mint(), "workshop", "Kilns", "Which kiln runs hottest?", Ada), Cancellation));
+        var keptUrl = kept.Services.GetRequiredService<KoanWebBaseUrl>();
+        Assert.Null(keptUrl.Current);
+        using var leo = await SignedIn(kept, "leo", Leo);
+
+        using (var again = await Answer(leo, OfferController.UsePath, accepted.Id))
+        {
+            Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
+            Assert.Equal(FirstRunController.Path, again.Headers.Location?.OriginalString);
+        }
+        Assert.Equal(Public, keptUrl.Current);
+    }
+
+    [Fact]
     public async Task Not_this_one_declines_the_offer_lands_on_the_door_and_offers_the_origin_that_waited_and_a_declined_origin_is_never_offered_again()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
@@ -323,6 +435,16 @@ public sealed class OfferTests
         {
             SqliteConnection.ClearAllPools();
             if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
+        }
+    }
+
+    /// <summary>A command that keeps the writer busy until <see cref="Until"/> completes, writing nothing.</summary>
+    private sealed record Hold(Task Until) : ICommand<bool>
+    {
+        public async Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct)
+        {
+            await Until;
+            return new Outcome<bool>.Done(true);
         }
     }
 
