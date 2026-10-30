@@ -20,5 +20,5 @@ Built from the frame and the shared components, captured, and scored last as bel
 | edit | never | — | templated from the new-topic form; captured as form, refused, remove confirmation and not yours |
 | take-this-on-a-tangent | never | — | templated from the new-topic form; captured as form, refused and visitor; the topic screen adds taken-origin, taken-from and taken-from-unseen |
 | new-tangent | never | — | templated from the new-topic form, the description, kind and audience behind one quiet disclosure; captured as empty and refused |
-| tangent-settings-details | never | — | templated from the new-topic form; captured as administrator and for the moderators' Tangent, whose audience and place are fixed |
+| tangent-settings-details | never | — | templated from the new-topic form; captured as administrator, as a holder of `ManageTangent` alone, who reads nothing of where it stands, and for the moderators' Tangent, whose audience and place are fixed; the saved page a change that closes the Tangent to its sender lands on is not captured |
 | report | never | — | templated from the take-this-on-a-tangent form; captured as report-open, report-page and report-received; at 390 the path bar's crumbs overlap |

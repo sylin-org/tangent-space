@@ -1,0 +1,21 @@
+@using global::Tangent.Render
+@* A change that made a Tangent private to the one who sent it: one panel saying it is saved and no longer shows for
+   them, with the way to the door. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="closed-heading">
+        <div class="sign-in-body">
+            <h1 id="closed-heading" class="sign-in-title">Saved</h1>
+            <p class="sign-in-lede">@Model.Name is private now, and no longer shows for you.</p>
+            <div class="post-form-actions">
+                <a class="sign-in-submit post-form-submit" href="@Model.Door">Go to the door</a>
+            </div>
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public TangentClosed Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and the saved change as crumbs, and who reads.</summary>
+    public static Frame Frame(TangentClosed page) => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Saved")], page.Who);
+}

@@ -155,12 +155,14 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // The discussions Tangent's settings, read by the persona, who set the place up and so administers it: its name,
-  // description, kind and audience, and its place between its neighbours with the two moves; and the moderators'
-  // Tangent's, whose audience and place stay as they are.
+  // description, kind and audience, and its place between its neighbours with the two moves; by the persona as a member
+  // who holds ManageTangent there alone, who reads nothing of where it stands; and the moderators' Tangent's, whose
+  // audience and place stay as they are.
   'tangent-settings-details': {
     path: '/t/discussions/settings',
     states: [
       { name: 'administrator', place: 'persona', seed: 'tangent', signedIn: true },
+      { name: 'manager', seed: 'tangent-manager', signedIn: true },
       { name: 'moderators', place: 'persona', seed: 'tangent', signedIn: true, path: '/t/moderators/settings' },
     ],
   },

@@ -86,6 +86,7 @@ public sealed record CreateTangent(
         if (await Overwrites.AudienceOf(Collection(), Slug, ct) != Audience) return new Outcome<Tangent>.Refused(NoAudience);
 
         var at = At ?? DateTimeOffset.UtcNow;
+        tangent.LoggedAudience = Audience;
         await tangent.Save(ct);
         await Event.Next(sequences, EventKind.TangentChanged, at, tangentId: tangent.Id, actorId: ActorId, audience: Audience).Save(ct);
         return new Outcome<Tangent>.Done(tangent);

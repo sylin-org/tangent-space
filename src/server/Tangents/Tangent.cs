@@ -5,7 +5,7 @@ using Tangent.Writer;
 namespace Tangent.Tangents;
 
 /// <summary>A subject area inside the Tangent Space, keyed by its slug. Its audience is the <c>everyone</c> overwrite on
-/// its resource (<see cref="Overwrites"/>), not a field here.</summary>
+/// its resource (<see cref="Overwrites"/>); <see cref="LoggedAudience"/> is only what the log last said of it.</summary>
 public sealed class Tangent : Entity<Tangent>
 {
     public const int NameLimit = 80;
@@ -36,6 +36,11 @@ public sealed class Tangent : Entity<Tangent>
 
     /// <summary>How many Topics were started here, raised in the commit that starts one.</summary>
     public int TopicCount { get; set; }
+
+    /// <summary>The audience the log last recorded for this Tangent in a <c>tangent.changed</c>; null where none is
+    /// known. The audience itself is the <c>everyone</c> overwrite, which Koan commits outside the writer: a change of
+    /// the Tangent that finds the two apart records the overwrite's here and in the log (<see cref="ChangeTangent"/>).</summary>
+    public Space.Audience? LoggedAudience { get; set; }
 
     /// <summary>A Tangent, or a refusal: the slug has the slug's shape and is not <see cref="NewSegment"/>, and the name
     /// and description are within their limits.</summary>

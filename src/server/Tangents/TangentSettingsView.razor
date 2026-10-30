@@ -1,8 +1,9 @@
 @using global::Tangent.Posts
 @using global::Tangent.Render
 @* A Tangent's settings: one panel in the page, with the form that renames and describes it, sets its default kind and
-   its audience, saying that its address stays; then its place among the Tangents, between its neighbours, with a
-   button to move it one place earlier and one to move it later, each its own small form. The moderators' Tangent says
+   its audience, saying that its address stays; then, for a reader who may arrange the place's list, its place among
+   the Tangents, between the nearest they may view, with a button to move it one place earlier and one to move it
+   later, each its own small form. The moderators' Tangent says
    instead that its audience and its place stay. A reader who may not change it reads why above the form, whose fields
    are read-only and which has no button, and a visitor the way to sign in; a refusal of a field shows under that
    field, and any other above the form. *@
@@ -55,17 +56,20 @@
                     </div>
                 }
             </form>
-            <section class="post-form-place" aria-labelledby="settings-place">
-                <h2 id="settings-place" class="field-label">Place among the Tangents</h2>
-                <p class="post-form-note">@PlaceSentence()</p>
-                @if (Mutable && !Model.Fixed)
-                {
-                    <div class="post-form-moves">
-                        @Moved(Move.Earlier, "Move earlier", Model.Before is not null)
-                        @Moved(Move.Later, "Move later", Model.After is not null)
-                    </div>
-                }
-            </section>
+            @if (Model.Movable)
+            {
+                <section class="post-form-place" aria-labelledby="settings-place">
+                    <h2 id="settings-place" class="field-label">Place among the Tangents</h2>
+                    <p class="post-form-note">@PlaceSentence()</p>
+                    @if (!Model.Fixed)
+                    {
+                        <div class="post-form-moves">
+                            @Moved(Move.Earlier, "Move earlier", Model.Before is not null)
+                            @Moved(Move.Later, "Move later", Model.After is not null)
+                        </div>
+                    }
+                </section>
+            }
         </div>
     </section>
 </main>
@@ -83,7 +87,7 @@
         (_, { } before, { } after) => $"It comes after {before} and before {after}.",
         (_, null, { } after) => $"It comes first, before {after}.",
         (_, { } before, null) => $"It comes last, after {before}.",
-        _ => "It is the only Tangent."
+        _ => "It is the only Tangent you can read."
     };
 
     /// <summary>One move as a small form of its own, posting the move alone; disabled where the Tangent is already at

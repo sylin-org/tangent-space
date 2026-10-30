@@ -60,6 +60,7 @@ public static class ModeratorsTangent
     {
         var tangent = Tangents.Tangent.Create(slug, Name, Description, PostKind.Topic, Order);
         if (!await HasAccess(slug, ct)) throw new Refusal(NoAccess);
+        tangent.LoggedAudience = Audience.Private;
         await tangent.Save(ct);
         await Event.Next(sequences, EventKind.TangentChanged, at, tangentId: tangent.Id, actorId: actorId, audience: Audience.Private).Save(ct);
         return tangent;

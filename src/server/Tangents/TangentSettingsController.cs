@@ -4,6 +4,7 @@ using Koan.Data.Core.Sorting;
 using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
@@ -14,13 +15,17 @@ namespace Tangent.Tangents;
 /// <summary>A Tangent's settings: <c>/t/{tangent}/settings</c>. Its <c>GET</c> is the form, one resource both ways
 /// (<see cref="TangentSettingsPage"/>). Its <c>POST</c> takes <c>name</c>, <c>description</c>, <c>kind</c>,
 /// <c>audience</c> and <c>move</c>, as a form or a JSON object, each left as it is when not sent, and sends
-/// <see cref="ChangeTangent"/>: a form is sent on to the Tangent's page, or back to its settings after a move; a JSON
+/// <see cref="ChangeTangent"/>: a form is sent on to the Tangent's page, or back to its settings after a move, or, where
+/// the change closed the Tangent to its sender, reads that it is saved (<see cref="TangentClosed"/>); a JSON
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
 /// gate. Both resolve the address as the Tangent page does (<see cref="PostWrites.Locate"/>) before anything else is
 /// judged, so a Tangent the reader may not view and one no row has answer alike.</summary>
 public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop writer, RoleCollection roles) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
+
+    /// <summary>The most Tangents on either side the page reads to name the nearest one the reader may view.</summary>
+    public const int NeighbourRead = TangentPageController.SwitcherLimit;
 
     [HttpGet(Route)]
     public async Task<IActionResult> Get(string tangent, CancellationToken ct)
@@ -61,6 +66,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         switch (outcome)
         {
             case Outcome<Tangent>.Done { Result: var changed }:
+                if (!PostWrites.WantsJson(Request) && !(await Capabilities.Load(personId, changed.Id, null, ct)).Exists)
+                    return await Closed(changed, personId, ct);
                 var address = PostWrites.TangentAddress(Configured(), changed.Id);
                 return await TangentWrites.Written(HttpContext, changed, Configured(), personId, created: false,
                     move is null ? address : address + "/" + TangentWrites.SettingsSegment, ct);
@@ -73,6 +80,17 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
             default:
                 throw new InvalidOperationException($"The writer answered {outcome} for changing the Tangent {tangent}.");
         }
+    }
+
+    /// <summary>What a form answers whose change closed the Tangent to its own sender: it is saved, and absent to them
+    /// now, so the page says so in a sentence and leads to the door.</summary>
+    private async Task<IActionResult> Closed(Tangent tangent, string? personId, CancellationToken ct)
+    {
+        var configured = Configured();
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
+        var place = await Capabilities.Load(personId, null, null, ct);
+        return Ok(new TangentClosed(tangent.Name, space.Name, configured + "/",
+            await PostWrites.Reader(personId, place, configured, baseUrl.PathBase + "/", ct)));
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again, read afresh,
@@ -112,15 +130,18 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentWrites.SettingsSegment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var moderators = space.ModeratorsTangentId == row.Id;
+        var movable = personId is not null && (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace);
+        var neighbours = movable && !moderators;
         return new TangentSettingsPage(
             row.Id,
             row.Name,
             row.Description,
             PostWrites.Word(row.DefaultKind),
             TangentWrites.Word(await Overwrites.AudienceOf(roles, row.Id, ct) ?? Audience.Public),
-            moderators ? null : (await Neighbour(row, earlier: true, ct))?.Name,
-            moderators ? null : (await Neighbour(row, earlier: false, ct))?.Name,
+            neighbours ? (await Neighbour(personId, row, earlier: true, ct))?.Name : null,
+            neighbours ? (await Neighbour(personId, row, earlier: false, ct))?.Name : null,
             moderators,
+            movable,
             address,
             address + "/" + TangentWrites.SettingsSegment,
             FormToken.For(HttpContext),
@@ -134,9 +155,10 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
             await PostWrites.Reader(personId, capabilities, configured, here, ct));
     }
 
-    /// <summary>The Tangent just before or just after <paramref name="tangent"/> in the Tangents' order, the moderators'
-    /// Tangent, which comes after every other, aside; null at either end. One bounded read of one row.</summary>
-    private static async Task<Tangent?> Neighbour(Tangent tangent, bool earlier, CancellationToken ct)
+    /// <summary>The nearest Tangent before or after <paramref name="tangent"/> in the Tangents' order that the reader may
+    /// view, among the <see cref="NeighbourRead"/> nearest, the moderators' Tangent, which comes after every other, aside;
+    /// null where none is. One bounded read, and what the reader holds on each from Koan's cache.</summary>
+    private static async Task<Tangent?> Neighbour(string? personId, Tangent tangent, bool earlier, CancellationToken ct)
     {
         var order = FieldPath.Of(nameof(Tangent.Order));
         var id = FieldPath.Of(nameof(Tangent.Id));
@@ -147,14 +169,15 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
                 Filter.On(order, beyond, FilterValue.Of(tangent.Order)),
                 Filter.All(Filter.On(order, FilterOperator.Eq, FilterValue.Of(tangent.Order)), Filter.On(id, beyond, FilterValue.Of(tangent.Id)))),
             Page = 1,
-            PageSize = 1
+            PageSize = NeighbourRead
         }.WithSort<Tangent>(sort =>
         {
             if (earlier) sort.OrderByDescending(row => row.Order).ThenByDescending(row => row.Id);
             else sort.OrderBy(row => row.Order).ThenBy(row => row.Id);
         });
         var rows = await Tangent.Query(row => row.Order < ModeratorsTangent.Order, query, ct);
-        return rows.Count == 0 ? null : rows[0];
+        var each = await Capabilities.LoadEach(personId, rows.Select(row => row.Id).ToList(), ct);
+        return rows.FirstOrDefault(row => each[row.Id].Exists);
     }
 
     private string Configured() => baseUrl.Configured
