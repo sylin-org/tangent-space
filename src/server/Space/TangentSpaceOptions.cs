@@ -1,8 +1,7 @@
 namespace Tangent.Space;
 
 /// <summary>What an operator configures under the <c>Tangent</c> section: the folder that holds the Tangent
-/// Space's data, and the account that sets it up. The base URL it answers at is Koan's
-/// <c>Koan:Web:ApplicationUrl</c>.</summary>
+/// Space's data, and the account that sets it up. Where it answers is learned (<see cref="PlaceAddress"/>).</summary>
 public sealed class TangentSpaceOptions
 {
     public const string Configuration = "Tangent";

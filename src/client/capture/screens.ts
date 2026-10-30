@@ -63,19 +63,32 @@ export interface Screen {
 // The consent screen's Tangent Space: Koan's server lets its code look-ups through as often as a capture asks.
 const consentSettings = { 'Koan:Web:Auth:Server:UserCodeVerificationRateLimitPerMinute': '1000' } as const
 
+// A Tangent Space with no URL configured, in Production, behind the capture's loopback proxy, which it believes: it
+// answers at the base URL the proxy names, and offers its operator the public origin it is also reached at.
+const offerSettings = {
+  'Koan:Web:ApplicationUrl': '',
+  'Koan:Web:TrustedProxies:0': '127.0.0.1',
+  ASPNETCORE_ENVIRONMENT: 'Production',
+} as const
+
 // A screen's name is its name in docs/FEATURES.md "Screens", lowercase, with hyphens between words:
 // "Tangent Space settings (general)" is tangent-space-settings-general. The door's two screens are the
 // door's states.
 export const screens: Readonly<Record<string, Screen>> = {
   // A visitor's front page; the capture persona with news since her place checkpoint — replies to her Topic, a
   // mention of her, new articles and new Posts in each Tangent; and the same persona with her checkpoint at the
-  // log's last sequence, quiet.
+  // log's last sequence, quiet. Then the persona as the operator of a place reached at a public origin while it has
+  // no address: the Offer on her door, with its evidence and its two answers; where Use it lands, first run's
+  // pointers under the origin she used; and her door once she said Not this one.
   door: {
     path: '/',
     states: [
       { name: 'visitor', seed: 'door' },
       { name: 'signed-in-with-news', seed: 'door', signedIn: true },
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
+      { name: 'offer', seed: 'offer', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'offer-used', seed: 'offer-used', place: 'persona', signedIn: true, settings: offerSettings, path: '/first-run' },
+      { name: 'offer-declined', seed: 'offer-declined', place: 'persona', signedIn: true, settings: offerSettings },
     ],
   },
   // What a visitor reads: the action that signs in with Bluesky; on its way once pressed; the handle form for another

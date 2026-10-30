@@ -129,9 +129,9 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
     {
         var reported = found.Post!;
         var root = found.Root!;
-        var configured = Configured();
-        var tangentAddress = PostWrites.TangentAddress(configured, found.Tangent.Id);
-        var topicAddress = PostWrites.TopicAddress(configured, found.Tangent.Id, root.Slug ?? root.Id);
+        var baseAddress = BaseAddress();
+        var tangentAddress = PostWrites.TangentAddress(baseAddress, found.Tangent.Id);
+        var topicAddress = PostWrites.TopicAddress(baseAddress, found.Tangent.Id, root.Slug ?? root.Id);
         var address = Address(found);
         var back = baseUrl.PathBase + "/t/" + found.Tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + reported.Id + "/" + Segment;
         var reader = found.Rows.Participant;
@@ -151,17 +151,16 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
             received || inModerators || reader is null ? null : FormToken.For(HttpContext),
             received || inModerators || gate is not null ? null : Tid.Mint(DateTimeOffset.UtcNow),
             gate,
-            personId is null ? configured + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
+            personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
             found.Rows.Space.Name,
-            configured + "/",
-            await PostWrites.Reader(personId, found.Rows.For(null), configured, back, ct),
+            baseAddress + "/",
+            await PostWrites.Reader(personId, found.Rows.For(null), baseAddress, back, ct),
             Failure: inModerators ? ReportPost.InModerators : null);
     }
 
     /// <summary>The reported Post's address.</summary>
     private string Address(PostWrites.Located found)
-        => PostWrites.Address(Configured(), found.Tangent.Id, found.Root!.Slug ?? found.Root.Id, found.Post!.Id);
+        => PostWrites.Address(BaseAddress(), found.Tangent.Id, found.Root!.Slug ?? found.Root.Id, found.Post!.Id);
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

@@ -35,7 +35,7 @@ public sealed class ReplyController(KoanWebBaseUrl baseUrl, WriteLoop writer) : 
         return outcome switch
         {
             Outcome<Post>.Done { Result: var reply } => await PostWrites.Written(HttpContext, reply, root,
-                PostWrites.Address(Configured(), root.TangentId, root.Slug ?? root.Id, reply.Id), personId, created: true, ct),
+                PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, reply.Id), personId, created: true, ct),
             Outcome<Post>.Refused { Reason: Reply.NoTopic } => PostWrites.Absent(),
             Outcome<Post>.Refused { Reason: var reason } => PostWrites.Refused(reason),
             Outcome<Post>.Conflict { Reason: var reason } => PostWrites.Conflicting(reason),
@@ -44,6 +44,5 @@ public sealed class ReplyController(KoanWebBaseUrl baseUrl, WriteLoop writer) : 
         };
     }
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

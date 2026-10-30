@@ -753,6 +753,51 @@
   font: 600 14px/1.4 var(--ts-font-ui);
 }
 
+/* An open Offer on its decider's door: one line with its evidence, and its two answers beside it. */
+.door-offers {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.door-offer {
+  padding: 16px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-surface);
+}
+
+.door-offer-line {
+  flex: 1 1 320px;
+  margin: 0;
+  color: var(--ts-text);
+  font: var(--ts-type-ui-large);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.door-offer-answers {
+  display: flex;
+  gap: 10px;
+}
+
+.door-offer-answers form {
+  margin: 0;
+}
+
+/* The accent button, kept at every width, as a button rather than a link. */
+.door-offer-answers .tangent-new {
+  margin-left: 0;
+  display: inline-flex;
+  border: 0;
+  cursor: pointer;
+}
+
 /* The way to older Topics and back. */
 .topic-pages {
   margin-top: 20px;

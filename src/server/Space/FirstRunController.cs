@@ -31,11 +31,12 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return await Answer(HttpContext, baseUrl, options.Value, ct);
         if (!Theirs(space)) return NotHere();
         var listening = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
-        return new ObjectResult(new FirstRun(space.Name, Configured(baseUrl) + "/")
+        var address = baseUrl.Resolve(HttpContext);
+        return new ObjectResult(new FirstRun(space.Name, address + "/")
         {
-            BaseUrl = Configured(baseUrl),
-            Pointers = Pointers.For(Configured(baseUrl), Pointers.Upstream(listening)),
-            Reader = await ReaderOf(User, baseUrl, ct)
+            BaseUrl = address,
+            Pointers = Pointers.For(address, Pointers.Upstream(listening)),
+            Reader = await ReaderOf(User, address, baseUrl.PathBase, ct)
         });
     }
 
@@ -44,7 +45,8 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
     public static async Task<IActionResult> Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpaceOptions options, CancellationToken ct)
     {
         http.Response.Headers.CacheControl = "no-store";
-        var place = Place(baseUrl, options) with { Reader = await ReaderOf(http.User, baseUrl, ct) };
+        var address = baseUrl.Resolve(http);
+        var place = Place(address, options) with { Reader = await ReaderOf(http.User, address, baseUrl.PathBase, ct) };
         if (PersonId(http.User) is { } personId)
         {
             var handle = await HandleOf(http.User, personId, ct);
@@ -53,7 +55,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         }
         return new ObjectResult(place with
         {
-            Challenge = Configured(baseUrl) + SignInController.ChallengePath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path)
+            Challenge = address + SignInController.ChallengePath + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path)
         });
     }
 
@@ -67,30 +69,28 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
 
     /// <summary>Whoever is signed in, as the account menu shows them: their participant's display name, else their
-    /// handle; the highest seeded role they hold; and Koan's sign-out, coming back here. Null for a visitor.</summary>
-    private static async Task<FirstRunReader?> ReaderOf(ClaimsPrincipal user, KoanWebBaseUrl baseUrl, CancellationToken ct)
+    /// handle; the highest seeded role they hold; and Koan's sign-out under <paramref name="address"/>, coming back here.
+    /// Null for a visitor.</summary>
+    private static async Task<FirstRunReader?> ReaderOf(ClaimsPrincipal user, string address, PathString pathBase, CancellationToken ct)
     {
         if (PersonId(user) is not { } personId) return null;
         var participant = await Participant.Get(personId, ct);
         var handle = participant?.Handle is { Length: > 0 } stored ? stored : Claimed(user) is { Length: > 0 } claimed ? claimed : personId;
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
         var role = participant is null ? null : Roles.Word((await Capabilities.Load(personId, null, null, ct)).RoleIds);
-        var signOut = Configured(baseUrl) + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path);
+        var signOut = address + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(pathBase + Path);
         return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut);
     }
 
     /// <summary>The place before it is established, with the account the configuration names to set it up.</summary>
-    private static FirstRun Place(KoanWebBaseUrl baseUrl, TangentSpaceOptions options)
-        => new(TangentSpace.Unnamed, Configured(baseUrl) + "/", options.NamedOperator());
+    private static FirstRun Place(string address, TangentSpaceOptions options)
+        => new(TangentSpace.Unnamed, address + "/", options.NamedOperator());
 
     /// <summary>The configured operator's handle: the one the setting names, or, for a DID, the handle of the participant
     /// with that DID where one has arrived here.</summary>
     private static async Task<string?> OperatorHandle(TangentSpaceOptions options, CancellationToken ct)
         => !options.NamedByDid() ? options.NamedOperator()
             : (await Participant.Get(options.NamedOperator()!, ct))?.Handle is { Length: > 0 } arrived ? arrived : null;
-
-    private static string Configured(KoanWebBaseUrl baseUrl) => baseUrl.Configured
-        ?? throw new InvalidOperationException($"{TangentModule.BaseUrlKey} must be set to the base URL the Tangent Space answers at.");
 
     private static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;

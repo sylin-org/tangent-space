@@ -37,7 +37,7 @@ public sealed class Event : Entity<Event>
     public string? ActorId { get; set; }
 
     /// <summary>Whom it concerns: the author of the Post a reply answers, the participant mentioned, admitted, timed out
-    /// or banned.</summary>
+    /// or banned, or the one who decides an Offer.</summary>
     [Index(Name = "ix_event_targets", Order = 0)]
     public string? TargetId { get; set; }
 
@@ -49,10 +49,13 @@ public sealed class Event : Entity<Event>
     /// <summary>The audience a Tangent has after the change, on <see cref="EventKind.TangentChanged"/>.</summary>
     public Audience? Audience { get; set; }
 
+    /// <summary>The Offer made, on <see cref="EventKind.OfferMade"/>.</summary>
+    public string? OfferId { get; set; }
+
     /// <summary>The next row of the log, numbered from the mark the writer holds for the running command.</summary>
     public static Event Next(Sequences sequences, string kind, DateTimeOffset at,
         string? tangentId = null, string? topicId = null, string? postId = null, string? actorId = null,
-        string? targetId = null, long? version = null, Audience? audience = null)
+        string? targetId = null, long? version = null, Audience? audience = null, string? offerId = null)
     {
         var seq = sequences.Next(Log);
         return new Event
@@ -67,7 +70,8 @@ public sealed class Event : Entity<Event>
             TargetId = targetId,
             Version = version,
             At = at,
-            Audience = audience
+            Audience = audience,
+            OfferId = offerId
         };
     }
 }

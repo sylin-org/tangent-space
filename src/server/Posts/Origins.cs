@@ -40,7 +40,7 @@ public static class Origins
     /// started on its own. The origin, its Tangent's row, capability's rows there, its Topic's root and its author, each
     /// one keyed read. A reader for whom the origin's Tangent is absent — or an origin no row holds — reads only that it
     /// was taken from a Post they cannot see. A removed origin is its tombstone's address.</summary>
-    public static async Task<TopicPage.Origin?> Of(Post root, string? personId, string configured, CancellationToken ct)
+    public static async Task<TopicPage.Origin?> Of(Post root, string? personId, string baseUrl, CancellationToken ct)
     {
         if (root.OriginId is not { } originId) return null;
         if (await Post.Get(originId, ct) is not { } origin || await Tangents.Tangent.Get(origin.TangentId, ct) is not { } tangent)
@@ -53,7 +53,7 @@ public static class Origins
         var handle = author?.Handle is { Length: > 0 } stored ? stored : origin.AuthorId;
         return new TopicPage.Origin(
             false,
-            PostWrites.Address(configured, tangent.Id, topic.Slug ?? topic.Id, origin.Id),
+            PostWrites.Address(baseUrl, tangent.Id, topic.Slug ?? topic.Id, origin.Id),
             topic.Title ?? "",
             tangent.Name,
             author?.Profile.DisplayName is { Length: > 0 } name ? name : handle,
@@ -66,7 +66,7 @@ public static class Origins
     /// origin with none is not in the answer. One range of <c>ix_post_origins</c> per origin, at most <see cref="TakenRead"/> rows, leaving
     /// out the reports in a moderators' Tangent the reader may not view (<see cref="ModeratorsAbsentTo"/>), then the Tangents of
     /// what was found by Id and their overwrites from Koan's cache.</summary>
-    public static async Task<IReadOnlyDictionary<string, TopicPage.Taken>> From(IReadOnlyList<Post> origins, string? personId, string configured,
+    public static async Task<IReadOnlyDictionary<string, TopicPage.Taken>> From(IReadOnlyList<Post> origins, string? personId, string baseUrl,
         CancellationToken ct)
     {
         var found = new Dictionary<string, IReadOnlyList<Post>>(StringComparer.Ordinal);
@@ -93,7 +93,7 @@ public static class Origins
             taken[originId] = new TopicPage.Taken(
                 viewable.Take(TakenLimit).Select(post => new TopicPage.TakenTopic(
                     post.Title ?? "",
-                    PostWrites.TopicAddress(configured, post.TangentId, post.Slug ?? post.Id),
+                    PostWrites.TopicAddress(baseUrl, post.TangentId, post.Slug ?? post.Id),
                     tangents[post.TangentId].Name,
                     post.Removed)).ToList(),
                 viewable.Count,

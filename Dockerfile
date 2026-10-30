@@ -1,6 +1,7 @@
 # The published shape in a container: one self-contained executable with its appsettings.json, listening on 5220,
-# with its data folder inside the /state volume. Build it with `docker compose build`; the pinned Koan checkout
-# must be at .local/upstream/koan-framework first (`pwsh scripts/tangent.ps1 build` puts it there).
+# with its data folder inside the /state volume. No address is configured here: the place takes the one its first run
+# completes on, and is offered the ones it is reached at later. Build it with `docker compose build`; the pinned Koan
+# checkout must be at .local/upstream/koan-framework first (`pwsh scripts/tangent.ps1 build` puts it there).
 
 # The client, built as the server project's own target builds it: npm ci, then npm run build into src/server/wwwroot.
 FROM node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS client

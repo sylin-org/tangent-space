@@ -5,7 +5,6 @@ using Koan.Data.Core;
 using Koan.Identity.Roles;
 using Koan.Web.Extensions;
 using Koan.Web.Hosting;
-using Koan.Web.Options;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -20,13 +19,13 @@ using Tangent.Writer;
 
 namespace Tangent;
 
-/// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder,
-/// the HTML projection, first run's gate, the delegated agent door, and what every start makes sure of: the roles, first
-/// run and the pre-registered client.</summary>
+/// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder, where the place
+/// keeps the address it accepts, the HTML projection, first run's gate, the delegated agent door, and what every start
+/// makes sure of: the roles, first run, the pre-registered client and the Offers of an address.</summary>
 public sealed class TangentModule : KoanModule
 {
-    /// <summary>The key Koan reads the base URL from. A Tangent Space always has one: every absolute link derives from
-    /// it, so Koan's request-derived posture is never enough here.</summary>
+    /// <summary>The key Koan reads a configured base URL from, which wins over the address the place accepted
+    /// (<see cref="PlaceAddress"/>). A path under a host is configured here, since an accepted address is an origin.</summary>
     public const string BaseUrlKey = "Koan:Web:ApplicationUrl";
 
     public override void Register(IServiceCollection services)
@@ -35,9 +34,10 @@ public sealed class TangentModule : KoanModule
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
                 "Tangent:DataFolder must name a folder.");
 
-        services.AddOptions<KoanWebOptions>()
-            .Validate(options => !string.IsNullOrWhiteSpace(options.ApplicationUrl),
-                $"{BaseUrlKey} must be set to the base URL the Tangent Space answers at: scheme, host and an optional path.");
+        // The address the place accepts lives on its row; Koan reads it before the host serves.
+        services.AddSingleton<PlaceAddress>();
+        services.AddSingleton<IApplicationUrlStore>(provider => provider.GetRequiredService<PlaceAddress>());
+        services.AddSingleton<Offers.AddressOffers>();
 
         services.AddOptions<SqliteOptions>()
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((sqlite, tangent, environment) =>
@@ -87,6 +87,7 @@ public sealed class TangentModule : KoanModule
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);
         await Delegates.DelegateClient.Seed(services, ct);
+        services.GetRequiredService<Offers.AddressOffers>().Start();
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 
@@ -97,7 +98,7 @@ public sealed class TangentModule : KoanModule
         var addresses = services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
         services.GetRequiredService<ILogger<TangentModule>>().LogInformation(
             "Tangent Space at {BaseUrl}; listening on {Addresses}; data folder {DataFolder}",
-            services.GetRequiredService<KoanWebBaseUrl>().Configured,
+            services.GetRequiredService<KoanWebBaseUrl>().Current ?? "each request's own origin",
             string.Join(" ", addresses),
             options.DataFolderPath(contentRoot));
     }

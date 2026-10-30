@@ -1,6 +1,9 @@
 # One Tangent Space in a container on 5220, reachable from this machine only, its data folder in the `state`
-# volume, at the address TANGENT_URL names (TANGENT_URL=https://tangent.example docker compose up -d). Back up while
-# it runs, then copy the backup out:
+# volume (docker compose up -d). It needs no address to start: until it has one it answers at the address each request
+# arrives on, the sign-in that sets it up makes that address its own, and an https address it is reached at later is
+# offered to its operator. Behind a reverse proxy on this machine, TANGENT_PROXY names the proxy as the container sees
+# it, the compose network's gateway, so its forwarded scheme and host are believed; TANGENT_URL names the address
+# instead, which then wins. Back up while it runs, then copy the backup out:
 #   docker compose exec tangent /app/Tangent.Server backup /state/backups
 #   docker compose cp tangent:/state/backups ./backups
 # Restore while it is stopped (--replace moves the current data folder aside inside the volume):
@@ -14,9 +17,10 @@ services:
     ports:
       - "127.0.0.1:5220:5220"
     environment:
-      # The https address people reach this Tangent Space at, from TANGENT_URL: atproto sign-in needs one, and in
-      # Production the Tangent Space refuses to start at an http address, so compose names none of its own.
-      Koan__Web__ApplicationUrl: "${TANGENT_URL:?Set TANGENT_URL to the https address people reach this Tangent Space at}"
+      # Empty unless TANGENT_URL or TANGENT_PROXY is set, and an empty value configures nothing. A configured address
+      # is https: in Production atproto sign-in has no http client.
+      Koan__Web__ApplicationUrl: "${TANGENT_URL:-}"
+      Koan__Web__TrustedProxies__0: "${TANGENT_PROXY:-}"
       Tangent__DataFolder: "/state/data"
     volumes:
       - state:/state

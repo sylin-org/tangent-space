@@ -39,7 +39,7 @@ public static partial class Mentions
 
     /// <summary>The participants these Posts mention, by DID, as a page shows them, in one keyed read of at most
     /// <see cref="Limit"/> identities a Post.</summary>
-    public static async Task<IReadOnlyDictionary<string, TopicPage.Mention>> Resolve(IEnumerable<Post> posts, string configured,
+    public static async Task<IReadOnlyDictionary<string, TopicPage.Mention>> Resolve(IEnumerable<Post> posts, string baseUrl,
         CancellationToken ct)
     {
         var ids = posts.SelectMany(post => post.MentionedIds).Distinct(StringComparer.Ordinal).ToList();
@@ -47,7 +47,7 @@ public static partial class Mentions
         return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(participant => participant.Id, participant =>
         {
             var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-            return new TopicPage.Mention(participant.Id, handle, configured + "/p/" + Uri.EscapeDataString(handle));
+            return new TopicPage.Mention(participant.Id, handle, baseUrl + "/p/" + Uri.EscapeDataString(handle));
         }, StringComparer.Ordinal);
     }
 

@@ -19,8 +19,14 @@ export interface TangentSpace {
 
 // Every capture shows this base URL whatever port the server listens on, so captures do not differ by port.
 // It is https, as atproto sign-in needs outside Development; the browser's requests to it are answered by the
-// server's loopback http address through forward().
+// server's loopback http address through forward(), which passes them on as a proxy does, naming the scheme and
+// host they came on. A state that configures no URL declares that proxy, and the place takes the URL from it.
 export const captureBaseUrl = 'https://tangent.localhost'
+
+// The public origin a capture's place is also reached at, which it offers its operator as its address
+// (src/server/Capture/OfferSeedController.cs); once used, the pages link to it, and the browser reaches it as it
+// reaches the base URL.
+export const captureOfferedUrl = 'https://tangent.example.org'
 
 /** Builds the capture host and returns its entry assembly, or returns the published server it is given. The capture
  *  host is the server with Koan's test connector, which only TangentCaptureHost adds, built into a folder of its
@@ -41,9 +47,10 @@ export function resolveServer(root: string, published?: string): string {
 }
 
 /** The base URL a Tangent Space states for itself before first run: the door its first-run resource links to, asked
- *  for as JSON at the given address, without the door's closing slash. */
-export async function statedBaseUrl(door: URL): Promise<URL> {
-  const response = await fetch(door, { headers: { accept: 'application/json' } })
+ *  for as JSON at the given address, through the capture's proxy when the request is for `through`, without the door's
+ *  closing slash. */
+export async function statedBaseUrl(door: URL, through?: URL): Promise<URL> {
+  const response = await fetch(door, { headers: { accept: 'application/json', ...(through ? forwarded(through) : {}) } })
   if (!response.ok) throw new Error(`${door} answered ${response.status} ${response.statusText}.`)
   const { door: stated } = (await response.json()) as { door?: unknown }
   if (typeof stated !== 'string') throw new Error(`${door} did not answer as the door of a Tangent Space.`)
@@ -68,7 +75,10 @@ export async function startTangentSpace(server: string, settings: Readonly<Recor
   // connector's token endpoint against that variable, where port 0 is no address to call.
   const environment: Record<string, string> = { ...(process.env as Record<string, string>) }
   delete environment.ASPNETCORE_URLS
-  for (const [key, value] of Object.entries(all)) environment[key.replaceAll(':', '__')] = value
+  // An empty setting is one the state leaves unset, whatever the environment says.
+  for (const [key, value] of Object.entries(all))
+    if (value === '') delete environment[key.replaceAll(':', '__')]
+    else environment[key.replaceAll(':', '__')] = value
 
   const listen = '--urls=http://127.0.0.1:0'
   const [command, args] = server.toLowerCase().endsWith('.dll') ? ['dotnet', [server, listen]] : [server, [listen]]
@@ -111,14 +121,15 @@ export async function startTangentSpace(server: string, settings: Readonly<Recor
       new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('The Tangent Space did not listen within a minute.')), 60_000))),
     ]).finally(() => clearTimeout(timer))
 
-    // The address answers as this run's Tangent Space: its door states the base URL this run configured.
-    const baseUrl = new URL(all['Koan:Web:ApplicationUrl'])
+    // The address answers as this run's Tangent Space: its door states the base URL this run configured, or, where it
+    // configures none, the one its proxy names.
+    const baseUrl = new URL(all['Koan:Web:ApplicationUrl'] || captureBaseUrl)
     const door = new URL(doorOf(baseUrl).pathname, listening)
     let stated: URL | undefined
     while (!stated) {
       if (ended) throw new Error('The Tangent Space exited before its door answered.')
       try {
-        stated = await statedBaseUrl(door)
+        stated = await statedBaseUrl(door, baseUrl)
       } catch (failure) {
         if (Date.now() > deadline) throw failure
         await new Promise((wait) => setTimeout(wait, 200))
@@ -139,11 +150,17 @@ export interface Forwarded {
   body: Buffer
 }
 
-/** Sends a request the browser made to the base URL to the address the Tangent Space listens on, as it came,
+/** The headers a proxy adds for a request that came to `url`: the scheme and host it came on. The Tangent Space believes
+ *  them only where a state declares the loopback proxy (`Koan:Web:TrustedProxies`). */
+export function forwarded(url: URL): Record<string, string> {
+  return { 'x-forwarded-proto': url.protocol.replace(/:$/, ''), 'x-forwarded-host': url.host }
+}
+
+/** Sends a request the browser made to the base URL to the address the Tangent Space listens on, as a proxy does,
  *  and answers with what the server answered, redirects included, for the browser to follow itself. */
 export function forward(listening: URL, url: URL, method: string, headers: Record<string, string>, body?: Buffer): Promise<Forwarded> {
   const target = new URL(url.pathname + url.search, listening)
-  const sent: Record<string, string> = { ...headers }
+  const sent: Record<string, string> = { ...headers, ...forwarded(url) }
   delete sent.host
   return new Promise((answer, fail) => {
     const outgoing = send(target, { method, headers: sent }, (response) => {
