@@ -29,6 +29,9 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>The refusal a description outside the rule meets.</summary>
     public const string DescriptionRule = "Describe the Tangent Space in at most 300 characters.";
 
+    /// <summary>The refusal an admission other than join or apply meets.</summary>
+    public const string AdmissionRule = "A newcomer joins at once or applies and waits: choose join or apply.";
+
     /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
     public const string PlainName = "Tangent Space";
 
@@ -102,7 +105,7 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>Who may read: anyone, or participants the place admitted.</summary>
     public Audience Audience { get; set; } = Audience.Public;
 
-    /// <summary>How a participant becomes a member of a private place, or of a members-only Tangent.</summary>
+    /// <summary>How a newcomer arrives: joining at once, or applying and waiting until someone admits them.</summary>
     public Admission Admission { get; set; } = Admission.Join;
 
     /// <summary>Whether a newly admitted participant's Posts wait for approval.</summary>
@@ -112,15 +115,17 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public Slots Slots { get; set; } = new();
 
-    /// <summary>Renames and describes the place, a change to the row, or refuses with <see cref="NameRule"/> or
-    /// <see cref="DescriptionRule"/>; both are kept trimmed. Answers whether anything changed.</summary>
-    public bool Change(string name, string description)
+    /// <summary>Renames and describes the place and sets how a newcomer arrives, a change to the row, or refuses with
+    /// <see cref="NameRule"/> or <see cref="DescriptionRule"/>; the name and the description are kept trimmed. Answers
+    /// whether anything changed.</summary>
+    public bool Change(string name, string description, Admission admission)
     {
         var named = Named(name);
         var described = description.Trim();
         if (described.Length > DescriptionLimit) throw new Refusal(DescriptionRule);
-        if (Name == named && Description == described) return false;
-        (Name, Description) = (named, described);
+        if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
+        if (Name == named && Description == described && Admission == admission) return false;
+        (Name, Description, Admission) = (named, described, admission);
         Version = checked(Version + 1);
         return true;
     }

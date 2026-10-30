@@ -83,8 +83,8 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         var place = participant is null ? null : await Capabilities.Load(personId, null, null, ct);
         var role = place is null ? null : Roles.Word(place.RoleIds);
         var signOut = address + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(pathBase + Path);
-        var settings = place is not null && place.Holds(Bit.ManageSpace) && await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null
-            ? address + TangentSpaceSettingsController.Path
+        var settings = place is not null && await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null
+            ? TangentSpaceSettingsController.Entry(place, address)
             : null;
         return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut, settings);
     }

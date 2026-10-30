@@ -12,7 +12,7 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
 
 /// <summary>Who is signed in, as the account menu shows them: their id, the name to show, their handle, the highest role they
 /// hold where they hold one, their avatar where their profile has one, where they sign out, coming back to the page
-/// they are on, and the place's settings, for one who holds <c>ManageSpace</c>.</summary>
+/// they are on, and the place's settings, for one who holds <c>ManageSpace</c> or <c>ManageStanding</c>.</summary>
 public sealed record Who(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
 
 /// <summary>One step of the path bar. The last crumb is the page itself and has no address. A crumb with a

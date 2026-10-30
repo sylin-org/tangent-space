@@ -228,7 +228,8 @@ public sealed class TangentPageTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
-        await Given.AParticipant(tangentSpace, "did:plc:newcomer", [], ct: Cancellation);
+        // An applicant: signed in, reading, and holding no verb but View.
+        await Given.AParticipant(tangentSpace, "did:plc:newcomer", [], Standing.Applied, Cancellation);
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
         using var newcomer = new Browser(tangentSpace);

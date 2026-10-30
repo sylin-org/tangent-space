@@ -82,10 +82,13 @@ public sealed class OfferTests
         await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var release = new TaskCompletionSource();
-        var held = writer.Send(new Hold(release.Task), Cancellation);
+        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = writer.Send(new Hold(release.Task, running), Cancellation);
+        // The writer runs the held command before the queue is filled, so no slot opens once the origin arrives.
+        await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
         var queued = new List<Task<Outcome<bool>>>();
         while (queued.Count <= WriteLoop.QueueBound && writer.TrySend(new Hold(Task.CompletedTask)) is { } sent) queued.Add(sent);
-        Assert.InRange(queued.Count, WriteLoop.QueueBound - 1, WriteLoop.QueueBound);
+        Assert.Equal(WriteLoop.QueueBound, queued.Count);
 
         // The request that brings the origin goes on at once, and its offer is not queued behind the writer.
         using (var bounded = CancellationTokenSource.CreateLinkedTokenSource(Cancellation))
@@ -485,10 +488,13 @@ public sealed class OfferTests
     }
 
     /// <summary>A command that keeps the writer busy until <see cref="Until"/> completes, writing nothing.</summary>
-    private sealed record Hold(Task Until) : ICommand<bool>
+    /// <summary>Holds the writer until <paramref name="Until"/> completes, saying when it began through
+    /// <paramref name="Running"/>.</summary>
+    private sealed record Hold(Task Until, TaskCompletionSource? Running = null) : ICommand<bool>
     {
         public async Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct)
         {
+            Running?.TrySetResult();
             await Until;
             return new Outcome<bool>.Done(true);
         }

@@ -15,7 +15,7 @@ public sealed record FirstArrival(string PersonId, string Handle, DateTimeOffset
         if (await Participant.Get(PersonId, ct) is { } existing) return new Outcome<Participant>.Done(existing);
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var participant = Participant.Arrive(PersonId, Handle, space.Admission);
+        var participant = Participant.Arrive(PersonId, Handle, space.Admission, At);
         await participant.Save(ct);
         await Event.Next(sequences, EventKind.StandingChanged, At ?? DateTimeOffset.UtcNow,
             actorId: participant.Id, targetId: participant.Id).Save(ct);

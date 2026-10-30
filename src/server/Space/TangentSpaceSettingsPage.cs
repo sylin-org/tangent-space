@@ -28,6 +28,6 @@ public sealed record TangentSpaceSettingsPage(
 /// <summary>One section of the place's settings: its name, its address, and whether it is the one the page shows.</summary>
 public sealed record SettingsSection(string Name, string Address, bool Current);
 
-/// <summary>The place as a write of its settings leaves it, for an agent: its name and description, its door, its
-/// settings, and what the writer <see cref="Can"/> do in it.</summary>
-public sealed record WrittenTangentSpace(string Name, string Description, string Door, string Settings, IReadOnlyList<string> Can);
+/// <summary>The place as a write of its settings leaves it, for an agent: its name and description, its admission
+/// (<c>join</c> or <c>apply</c>), its door, its settings, and what the writer <see cref="Can"/> do in it.</summary>
+public sealed record WrittenTangentSpace(string Name, string Description, string Admission, string Door, string Settings, IReadOnlyList<string> Can);
