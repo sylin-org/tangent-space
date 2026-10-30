@@ -8,8 +8,9 @@ namespace Tangent.Participants;
 
 /// <summary>At every sign-in, after Koan has reconciled the person: a person's first sign-in is their first arrival,
 /// which creates their participant through the writer; a returning participant takes the handle the connector
-/// verified at this sign-in. Either way, once that commits, a participant who stands admitted joins the member role
-/// where they lack it (<see cref="MemberRole"/>), and the profile job is submitted when the profile is empty or older than
+/// verified at this sign-in. Either way, once that commits, a participant who stands admitted now, a timeout that has
+/// ended among them, joins the member role where they lack it (<see cref="MemberRole"/>); the row keeps the standing it
+/// holds, which reads as admitted everywhere once a timeout ends. The profile job is submitted when the profile is empty or older than
 /// its lifetime. This is where Tangent learns of a first arrival. Koan discovers it in the sign-in lifecycle. No step
 /// fails the sign-in: each is logged and the next sign-in tries again.</summary>
 public sealed class ParticipantSignIn(WriteLoop writer, RoleCollection roles, ILogger<ParticipantSignIn> logger) : IKoanAuthFlowHandler

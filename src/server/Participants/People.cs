@@ -93,13 +93,13 @@ public static class People
     /// (<see cref="Bit.ManageRoles"/>), the target being in <paramref name="targetRoles"/>; otherwise why not, the first
     /// of: the verb's gate in the place; the target is the reader; an applicant, decided among the applications; the
     /// operator, whom no one changes; a target whose highest seeded role is not below the reader's, the operator standing
-    /// above every role.</summary>
+    /// above every role. The target's standing is read as it stands at <paramref name="now"/>.</summary>
     public static string? Refusal(Capabilities actor, string actorId, Participant target, IReadOnlyCollection<string> targetRoles,
-        TangentSpace space, Bit verb)
+        TangentSpace space, Bit verb, DateTimeOffset now)
     {
         if (actor.Gate(verb) is { } gate) return gate;
         if (target.Id == actorId) return Themselves;
-        if (target.Standing is Standing.Applied or Standing.Declined) return Participant.NotAdmitted;
+        if (target.StandingAt(now) is Standing.Applied or Standing.Declined) return Participant.NotAdmitted;
         if (target.Id == space.OperatorId) return Operator;
         return Height(actorId, actor.RoleIds, space) > Height(target.Id, targetRoles, space) ? null : NotBelow;
     }
@@ -130,7 +130,7 @@ public static class People
     {
         if (actorId is null) return Offer.None;
         var can = new List<string>();
-        if (Refusal(actor, actorId, target, targetRoles, space, Bit.ManageStanding) is null)
+        if (Refusal(actor, actorId, target, targetRoles, space, Bit.ManageStanding, now) is null)
         {
             can.AddRange(target.StandingAt(now) switch
             {
@@ -143,7 +143,7 @@ public static class People
 
         var give = new List<string>();
         var take = new List<string>();
-        if (Refusal(actor, actorId, target, targetRoles, space, Bit.ManageRoles) is null)
+        if (Refusal(actor, actorId, target, targetRoles, space, Bit.ManageRoles, now) is null)
         {
             var height = Height(target.Id, targetRoles, space);
             foreach (var (word, key) in Given)
@@ -166,8 +166,8 @@ public static class People
     /// (<see cref="Bit.ManageRoles"/>) by <paramref name="actorId"/>: the place exists for the actor, who holds
     /// <see cref="Bit.View"/> on it, or the change answers that no place is here; the actor holds the verb, or is refused
     /// with its gate; the participant has arrived, or the change answers <see cref="NoOne"/>; then
-    /// <see cref="Refusal"/>.</summary>
-    public static async Task<Judged> Judge(string actorId, string participantId, Bit verb, CancellationToken ct)
+    /// <see cref="Refusal"/>, with their standing as it stands at <paramref name="now"/>.</summary>
+    public static async Task<Judged> Judge(string actorId, string participantId, Bit verb, DateTimeOffset now, CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return new Judged(null, null, null, null, Applications.NoPlace);
         var actor = await Capabilities.Load(actorId, null, null, ct);
@@ -176,7 +176,7 @@ public static class People
         if (string.IsNullOrWhiteSpace(participantId) || await Participant.Get(participantId, ct) is not { } target)
             return new Judged(space, actor, null, null, NoOne);
         var bag = await AppHost.GetRequiredService<RoleCollection>(nameof(People)).Bag(target.Id, authenticated: true, ct);
-        return new Judged(space, actor, target, bag, Refusal(actor, actorId, target, bag.Roles, space, verb));
+        return new Judged(space, actor, target, bag, Refusal(actor, actorId, target, bag.Roles, space, verb, now));
     }
 
     /// <summary>One change of standing, by <paramref name="actorId"/>, judged by <see cref="Judge"/>: where
@@ -188,7 +188,7 @@ public static class People
         Func<Participant, DateTimeOffset, bool> change, DateTimeOffset? at, CancellationToken ct)
     {
         var now = at ?? DateTimeOffset.UtcNow;
-        var judged = await Judge(actorId, participantId, Bit.ManageStanding, ct);
+        var judged = await Judge(actorId, participantId, Bit.ManageStanding, now, ct);
         if (judged.Refusal is { } refusal) return new Outcome<Participant>.Refused(refusal);
         var target = judged.Target!;
         var before = target.StandingAt(now);

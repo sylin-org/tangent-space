@@ -76,12 +76,13 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     }
 
     /// <summary>Admits an applicant, waiting or declined: they stand admitted and their application is closed. False,
-    /// with nothing changed, for one already admitted; a timed-out or banned participant is refused with
-    /// <see cref="NotAnApplication"/>.</summary>
-    public bool Admit()
+    /// with nothing changed, for one who stands admitted at <paramref name="now"/>, a timeout that has ended among them;
+    /// a timed-out or banned participant is refused with <see cref="NotAnApplication"/>.</summary>
+    public bool Admit(DateTimeOffset now)
     {
-        if (Standing == Standing.Admitted) return false;
-        if (Standing is not (Standing.Applied or Standing.Declined)) throw new Refusal(NotAnApplication);
+        var standing = StandingAt(now);
+        if (standing == Standing.Admitted) return false;
+        if (standing is not (Standing.Applied or Standing.Declined)) throw new Refusal(NotAnApplication);
         Standing = Standing.Admitted;
         AppliedAt = null;
         return true;
@@ -89,20 +90,23 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
 
     /// <summary>Declines a waiting application: the applicant keeps reading what a visitor reads, the application stays
     /// listed as declined, and a later <see cref="Admit"/> reverses it. False, with nothing changed, for one already
-    /// declined; anyone else is refused with <see cref="NotAnApplication"/>.</summary>
-    public bool Decline()
+    /// declined; anyone else is refused with <see cref="NotAnApplication"/>, read at <paramref name="now"/>.</summary>
+    public bool Decline(DateTimeOffset now)
     {
-        if (Standing == Standing.Declined) return false;
-        if (Standing != Standing.Applied) throw new Refusal(NotAnApplication);
+        var standing = StandingAt(now);
+        if (standing == Standing.Declined) return false;
+        if (standing != Standing.Applied) throw new Refusal(NotAnApplication);
         Standing = Standing.Declined;
         return true;
     }
 
-    /// <summary>The standing in force at <paramref name="now"/>: a timeout whose end has come reads as admitted.</summary>
+    /// <summary>The standing in force at <paramref name="now"/>, which every decision about the participant reads: a
+    /// timeout whose end has come reads as admitted, and the row keeps it as it was written.</summary>
     public Standing StandingAt(DateTimeOffset now)
         => Standing == Standing.TimedOut && StandingUntil is { } until && until <= now ? Standing.Admitted : Standing;
 
-    /// <summary>Times the participant out until <paramref name="until"/>: they read and nothing more until then. False,
+    /// <summary>Times the participant out until <paramref name="until"/>: until then they read and report, and post,
+    /// reply and start nothing. False,
     /// with nothing changed, where they are already timed out until that instant; an applicant is refused with
     /// <see cref="NotAdmitted"/>, a banned participant with <see cref="BannedFirst"/>, and an end not after
     /// <paramref name="now"/> with <see cref="TimeoutEnds"/>.</summary>

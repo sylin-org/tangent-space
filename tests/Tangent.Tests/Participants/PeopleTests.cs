@@ -61,11 +61,16 @@ public sealed class PeopleTests
 
     private static async Task<long> Head() => (await Event.All(Cancellation)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
 
+    private static async Task<bool> IsMember(TangentSpaceFixture tangentSpace, string id)
+        => (await tangentSpace.Services.GetRequiredService<RoleCollection>().Bag(id, authenticated: true, Cancellation)).InRole(Roles.Member);
+
     [Fact]
     public async Task A_moderator_times_a_member_out_who_reads_and_posts_nothing_until_it_is_lifted_or_passes_and_their_door_says_so()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         var writer = await Place(tangentSpace);
+        var moderators = Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation)).Result;
+        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
         using var mo = await SignedIn(tangentSpace, Mo);
         using var ada = await SignedIn(tangentSpace, Ada);
         var path = PeopleController.Path;
@@ -98,10 +103,15 @@ public sealed class PeopleTests
         Assert.Equal((EventKind.StandingChanged, Mo, Ada, Standing.TimedOut, Standing.Admitted),
             (logged.Kind, logged.ActorId, logged.TargetId, logged.Standing, logged.Before));
 
-        // Timed out, she reads and posts nothing, and her door says until when.
+        // Timed out, she reads and reports, posts nothing, and her door says until when.
         Assert.Equal([nameof(Bit.View)], await Can(ada, "/t/" + Workshop));
         var refused = await StartIn(ada, "While timed out");
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut), (refused.Status, refused.Gate));
+        var reportAction = PostPath(topic, topic) + "/report";
+        var reportId = Tids.Mint();
+        Assert.Equal(HttpStatusCode.OK, (await Json(ada, reportAction, reportAction, new { id = reportId, body = "This needs a look." })).Status);
+        var report = (await Post.Get(reportId, Cancellation))!;
+        Assert.Equal((moderators.Id, Ada, topic.Id), (report.TangentId, report.AuthorId, report.OriginId));
         var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
         Assert.Equal(Capabilities.TimedOut, door.Json.GetProperty("gate").GetString());
         Assert.Equal(row.StandingUntil!.Value.ToUnixTimeSeconds(), door.Json.GetProperty("until").GetDateTimeOffset().ToUnixTimeSeconds());
@@ -227,6 +237,36 @@ public sealed class PeopleTests
     }
 
     private static (HttpStatusCode, string?) Refusal(Answered answered) => (answered.Status, answered.Gate);
+
+    [Fact]
+    public async Task A_participant_whose_timeout_has_ended_reads_as_admitted_in_every_decision_and_their_next_sign_in_puts_back_a_missing_member_role()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        // Timed out without the member role, whose write never happened, until five minutes ago.
+        const string cy = "did:plc:cy4people";
+        var ended = new Participant { Id = cy, Handle = "cy4people.example", Standing = Standing.TimedOut, StandingUntil = DateTimeOffset.UtcNow.AddMinutes(-5) };
+        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(ended), Cancellation));
+        Assert.False(await IsMember(tangentSpace, cy));
+
+        using var signedIn = await SignedIn(tangentSpace, cy);
+
+        Assert.True(await IsMember(tangentSpace, cy));
+        Assert.Equal(HttpStatusCode.Created, (await StartIn(signedIn, "Back after it ended")).Status);
+        // The row keeps the timeout as it was written; every reading of it says admitted.
+        Assert.Equal(Standing.TimedOut, (await Participant.Get(cy, Cancellation))!.Standing);
+        using var mo = await SignedIn(tangentSpace, Mo);
+        var row = Row((await Send(mo.Client, HttpMethod.Get, PeopleController.Path, json: true)).Json, cy);
+        Assert.Equal("admitted", row.GetProperty("standing").GetString());
+        Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(row, "can"));
+        var events = await Head();
+        var lifted = await Json(mo, PeopleController.Path, PeopleController.LiftPath, new { participant = cy });
+        Assert.Equal((HttpStatusCode.OK, "admitted"), (lifted.Status, lifted.Json.GetProperty("standing").GetString()));
+        var admitted = await Json(mo, PeopleController.Path, ApplicationsController.AdmitPath, new { participant = cy });
+        Assert.Equal((HttpStatusCode.OK, "admitted"), (admitted.Status, admitted.Json.GetProperty("standing").GetString()));
+        Assert.Equal(events, await Head());
+        Assert.False((await Send(signedIn.Client, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("gate", out _));
+    }
 
     [Fact]
     public async Task An_administrator_makes_a_member_a_moderator_who_then_times_out_a_member_and_takes_it_back_and_the_operator_alone_takes_an_administrators_role()

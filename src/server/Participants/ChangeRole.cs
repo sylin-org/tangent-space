@@ -57,7 +57,7 @@ public sealed record ChangeRole(string ActorId, string ParticipantId, string Rol
     /// holds what it grants.</summary>
     private async Task<People.Judged> Judge(CancellationToken ct)
     {
-        var judged = await People.Judge(ActorId, ParticipantId, Bit.ManageRoles, ct);
+        var judged = await People.Judge(ActorId, ParticipantId, Bit.ManageRoles, At ?? DateTimeOffset.UtcNow, ct);
         if (judged.Refusal is not null) return judged;
         if (People.Given.All(given => given.Key != Role)) return judged with { Refusal = People.NotARole };
         var role = await AppHost.GetRequiredService<RoleCollection>(nameof(ChangeRole)).Get(Role, ct);

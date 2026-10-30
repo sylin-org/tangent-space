@@ -32,7 +32,7 @@ public static class Applications
     /// one <see cref="EventKind.StandingChanged"/> with the actor, the applicant as its target, the standing it left
     /// them with and the one they held before; one that changes nothing writes nothing.</summary>
     public static async Task<Outcome<Participant>> Decide(Sequences sequences, string actorId, string participantId,
-        Func<Participant, bool> decide, DateTimeOffset? at, CancellationToken ct)
+        Func<Participant, DateTimeOffset, bool> decide, DateTimeOffset? at, CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is null) return new Outcome<Participant>.Refused(NoPlace);
         var capabilities = await Capabilities.Load(actorId, null, null, ct);
@@ -41,10 +41,11 @@ public static class Applications
         if (string.IsNullOrWhiteSpace(participantId) || await Participant.Get(participantId, ct) is not { } participant)
             return new Outcome<Participant>.Refused(NoApplicant);
 
-        var before = participant.Standing;
-        if (!decide(participant)) return new Outcome<Participant>.Done(participant);
+        var now = at ?? DateTimeOffset.UtcNow;
+        var before = participant.StandingAt(now);
+        if (!decide(participant, now)) return new Outcome<Participant>.Done(participant);
         await participant.Save(ct);
-        await Event.Next(sequences, EventKind.StandingChanged, at ?? DateTimeOffset.UtcNow, actorId: actorId, targetId: participant.Id,
+        await Event.Next(sequences, EventKind.StandingChanged, now, actorId: actorId, targetId: participant.Id,
             standing: participant.Standing, before: before).Save(ct);
         return new Outcome<Participant>.Done(participant);
     }

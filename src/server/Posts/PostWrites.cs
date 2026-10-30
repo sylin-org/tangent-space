@@ -247,7 +247,7 @@ public static class PostWrites
         Capabilities.SignIn => "Sign in to write here.",
         Capabilities.Apply => "Your application is waiting: you can write here once someone admits you.",
         Capabilities.Declined => "Your application was declined, so you read here and don’t write.",
-        Capabilities.TimedOut => "You’re timed out: you can read here, and write again once it ends.",
+        Capabilities.TimedOut => "You’re timed out: you can read and report here, and post again once it ends.",
         Capabilities.Locked => "This topic is locked, so no one replies in it.",
         Capabilities.Removed => "This post is removed, so nothing changes it now.",
         Capabilities.NotYours => "Only its author, or a moderator, can change this post.",

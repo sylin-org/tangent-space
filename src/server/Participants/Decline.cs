@@ -9,5 +9,5 @@ namespace Tangent.Participants;
 public sealed record Decline(string ActorId, string ParticipantId, DateTimeOffset? At = null) : ICommand<Participant>
 {
     public Task<Outcome<Participant>> Run(Sequences sequences, CancellationToken ct)
-        => Applications.Decide(sequences, ActorId, ParticipantId, participant => participant.Decline(), At, ct);
+        => Applications.Decide(sequences, ActorId, ParticipantId, (participant, now) => participant.Decline(now), At, ct);
 }
