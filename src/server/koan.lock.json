@@ -75,6 +75,10 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Web.OpenGraph",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Web.Sse",
       "version": "1.0"
     }
@@ -111,6 +115,10 @@
     {
       "kind": "project",
       "id": "Koan.Web.Auth.Server"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Web.OpenGraph"
     },
     {
       "kind": "project",

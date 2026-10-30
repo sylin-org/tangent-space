@@ -85,6 +85,11 @@ public static partial class Mentions
     private static Func<string, string?> Words(IReadOnlyDictionary<string, TangentPage.Author> people)
         => target => Identity(target) is { } did && people.TryGetValue(did, out var person) ? "@" + person.Handle : null;
 
+    /// <summary>A Post's body at a version as plain text on one line with its mentions left out, so it names no one, and
+    /// no punctuation stranded where one stood.</summary>
+    public static string Unnamed(string postId, long version, string body)
+        => Stranded().Replace(RenderedBodies.For(postId, version, body).PlainText(_ => ""), "");
+
     /// <summary>Appends, inside the running command, one <see cref="EventKind.Mention"/> per participant
     /// <paramref name="post"/> mentions that <paramref name="before"/> — the identities it mentioned before an edit,
     /// empty for a new Post — did not, targeted at them: not the actor, not a DID that is no participant's, and not a
@@ -198,6 +203,9 @@ public static partial class Mentions
         return !Rune.IsLetterOrDigit(rune) && Rune.GetUnicodeCategory(rune) is not
             (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark);
     }
+
+    [GeneratedRegex(@"^[\s,.;:!?]+|\s+(?=[,.;:!?])")]
+    private static partial Regex Stranded();
 
     [GeneratedRegex(@"^did:[a-z]+:[A-Za-z0-9._:%-]+$")]
     private static partial Regex Did();

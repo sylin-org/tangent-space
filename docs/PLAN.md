@@ -119,6 +119,12 @@ Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1
 
 Parallel once slice 1 lands: 2.1 and 2.2 together; then 2.3, 2.4 and 2.5; then 2.6 and 2.7; 2.8 last.
 
+## Slice 3, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 3.4 Social cards: a page a visitor may read carries a card from what it already read, through Koan's `RenderHead` (WEB-0085) | 2.3, 4.2 | repeat |
+
 ## Slice 4, package by package
 
 | Package | After | Role |

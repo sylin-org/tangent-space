@@ -9,7 +9,8 @@
    stream raises as new ones arrive, and their account opening in the page with their name, handle and role, their
    notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
-   in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. Nothing here is a dialog. *@
+   in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. A page a visitor may
+   read carries in its head the card a link to it previews. Nothing here is a dialog. *@
 <!DOCTYPE html>
 <html lang="en" data-accent="@Accent">
 <head>
@@ -25,6 +26,10 @@
     @foreach (var feed in Frame?.Feeds ?? [])
     {
         <link rel="alternate" type="@feed.Type" title="@feed.Title" href="@feed.Address">
+    }
+    @if (Card is not null)
+    {
+        @((MarkupString)Card)
     }
 </head>
 <body>
@@ -185,6 +190,9 @@ else
 
     /// <summary>Whether the page opens with no server. The components inside it read the same, by this name.</summary>
     [Parameter] public bool Standalone { get; set; }
+
+    /// <summary>The card's head block, already encoded (<see cref="Koan.Web.OpenGraph.IOpenGraphCardRenderer.RenderHead"/>).</summary>
+    [Parameter] public string? Card { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
