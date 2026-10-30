@@ -115,6 +115,7 @@ Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1
 | 2.8 Reports: a Post taken on a tangent into the moderators' Tangent, with the origin | 2.7 | repeat |
 | 2.9 Phone layout for the topic | the polish stage | repeat |
 | 2.10 Mentions a person can type: a typed `@handle` of a participant here becomes their mention when the Post is written | 2.3 | repeat |
+| 2.11 Moderating a Post: a mark on a Post someone else changed, and the author told | 2.2, 6.1 | repeat |
 
 Parallel once slice 1 lands: 2.1 and 2.2 together; then 2.3, 2.4 and 2.5; then 2.6 and 2.7; 2.8 last.
 
