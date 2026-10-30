@@ -67,6 +67,10 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         return true;
     }
 
+    /// <summary>Gives up the handle, which another participant's sign-in verified as theirs; the participant shows their
+    /// DID until their own next sign-in verifies one.</summary>
+    public void HandleTaken() => Handle = "";
+
     /// <summary>Whether the cached profile was captured less than <see cref="Profile.Lifetime"/> before
     /// <paramref name="now"/>.</summary>
     public bool ProfileFresh(DateTimeOffset now) => Profile.CapturedAt is { } captured && now - captured < Profile.Lifetime;

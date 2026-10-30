@@ -36,10 +36,6 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
 
     public const string RevokeSegment = "revoke";
 
-    /// <summary>The most participants read for one handle: a handle moves between accounts, and a row keeps the one it
-    /// was last verified with until that participant signs in again.</summary>
-    private const int HolderRead = 8;
-
     [HttpGet(ProfilePage.Segment + "{handle}")]
     [HttpHead(ProfilePage.Segment + "{handle}")]
     public async Task<IActionResult> Get(string handle, [FromQuery(Name = Before)] string? before, CancellationToken ct)
@@ -134,20 +130,20 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 
-    /// <summary>The participant the address names: by Id where it is a DID; otherwise the participant whose row keeps the
-    /// handle, as written or in lower case, as atproto writes handles, and among rows that still keep a handle another
-    /// account took since, the one whose profile was captured last.</summary>
+    /// <summary>The participant the address names: by Id where it is a DID; otherwise the one participant whose row keeps
+    /// the handle, as written or in lower case, as atproto writes handles. A handle has one holder: the writer records a
+    /// verified handle and takes it from any other row in one command (<see cref="Handles.Release"/>), so one keyed read of
+    /// one row answers.</summary>
     private static async Task<Participant?> Holder(string handle, CancellationToken ct)
     {
         if (handle.Length is 0 or > Mentions.IdentityLimit) return null;
         if (handle.StartsWith("did:", StringComparison.Ordinal)) return await Participant.Get(handle, ct);
         if (handle.Length > Participants.SignIn.HandleLimit) return null;
-        var query = new QueryDefinition { Page = 1, PageSize = HolderRead };
+        var query = new QueryDefinition { Page = 1, PageSize = 1 };
         var rows = await Participant.Query(participant => participant.Handle == handle, query, ct);
         var lower = handle.ToLowerInvariant();
         if (rows.Count == 0 && lower != handle) rows = await Participant.Query(participant => participant.Handle == lower, query, ct);
-        return rows.OrderByDescending(row => row.Profile.CapturedAt ?? DateTimeOffset.MinValue).ThenBy(row => row.Id, StringComparer.Ordinal)
-            .FirstOrDefault();
+        return rows.FirstOrDefault();
     }
 
     /// <summary>The Tangents the reader may view, by slug: every Tangent of the place, at most as many as Koan lets one

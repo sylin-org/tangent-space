@@ -126,6 +126,27 @@ public sealed class ProfileTests
     }
 
     [Fact]
+    public async Task A_handle_verified_at_a_sign_in_is_taken_from_the_participant_who_kept_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = new Browser(tangentSpace);
+        (await ada.SignIn("ada", Ada, Cancellation, handle: "x.example")).Dispose();
+        using var bea = new Browser(tangentSpace);
+        using var visitor = Agent(tangentSpace);
+        Assert.Equal(Ada, (await Send(visitor, HttpMethod.Get, "/p/x.example", json: true)).Json.GetProperty("id").GetString());
+
+        // Ada gave x.example up and has not signed in since; Bea signs in verified as x.example.
+        (await bea.SignIn("bea", Bea, Cancellation, handle: "x.example")).Dispose();
+
+        Assert.Equal(Bea, (await Send(visitor, HttpMethod.Get, "/p/x.example", json: true)).Json.GetProperty("id").GetString());
+        Assert.Equal("", (await Participant.Get(Ada, Cancellation))!.Handle);
+        var byDid = await Send(visitor, HttpMethod.Get, "/p/" + Uri.EscapeDataString(Ada), json: true);
+        Assert.Equal((HttpStatusCode.OK, Ada, BaseUrl + "/p/" + Uri.EscapeDataString(Ada)),
+            (byDid.Status, byDid.Json.GetProperty("handle").GetString(), byDid.Json.GetProperty("address").GetString()));
+    }
+
+    [Fact]
     public async Task Names_on_posts_and_on_the_door_link_to_their_profiles()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
@@ -150,13 +171,18 @@ public sealed class ProfileTests
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
+        // Koan keeps grants that expired; more of them than the profile reads, stored before the live one, leave it listed.
+        for (var index = 0; index < Delegates.Approved.Limit + 10; index++)
+            await new AgentGrant { Subject = Ada, Capability = "mcp:grant:expired:" + index, Resource = BaseUrl, ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) }
+                .Save(Cancellation);
         var bearer = await Delegate(tangentSpace, ada);
         const string own = "/p/" + AdaHandle;
+
+        var grant = Assert.Single(await AgentGrant.Query(row => row.Subject == Ada && row.ExpiresAt > DateTimeOffset.UtcNow, Cancellation));
 
         var mine = await Send(ada.Client, HttpMethod.Get, own, json: true);
         var agents = mine.Json.GetProperty("delegates").GetProperty("agents");
         Assert.Equal(1, agents.GetArrayLength());
-        var grant = Assert.Single(await AgentGrant.Query(row => row.Subject == Ada, Cancellation));
         Assert.Equal(grant.Id, agents[0].GetProperty("id").GetString());
         var approved = agents[0].GetProperty("approved").GetDateTimeOffset();
         Assert.InRange(approved, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(1));
