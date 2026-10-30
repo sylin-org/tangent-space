@@ -66,7 +66,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var root }:
-                return await PostWrites.Written(HttpContext, root, root, PostWrites.Address(Configured(), root.TangentId, root.Slug ?? root.Id, root.Id),
+                return await PostWrites.Written(HttpContext, root, root, PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, root.Id),
                     personId, created: true, ct);
             case Outcome<Post>.Refused { Reason: StartTopic.NoOrigin }:
                 return PostWrites.Absent();
@@ -133,9 +133,9 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         var origin = found.Post!;
         var root = found.Root!;
         var here = found.Rows.For(null);
-        var configured = Configured();
-        var tangentAddress = PostWrites.TangentAddress(configured, found.Tangent.Id);
-        var topicAddress = PostWrites.TopicAddress(configured, found.Tangent.Id, root.Slug ?? root.Id);
+        var baseAddress = BaseAddress();
+        var tangentAddress = PostWrites.TangentAddress(baseAddress, found.Tangent.Id);
+        var topicAddress = PostWrites.TopicAddress(baseAddress, found.Tangent.Id, root.Slug ?? root.Id);
         var address = topicAddress + "/" + Uri.EscapeDataString(origin.Id);
         var back = baseUrl.PathBase + "/t/" + found.Tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + origin.Id + "/" + Segment;
 
@@ -161,10 +161,10 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
             Tid.Mint(DateTimeOffset.UtcNow),
             found.Capabilities.Can,
             gate,
-            personId is null ? configured + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
+            personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
             found.Rows.Space.Name,
-            configured + "/",
-            await PostWrites.Reader(personId, here, configured, back, ct));
+            baseAddress + "/",
+            await PostWrites.Reader(personId, here, baseAddress, back, ct));
     }
 
     /// <summary>The origin's author and the participants its body mentions, in one keyed read, by participant Id.</summary>
@@ -179,6 +179,5 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         }, StringComparer.Ordinal);
     }
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

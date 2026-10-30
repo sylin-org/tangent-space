@@ -68,8 +68,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         {
             case Outcome<Tangent>.Done { Result: var changed }:
                 if (!(await Capabilities.Load(personId, changed.Id, null, ct)).Exists) return await Closed(changed, personId, ct);
-                var address = PostWrites.TangentAddress(Configured(), changed.Id);
-                return await TangentWrites.Written(HttpContext, changed, Configured(), personId, created: false,
+                var address = PostWrites.TangentAddress(BaseAddress(), changed.Id);
+                return await TangentWrites.Written(HttpContext, changed, BaseAddress(), personId, created: false,
                     move is null ? address : address + "/" + TangentWrites.SettingsSegment, ct);
             case Outcome<Tangent>.Refused { Reason: ChangeTangent.NoTangent }:
                 return PostWrites.Absent();
@@ -86,11 +86,11 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
     /// absent to them now, so it says so in a sentence and leads to the door, and says nothing else of the Tangent.</summary>
     private async Task<IActionResult> Closed(Tangent tangent, string? personId, CancellationToken ct)
     {
-        var configured = Configured();
+        var baseAddress = BaseAddress();
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var place = await Capabilities.Load(personId, null, null, ct);
-        return Ok(new TangentClosed(tangent.Name, space.Name, configured + "/",
-            await PostWrites.Reader(personId, place, configured, baseUrl.PathBase + "/", ct)));
+        return Ok(new TangentClosed(tangent.Name, space.Name, baseAddress + "/",
+            await PostWrites.Reader(personId, place, baseAddress, baseUrl.PathBase + "/", ct)));
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again, read afresh,
@@ -125,8 +125,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
     {
         var row = found.Tangent;
         var capabilities = found.Capabilities;
-        var configured = Configured();
-        var address = PostWrites.TangentAddress(configured, row.Id);
+        var baseAddress = BaseAddress();
+        var address = PostWrites.TangentAddress(baseAddress, row.Id);
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentWrites.SettingsSegment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var moderators = space.ModeratorsTangentId == row.Id;
@@ -149,10 +149,10 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
             TangentWrites.ManageGate(capabilities),
             TangentWrites.Kinds,
             moderators ? [] : TangentWrites.Audiences,
-            personId is null ? configured + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
+            personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
-            configured + "/",
-            await PostWrites.Reader(personId, capabilities, configured, here, ct));
+            baseAddress + "/",
+            await PostWrites.Reader(personId, capabilities, baseAddress, here, ct));
     }
 
     /// <summary>The nearest Tangent before or after <paramref name="tangent"/> in the Tangents' order that the reader may
@@ -180,6 +180,5 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         return rows.FirstOrDefault(row => each[row.Id].Exists);
     }
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

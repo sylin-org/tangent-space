@@ -11,7 +11,7 @@ import { storageKey } from '../appearance.ts'
 import { interrupted, onInterrupt } from './interrupt.ts'
 import { referencePackage, renderReference } from './reference.ts'
 import { captureOperator, capturePersona, captureThemes, nearestReadings, referenceVariants, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
-import { doorOf, establish, forward, resolveServer, seed, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
+import { captureOfferedUrl, doorOf, establish, forward, resolveServer, seed, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
 
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const viewportHeight: Record<Width, number> = { 1440: 960, 1024: 768, 390: 844 }
@@ -107,7 +107,10 @@ async function captureScreen(screen: Screen): Promise<string[]> {
       // A running one is asked for where --url says, and its pages link to the base URL it states.
       const pageBase = tangentSpace?.baseUrl ?? new URL(values.url!)
       const baseUrl = tangentSpace?.baseUrl ?? (await statedBaseUrl(doorOf(pageBase)))
-      const args = tangentSpace ? [`--host-resolver-rules=MAP ${baseUrl.host} ${tangentSpace.listening.host}`] : []
+      const offered = new URL(captureOfferedUrl)
+      const args = tangentSpace
+        ? [`--host-resolver-rules=MAP ${baseUrl.host} ${tangentSpace.listening.host}, MAP ${offered.host} ${tangentSpace.listening.host}`]
+        : []
       const { browser, close } = await launch(args)
       try {
         for (const state of states)
@@ -132,7 +135,8 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
   if (state.signedIn && !listening) throw new Error(`The ${state.name} state signs in through the test connector; capture it without --url.`)
   const target = new URL(pageBase.pathname.replace(/\/$/, '') + path, pageBase)
   for (const [key, value] of Object.entries(state.query ?? {})) target.searchParams.set(key, value)
-  const tangentSpace = new Set([pageBase.origin, baseUrl.origin])
+  // A started Tangent Space also answers at the origin it offers, which its pages link to once it is used.
+  const tangentSpace = new Set([pageBase.origin, baseUrl.origin, ...(listening ? [new URL(captureOfferedUrl).origin] : [])])
   for (const width of widths)
     for (const theme of captureThemes) {
       if (state.reseed && listening) await seed(listening, baseUrl, state.reseed)

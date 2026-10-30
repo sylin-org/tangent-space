@@ -21,6 +21,7 @@ The tree is being built slice by slice against [the brief](docs/BRIEF.md) on [Ko
 | [Architecture](docs/ARCHITECTURE.md) | The shape: one writer, one log, one renderer, what Koan carries |
 | [ADR 0014](docs/adr/0014-tangent-beside-your-site.md) | The anchor decision and what earlier records still bind |
 | [ADR 0015](docs/adr/0015-the-spine.md) | The spine |
+| [Journeys](docs/JOURNEYS.md) | What a person or an agent meets, step by step, as it stands |
 | [Feature map](docs/FEATURES.md) | The slices, in order |
 | [Development plan](docs/PLAN.md) | Roles, models, effort, parallel tracks and gates |
 | [Harvest map](docs/HARVEST.md) | What is carried from the proof of concept, and how |

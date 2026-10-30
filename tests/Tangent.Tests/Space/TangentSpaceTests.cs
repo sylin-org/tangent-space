@@ -1,11 +1,10 @@
 using Koan.Web.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Tangent.Space;
 
-/// <summary>The first start: the data folder, no row until first run, and the base URL as Koan holds it.</summary>
+/// <summary>The first start: the data folder, no row until first run, and a configured base URL as Koan holds it.</summary>
 public sealed class TangentSpaceTests
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
@@ -39,17 +38,5 @@ public sealed class TangentSpaceTests
             ct: Cancellation));
 
         Assert.StartsWith($"{TangentModule.BaseUrlKey} must be the application's public URL", failure.Message);
-    }
-
-    [Fact]
-    public async Task A_missing_base_url_fails_start_naming_the_key()
-    {
-        var failure = await Assert.ThrowsAsync<OptionsValidationException>(() => TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { [TangentModule.BaseUrlKey] = "" },
-            ct: Cancellation));
-
-        Assert.Contains(
-            $"{TangentModule.BaseUrlKey} must be set to the base URL the Tangent Space answers at: scheme, host and an optional path.",
-            failure.Failures);
     }
 }

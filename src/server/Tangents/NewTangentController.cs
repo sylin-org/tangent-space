@@ -68,8 +68,8 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
             switch (outcome)
             {
                 case Outcome<Tangent>.Done { Result: var tangent }:
-                    return await TangentWrites.Written(HttpContext, tangent, Configured(), personId, created: true,
-                        PostWrites.TangentAddress(Configured(), tangent.Id), ct);
+                    return await TangentWrites.Written(HttpContext, tangent, BaseAddress(), personId, created: true,
+                        PostWrites.TangentAddress(BaseAddress(), tangent.Id), ct);
                 case Outcome<Tangent>.Refused { Reason: CreateTangent.NoPlace }:
                     return PostWrites.Absent();
                 case Outcome<Tangent>.Refused { Reason: var reason }:
@@ -125,11 +125,11 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
 
     private async Task<NewTangentPage> Page(Capabilities place, string? personId, CancellationToken ct)
     {
-        var configured = Configured();
+        var baseAddress = BaseAddress();
         var here = baseUrl.PathBase + Route;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         return new NewTangentPage(
-            configured + Route,
+            baseAddress + Route,
             FormToken.For(HttpContext),
             place.Can,
             place.Gate(Bit.ManageSpace),
@@ -139,12 +139,11 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
             TangentWrites.Word(Audience.Public),
             TangentWrites.Kinds,
             TangentWrites.Audiences,
-            personId is null ? configured + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
+            personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
-            configured + "/",
-            await PostWrites.Reader(personId, place, configured, here, ct));
+            baseAddress + "/",
+            await PostWrites.Reader(personId, place, baseAddress, here, ct));
     }
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

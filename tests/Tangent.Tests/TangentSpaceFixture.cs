@@ -15,8 +15,8 @@ namespace Tangent;
 
 /// <summary>One Tangent Space under test: the application's own composition — <c>AddKoan()</c> over the
 /// server's appsettings.json at <see cref="DefaultBaseUrl"/>, so <see cref="TangentModule"/> and its options are the ones that run, and
-/// Koan's pipeline serves under the configured base URL — in the Production environment the server runs in, on Kestrel at a free
-/// loopback port, with a new temp folder as its content root, so the data folder and the database land
+/// Koan's pipeline serves under the configured base URL — in the Production environment the server runs in unless the
+/// test names another, on Kestrel at a free loopback port, with a new temp folder as its content root, so the data folder and the database land
 /// inside that folder, and the server's wwwroot as its web root. A test names any setting it needs;
 /// disposing the fixture stops the application and deletes the folder.</summary>
 /// <remarks>Koan keeps one process-default host, and a test process runs several Tangent Spaces at once.
@@ -56,18 +56,20 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
 
     /// <summary>Builds and starts a Tangent Space. <paramref name="settings"/> override the server's
     /// appsettings.json (<c>Koan:Web:ApplicationUrl</c> above all); <paramref name="services"/> adds registrations
-    /// after the application's own. Not an async method, so the binding it makes stays on the caller's flow.</summary>
+    /// after the application's own; <paramref name="environment"/> is the host's environment. Not an async method, so the
+    /// binding it makes stays on the caller's flow.</summary>
     public static Task<TangentSpaceFixture> StartAsync(
         IReadOnlyDictionary<string, string?>? settings = null,
         Action<IServiceCollection>? services = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string environment = "Production")
     {
         var folder = Path.Combine(Path.GetTempPath(), "tangent-fixture-" + Guid.CreateVersion7().ToString("n"));
         Directory.CreateDirectory(folder);
         WebApplication application;
         try
         {
-            application = Build(folder, settings, services);
+            application = Build(folder, settings, services, environment);
         }
         catch
         {
@@ -80,14 +82,15 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         return StartAsync(application, folder, ct);
     }
 
-    private static WebApplication Build(string folder, IReadOnlyDictionary<string, string?>? settings, Action<IServiceCollection>? services)
+    private static WebApplication Build(string folder, IReadOnlyDictionary<string, string?>? settings, Action<IServiceCollection>? services,
+        string environment)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             ContentRootPath = folder,
             // The server's web root is wwwroot beside the binaries, where the client build is copied.
             WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot"),
-            EnvironmentName = Environments.Production
+            EnvironmentName = environment
         });
         builder.Configuration
             .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"), optional: false, reloadOnChange: false)

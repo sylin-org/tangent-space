@@ -1,9 +1,11 @@
 @using System.Globalization
 @using System.Text.Json
+@using Tangent.Offers
 @using Tangent.Space
 @using Tangent.Tangents
 @* The door: whose place this is, in the head with what it holds; the Tangents the reader may view, where a new one is
-   created for whoever may, and who is around in the rail; and in the column, for a signed-in reader with news, what is new since they were here — one sentence,
+   created for whoever may, and who is around in the rail; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
+   answers; for a signed-in reader with news, what is new since they were here — one sentence,
    then replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
    in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
@@ -66,6 +68,29 @@
             }
         </aside>
         <div class="tangent-main">
+            @if (Model.Offers is { Count: > 0 } offers)
+            {
+                <section class="door-offers" aria-label="Offers">
+                    @foreach (var offer in offers)
+                    {
+                        <div class="door-offer" @key="offer.Offer">
+                            <p class="door-offer-line">This place is being reached at <strong>@offer.Subject</strong>@Evidence(offer). Use it as its address?</p>
+                            <div class="door-offer-answers">
+                                <form method="post" action="@offer.Use">
+                                    <FormTokenField Token="@offer.Token" />
+                                    <input type="hidden" name="@OfferController.Field" value="@offer.Offer">
+                                    <button type="submit" class="tangent-new">Use it</button>
+                                </form>
+                                <form method="post" action="@offer.Decline">
+                                    <FormTokenField Token="@offer.Token" />
+                                    <input type="hidden" name="@OfferController.Field" value="@offer.Offer">
+                                    <button type="submit" class="watch-button">Not this one</button>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                </section>
+            }
             @if (Model.News is { } news)
             {
                 @if (news.Quiet)
@@ -132,6 +157,13 @@
     }
 
     private string Initial => Model.Name.Length > 0 ? char.ToUpperInvariant(Model.Name[0]).ToString() : "T";
+
+    /// <summary>What Koan has seen of an Offer's origin, after a dash: how many requests since when; nothing after a
+    /// restart, until the origin is seen again.</summary>
+    private string Evidence(Door.Offered offer)
+        => offer is { Count: { } count, Since: { } since }
+            ? " — " + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " request" : " requests") + " since " + TopicRow.When(since, Model.Day)
+            : "";
 
     /// <summary>A count with its noun; "at least" before it when the door could not finish counting.</summary>
     private static string Words(int count, bool atLeast, string one, string many)

@@ -92,11 +92,11 @@ public static class TangentWrites
     /// <summary>A write that committed: a form is sent on to <paramref name="next"/>; a JSON request reads the Tangent as
     /// it now stands with the writer's <c>can</c> on it, created (<c>201</c>) or changed (<c>200</c>), with its address
     /// as its <c>Location</c>.</summary>
-    public static async Task<IActionResult> Written(HttpContext http, Tangent tangent, string configured, string? personId, bool created,
+    public static async Task<IActionResult> Written(HttpContext http, Tangent tangent, string baseAddress, string? personId, bool created,
         string next, CancellationToken ct)
     {
         http.Response.Headers.CacheControl = "no-store";
-        var address = PostWrites.TangentAddress(configured, tangent.Id);
+        var address = PostWrites.TangentAddress(baseAddress, tangent.Id);
         if (!PostWrites.WantsJson(http.Request))
         {
             http.Response.Headers.Location = next;

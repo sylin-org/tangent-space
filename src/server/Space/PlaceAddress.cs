@@ -1,0 +1,97 @@
+using Koan.Web.Hosting;
+using Tangent.Offers;
+using Tangent.Writer;
+
+namespace Tangent.Space;
+
+/// <summary>Where Koan keeps the URL the place accepts: the row's <see cref="TangentSpace.Address"/>. Koan reads it once
+/// before the host serves and saves through it whenever the place accepts an origin. Until one is accepted, and while no
+/// URL is configured, Koan takes each request's base URL from the request itself, in Production too
+/// (<see cref="DerivesUntilAccepted"/>), so a place is set up on the address its first run is reached at. Only the writer
+/// writes: a plain accept keeps the address (<see cref="KeepAddress"/>); an accept that uses an Offer
+/// (<see cref="Use"/>) runs that Offer's own command, which judges it, keeps the address and accepts the Offer in one
+/// transaction. A save waits for the writer at most <paramref name="bound"/>, on its own clock and never the request's:
+/// once the writer has the command it commits whatever becomes of the request, and a commit that lands after the wait
+/// gave up is held by <see cref="AddressOffers"/>, which hears it.</summary>
+public sealed class PlaceAddress(WriteLoop writer, TimeSpan bound) : IApplicationUrlStore
+{
+    /// <summary>How long a save waits for the writer unless the composition names another.</summary>
+    public static readonly TimeSpan DefaultBound = TimeSpan.FromSeconds(30);
+
+    /// <summary>The Offer being used on this flow, which <see cref="Save"/> runs in place of a plain keep.</summary>
+    private static readonly AsyncLocal<Using?> Pending = new();
+
+    public bool DerivesUntilAccepted => true;
+
+    public async Task<string?> Load(CancellationToken ct) => (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.Address;
+
+    /// <summary>Keeps <paramref name="applicationUrl"/> through the writer, waiting at most the store's bound, whatever
+    /// becomes of the request <paramref name="ct"/> belongs to. A wait that gives up throws <see cref="TimeoutException"/>;
+    /// the command still runs, and once it commits the address is held.</summary>
+    public async Task Save(string applicationUrl, CancellationToken ct)
+    {
+        using var waited = new CancellationTokenSource(bound);
+        try
+        {
+            await Keep(applicationUrl, waited.Token);
+        }
+        catch (OperationCanceledException) when (waited.IsCancellationRequested)
+        {
+            throw new TimeoutException($"The writer did not keep {applicationUrl} as the place's address within {bound}; "
+                + "it is held once the writer commits it.");
+        }
+    }
+
+    private async Task Keep(string applicationUrl, CancellationToken bound)
+    {
+        if (Pending.Value is { } use)
+        {
+            use.Outcome = await writer.Send(use.Command with { Address = applicationUrl }, bound);
+            if (use.Outcome is not Outcome<Offer>.Done)
+                throw new InvalidOperationException($"Using the offer {use.Command.OfferId} kept nothing: {use.Outcome}.");
+            return;
+        }
+
+        switch (await writer.Send(new KeepAddress(applicationUrl), bound))
+        {
+            case Outcome<TangentSpace>.Done:
+                return;
+            case Outcome<TangentSpace>.Failed { Cause: var cause }:
+                throw new InvalidOperationException($"Keeping {applicationUrl} as the place's address failed.", cause);
+            case var other:
+                throw new InvalidOperationException($"Keeping {applicationUrl} as the place's address was not done: {other}.");
+        }
+    }
+
+    /// <summary>Uses an Offer of an address, in this order: Koan validates the origin; <see cref="Save"/> hands
+    /// <paramref name="command"/> to the writer, which judges the Offer and, in one transaction, keeps the address and
+    /// accepts the Offer; only once that commits does Koan hold the origin, and a request that ends meanwhile changes
+    /// neither, since the writer is awaited on the store's own bound. A refusal or a failure at any step leaves the Offer
+    /// open and the address unchanged. Answers the command's outcome, or the failure Koan met before it ran.</summary>
+    public static async Task<Outcome<Offer>> Use(KoanWebBaseUrl baseUrl, UseOffer command, CancellationToken ct)
+    {
+        var use = new Using(command);
+        Pending.Value = use;
+        try
+        {
+            await baseUrl.Accept(command.Address, ct);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            return use.Outcome is { } outcome and not Outcome<Offer>.Done ? outcome : new Outcome<Offer>.Failed(failure);
+        }
+        finally
+        {
+            Pending.Value = null;
+        }
+
+        return use.Outcome ?? new Outcome<Offer>.Failed(new InvalidOperationException("Koan held the origin without keeping it."));
+    }
+
+    private sealed class Using(UseOffer command)
+    {
+        public UseOffer Command => command;
+
+        public Outcome<Offer>? Outcome { get; set; }
+    }
+}

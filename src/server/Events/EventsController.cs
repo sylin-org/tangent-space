@@ -258,9 +258,7 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
     private static bool Streamed(HttpRequest request)
         => request.GetTypedHeaders().Accept.Any(type => type.MediaType.Equals(StreamType, StringComparison.OrdinalIgnoreCase));
 
-    private string Next(long through) => (baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at."))
-        + Path + "?" + Since + "=" + through.ToString(CultureInfo.InvariantCulture);
+    private string Next(long through) => baseUrl.Resolve(HttpContext) + Path + "?" + Since + "=" + through.ToString(CultureInfo.InvariantCulture);
 
     private static TimeSpan Min(TimeSpan left, TimeSpan right) => left < right ? left : right;
 }

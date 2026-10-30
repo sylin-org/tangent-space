@@ -6,6 +6,7 @@ using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Events;
+using Tangent.Offers;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Render;
@@ -27,9 +28,11 @@ namespace Tangent.Space;
 /// listed first.
 /// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
 /// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
-/// rule, and its writers <see cref="Door.Around"/>. A reader without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
+/// rule, and its writers <see cref="Door.Around"/>. For the place's operator, while no URL is configured, it also reads
+/// the open Offers they decide, one bounded read, with the evidence Koan holds for each, and shows them first. A reader
+/// without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
 /// moves the reader's place checkpoint to the sequence a door read through, through the writer.</summary>
-public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, AddressOffers offers) : ControllerBase
 {
     /// <summary>The form field that carries the sequence the door was read through.</summary>
     public const string Through = "through";
@@ -115,8 +118,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
                     .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds)),
             ct);
 
-        var configured = Configured();
-        var door = configured + "/";
+        var baseAddress = BaseAddress();
+        var door = baseAddress + "/";
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
         // Read through the newest event in a Tangent the reader may view, their own included; an event in a Tangent
         // they may not view moves nothing they can see.
@@ -146,6 +149,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             Response.Headers.CacheControl = news.CaughtUp is null ? "private" : "no-cache, no-store";
         }
 
+        var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;
+        if (offered is not null) Response.Headers.CacheControl = "no-cache, no-store";
+
         var viewable = listed.Where(tangent => Viewable(tangent.Id)).ToList();
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
         return Ok(new Door(
@@ -162,19 +168,38 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             featured.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             alive.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             new Door.Crowd(writers.Count, full, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
-            reader is null ? configured + SignInController.Path + "?return=" + back : null,
+            reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
-                Roles.Word(place.RoleIds), reader.Profile.Avatar, configured + AuthConstants.Routes.Logout + "?return=" + back),
+                Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            Resume(configured, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0)),
-            place.Holds(Bit.ManageSpace) ? configured + NewTangentController.Route : null));
+            Resume(baseAddress, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0)),
+            place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
+        {
+            Offers = offered
+        });
+    }
+
+    /// <summary>The open Offers <paramref name="deciderId"/> decides, each with what Koan has seen of its subject and its
+    /// two answers under <paramref name="baseAddress"/>; null when none is open.</summary>
+    private async Task<IReadOnlyList<Door.Offered>?> Offered(string deciderId, string baseAddress, CancellationToken ct)
+    {
+        var open = await Offer.Query(offer => offer.State == OfferState.Open && offer.DeciderId == deciderId,
+            new QueryDefinition { Page = 1, PageSize = Offer.OpenLimit }, ct);
+        if (open.Count == 0) return null;
+        var token = FormToken.For(HttpContext);
+        return open.Select(offer =>
+        {
+            var seen = offers.Evidence(offer.Subject);
+            return new Door.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject, seen?.Count, seen?.FirstSeen,
+                baseAddress + OfferController.UsePath, baseAddress + OfferController.DeclinePath, token);
+        }).ToList();
     }
 
     /// <summary>Where the reader asks again: the poll past the newest event the door read that they may view, or, where its
     /// whole window held none, past the window's newest, so the position never reaches back before what the door read and
     /// says of hidden events only that a whole window of them passed.</summary>
-    private static Door.Position Resume(string configured, long at)
-        => new(at, configured + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    private static Door.Position Resume(string baseAddress, long at)
+        => new(at, baseAddress + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     /// <summary>Marks the door seen: moves the signed-in reader's place checkpoint to the sequence in the
     /// <see cref="Through"/> field, never backwards, and sends them back to the door. The form answers to
@@ -327,7 +352,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
     private static string Name(IReadOnlyDictionary<string, Tangents.Tangent> tangents, string slug)
         => tangents.TryGetValue(slug, out var tangent) ? tangent.Name : slug;
 
-    private string Address(string slug) => Configured() + "/t/" + Uri.EscapeDataString(slug);
+    private string Address(string slug) => BaseAddress() + "/t/" + Uri.EscapeDataString(slug);
 
     private string TopicAddress(Post root) => Address(root.TangentId) + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
 
@@ -336,6 +361,5 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
     private static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

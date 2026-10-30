@@ -30,7 +30,7 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
         var to = space is null ? baseUrl.PathBase + FirstRunController.Path : Destination(destination);
         if (User.Identity?.IsAuthenticated == true && User.FindFirst(ClaimTypes.NameIdentifier) is not null) return Redirect(to);
         var name = (space ?? TangentSpace.Unestablished()).Name;
-        return new ObjectResult(Participants.SignIn.ForVisitor(name, Configured() + "/", to, Challenge(to), handle, error));
+        return new ObjectResult(Participants.SignIn.ForVisitor(name, BaseAddress() + "/", to, Challenge(to), handle, error));
     }
 
     /// <summary>The connector's challenge, coming back to this page with where the participant goes next, signed in
@@ -38,11 +38,10 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
     private string Challenge(string to)
     {
         var here = Uri.EscapeDataString(baseUrl.PathBase + Path + "?return=" + Uri.EscapeDataString(to));
-        return Configured() + ChallengePath + "?return=" + here + "&" + AuthConstants.Query.Failure + "=" + here;
+        return BaseAddress() + ChallengePath + "?return=" + here + "&" + AuthConstants.Query.Failure + "=" + here;
     }
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 
     /// <summary>Where the participant goes next: a relative path under the base URL, of visible characters, without
     /// scheme or authority; anything else is the door.</summary>

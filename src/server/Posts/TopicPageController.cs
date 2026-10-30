@@ -70,7 +70,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             // the Topic's address, so a sender who minted the TID finds the Topic it started without knowing its slug.
             // A slug is read first, so a slug that looks like a TID names its own Topic.
             if (postId is null && Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentRow.Id)
-                return Redirect(Configured() + "/t/" + Uri.EscapeDataString(tangentRow.Id) + "/" + Uri.EscapeDataString(started.Slug ?? started.Id));
+                return Redirect(BaseAddress() + "/t/" + Uri.EscapeDataString(tangentRow.Id) + "/" + Uri.EscapeDataString(started.Slug ?? started.Id));
             return Gated(Capabilities.Absent);
         }
 
@@ -99,11 +99,11 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             : await TopicWindow.After(root, seen?.Seq ?? 0, ct);
 
         var people = await People(window.Replies.Prepend(root).ToList(), ct);
-        var configured = Configured();
-        var mentioned = await Mentions.Resolve(window.Replies.Prepend(root), configured, ct);
-        var taken = await Origins.From(window.Replies.Prepend(root).ToList(), personId, configured, ct);
-        var takenFrom = await Origins.Of(root, personId, configured, ct);
-        var tangentAddress = configured + "/t/" + Uri.EscapeDataString(tangentRow.Id);
+        var baseAddress = BaseAddress();
+        var mentioned = await Mentions.Resolve(window.Replies.Prepend(root), baseAddress, ct);
+        var taken = await Origins.From(window.Replies.Prepend(root).ToList(), personId, baseAddress, ct);
+        var takenFrom = await Origins.Of(root, personId, baseAddress, ct);
+        var tangentAddress = baseAddress + "/t/" + Uri.EscapeDataString(tangentRow.Id);
         var address = tangentAddress + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
         var topicCan = rows.For(root);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + (anchor is null ? "" : "/" + anchor.Id));
@@ -144,11 +144,11 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             anchor?.Id,
             place.Holds(Bit.Topic) ? tangentAddress + "/" + TangentPageController.NewTopicSegment : null,
             space.Name,
-            configured + "/",
-            reader is null ? configured + SignInController.Path + "?return=" + back : null,
+            baseAddress + "/",
+            reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new TopicPage.Reader(
                 reader.Id, Named(reader).Name, Named(reader).Handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
-                configured + AuthConstants.Routes.Logout + "?return=" + back),
+                baseAddress + AuthConstants.Routes.Logout + "?return=" + back),
             DateOnly.FromDateTime(DateTime.UtcNow),
             takenFrom));
     }
@@ -233,6 +233,5 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         return (participant.Profile.DisplayName is { Length: > 0 } name ? name : handle, handle);
     }
 
-    private string Configured() => baseUrl.Configured
-        ?? throw new InvalidOperationException("Koan:Web:ApplicationUrl must be set to the base URL the Tangent Space answers at.");
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }
