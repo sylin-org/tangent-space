@@ -11,8 +11,8 @@ namespace Tangent.Posts;
 /// <summary>Where a Post is reported: <c>/t/{tangent}/{topic}/{post}/report</c>, beside its edit. Its <c>POST</c> takes
 /// <c>body</c>, the reason, and <c>id</c>, as a form or a JSON object, and sends <see cref="ReportPost"/>: a form is sent
 /// on to this address with <c>received</c> naming the report, and a JSON request reads that the report was received;
-/// neither is told where the report is. A refusal reads the form again with the reason inline, or a problem with the gate;
-/// the same id with another reason is a conflict. Its <c>GET</c> is the form, one resource both ways
+/// neither is told where the report is. A refusal reads the form again with the reason inline, or a problem with the gate.
+/// The same id from the same reporter about the same Post reads that the report was received, whatever became of it. Its <c>GET</c> is the form, one resource both ways
 /// (<see cref="ReportPage"/>), with a TID minted into it, or, where <c>received</c> names a report the reader made of this
 /// Post, that it was received. Both resolve the address as the Topic page does (<see cref="PostWrites.Locate"/>) before
 /// anything else is judged, so a Post the reader may not view and one no row has answer alike.</summary>
@@ -66,12 +66,6 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
                 return PostWrites.Absent();
             case Outcome<Post>.Refused { Reason: var reason }:
                 return await Refused(found, personId, fields, reason, ct);
-            case Outcome<Post>.Conflict { Reason: var reason }:
-                if (PostWrites.WantsJson(Request)) return PostWrites.Conflicting(reason);
-                return await Again(found, personId, fields, StatusCodes.Status409Conflict, keepId: false, page => page with
-                {
-                    Failure = "This form was already sent with another reason, so nothing was sent. Send it again to send this reason as well."
-                }, ct);
             case Outcome<Post>.Failed { Cause: var cause }:
                 throw new InvalidOperationException($"Reporting {post} failed.", cause);
             default:
@@ -87,7 +81,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         var about = reason switch
         {
             ReportPost.NeedsReason => PostWrites.About.Body,
-            ReportPost.NoModerators => PostWrites.About.Sent,
+            ReportPost.NoModerators or ReportPost.InModerators => PostWrites.About.Sent,
             _ => PostWrites.Concerning(reason)
         };
         if (PostWrites.WantsJson(Request))
@@ -95,7 +89,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
             return reason switch
             {
                 ReportPost.NoModerators => new Problem(StatusCodes.Status503ServiceUnavailable, "Not sent", reason).ToResult(),
-                ReportPost.NeedsReason => new Problem(StatusCodes.Status400BadRequest, "Not sent", reason).ToResult(),
+                ReportPost.NeedsReason or ReportPost.InModerators => new Problem(StatusCodes.Status400BadRequest, "Not sent", reason).ToResult(),
                 _ => PostWrites.Refused(reason)
             };
         }
@@ -103,7 +97,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         var status = reason switch
         {
             ReportPost.NoModerators => StatusCodes.Status503ServiceUnavailable,
-            ReportPost.NeedsReason => StatusCodes.Status400BadRequest,
+            ReportPost.NeedsReason or ReportPost.InModerators => StatusCodes.Status400BadRequest,
             _ => PostWrites.Status(reason)
         };
         return await Again(found, personId, fields, status, keepId: reason != Post.IdTaken, page => about switch

@@ -19,6 +19,7 @@ namespace Tangent.Posts;
 public sealed partial class ReportTests
 {
     private const string Leo = "did:plc:leo4reports";
+    private const string Keeper = "did:plc:keeper4reports";
     private const string Moderators = ModeratorsTangent.Slug;
 
     [Fact]
@@ -90,7 +91,7 @@ public sealed partial class ReportTests
 
         var received = await Send(ada.Client, HttpMethod.Get, new Uri(sent.Location!).PathAndQuery);
         var receivedJson = await Send(ada.Client, HttpMethod.Get, new Uri(sent.Location!).PathAndQuery, json: true);
-        var hidden = await Send(ada.Client, HttpMethod.Get, "/t/" + Moderators + "/" + report.Slug);
+        var moderatorsTopic = await Send(ada.Client, HttpMethod.Get, "/t/" + Moderators + "/" + report.Slug);
 
         Assert.Equal(HttpStatusCode.OK, received.Status);
         Assert.Contains("Report received", received.Body);
@@ -101,7 +102,7 @@ public sealed partial class ReportTests
             Assert.DoesNotContain(report.Slug!, answer);
         }
 
-        Assert.Equal(HttpStatusCode.NotFound, hidden.Status);
+        Assert.Equal(HttpStatusCode.NotFound, moderatorsTopic.Status);
         // Another reader naming Ada's report reads the form, and nothing of it.
         using var bea = await SignedIn(tangentSpace, Bea);
         var notTheirs = await Send(bea.Client, HttpMethod.Get, new Uri(sent.Location!).PathAndQuery, json: true);
@@ -198,14 +199,14 @@ public sealed partial class ReportTests
         var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
         var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var hidden = await Started(writer, Leo, "Quiet planning", "The studio’s private words.", Studio);
+        var studio = await Started(writer, Leo, "Quiet planning", "The studio’s private words.", Studio);
         using var visitor = Agent(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var action = PostPath(topic, reply) + "/report";
         var counted = await Counted();
 
         var refused = await Send(visitor, HttpMethod.Post, action, JsonBody(new { id = Tids.Mint(), body = "Unkind." }), json: true);
-        var absent = await Json(ada, TopicPath(topic), PostPath(hidden, hidden) + "/report", new { id = Tids.Mint(), body = "Unkind." });
+        var absent = await Json(ada, TopicPath(topic), PostPath(studio, studio) + "/report", new { id = Tids.Mint(), body = "Unkind." });
         var visitorForm = await Send(visitor, HttpMethod.Get, action);
 
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (refused.Status, refused.Gate));
@@ -220,12 +221,16 @@ public sealed partial class ReportTests
         var afterFirst = await Counted();
         var again = await Form(ada, action, action, new Dictionary<string, string>(fields));
         var otherWords = await Json(ada, action, action, new { id = minted, body = "Something else." });
+        var afterOtherWords = await Counted();
 
         Assert.Equal((HttpStatusCode.SeeOther, HttpStatusCode.SeeOther), (first.Status, again.Status));
         Assert.Equal(first.Location, again.Location);
         Assert.Equal(afterFirst, await Counted());
         Assert.Single(await Post.Query(post => post.OriginId == reply.Id, Cancellation));
-        Assert.Equal(HttpStatusCode.Conflict, otherWords.Status);
+        // The same id with other words is the same report: received, and nothing more is written.
+        Assert.Equal(HttpStatusCode.OK, otherWords.Status);
+        Assert.True(otherWords.Json.GetProperty("received").GetBoolean());
+        Assert.Equal(afterFirst, afterOtherWords);
 
         var empty = await Form(ada, action, action, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "   " });
         Assert.Equal(HttpStatusCode.BadRequest, empty.Status);
@@ -257,6 +262,94 @@ public sealed partial class ReportTests
         Assert.Null(third.ParentId);
         Assert.NotEqual(first.Id, third.TopicId);
         Assert.Equal(reply.Id, third.OriginId);
+    }
+
+    [Fact]
+    public async Task A_report_of_a_post_the_moderators_may_not_view_carries_nothing_of_its_topic_and_shows_its_origin_as_unseen()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Reporting(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
+        var secret = await Started(writer, Leo, "Secret acquisition plans", "We buy the kiln shop next spring.", Studio);
+        var report = await Reported(writer, Keeper, secret, "This names a seller who asked to stay out of it.");
+        using var mo = await SignedIn(tangentSpace, Mo);
+
+        var moderators = await Send(mo.Client, HttpMethod.Get, "/t/" + Moderators);
+        var door = await Send(mo.Client, HttpMethod.Get, "/");
+        var doorJson = await Send(mo.Client, HttpMethod.Get, "/", json: true);
+        var topic = await Send(mo.Client, HttpMethod.Get, TopicPath(report));
+
+        Assert.Equal("Report: This names a seller who asked to stay out of it.", report.Title);
+        Assert.Equal(HttpStatusCode.OK, topic.Status);
+        foreach (var answer in new[] { moderators.Body, door.Body, doorJson.Body, topic.Body })
+        {
+            Assert.DoesNotContain("Secret acquisition", answer);
+            Assert.DoesNotContain("kiln shop", answer);
+            Assert.DoesNotContain("/t/" + Studio, answer);
+        }
+
+        Assert.Contains("This names a seller", topic.Body);
+        Assert.Contains("Taken on a tangent from a post you can’t see", WebUtility.HtmlDecode(Between(topic.Body, "topic-taken-from")));
+        // Where the moderators may view the reported Tangent, the title names the reported Topic.
+        var open = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        Assert.Equal("Report: Lanterns at dusk", (await Reported(writer, Ada, open, "Unkind.")).Title);
+    }
+
+    [Fact]
+    public async Task A_resend_after_the_moderators_removed_the_report_answers_received_and_says_nothing_of_what_they_did()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Reporting(tangentSpace);
+        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var action = PostPath(topic, reply) + "/report";
+        var minted = Tids.Mint();
+        var fields = new Dictionary<string, string> { ["id"] = minted, ["body"] = "This mocks someone in the workshop." };
+        var first = await Form(ada, action, action, new Dictionary<string, string>(fields));
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(minted, Mo), Cancellation));
+        var counted = await Counted();
+
+        var again = await Form(ada, action, action, new Dictionary<string, string>(fields));
+        var json = await Json(ada, action, action, new { id = minted, body = "This mocks someone in the workshop." });
+        var received = await Send(ada.Client, HttpMethod.Get, new Uri(again.Location!).PathAndQuery);
+
+        Assert.Equal((HttpStatusCode.SeeOther, first.Location), (again.Status, again.Location));
+        Assert.Equal(HttpStatusCode.OK, json.Status);
+        Assert.True(json.Json.GetProperty("received").GetBoolean());
+        Assert.Contains("Report received", received.Body);
+        foreach (var answer in new[] { json.Body, received.Body })
+        {
+            Assert.DoesNotContain("emoved by", answer);
+            Assert.DoesNotContain("This mocks someone", answer);
+        }
+
+        Assert.Equal(counted, await Counted());
+    }
+
+    [Fact]
+    public async Task Report_is_offered_on_someone_elses_post_and_never_on_ones_own_or_inside_the_moderators_tangent()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Reporting(tangentSpace);
+        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var own = await Replied(writer, topic, Ada, "At six, by the gate.");
+        var report = await Reported(writer, Ada, topic, "Unkind.");
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var mo = await SignedIn(tangentSpace, Mo);
+
+        var page = await Send(ada.Client, HttpMethod.Get, TopicPath(topic));
+        var json = await Send(ada.Client, HttpMethod.Get, TopicPath(topic), json: true);
+        var moderators = await Send(mo.Client, HttpMethod.Get, TopicPath(report), json: true);
+        var nested = await writer.Send(new ReportPost(Tids.Mint(), report.Id, PostBody.Of("Report the report."), Mo), Cancellation);
+
+        Assert.Contains("action=\"" + AddressOf(topic, topic) + "/report\"", page.Body);
+        Assert.DoesNotContain("action=\"" + AddressOf(topic, own) + "/report\"", page.Body);
+        Assert.False(Present(Shown(json.Json, own.Id), "report"));
+        Assert.True(Present(Shown(json.Json, topic.Id), "report"));
+        Assert.False(Present(moderators.Json.GetProperty("root"), "report"));
+        Assert.Equal(ReportPost.InModerators, Assert.IsType<Outcome<Post>.Refused>(nested).Reason);
     }
 
     /// <summary>The place every proof of the write verbs starts from, with the moderators' Tangent a start creates for it.</summary>
@@ -318,9 +411,15 @@ public sealed partial class ReportTests
     private static IReadOnlyList<string> Taken(JsonElement page, string postId)
         => TakenOf(page, postId).GetProperty("topics").EnumerateArray().Select(topic => topic.GetProperty("title").GetString()!).ToList();
 
-    private static JsonElement TakenOf(JsonElement page, string postId)
-        => page.GetProperty("replies").EnumerateArray().Prepend(page.GetProperty("root"))
-            .Single(post => post.GetProperty("id").GetString() == postId).GetProperty("taken");
+    private static JsonElement TakenOf(JsonElement page, string postId) => Shown(page, postId).GetProperty("taken");
+
+    /// <summary>One Post as a Topic page's JSON shows it.</summary>
+    private static JsonElement Shown(JsonElement page, string postId)
+        => page.GetProperty("replies").EnumerateArray().Prepend(page.GetProperty("root")).Single(post => post.GetProperty("id").GetString() == postId);
+
+    /// <summary>Whether a JSON object carries a value under <paramref name="name"/>.</summary>
+    private static bool Present(JsonElement element, string name)
+        => element.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null;
 
     [GeneratedRegex("name=\"id\" value=\"(?<id>[^\"]+)\"")]
     private static partial Regex ReportId();

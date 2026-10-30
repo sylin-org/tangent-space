@@ -77,6 +77,21 @@ public static class ModeratorsTangent
         return tangent;
     }
 
+    /// <summary>Whether a participant holding the moderator role and nothing more may view the Tangent
+    /// <paramref name="tangentId"/>: Koan's resolution over that role's bag, <paramref name="space"/>'s audience and the
+    /// Tangent's overwrites; two keyed reads of roles and the overwrites from Koan's cache. It decides what a report
+    /// carries of the reported Topic.</summary>
+    public static async Task<bool> MayView(string tangentId, TangentSpace space, CancellationToken ct)
+    {
+        var roles = Collection();
+        var moderator = await roles.Get(Roles.Moderator, ct);
+        var everyone = await roles.Get(Roles.Everyone, ct);
+        IEnumerable<string> tokens =
+            [RoleTokens.Everyone, RoleTokens.Authenticated, Roles.Moderator, .. moderator?.Permissions ?? [], .. everyone?.Permissions ?? []];
+        var holder = new Participants.Participant { Id = Roles.Moderator, Standing = Participants.Standing.Admitted };
+        return Capabilities.For(holder, tokens, space, await roles.Overwrites(Overwrites.Resource(tangentId), ct), DateTimeOffset.UtcNow).Exists;
+    }
+
     /// <summary>Whether Koan's rows on <paramref name="slug"/>'s resource state its access: a private audience, and the
     /// moderator role allowed <see cref="ModeratorBits"/>.</summary>
     private static async Task<bool> HasAccess(string slug, CancellationToken ct)

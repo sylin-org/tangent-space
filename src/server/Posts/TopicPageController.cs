@@ -156,7 +156,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is
     /// edited where they may edit or remove it, where it is taken on a tangent where <paramref name="takeOn"/> says they
     /// may start a Topic somewhere and it is not removed, the Topics taken from it that they may view, and, with the
-    /// page's <paramref name="token"/> for a signed-in reader, the form that reports it where it is not removed.</summary>
+    /// page's <paramref name="token"/> for a signed-in reader, the form that reports it: on someone else's Post that is
+    /// not removed, outside the moderators' Tangent.</summary>
     private static TopicPage.Post Shown(Post post, Post root, string topicAddress, Capabilities.Rows rows,
         IReadOnlyDictionary<string, TangentPage.Author> people, IReadOnlyDictionary<string, TopicPage.Mention> mentioned, Checkpoint? seen,
         Participant? reader, IReadOnlyDictionary<string, TopicPage.Taken> taken, bool takeOn, FormToken? token)
@@ -182,7 +183,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             editable ? address + "/" + EditSegment : null,
             takeOn && !post.Removed ? address + "/" + TakeOnATangentController.Segment : null,
             taken.GetValueOrDefault(post.Id),
-            token is not null && !post.Removed ? new TopicPage.Report(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow), token) : null);
+            token is not null && !post.Removed && post.AuthorId != reader?.Id && post.TangentId != rows.Space.ModeratorsTangentId
+                ? new TopicPage.Report(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow), token) : null);
     }
 
     /// <summary>A cursor's sequence: a non-negative whole number; null when the text is not one.</summary>

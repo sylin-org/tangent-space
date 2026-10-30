@@ -57,8 +57,8 @@ public sealed record TopicPage(
     /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is where the reader
     /// takes it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
     /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
-    /// <see cref="Report"/> is the form that reports it to the moderators, for a signed-in reader, on a Post that is not
-    /// removed.</summary>
+    /// <see cref="Report"/> is the form that reports it to the moderators, for a signed-in reader, on someone else's Post
+    /// that is not removed, outside the moderators' Tangent.</summary>
     public sealed record Post(
         string Id,
         long Sequence,

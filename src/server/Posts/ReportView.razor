@@ -20,7 +20,7 @@
             </blockquote>
             @if (Model.Received)
             {
-                <p class="report-received" role="status">The moderators have your report. The author is not told who sent it, or that it was sent.</p>
+                <p class="report-received" role="status">The moderators have your report. Only they can read it; nobody is notified that it was sent.</p>
                 <p><a href="@Model.Reported.Address">Back to the post</a></p>
             }
             else
@@ -61,7 +61,7 @@
                         {
                             <p class="field-failure" id="report-body-failure">@bodyFailure</p>
                         }
-                        <p class="post-report-note" id="report-note">Only the moderators read it; the author is not told.</p>
+                        <p class="post-report-note" id="report-note">Only the moderators can read it; nobody is notified that it was sent.</p>
                     </div>
                     @if (Model.Gate is null)
                     {

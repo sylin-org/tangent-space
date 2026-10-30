@@ -64,20 +64,20 @@ public static class Origins
     /// Id, newest first, at most <see cref="TakenLimit"/> each, with how many of those read the reader may view, and
     /// "at least" where more than the bound are or the read was full, since more they may view can lie past it; an
     /// origin with none is not in the answer. One range of <c>ix_post_origins</c> per origin, at most <see cref="TakenRead"/> rows, leaving
-    /// out the reports in a moderators' Tangent the reader may not view (<see cref="HiddenReports"/>), then the Tangents of
+    /// out the reports in a moderators' Tangent the reader may not view (<see cref="ModeratorsAbsentTo"/>), then the Tangents of
     /// what was found by Id and their overwrites from Koan's cache.</summary>
     public static async Task<IReadOnlyDictionary<string, TopicPage.Taken>> From(IReadOnlyList<Post> origins, string? personId, string configured,
         CancellationToken ct)
     {
         var found = new Dictionary<string, IReadOnlyList<Post>>(StringComparer.Ordinal);
-        var hidden = await HiddenReports(personId, ct);
+        var absent = await ModeratorsAbsentTo(personId, ct);
         foreach (var origin in origins.DistinctBy(post => post.Id))
         {
             var originId = origin.Id;
             var query = new QueryDefinition { Page = 1, PageSize = TakenRead }.WithSort<Post>(sort => sort.OrderByDescending(post => post.CreatedAt));
-            var rows = hidden is null
+            var rows = absent is null
                 ? await Post.Query(post => post.OriginId == originId, query, ct)
-                : await Post.Query(post => post.OriginId == originId && post.TangentId != hidden, query, ct);
+                : await Post.Query(post => post.OriginId == originId && post.TangentId != absent, query, ct);
             if (rows.Count > 0) found[originId] = rows;
         }
 
@@ -106,7 +106,7 @@ public static class Origins
     /// <summary>The moderators' Tangent where the reader may not view it, so the Topics a report starts there are not
     /// read at all: they never crowd out those the reader may view or make a page say "at least"; null where
     /// the reader may view it or the place records none. The settings row and the Tangent's overwrites from Koan's cache.</summary>
-    private static async Task<string?> HiddenReports(string? personId, CancellationToken ct)
+    private static async Task<string?> ModeratorsAbsentTo(string? personId, CancellationToken ct)
     {
         if ((await TangentSpace.Get(TangentSpace.SingleRow, ct))?.ModeratorsTangentId is not { } moderators) return null;
         return (await Capabilities.LoadEach(personId, [moderators], ct))[moderators].Exists ? null : moderators;
