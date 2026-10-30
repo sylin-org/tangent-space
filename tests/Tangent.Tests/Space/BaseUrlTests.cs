@@ -150,7 +150,7 @@ public sealed class BaseUrlTests
         Assert.Contains($"<link rel=\"tangent\" href=\"{origin}\">", pointers);
     }
 
-    [Fact(Skip = "Holds once Tangent's pin carries Koan's K11, where a stored address the host cannot use is not held; at Koan 2d7ddb15e this Production start is refused, naming the store.")]
+    [Fact]
     public async Task A_place_that_kept_an_http_loopback_address_in_development_starts_in_production_and_offers_its_public_origin()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
