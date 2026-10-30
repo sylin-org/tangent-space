@@ -18,6 +18,14 @@ public static class Pointers
     /// on unless its operator names another.</summary>
     public const string FixedUpstream = "http://127.0.0.1:5220";
 
+    /// <summary>What first run says in place of the pointers while the base URL is local, in one sentence whose code is
+    /// set between backticks: they appear once the place answers at a public address — one the place offers its
+    /// operator when it is reached at it, or, where the base URL is <paramref name="configured"/>, one the configuration
+    /// names.</summary>
+    public static string Later(bool configured) => configured
+        ? "Its pointers appear here once `Koan:Web:ApplicationUrl` names its public address."
+        : "Its pointers appear here once it answers at its public address: when it is reached at one, it offers it to you on its door.";
+
     /// <summary>The address a reverse proxy on the same machine reaches the server at: the first http address it listens
     /// on, a wildcard or loopback host written as 127.0.0.1 and the port kept; <see cref="FixedUpstream"/> when it
     /// listens on none it reports.</summary>

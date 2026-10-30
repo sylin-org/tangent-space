@@ -97,6 +97,8 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Participant profile: the PDS profile, roles, posts here, Connections, the person's grants from Koan | profile | `ProfilePanel`, `ParticipantAvatar` (harvest) | `Sylin.Koan.Identity.Web` | S | todo |
 | Creating a Tangent: New Tangent on the door and in the switcher for whoever holds `ManageSpace`; the name alone, the slug derived, everything else a quiet default | new tangent | `NewTangentPanel` (harvest) | — | S | done |
 | Tangent settings: name, description, default kind, order, and the audience as the `everyone` overwrite; the moderators' Tangent's audience and order fixed | tangent settings | `TopicSettingsPanel`, `AccessPanel` (harvest) | — | S | done |
+| The place's settings (general) at `/settings`, offered in the account menu to whoever holds `ManageSpace`: the place's name and description, `space.changed` on a change; the sections' frame the later settings join | Tangent Space settings (general) | new | — | S | done |
+| A first Tangent at setup: first run creates *General*, public and of discussions, beside the moderators' Tangent, so the place can be talked in from its first minute | door | new | — | S | done |
 
 ### 6 · Attention
 

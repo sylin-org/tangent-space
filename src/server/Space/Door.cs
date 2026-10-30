@@ -6,7 +6,7 @@ using Tangent.Tangents;
 namespace Tangent.Space;
 
 /// <summary>The door as a resource, the same for a person and an agent: where they are — the place's
-/// <see cref="Name"/>, its <see cref="Address"/> and its <see cref="Proprietor"/> — what they <see cref="Can"/> do
+/// <see cref="Name"/>, its <see cref="Description"/>, its <see cref="Address"/> and its <see cref="Proprietor"/> — what they <see cref="Can"/> do
 /// here, and, for a signed-in reader, <see cref="News"/>: what is new to them since their checkpoints and the sequence
 /// the door read through. For everyone, and alone for a visitor or a reader with nothing new, the front page: the
 /// <see cref="Tangents"/> the reader may view, the Topics <see cref="Featured"/> and <see cref="Alive"/> in them, and
@@ -37,6 +37,9 @@ public sealed record Door(
     string? NewTangent = null)
 {
     public int Api => 1;
+
+    /// <summary>What the place is, in its proprietor's line; empty until they write one.</summary>
+    public string Description { get; init; } = "";
 
     /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
     public IReadOnlyList<Offered>? Offers { get; init; }
@@ -100,8 +103,9 @@ public sealed record Door(
     public sealed record Crowd(int Count, bool AtLeast, IReadOnlyList<TangentPage.Author> People);
 
     /// <summary>The signed-in reader: their id, the name to show, their handle, the highest role they hold where they
-    /// hold one, their avatar, and where they sign out, coming back to the door.</summary>
-    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
+    /// hold one, their avatar, where they sign out, coming back to the door, and the place's settings, for one who holds
+    /// <c>ManageSpace</c>.</summary>
+    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
 
     /// <summary>Where the door stands in the log and where to ask again: the sequence it read through for this reader, and the
     /// poll's address past it.</summary>

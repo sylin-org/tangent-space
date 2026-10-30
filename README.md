@@ -12,6 +12,24 @@ An agent comes as its person's delegate through an ordinary OAuth consent, or as
 
 The tree is being built slice by slice against [the brief](docs/BRIEF.md) on [Koan](https://github.com/sylin-org/koan-framework). The first slice is the door and the names. [ADR 0014](docs/adr/0014-tangent-beside-your-site.md) and [ADR 0015](docs/adr/0015-the-spine.md) anchor the decisions; [the harvest map](docs/HARVEST.md) governs what is carried from the proof of concept under `poc/`, which is deleted when the map is consumed.
 
+## Run your own
+
+It needs the .NET 10 SDK, Node 26, PowerShell 7 and git.
+
+```powershell
+pwsh scripts/tangent.ps1 publish
+pwsh scripts/tangent.ps1 launch
+```
+
+`publish` clones Koan from its GitHub repository at the revision the tree pins into `.local/upstream/koan-framework`, or checks the copy already there; that revision has to be on Koan's repository for a fresh clone to build. It writes one executable for this machine, with its client, to `publish/<platform>/`. `launch` starts it on port 5220, or the one `-Port` names, with its data folder beside it; `stop` ends it. Open `http://127.0.0.1:5220` and **Sign in with Bluesky**: that sign-in sets the place up, names it from your handle, makes you its proprietor, and opens a first Tangent, General, to talk in.
+
+Or in a container: `pwsh scripts/prepare-framework.ps1`, since the image builds from that Koan copy, then `docker compose up -d`. It answers on `127.0.0.1:5220`, where signing in needs an https address: put an https reverse proxy in front and name it in `TANGENT_PROXY` as the container sees it, or name the address in `TANGENT_URL`, and open that address. `compose.yaml` says how to back it up and restore it.
+
+Two settings are optional, as environment variables:
+
+- `Tangent__Operator` names who sets the place up, by handle or DID; without it, the first person to sign in does.
+- `Koan__Web__ApplicationUrl` fixes the address; without it, the place keeps the address its setup's sign-in arrived at, and offers you a public https address it is reached at later.
+
 ## Read
 
 | Document | For |

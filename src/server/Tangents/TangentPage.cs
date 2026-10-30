@@ -80,8 +80,9 @@ public sealed partial record TangentPage(
     public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount);
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
-    /// they hold where they hold one, their avatar, and where they sign out, coming back to this page.</summary>
-    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
+    /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
+    /// settings, for one who holds <c>ManageSpace</c>.</summary>
+    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are
     /// written for among it, so the same page for a visitor on the same day answers the same tag, and a new Post, a

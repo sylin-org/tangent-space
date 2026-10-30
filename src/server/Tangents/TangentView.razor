@@ -130,7 +130,7 @@
         var switcher = new Switcher(Tile.For(page.Slug, page.Name), page.Tangents
             .Select(tangent => new SwitcherItem(tangent.Name, tangent.Address, Detail(tangent), Tile.For(tangent.Slug, tangent.Name), tangent.Slug == page.Slug))
             .ToList(), page.Door, page.NewTangent);
-        var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
+        var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings) : null;
         return new(page.Place, page.Door, [new Crumb(page.Name, page.Address, switcher)], who, page.SignIn);
     }
 

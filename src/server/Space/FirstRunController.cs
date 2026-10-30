@@ -15,9 +15,10 @@ namespace Tangent.Space;
 /// <summary>First run, one resource both ways. Until the place is established, a visitor reads where to sign in, and
 /// so does a signed-in person who may set it up, whose sign-in sets it up (<see cref="FirstRunSignIn"/>); anyone else
 /// reads who may. Who may: the account <c>Tangent:Operator</c> names by handle or DID, or, with none named, whoever
-/// signs in first. Once it is established, the operator and the proprietor read the site's pointers here; to everyone
-/// else it answers as a missing resource. Every other page of the tree answers this resource until the place is
-/// established (<see cref="FirstRunGate"/>).</summary>
+/// signs in first. Once it is established, the operator and the proprietor read the site's pointers here, once its
+/// base URL is public: while it is local no site could use them, so they read when the pointers will appear instead;
+/// to everyone else it answers as a missing resource. Every other page of the tree answers this resource until the
+/// place is established (<see cref="FirstRunGate"/>).</summary>
 [AnswersBeforeFirstRun]
 public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, IServer server) : ControllerBase
 {
@@ -32,10 +33,12 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         if (!Theirs(space)) return NotHere();
         var listening = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
         var address = baseUrl.Resolve(HttpContext);
+        var local = TangentSpace.IsLocal(address);
         return new ObjectResult(new FirstRun(space.Name, address + "/")
         {
             BaseUrl = address,
-            Pointers = Pointers.For(address, Pointers.Upstream(listening)),
+            Pointers = local ? [] : Pointers.For(address, Pointers.Upstream(listening)),
+            PointersLater = local ? Pointers.Later(baseUrl.IsConfigured) : null,
             Reader = await ReaderOf(User, address, baseUrl.PathBase, ct)
         });
     }
@@ -77,9 +80,13 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         var participant = await Participant.Get(personId, ct);
         var handle = participant?.Handle is { Length: > 0 } stored ? stored : Claimed(user) is { Length: > 0 } claimed ? claimed : personId;
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
-        var role = participant is null ? null : Roles.Word((await Capabilities.Load(personId, null, null, ct)).RoleIds);
+        var place = participant is null ? null : await Capabilities.Load(personId, null, null, ct);
+        var role = place is null ? null : Roles.Word(place.RoleIds);
         var signOut = address + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(pathBase + Path);
-        return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut);
+        var settings = place is not null && place.Holds(Bit.ManageSpace) && await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null
+            ? address + TangentSpaceSettingsController.Path
+            : null;
+        return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut, settings);
     }
 
     /// <summary>The place before it is established, with the account the configuration names to set it up.</summary>

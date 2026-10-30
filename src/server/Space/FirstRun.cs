@@ -10,7 +10,8 @@ namespace Tangent.Space;
 /// someone signed in who may set it up, it carries <see cref="Challenge"/>, the Koan connector's atproto challenge,
 /// whose sign-in sets the place up and comes back here; signed in as anyone else, <see cref="Waiting"/>; once the place
 /// is established, for its operator and its proprietor, the <see cref="BaseUrl"/> it answers at and the
-/// <see cref="Pointers"/>, what the site places to point at it. <see cref="Reader"/> is whoever is
+/// <see cref="Pointers"/>, what the site places to point at it: none while the base URL is local, which no site can
+/// point at, and <see cref="PointersLater"/> says instead when they appear. <see cref="Reader"/> is whoever is
 /// signed in, as the account menu shows them, with where they sign out.</summary>
 public sealed record FirstRun(
     string Name,
@@ -20,7 +21,8 @@ public sealed record FirstRun(
     FirstRunWaiting? Waiting = null,
     string? BaseUrl = null,
     IReadOnlyList<Pointer>? Pointers = null,
-    FirstRunReader? Reader = null)
+    FirstRunReader? Reader = null,
+    string? PointersLater = null)
 {
     /// <summary>The configuration key that names the account that may set the place up.</summary>
     public const string OperatorSetting = "Tangent:Operator";
@@ -45,5 +47,6 @@ public sealed record FirstRun(
 public sealed record FirstRunWaiting(string Handle, string? OperatorHandle = null);
 
 /// <summary>The signed-in person reading first run: the name to show, their handle, the highest role they hold where
-/// they hold one, their avatar, and where they sign out, coming back to first run.</summary>
-public sealed record FirstRunReader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut);
+/// they hold one, their avatar, where they sign out, coming back to first run, and the place's settings, for one who
+/// holds <c>ManageSpace</c> once it is established.</summary>
+public sealed record FirstRunReader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);

@@ -2,8 +2,8 @@
 @* First run: one panel in the page, headed by the place's mark and name. Before setup it holds the one action, signing
    in with Bluesky, whose sign-in sets the place up, with the handle form for an account on another server behind a
    disclosure, and says who may set the place up where the configuration names someone; signed in as anyone else, who
-   may and the way to another account; once established, the pointers the site places, each ready to copy. Every hint
-   is one sentence. *@
+   may and the way to another account; once established, the pointers the site places, each ready to copy, or, while
+   the place answers only at a local address, when they will appear. Every hint is one sentence. *@
 <main class="sign-in first-run">
     <section class="@PanelClass" aria-labelledby="first-run-title">
         <PanelHead Frame="@Frame(Model)" />
@@ -11,29 +11,40 @@
         @if (Model.Pointers is { } pointers)
         {
             <h1 id="first-run-title" class="sign-in-title">@Model.Name is ready</h1>
-            <p class="sign-in-lede">It answers at <a href="@Model.Door"><CodeText Text="@(Model.BaseUrl ?? "")" /></a>; place any one of these on your site.</p>
-            <ol class="first-run-pointers">
-                @for (var index = 0; index < pointers.Count; index++)
-                {
-                    var pointer = pointers[index];
-                    var id = "pointer-" + pointer.Kind;
-                    <li class="first-run-pointer" data-pointer="@pointer.Kind">
-                        <div class="first-run-pointer-head">
-                            <h2 class="first-run-pointer-title" id="@(id)-title">@Title(pointer)</h2>
+            @if (Model.PointersLater is { } later)
+            {
+                <p class="sign-in-lede">It answers at <a href="@Model.Door"><CodeText Text="@(Model.BaseUrl ?? "")" /></a>, which only this machine reaches.</p>
+                <p class="first-run-rule first-run-later"><CodedSentence Text="@later" /></p>
+            }
+            else
+            {
+                <p class="sign-in-lede">It answers at <a href="@Model.Door"><CodeText Text="@(Model.BaseUrl ?? "")" /></a>; place any one of these on your site.</p>
+            }
+            @if (pointers.Count > 0)
+            {
+                <ol class="first-run-pointers">
+                    @for (var index = 0; index < pointers.Count; index++)
+                    {
+                        var pointer = pointers[index];
+                        var id = "pointer-" + pointer.Kind;
+                        <li class="first-run-pointer" data-pointer="@pointer.Kind">
+                            <div class="first-run-pointer-head">
+                                <h2 class="first-run-pointer-title" id="@(id)-title">@Title(pointer)</h2>
+                                @if (pointer.Text.Length > 0)
+                                {
+                                    <button type="button" class="first-run-copy" data-island="copy" data-props="@("{\"target\":\"" + id + "\"}")"
+                                            aria-describedby="@(id)-title" hidden>Copy</button>
+                                }
+                            </div>
+                            <p class="first-run-pointer-where"><CodedSentence Text="@pointer.Where" /></p>
                             @if (pointer.Text.Length > 0)
                             {
-                                <button type="button" class="first-run-copy" data-island="copy" data-props="@("{\"target\":\"" + id + "\"}")"
-                                        aria-describedby="@(id)-title" hidden>Copy</button>
+                                <pre class="first-run-snippet" id="@id" tabindex="0"><code>@pointer.Text</code></pre>
                             }
-                        </div>
-                        <p class="first-run-pointer-where"><CodedSentence Text="@pointer.Where" /></p>
-                        @if (pointer.Text.Length > 0)
-                        {
-                            <pre class="first-run-snippet" id="@id" tabindex="0"><code>@pointer.Text</code></pre>
-                        }
-                    </li>
-                }
-            </ol>
+                        </li>
+                    }
+                </ol>
+            }
             <p class="first-run-onward">
                 <a class="first-run-door" href="@Model.Door">Open @Model.Name</a>
             </p>
@@ -126,7 +137,7 @@
     /// whoever is signed in.</summary>
     public static Frame Frame(FirstRun firstRun)
         => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "First run" : "Pointers")],
-            firstRun.Reader is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null);
+            firstRun.Reader is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings) : null);
 
     private string PanelClass => Model.Pointers is null ? "sign-in-panel" : "sign-in-panel first-run-panel";
 

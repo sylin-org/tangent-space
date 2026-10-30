@@ -1,5 +1,3 @@
-using Koan.Data.Abstractions;
-using Koan.Data.Core.Sorting;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -63,7 +61,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         {
             if (await Tangent.FreeSlug(Posts.Slug.From(name, Unnamed), ct) is not { } slug) return await Refused(place, personId, fields, NoSlug, ct);
             var outcome = await writer.Send(new CreateTangent(slug, name, description,
-                kind is { } chosenKind ? Enum.GetValues<PostKind>()[chosenKind] : PostKind.Topic, await NextOrder(ct),
+                kind is { } chosenKind ? Enum.GetValues<PostKind>()[chosenKind] : PostKind.Topic, await Tangent.NextOrder(ct),
                 audience is { } chosenAudience ? Enum.GetValues<Audience>()[chosenAudience] : Audience.Public, personId ?? ""), ct);
             switch (outcome)
             {
@@ -85,15 +83,6 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         }
 
         return await Refused(place, personId, fields, NoSlug, ct);
-    }
-
-    /// <summary>The order that puts a new Tangent after the existing ones, the moderators' Tangent aside, which comes after
-    /// every other: one more than the highest below it; one bounded read of one row.</summary>
-    private static async Task<int> NextOrder(CancellationToken ct)
-    {
-        var last = await Tangent.Query(tangent => tangent.Order < ModeratorsTangent.Order,
-            new QueryDefinition { Page = 1, PageSize = 1 }.WithSort<Tangent>(sort => sort.OrderByDescending(tangent => tangent.Order)), ct);
-        return last.Count == 0 ? 1 : last[0].Order + 1;
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again keeping what

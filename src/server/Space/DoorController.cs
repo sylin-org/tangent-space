@@ -170,11 +170,13 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             new Door.Crowd(writers.Count, full, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
-                Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back),
+                Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
+                place.Holds(Bit.ManageSpace) ? baseAddress + TangentSpaceSettingsController.Path : null),
             DateOnly.FromDateTime(DateTime.UtcNow),
             Resume(baseAddress, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0)),
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
         {
+            Description = space.Description,
             Offers = offered
         });
     }
