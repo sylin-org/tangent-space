@@ -10,8 +10,9 @@
    answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
    out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
-   it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
-   in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
+   it seen and, while they have notifications they have not seen, how many, linked to them — and then the front page:
+   the featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front
+   page, with how many notifications they have not seen, linked to them, while there are some. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address. *@
 <main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Model.Address })">
     <section class="tangent-head" aria-labelledby="door-title">
@@ -128,6 +129,10 @@
                 {
                     <div class="topic-empty">
                         <p class="topic-empty-title">Nothing new since you were here.</p>
+                        @if (news.Notifications is { } notifications)
+                        {
+                            <p class="tangent-description"><a href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a></p>
+                        }
                     </div>
                 }
                 else
@@ -135,6 +140,10 @@
                     <section class="door-news" aria-labelledby="door-news-title">
                         <div class="topic-list-head">
                             <h2 id="door-news-title" class="topic-list-title">Since you were here</h2>
+                            @if (news.Notifications is { } notifications)
+                            {
+                                <a class="watch-button door-notifications" href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a>
+                            }
                             @if (news.CaughtUp is { } caughtUp)
                             {
                                 <form method="post" action="@caughtUp.Action">
@@ -195,7 +204,7 @@
     /// reads, or where a visitor signs in.</summary>
     public static Frame Frame(Door door)
     {
-        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings) : null;
+        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.Notifications) : null;
         return new(door.Name, door.Address, [new Crumb(door.Name)], who, door.SignIn);
     }
 

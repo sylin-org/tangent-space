@@ -106,7 +106,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Notifications: events where I am the target, read by advancing the checkpoint; a few preferences | notifications | `NotificationsPage`, `ParticipantPreferences` (harvest) | — | S | todo |
+| Notifications: the events where I am the target, that someone else did and that I may view, at `/notifications` a page at a time from a sealed cursor, each one line one click from what it is about, an open Offer with its two answers; my own opening of them, never my delegate's, moves my notifications checkpoint without waiting on the writer, and every page's masthead counts what lies past it among what I may view, "at least" past 99, raised live by the page's stream; the door names them, with how many, while there are some. No preference scored five, so none is built | notifications, door, every page's masthead | `NotificationsPage`, `ParticipantPreferences` (harvest) | — | S | done |
 | Watching: the flag on a checkpoint; one line on the door | door | `FollowButton` (harvest) | — | S | todo |
 | Search across titles and bodies, bounded, with header suggestions | search | `SearchBox`, `SearchPage` (transplant) | brief 4 | S | todo |
 

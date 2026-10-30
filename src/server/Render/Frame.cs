@@ -1,7 +1,8 @@
 namespace Tangent.Render;
 
 /// <summary>The frame the shell draws around a page: the place's name and its door in the masthead, who is signed in
-/// where someone is or where a visitor signs in, and where the page is, as crumbs in the path bar. A resource that
+/// where someone is, with how many of their notifications they have not seen, or where a visitor signs in, and where the
+/// page is, as crumbs in the path bar. A resource that
 /// names a frame gets the masthead, the path bar and the footer; one that names none gets its component alone in the
 /// page.</summary>
 public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumbs, Who? Who = null, string? SignIn = null)
@@ -12,8 +13,10 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
 
 /// <summary>Who is signed in, as the account menu shows them: their id, the name to show, their handle, the highest role they
 /// hold where they hold one, their avatar where their profile has one, where they sign out, coming back to the page
-/// they are on, and the place's settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>.</summary>
-public sealed record Who(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
+/// they are on, the place's settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>,
+/// and how many of their notifications they have not seen, which the masthead shows beside the account.</summary>
+public sealed record Who(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
+    Events.Notifications.Unseen? Notifications = null);
 
 /// <summary>One step of the path bar. The last crumb is the page itself and has no address. A crumb with a
 /// <see cref="Switcher"/> is a Tangent's, drawn with its tile and opening the list of Tangents in the page.</summary>

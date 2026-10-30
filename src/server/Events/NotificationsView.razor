@@ -1,0 +1,154 @@
+@using System.Globalization
+@using global::Tangent.Offers
+@using global::Tangent.Render
+@* The reader's notifications, in one panel, newest first, one line each in an Offer's line: a mark where it is new
+   since they last opened them; who did it, by their mark and name, where the line names them; what happened, its
+   subject a link to what it is about — the Post, the Topic taken on a tangent, the door, their profile, or where the
+   place answers — and when; a Post's opening words under it; and an open Offer's two answers beside it, a decided one
+   saying how it was decided. None reads as one sentence, and a page that shows none but has older ones says so above
+   the way to them. Older notifications and the newest are a link away. *@
+<div class="layout">
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="notifications-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">In <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="notifications-heading" class="sign-in-title">Notifications</h1>
+                @if (Model.Entries.Count == 0)
+                {
+                    <p class="post-form-note">@Empty()</p>
+                }
+                else
+                {
+                    <ul class="door-offers notifications">
+                        @foreach (var entry in Model.Entries)
+                        {
+                            <li class="@(entry.New ? "door-offer notification is-new" : "door-offer notification")" @key="entry.Seq">
+                                <div class="notification-body">
+                                    <p class="door-offer-line notification-line">
+                                        @if (entry.New)
+                                        {
+                                            <span class="new-dot notification-dot" role="img" aria-label="New"></span>
+                                        }
+                                        @if (entry.Who is { } who)
+                                        {
+                                            @TopicRow.Mark(who, "face")
+                                        }
+                                        <span class="notification-text">@Line(entry) <span class="topic-row-none">· @Where(entry)<time datetime="@entry.At.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@TopicRow.When(entry.At, Model.Day)</time></span></span>
+                                    </p>
+                                    @if (entry.Line is { Length: > 0 } opening)
+                                    {
+                                        <p class="notification-opening">@opening</p>
+                                    }
+                                </div>
+                                @if (entry.Offer is { Use: { } use, Decline: { } decline, Token: { } token } offer)
+                                {
+                                    <div class="door-offer-answers">
+                                        <form method="post" action="@use">
+                                            <FormTokenField Token="@token" />
+                                            <input type="hidden" name="@OfferController.Field" value="@offer.Id">
+                                            <button type="submit" class="tangent-new">Use it</button>
+                                        </form>
+                                        <form method="post" action="@decline">
+                                            <FormTokenField Token="@token" />
+                                            <input type="hidden" name="@OfferController.Field" value="@offer.Id">
+                                            <button type="submit" class="watch-button">Not this one</button>
+                                        </form>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (Model.Continued || Model.Next is not null)
+                {
+                    <nav class="topic-pages" aria-label="More notifications">
+                        @if (Model.Continued)
+                        {
+                            <a href="@Model.Address">Newest notifications</a>
+                        }
+                        @if (Model.Next is { } next)
+                        {
+                            <a class="topic-pages-next" href="@next">Older notifications →</a>
+                        }
+                    </nav>
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public NotificationsPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and the notifications as crumbs, and who reads.</summary>
+    public static Frame Frame(NotificationsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Notifications")], page.Who);
+
+    /// <summary>What a page without a notification to show says, by what it read: older ones a page away, none older, or
+    /// none yet.</summary>
+    private string Empty() => Model.Next is not null
+        ? (Model.Continued ? "Nothing to show among these" : "Nothing to show among the newest") + "; older notifications follow."
+        : Model.Continued ? "No older notifications."
+        : "Nothing for you yet. Replies to you, mentions of you and what the place offers you arrive here.";
+
+    /// <summary>The Tangent a Post's notification is in, before its time.</summary>
+    private static string Where(NotificationsPage.Entry entry) => entry.Tangent is { } tangent ? tangent + " · " : "";
+
+    /// <summary>What happened, in a line: who did it, in bold, and its subject linked to what it is about.</summary>
+    private static RenderFragment Line(NotificationsPage.Entry entry) => entry.Kind switch
+    {
+        NotificationsPage.Kinds.Reply => Named(entry, "replied to you in", entry.Removed == true ? " — since removed" : ""),
+        NotificationsPage.Kinds.Mention => Named(entry, "mentioned you in", entry.Removed == true ? " — since removed" : ""),
+        NotificationsPage.Kinds.Taken => Named(entry, "took your post on a tangent:", ""),
+        NotificationsPage.Kinds.Standing => Linked(entry, Standing(entry)),
+        NotificationsPage.Kinds.Role => Linked(entry, (entry.Given == true ? "made you " + Article(entry.Role ?? "") + " " + entry.Role : "took your " + entry.Role + " role") + "."),
+        NotificationsPage.Kinds.Offer when entry.Offer is { } offer => Offered(entry, offer),
+        _ => Linked(entry, "Something here concerns you.")
+    };
+
+    /// <summary>A Post's notification: who, what they did, and the Topic, linked to the Post.</summary>
+    private static RenderFragment Named(NotificationsPage.Entry entry, string did, string after) => @<text><strong>@(entry.Who?.Name ?? "Someone")</strong> @did <a class="notification-link" href="@entry.Address">@entry.Topic</a>@after</text>;
+
+    /// <summary>A notification whose sentence is its link, after who did it where the page names them.</summary>
+    private static RenderFragment Linked(NotificationsPage.Entry entry, string sentence) => @<text>@if (entry.Who is { } who)
+        {
+            <strong>@who.Name</strong>@(" ")
+        }@if (entry.Address is { } address)
+        {
+            <a class="notification-link" href="@address">@sentence</a>
+        }
+        else
+        {
+            @sentence
+        }</text>;
+
+    /// <summary>A change of the reader's standing, in the door's words.</summary>
+    private static string Standing(NotificationsPage.Entry entry) => (entry.Standing, entry.Was) switch
+    {
+        ("admitted", "timed-out") => "lifted your timeout: you’re back, and you can start topics and reply here again.",
+        ("admitted", "banned") => "lifted your ban: you’re back, and you can start topics and reply here again.",
+        ("admitted", _) => "admitted you: you can start topics and reply here.",
+        ("declined", _) => "Your application was declined, so you read here and don’t write.",
+        ("timed-out", _) => "You were timed out: you can read and report here, and post again once it ends.",
+        ("banned", _) => "You were banned.",
+        _ => "Your standing here changed."
+    };
+
+    /// <summary>An Offer: while open, what it offers to do, beside its two answers; once decided, how.</summary>
+    private static RenderFragment Offered(NotificationsPage.Entry entry, NotificationsPage.Offered offer) => offer.State switch
+    {
+        "open" => Asked(offer),
+        "accepted" => Decided(entry, "You made ", offer.Subject, " this place’s address."),
+        "declined" => Decided(entry, "You declined ", offer.Subject, " as this place’s address."),
+        _ => Decided(entry, "The offer of ", offer.Subject, " as this place’s address lapsed once an address was configured.")
+    };
+
+    private static RenderFragment Asked(NotificationsPage.Offered offer)
+        => @<text>This place is being reached at <strong>@offer.Subject</strong>. Use it as its address?</text>;
+
+    private static RenderFragment Decided(NotificationsPage.Entry entry, string before, string subject, string after)
+        => @<text>@before<a class="notification-link" href="@entry.Address">@subject</a>@after</text>;
+
+    /// <summary>The article a role's word takes.</summary>
+    private static string Article(string role) => role.Length > 0 && "aeiou".Contains(role[0]) ? "an" : "a";
+}

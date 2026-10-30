@@ -149,7 +149,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             reader is null ? null : new TopicPage.Reader(
                 reader.Id, Named(reader).Name, Named(reader).Handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
                 baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
-                await PostWrites.SettingsFor(reader.Id, baseAddress, ct)),
+                await PostWrites.SettingsFor(reader.Id, baseAddress, ct),
+                await Events.Notifications.Count(reader.Id, baseAddress, ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             takenFrom));
     }

@@ -63,7 +63,9 @@ public sealed record Door(
     /// <see cref="CaughtUp"/> is the form that moves the place checkpoint to <see cref="Through"/>, present while there
     /// is news. <see cref="Admitted"/> is who admitted the reader and when, and <see cref="Lifted"/> who lifted their
     /// timeout or ban and when, where that happened since their checkpoint and they stand admitted still;
-    /// <see cref="Roles"/> are the roles someone gave them or took from them since then, the newest change of each.</summary>
+    /// <see cref="Roles"/> are the roles someone gave them or took from them since then, the newest change of each.
+    /// <see cref="Notifications"/> is how many of the reader's notifications they have not seen and where they are,
+    /// present while there are some.</summary>
     public sealed record Since(
         long From,
         long Through,
@@ -78,6 +80,10 @@ public sealed record Door(
         Decision? Lifted = null,
         IReadOnlyList<RoleChange>? Roles = null)
     {
+        /// <summary>How many of the reader's notifications they have not seen and where they are, present while there are
+        /// some.</summary>
+        public Events.Notifications.Unseen? Notifications { get; init; }
+
         /// <summary>Whether nothing is new to the reader.</summary>
         public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
                              && Admitted is null && Lifted is null && (Roles?.Count ?? 0) == 0;
@@ -130,8 +136,10 @@ public sealed record Door(
 
     /// <summary>The signed-in reader: their id, the name to show, their handle, the highest role they hold where they
     /// hold one, their avatar, where they sign out, coming back to the door, and the place's settings, for one who holds
-    /// <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>.</summary>
-    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
+    /// <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many of their notifications they have not
+    /// seen.</summary>
+    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
+        Events.Notifications.Unseen? Notifications = null);
 
     /// <summary>Where the door stands in the log and where to ask again: the sequence it read through for this reader, and the
     /// poll's address past it.</summary>

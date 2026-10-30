@@ -117,7 +117,8 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
         var role = participant is null ? null : Roles.Word((await Capabilities.Load(personId, null, null, ct)).RoleIds);
         var signOut = BaseAddress() + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path);
-        return new Who(personId, name, handle, role, participant?.Profile.Avatar, signOut, await Posts.PostWrites.SettingsFor(personId, BaseAddress(), ct));
+        return new Who(personId, name, handle, role, participant?.Profile.Avatar, signOut, await Posts.PostWrites.SettingsFor(personId, BaseAddress(), ct),
+            await Events.Notifications.Count(personId, BaseAddress(), ct));
     }
 
     /// <summary>This page's address under the base URL with what it was asked for, for sign-in to come back to.</summary>

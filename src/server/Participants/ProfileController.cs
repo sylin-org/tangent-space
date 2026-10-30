@@ -128,7 +128,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             rows.Space.Name,
             baseAddress + "/",
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
-            reader is null ? null : Reader(reader, place, back),
+            reader is null ? null : Reader(reader, place, back, await Events.Notifications.Count(reader.Id, baseAddress, ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             listed,
             forms));
@@ -210,12 +210,13 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             post.CreatedAt);
     }
 
-    /// <summary>The signed-in reader as the account menu shows them, signing out back to this profile.</summary>
-    private Who Reader(Participant reader, Capabilities place, string back)
+    /// <summary>The signed-in reader as the account menu shows them, signing out back to this profile, with how many of
+    /// their notifications they have not seen.</summary>
+    private Who Reader(Participant reader, Capabilities place, string back, Events.Notifications.Unseen unseen)
     {
         var (name, handle) = Named(reader);
         return new Who(reader.Id, name, handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
-            BaseAddress() + AuthConstants.Routes.Logout + "?return=" + back);
+            BaseAddress() + AuthConstants.Routes.Logout + "?return=" + back, Notifications: unseen);
     }
 
     /// <summary>The name a participant is shown by, and their handle: the profile's display name, else the handle, else

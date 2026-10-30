@@ -48,5 +48,6 @@ public sealed record FirstRunWaiting(string Handle, string? OperatorHandle = nul
 
 /// <summary>The signed-in person reading first run: the name to show, their handle, the highest role they hold where
 /// they hold one, their avatar, where they sign out, coming back to first run, and the place's settings, for one who
-/// holds <c>ManageSpace</c> once it is established.</summary>
-public sealed record FirstRunReader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
+/// holds <c>ManageSpace</c> once it is established, and how many of their notifications they have not seen once it is.</summary>
+public sealed record FirstRunReader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
+    Events.Notifications.Unseen? Notifications = null);

@@ -82,8 +82,10 @@ public sealed partial record TangentPage(
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
     /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
-    /// settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>.</summary>
-    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
+    /// settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many of their
+    /// notifications they have not seen.</summary>
+    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
+        Events.Notifications.Unseen? Notifications = null);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are
     /// written for among it, so the same page for a visitor on the same day answers the same tag, and a new Post, a

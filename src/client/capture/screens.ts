@@ -457,6 +457,19 @@ export const screens: Readonly<Record<string, Screen>> = {
       },
     ],
   },
+  // The persona's notifications: none yet; with what the notifications seed holds, newest first, those since she last
+  // opened them marked new; and, as the operator of a place reached at a public origin while it has no address, the
+  // Offer among them with its two answers. Last, the frame's count of what she has not seen, on the door. Opening them
+  // moves her checkpoint, which the seed puts back before every width and theme.
+  notifications: {
+    path: '/notifications',
+    states: [
+      { name: 'empty', signedIn: true },
+      { name: 'with-entries', seed: 'notifications', reseed: 'notifications-unseen', signedIn: true },
+      { name: 'with-offer', seed: 'offer', reseed: 'notifications-unseen', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'count', seed: 'notifications', reseed: 'notifications-unseen', signedIn: true, path: '/' },
+    ],
+  },
   // The form that takes Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted and the
   // Tangents she may start a Topic in listed; sent with a title of nothing but spaces, refused under the title; and as a
   // visitor reads it, who is told to sign in.
