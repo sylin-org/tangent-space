@@ -29,7 +29,7 @@ public sealed class ReplyController(KoanWebBaseUrl baseUrl, WriteLoop writer) : 
         var outcome = await writer.Send(new Reply(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             root.Id,
-            PostWrites.Body(fields, found.Rows.For(root).Holds(Bit.Post)),
+            await PostWrites.Body(fields, found.Rows.For(root).Holds(Bit.Post), ct),
             personId ?? "",
             fields.GetValueOrDefault(PostWrites.ParentField) is { Length: > 0 } parent ? parent : null), ct);
         return outcome switch

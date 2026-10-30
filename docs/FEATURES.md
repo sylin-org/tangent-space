@@ -64,7 +64,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Checkpoints and the watch flag | topic | `ReadPosition`, `Watches` (harvest) | — | S | done |
 | Reports: a Post taken on a tangent into the moderators' Tangent, with the origin | topic | `ReportPanel` (harvest) | — | S | done |
 | Phone layout for the topic | topic at 390 | `mobile-reader.css` (transplant) | — | S | todo |
-| Mentions a person can type: a typed `@handle` of a participant here becomes a mention when the Post is written, so it targets them as a DID link does | topic | — | — | S | todo |
+| Mentions a person can type: a typed `@handle` of a participant here becomes a mention when the Post is written, so it targets them as a DID link does | topic | — | — | S | done |
 
 ### 3 · Articles and publication
 

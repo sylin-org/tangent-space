@@ -14,8 +14,13 @@ public sealed class Post : Entity<Post>
     /// <summary>How many of a Topic's most recent authors its root keeps.</summary>
     public const int RecentAuthorLimit = 4;
 
-    /// <summary>The most UTF-8 bytes a body holds.</summary>
+    /// <summary>The most UTF-8 bytes a body holds as its sender sent it.</summary>
     public const int BodyLimit = 64 * 1024;
+
+    /// <summary>The most UTF-8 bytes a body holds as the Post keeps it: what was sent, within <see cref="BodyLimit"/>,
+    /// grown by at most <see cref="Mentions.Limit"/> typed handles written as mentions, each adding at most
+    /// <see cref="Mentions.TypedWeight"/>.</summary>
+    public const int KeptBodyLimit = BodyLimit + Mentions.Limit * Mentions.TypedWeight;
 
     public const int TitleLimit = 200;
 
@@ -82,6 +87,10 @@ public sealed class Post : Entity<Post>
     /// <summary>The DIDs the body mentions, each once, in the order of their first mention, at most
     /// <see cref="Mentions.Limit"/>; empty on a tombstone.</summary>
     public List<string> MentionedIds { get; set; } = [];
+
+    /// <summary>The body as the request that last wrote it sent it, as <see cref="PostBody.SentHash"/>: read only to
+    /// recognize that request sent again, whoever its typed handles name by then; empty on a tombstone.</summary>
+    public string SentHash { get; set; } = "";
 
     /// <summary>Raised by every edit.</summary>
     public long Version { get; set; } = 1;
@@ -157,6 +166,7 @@ public sealed class Post : Entity<Post>
             Title = title.Trim(),
             Body = text,
             MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [],
+            SentHash = body.SentHash,
             AuthorId = authorId,
             CreatedAt = at,
             LastActivityAt = at,
@@ -195,6 +205,7 @@ public sealed class Post : Entity<Post>
             ParentId = parentId,
             Body = body.Text,
             MentionedIds = [.. body.Mentioned],
+            SentHash = body.SentHash,
             Sequence = LastSequence,
             AuthorId = authorId,
             CreatedAt = at
@@ -203,8 +214,14 @@ public sealed class Post : Entity<Post>
 
     /// <summary>Whether an edit with this body and title would leave the Post as it is: the same body, and on a root the
     /// same title or none sent; a reply sent no title.</summary>
-    public bool Unchanged(string body, string? title) =>
-        Body == body && (ParentId is null ? title is null || Title == title.Trim() : string.IsNullOrEmpty(title));
+    public bool Unchanged(string body, string? title) => Body == body && Titled(title);
+
+    /// <summary>Whether an edit made from <paramref name="version"/> with this body and title is the one that made the
+    /// Post what it is, sent again: it took the Post from that version to this one with the same words sent, and on a
+    /// root the same title or none; a reply sent no title. Whoever its typed handles name now changes nothing.</summary>
+    public bool MadeBy(long version, PostBody body, string? title) => Version == version + 1 && SentHash == body.SentHash && Titled(title);
+
+    private bool Titled(string? title) => ParentId is null ? title is null || Title == title.Trim() : string.IsNullOrEmpty(title);
 
     /// <summary>Changes the body, and a root's title when one is sent, and raises <see cref="Version"/>, or a refusal: the
     /// Post is not removed, the body and title are within their limits, and a reply is sent no title. A root taken on a
@@ -224,6 +241,7 @@ public sealed class Post : Entity<Post>
 
         Body = text;
         MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [];
+        SentHash = body.SentHash;
         Version = checked(Version + 1);
     }
 
@@ -240,16 +258,19 @@ public sealed class Post : Entity<Post>
         RemovedAt = at;
         Body = "";
         MentionedIds = [];
+        SentHash = "";
     }
 
-    /// <summary>Refuses a body that is empty, holds a NUL or more than <see cref="BodyLimit"/> bytes, or that its own
-    /// judgement refused (<see cref="PostBody.Refusal"/>): too intricate to render quickly, rendering too large or too
-    /// deep, or mentioning too many identities.</summary>
+    /// <summary>Refuses a body that is empty, holds a NUL, was sent with more than <see cref="BodyLimit"/> bytes or would
+    /// be kept with more than <see cref="KeptBodyLimit"/>, or that its own judgement refused
+    /// (<see cref="PostBody.Refusal"/>): too intricate to render quickly, rendering too large or too deep, or mentioning
+    /// too many identities.</summary>
     public static void CheckBody(PostBody body)
     {
         if (string.IsNullOrWhiteSpace(body.Text)) throw new Refusal(NeedsBody);
         if (body.Text.Contains('\0')) throw new Refusal(BodyHasNul);
-        if (Encoding.UTF8.GetByteCount(body.Text) > BodyLimit) throw new Refusal(BodyTooLong);
+        if (Encoding.UTF8.GetByteCount(body.Sent) > BodyLimit || Encoding.UTF8.GetByteCount(body.Text) > KeptBodyLimit)
+            throw new Refusal(BodyTooLong);
         if (body.Refusal is { } refusal) throw new Refusal(refusal);
     }
 

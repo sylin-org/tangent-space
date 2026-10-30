@@ -50,7 +50,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         var title = fields.GetValueOrDefault(PostWrites.TitleField);
         if (PostWrites.Version(fields) is not { } version) return await Refused(root, row, personId, fields, PostWrites.VersionRule, ct);
         var may = found.Capabilities;
-        var outcome = await writer.Send(new EditPost(row.Id, version, PostWrites.Body(fields, may.Holds(Bit.EditOwn) || may.Holds(Bit.Moderate)), title,
+        var outcome = await writer.Send(new EditPost(row.Id, version, await PostWrites.Body(fields, may.Holds(Bit.EditOwn) || may.Holds(Bit.Moderate), ct), title,
             personId ?? ""), ct);
         switch (outcome)
         {

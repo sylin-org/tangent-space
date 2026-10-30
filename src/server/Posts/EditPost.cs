@@ -15,8 +15,9 @@ namespace Tangent.Posts;
 /// its version rises, and <see cref="EventKind.PostEdited"/> is appended with the new version, with one
 /// <see cref="EventKind.Mention"/> per participant the new body mentions and the old did not
 /// (<see cref="Mentions.Notify"/>); the body is judged where the command is built (<see cref="PostBody"/>), never in
-/// the writer. Safe to repeat: when the
-/// Post already says what the command says, at any version, it answers with the Post and writes nothing.</summary>
+/// the writer. Safe to repeat: when the Post already says what the command says, at any version, or this edit made it
+/// what it is and is sent again — from the version before, with the same words sent, whoever their typed handles name
+/// now (<see cref="Post.MadeBy"/>) — it answers with the Post and writes nothing.</summary>
 public sealed record EditPost(
     string PostId,
     long Version,
@@ -39,7 +40,7 @@ public sealed record EditPost(
         if (!capabilities.Holds(Bit.EditOwn) && !capabilities.Holds(Bit.Moderate))
             return new Outcome<Post>.Refused(capabilities.Gate(Bit.EditOwn)!);
 
-        if (post.Unchanged(Body.Text, Title)) return new Outcome<Post>.Done(post);
+        if (post.Unchanged(Body.Text, Title) || post.MadeBy(Version, Body, Title)) return new Outcome<Post>.Done(post);
         if (post.Version != Version) return new Outcome<Post>.Conflict(Stale(post.Version));
 
         var at = At ?? DateTimeOffset.UtcNow;

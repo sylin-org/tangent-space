@@ -10,9 +10,9 @@ namespace Tangent.Posts;
 /// <summary>Reports a Post: takes it on a tangent into the moderators' Tangent (<see cref="ModeratorsTangent"/>) as a
 /// Topic whose root carries the reported Post as its origin, the reporter as its author, a title (<see cref="Title"/>)
 /// and the reason as its body. The title names the reported Topic only where the moderator role may view the reported
-/// Tangent (<see cref="ModeratorsTangent.MayView"/>); elsewhere it is the reason's first words, so nothing of a Tangent
-/// the moderators may not view reaches theirs. Reporting is its own verb, held by every participant for whom the
-/// Post exists, whatever they hold in the moderators' Tangent: the Post exists for the reporter, who holds
+/// Tangent (<see cref="ModeratorsTangent.MayView"/>); elsewhere it is the reason's first words as sent, so nothing of
+/// a Tangent the moderators may not view reaches theirs. Reporting is its own verb, held by every participant for
+/// whom the Post exists, whatever they hold in the moderators' Tangent: the Post exists for the reporter, who holds
 /// <see cref="Bit.View"/> where it is, or the command answers that no Post has the Id before anything else; a visitor is
 /// refused with <see cref="Capabilities.SignIn"/>; a Post of the moderators' Tangent with <see cref="InModerators"/>; a
 /// removed Post with <see cref="Capabilities.Removed"/>; a reason of
@@ -84,7 +84,7 @@ public sealed record ReportPost(
         }
         else
         {
-            var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : FirstWords(Reason.Text));
+            var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : FirstWords(Reason.Sent));
             written = Post.Root(Id, into.Id, title, await StartTopic.UniqueSlug(into.Id, title, Id, ct), into.DefaultKind, Reason, ReporterId, at,
                 reported.Id);
             await written.Save(ct);
