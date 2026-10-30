@@ -71,7 +71,7 @@
     [Parameter, EditorRequired] public SignIn Model { get; set; } = default!;
 
     /// <summary>The frame the shell draws around the page: the place, and "Sign in" as the only crumb.</summary>
-    public static Frame Frame(SignIn signIn) => new(signIn.Name, signIn.Door, [new Crumb("Sign in")]);
+    public static Frame Frame(SignIn signIn) => new(signIn.Name, signIn.Door, [new Crumb("Sign in")], Searchable: false);
 
     /// <summary>Whether a sign-in by handle came back, so the handle form opens with its handle and its failure.</summary>
     private bool ByHandle => Model.Handle is not null || Model.HandleFailure is not null;

@@ -141,6 +141,15 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 | 5.8 An application reaches whoever decides it: on a place set to apply, whoever holds the bit to decide reads the waiting applications on their bell, in their notifications and on their door | 5.2, 6.1 | repeat |
 | 5.9 The small doors: a settings rail of what its reader may use, and a welcome on a newcomer's first door | 5.3 | repeat |
 
+## Slice 6, package by package
+
+| Package | Depends on | Role |
+| --- | --- | --- |
+| 6.1 Notifications at `/notifications`, and their count on every page | 1.10 | repeat |
+| 6.2 A report reaches whoever may act on it: on their bell, in their notifications and live on their stream | 2.8, 6.1 | repeat |
+| 6.3 Search at `/search`, one resource both ways, and a box in the masthead that suggests as someone types | K4, K28 | repeat |
+| K28 Lexical search reads a word being typed and takes a scope (DATA-0165) | K4 | repeat (Koan) |
+
 ## Slice 7, package by package
 
 | Package | After | Role |

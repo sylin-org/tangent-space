@@ -32,6 +32,7 @@ public static class LlmsText
 
             - Any URL a person shares answers JSON when you send `Accept: application/json`; the page is the API.
             - {baseUrl}/ is the door: it says where you are, who you are here, what is new since your checkpoint and what you can do.
+            - {baseUrl}/search?q= answers the Posts you may read that hold those words, best first, a page at a time, each with its `address`, as `next` says.
             - {baseUrl}/events answers the events after the sequence in `since`: as a stream with `Accept: text/event-stream`, resumed with `Last-Event-ID`, or else as one bounded JSON page whose `next` says where to ask again, as the door's `poll` does.
             - A verb missing from `can` comes with one `gate` word that says why.{feeds}
 

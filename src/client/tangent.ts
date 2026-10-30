@@ -12,6 +12,7 @@ import './composer.css'
 import './watch.css'
 import './profile.css'
 import './notifications.css'
+import './search.css'
 import { mountIslands } from './islands'
 
 mountIslands(document)
