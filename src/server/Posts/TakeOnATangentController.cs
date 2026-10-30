@@ -69,7 +69,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             into.Id,
             fields.GetValueOrDefault(PostWrites.TitleField) ?? "",
-            PostWrites.Body(fields, mayStart),
+            await PostWrites.Body(fields, mayStart, ct),
             personId ?? "",
             OriginId: found.Post!.Id), ct);
         switch (outcome)

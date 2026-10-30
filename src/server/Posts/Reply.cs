@@ -13,9 +13,10 @@ namespace Tangent.Posts;
 /// the author, who holds <see cref="Bit.View"/> in its Tangent, or the command answers that no Topic has the Id; the
 /// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a locked or removed one, or is refused with
 /// the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
-/// gate, so a replay is safe; a Post of this Topic holding the Id with a different parent, body or author is a conflict,
-/// and a Post anywhere else holding it is refused with <see cref="Post.IdTaken"/>, which says nothing of that
-/// Post. The body is judged where the command is built (<see cref="PostBody"/>), never in the writer.</summary>
+/// gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Topic holding the Id with a
+/// different parent, body or author is a conflict, and a Post anywhere else holding it is refused with
+/// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built
+/// (<see cref="PostBody"/>), never in the writer.</summary>
 public sealed record Reply(
     string Id,
     string TopicId,
@@ -56,8 +57,9 @@ public sealed record Reply(
         return new Outcome<Post>.Done(reply);
     }
 
-    /// <summary>Whether the existing row is this request: the same Topic, parent, body and author.</summary>
+    /// <summary>Whether the existing row is this request: the same Topic, parent and author, and the same words sent,
+    /// whoever their typed handles name now.</summary>
     private bool Same(Post existing) =>
         existing.TopicId == TopicId && existing.ParentId == (ParentId ?? TopicId)
-        && existing.Body == Body.Text && existing.AuthorId == AuthorId;
+        && existing.SentHash == Body.SentHash && existing.AuthorId == AuthorId;
 }

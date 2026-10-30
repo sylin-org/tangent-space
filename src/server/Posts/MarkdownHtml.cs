@@ -21,8 +21,9 @@ namespace Tangent.Posts;
 /// image followed by emphasis alone, in its paragraph or the next, becomes a figure with that caption. A caller may
 /// hold links by their target (<see cref="Render"/>): each is left out of the parse's result and given its target and
 /// words when the result is written out (<see cref="Rendered.Html"/>, <see cref="Rendered.PlainText"/>), so one parse
-/// serves every later answer. <see cref="Tractable"/> refuses, by a linear count, the structures that make Markdig's
-/// parse grow with the square of their size. Pure: no I/O.</summary>
+/// serves every later answer. <see cref="Prose"/> says where in the source the words a reader reads as words stand.
+/// <see cref="Tractable"/> refuses, by a linear count, the structures that make Markdig's parse grow with the square of
+/// their size. Pure: no I/O.</summary>
 public static class MarkdownHtml
 {
     /// <summary>The most UTF-8 bytes rendered HTML may hold, every held link written at its longest.</summary>
@@ -49,6 +50,10 @@ public static class MarkdownHtml
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UsePipeTables().UseSoftlineBreakAsHardlineBreak().DisableHtml().Build();
+
+    /// <summary>The same parse, with every inline's place in the source.</summary>
+    private static readonly MarkdownPipeline Located = new MarkdownPipelineBuilder()
+        .UsePipeTables().UseSoftlineBreakAsHardlineBreak().DisableHtml().UsePreciseSourceLocation().Build();
 
     private static readonly HtmlSanitizer Sanitizer = CreateSanitizer();
 
@@ -269,6 +274,36 @@ public static class MarkdownHtml
         foreach (Match match in HeldAnchor.Matches(html)) labels.TryAdd(int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), match.Groups[2].Value);
         return new Rendered(Pieces(html, HeldAnchor, match => match.Groups[2].Value), Pieces(Plain(document), HeldWords, match => Words(labels, match)),
             held.Select(entry => entry.Target).ToList());
+    }
+
+    /// <summary>Where <paramref name="markdown"/> holds its prose: each run of the source that reads as words, in the
+    /// order of the source — never code, a link's words or its target, an image's description or an autolink. A run is
+    /// where its words stand within the source Markdig places them in, which may hold more: a table cell's padding, or
+    /// the backslash of an escape; where the words are not found there as they read, the whole place is the run. One
+    /// parse; ask <see cref="Tractable"/> first, since Markdig throws <see cref="ArgumentException"/> past its nesting
+    /// limit.</summary>
+    public static IReadOnlyList<Range> Prose(string markdown)
+    {
+        Interlocked.Increment(ref _parses);
+        var runs = new List<Range>();
+        foreach (var literal in Markdown.Parse(markdown, Located).Descendants<LiteralInline>())
+        {
+            var span = literal.Span;
+            if (InLink(literal) || span.IsEmpty || span.Start < 0 || span.End >= markdown.Length) continue;
+            var words = literal.Content.AsSpan();
+            var at = words.IsEmpty ? -1 : markdown.AsSpan(span.Start, span.Length).IndexOf(words);
+            runs.Add(at >= 0 ? (span.Start + at)..(span.Start + at + words.Length) : span.Start..(span.End + 1));
+        }
+
+        return runs;
+    }
+
+    /// <summary>Whether an inline sits inside a link or an image, among its words or its description.</summary>
+    private static bool InLink(Inline inline)
+    {
+        for (var parent = inline.Parent; parent is not null; parent = parent.Parent)
+            if (parent is LinkInline) return true;
+        return false;
     }
 
     /// <summary>A held link's own words in the plain text: its words in the HTML, without their tags.</summary>
