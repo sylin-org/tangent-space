@@ -1,44 +1,36 @@
 using Koan.Identity.Roles;
 using Microsoft.Extensions.Options;
 using Tangent.Access;
+using Tangent.Participants;
 using Tangent.Writer;
 
 namespace Tangent.Space;
 
-/// <summary>What every start makes sure of about first run. An unestablished place with no operator configured draws
-/// a new setup code and writes it to the log once, as a warning, since the operator must act on it and ordinary
-/// production filters keep warnings. An established place refuses to start under a configured operator
-/// other than the one it was established with, since changing the setting never transfers the place; it has its
-/// moderators' Tangent, which the start creates where the place was established without one; and its operator
-/// is a member of the administrator role, which the start restores when a first run's own add never landed.</summary>
+/// <summary>What every start makes sure of about an established place. A configured operator matters only before
+/// setup, so the place starts whatever <c>Tangent:Operator</c> names; a value that names someone other than the
+/// operator draws one warning saying so. The place has its moderators' Tangent, which the start creates where the place
+/// was established without one; and its operator is a member of the administrator role, which the start restores when
+/// a first run's own add never landed.</summary>
 public static class FirstRunStart
 {
     public static async Task Run(IServiceProvider services, CancellationToken ct)
     {
-        var configured = services.GetRequiredService<IOptions<TangentSpaceOptions>>().Value.Operator;
-        var logger = services.GetRequiredService<ILogger<SetupCode>>();
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
-        if (space is null)
-        {
-            if (configured is null)
-                logger.LogWarning(
-                    "Setup code {SetupCode}: type it on the first-run page to set up this Tangent Space; it changes at every start until then, and setting {Setting} to your DID replaces it",
-                    services.GetRequiredService<SetupCode>().Draw(), FirstRun.OperatorSetting);
-            return;
-        }
-
-        if (configured is not null && configured != space.OperatorId)
-            throw new InvalidOperationException(
-                $"{FirstRun.OperatorSetting} names {configured}, but this Tangent Space's operator is {space.OperatorId}. Changing the setting never " +
-                $"transfers the place: set {FirstRun.OperatorSetting} to {space.OperatorId}, or remove it.");
+        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return;
+        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(FirstRunStart));
+        var options = services.GetRequiredService<IOptions<TangentSpaceOptions>>().Value;
+        if (options.NamedOperator() is { } named && space.OperatorId is { } operatorId
+            && !options.MaySetUp(operatorId, (await Participant.Get(operatorId, ct))?.Handle ?? ""))
+            logger.LogWarning(
+                "{Setting} names {Named}, but this Tangent Space's operator is {Operator}; the setting matters only before setup, so this start ignores it",
+                FirstRun.OperatorSetting, named, operatorId);
 
         if (space.ModeratorsTangentId is null) CreateModerators(services, logger);
 
-        if (space.OperatorId is not { } operatorId) return;
+        if (space.OperatorId is not { } administrator) return;
         var roles = services.GetRequiredService<RoleCollection>();
-        if ((await roles.Get(Roles.Administrator, ct))?.Members.Contains(operatorId) == true) return;
-        await roles.Add(Roles.Administrator, operatorId, ct);
-        logger.LogInformation("The operator {Operator} was not a member of {Role}; this start made them one", operatorId, Roles.Administrator);
+        if ((await roles.Get(Roles.Administrator, ct))?.Members.Contains(administrator) == true) return;
+        await roles.Add(Roles.Administrator, administrator, ct);
+        logger.LogInformation("The operator {Operator} was not a member of {Role}; this start made them one", administrator, Roles.Administrator);
     }
 
     /// <summary>Queues <see cref="CreateModeratorsTangent"/> as the writer's first command and logs its outcome. The

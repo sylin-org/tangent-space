@@ -14,8 +14,6 @@ export interface TangentSpace {
   baseUrl: URL
   /** Where the base URL's host and port actually answer. */
   listening: URL
-  /** The setup code the server wrote to its log at this start, when it drew one. */
-  setupCode?: string
   stop(): Promise<void>
 }
 
@@ -42,13 +40,14 @@ export function resolveServer(root: string, published?: string): string {
   return build.stdout.trim()
 }
 
-/** The base URL a Tangent Space states for itself: its door, asked for as JSON at the given address. */
+/** The base URL a Tangent Space states for itself before first run: the door its first-run resource links to, asked
+ *  for as JSON at the given address, without the door's closing slash. */
 export async function statedBaseUrl(door: URL): Promise<URL> {
   const response = await fetch(door, { headers: { accept: 'application/json' } })
   if (!response.ok) throw new Error(`${door} answered ${response.status} ${response.statusText}.`)
-  const { baseUrl } = (await response.json()) as { baseUrl?: unknown }
-  if (typeof baseUrl !== 'string') throw new Error(`${door} did not answer as the door of a Tangent Space.`)
-  return new URL(baseUrl)
+  const { door: stated } = (await response.json()) as { door?: unknown }
+  if (typeof stated !== 'string') throw new Error(`${door} did not answer as the door of a Tangent Space.`)
+  return new URL(stated.replace(/\/$/, ''))
 }
 
 /** The door's address under a base URL, keeping its path. */
@@ -127,8 +126,7 @@ export async function startTangentSpace(server: string, settings: Readonly<Recor
     }
     if (stated.href !== baseUrl.href)
       throw new Error(`${listening} states the base URL ${stated}, not ${baseUrl}: it is not this run's Tangent Space.`)
-    const setupCode = /Setup code ([0-9A-Z-]+):/.exec(log)?.[1]
-    return { baseUrl, listening, setupCode, stop }
+    return { baseUrl, listening, stop }
   } catch (failure) {
     await stop()
     throw new Error(`${(failure as Error).message}\n${log}`)
@@ -204,10 +202,9 @@ export async function signIn(listening: URL, persona: Persona): Promise<Map<stri
   return session
 }
 
-/** Establishes the place through first run as a persona, the way the page does: signs them in, reads the form's
- *  token from the first-run resource as JSON, and posts the form with the place's name, the operator's statement and
- *  the setup code the server logged, when it asks for one. */
-export async function establish(listening: URL, persona: Persona, name: string, setupCode?: string): Promise<void> {
+/** Establishes the place through first run as a persona, the way the page does: signs them in, reads the one action's
+ *  token from the first-run resource as JSON, and posts it. The place takes its name from the persona's handle. */
+export async function establish(listening: URL, persona: Persona): Promise<void> {
   const jar = await signIn(listening, persona)
   const cookies = () => [...jar].map(([key, value]) => `${key}=${value}`).join('; ')
   const page = await fetch(new URL('/first-run', listening), { headers: { accept: 'application/json', cookie: cookies() } })
@@ -217,16 +214,13 @@ export async function establish(listening: URL, persona: Persona, name: string, 
     const split = pair.indexOf('=')
     jar.set(pair.slice(0, split).trim(), pair.slice(split + 1))
   }
-  const { form } = (await page.json()) as { form?: { token?: { field?: string; value?: string }; asksCode?: boolean } }
-  if (!form?.token?.field || !form.token.value) throw new Error(`The first-run page holds no form for ${persona.name}.`)
-  if (form.asksCode && !setupCode) throw new Error('The first-run form asks for the setup code, and the server logged none.')
-  const body = new URLSearchParams({ [form.token.field]: form.token.value, name, proprietor: 'me', handle: '', accountable: 'yes' })
-  if (form.asksCode && setupCode) body.set('code', setupCode)
+  const { setUp } = (await page.json()) as { setUp?: { token?: { field?: string; value?: string } } }
+  if (!setUp?.token?.field || !setUp.token.value) throw new Error(`The first-run page holds no action for ${persona.name}.`)
   const posted = await fetch(new URL('/first-run', listening), {
     method: 'POST',
     redirect: 'manual',
     headers: { cookie: cookies(), 'content-type': 'application/x-www-form-urlencoded' },
-    body,
+    body: new URLSearchParams({ [setUp.token.field]: setUp.token.value }),
   })
   if (posted.status !== 303) throw new Error(`First run as ${persona.name} answered ${posted.status}:
 ${await posted.text()}`)

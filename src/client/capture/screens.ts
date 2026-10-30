@@ -24,11 +24,8 @@ export interface State {
   /** How the place stands: established through first run by the capture operator before the page opens (the
    *  default), not established yet, or established by the capture persona, who is then its operator. */
   place?: 'established' | 'unestablished' | 'persona'
-  /** Fields filled once the page has settled and the checks are made, by selector, before any click; the value
-   *  setupCodeFill types the setup code this run's server wrote to its log. */
+  /** Fields filled once the page has settled, by selector, before any click. */
   fill?: Readonly<Record<string, string>>
-  /** Radio buttons or checkboxes checked once the page has settled, before any click. */
-  check?: readonly string[]
   /** Hidden fields given a value before any fill, by selector, such as a form's TID, so a state that writes repeats
    *  one Post in every width and theme rather than adding another. */
   values?: Readonly<Record<string, string>>
@@ -53,20 +50,13 @@ export interface State {
 // the atproto connector's verified handle claim.
 export const capturePersona = { name: 'ada', did: 'did:plc:capture4persona', handle: 'ada.bsky.social' } as const
 
-// Who establishes the place through first run before a state opens, unless the state says otherwise, and the
-// name they give it.
+// Who establishes the place through first run before a state opens, unless the state says otherwise; the place
+// takes its name from their handle.
 export const captureOperator = { name: 'leo', did: 'did:plc:capture4operator', handle: 'leo.bsky.social' } as const
-export const capturePlaceName = 'Tangent Space'
-
-// The fill value that stands for the setup code the capture host logged at its start.
-export const setupCodeFill = '{setup code}'
 
 export interface Screen {
   /** The path under the base URL, starting with a slash. */
   path: string
-  /** The name first run gives the place before the screen's states open; capturePlaceName unless the screen names
-   *  its own, as one that shows the place's face does. */
-  placeName?: string
   states: readonly State[]
 }
 
@@ -93,7 +83,6 @@ export const screens: Readonly<Record<string, Screen>> = {
   // handle no account answers to.
   'sign-in': {
     path: '/sign-in',
-    placeName: 'Lantern Works',
     states: [
       { name: 'empty' },
       { name: 'submitting', query: { handle: 'ada.bsky.social' }, click: '.sign-in-submit', cancel: '/auth/atproto/challenge' },
@@ -102,34 +91,16 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'handle-unresolved', query: { error: 'handle_unresolved', handle: 'ada.bsky.socail' } },
     ],
   },
-  // Before anyone signs in; signed in where the configuration names someone else as operator; signed in, the
-  // form with its setup code field before anything is written, and refused for a wrong setup code; the form refused
-  // for a proprietor handle no participant has, its setup code accepted; and established,
-  // the site's pointers for its operator, under the name the persona gave the place.
+  // A visitor, before anyone signs in; signed in, the one action that sets the place up; signed in where the
+  // configuration names someone else's handle as operator, waiting; and established by the persona, the site's
+  // pointers for its operator, under the name her handle gives the place.
   'first-run': {
     path: '/first-run',
-    placeName: 'Ada’s Notebook',
     states: [
-      { name: 'arrival', place: 'unestablished' },
-      { name: 'waiting', place: 'unestablished', signedIn: true, settings: { 'Tangent:Operator': captureOperator.did } },
-      { name: 'form', place: 'unestablished', signedIn: true },
-      {
-        name: 'form-code-error',
-        place: 'unestablished',
-        signedIn: true,
-        check: ['#first-run-accountable'],
-        fill: { '#first-run-code': 'AAAA-BBBB-CCCC-DDDD', '#first-run-name': 'Field notes' },
-        click: '.sign-in-submit',
-      },
-      {
-        name: 'form-error',
-        place: 'unestablished',
-        signedIn: true,
-        check: ['#first-run-someone', '#first-run-accountable'],
-        fill: { '#first-run-code': setupCodeFill, '#first-run-name': 'Field notes', '#first-run-handle': 'studio.example' },
-        click: '.sign-in-submit',
-      },
-      { name: 'established', place: 'persona', signedIn: true },
+      { name: 'visitor', place: 'unestablished' },
+      { name: 'set-up', place: 'unestablished', signedIn: true },
+      { name: 'waiting', place: 'unestablished', signedIn: true, settings: { 'Tangent:Operator': captureOperator.handle } },
+      { name: 'pointers', place: 'persona', signedIn: true },
     ],
   },
   // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the
@@ -139,7 +110,6 @@ export const screens: Readonly<Record<string, Screen>> = {
   // reaches the page.
   consent: {
     path: '/consent',
-    placeName: 'Lantern Works',
     states: [
       { name: 'code', seed: 'consent', signedIn: true, settings: consentSettings },
       { name: 'request', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'BCDF-GHJK' } },

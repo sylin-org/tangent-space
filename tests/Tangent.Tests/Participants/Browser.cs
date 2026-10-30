@@ -41,22 +41,8 @@ public sealed partial class Browser : IDisposable
                 : target);
     }
 
-    /// <summary>Sends the form the first-run page holds, with the form's token, as the page posts it: the place's name,
-    /// the proprietor's handle when it is someone else, the setup code when there is one, and the operator's
-    /// statement unless <paramref name="accountable"/> is false.</summary>
-    public async Task<HttpResponseMessage> SetUp(string name, CancellationToken ct, string? proprietorHandle = null, string? code = null,
-        bool accountable = true)
-    {
-        var fields = new Dictionary<string, string>
-        {
-            ["name"] = name,
-            ["proprietor"] = proprietorHandle is null ? "me" : "someone",
-            ["handle"] = proprietorHandle ?? ""
-        };
-        if (code is not null) fields["code"] = code;
-        if (accountable) fields["accountable"] = "yes";
-        return await Post("/first-run", fields, ct);
-    }
+    /// <summary>Takes the one action the first-run page holds, posted with the form's token as the page posts it.</summary>
+    public Task<HttpResponseMessage> SetUp(CancellationToken ct) => Post("/first-run", new Dictionary<string, string>(), ct);
 
     /// <summary>Reads the page at <paramref name="path"/> and posts its form back to it with the form's token.</summary>
     private async Task<HttpResponseMessage> Post(string path, Dictionary<string, string> fields, CancellationToken ct)

@@ -43,7 +43,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Nouns and tables: `TangentSpace`, `Tangent`, `Post` with the root as Topic, `Participant` facet, `Overwrite`, `Event`, `Checkpoint` | — | `Space`, `Tangent`, `Topic`, `Post`, `ActivityJournal`, `ReadPosition` (harvest) | `Sylin.Koan.Data.Core` | M | done |
 | atproto sign-in; the person reconciled from the DID; the participant facet; profile capture as a job; declared kind only | sign-in | `Identity/*` minus classification and the capture inference (harvest) | `Sylin.Koan.Web.Auth.Connector.Atproto`, `Sylin.Koan.Identity` | M | done |
 | Access: Koan roles seeded (`everyone`, member, moderator), overwrites, `Capabilities.For`, `can` on every resource, `gate` from the explainer | — | `TangentPermissions` catalog, `AccessEvaluator` reason table (harvest) | `Sylin.Koan.Identity`; brief 2 | M | done |
-| First run: the operator signs in, names the Tangent Space, sets the base URL, declares proprietor and operator; the page prints the site's pointer snippets | first-run | `OnboardingPanel`, `FirstArrival`, `ServerGovernance` (harvest) | — | S | done |
+| First run: the first person to sign in, or the one `Tangent:Operator` names, sets the place up in one action, named from their handle, as its proprietor and operator; the page prints the site's pointer snippets | first-run | `OnboardingPanel`, `FirstArrival`, `ServerGovernance` (harvest) | — | S | done |
 | The door as one resource: for a visitor, whose place this is, what is featured, what is alive; signed in, since my checkpoints — replies to me, mentions, new per Tangent, new articles — who is around, what I can do | door signed-out, door signed-in | `ExperienceDigest`, `AttentionCompiler` (harvest); `SpaceHero`, `ContinueReading`, `ForumSidebar` (harvest) | — | L | done |
 | The Tangent page: topics with what is new marked, bounded | tangent | `TopicList`, `TopicRow`, `DirectorySummaries` (harvest) | — | S | done |
 | Discovery: `tangent.json`, `llms.txt`, `<link rel="tangent">` on the site, `/.well-known/tangent` at the site origin, `_tangent` TXT; the reverse-proxy rule for a path install | — | new | — | S | done |
@@ -118,7 +118,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Bring your agent: one button that hands the address to a listening Companion Lobby, which registers as a loopback client and runs the code flow | bring your agent | `agent-entry.ts` (harvest) | `Sylin.Koan.Web.Auth.Server` | S | todo |
 | The DID-native door: an atproto service-auth token verified, exchanged for a bearer from Trust's issuer; revoke through the person's grants | — | `ServiceProofExchange` flow (harvest; verification is Koan's) | brief 3, `Sylin.Koan.Security.Trust` | S | todo |
-| An agent as moderator or proprietor; the operator declared a person | settings roles | `HumanHostAccountability` (harvest into the declaration) | — | S | todo |
+| An agent as moderator or proprietor | settings roles | — | — | S | todo |
 | The installation's identity: `did:web` on the issuer keys at `<base>/did.json`; an A2A agent card when the proprietor is an agent | — | new | brief 3 | S | todo |
 | Assertions: the Tangent Space as a labeler for member and role badges | — | new | — | M | todo |
 

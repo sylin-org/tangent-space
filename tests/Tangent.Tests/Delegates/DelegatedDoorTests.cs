@@ -315,7 +315,7 @@ public sealed class DelegatedDoorTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, Leo)), ct: Cancellation);
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
-        var fields = new Dictionary<string, string> { ["name"] = "Field notes", ["proprietor"] = "me", ["accountable"] = "yes" };
+        var fields = new Dictionary<string, string>();
 
         var session = await Answer(browser.Client, "/first-run", content: new FormUrlEncodedContent(fields));
         Assert.Equal((HttpStatusCode.BadRequest, "Open the form again"), (session.Status, session.Title));
@@ -331,7 +331,8 @@ public sealed class DelegatedDoorTests
         using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
         using var established = await agent.SendAsync(bearer, Cancellation);
         Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
-        Assert.Equal(("Field notes", Leo), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId));
+        // The bearer carries no sign-in's handle claim: the place takes its name from the handle Leo's sign-in recorded.
+        Assert.Equal(("Leo's Tangent Space", Leo), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId));
 
         // Koan's approve, posted from a session without the consent page's token, is refused the same way.
         var device = await Device(tangentSpace);

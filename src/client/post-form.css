@@ -1,5 +1,5 @@
-/* The forms that start a Topic and edit a Post: the sign-in panel, wider, with a body field and the removal confirmed
- * in the page. */
+/* The forms that start a Topic, take a Post on a tangent and edit a Post: the sign-in panel, wider, with a body field,
+ * a choice of cards where the form picks a Tangent, and the removal confirmed in the page. */
 
 .post-form-panel {
   width: min(100%, 720px);
@@ -127,4 +127,75 @@
   .post-form-submit {
     width: 100%;
   }
+}
+
+/* A choice of Tangents as cards. The chosen card takes the accent border and its soft fill, never a ring, so a choice
+ * never reads as focus; focus is the outline the keyboard brings. */
+.post-form-choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.post-form-choice legend {
+  margin-bottom: 6px;
+}
+
+.post-form-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.post-form-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 16px;
+  border: 1.5px solid var(--ts-connector);
+  border-radius: var(--ts-radius-row);
+  background: transparent;
+  cursor: pointer;
+}
+
+.post-form-option:has(input:checked) {
+  border-color: var(--ts-accent);
+  background: var(--ts-accent-soft);
+}
+
+.post-form-option:has(input:focus-visible) {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 3px;
+}
+
+.post-form-option input:focus-visible {
+  outline: none;
+}
+
+.post-form-option input {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  margin: 0;
+  accent-color: var(--ts-accent);
+}
+
+.post-form-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.post-form-option-name {
+  font-weight: 600;
+}
+
+.post-form-option-detail {
+  color: var(--ts-text-2);
+  font-size: 13px;
 }

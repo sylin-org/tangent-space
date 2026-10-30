@@ -21,7 +21,7 @@ public sealed partial class DiscoveryTests
     public async Task A_public_descriptor_states_the_place_its_people_its_links_and_the_delegated_door()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        await Establish(tangentSpace, "Field notes", operatorDid: Leo, proprietorHandle: "ada.example");
+        await Establish(tangentSpace, "Field notes", operatorDid: Leo, proprietorDid: Ada);
 
         using var response = await tangentSpace.Client.GetAsync("/tangent.json", Cancellation);
         using var descriptor = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
@@ -206,17 +206,19 @@ public sealed partial class DiscoveryTests
     private static async Task<string> Body(TangentSpaceFixture tangentSpace, string path)
         => await tangentSpace.Client.GetStringAsync(path, Cancellation);
 
-    /// <summary>Establishes the place through the writer: Leo as operator, and as proprietor unless another handle is named.</summary>
+    /// <summary>Establishes the place through the writer with Leo as its operator and its proprietor, then stores the
+    /// audience and another proprietor where one is named.</summary>
     private static async Task<TangentSpace> Establish(TangentSpaceFixture tangentSpace, string name, string operatorDid,
-        Audience audience = Audience.Public, string? proprietorHandle = null)
+        Audience audience = Audience.Public, string? proprietorDid = null)
     {
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(new Participant { Id = Ada, Handle = "ada.example" }), Cancellation));
-        var outcome = await writer.Send(new Establish(operatorDid, "leo.example", name, proprietorHandle), Cancellation);
+        var outcome = await writer.Send(new Establish(operatorDid, "leo.example", name), Cancellation);
         var space = Assert.IsType<Outcome<TangentSpace>.Done>(outcome).Result;
-        if (audience == Audience.Private)
+        if (audience == Audience.Private || proprietorDid is not null)
         {
             space.Audience = audience;
+            space.ProprietorId = proprietorDid ?? space.ProprietorId;
             Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
         }
 

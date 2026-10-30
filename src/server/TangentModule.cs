@@ -33,10 +33,7 @@ public sealed class TangentModule : KoanModule
     {
         services.AddKoanOptions<TangentSpaceOptions>(TangentSpaceOptions.Configuration)
             .Validate(options => !string.IsNullOrWhiteSpace(options.DataFolder),
-                "Tangent:DataFolder must name a folder.")
-            .Validate(options => options.Operator is null || options.Operator.StartsWith("did:", StringComparison.Ordinal),
-                $"{FirstRun.OperatorSetting} must be the DID of the person who may set up the Tangent Space, or unset.");
-        services.AddSingleton<SetupCode>();
+                "Tangent:DataFolder must name a folder.");
 
         services.AddOptions<KoanWebOptions>()
             .Validate(options => !string.IsNullOrWhiteSpace(options.ApplicationUrl),

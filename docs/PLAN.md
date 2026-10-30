@@ -95,6 +95,8 @@ Group A is a chain from 0.1; group B is independent of it. Four sessions at once
 | 1.9 Phone layouts for the door and the Tangent | the polish stage | repeat |
 | 1.10 Access on Koan's overwrites: Tangent's own overwrite step lifted onto K2's resolution and explainer | K2, 1.3 | repeat |
 | 1.11 Tangent on Koan's K6 and K7: the pin moves, the delegated agent door composes Koan's resource edge and consent seam, and Tangent's own copies of them go | K6, K7, 1.8 | repeat |
+| 1.12 First run without questions: one action sets the place up, `Tangent:Operator` names the operator by handle or DID, the name comes from the handle | 1.4, 2.8 | repeat |
+| 1.13 The address learned and offered: a notification to the operator carries an Offer to use the address requests arrive on | 1.12 | first of its kind |
 
 Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1.5, 1.7 and 1.8 together, with K2 in the Koan checkout beside them; 1.10 once K2 merges. Phone layouts are visual work and wait for the polish stage; until then every screen is captured at 390 and must read there without a horizontal scroll.
 
@@ -116,7 +118,7 @@ Parallel once slice 1 lands: 2.1 and 2.2 together; then 2.3, 2.4 and 2.5; then 2
 
 ## Later slices
 
-The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), export through the renderer (7), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, feeds, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, the operator declaration, `did:web`, appearance. Explorer-grade: references through Constellation, the A2A card.
+The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), export through the renderer (7), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, feeds, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`, appearance. Explorer-grade: references through Constellation, the A2A card.
 
 A slice closes when its packages work and FEATURES says so. Until Leo calls the polish stage, screens are built from the frame and the existing components, captured, and listed in `docs/SCREENS.md` as owing the visual gate; the polish stage holds every one of them to it.
 

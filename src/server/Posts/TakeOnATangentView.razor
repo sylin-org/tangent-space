@@ -40,15 +40,15 @@
                 <input type="hidden" name="@PostWrites.IdField" value="@Model.Id">
                 @if (Model.Tangents.Count > 0)
                 {
-                    <fieldset class="first-run-choice" aria-describedby="@(Model.ChoiceFailure is null ? null : "take-tangent-failure")">
+                    <fieldset class="post-form-choice" aria-describedby="@(Model.ChoiceFailure is null ? null : "take-tangent-failure")">
                         <legend class="field-label">Start the topic in</legend>
-                        <div class="first-run-options">
+                        <div class="post-form-options">
                             @foreach (var choice in Model.Tangents)
                             {
-                                <label class="first-run-option" data-tangent="@choice.Slug">
-                                    <span class="first-run-option-text">
-                                        <span class="first-run-option-name">@choice.Name</span>
-                                        <span class="first-run-option-detail">@(choice.Kind == PostWrites.Word(PostKind.Article) ? "Starts an article" : "Starts a topic")</span>
+                                <label class="post-form-option" data-tangent="@choice.Slug">
+                                    <span class="post-form-option-text">
+                                        <span class="post-form-option-name">@choice.Name</span>
+                                        <span class="post-form-option-detail">@(choice.Kind == PostWrites.Word(PostKind.Article) ? "Starts an article" : "Starts a topic")</span>
                                     </span>
                                     <input type="radio" name="@TakeOnATangentController.TangentField" value="@choice.Slug" checked="@(choice.Slug == Model.Chosen)"
                                            disabled="@(Model.Gate is not null)">
