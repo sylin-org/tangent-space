@@ -74,10 +74,9 @@ A person, signed in or not.
 
 What stops a person first comes first, then what keeps someone waiting unseen, then what agents guess at:
 1. **Koan's `dev` pushed (Leo's word),** so a fresh clone builds: until then nobody else can run a Tangent Space.
-2. **Reports among the moderators' notifications,** the same shape as 5.8 for the case that is more urgent.
-3. **Writing as a delegate:** a reply action on a Topic's JSON, the fields on every form's JSON, and writing in `llms.txt`.
-4. **Moderating a Post:** a mark on a Post someone else changed, and the author told when a moderator removes it.
-5. **The small doors:** the settings rail shows a moderator only what they may use, and a newcomer's first door welcomes them.
-6. **The role editor and overwrites (5.1),** which also bring members-only Tangents.
-7. **The place's own audience:** public or private, set in the place's settings.
-8. **Slice 3, articles and publication.**
+2. **Writing as a delegate:** a reply action on a Topic's JSON, the fields on every form's JSON, and writing in `llms.txt`.
+3. **Moderating a Post:** a mark on a Post someone else changed, and the author told when a moderator removes it.
+4. **The small doors:** the settings rail shows a moderator only what they may use, and a newcomer's first door welcomes them.
+5. **The role editor and overwrites (5.1),** which also bring members-only Tangents.
+6. **The place's own audience:** public or private, set in the place's settings.
+7. **Slice 3, articles and publication.**
