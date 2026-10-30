@@ -38,7 +38,8 @@ public sealed class TangentSpaceSettingsTests
         Assert.Equal(("Field notes", ""), (page.Json.GetProperty("name").GetString(), page.Json.GetProperty("description").GetString()));
         Assert.Contains(nameof(Bit.ManageSpace), page.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         Assert.False(page.Json.TryGetProperty("gate", out _));
-        Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications", false)],
+        Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications", false),
+                ("People", settings + "/people", false)],
             page.Json.GetProperty("sections").EnumerateArray().Select(section =>
                 (section.GetProperty("name").GetString(), section.GetProperty("address").GetString(), section.GetProperty("current").GetBoolean())));
         var before = await Event.Count.Exact(Cancellation);

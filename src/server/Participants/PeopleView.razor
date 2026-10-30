@@ -1,0 +1,105 @@
+@using System.Globalization
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@using global::Tangent.Space
+@* The place's settings, people: the sections of the settings in the rail, this one marked, and in one panel beside them
+   the search by the start of a handle, then the participants in handle order, one line each — their name and handle,
+   linked to their profile, their kind, their standing with when a timeout ends, and the roles they hold — with what the
+   reader may change of them inline (PeopleActions). No one found reads as one sentence. The next page and the first
+   are a link away. A reader who may not read the people reads why, and a visitor the way to sign in; a refusal shows
+   above the list. *@
+<div class="layout layout-settings">
+    <SettingsRail Sections="@Model.Sections" />
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="people-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="people-heading" class="sign-in-title">@TangentSpaceSettingsController.PeopleSection</h1>
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="people-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else
+                {
+                    <form class="sign-in-form people-search" method="get" action="@Model.Search" role="search">
+                        <div class="field">
+                            <label class="field-label" for="people-handle">Find by handle</label>
+                            <span class="field-input">
+                                <input id="people-handle" name="@PeopleController.HandleQuery" type="search" value="@Model.Handle"
+                                       maxlength="253" autocomplete="off" spellcheck="false" placeholder="The start of a handle">
+                            </span>
+                        </div>
+                        <button type="submit" class="watch-button">Find</button>
+                    </form>
+                    @if (Model.Failure is { } failure)
+                    {
+                        <p class="sign-in-failure" id="people-failure" role="alert">@failure</p>
+                    }
+                    @if (Model.People.Count == 0)
+                    {
+                        <p class="post-form-note">@Empty()</p>
+                    }
+                    else
+                    {
+                        <ul class="door-offers applications people">
+                            @foreach (var person in Model.People)
+                            {
+                                <li class="door-offer" @key="person.Id">
+                                    <p class="door-offer-line">
+                                        <a href="@person.Profile">@person.Name</a> @("@" + person.Handle)
+                                        <span class="topic-row-none">· @person.Kind · @Standing(person)@(person.Roles.Count > 0 ? " · " + string.Join(", ", person.Roles) : "")</span>
+                                    </p>
+                                    <PeopleActions Person="@person" Forms="@Model.Forms" />
+                                </li>
+                            }
+                        </ul>
+                    }
+                    @if (Model.Continued || Model.Next is not null)
+                    {
+                        <nav class="topic-pages" aria-label="More people">
+                            @if (Model.Continued)
+                            {
+                                <a href="@Model.First">First page</a>
+                            }
+                            @if (Model.Next is { } next)
+                            {
+                                <a class="topic-pages-next" href="@next">Next page</a>
+                            }
+                        </nav>
+                    }
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PeoplePage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
+    /// a visitor signs in.</summary>
+    public static Frame Frame(PeoplePage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Settings")], page.Who, page.SignIn);
+
+    /// <summary>A participant's standing in words, with when a timeout ends.</summary>
+    public static string Standing(PeoplePage.Listed person) => person.Until is { } until
+        ? "timed out until " + Until(until)
+        : person.Standing;
+
+    /// <summary>When a timeout ends, to the minute, in UTC.</summary>
+    public static string Until(DateTimeOffset at) => at.ToUniversalTime().ToString("MMM d, h:mm tt 'UTC'", CultureInfo.InvariantCulture);
+
+    /// <summary>The one sentence for a page with no one on it.</summary>
+    private string Empty() => Model.Handle.Length > 0
+        ? "No one here has a handle that starts with " + Model.Handle + "."
+        : Model.Continued ? "No one further." : "No one is here yet.";
+}

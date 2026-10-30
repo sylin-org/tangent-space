@@ -43,6 +43,15 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// <summary>The refusal a decision meets for a participant whose standing is not an application's.</summary>
     public const string NotAnApplication = "Only an application waiting or declined is decided.";
 
+    /// <summary>The refusal a timeout, a ban, a lift or a change of roles meets for an applicant, waiting or declined.</summary>
+    public const string NotAdmitted = "An applicant is admitted or declined among the applications before anything else changes their standing or roles.";
+
+    /// <summary>The refusal a timeout meets for a banned participant.</summary>
+    public const string BannedFirst = "They are banned: lift the ban before timing them out.";
+
+    /// <summary>The refusal a timeout meets whose end is not after its start.</summary>
+    public const string TimeoutEnds = "A timeout ends after it begins.";
+
     /// <summary>The participant a person becomes at their first sign-in, at <paramref name="at"/>: a person until their
     /// profile says otherwise, with the standing the place's admission gives — admitted where it says join, applied where
     /// it says apply, from then.</summary>
@@ -86,6 +95,51 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         if (Standing == Standing.Declined) return false;
         if (Standing != Standing.Applied) throw new Refusal(NotAnApplication);
         Standing = Standing.Declined;
+        return true;
+    }
+
+    /// <summary>The standing in force at <paramref name="now"/>: a timeout whose end has come reads as admitted.</summary>
+    public Standing StandingAt(DateTimeOffset now)
+        => Standing == Standing.TimedOut && StandingUntil is { } until && until <= now ? Standing.Admitted : Standing;
+
+    /// <summary>Times the participant out until <paramref name="until"/>: they read and nothing more until then. False,
+    /// with nothing changed, where they are already timed out until that instant; an applicant is refused with
+    /// <see cref="NotAdmitted"/>, a banned participant with <see cref="BannedFirst"/>, and an end not after
+    /// <paramref name="now"/> with <see cref="TimeoutEnds"/>.</summary>
+    public bool TimeOut(DateTimeOffset until, DateTimeOffset now)
+    {
+        if (until <= now) throw new Refusal(TimeoutEnds);
+        var standing = StandingAt(now);
+        if (standing is Standing.Applied or Standing.Declined) throw new Refusal(NotAdmitted);
+        if (standing == Standing.Banned) throw new Refusal(BannedFirst);
+        if (standing == Standing.TimedOut && StandingUntil == until) return false;
+        Standing = Standing.TimedOut;
+        StandingUntil = until;
+        return true;
+    }
+
+    /// <summary>Bans the participant: the place is absent to them until someone lifts it. False, with nothing changed,
+    /// for one already banned; an applicant is refused with <see cref="NotAdmitted"/>.</summary>
+    public bool Ban(DateTimeOffset now)
+    {
+        var standing = StandingAt(now);
+        if (standing is Standing.Applied or Standing.Declined) throw new Refusal(NotAdmitted);
+        if (standing == Standing.Banned) return false;
+        Standing = Standing.Banned;
+        StandingUntil = null;
+        return true;
+    }
+
+    /// <summary>Lifts a timeout or a ban: the participant stands admitted again. False, with nothing changed, for one
+    /// who stands admitted, a timeout that has ended among them; an applicant is refused with
+    /// <see cref="NotAdmitted"/>.</summary>
+    public bool Lift(DateTimeOffset now)
+    {
+        var standing = StandingAt(now);
+        if (standing is Standing.Applied or Standing.Declined) throw new Refusal(NotAdmitted);
+        if (standing == Standing.Admitted) return false;
+        Standing = Standing.Admitted;
+        StandingUntil = null;
         return true;
     }
 

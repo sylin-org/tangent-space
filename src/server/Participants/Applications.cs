@@ -29,8 +29,8 @@ public static class Applications
     /// answers that no place is here; the actor holds <see cref="Bit.ManageStanding"/>, or is refused with the gate word;
     /// the participant has arrived, or the command answers that no one did; <paramref name="decide"/> changes their
     /// standing, or refuses with <see cref="Participant.NotAnApplication"/>. A decision that changes something appends
-    /// one <see cref="EventKind.StandingChanged"/> with the actor, the applicant as its target and the standing it left
-    /// them with; one that changes nothing writes nothing.</summary>
+    /// one <see cref="EventKind.StandingChanged"/> with the actor, the applicant as its target, the standing it left
+    /// them with and the one they held before; one that changes nothing writes nothing.</summary>
     public static async Task<Outcome<Participant>> Decide(Sequences sequences, string actorId, string participantId,
         Func<Participant, bool> decide, DateTimeOffset? at, CancellationToken ct)
     {
@@ -41,10 +41,11 @@ public static class Applications
         if (string.IsNullOrWhiteSpace(participantId) || await Participant.Get(participantId, ct) is not { } participant)
             return new Outcome<Participant>.Refused(NoApplicant);
 
+        var before = participant.Standing;
         if (!decide(participant)) return new Outcome<Participant>.Done(participant);
         await participant.Save(ct);
         await Event.Next(sequences, EventKind.StandingChanged, at ?? DateTimeOffset.UtcNow, actorId: actorId, targetId: participant.Id,
-            standing: participant.Standing).Save(ct);
+            standing: participant.Standing, before: before).Save(ct);
         return new Outcome<Participant>.Done(participant);
     }
 

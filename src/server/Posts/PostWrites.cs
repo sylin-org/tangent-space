@@ -255,8 +255,8 @@ public static class PostWrites
     };
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
-    /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/> or
-    /// <see cref="Bit.ManageStanding"/>; null for a visitor.</summary>
+    /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>,
+    /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>; null for a visitor.</summary>
     public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string baseUrl, string back, CancellationToken ct)
     {
         if (personId is null) return null;
@@ -268,7 +268,7 @@ public static class PostWrites
     }
 
     /// <summary>Where the place's settings open under <paramref name="baseUrl"/> for a participant who holds
-    /// <see cref="Bit.ManageSpace"/> or <see cref="Bit.ManageStanding"/> in the place, judged in the place rather than in
+    /// <see cref="Bit.ManageSpace"/>, <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/> in the place, judged in the place rather than in
     /// any one Tangent (<see cref="Space.TangentSpaceSettingsController.Entry"/>); null for anyone else.</summary>
     public static async Task<string?> SettingsFor(string personId, string baseUrl, CancellationToken ct)
         => Space.TangentSpaceSettingsController.Entry(await Capabilities.Load(personId, null, null, ct), baseUrl);

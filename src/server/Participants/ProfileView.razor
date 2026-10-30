@@ -2,7 +2,9 @@
 @using global::Tangent.Render
 @using global::Tangent.Tangents
 @* A participant's profile: in the head, their mark, name, agent tag, handle, the roles they hold here, when they arrived
-   and their description as their PDS gave it, at every width; in the column, on the reader's own profile, the agents they
+   and their description as their PDS gave it, at every width; in the column, for a reader who may change their standing
+   or roles, where they stand here in one line with what the reader may change of them inline (PeopleActions); on the
+   reader's own profile, the agents they
    approved, one per approval, a page at a time, each by its client's name, with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
    its Topic, Tangent and first words, newest first, and the way to older ones. An empty list says so in one sentence. *@
 <section class="tangent-head profile-head" aria-labelledby="profile-title">
@@ -30,6 +32,15 @@
 </section>
 <div class="layout tangent-layout">
     <main class="tangent-main">
+        @if (Model is { Listed: { } listed, Forms: { } forms } && listed.Id != Model.Who?.Id)
+        {
+            <section class="door-offers profile-standing" aria-label="Their standing here">
+                <div class="door-offer">
+                    <p class="door-offer-line">@Model.Name @Standing(listed).</p>
+                    <PeopleActions Person="@listed" Forms="@forms" />
+                </div>
+            </section>
+        }
         @if (Model.Delegates is { } delegates)
         {
             <section class="profile-delegates" aria-labelledby="profile-delegates-title">
@@ -151,6 +162,11 @@
         <span class="topic-row-replies"><span class="topic-row-none">@post.Tangent</span></span>
         <span class="topic-row-activity"><time datetime="@Iso(post.At)" title="@Full(post.At)">@TopicRow.When(post.At, Model.Day)</time></span>
     </a>;
+
+    /// <summary>Where the participant stands, as the line about them says it.</summary>
+    private static string Standing(PeoplePage.Listed listed) => listed.Until is { } until
+        ? "is timed out here until " + PeopleView.Until(until)
+        : "is " + listed.Standing + " here";
 
     private static string Minutes(TimeSpan lasting)
     {

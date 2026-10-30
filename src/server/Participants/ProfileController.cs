@@ -25,7 +25,9 @@ namespace Tangent.Participants;
 /// Tangents the reader may view (<see cref="ViewableTangents.All"/>), every Tangent judged from Koan's compiled state, so
 /// as many as the place holds; one page of their Posts in those (<see cref="RecentPosts"/>); the roots of the replies
 /// among them; the participants those Posts mention; and, on the reader's own profile in their own session, a page of
-/// their approvals. A revoke posts back here and is the reader's alone.</summary>
+/// their approvals. A revoke posts back here and is the reader's alone. For a reader who holds <see cref="Bit.ManageStanding"/>
+/// or <see cref="Bit.ManageRoles"/>, it also reads the participant as the place's people list them, with what the reader
+/// may change of them and the forms that do, which post to <see cref="PeopleController"/> and come back here.</summary>
 public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles, IOptions<AuthServerOptions> server) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page of Posts to continue from.</summary>
@@ -94,6 +96,17 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             Response.Headers.CacheControl = "private";
         }
 
+        // Whoever may change the participant's standing or roles reads them as the people list them, with the forms that
+        // change them, coming back here; those forms carry a fresh antiforgery token, so the page is never stored.
+        PeoplePage.Listed? listed = null;
+        PeopleForms? forms = null;
+        if (reader is not null && PeopleController.ReadGate(place) is null)
+        {
+            listed = await (await PeopleController.Lister.Load(roles, place, reader.Id, baseAddress, ct)).Row(subject, ct);
+            forms = PeopleController.Forms(HttpContext, baseAddress, baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
+            Response.Headers.CacheControl = "no-cache, no-store";
+        }
+
         var back = Uri.EscapeDataString(baseUrl.PathBase + ProfilePage.Segment + shownHandle);
         return Ok(new ProfilePage(
             subject.Id,
@@ -116,7 +129,9 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             baseAddress + "/",
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : Reader(reader, place, back),
-            DateOnly.FromDateTime(DateTime.UtcNow)));
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            listed,
+            forms));
     }
 
     /// <summary>Revokes one of the reader's own approvals and sends them back to their profile, or answers <c>204</c> as

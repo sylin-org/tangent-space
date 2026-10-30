@@ -818,6 +818,26 @@
   flex-basis: 100%;
 }
 
+/* The place's people, and a participant's standing on their profile: each an Offer's line with what the reader may
+   change of them, the answers wrapping onto further lines on a narrow page; Time out and Ban open in place. The search
+   by the start of a handle keeps its button beside its field. */
+.people-answers {
+  flex-wrap: wrap;
+}
+
+.people .topic-row-none {
+  white-space: normal;
+}
+
+.people-search {
+  flex-direction: row;
+  align-items: flex-end;
+}
+
+.people-search .field {
+  flex: 1 1 auto;
+}
+
 /* The way to older Topics and back. */
 .topic-pages {
   margin-top: 20px;

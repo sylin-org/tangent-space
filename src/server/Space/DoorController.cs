@@ -25,9 +25,11 @@ namespace Tangent.Space;
 /// mention is not judged by the Topic's checkpoint: that counts the Topic's Posts as they arrived, and an edit can
 /// mention the reader in a Post they read long before, so a mention is new by its own place in the log alone.
 /// The Topics and Tangents among the news that the reader watches, by the watch flag on those same checkpoints, are
-/// listed first. A <c>standing.changed</c> among the reader's targeted events that admitted them, by someone else, is news
-/// while they stand admitted; the door's <c>gate</c> is why they may not write in the place, which an applicant's door
-/// says in one sentence.
+/// listed first. The newest <c>standing.changed</c> among the reader's targeted events by someone else is news while they
+/// stand admitted, as their admission or as the lift of their timeout or ban, by the standing it changed; so is each
+/// <c>role.changed</c> that gave them a role or took one, the newest of each role. The door's <c>gate</c> is why they may
+/// not write in the place, which an applicant's door and a timed-out participant's, with when it ends, say in one
+/// sentence.
 /// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
 /// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
 /// rule, and its writers <see cref="Door.Around"/>. For the place's operator, while no URL is configured, it also reads
@@ -115,15 +117,25 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var taken = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e) && TakenOnATangent(e)).ToList();
         var mentions = targeted.Where(e => e.Kind == EventKind.Mention && e.TargetId == reader?.Id && New(e)).ToList();
         var articles = fresh.Where(e => e.PostId == e.TopicId && posts[e.TopicId!].Kind == PostKind.Article).ToList();
-        // Someone admitted the reader since their checkpoint, and they stand admitted still.
-        var admitted = reader is { Standing: Standing.Admitted }
-            ? targeted.FirstOrDefault(e => e is { Kind: EventKind.StandingChanged, Standing: Standing.Admitted, ActorId: not null } && e.ActorId != reader.Id)
+        // Someone admitted the reader, or lifted their timeout or ban, since their checkpoint, and they stand admitted
+        // still: the newest change someone else made of their standing says which.
+        var now = DateTimeOffset.UtcNow;
+        var decided = reader is not null && reader.StandingAt(now) == Standing.Admitted
+            ? targeted.FirstOrDefault(e => e is { Kind: EventKind.StandingChanged, ActorId: not null } && e.ActorId != reader.Id)
             : null;
+        var admitted = decided is { Standing: Standing.Admitted, Before: not (Standing.TimedOut or Standing.Banned) } ? decided : null;
+        var lifted = decided is { Standing: Standing.Admitted, Before: Standing.TimedOut or Standing.Banned } ? decided : null;
+        // The roles someone gave the reader or took from them since their checkpoint, the newest change of each.
+        var roleChanges = reader is null
+            ? []
+            : targeted.Where(e => e is { Kind: EventKind.RoleChanged, ActorId: not null, Role: not null, Given: not null } && e.ActorId != reader.Id
+                                  && Participants.People.Given.Any(given => given.Key == e.Role))
+                .GroupBy(e => e.Role!, StringComparer.Ordinal).Select(changes => changes.First()).ToList();
 
         var baseAddress = BaseAddress();
         var people = await People(
             baseAddress,
-            new[] { space.ProprietorId, reader?.Id, admitted?.ActorId }
+            new[] { space.ProprietorId, reader?.Id, admitted?.ActorId, lifted?.ActorId }.Concat(roleChanges.Select(e => e.ActorId))
                 .Concat(replies.Concat(mentions).Concat(articles).Concat(taken).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
                 .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
@@ -134,9 +146,10 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
 
         var door = baseAddress + "/";
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
-        // Read through the newest event in a Tangent the reader may view, their own included, and their admission; an
-        // event in a Tangent they may not view moves nothing they can see.
-        var newestViewable = window.Concat(targeted).Where(e => Viewable(e.TangentId) || e == admitted).Select(e => e.Seq).DefaultIfEmpty(0).Max();
+        // Read through the newest event in a Tangent the reader may view, their own included, and the changes of their
+        // standing and roles the door tells; an event in a Tangent they may not view moves nothing they can see.
+        var newestViewable = window.Concat(targeted).Where(e => Viewable(e.TangentId) || e == admitted || e == lifted || roleChanges.Contains(e))
+            .Select(e => e.Seq).DefaultIfEmpty(0).Max();
         var through = Math.Max(since, newestViewable);
         Door.Since? news = null;
         if (reader is not null)
@@ -156,7 +169,10 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                 Group(articles, partial, posts, tangents, people),
                 null,
                 Group(taken, targetedFull, posts, tangents, people),
-                admitted is null ? null : new Door.Decision(Person(people, admitted.ActorId!), admitted.At));
+                admitted is null ? null : new Door.Decision(Person(people, admitted.ActorId!), admitted.At),
+                lifted is null ? null : new Door.Decision(Person(people, lifted.ActorId!), lifted.At, Participants.People.Word(lifted.Before!.Value)),
+                roleChanges.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At,
+                    Participants.People.Given.First(given => given.Key == e.Role).Word, e.Given!.Value)).ToList());
             // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
             // other door of a signed-in reader is theirs alone to cache.
             if (!news.Quiet) news = news with { CaughtUp = new Door.CaughtUp(door, through, FormToken.For(HttpContext)) };
@@ -192,7 +208,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             Description = space.Description,
             Offers = offered,
             AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
-            Gate = place.Gate(Bit.Post)
+            Gate = place.Gate(Bit.Post),
+            Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
         });
     }
 
