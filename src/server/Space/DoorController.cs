@@ -166,7 +166,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer) : C
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
                 Roles.Word(place.RoleIds), reader.Profile.Avatar, configured + AuthConstants.Routes.Logout + "?return=" + back),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            Resume(configured, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0))));
+            Resume(configured, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0)),
+            place.Holds(Bit.ManageSpace) ? configured + NewTangentController.Route : null));
     }
 
     /// <summary>Where the reader asks again: the poll past the newest event the door read that they may view, or, where its

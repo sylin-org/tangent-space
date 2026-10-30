@@ -199,3 +199,63 @@
   color: var(--ts-text-2);
   font-size: 13px;
 }
+
+/* The forms that create a Tangent and change its settings: a short description box, a quiet note under a field, the
+ * choices that stand at their defaults behind one line, and the Tangent's place with its two moves. */
+.post-form-short {
+  min-height: 84px;
+}
+
+.post-form-note {
+  margin: 0;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+  text-wrap: pretty;
+}
+
+.post-form-more-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.post-form-place {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ts-line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.post-form-place h2 {
+  margin: 0;
+}
+
+.post-form-moves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.post-form-move {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-button);
+  background: var(--ts-surface);
+  color: var(--ts-text-2);
+  font: 600 13px/1 var(--ts-font-ui);
+  cursor: pointer;
+}
+
+.post-form-move:hover:not(:disabled) {
+  border-color: var(--ts-text-3);
+  color: var(--ts-text);
+}
+
+.post-form-move:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

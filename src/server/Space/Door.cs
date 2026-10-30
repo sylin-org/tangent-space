@@ -15,7 +15,8 @@ namespace Tangent.Space;
 /// is the signed-in reader and <see cref="SignIn"/> where a visitor signs in; <see cref="Day"/> is the UTC day the
 /// times are written for. <see cref="Poll"/> is where the reader asks for what happens after this door: the poll past the
 /// newest event the door read that the reader may see, or past the newest of its window where the window held none of
-/// those, which the stream at the same address also answers.
+/// those, which the stream at the same address also answers. <see cref="NewTangent"/> is where a Tangent is created,
+/// present only for a reader who may create one.
 /// <c>api</c> is the stability promise an agent reads.</summary>
 public sealed record Door(
     string Name,
@@ -31,7 +32,8 @@ public sealed record Door(
     string? SignIn,
     Door.Reader? Who,
     DateOnly Day,
-    Door.Position Poll)
+    Door.Position Poll,
+    string? NewTangent = null)
 {
     public int Api => 1;
 

@@ -2,8 +2,8 @@
 @using System.Text.Json
 @using Tangent.Space
 @using Tangent.Tangents
-@* The door: whose place this is, in the head with what it holds; the Tangents the reader may view and who is around in
-   the rail; and in the column, for a signed-in reader with news, what is new since they were here — one sentence,
+@* The door: whose place this is, in the head with what it holds; the Tangents the reader may view, where a new one is
+   created for whoever may, and who is around in the rail; and in the column, for a signed-in reader with news, what is new since they were here — one sentence,
    then replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
    in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
@@ -40,6 +40,10 @@
                     </li>
                 }
             </ul>
+            @if (Model.NewTangent is { } created)
+            {
+                <a class="rail-new" href="@created">New Tangent</a>
+            }
             <h2 class="rail-heading rail-heading-spaced">Around</h2>
             @if (Model.Around.People.Count == 0)
             {

@@ -68,14 +68,15 @@ const consentSettings = { 'Koan:Web:Auth:Server:UserCodeVerificationRateLimitPer
 // door's states.
 export const screens: Readonly<Record<string, Screen>> = {
   // A visitor's front page; the capture persona with news since her place checkpoint — replies to her Topic, a
-  // mention of her, new articles and new Posts in each Tangent; and the same persona with her checkpoint at the
-  // log's last sequence, quiet.
+  // mention of her, new articles and new Posts in each Tangent; the same persona with her checkpoint at the log's last
+  // sequence, quiet; and the persona as the one who set the place up, who administers it and is offered a new Tangent.
   door: {
     path: '/',
     states: [
       { name: 'visitor', seed: 'door' },
       { name: 'signed-in-with-news', seed: 'door', signedIn: true },
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
+      { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
     ],
   },
   // What a visitor reads: the action that signs in with Bluesky; on its way once pressed; the handle form for another
@@ -143,6 +144,26 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'visitor', seed: 'write' },
     ],
   },
+  // The form that creates a Tangent, read by the persona, who set the place up and so administers it, in a place that
+  // holds only the moderators' Tangent: as it opens, the name alone with the rest at its defaults behind one line; and
+  // sent with a name of nothing but spaces, refused under the name.
+  'new-tangent': {
+    path: '/t/new',
+    states: [
+      { name: 'empty', place: 'persona', signedIn: true },
+      { name: 'refused', place: 'persona', signedIn: true, fill: { '#new-tangent-name': '   ' }, click: '.post-form-submit' },
+    ],
+  },
+  // The discussions Tangent's settings, read by the persona, who set the place up and so administers it: its name,
+  // description, kind and audience, and its place between its neighbours with the two moves; and the moderators'
+  // Tangent's, whose audience and place stay as they are.
+  'tangent-settings-details': {
+    path: '/t/discussions/settings',
+    states: [
+      { name: 'administrator', place: 'persona', seed: 'tangent', signedIn: true },
+      { name: 'moderators', place: 'persona', seed: 'tangent', signedIn: true, path: '/t/moderators/settings' },
+    ],
+  },
   // The form that edits the persona's own Topic: as it opens; sent with a body of nothing but spaces, refused under
   // the body; with the removal opened, confirmed in the page; and Leo's reply in the same Topic, which is not hers.
   edit: {
@@ -155,8 +176,9 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // A discussions Tangent and an articles Tangent, populated and empty, read by the persona, a member with some
-  // Topics new to them; the discussions Tangent also as a visitor reads it, with the persona's account open, and with
-  // the Tangent switcher open.
+  // Topics new to them; the discussions Tangent also as a visitor reads it, with the persona's account open, with
+  // the Tangent switcher open, and with the switcher open for the persona as the one who set the place up, who is
+  // offered its settings and a new Tangent.
   tangent: {
     path: '/t/discussions',
     states: [
@@ -164,6 +186,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'discussions-visitor', seed: 'tangent' },
       { name: 'discussions-account', seed: 'tangent', signedIn: true, click: '.account-button' },
       { name: 'discussions-switcher', seed: 'tangent', signedIn: true, click: '.switcher-button' },
+      { name: 'discussions-administrator', place: 'persona', seed: 'tangent', signedIn: true, click: '.switcher-button' },
       { name: 'discussions-empty', seed: 'tangent', signedIn: true, path: '/t/workshop' },
       { name: 'articles', seed: 'tangent', signedIn: true, path: '/t/articles' },
       { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },

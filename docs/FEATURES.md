@@ -94,7 +94,8 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Join or apply; standing; the one knob "new accounts post after approval", age from the DID | settings people, door | `SpaceAdmission`, `Admission` (harvest) | — | S | todo |
 | People directory with seek cursors; time out, ban and lift inline | settings people | `TangentMemberDirectory`, `Restrictions`, `ParticipantActions` (harvest) | — | S | todo |
 | Participant profile: the PDS profile, roles, posts here, Connections, the person's grants from Koan | profile | `ProfilePanel`, `ParticipantAvatar` (harvest) | `Sylin.Koan.Identity.Web` | S | todo |
-| Tangent settings: details, default kind, order, access | tangent settings | `TopicSettingsPanel`, `AccessPanel` (harvest) | — | S | todo |
+| Creating a Tangent: New Tangent on the door and in the switcher for whoever holds `ManageSpace`; the name alone, the slug derived, everything else a quiet default | new tangent | `NewTangentPanel` (harvest) | — | S | done |
+| Tangent settings: name, description, default kind, order, and the audience as the `everyone` overwrite; the moderators' Tangent's audience and order fixed | tangent settings | `TopicSettingsPanel`, `AccessPanel` (harvest) | — | S | done |
 
 ### 6 · Attention
 
@@ -131,7 +132,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 ## Screens
 
-The visual loop runs on each, at 1440, 1024 and 390, in light and dark: door signed-out, door signed-in, tangent (discussions), tangent (articles), topic, article, article editor, new topic, profile, notifications, search, sign-in, consent, first-run, bring your agent, Tangent Space settings (general, appearance, tangents, people, roles, export), Tangent settings (details, access), connections. Current scores live in [SCREENS](SCREENS.md) once the first screen passes.
+The visual loop runs on each, at 1440, 1024 and 390, in light and dark: door signed-out, door signed-in, tangent (discussions), tangent (articles), topic, article, article editor, new topic, new Tangent, profile, notifications, search, sign-in, consent, first-run, bring your agent, Tangent Space settings (general, appearance, tangents, people, roles, export), Tangent settings (details, access), connections. Current scores live in [SCREENS](SCREENS.md) once the first screen passes.
 
 ## Not built
 

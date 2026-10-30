@@ -1,0 +1,103 @@
+@using global::Tangent.Posts
+@using global::Tangent.Space
+@* A Tangent's description, its default kind and its audience as fields of a form: the description in a box, the kind and
+   the audience each a choice of two cards. Quiet, they sit behind one line that says what they stand at, opening in
+   place, and open by themselves when one is not at its default or a refusal concerns the description. Where the
+   audience is fixed, a sentence says so instead of the cards. *@
+@if (Quiet)
+{
+    <details class="post-form-more" open="@Open">
+        <summary class="sign-in-other-toggle">@Summary()</summary>
+        <div class="post-form-more-body">@Fields</div>
+    </details>
+}
+else
+{
+    @Fields
+}
+
+@code {
+    /// <summary>What the fields' ids begin with.</summary>
+    [Parameter, EditorRequired] public string Prefix { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Kind { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Audience { get; set; } = "";
+
+    [Parameter, EditorRequired] public IReadOnlyList<string> Kinds { get; set; } = [];
+
+    /// <summary>The audiences offered; none where the audience is fixed.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<string> Audiences { get; set; } = [];
+
+    [Parameter] public string? DescriptionFailure { get; set; }
+
+    [Parameter] public bool ReadOnly { get; set; }
+
+    /// <summary>Behind one line that says what the fields stand at.</summary>
+    [Parameter] public bool Quiet { get; set; }
+
+    /// <summary>The sentence shown where the audience is fixed.</summary>
+    [Parameter] public string? AudienceFixed { get; set; }
+
+    private bool Open => DescriptionFailure is not null || Description.Length > 0 || Kind != PostWrites.Word(PostKind.Topic)
+                         || Audience != TangentWrites.Word(Space.Audience.Public);
+
+    private string Summary() => KindName(Kind) + " · " + AudienceName(Audience) + " · " + (Description.Length > 0 ? "described" : "no description");
+
+    private static string KindName(string kind) => kind == PostWrites.Word(PostKind.Article) ? "Articles" : "Discussions";
+
+    private static string KindDetail(string kind) => kind == PostWrites.Word(PostKind.Article)
+        ? "Each topic opens with a published piece."
+        : "Topics are conversations, latest activity first.";
+
+    private static string AudienceName(string audience) => audience == TangentWrites.Word(Space.Audience.Private) ? "Private" : "Public";
+
+    private static string AudienceDetail(string audience) => audience == TangentWrites.Word(Space.Audience.Private)
+        ? "Only administrators, and roles given access, read it."
+        : "Everyone who reads this place reads it; members post.";
+
+    private RenderFragment Fields => @<text>
+        <div class="field">
+            <label class="field-label" for="@(Prefix + "-description")">Description</label>
+            <textarea class="post-form-body post-form-short" id="@(Prefix + "-description")" name="@TangentWrites.DescriptionField" rows="3"
+                      maxlength="@Tangent.DescriptionLimit" readonly="@ReadOnly" autofocus="@(DescriptionFailure is not null)"
+                      aria-invalid="@(DescriptionFailure is null ? "false" : "true")"
+                      aria-describedby="@(DescriptionFailure is null ? null : Prefix + "-description-failure")">@Description</textarea>
+            @if (DescriptionFailure is { } failure)
+            {
+                <p class="field-failure" id="@(Prefix + "-description-failure")">@failure</p>
+            }
+        </div>
+        @Choice("Default kind", TangentWrites.KindField, Kinds, Kind, KindName, KindDetail)
+        @if (AudienceFixed is { } fixedAudience)
+        {
+            <div class="field">
+                <span class="field-label">Audience</span>
+                <p class="post-form-note">@fixedAudience</p>
+            </div>
+        }
+        else
+        {
+            @Choice("Audience", TangentWrites.AudienceField, Audiences, Audience, AudienceName, AudienceDetail)
+        }
+    </text>;
+
+    private RenderFragment Choice(string legend, string field, IReadOnlyList<string> words, string chosen, Func<string, string> name,
+        Func<string, string> detail) => @<fieldset class="post-form-choice">
+        <legend class="field-label">@legend</legend>
+        <div class="post-form-options">
+            @foreach (var word in words)
+            {
+                <label class="post-form-option">
+                    <span class="post-form-option-text">
+                        <span class="post-form-option-name">@name(word)</span>
+                        <span class="post-form-option-detail">@detail(word)</span>
+                    </span>
+                    <input type="radio" name="@field" value="@word" checked="@(word == chosen)" disabled="@ReadOnly">
+                </label>
+            }
+        </div>
+    </fieldset>;
+}

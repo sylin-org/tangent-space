@@ -30,3 +30,22 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* The Tangent head's actions: the watch toggle and, for whoever may change it, the Tangent's settings, side by side. */
+.tangent-head-actions {
+  margin: 12px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.tangent-head-actions .watch-form {
+  margin: 0;
+}
+
+.tangent-settings {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}

@@ -19,7 +19,8 @@ namespace Tangent.Tangents;
 /// <see cref="Bit.View"/> on the Tangent receives its gate instead, and one for whom the Tangent is absent receives
 /// what an address with no Tangent receives. Every read is bounded and keyed: the Tangent, then capability's rows, at
 /// most two reads of Topics, their latest replies by Id, the people on the page, the reader's checkpoints for those
-/// Topics and for the Tangent, whose watch flag the page's watch form shows, and the first <see cref="SwitcherLimit"/> Tangents by order with their overwrites for the switcher.</summary>
+/// Topics and for the Tangent, whose watch flag the page's watch form shows, the first <see cref="SwitcherLimit"/> Tangents by order with their overwrites for the switcher, and, for a
+/// signed-in reader, what they hold in the place, which says whether the switcher offers a new Tangent.</summary>
 public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
@@ -67,6 +68,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
         // revalidated.
         var token = reader is null ? null : FormToken.For(HttpContext);
         if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
+        var creates = reader is not null && (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace);
         return Ok(new TangentPage(
             row.Id,
             row.Name,
@@ -87,7 +89,9 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
             reader is null ? null : new TangentPage.Reader(
                 reader.Id, Named(reader).Name, Named(reader).Handle, Role(capabilities), reader.Profile.Avatar,
                 configured + AuthConstants.Routes.Logout + "?return=" + back),
-            DateOnly.FromDateTime(DateTime.UtcNow)));
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            TangentWrites.MayManage(capabilities) ? address + "/" + TangentWrites.SettingsSegment : null,
+            creates ? configured + NewTangentController.Route : null));
     }
 
     /// <summary>What a reader without <see cref="Bit.View"/> receives: a missing resource's answer where the Tangent

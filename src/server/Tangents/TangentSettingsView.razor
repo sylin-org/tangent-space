@@ -1,0 +1,100 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* A Tangent's settings: one panel in the page, with the form that renames and describes it, sets its default kind and
+   its audience, saying that its address stays; then its place among the Tangents, between its neighbours, with a
+   button to move it one place earlier and one to move it later, each its own small form. The moderators' Tangent says
+   instead that its audience and its place stay. A reader who may not change it reads why above the form, whose fields
+   are read-only and which has no button, and a visitor the way to sign in; a refusal of a field shows under that
+   field, and any other above the form. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="settings-heading">
+        <div class="sign-in-body">
+            <p class="post-form-where">Settings of <a href="@Model.Address">@Model.Name</a></p>
+            <h1 id="settings-heading" class="sign-in-title">Tangent settings</h1>
+            @if (Model.Gate is { } gate)
+            {
+                <p class="sign-in-failure" id="settings-failure" role="alert" data-gate="@gate">
+                    @if (Model.SignIn is { } signIn)
+                    {
+                        @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                    }
+                    else
+                    {
+                        @PostWrites.Sentence(gate)
+                    }
+                </p>
+            }
+            else if (Model.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="settings-failure" role="alert">@failure</p>
+            }
+            <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Mutable ? "submitting" : null)">
+                <FormTokenField Token="@Model.Token" />
+                <div class="field">
+                    <label class="field-label" for="settings-name">Name</label>
+                    <span class="field-input">
+                        <input id="settings-name" name="@TangentWrites.NameField" type="text" required maxlength="@Tangent.NameLimit" autocomplete="off"
+                               readonly="@(!Mutable)" value="@Model.Name" autofocus="@(Model.NameFailure is not null)"
+                               aria-invalid="@(Model.NameFailure is null ? "false" : "true")"
+                               aria-describedby="@(Model.NameFailure is null ? "settings-address" : "settings-name-failure settings-address")">
+                    </span>
+                    @if (Model.NameFailure is { } nameFailure)
+                    {
+                        <p class="field-failure" id="settings-name-failure">@nameFailure</p>
+                    }
+                    <p class="post-form-note" id="settings-address">Its address stays <code>/t/@Model.Slug</code>, whatever its name.</p>
+                </div>
+                <TangentChoices Prefix="settings" Description="@Model.Description" Kind="@Model.Kind" Audience="@Model.Audience"
+                                Kinds="@Model.Kinds" Audiences="@Model.Audiences" DescriptionFailure="@Model.DescriptionFailure"
+                                ReadOnly="@(!Mutable)" AudienceFixed="@(Model.Fixed ? "Only moderators read this Tangent; its audience stays as it is." : null)" />
+                @if (Mutable)
+                {
+                    <div class="post-form-actions">
+                        <a class="post-form-cancel" href="@Model.Address">Back to the Tangent</a>
+                        <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Saving…">Save</button>
+                    </div>
+                }
+            </form>
+            <section class="post-form-place" aria-labelledby="settings-place">
+                <h2 id="settings-place" class="field-label">Place among the Tangents</h2>
+                <p class="post-form-note">@PlaceSentence()</p>
+                @if (Mutable && !Model.Fixed)
+                {
+                    <div class="post-form-moves">
+                        @Moved(Move.Earlier, "Move earlier", Model.Before is not null)
+                        @Moved(Move.Later, "Move later", Model.After is not null)
+                    </div>
+                }
+            </section>
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public TangentSettingsPage Model { get; set; } = default!;
+
+    /// <summary>Whether the reader may change the Tangent here.</summary>
+    private bool Mutable => Model.Gate is null;
+
+    /// <summary>Where the Tangent stands, in a sentence.</summary>
+    private string PlaceSentence() => (Model.Fixed, Model.Before, Model.After) switch
+    {
+        (true, _, _) => "It comes after every other Tangent, and stays there.",
+        (_, { } before, { } after) => $"It comes after {before} and before {after}.",
+        (_, null, { } after) => $"It comes first, before {after}.",
+        (_, { } before, null) => $"It comes last, after {before}.",
+        _ => "It is the only Tangent."
+    };
+
+    /// <summary>One move as a small form of its own, posting the move alone; disabled where the Tangent is already at
+    /// that end.</summary>
+    private RenderFragment Moved(Move move, string label, bool possible) => @<form method="post" action="@Model.Action">
+        <FormTokenField Token="@Model.Token" />
+        <button type="submit" class="post-form-move" name="@TangentWrites.MoveField" value="@TangentWrites.Word(move)" disabled="@(!possible)">@label</button>
+    </form>;
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent and its settings as crumbs; and who
+    /// reads, or where a visitor signs in.</summary>
+    public static Frame Frame(TangentSettingsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Name, page.Address), new Crumb("Settings")], page.Who, page.SignIn);
+}
