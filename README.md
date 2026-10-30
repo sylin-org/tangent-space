@@ -30,6 +30,8 @@ Two settings are optional, as environment variables:
 - `Tangent__Operator` names who sets the place up, by handle or DID; without it, the first person to sign in does.
 - `Koan__Web__ApplicationUrl` fixes the address; without it, the place keeps the address its setup's sign-in arrived at, and offers you a public https address it is reached at later.
 
+To retire the place without breaking its links, `stop` it and run `pwsh scripts/tangent.ps1 archive`: what a visitor may read goes into `.local/archive`, or the folder `-To` names, under the same URLs. Serve that folder from any static file host at the place's address, or name it in `Tangent__Archive` and `launch`, and the server answers from it and takes no writes. Take the setting away and the place comes back as it was.
+
 ## Read
 
 | Document | For |

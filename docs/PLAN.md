@@ -161,6 +161,7 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 | Package | After | Role |
 | --- | --- | --- |
 | 7.1 Export: one Tangent or the whole place as a zip of readable pages beside their data, streamed in bounded reads through the one renderer, at `/settings/export` | 5.7, 5.1 | first of its kind |
+| 7.2 Static archive and retirement: every public page and feed in a folder under the same URLs, by the operator's `archive` verb, and `Tangent:Archive`, which answers from it and takes no writes | 7.1 | first of its kind |
 
 ## Slice 9, package by package
 

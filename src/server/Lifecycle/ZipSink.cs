@@ -6,7 +6,7 @@ namespace Tangent.Lifecycle;
 /// here, so however many files it holds, it holds only the one being written. The stream need not seek, so it may be
 /// a response. Only <see cref="Finish"/> writes the zip's directory: one left unfinished never opens as complete. It
 /// knows nothing of what its files are.</summary>
-public sealed class ZipSink
+public sealed class ZipSink : IFileSink
 {
     private readonly ZipArchive _zip;
 

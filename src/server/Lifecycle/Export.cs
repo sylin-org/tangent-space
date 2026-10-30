@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Text;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
@@ -15,8 +16,10 @@ using Tangent.Tangents;
 
 namespace Tangent.Lifecycle;
 
-/// <summary>One Tangent or the whole Tangent Space, as its reader may view it, written to a <see cref="ZipSink"/> as it
-/// is read: pages that open with no server, each beside its data. A page is the live page's resource through the live
+/// <summary>One Tangent or the whole Tangent Space, as its reader may view it, written to a <see cref="IFileSink"/> as it
+/// is read: pages that open with no server, each beside its data, or, for an <see cref="Archive"/>, a visitor's pages
+/// alone, each saying the place is retired, with the Tangents' list at <c>t/</c>, each Tangent's feeds beside its pages, a
+/// person's mark as its live page draws it, and each Post's address forwarding to its window. A page is the live page's resource through the live
 /// page's component (<see cref="HtmlFormatter.Whole"/>), standing alone, and its data is that resource as its JSON
 /// answers, so one file of each per bounded read: <c>index</c> and <c>page-{n}</c> at the root for the Tangents, under
 /// <c>t/{tangent}/</c> for its Topics, and <c>index</c> and <c>{n}</c> under <c>t/{tangent}/{topic}/</c> for the windows of
@@ -35,9 +38,9 @@ public sealed class Export
     public const int WindowSize = 50;
 
     /// <summary>How the place's files name a first page.</summary>
-    private const string First = "index";
+    internal const string First = "index";
 
-    private readonly ZipSink _zip;
+    private readonly IFileSink _files;
     private readonly string? _personId;
     private readonly Tangents.Tangent? _only;
     private readonly TangentSpace _space;
@@ -49,10 +52,11 @@ public sealed class Export
     private readonly ResourceComponents _components;
     private readonly JsonSerializerSettings _json;
     private readonly ILoggerFactory _logs;
+    private readonly string? _retired;
 
-    private Export(ZipSink zip, string? personId, Tangents.Tangent? only, TangentSpace space, string baseAddress, IServiceProvider services)
+    private Export(IFileSink files, string? personId, Tangents.Tangent? only, TangentSpace space, string baseAddress, IServiceProvider services, string? retired = null)
     {
-        _zip = zip;
+        _files = files;
         _personId = personId;
         _only = only;
         _space = space;
@@ -63,7 +67,13 @@ public sealed class Export
         _components = services.GetRequiredService<ResourceComponents>();
         _json = services.GetRequiredService<IOptions<MvcNewtonsoftJsonOptions>>().Value.SerializerSettings;
         _logs = services.GetRequiredService<ILoggerFactory>();
+        _retired = retired;
     }
+
+    /// <summary>The walk an archive makes: every Tangent a visitor may view, onto <paramref name="files"/>, each page
+    /// saying <paramref name="retired"/>.</summary>
+    internal static Export Visitors(IFileSink files, TangentSpace space, string baseAddress, IServiceProvider services, string retired)
+        => new(files, null, null, space, baseAddress, services, retired);
 
     /// <summary>Writes the export onto <paramref name="output"/>: of <paramref name="only"/>, or of every Tangent the
     /// reader may view. A read that fails ends here with the zip unfinished, so a broken export never opens as a whole
@@ -79,7 +89,7 @@ public sealed class Export
     }
 
     /// <summary>What a page's stylesheet needs, from where the place serves it.</summary>
-    private async Task Assets(CancellationToken ct)
+    internal async Task Assets(CancellationToken ct)
     {
         var root = _services.GetRequiredService<IWebHostEnvironment>().WebRootFileProvider;
         var stylesheet = root.GetFileInfo(HtmlFormatter.Stylesheet);
@@ -91,11 +101,11 @@ public sealed class Export
     private async Task Copied(string path, Microsoft.Extensions.FileProviders.IFileInfo file, CancellationToken ct)
     {
         await using var source = file.CreateReadStream();
-        await _zip.Copy(path, source, ct);
+        await _files.Copy(path, source, ct);
     }
 
     /// <summary>The Tangents, a page of them at a time: what each holds, then the page that lists them.</summary>
-    private async Task Tangents(CancellationToken ct)
+    internal async Task Tangents(CancellationToken ct)
     {
         if (_only is { } only)
         {
@@ -115,19 +125,20 @@ public sealed class Export
         } while (after is not null);
     }
 
-    /// <summary>The root's page of the Tangents, each with where it opens.</summary>
-    private Task Listing(IReadOnlyList<Tangents.Tangent> tangents, int page, bool more, CancellationToken ct) => Page(PagePath(page), new TangentsPage(
+    /// <summary>A page of the Tangents, each with where it opens: at the root of a zip, and of an archive at <c>t/</c>, its
+    /// address on the place, the root being its door.</summary>
+    private Task Listing(IReadOnlyList<Tangents.Tangent> tangents, int page, bool more, CancellationToken ct) => Page((Retired ? "t/" : "") + PagePath(page), new TangentsPage(
         tangents.Select(tangent => new TangentPage.Listed(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind),
-            "t/" + Uri.EscapeDataString(tangent.Id) + "/" + First + ".html", tangent.TopicCount)).ToList(),
+            (Retired ? "" : "t/") + Uri.EscapeDataString(tangent.Id) + "/" + First + ".html", tangent.TopicCount)).ToList(),
         more ? PagePath(page + 1) + ".html" : null,
         page > 1,
         First + ".html",
         [],
         null,
         _space.Name,
-        First + ".html",
+        (Retired ? "../" : "") + First + ".html",
         null,
-        null), ".", null, ct);
+        null), Retired ? ".." : ".", null, ct);
 
     /// <summary>What a Tangent holds: every Topic, then the pages that list them as its page does.</summary>
     private async Task Holding(Tangents.Tangent tangent, CancellationToken ct)
@@ -141,6 +152,7 @@ public sealed class Export
             slug = roots[^1].Slug!;
         }
 
+        if (Retired) await Feed($"t/{tangent.Id}/{Feeds.TangentSegment}", await Feeds.OfTangent(tangent, _space, _base, ct), ct);
         var audience = _space.Audience == Audience.Private || await Overwrites.AudienceOf(tangent.Id, ct) == Audience.Private
             ? Audience.Private
             : Audience.Public;
@@ -151,7 +163,7 @@ public sealed class Export
             var read = await TopicList.Read(tangent.Id, cursor, ct);
             var topics = read.Topics.Where(root => root.CreatedAt <= _asOf).ToList();
             await Page($"t/{tangent.Id}/{PagePath(page)}", await Listed(tangent, audience, topics, page++, read.Next is not null, ct), "../..",
-                new Frame(_space.Name, "../../" + First + ".html", [new Crumb(_space.Name, "../../" + First + ".html"), new Crumb(tangent.Name)]), ct);
+                new Frame(_space.Name, "../../" + First + ".html", [new Crumb(_space.Name, "../../" + First + ".html"), new Crumb(tangent.Name)], Feeds: FeedsOf(tangent)), ct);
             cursor = read.Next;
         } while (cursor is not null);
     }
@@ -172,7 +184,7 @@ public sealed class Export
     private async Task<TangentPage> Listed(Tangents.Tangent tangent, Audience audience, IReadOnlyList<Post> topics, int page, bool more, CancellationToken ct)
     {
         var latest = await TangentPageController.LatestReplies(topics, ct);
-        var people = Standalone(await TangentPageController.People(topics, latest.Values, ct));
+        var people = Marks(await TangentPageController.People(topics, latest.Values, ct));
         var unseen = new Dictionary<string, long>();
         return new TangentPage(
             tangent.Id,
@@ -207,6 +219,9 @@ public sealed class Export
             var replies = await TopicWindow.Between(root.Id, (window - 1) * WindowSize, window * WindowSize, ct);
             var path = window == 1 ? First : window.ToString(CultureInfo.InvariantCulture);
             await Page(folder + "/" + path, await Window(tangent, root, replies, window, windows, takenFrom, ct), "../../..", null, ct);
+            if (!Retired) continue;
+            if (window == 1) await Forward(folder + "/" + root.Id, "../" + First + ".html#" + root.Id, root.Title ?? "", ct);
+            foreach (var reply in replies) await Forward(folder + "/" + reply.Id, "../" + path + ".html#" + reply.Id, root.Title ?? "", ct);
         }
     }
 
@@ -215,7 +230,7 @@ public sealed class Export
         TopicPage.Origin? takenFrom, CancellationToken ct)
     {
         var posts = replies.Prepend(root).ToList();
-        var people = Standalone(await TopicPageController.People(posts, _base, ct, posts.Count * 3));
+        var people = Marks(await TopicPageController.People(posts, _base, ct, posts.Count * 3));
         var mentioned = await Mentions.Resolve(posts, _base, ct);
         var taken = await Origins.From(posts, _personId, _base, ct);
         var sequences = await Sequences(root, replies, ct);
@@ -247,7 +262,8 @@ public sealed class Export
             null,
             null,
             Undated,
-            takenFrom);
+            takenFrom,
+            FeedsOf(tangent));
     }
 
     private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, TangentPage.Author> people,
@@ -314,26 +330,52 @@ public sealed class Export
 
     private static string WindowFile(long window) => (window == 1 ? First : window.ToString(CultureInfo.InvariantCulture)) + ".html";
 
-    private static string PagePath(int page) => page == 1 ? First : "page-" + page.ToString(CultureInfo.InvariantCulture);
+    internal static string PagePath(int page) => page == 1 ? First : "page-" + page.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>The day a page's times are written for: none, so each is a full date, which a page kept for years goes on
     /// meaning.</summary>
-    private static readonly DateOnly Undated = DateOnly.MinValue;
+    internal static readonly DateOnly Undated = DateOnly.MinValue;
 
-    /// <summary>The people as a page standing alone shows them: by their marks, since their avatars and their profiles are
-    /// elsewhere.</summary>
-    private static Dictionary<string, TangentPage.Author> Standalone(IReadOnlyDictionary<string, TangentPage.Author> people)
-        => people.ToDictionary(person => person.Key, person => person.Value with { Avatar = null, Profile = null }, StringComparer.Ordinal);
+    /// <summary>Whether this walk is an archive's.</summary>
+    private bool Retired => _retired is not null;
+
+    /// <summary>The feeds a Tangent's pages advertise: in an archive, which holds them at their addresses.</summary>
+    private IReadOnlyList<FeedLink>? FeedsOf(Tangents.Tangent tangent)
+        => Retired ? Feeds.TangentLinks(_base, tangent.Id, tangent.Name, _space.Name) : null;
+
+    /// <summary>The people as a page shows them: in a zip by their marks, since their avatars and their profiles are
+    /// elsewhere; in an archive as on the live page, since their profiles are at the same addresses.</summary>
+    private IReadOnlyDictionary<string, TangentPage.Author> Marks(IReadOnlyDictionary<string, TangentPage.Author> people) => Retired
+        ? people
+        : people.ToDictionary(person => person.Key, person => person.Value with { Avatar = null, Profile = null }, StringComparer.Ordinal);
+
+    /// <summary>A feed at <paramref name="path"/>, its address without an extension, in both its formats.</summary>
+    internal async Task Feed(string path, Feed feed, CancellationToken ct)
+    {
+        await _files.Write(path + AtomFeed.Extension, Encoding.UTF8.GetBytes(AtomFeed.Of(feed)), ct);
+        await _files.Write(path + JsonFeed.Extension, Encoding.UTF8.GetBytes(JsonFeed.Of(feed)), ct);
+    }
+
+    /// <summary>An address that holds nothing of its own, a static host having no redirect to give: a page at
+    /// <paramref name="address"/> that sends its reader on to <paramref name="target"/>, and links it for one who stays.</summary>
+    internal Task Forward(string address, string target, string title, CancellationToken ct)
+    {
+        var to = WebUtility.HtmlEncode(target);
+        var named = WebUtility.HtmlEncode(title);
+        return _files.Write(address + "/" + First + ".html", Encoding.UTF8.GetBytes(
+            "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0; url=" + to + "\"><title>" + named + "</title></head>" +
+            "<body><p>" + WebUtility.HtmlEncode(_retired) + "</p><p><a href=\"" + to + "\">" + named + "</a></p></body></html>\n"), ct);
+    }
 
     /// <summary>One resource at <paramref name="path"/>: its page, <paramref name="up"/> being the way from there to the
-    /// zip's root, and its data beside it.</summary>
-    private async Task Page<TResource>(string path, TResource model, string up, Frame? frame, CancellationToken ct) where TResource : notnull
+    /// root, and in a zip its data beside it.</summary>
+    internal async Task Page<TResource>(string path, TResource model, string up, Frame? frame, CancellationToken ct) where TResource : notnull
     {
         var resource = _components.For(typeof(TResource));
         string html;
         await using (var renderer = new HtmlRenderer(_services, _logs))
-            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, frame ?? resource.Frame?.Invoke(model), standalone: true);
-        await _zip.Write(path + ".html", Encoding.UTF8.GetBytes(Feed.Rooted(html, _origin)), ct);
-        await _zip.Write(path + ".json", Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model, _json)), ct);
+            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, frame ?? resource.Frame?.Invoke(model), standalone: true, _retired);
+        await _files.Write(path + ".html", Encoding.UTF8.GetBytes(Render.Feed.Rooted(html, _origin)), ct);
+        if (!Retired) await _files.Write(path + ".json", Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model, _json)), ct);
     }
 }

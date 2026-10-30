@@ -64,9 +64,9 @@ public sealed class HtmlFormatter : TextOutputFormatter
 
     /// <summary>A resource as a whole page: its component in the shell and the <paramref name="frame"/> around it, its files
     /// at <paramref name="baseUrl"/>. A <paramref name="standalone"/> page opens with no server and counts on no
-    /// script.</summary>
+    /// script; <paramref name="retired"/> is the line that says the place is retired, on a page of its archive.</summary>
     public static Task<string> Whole(HtmlRenderer renderer, ResourceComponent resource, object value, string baseUrl, string accent, Frame? frame,
-        bool standalone = false, string? card = null) => renderer.Dispatcher.InvokeAsync(async () =>
+        bool standalone = false, string? card = null, string? retired = null) => renderer.Dispatcher.InvokeAsync(async () =>
     {
         var shell = ParameterView.FromDictionary(new Dictionary<string, object?>
         {
@@ -76,6 +76,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
             [nameof(Shell.Card)] = card,
             [nameof(Shell.Frame)] = frame,
             [nameof(Shell.Standalone)] = standalone,
+            [nameof(Shell.Retired)] = retired,
             [nameof(Shell.ChildContent)] = (RenderFragment)(builder =>
             {
                 builder.OpenComponent(0, resource.Component);

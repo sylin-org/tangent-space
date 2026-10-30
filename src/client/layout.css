@@ -669,6 +669,14 @@ h3 {
   color: var(--ts-text-3);
 }
 
+/* The one line a page of a retired place's archive opens with. */
+.retired-line {
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--ts-text-3);
+  text-align: center;
+}
+
 /* The appearance switch: a segmented control of System, Light and Dark. */
 .appearance {
   display: flex;

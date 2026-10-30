@@ -71,7 +71,8 @@ A person, signed in or not.
 | Social cards | A link to a public Topic, article, Tangent or the door pasted into a chat or a social app previews its title, first words, the place's name and its address, with no image yet. A members-only Tangent and a private place preview nothing; a removed Topic keeps its title and says nothing of its words. | works (3.4), not walked in a real app |
 | Backup and restore | `scripts/tangent.ps1 backup` and `restore`, in the container too. | works when walked on 29 October; the walk runs no lifecycle command, so it was not walked again |
 | Export | Whoever holds `ManageSpace` opens Export in the settings and downloads the whole place or one Tangent: a zip of pages that open with no server, each beside its data as JSON, holding everything they may view, members-only Tangents among it, and removed Posts as tombstones. | works (7.1), not walked on a server |
-| The static archive | None yet. | missing (slice 7) |
+| The static archive | The operator stops the place and runs `scripts/tangent.ps1 archive`: every page and feed a visitor may read, in a folder under the same URLs, for any static file host. Pages offer nothing and open with one line saying the place is retired; a private place has nothing to archive and says so. | works (7.2), the script walked on an empty place, the verb in the suite |
+| Retirement | The operator names the archive in `Tangent:Archive` and launches: the server answers its public URLs from the folder and takes no writes. Taking the setting away brings the place back. | works when walked on 30 October, on an archive rendered by the suite |
 
 ## The order these close in
 
