@@ -55,7 +55,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         var outcome = await writer.Send(new ReportPost(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             found.Post!.Id,
-            PostWrites.Body(fields, mayReport),
+            await PostWrites.Body(fields, mayReport, ct),
             personId ?? ""), ct);
         switch (outcome)
         {

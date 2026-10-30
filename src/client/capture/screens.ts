@@ -305,7 +305,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   // removed; and a Topic without replies. Then the composer: her reply typed and the page opened again, which brings
   // it back; a reply of nothing but spaces, refused above the field; a locked Topic, whose gate she reads instead; and
   // last, since it writes, a reply sent through the composer, which lands on the reply's address; it carries the same
-  // TID in every width and theme, so the server's idempotency keeps it one Post. Then take this on a tangent: a Topic
+  // TID in every width and theme, so the server's idempotency keeps it one Post; and a reply to the quiet question
+  // that types its author's handle, which lands reading it as her mention. Then take this on a tangent: a Topic
   // whose reply was taken into the workshop, each Post offering the verb and the reply listing the Topic taken from
   // it; that Topic, linked to its origin; and a Topic taken from a Post in a Tangent the persona may not view, which
   // says only that. Then reporting: the root's Report opened in the page, its short form under the Post; a reply's
@@ -378,6 +379,17 @@ export const screens: Readonly<Record<string, Screen>> = {
         cancel: '/t/discussions/what-kind-of-discussions/seen',
         values: { '#reply-form-id': '3mwfixedrep22' },
         fill: { '#reply-body': 'Fridays it is. I’ll bring a link about glue.' },
+        click: '.post-form-submit',
+        waitFor: 'article.post.is-anchor',
+      },
+      {
+        name: 'replied-mention',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/a-quiet-question',
+        cancel: '/t/discussions/a-quiet-question/seen',
+        values: { '#reply-form-id': '3mwfixedmen22' },
+        fill: { '#reply-body': 'Index cards, @mara.bsky.social. A notebook replaced them in March.' },
         click: '.post-form-submit',
         waitFor: 'article.post.is-anchor',
       },

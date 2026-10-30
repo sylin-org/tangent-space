@@ -149,13 +149,14 @@ public static class PostWrites
 
     public static string Word(PostKind kind) => kind.ToString().ToLowerInvariant();
 
-    /// <summary>The body a write route hands its command: judged (<see cref="PostBody.Of"/>) only where the person holds
-    /// the verb the command needs here, so a request the writer will refuse at its gate never pays for a parse; left
+    /// <summary>The body a write route hands its command: written as its sender wrote it, each typed handle of a
+    /// participant here their mention, and judged (<see cref="PostBody.Written"/>) only where the person holds the verb
+    /// the command needs here, so a request the writer will refuse at its gate never pays for a parse or a read; left
     /// unjudged otherwise.</summary>
-    public static PostBody Body(IReadOnlyDictionary<string, string> fields, bool mayWrite)
+    public static async Task<PostBody> Body(IReadOnlyDictionary<string, string> fields, bool mayWrite, CancellationToken ct)
     {
         var text = fields.GetValueOrDefault(BodyField) ?? "";
-        return mayWrite ? PostBody.Of(text) : PostBody.Unjudged(text);
+        return mayWrite ? await PostBody.Written(text, ct) : PostBody.Unjudged(text);
     }
 
     public static string TangentAddress(string baseUrl, string tangent) => baseUrl + "/t/" + Uri.EscapeDataString(tangent);

@@ -46,7 +46,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             found.Tangent.Id,
             fields.GetValueOrDefault(PostWrites.TitleField) ?? "",
-            PostWrites.Body(fields, found.Capabilities.Holds(Bit.Topic)),
+            await PostWrites.Body(fields, found.Capabilities.Holds(Bit.Topic), ct),
             personId ?? "",
             kind), ct);
         switch (outcome)
