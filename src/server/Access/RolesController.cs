@@ -214,7 +214,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ro
 
     /// <summary>One role as the reader of the roles finds it, the order holding <paramref name="count"/> roles: what they
     /// may do to it by <see cref="People.Manages"/>, nothing to everyone, never a move past either end, and never a
-    /// deletion of a seeded role.</summary>
+    /// deletion of a seeded role or of one granting a permission they do not hold.</summary>
     public static RolesPage.Listed Listed(Role role, Capabilities reader, string? readerId, TangentSpace space, long count)
     {
         var can = new List<string>();
@@ -223,7 +223,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ro
             can.Add(RolesPage.Verb.Change);
             if (role.Position < count - 1 && People.Manages(reader, readerId, space, role, role.Position + 1)) can.Add(RolesPage.Verb.Higher);
             if (role.Position > 1 && People.Manages(reader, readerId, space, role, role.Position - 1)) can.Add(RolesPage.Verb.Lower);
-            if (!Roles.Seeded(role.Key)) can.Add(RolesPage.Verb.Delete);
+            if (!Roles.Seeded(role.Key) && People.Holding(reader, role) is null) can.Add(RolesPage.Verb.Delete);
         }
 
         return new RolesPage.Listed(Roles.Word(role.Key), role.Name, Bits.Names(Bits.InTokens(role.Permissions)),

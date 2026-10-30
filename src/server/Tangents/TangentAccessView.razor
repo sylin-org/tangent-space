@@ -3,8 +3,8 @@
 @* A Tangent's access: one panel in the page that says who reads it by its audience, linked to the settings that change
    it, then the roles in their order, one line each with what the role holds here, and, for a reader who may change it,
    a button for each other access, each its own small form. The moderators' Tangent says instead that its access stays.
-   A reader who may not change it reads why above the list, and a visitor the way to sign in; a refusal shows above the
-   list. *@
+   A reader who may not change it reads why and nothing else, and a visitor the way to sign in; a refusal shows above
+   the list. *@
 <main class="sign-in post-form">
     <section class="sign-in-panel post-form-panel" aria-labelledby="access-heading">
         <div class="sign-in-body">
@@ -23,57 +23,60 @@
                     }
                 </p>
             }
-            else if (Model.Failure is { } failure)
+            else
             {
-                <p class="sign-in-failure" id="access-failure" role="alert">@failure</p>
-            }
-            <p class="post-form-note">
-                @Audience()
-                @if (!Model.Fixed)
+                @if (Model.Failure is { } failure)
                 {
-                    @(" ")<a href="@Model.Settings">Its settings</a>@(" change who reads it.")
+                    <p class="sign-in-failure" id="access-failure" role="alert">@failure</p>
                 }
-            </p>
-            <ul class="door-offers applications people tangent-access">
-                @foreach (var role in Model.Roles)
+                <p class="post-form-note">
+                    @Audience()
+                    @if (!Model.Fixed)
+                    {
+                        @(" ")<a href="@Model.Settings">Its settings</a>@(" change who reads it.")
+                    }
+                </p>
+                <ul class="door-offers applications people tangent-access">
+                    @foreach (var role in Model.Roles)
+                    {
+                        <li class="door-offer" @key="role.Word">
+                            <p class="door-offer-line">
+                                @role.Name <span class="topic-row-none">· @Holds(role.Access)</span>
+                            </p>
+                            @if (Model.Change is { } change && role.Offered.Count > 0)
+                            {
+                                <div class="door-offer-answers people-answers">
+                                    @foreach (var access in role.Offered)
+                                    {
+                                        <form method="post" action="@change.Action">
+                                            <FormTokenField Token="@change.Token" />
+                                            <input type="hidden" name="@TangentAccessController.RoleField" value="@role.Word">
+                                            <button type="submit" class="watch-button" name="@TangentAccessController.AccessField" value="@access">@Button(access)</button>
+                                        </form>
+                                    }
+                                </div>
+                            }
+                        </li>
+                    }
+                </ul>
+                <p class="post-form-note">Administrators read and post in every Tangent.</p>
+                @if (Model.Previous is not null || Model.Next is not null)
                 {
-                    <li class="door-offer" @key="role.Word">
-                        <p class="door-offer-line">
-                            @role.Name <span class="topic-row-none">· @Holds(role.Access)</span>
-                        </p>
-                        @if (Model.Change is { } change && role.Offered.Count > 0)
+                    <nav class="topic-pages" aria-label="More roles">
+                        @if (Model.Previous is { } previous)
                         {
-                            <div class="door-offer-answers people-answers">
-                                @foreach (var access in role.Offered)
-                                {
-                                    <form method="post" action="@change.Action">
-                                        <FormTokenField Token="@change.Token" />
-                                        <input type="hidden" name="@TangentAccessController.RoleField" value="@role.Word">
-                                        <button type="submit" class="watch-button" name="@TangentAccessController.AccessField" value="@access">@Button(access)</button>
-                                    </form>
-                                }
-                            </div>
+                            <a href="@previous">Higher roles</a>
                         }
-                    </li>
+                        @if (Model.Next is { } next)
+                        {
+                            <a class="topic-pages-next" href="@next">Lower roles</a>
+                        }
+                    </nav>
                 }
-            </ul>
-            <p class="post-form-note">Administrators read and post in every Tangent.</p>
-            @if (Model.Previous is not null || Model.Next is not null)
-            {
-                <nav class="topic-pages" aria-label="More roles">
-                    @if (Model.Previous is { } previous)
-                    {
-                        <a href="@previous">Higher roles</a>
-                    }
-                    @if (Model.Next is { } next)
-                    {
-                        <a class="topic-pages-next" href="@next">Lower roles</a>
-                    }
-                </nav>
+                <div class="post-form-actions">
+                    <a class="post-form-cancel" href="@Model.Settings">Back to the settings</a>
+                </div>
             }
-            <div class="post-form-actions">
-                <a class="post-form-cancel" href="@Model.Settings">Back to the settings</a>
-            </div>
         </div>
     </section>
 </main>

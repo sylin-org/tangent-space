@@ -12,7 +12,8 @@ namespace Tangent.Tangents;
 
 /// <summary>A Tangent's access: <c>/t/{tangent}/settings/access</c>, which roles read and post there beyond its
 /// audience. Its <c>GET</c> is one page of the roles in Koan's order with what each holds there, one resource both ways
-/// (<see cref="TangentAccessPage"/>), by <c>page</c>. Its <c>POST</c> takes <c>role</c>, a role's word, and
+/// (<see cref="TangentAccessPage"/>), by <c>page</c>; a reader who may not manage the Tangent reads the gate with no role
+/// listed, answered <c>401</c> to sign in and <c>403</c> otherwise. Its <c>POST</c> takes <c>role</c>, a role's word, and
 /// <c>access</c>, one of <see cref="Accesses"/>, as a form or a JSON object, and sends <see cref="ChangeAccess"/>: a form
 /// is sent back to the access, and a JSON request reads the role as the page now lists it; a refusal reads the page again
 /// with the reason above the list, or a problem. Both resolve the address as the Tangent page does
@@ -42,7 +43,8 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
         var personId = PostWrites.PersonId(User);
         var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
         if (found is null) return unseen!;
-        return Ok(await Page(found, personId, Math.Max(page ?? 1, 1), ct));
+        var read = await Page(found, personId, Math.Max(page ?? 1, 1), ct);
+        return read.Gate is { } gate ? new ObjectResult(read) { StatusCode = PostWrites.Status(gate) } : Ok(read);
     }
 
     [HttpPost(Route)]
@@ -105,7 +107,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
         var (again, unseen) = await PostWrites.Locate(personId, found.Tangent.Id, null, null, ct);
         if (again is null) return unseen!;
         var page = await Page(again, personId, 1, ct);
-        page = gate ? page with { Gate = reason, Change = null } : page with { Failure = reason };
+        page = gate ? page with { Gate = reason, Change = null, Roles = [], Next = null, Previous = null } : page with { Failure = reason };
         return new ObjectResult(page) { StatusCode = status };
     }
 
@@ -128,10 +130,10 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentWrites.SettingsSegment + "/" + Segment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var place = await Capabilities.Load(personId, null, null, ct);
-        var read = await roles.Page(page: number, pageSize: RolesController.PageSize, ct: ct);
-        var listed = new List<TangentAccessPage.Listed>();
-        foreach (var role in read.Items.Where(Listable)) listed.Add(await Listed(role, found, place, personId, space, ct));
         var gate = TangentWrites.ManageGate(found.Capabilities);
+        var read = gate is null ? await roles.Page(page: number, pageSize: RolesController.PageSize, ct: ct) : null;
+        var listed = new List<TangentAccessPage.Listed>();
+        foreach (var role in read?.Items.Where(Listable) ?? []) listed.Add(await Listed(role, found, place, personId, space, ct));
         return new TangentAccessPage(
             row.Id,
             row.Name,
@@ -140,8 +142,8 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
             TangentWrites.Word(await Overwrites.AudienceOf(row.Id, ct) ?? Audience.Public),
             space.ModeratorsTangentId == row.Id,
             listed,
-            (long)number * RolesController.PageSize < read.TotalCount ? settings + "/" + Segment + "?" + RolesController.PageQuery + "=" + (number + 1) : null,
-            number > 1 ? settings + "/" + Segment + (number > 2 ? "?" + RolesController.PageQuery + "=" + (number - 1) : "") : null,
+            read is not null && (long)number * RolesController.PageSize < read.TotalCount ? settings + "/" + Segment + "?" + RolesController.PageQuery + "=" + (number + 1) : null,
+            read is not null && number > 1 ? settings + "/" + Segment + (number > 2 ? "?" + RolesController.PageQuery + "=" + (number - 1) : "") : null,
             gate is null && space.ModeratorsTangentId != row.Id
                 ? Form.Posting(settings + "/" + Segment, FormToken.For(HttpContext),
                     new Form.Field(RoleField, "The word of a role listed here with the access in its offered."),

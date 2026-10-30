@@ -129,7 +129,7 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 | 5.3 The people here: a directory with seek cursors; naming moderators and administrators; time out, ban and lift inline | 5.5 | repeat |
 | 5.2 Admission: join or apply; standing; the one knob "new accounts post after approval" | 5.3 | repeat |
 | 5.4 A participant's profile | 5.3 | repeat |
-| 5.1 The role editor island over Koan's roles, and overwrites per Tangent beyond its audience | 5.3 | first of its kind |
+| 5.1 The roles at `/settings/roles` over Koan's order, given and taken on People; each Tangent's access by role, its overwrites beyond its audience; and the place's own audience | 5.3 | first of its kind |
 | 5.7 Any number of Tangents and members, on Koan's roles as rows: every list of Tangents reaches every one the reader may view, a page at a time | 5.4 | repeat |
 | 5.8 An application reaches whoever decides it: on a place set to apply, whoever holds the bit to decide reads the waiting applications on their bell, in their notifications and on their door | 5.2, 6.1 | repeat |
 

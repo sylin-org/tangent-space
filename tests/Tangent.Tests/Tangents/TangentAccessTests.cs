@@ -65,6 +65,11 @@ public sealed class TangentAccessTests
         Assert.DoesNotContain(nameof(Bit.Topic), (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true)).Json
             .GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
 
+        // A member who reads the Tangent reads the gate on its access, and no role.
+        var unmanaged = await Send(ada.Client, HttpMethod.Get, access, json: true);
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent)), (unmanaged.Status, unmanaged.Json.GetProperty("gate").GetString()));
+        Assert.Empty(unmanaged.Json.GetProperty("roles").EnumerateArray());
+
         // A member manages nothing here; a role no one has is not found; an administrator's access is not set.
         var refused = await Json(ada, "/t/" + Studio, access, new { role = "member", access = "post" });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent)), (refused.Status, refused.Gate));

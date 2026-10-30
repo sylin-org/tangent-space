@@ -115,6 +115,31 @@ public sealed class RoleSettingsTests
     }
 
     [Fact]
+    public async Task A_role_granting_a_permission_its_manager_does_not_hold_is_not_theirs_to_delete()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Shaped(tangentSpace);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await roles.SetPermissions(Roles.Moderator, Bits.Tokens(Roles.ModeratorBits | Bit.ManageRoles), Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var mo = await SignedIn(tangentSpace, Mo);
+        var path = RolesController.Path;
+        Assert.Equal(HttpStatusCode.Created, (await Json(leo, path, path, new { name = "Keepers", permissions = "ManageSpace" })).Status);
+        Assert.Equal(HttpStatusCode.Created, (await Json(mo, path, path, new { name = "Helpers", permissions = "View" })).Status);
+
+        // Below the moderator, so theirs to manage, and offered no deletion they could not make.
+        var page = (await Send(mo.Client, HttpMethod.Get, path, json: true)).Json;
+        Assert.Contains(RolesPage.Verb.Change, Strings(Row(page, "keepers"), "can"));
+        Assert.DoesNotContain(RolesPage.Verb.Delete, Strings(Row(page, "keepers"), "can"));
+        Assert.Contains(RolesPage.Verb.Delete, Strings(Row(page, "helpers"), "can"));
+
+        var refused = await Json(mo, path, RolesController.DeletePath, new { role = "keepers" });
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotHeld), (refused.Status, refused.Gate));
+        Assert.NotNull(await roles.Get("role:keepers", Cancellation));
+        Assert.Equal(HttpStatusCode.NoContent, (await Json(mo, path, RolesController.DeletePath, new { role = "helpers" })).Status);
+    }
+
+    [Fact]
     public async Task A_moderator_who_shapes_roles_changes_only_those_below_their_own_highest_and_gives_nothing_they_do_not_hold()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);

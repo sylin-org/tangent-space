@@ -294,13 +294,15 @@ export const screens: Readonly<Record<string, Screen>> = {
   },
   // A Tangent's access, read by the persona, who set the place up and so manages every role: the studio, private, whose
   // member role reads and posts there, members-only, where patrons read alone; the public discussions, where each role
-  // holds what it holds in the place; and the moderators' Tangent, whose access stays as it is.
+  // holds what it holds in the place; the moderators' Tangent, whose access stays as it is; and refused, read by the
+  // persona as a member of a place someone else set up, who reads the gate and no role.
   'tangent-settings-access': {
     path: '/t/studio/settings/access',
     states: [
       { name: 'members-only', place: 'persona', seed: 'roles', signedIn: true },
       { name: 'public', place: 'persona', seed: 'roles', signedIn: true, path: '/t/discussions/settings/access' },
       { name: 'moderators', place: 'persona', seed: 'roles', signedIn: true, path: '/t/moderators/settings/access' },
+      { name: 'refused', seed: 'roles', signedIn: true, path: '/t/discussions/settings/access' },
     ],
   },
   // The form that edits the persona's own Topic: as it opens; sent with a body of nothing but spaces, refused under

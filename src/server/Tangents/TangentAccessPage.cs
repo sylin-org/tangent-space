@@ -10,7 +10,7 @@ namespace Tangent.Tangents;
 /// <see cref="Previous"/> are the pages beside this one, null at either end. <see cref="Fixed"/> says this is the
 /// moderators' Tangent, whose access stays as it is. <see cref="Change"/>, present only where the reader may manage the
 /// Tangent, takes <c>role</c> and <c>access</c>. <see cref="Can"/> is what the reader holds on the Tangent, and
-/// <see cref="Gate"/> why they may not change its access, null when they may; <see cref="SignIn"/> is where a visitor
+/// <see cref="Gate"/> why they may not change its access, null when they may, when no role is listed; <see cref="SignIn"/> is where a visitor
 /// signs in, coming back here. After a refusal the page says why above the list.</summary>
 public sealed record TangentAccessPage(
     string Slug,
