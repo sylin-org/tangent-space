@@ -192,6 +192,17 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'refused', signedIn: true },
     ],
   },
+  // The place's appearance, read by the persona, who set the place up and so holds ManageSpace: gold, the accent a place
+  // starts with, and jade once the place says so; and by the persona in a place someone else set up, refused above
+  // disabled choices.
+  'tangent-space-settings-appearance': {
+    path: '/settings/appearance',
+    states: [
+      { name: 'proprietor', place: 'persona', signedIn: true },
+      { name: 'jade', place: 'persona', seed: 'jade', signedIn: true },
+      { name: 'refused', signedIn: true },
+    ],
+  },
   // The place's applications, read by the persona, who set the place up and so decides them: two waiting and one
   // declined; the first one's decline opened, confirmed in the page; and none.
   'tangent-space-settings-applications': {

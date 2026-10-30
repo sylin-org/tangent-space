@@ -59,6 +59,9 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
             case "applications":
                 await ApplicationsScreen(ct);
                 return NoContent();
+            case "jade":
+                await Jade(ct);
+                return NoContent();
             default:
                 return NotFound();
         }
@@ -69,6 +72,14 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         space.Admission = Admission.Apply;
+        await Write(new Keep<TangentSpace>(space), ct);
+    }
+
+    /// <summary>The place's accent set to jade.</summary>
+    private async Task Jade(CancellationToken ct)
+    {
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
+        space.Appearance.Accent = Accent.Jade;
         await Write(new Keep<TangentSpace>(space), ct);
     }
 

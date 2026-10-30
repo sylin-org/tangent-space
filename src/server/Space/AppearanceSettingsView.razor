@@ -1,0 +1,78 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* The place's settings, appearance: the sections of the settings in the rail, this one marked, and in one panel beside
+   them the choice of the place's accent, four cards, each with its colour in the reader's theme, and a note that light or
+   dark stays each reader's own. A reader who may not change it reads why above the form, whose choices are disabled and
+   which has no button, and a visitor the way to sign in; a refusal shows above the form. *@
+<div class="layout layout-settings">
+    <SettingsRail Sections="@Model.Sections" />
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="space-appearance-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="space-appearance-heading" class="sign-in-title">@TangentSpaceSettingsController.AppearanceSection</h1>
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="space-appearance-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else if (Model.Failure is { } failure)
+                {
+                    <p class="sign-in-failure" id="space-appearance-failure" role="alert">@failure</p>
+                }
+                <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+                    @if (Model.Change is { } change)
+                    {
+                        <FormTokenField Token="@change.Token" />
+                    }
+                    <fieldset class="post-form-choice">
+                        <legend class="field-label">The place's accent</legend>
+                        <div class="post-form-options">
+                            @foreach (var word in Model.Accents)
+                            {
+                                <label class="post-form-option">
+                                    <span class="accent-swatch" data-swatch="@word" aria-hidden="true"></span>
+                                    <span class="post-form-option-text">
+                                        <span class="post-form-option-name">@Name(word)</span>
+                                    </span>
+                                    <input type="radio" name="@TangentSpaceSettingsController.AccentField" value="@word"
+                                           checked="@(word == Model.Accent)" disabled="@(!Mutable)">
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                    <p class="post-form-note">Links, buttons and what is new take it on every page, for everyone. Light or dark is each reader's own, at the foot of any page.</p>
+                    @if (Mutable)
+                    {
+                        <div class="post-form-actions">
+                            <a class="post-form-cancel" href="@Model.Door">Back to the door</a>
+                            <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Saving…">Save</button>
+                        </div>
+                    }
+                </form>
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public AppearanceSettingsPage Model { get; set; } = default!;
+
+    /// <summary>Whether the reader may change the accent here.</summary>
+    private bool Mutable => Model.Gate is null;
+
+    private static string Name(string word) => char.ToUpperInvariant(word[0]) + word[1..];
+
+    /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
+    /// a visitor signs in.</summary>
+    public static Frame Frame(AppearanceSettingsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Settings")], page.Who, page.SignIn);
+}

@@ -1,7 +1,7 @@
 @using System.Globalization
 @using System.Text.Json
-@* The page around one resource's component: the stylesheet and the two scripts every page loads, absolute from
-   the base URL. The theme script blocks in <head> so the saved appearance applies before the first paint; the
+@* The page around one resource's component: the place's accent on <html>, and the stylesheet and the two scripts every page loads, absolute from
+   the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in, how
    many of their notifications they have not seen, linked to them and shown only while there are some, which the page's
@@ -10,7 +10,7 @@
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
    in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. Nothing here is a dialog. *@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-accent="@Accent">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -160,6 +160,8 @@ else
     [Parameter, EditorRequired] public string Title { get; set; } = "";
 
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Accent { get; set; } = "";
 
     [Parameter] public Frame? Frame { get; set; }
 

@@ -3,6 +3,7 @@ using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Mvc.Formatters;
+using Tangent.Space;
 
 namespace Tangent.Render;
 
@@ -40,6 +41,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
         var resource = _components.For(context.ObjectType!);
         var renderer = http.RequestServices.GetRequiredService<HtmlRenderer>();
         var fragment = IsFragment(http.Request);
+        var accent = fragment ? "" : await Appearance.OfRequest(http);
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
         {
             if (fragment)
@@ -51,6 +53,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
             {
                 [nameof(Shell.Title)] = resource.Title(value),
                 [nameof(Shell.BaseUrl)] = _baseUrl.Resolve(http),
+                [nameof(Shell.Accent)] = accent,
                 [nameof(Shell.Frame)] = resource.Frame?.Invoke(value),
                 [nameof(Shell.ChildContent)] = (RenderFragment)(builder =>
                 {

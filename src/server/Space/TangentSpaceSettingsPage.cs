@@ -32,7 +32,7 @@ public sealed record TangentSpaceSettingsPage(
 public sealed record SettingsSection(string Name, string Address, bool Current);
 
 /// <summary>The place as a write of its settings leaves it, for an agent: its name and description, its admission
-/// (<c>join</c> or <c>apply</c>), its audience (<c>public</c> or <c>private</c>), its door, its settings, and what the
-/// writer <see cref="Can"/> do in it.</summary>
-public sealed record WrittenTangentSpace(string Name, string Description, string Admission, string Audience, string Door, string Settings,
+/// (<c>join</c> or <c>apply</c>), its audience (<c>public</c> or <c>private</c>), its accent, its door, its settings, and
+/// what the writer <see cref="Can"/> do in it.</summary>
+public sealed record WrittenTangentSpace(string Name, string Description, string Admission, string Audience, string Accent, string Door, string Settings,
     IReadOnlyList<string> Can);

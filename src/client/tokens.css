@@ -86,6 +86,11 @@
   --ts-shadow: rgba(40, 30, 15, 0.18);
   --ts-scrim: rgba(29, 27, 23, 0.4);
   --ts-accent: var(--ts-accent-light);
+  /* The place's first four tokens, with --ts-accent, named as site.standard.theme.basic names them; they follow the
+     theme and the accent through the tokens they stand for. */
+  --ts-background: var(--ts-page);
+  --ts-foreground: var(--ts-text);
+  --ts-accent-foreground: var(--ts-on-accent);
   --ts-accent-line: color-mix(in srgb, var(--ts-accent) 50%, transparent);
   --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 14%, transparent);
   --ts-selection: color-mix(in srgb, var(--ts-accent) 24%, transparent);

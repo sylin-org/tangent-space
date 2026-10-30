@@ -200,6 +200,20 @@
   font-size: 13px;
 }
 
+/* An accent beside the others, as the place's appearance offers them, in the theme the reader reads: its tones are the
+ * ones tokens.css gives the page for that accent, and the token test holds them equal. */
+.accent-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: light-dark(var(--ts-accent-light), var(--ts-accent-dark));
+}
+
+.accent-swatch[data-swatch="gold"] { --ts-accent-light: #8a5f12; --ts-accent-dark: #d9ab55; }
+.accent-swatch[data-swatch="jade"] { --ts-accent-light: #2f6b5e; --ts-accent-dark: #7cc4b0; }
+.accent-swatch[data-swatch="iris"] { --ts-accent-light: #5a4fb0; --ts-accent-dark: #a99cf0; }
+.accent-swatch[data-swatch="copper"] { --ts-accent-light: #a4472a; --ts-accent-dark: #e58f6a; }
+
 /* The forms that create a Tangent and change its settings: a short description box, a quiet note under a field, the
  * choices that stand at their defaults behind one line, and the Tangent's place with its two moves. */
 .post-form-short {

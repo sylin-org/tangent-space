@@ -77,6 +77,7 @@ public sealed class TangentModule : KoanModule
             .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame)
             .Add<TangentSpaceSettingsPage, TangentSpaceSettingsView>(page => "Settings · " + page.Place, frame: TangentSpaceSettingsView.Frame)
             .Add<AdmissionSettingsPage, AdmissionSettingsView>(page => "Admission · " + page.Place, frame: AdmissionSettingsView.Frame)
+            .Add<AppearanceSettingsPage, AppearanceSettingsView>(page => "Appearance · " + page.Place, frame: AppearanceSettingsView.Frame)
             .Add<Participants.ApplicationsPage, Participants.ApplicationsView>(page => "Applications · " + page.Place, frame: Participants.ApplicationsView.Frame)
             .Add<Participants.PeoplePage, Participants.PeopleView>(page => "People · " + page.Place, frame: Participants.PeopleView.Frame)
             .Add<RolesPage, RolesView>(page => "Roles · " + page.Place, frame: RolesView.Frame)
