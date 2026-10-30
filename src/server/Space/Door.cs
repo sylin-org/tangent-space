@@ -79,7 +79,7 @@ public sealed record Door(
         Group Mentions,
         IReadOnlyList<InTangent> PerTangent,
         Group Articles,
-        CaughtUp? CaughtUp,
+        Form? CaughtUp,
         Group? Taken = null,
         Decision? Admitted = null,
         Decision? Lifted = null,
@@ -117,16 +117,11 @@ public sealed record Door(
     /// <summary>What is new in one Tangent: its Topics and its replies.</summary>
     public sealed record InTangent(string Slug, string Name, string Address, int Topics, int Replies, bool AtLeast);
 
-    /// <summary>The form that marks the door seen: where it posts, the sequence it carries in the <c>through</c> field,
-    /// and its antiforgery token.</summary>
-    public sealed record CaughtUp(string Action, long Through, FormToken Token);
-
     /// <summary>One open Offer as its decider reads it: the Offer's Id, what it would do (<c>address</c>: use
     /// <see cref="Subject"/>, an origin, as the place's address), and the evidence Koan holds since this process started —
-    /// how many requests arrived on it and since when, absent after a restart until it is seen again; then its two answers
-    /// as addresses to post to, each carrying the Id in the <c>offer</c> field, and the form's antiforgery token.</summary>
-    public sealed record Offered(string Offer, string Kind, string Subject, long? Count, DateTimeOffset? Since, string Use, string Decline,
-        FormToken Token);
+    /// how many requests arrived on it and since when, absent after a restart until it is seen again; then its two answers,
+    /// each a form carrying the Id in its <c>offer</c> field.</summary>
+    public sealed record Offered(string Offer, string Kind, string Subject, long? Count, DateTimeOffset? Since, Form Use, Form Decline);
 
     /// <summary>How many applications wait, whether that is a lower bound because the read was full, and the address of
     /// the applications, where each is admitted or declined.</summary>

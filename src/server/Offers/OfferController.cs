@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
+using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
 using Tangent.Writer;
@@ -27,10 +28,18 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
     /// <summary>The form field that carries the Offer's Id.</summary>
     public const string Field = "offer";
 
+    /// <summary>The form that uses the Offer <paramref name="offer"/>, under <paramref name="baseAddress"/>.</summary>
+    public static Form UseForm(string baseAddress, string offer, FormToken token) => Form.Posting(baseAddress + UsePath, token, Named(offer));
+
+    /// <summary>The form that declines the Offer <paramref name="offer"/>, under <paramref name="baseAddress"/>.</summary>
+    public static Form DeclineForm(string baseAddress, string offer, FormToken token) => Form.Posting(baseAddress + DeclinePath, token, Named(offer));
+
+    private static Form.Field Named(string offer) => new(Field, "The Offer's Id.", offer);
+
     [HttpPost(UsePath)]
-    public async Task<IActionResult> Use([FromForm(Name = Field)] string? offer, CancellationToken ct)
+    public async Task<IActionResult> Use(CancellationToken ct)
     {
-        var (refusal, personId, row) = await Posted(offer, ct);
+        var (refusal, personId, row) = await Posted(ct);
         if (refusal is not null) return refusal;
         if (row!.State == OfferState.Accepted) return await Landed(row, ct);
         if (row.State != OfferState.Open || baseUrl.IsConfigured) return NoLongerOpen();
@@ -56,9 +65,9 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
     }
 
     [HttpPost(DeclinePath)]
-    public async Task<IActionResult> Decline([FromForm(Name = Field)] string? offer, CancellationToken ct)
+    public async Task<IActionResult> Decline(CancellationToken ct)
     {
-        var (refusal, personId, row) = await Posted(offer, ct);
+        var (refusal, personId, row) = await Posted(ct);
         if (refusal is not null) return refusal;
         if (row!.State == OfferState.Declined) return Door();
         if (row.State != OfferState.Open) return NoLongerOpen();
@@ -81,9 +90,9 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
         }
     }
 
-    /// <summary>What every answer asks first: a signed-in poster, the form's token, and an Offer that exists for them,
-    /// which only the place's operator has.</summary>
-    private async Task<(IActionResult? Refusal, string? PersonId, Offer? Row)> Posted(string? offer, CancellationToken ct)
+    /// <summary>What every answer asks first: a signed-in poster, the form's token, and the Offer its <see cref="Field"/>
+    /// names, sent as a form or a JSON object, that exists for them, which only the place's operator has.</summary>
+    private async Task<(IActionResult? Refusal, string? PersonId, Offer? Row)> Posted(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
@@ -92,7 +101,8 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
         if (!await FormToken.Validate(HttpContext))
             return (new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was decided.").ToResult(), null, null);
-        if (offer is not { Length: > 0 } || await Offer.Get(offer, ct) is not { } row
+        if (await PostWrites.Fields(Request, ct) is not { } fields) return (PostWrites.Unreadable(), null, null);
+        if (fields.GetValueOrDefault(Field) is not { Length: > 0 } offer || await Offer.Get(offer, ct) is not { } row
             || (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.OperatorId != personId)
             return (Absent(), null, null);
         return (null, personId, row);

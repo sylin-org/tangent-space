@@ -104,7 +104,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         return await Again(found, personId, fields, status, keepId: reason != Post.IdTaken, page => about switch
         {
             PostWrites.About.Body => page with { BodyFailure = reason },
-            PostWrites.About.Gate => page with { Gate = reason },
+            PostWrites.About.Gate => page with { Gate = reason, Report = null },
             _ => page with { Failure = reason }
         }, ct);
     }
@@ -117,7 +117,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         var (found, unseen) = await PostWrites.Locate(personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
         if (found is null) return unseen!;
         var page = await Page(found, personId, received: false, ct) with { Body = fields.GetValueOrDefault(PostWrites.BodyField) };
-        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Id = id };
+        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Report = page.Report?.With(PostWrites.IdField, id) };
         return new ObjectResult(refusal(page)) { StatusCode = status };
     }
 
@@ -147,9 +147,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
                 reported.Removed ? null : TangentPage.Opening(reported, people), reported.Removed, root.Title ?? "", topicAddress,
                 found.Tangent.Name, tangentAddress),
             received,
-            address + "/" + Segment,
-            received || inModerators || reader is null ? null : FormToken.For(HttpContext),
-            received || inModerators || gate is not null ? null : Tid.Mint(DateTimeOffset.UtcNow),
+            received || inModerators || gate is not null ? null : PostWrites.ReportForm(address + "/" + Segment, Tid.Mint(DateTimeOffset.UtcNow), FormToken.For(HttpContext)),
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
             found.Rows.Space.Name,

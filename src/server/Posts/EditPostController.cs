@@ -169,6 +169,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         var tangent = await Tangents.Tangent.Get(root.TangentId, ct);
         var editable = capabilities.Holds(Bit.EditOwn) || capabilities.Holds(Bit.Moderate);
         var removable = capabilities.Holds(Bit.RemoveOwn) || capabilities.Holds(Bit.Moderate);
+        var token = editable || removable ? FormToken.For(HttpContext) : null;
+        var bodyOptional = row.ParentId is null && row.OriginId is not null;
         return new EditPage(
             row.Id,
             address,
@@ -182,9 +184,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             row.Body,
             row.Version,
             row.Removed,
-            address + "/" + EditSegment,
-            address + "/" + RemoveSegment,
-            FormToken.For(HttpContext),
+            editable ? PostWrites.EditForm(address + "/" + EditSegment, row.Version, row.ParentId is null, bodyOptional, token!) : null,
+            removable ? PostWrites.RemoveForm(address + "/" + RemoveSegment, token!) : null,
             capabilities.Can,
             editable ? null : capabilities.Gate(Bit.EditOwn),
             removable ? null : capabilities.Gate(Bit.RemoveOwn),
@@ -192,7 +193,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
-            BodyOptional: row.ParentId is null && row.OriginId is not null);
+            BodyOptional: bodyOptional);
     }
 
     private string Address(Post root, Post row) => PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, row.Id);

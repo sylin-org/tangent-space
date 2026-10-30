@@ -103,10 +103,11 @@ public sealed class TangentSpaceSettingsTests
         Assert.DoesNotContain("type=\"submit\"", html.Body);
 
         var before = await Event.Count.Exact(Cancellation);
-        var refused = await Form(ada, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, General("Ada's place", ""));
+        // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.
+        var refused = await Form(ada, "/t/" + Workshop, TangentSpaceSettingsController.Path, General("Ada's place", ""));
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
         Assert.Contains($"data-gate=\"{gate}\"", refused.Body);
-        var asJson = await Json(ada, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, new { name = "Ada's place" });
+        var asJson = await Json(ada, "/t/" + Workshop, TangentSpaceSettingsController.Path, new { name = "Ada's place" });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Gate));
 
         using var visitor = Agent(tangentSpace);

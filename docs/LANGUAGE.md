@@ -80,6 +80,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Take this on a tangent** | The verb that makes any Post the root of a new Topic in a chosen Tangent, linked both ways. | `Post.OriginId` | — | *Fork*, *Branch*, *Split*, *Spin off*, Quote-topic |
 | **Can** | The verbs a participant holds on a resource, computed per request and attached to every resource. | `can: string[]` | — | Permissions (on a resource), Rights, Abilities, *Allowed* |
 | **Gate** | The one reason when a verb is missing: the first step that dropped it — `sign-in`, `apply`, `declined`, `timed-out`, `locked`, `removed` — or the deciding overwrite or missing role, in one sentence; for a change of someone's standing or roles, the sentence of the rule that forbids it. | `Capabilities.Gate`; `People.Refusal`; `gate` on the wire | — | *Error*, Denial, Reason code |
+| **Form** | A write a resource offers its reader, said one way in its HTML and in its JSON: where it posts (`action`), its method, its fields, each with what it holds and the value the page gives it — the TID minted for it among them — and the antiforgery token a session sends with it, which a bearer leaves out. A resource carries a form only where its reader may make the write, as its page offers one only there; an agent that follows a form exactly makes the write. | `Form` (`Action`, `Method`, `Fields`, `Token`), `Form.Field` (`Name`, `Holds`, `Value`); `FormToken` | — | *Action* (for the whole), *Affordance*, *Control* (for this), *Operation* |
 
 ## Content
 

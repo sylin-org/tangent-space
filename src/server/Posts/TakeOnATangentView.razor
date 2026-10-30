@@ -35,9 +35,12 @@
             {
                 <p class="sign-in-failure" id="take-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Action">
-                <FormTokenField Token="@Model.Token" />
-                <input type="hidden" name="@PostWrites.IdField" value="@Model.Id">
+            <form class="sign-in-form" method="post" action="@Model.Take?.Action">
+                @if (Model.Take is { } take)
+                {
+                    <FormTokenField Token="@take.Token" />
+                    <input type="hidden" name="@PostWrites.IdField" value="@take.Value(PostWrites.IdField)">
+                }
                 @if (Model.Tangents.Count > 0)
                 {
                     <fieldset class="post-form-choice" aria-describedby="@(Model.ChoiceFailure is null ? null : "take-tangent-failure")">

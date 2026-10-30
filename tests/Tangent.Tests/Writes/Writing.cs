@@ -125,6 +125,38 @@ internal static partial class Writing
     public static async Task<Answered> Json(Browser browser, string page, string action, object fields)
         => await Send(browser.Client, HttpMethod.Post, action, JsonBody(fields), json: true, token: (await browser.Token(page, Cancellation)).Values.Single());
 
+    /// <summary>The value a form in a page's JSON gives the field named <paramref name="name"/>; null where it gives none.</summary>
+    public static string? Valued(JsonElement form, string name)
+    {
+        var field = form.GetProperty("fields").EnumerateArray().Single(field => field.GetProperty("name").GetString() == name);
+        return field.TryGetProperty("value", out var value) ? value.GetString() : null;
+    }
+
+    /// <summary>The names of a form's fields, in order.</summary>
+    public static List<string> FieldNames(JsonElement form)
+        => form.GetProperty("fields").EnumerateArray().Select(field => field.GetProperty("name").GetString()!).ToList();
+
+    /// <summary>Makes the write a form in a page's JSON says how to make, as an agent with a bearer does, knowing nothing
+    /// else: to the form's action, under the base URL the fixture's client answers for, with its method, as one JSON
+    /// object of every field the page gives a value, as it gives it, and the others from <paramref name="filled"/>, which
+    /// names only fields the form has.</summary>
+    public static async Task<Answered> Follow(HttpClient client, JsonElement form, IReadOnlyDictionary<string, string> filled, string bearer)
+    {
+        var names = FieldNames(form);
+        Assert.All(filled.Keys, name => Assert.Contains(name, names));
+        var fields = new Dictionary<string, string>();
+        foreach (var name in names)
+        {
+            if (filled.TryGetValue(name, out var mine)) fields[name] = mine;
+            else if (Valued(form, name) is { } given) fields[name] = given;
+        }
+
+        var action = form.GetProperty("action").GetString()!;
+        Assert.StartsWith(BaseUrl + "/", action);
+        return await Send(client, new HttpMethod(form.GetProperty("method").GetString()!), action[BaseUrl.Length..], JsonBody(fields),
+            json: true, bearer: bearer);
+    }
+
     /// <summary>The TID the new-topic form at <paramref name="html"/> carries.</summary>
     public static string MintedId(string html) => MintedField().Match(html) is { Success: true } match
         ? match.Groups["id"].Value

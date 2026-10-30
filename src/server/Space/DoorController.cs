@@ -179,7 +179,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                     Participants.People.Given.First(given => given.Key == e.Role).Word, e.Given!.Value)).ToList());
             // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
             // other door of a signed-in reader is theirs alone to cache.
-            if (!news.Quiet) news = news with { CaughtUp = new Door.CaughtUp(door, through, FormToken.For(HttpContext)) };
+            if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through, FormToken.For(HttpContext)) };
             Response.Headers.CacheControl = news.CaughtUp is null ? "private" : "no-cache, no-store";
         }
 
@@ -241,7 +241,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         {
             var seen = offers.Evidence(offer.Subject);
             return new Door.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject, seen?.Count, seen?.FirstSeen,
-                baseAddress + OfferController.UsePath, baseAddress + OfferController.DeclinePath, token);
+                OfferController.UseForm(baseAddress, offer.Id, token), OfferController.DeclineForm(baseAddress, offer.Id, token));
         }).ToList();
     }
 
@@ -251,11 +251,18 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
     private static Door.Position Resume(string baseAddress, long at)
         => new(at, baseAddress + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
+    /// <summary>The form that marks the door at <paramref name="door"/> seen through <paramref name="through"/>, the
+    /// sequence it read through.</summary>
+    public static Form CaughtUpForm(string door, long through, FormToken token) => Form.Posting(door, token,
+        new Form.Field(Through, "The sequence of the log the door read through; the reader's place checkpoint moves there and never back.",
+            through.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
     /// <summary>Marks the door seen: moves the signed-in reader's place checkpoint to the sequence in the
-    /// <see cref="Through"/> field, never backwards, and sends them back to the door. The form answers to
-    /// <see cref="FormToken.Validate"/>, a session with its antiforgery token, before anything else is read.</summary>
+    /// <see cref="Through"/> field, sent as a form or a JSON object, never backwards, and sends them back to the door. The
+    /// request answers to <see cref="FormToken.Validate"/>, a session with its antiforgery token, before anything else is
+    /// read.</summary>
     [HttpPost("/")]
-    public async Task<IActionResult> MarkSeen([FromForm(Name = Through)] string? through, CancellationToken ct)
+    public async Task<IActionResult> MarkSeen(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
@@ -265,7 +272,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             return new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was marked seen.").ToResult();
 
-        if (!long.TryParse(through, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var sequence))
+        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
+        if (!long.TryParse(fields.GetValueOrDefault(Through), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var sequence))
             return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log",
                 $"The {Through} field carries the sequence the door names as read through.").ToResult();
 

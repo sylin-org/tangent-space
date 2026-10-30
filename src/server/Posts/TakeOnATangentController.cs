@@ -34,6 +34,17 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
     /// <summary>What a choice of a Tangent that is not one the reader may start a Topic in is told.</summary>
     public const string ChooseListed = "Choose one of the Tangents listed.";
 
+    /// <summary>The form that takes a Post on a tangent at <paramref name="action"/>: a TID minted for the new Topic, the
+    /// Tangent it starts in, <paramref name="chosen"/> as the page chose it, its title, and the taker's own words.</summary>
+    public static Form TakeForm(string action, string? chosen, FormToken token) => Form.Posting(action, token,
+        Form.Minted(PostWrites.IdField, "Topic", Tid.Mint(DateTimeOffset.UtcNow)),
+        new Form.Field(TangentField,
+            "The slug of the Tangent the new Topic starts in, one of the Tangents this form lists on any of its pages; its value is the one the page chose.",
+            chosen),
+        new Form.Field(PostWrites.TitleField, PostWrites.TitleHolds("The new Topic's title")),
+        new Form.Field(PostWrites.BodyField,
+            PostWrites.BodyHolds("The taker's own words above the Post taken on a tangent") + " It may be empty."));
+
     [HttpGet(Route)]
     public async Task<IActionResult> Get([FromRoute] string tangent, [FromRoute] string topic, [FromRoute] string post,
         [FromQuery(Name = After)] string? after, CancellationToken ct)
@@ -128,7 +139,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
             Title = fields.GetValueOrDefault(PostWrites.TitleField),
             Body = fields.GetValueOrDefault(PostWrites.BodyField)
         };
-        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Id = id };
+        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Take = page.Take?.With(PostWrites.IdField, id) };
         return new ObjectResult(refusal(page)) { StatusCode = status };
     }
 
@@ -171,9 +182,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
                 origin.Removed, root.Title ?? "", topicAddress, found.Tangent.Name, tangentAddress),
             choices,
             choice?.Slug,
-            address + "/" + Segment,
-            FormToken.For(HttpContext),
-            Tid.Mint(DateTimeOffset.UtcNow),
+            gate is null ? TakeForm(address + "/" + Segment, choice?.Slug, FormToken.For(HttpContext)) : null,
             found.Capabilities.Can,
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,

@@ -27,8 +27,11 @@
             {
                 <p class="sign-in-failure" id="new-tangent-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Model.Gate is null ? "submitting" : null)">
-                <FormTokenField Token="@Model.Token" />
+            <form class="sign-in-form" method="post" action="@Model.Create?.Action" data-island="@(Model.Gate is null ? "submitting" : null)">
+                @if (Model.Create is { } create)
+                {
+                    <FormTokenField Token="@create.Token" />
+                }
                 <div class="field">
                     <label class="field-label" for="new-tangent-name">Name</label>
                     <span class="field-input">

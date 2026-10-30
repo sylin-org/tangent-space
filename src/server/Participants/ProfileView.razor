@@ -75,8 +75,8 @@
                                     <summary class="post-remove-toggle">Revoke</summary>
                                     <div class="post-remove-confirm">
                                         <p class="post-remove-note">It can’t renew its access, the access it holds now ends within @Minutes(delegates.Lasting), and it asks you again before it acts as you.</p>
-                                        <form method="post" action="@agent.Revoke">
-                                            <FormTokenField Token="@delegates.Token" />
+                                        <form method="post" action="@agent.Revoke.Action">
+                                            <FormTokenField Token="@agent.Revoke.Token" />
                                             <button type="submit" class="post-remove-submit">Revoke</button>
                                         </form>
                                     </div>

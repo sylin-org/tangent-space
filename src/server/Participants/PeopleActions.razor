@@ -7,14 +7,14 @@
 @if (Person.Can.Count > 0 || Person.Give.Count > 0 || Person.Take.Count > 0)
 {
     <div class="door-offer-answers people-answers">
-        @if (Person.Can.Contains(People.Verb.Lift))
+        @if (Person.Can.Contains(People.Verb.Lift) && Forms.Lift is { } lift)
         {
-            <form method="post" action="@Forms.Lift">
-                @Fields()
+            <form method="post" action="@lift.Action">
+                @Fields(lift)
                 <button type="submit" class="tangent-new">@(Person.Standing == People.Word(Standing.Banned) ? "Lift the ban" : "Lift the timeout")</button>
             </form>
         }
-        @if (Person.Can.Contains(People.Verb.TimeOut))
+        @if (Person.Can.Contains(People.Verb.TimeOut) && Forms.TimeOut is { } timeOut)
         {
             <details class="application-decline people-time-out">
                 <summary class="watch-button">Time out</summary>
@@ -22,8 +22,8 @@
                     <p class="post-remove-note">They keep reading and reporting here, and post, reply and start nothing until it ends; you can lift it sooner.</p>
                     @foreach (var duration in Forms.Durations)
                     {
-                        <form method="post" action="@Forms.TimeOut">
-                            @Fields()
+                        <form method="post" action="@timeOut.Action">
+                            @Fields(timeOut)
                             <input type="hidden" name="@PeopleController.ForField" value="@duration">
                             <button type="submit" class="watch-button">@For(duration)</button>
                         </form>
@@ -31,30 +31,36 @@
                 </div>
             </details>
         }
-        @foreach (var role in Person.Give)
+        @if (Forms.Give is { } give)
         {
-            <form method="post" action="@Forms.Give">
-                @Fields()
-                <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                <button type="submit" class="watch-button">Make @role</button>
-            </form>
+            @foreach (var role in Person.Give)
+            {
+                <form method="post" action="@give.Action">
+                    @Fields(give)
+                    <input type="hidden" name="@PeopleController.RoleField" value="@role">
+                    <button type="submit" class="watch-button">Make @role</button>
+                </form>
+            }
         }
-        @foreach (var role in Person.Take)
+        @if (Forms.Take is { } take)
         {
-            <form method="post" action="@Forms.Take">
-                @Fields()
-                <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                <button type="submit" class="watch-button">Take @role role</button>
-            </form>
+            @foreach (var role in Person.Take)
+            {
+                <form method="post" action="@take.Action">
+                    @Fields(take)
+                    <input type="hidden" name="@PeopleController.RoleField" value="@role">
+                    <button type="submit" class="watch-button">Take @role role</button>
+                </form>
+            }
         }
-        @if (Person.Can.Contains(People.Verb.Ban))
+        @if (Person.Can.Contains(People.Verb.Ban) && Forms.Ban is { } ban)
         {
             <details class="application-decline people-ban">
                 <summary class="watch-button">Ban</summary>
                 <div class="post-remove-confirm">
                     <p class="post-remove-note">This place disappears for them, every page and every stream, until you lift the ban.</p>
-                    <form method="post" action="@Forms.Ban">
-                        @Fields()
+                    <form method="post" action="@ban.Action">
+                        @Fields(ban)
                         <button type="submit" class="post-remove-submit">Ban</button>
                     </form>
                 </div>
@@ -69,10 +75,10 @@
     [Parameter, EditorRequired] public PeopleForms Forms { get; set; } = default!;
 
     /// <summary>What every form carries: its token, the participant, and the page it returns to.</summary>
-    private RenderFragment Fields() => @<text>
-        <FormTokenField Token="@Forms.Token" />
+    private RenderFragment Fields(Form form) => @<text>
+        <FormTokenField Token="@form.Token" />
         <input type="hidden" name="@PeopleController.ParticipantField" value="@Person.Id">
-        <input type="hidden" name="@PeopleController.BackField" value="@Forms.Back">
+        <input type="hidden" name="@PeopleController.BackField" value="@form.Value(PeopleController.BackField)">
     </text>;
 
     /// <summary>A duration's button, in words.</summary>

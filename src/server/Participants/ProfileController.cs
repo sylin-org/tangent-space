@@ -80,11 +80,11 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         if (own)
         {
             var (grants, more) = await Approved.Of(reader!.Id, agentsPage, ct);
+            var token = FormToken.For(HttpContext);
             approvals = new ProfilePage.Approvals(
                 grants.Select(grant => new ProfilePage.Approval(grant.Id, Approved.Client(grant), grant.ClientId != DelegateClient.Id, grant.IssuedAt,
-                    address + "/" + DelegatesSegment + "/" + Uri.EscapeDataString(grant.Id) + "/" + RevokeSegment)).ToList(),
+                    Form.Posting(address + "/" + DelegatesSegment + "/" + Uri.EscapeDataString(grant.Id) + "/" + RevokeSegment, token))).ToList(),
                 server.Value.AccessTokenLifetime,
-                FormToken.For(HttpContext),
                 more ? address + "?" + AgentsPage + "=" + (agentsPage + 1).ToString(CultureInfo.InvariantCulture) : null,
                 agentsPage > 1 ? address : null);
             // The reader's own profile carries the revoke forms with a fresh antiforgery token, so it is never stored or
@@ -103,7 +103,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         if (reader is not null && PeopleController.ReadGate(place) is null)
         {
             listed = await (await PeopleController.Lister.Load(roles, place, reader.Id, baseAddress, ct)).Row(subject, ct);
-            forms = PeopleController.Forms(HttpContext, baseAddress, baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
+            forms = PeopleController.Forms(HttpContext, place, baseAddress, baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
             Response.Headers.CacheControl = "no-cache, no-store";
         }
 

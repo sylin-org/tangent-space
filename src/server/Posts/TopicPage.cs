@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Tangent.Render;
 using Tangent.Tangents;
 
 namespace Tangent.Posts;
@@ -11,10 +12,11 @@ namespace Tangent.Posts;
 /// of the windows on either side, each absent where nothing lies that way, and their cursors are sequence numbers.
 /// <see cref="Anchor"/> is the Post the window was opened around, where its address named one. <see cref="Can"/> is what
 /// the reader holds on the Topic — <c>Post</c> among it when they may reply — and <see cref="Gate"/> the one reason they
-/// may not, where they may not. For a signed-in reader, <see cref="Seen"/> is the form that moves their checkpoint on
-/// the Topic through what the page shows, present while the window continues from that checkpoint and reaches past
-/// it, so the page never offers to skip a reply it did not show, and <see cref="Watching"/> the form that
-/// sets or clears their watch flag on it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
+/// may not, where they may not; <see cref="Reply"/> is the form that replies, present only where they may, answering
+/// the Post the page's address named where that is someone else's reply and not removed, and the Topic otherwise. For a
+/// signed-in reader, <see cref="Seen"/> is the form that moves their checkpoint on the Topic through what the page
+/// shows, present while the window continues from that checkpoint and reaches past it, so the page never offers to skip
+/// a reply it did not show, and <see cref="Watching"/> their watch flag on it with the form that sets it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for. <see cref="TakenFrom"/> is
 /// where a Topic taken on a tangent was taken from, as the reader may know it.</summary>
@@ -30,7 +32,8 @@ public sealed record TopicPage(
     int ReplyCount,
     IReadOnlyList<string> Can,
     string? Gate,
-    Events.TopicSeen? Seen,
+    Form? Reply,
+    Form? Seen,
     Events.Watching? Watching,
     TopicPage.Post Root,
     IReadOnlyList<TopicPage.Post> Replies,
@@ -57,8 +60,8 @@ public sealed record TopicPage(
     /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is where the reader
     /// takes it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
     /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
-    /// <see cref="Report"/> is the form that reports it to the moderators, for a signed-in reader, on someone else's Post
-    /// that is not removed, outside the moderators' Tangent.</summary>
+    /// <see cref="Report"/> is the form that reports it to the moderators, with a TID minted for it, for a signed-in
+    /// reader, on someone else's Post that is not removed, outside the moderators' Tangent.</summary>
     public sealed record Post(
         string Id,
         long Sequence,
@@ -76,11 +79,7 @@ public sealed record TopicPage(
         string? Edit,
         string? TakeOnATangent = null,
         TopicPage.Taken? Taken = null,
-        TopicPage.Report? Report = null);
-
-    /// <summary>The form that reports one Post: where it posts, the TID minted for it when the page was rendered, so a
-    /// form sent twice is one report, and its antiforgery token. It takes <c>id</c> and <c>body</c>, the reason.</summary>
-    public sealed record Report(string Action, string Id, Render.FormToken Token);
+        Form? Report = null);
 
     /// <summary>A participant a body mentions: their DID, which the body's link names, their handle now, and their
     /// address.</summary>

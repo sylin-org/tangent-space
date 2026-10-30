@@ -218,7 +218,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
             people + Query(narrowed, ""),
             start ?? "",
             people,
-            Forms(HttpContext, baseAddress, here),
+            Forms(HttpContext, place, baseAddress, here),
             place.Can,
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
@@ -234,11 +234,34 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
     public static string? ReadGate(Capabilities place)
         => place.Holds(Bit.ManageStanding) || place.Holds(Bit.ManageRoles) ? null : place.Gate(Bit.ManageStanding);
 
-    /// <summary>Where each change posts under <paramref name="baseAddress"/>, with a fresh token for
-    /// <paramref name="http"/>, returning to <paramref name="back"/>, a path under the base URL.</summary>
-    public static PeopleForms Forms(HttpContext http, string baseAddress, string back) => new(
-        baseAddress + TimeOutPath, baseAddress + BanPath, baseAddress + LiftPath, baseAddress + GivePath, baseAddress + TakePath,
-        People.Durations.Select(duration => duration.Word).ToList(), FormToken.For(http), back);
+    /// <summary>The forms of the changes the reader of <paramref name="place"/> may make, under
+    /// <paramref name="baseAddress"/>, with a fresh token for <paramref name="http"/>, returning to <paramref name="back"/>,
+    /// a path under the base URL; null where they may not read the people.</summary>
+    public static PeopleForms? Forms(HttpContext http, Capabilities place, string baseAddress, string back)
+    {
+        if (ReadGate(place) is not null) return null;
+        var token = FormToken.For(http);
+        var standing = place.Holds(Bit.ManageStanding);
+        var roles = place.Holds(Bit.ManageRoles);
+        var durations = People.Durations.Select(duration => duration.Word).ToList();
+        Form Changing(string path, string whose, params Form.Field[] more) => Form.Posting(baseAddress + path, token,
+        [
+            new Form.Field(ParticipantField, $"The id of a participant listed here with {whose}."),
+            .. more,
+            new Form.Field(BackField, "The page a form sent from a page returns to; a JSON request reads the participant as the people list them instead.", back)
+        ]);
+        return new PeopleForms(
+            standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Words(durations) + ".")) : null,
+            standing ? Changing(BanPath, "ban in their can") : null,
+            standing ? Changing(LiftPath, "lift in their can") : null,
+            roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, "The role to give: moderator or administrator, one in their give.")) : null,
+            roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, "The role to take: moderator or administrator, one in their take.")) : null,
+            durations);
+    }
+
+    /// <summary>Words joined as a sentence joins them: "hour, day or week".</summary>
+    private static string Words(IReadOnlyList<string> words)
+        => words.Count < 2 ? string.Concat(words) : string.Join(", ", words.Take(words.Count - 1)) + " or " + words[^1];
 
     /// <summary>The page a form returns to: the path it sent in <c>back</c> where that is under the base URL's, of visible
     /// characters, without scheme or authority, and the people's or a profile's; the people otherwise.</summary>

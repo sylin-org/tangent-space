@@ -28,8 +28,11 @@
                 {
                     <p class="sign-in-failure" id="space-admission-failure" role="alert">@failure</p>
                 }
-                <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Mutable ? "submitting" : null)">
-                    <FormTokenField Token="@Model.Token" />
+                <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+                    @if (Model.Change is { } change)
+                    {
+                        <FormTokenField Token="@change.Token" />
+                    }
                     <fieldset class="post-form-choice">
                         <legend class="field-label">How a newcomer arrives</legend>
                         <div class="post-form-options">

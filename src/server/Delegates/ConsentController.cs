@@ -88,8 +88,9 @@ public sealed class ConsentController(KoanWebBaseUrl baseUrl) : ControllerBase
     private ConsentDecision Decision(PendingConsent pending)
     {
         var origin = new Uri(BaseAddress());
-        return new ConsentDecision(new Uri(origin, pending.Approve).AbsoluteUri, new Uri(origin, pending.Deny).AbsoluteUri,
-            FormToken.For(HttpContext), pending.UserCode, pending.UserCode is null ? pending.ClientName : null, pending.RedirectUri);
+        var token = FormToken.For(HttpContext);
+        return new ConsentDecision(Form.Posting(new Uri(origin, pending.Approve).AbsoluteUri, token), Form.Posting(new Uri(origin, pending.Deny).AbsoluteUri, token),
+            pending.UserCode, pending.UserCode is null ? pending.ClientName : null, pending.RedirectUri);
     }
 
     private ConsentEntry Entry(string? code = null, string? failure = null) => new(BaseAddress() + Path, CodeField, code, failure);

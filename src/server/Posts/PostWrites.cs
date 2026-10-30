@@ -159,6 +159,52 @@ public static class PostWrites
         return mayWrite ? await PostBody.Written(text, ct) : PostBody.Unjudged(text);
     }
 
+    /// <summary>The form that replies in the Topic at <paramref name="topicAddress"/>: a TID minted for it, the body, and
+    /// the Post it answers, <paramref name="parent"/>, or the Topic where none is named.</summary>
+    public static Form ReplyForm(string topicAddress, string? parent, FormToken token) => Form.Posting(topicAddress, token,
+        Form.Minted(IdField, "reply", Tid.Mint(DateTimeOffset.UtcNow)),
+        new Form.Field(BodyField, BodyHolds("The reply")),
+        new Form.Field(ParentField, "The Id of the Post of this Topic the reply answers; empty, it answers the Topic.", parent ?? ""));
+
+    /// <summary>The form that starts a Topic at <paramref name="action"/>, a Tangent's, whose default kind is
+    /// <paramref name="kind"/>: a TID minted for it, the title, the body and the kind.</summary>
+    public static Form StartForm(string action, PostKind kind, FormToken token) => Form.Posting(action, token,
+        Form.Minted(IdField, "Topic", Tid.Mint(DateTimeOffset.UtcNow)),
+        new Form.Field(TitleField, TitleHolds("The Topic's title")),
+        new Form.Field(BodyField, BodyHolds("Its opening Post")),
+        new Form.Field(KindField, $"{Word(PostKind.Topic)} or {Word(PostKind.Article)}; left out, the Tangent's default, {Word(kind)}."));
+
+    /// <summary>The form that edits a Post at <paramref name="action"/> from the <paramref name="version"/> its editor read:
+    /// the version, the title on a Topic's <paramref name="root"/>, and the body, which may be empty on a root taken on a
+    /// tangent.</summary>
+    public static Form EditForm(string action, long version, bool root, bool bodyOptional, FormToken token)
+    {
+        var body = new Form.Field(BodyField, BodyHolds("The Post's words, which replace what it says now")
+                                             + (bodyOptional ? " Empty, the Post it was taken on a tangent from speaks for it." : ""));
+        var from = new Form.Field(VersionField,
+            "The version of the Post the edit was made from: one made from another changes nothing and answers with the Post as it stands.",
+            version.ToString(CultureInfo.InvariantCulture));
+        return root
+            ? Form.Posting(action, token, from, new Form.Field(TitleField, TitleHolds("The Topic's title") + " Left out, it stays."), body)
+            : Form.Posting(action, token, from, body);
+    }
+
+    /// <summary>The form that removes a Post at <paramref name="action"/>: nothing but its token.</summary>
+    public static Form RemoveForm(string action, FormToken token) => Form.Posting(action, token);
+
+    /// <summary>The form that reports a Post at <paramref name="action"/>, with the TID <paramref name="minted"/> for it, and
+    /// the reason.</summary>
+    public static Form ReportForm(string action, string minted, FormToken token) => Form.Posting(action, token,
+        Form.Minted(IdField, "report", minted),
+        new Form.Field(BodyField, "The reason, in a sentence or two of Markdown; only the moderators read it."));
+
+    /// <summary>What a body field holds: <paramref name="what"/>, written as a Post's body is.</summary>
+    public static string BodyHolds(string what)
+        => what + ", in Markdown, at most 64 KiB; an @ and the handle of a participant here, typed in it, mentions them.";
+
+    /// <summary>What a title field holds: <paramref name="what"/>, within a title's bounds.</summary>
+    public static string TitleHolds(string what) => what + ", at most " + Post.TitleLimit.ToString(CultureInfo.InvariantCulture) + " characters.";
+
     public static string TangentAddress(string baseUrl, string tangent) => baseUrl + "/t/" + Uri.EscapeDataString(tangent);
 
     public static string TopicAddress(string baseUrl, string tangent, string topic)

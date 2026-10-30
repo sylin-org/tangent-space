@@ -96,7 +96,7 @@ public sealed class DoorTests(ITestOutputHelper output)
             Assert.DoesNotContain(own.Id, text);
             Assert.DoesNotContain(before.Id, text);
             var form = news.GetProperty("caughtUp");
-            Assert.Equal(($"{BaseUrl}/", through), (form.GetProperty("action").GetString(), form.GetProperty("through").GetInt64()));
+            Assert.Equal(($"{BaseUrl}/", through.ToString(CultureInfo.InvariantCulture)), (form.GetProperty("action").GetString(), Writing.Valued(form, DoorController.Through)));
         }
 
         var html = await Html(browser.Client, "/");

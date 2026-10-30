@@ -82,7 +82,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             PostWrites.About.Title => page with { TitleFailure = reason },
             PostWrites.About.Body => page with { BodyFailure = reason },
             PostWrites.About.Sent => page with { Failure = reason },
-            _ => page with { Gate = reason }
+            _ => page with { Gate = reason, Start = null }
         }, ct);
     }
 
@@ -98,7 +98,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             Title = fields.GetValueOrDefault(PostWrites.TitleField),
             Body = fields.GetValueOrDefault(PostWrites.BodyField)
         };
-        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Id = id };
+        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Start = page.Start?.With(PostWrites.IdField, id) };
         return new ObjectResult(refusal(page)) { StatusCode = status };
     }
 
@@ -110,16 +110,15 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         var address = PostWrites.TangentAddress(baseAddress, row.Id);
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentPageController.NewTopicSegment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
+        var gate = capabilities.Gate(Bit.Topic);
         return new NewTopicPage(
             row.Id,
             row.Name,
             address,
             PostWrites.Word(row.DefaultKind),
-            address + "/" + TangentPageController.NewTopicSegment,
-            FormToken.For(HttpContext),
-            Tid.Mint(DateTimeOffset.UtcNow),
+            gate is null ? PostWrites.StartForm(address + "/" + TangentPageController.NewTopicSegment, row.DefaultKind, FormToken.For(HttpContext)) : null,
             capabilities.Can,
-            capabilities.Gate(Bit.Topic),
+            gate,
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",

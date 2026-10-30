@@ -40,11 +40,10 @@ public sealed class PeopleTests
         return writer;
     }
 
+    /// <summary>Starts a Topic in the workshop as JSON, with the session's token from the workshop's page, which carries a
+    /// form for every signed-in reader, so a reader the new-topic page offers no form still sends one.</summary>
     private static Task<Answered> StartIn(Browser browser, string title)
-    {
-        var form = "/t/" + Workshop + "/new";
-        return Json(browser, form, form, new { id = Tids.Mint(), title, body = "Hello, everyone." });
-    }
+        => Json(browser, "/t/" + Workshop, "/t/" + Workshop + "/new", new { id = Tids.Mint(), title, body = "Hello, everyone." });
 
     private static async Task<IReadOnlyList<string?>> Can(Browser browser, string path)
         => (await Send(browser.Client, HttpMethod.Get, path, json: true)).Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()).ToList();
@@ -316,7 +315,7 @@ public sealed class PeopleTests
         Assert.Equal(HttpStatusCode.OK, taken.Status);
         Assert.DoesNotContain("Moderator", Strings(taken.Json, "roles"));
         Assert.Contains("took your moderator role", (await Send(bea.Client, HttpMethod.Get, "/")).Body);
-        var refused = await Json(bea, TangentSpaceSettingsController.Path, PeopleController.LiftPath, new { participant = Ada });
+        var refused = await Json(bea, "/t/" + Workshop, PeopleController.LiftPath, new { participant = Ada });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding)), (refused.Status, refused.Gate));
         // The member role is admission's, never given here.
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, path, PeopleController.TakePath, new { participant = Ada, role = "member" })).Status);
@@ -407,7 +406,7 @@ public sealed class PeopleTests
 
         var read = await Send(mo.Client, HttpMethod.Get, profile, json: true);
         Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(read.Json.GetProperty("listed"), "can"));
-        Assert.Equal(BaseUrl + PeopleController.TimeOutPath, read.Json.GetProperty("forms").GetProperty("timeOut").GetString());
+        Assert.Equal(BaseUrl + PeopleController.TimeOutPath, read.Json.GetProperty("forms").GetProperty("timeOut").GetProperty("action").GetString());
         var html = (await Send(mo.Client, HttpMethod.Get, profile)).Body;
         Assert.Contains("is admitted here.", html);
         Assert.Contains("<summary class=\"watch-button\">Ban</summary>", html);

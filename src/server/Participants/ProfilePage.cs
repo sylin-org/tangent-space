@@ -52,15 +52,15 @@ public sealed record ProfilePage(
 
     /// <summary>The agents the reader approved on the consent page that may still act as them, one per approval, newest
     /// first, a page at a time, each with its client's name, when they approved it and the form that revokes it;
-    /// <see cref="Lasting"/> is how long an agent keeps the access it already holds once its approval is revoked, and
-    /// <see cref="Token"/> the forms' antiforgery token. <see cref="More"/> is the address of the next page of them, null
-    /// on the last, and <see cref="First"/> the first page's, on a later page.</summary>
-    public sealed record Approvals(IReadOnlyList<Approval> Agents, TimeSpan Lasting, FormToken Token, string? More = null, string? First = null);
+    /// <see cref="Lasting"/> is how long an agent keeps the access it already holds once its approval is revoked.
+    /// <see cref="More"/> is the address of the next page of them, null on the last, and <see cref="First"/> the first
+    /// page's, on a later page.</summary>
+    public sealed record Approvals(IReadOnlyList<Approval> Agents, TimeSpan Lasting, string? More = null, string? First = null);
 
     /// <summary>One approval: its id; its client's name, what the client registered, or its client id where it registered
     /// none, which is <see cref="SelfNamed"/> where a client registered itself rather than being this place's own shared
-    /// client; when it was given; and where its revoke form posts.</summary>
-    public sealed record Approval(string Id, string Client, bool SelfNamed, DateTimeOffset? Approved, string Revoke);
+    /// client; when it was given; and the form that revokes it, which takes nothing but its token.</summary>
+    public sealed record Approval(string Id, string Client, bool SelfNamed, DateTimeOffset? Approved, Form Revoke);
 
     /// <summary>A participant's profile address under the base URL in force: by their handle, or by their DID where they have
     /// none.</summary>

@@ -196,9 +196,11 @@ public sealed class OfferTests
             var offered = Assert.Single(door.RootElement.GetProperty("offers").EnumerateArray());
             Assert.Equal((offer.Id, "address", Public, 14L, $"{loopback}/offers/use", $"{loopback}/offers/decline"),
                 (offered.GetProperty("offer").GetString(), offered.GetProperty("kind").GetString(), offered.GetProperty("subject").GetString(),
-                    offered.GetProperty("count").GetInt64(), offered.GetProperty("use").GetString(), offered.GetProperty("decline").GetString()));
+                    offered.GetProperty("count").GetInt64(), offered.GetProperty("use").GetProperty("action").GetString(),
+                    offered.GetProperty("decline").GetProperty("action").GetString()));
+            Assert.Equal(offer.Id, Writing.Valued(offered.GetProperty("use"), OfferController.Field));
             Assert.True(offered.GetProperty("since").GetDateTimeOffset() <= DateTimeOffset.UtcNow);
-            Assert.NotEmpty(offered.GetProperty("token").GetProperty("value").GetString()!);
+            Assert.NotEmpty(offered.GetProperty("use").GetProperty("token").GetProperty("value").GetString()!);
         }
 
         var html = WebUtility.HtmlDecode(await Html(leo.Client, "/"));

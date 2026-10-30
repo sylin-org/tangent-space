@@ -275,9 +275,10 @@ public sealed class NotificationsTests
         var offered = entry.GetProperty("offer");
         Assert.Equal(("offer", offer.Id, "address", "https://tangent.example.org", "open", $"{loopback}/offers/use", $"{loopback}/offers/decline"),
             (entry.GetProperty("kind").GetString(), offered.GetProperty("id").GetString(), offered.GetProperty("kind").GetString(),
-                offered.GetProperty("subject").GetString(), offered.GetProperty("state").GetString(), offered.GetProperty("use").GetString(),
-                offered.GetProperty("decline").GetString()));
-        Assert.NotEmpty(offered.GetProperty("token").GetProperty("value").GetString()!);
+                offered.GetProperty("subject").GetString(), offered.GetProperty("state").GetString(), offered.GetProperty("use").GetProperty("action").GetString(),
+                offered.GetProperty("decline").GetProperty("action").GetString()));
+        Assert.Equal((offer.Id, offer.Id), (Valued(offered.GetProperty("use"), OfferController.Field), Valued(offered.GetProperty("decline"), OfferController.Field)));
+        Assert.NotEmpty(offered.GetProperty("use").GetProperty("token").GetProperty("value").GetString()!);
         await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal(made.Seq, (await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Notifications), Cancellation))!.Seq);
         Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
@@ -302,7 +303,7 @@ public sealed class NotificationsTests
         offered = Assert.Single(json.GetProperty("entries").EnumerateArray()).GetProperty("offer");
         Assert.Equal("declined", offered.GetProperty("state").GetString());
         Assert.False(offered.TryGetProperty("use", out _));
-        Assert.False(offered.TryGetProperty("token", out _));
+        Assert.False(offered.TryGetProperty("decline", out _));
         html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, Notifications.Path)).Body);
         Assert.Contains($"You declined <a class=\"notification-link\" href=\"{loopback}/first-run\">https://tangent.example.org</a> as this place’s address.", html);
         Assert.DoesNotContain("/offers/use", html);

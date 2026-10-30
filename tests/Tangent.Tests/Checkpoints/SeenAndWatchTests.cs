@@ -28,7 +28,7 @@ public sealed class SeenAndWatchTests
         var page = await Send(bea.Client, HttpMethod.Get, TopicPath(root), json: true);
         Assert.Equal(HttpStatusCode.OK, page.Status);
         var seen = page.Json.GetProperty("seen");
-        Assert.Equal((BaseUrl + seenPath, 3L), (seen.GetProperty("action").GetString(), seen.GetProperty("through").GetInt64()));
+        Assert.Equal((BaseUrl + seenPath, "POST", "3"), (seen.GetProperty("action").GetString(), seen.GetProperty("method").GetString(), Valued(seen, "through")));
         Assert.Contains("Mark seen", (await Send(bea.Client, HttpMethod.Get, TopicPath(root))).Body);
         Assert.Null(await SeenThrough(Bea, root));
 
@@ -116,7 +116,7 @@ public sealed class SeenAndWatchTests
             var page = (await Send(bea.Client, HttpMethod.Get, TopicPath(root), json: true)).Json;
             var seen = page.GetProperty("seen");
             Assert.Equal((await SeenThrough(Bea, root))!.Value + 1, page.GetProperty("from").GetInt64());
-            var posted = await Form(bea, TopicPath(root), seenPath, new Dictionary<string, string> { ["through"] = seen.GetProperty("through").GetInt64().ToString(System.Globalization.CultureInfo.InvariantCulture) });
+            var posted = await Form(bea, TopicPath(root), seenPath, new Dictionary<string, string> { ["through"] = Valued(seen, "through")! });
             Assert.Equal(HttpStatusCode.SeeOther, posted.Status);
         }
 
@@ -156,7 +156,8 @@ public sealed class SeenAndWatchTests
         await Form(bea, TopicPath(root), TopicPath(root) + "/" + CheckpointController.SeenSegment, new Dictionary<string, string> { ["through"] = "1" });
 
         var topicPage = (await Send(bea.Client, HttpMethod.Get, TopicPath(root), json: true)).Json.GetProperty("watching");
-        Assert.Equal((BaseUrl + topicWatch, false), (topicPage.GetProperty("action").GetString(), topicPage.GetProperty("watch").GetBoolean()));
+        Assert.Equal((BaseUrl + topicWatch, false, "true"), (topicPage.GetProperty("form").GetProperty("action").GetString(), topicPage.GetProperty("watch").GetBoolean(),
+            Valued(topicPage.GetProperty("form"), "watch")));
         var watched = await Form(bea, TopicPath(root), topicWatch, new Dictionary<string, string> { ["watch"] = "true" });
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + TopicPath(root)), (watched.Status, watched.Location));
         Assert.Equal((1L, true), await Flag(Bea, Scope.Topic(root.Id)));

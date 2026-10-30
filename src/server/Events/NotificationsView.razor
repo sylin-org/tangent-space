@@ -42,17 +42,17 @@
                                         <p class="notification-opening">@opening</p>
                                     }
                                 </div>
-                                @if (entry.Offer is { Use: { } use, Decline: { } decline, Token: { } token } offer)
+                                @if (entry.Offer is { Use: { } use, Decline: { } decline })
                                 {
                                     <div class="door-offer-answers">
-                                        <form method="post" action="@use">
-                                            <FormTokenField Token="@token" />
-                                            <input type="hidden" name="@OfferController.Field" value="@offer.Id">
+                                        <form method="post" action="@use.Action">
+                                            <FormTokenField Token="@use.Token" />
+                                            <input type="hidden" name="@OfferController.Field" value="@use.Value(OfferController.Field)">
                                             <button type="submit" class="tangent-new">Use it</button>
                                         </form>
-                                        <form method="post" action="@decline">
-                                            <FormTokenField Token="@token" />
-                                            <input type="hidden" name="@OfferController.Field" value="@offer.Id">
+                                        <form method="post" action="@decline.Action">
+                                            <FormTokenField Token="@decline.Token" />
+                                            <input type="hidden" name="@OfferController.Field" value="@decline.Value(OfferController.Field)">
                                             <button type="submit" class="watch-button">Not this one</button>
                                         </form>
                                     </div>

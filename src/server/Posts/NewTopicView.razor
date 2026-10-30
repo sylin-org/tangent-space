@@ -26,9 +26,12 @@
             {
                 <p class="sign-in-failure" id="new-topic-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Composing ? "composer" : null)" data-props="@ComposerProps()">
-                <FormTokenField Token="@Model.Token" />
-                <input type="hidden" name="@PostWrites.IdField" value="@Model.Id">
+            <form class="sign-in-form" method="post" action="@Model.Start?.Action" data-island="@(Composing ? "composer" : null)" data-props="@ComposerProps()">
+                @if (Model.Start is { } start)
+                {
+                    <FormTokenField Token="@start.Token" />
+                    <input type="hidden" name="@PostWrites.IdField" value="@start.Value(PostWrites.IdField)">
+                }
                 <div class="field">
                     <label class="field-label" for="new-topic-title">Title</label>
                     <span class="field-input">
@@ -74,7 +77,7 @@
     private bool Article => Model.Kind == PostWrites.Word(PostKind.Article);
 
     /// <summary>Whether the composer island takes the form: for a participant who may start a Topic here.</summary>
-    private bool Composing => Model.Gate is null && Model.Who is not null;
+    private bool Composing => Model.Start is not null && Model.Who is not null;
 
     /// <summary>The composer's props: whose drafts these are, the Tangent they are kept under, and the prefix of the
     /// address that names a new Topic by its root's TID until its slug is known.</summary>

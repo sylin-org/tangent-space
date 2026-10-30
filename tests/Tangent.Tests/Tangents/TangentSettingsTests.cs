@@ -209,12 +209,14 @@ public sealed class TangentSettingsTests
         var settings = (await Send(leo.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json;
         Assert.Equal(("workshop", "workshop", "topic", "public", BaseUrl + "/t/workshop/settings", false),
             (settings.GetProperty("slug").GetString(), settings.GetProperty("name").GetString(), settings.GetProperty("kind").GetString(),
-                settings.GetProperty("audience").GetString(), settings.GetProperty("action").GetString(), settings.GetProperty("fixed").GetBoolean()));
+                settings.GetProperty("audience").GetString(), settings.GetProperty("change").GetProperty("action").GetString(), settings.GetProperty("fixed").GetBoolean()));
+        Assert.Equal(["name", "description", "kind", "audience", "move"], FieldNames(settings.GetProperty("change")));
         Assert.Contains("ManageTangent", Strings(settings.GetProperty("can")));
         Assert.False(settings.TryGetProperty("gate", out _));
         var member = (await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json;
         Assert.Equal(Capabilities.NoRoleGrants(Bit.ManageTangent), member.GetProperty("gate").GetString());
         Assert.Equal(["View", "Post", "Topic"], Strings(member.GetProperty("can")));
+        Assert.False(member.TryGetProperty("change", out _));
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/studio/settings", json: true);
         Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (studio.Status, studio.Gate));
 
