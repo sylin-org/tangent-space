@@ -1,0 +1,86 @@
+@using global::Tangent.Render
+@* What the reader may change of one participant, inline, each change one form: Lift, at once; Time out, which opens in
+   place to say what a timeout leaves and offers its few durations; the roles the reader may give and take, one button
+   each; and Ban, which opens in place to say what a ban does and holds the one button that does it, the confirmation in
+   the page, never a dialog. Each form names the participant and the page it returns to. Nothing renders where the
+   reader may change nothing. *@
+@if (Person.Can.Count > 0 || Person.Give.Count > 0 || Person.Take.Count > 0)
+{
+    <div class="door-offer-answers people-answers">
+        @if (Person.Can.Contains(People.Verb.Lift))
+        {
+            <form method="post" action="@Forms.Lift">
+                @Fields()
+                <button type="submit" class="tangent-new">@(Person.Standing == People.Word(Standing.Banned) ? "Lift the ban" : "Lift the timeout")</button>
+            </form>
+        }
+        @if (Person.Can.Contains(People.Verb.TimeOut))
+        {
+            <details class="application-decline people-time-out">
+                <summary class="watch-button">Time out</summary>
+                <div class="post-remove-confirm">
+                    <p class="post-remove-note">They keep reading and reporting here, and post, reply and start nothing until it ends; you can lift it sooner.</p>
+                    @foreach (var duration in Forms.Durations)
+                    {
+                        <form method="post" action="@Forms.TimeOut">
+                            @Fields()
+                            <input type="hidden" name="@PeopleController.ForField" value="@duration">
+                            <button type="submit" class="watch-button">@For(duration)</button>
+                        </form>
+                    }
+                </div>
+            </details>
+        }
+        @foreach (var role in Person.Give)
+        {
+            <form method="post" action="@Forms.Give">
+                @Fields()
+                <input type="hidden" name="@PeopleController.RoleField" value="@role">
+                <button type="submit" class="watch-button">Make @role</button>
+            </form>
+        }
+        @foreach (var role in Person.Take)
+        {
+            <form method="post" action="@Forms.Take">
+                @Fields()
+                <input type="hidden" name="@PeopleController.RoleField" value="@role">
+                <button type="submit" class="watch-button">Take @role role</button>
+            </form>
+        }
+        @if (Person.Can.Contains(People.Verb.Ban))
+        {
+            <details class="application-decline people-ban">
+                <summary class="watch-button">Ban</summary>
+                <div class="post-remove-confirm">
+                    <p class="post-remove-note">This place disappears for them, every page and every stream, until you lift the ban.</p>
+                    <form method="post" action="@Forms.Ban">
+                        @Fields()
+                        <button type="submit" class="post-remove-submit">Ban</button>
+                    </form>
+                </div>
+            </details>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PeoplePage.Listed Person { get; set; } = default!;
+
+    [Parameter, EditorRequired] public PeopleForms Forms { get; set; } = default!;
+
+    /// <summary>What every form carries: its token, the participant, and the page it returns to.</summary>
+    private RenderFragment Fields() => @<text>
+        <FormTokenField Token="@Forms.Token" />
+        <input type="hidden" name="@PeopleController.ParticipantField" value="@Person.Id">
+        <input type="hidden" name="@PeopleController.BackField" value="@Forms.Back">
+    </text>;
+
+    /// <summary>A duration's button, in words.</summary>
+    private static string For(string duration) => duration switch
+    {
+        "hour" => "For an hour",
+        "day" => "For a day",
+        "week" => "For a week",
+        _ => "For a " + duration
+    };
+}

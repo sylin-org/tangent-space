@@ -116,7 +116,8 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
 
         var place = await Capabilities.Load(personId, null, null, ct);
         var (name, handle) = Named(applicant);
-        return new ObjectResult(new DecidedApplication(applicant.Id, name, handle, Word(applicant.Standing), applications, place.Can))
+        return new ObjectResult(new DecidedApplication(applicant.Id, name, handle, People.Word(applicant.StandingAt(DateTimeOffset.UtcNow)),
+            applications, place.Can))
         {
             ContentTypes = { "application/json" }
         };
@@ -181,12 +182,6 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
         var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
         return (participant.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle, handle);
     }
-
-    private static string Word(Standing standing) => standing switch
-    {
-        Standing.TimedOut => "timed-out",
-        _ => standing.ToString().ToLowerInvariant()
-    };
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

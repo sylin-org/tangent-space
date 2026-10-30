@@ -9,5 +9,5 @@ namespace Tangent.Participants;
 public sealed record Admit(string ActorId, string ParticipantId, DateTimeOffset? At = null) : ICommand<Participant>
 {
     public Task<Outcome<Participant>> Run(Sequences sequences, CancellationToken ct)
-        => Applications.Decide(sequences, ActorId, ParticipantId, participant => participant.Admit(), At, ct);
+        => Applications.Decide(sequences, ActorId, ParticipantId, (participant, now) => participant.Admit(now), At, ct);
 }

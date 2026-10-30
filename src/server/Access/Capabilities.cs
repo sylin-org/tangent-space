@@ -110,9 +110,7 @@ public sealed class Capabilities
         var viewIfPublic = space.Audience == Audience.Public ? Bit.View : Bit.None;
 
         // Standing precedes everything: a cap on what any later step may leave. A timeout that has ended is over.
-        var standing = participant?.Standing;
-        if (standing == Standing.TimedOut && participant!.StandingUntil is { } until && until <= now) standing = Standing.Admitted;
-        switch (standing)
+        switch (participant?.StandingAt(now))
         {
             case null:
                 Drop(Bits.All & ~viewIfPublic, SignIn);

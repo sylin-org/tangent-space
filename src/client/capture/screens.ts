@@ -88,6 +88,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   // pointers under the origin she used; and her door once she said Not this one. Last, the persona arriving at a place
   // whose admission says apply: her door says her application is waiting. And the persona as a moderator of a place of
   // sixty Tangents after its first: the first page of them, the moderators' Tangent after it, and the way to all of them.
+  // Last, the persona timed out by the operator, whose door says until when; and lifted and made a moderator, whose door
+  // says she is back and what she was made.
   door: {
     path: '/',
     states: [
@@ -102,6 +104,8 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'offer-declined', seed: 'offer-declined', place: 'persona', signedIn: true, settings: offerSettings },
       { name: 'applicant', seed: 'apply', signedIn: true },
       { name: 'many-tangents', seed: 'many-tangents', signedIn: true },
+      { name: 'timed-out', seed: 'timed-out', signedIn: true },
+      { name: 'lifted', seed: 'lifted', signedIn: true },
     ],
   },
   // Every Tangent the persona may view in a place of sixty after its first: the first page, the page after it, and the
@@ -169,6 +173,27 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'with-applicants', place: 'persona', seed: 'applications', signedIn: true },
       { name: 'decline-confirmation', place: 'persona', seed: 'applications', signedIn: true, click: '.application-decline summary' },
       { name: 'empty', place: 'persona', signedIn: true },
+    ],
+  },
+  // The place's people, read by the persona, who set the place up and so is its operator and acts on everyone else:
+  // an administrator, a moderator, members, one an agent, one timed out and one banned, each with what she may change
+  // of them; the first time out opened, with its durations; the first ban opened, confirmed in the page; the start of a
+  // handle found; and refused, read by the persona as a member of a place someone else set up.
+  'tangent-space-settings-people': {
+    path: '/settings/people',
+    states: [
+      { name: 'with-people', place: 'persona', seed: 'people', signedIn: true },
+      {
+        name: 'time-out-open',
+        place: 'persona',
+        seed: 'people',
+        signedIn: true,
+        click: '.people-time-out > summary',
+        waitFor: '.people-time-out[open]',
+      },
+      { name: 'ban-confirmation', place: 'persona', seed: 'people', signedIn: true, click: '.people-ban > summary', waitFor: '.people-ban[open]' },
+      { name: 'found', place: 'persona', seed: 'people', signedIn: true, query: { handle: 'ma' } },
+      { name: 'refused', signedIn: true },
     ],
   },
   // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the
@@ -418,6 +443,18 @@ export const screens: Readonly<Record<string, Screen>> = {
         waitFor: '.profile-revoke[open]',
       },
       { name: 'absent', seed: 'profile', path: '/p/nobody.example' },
+      // Mara's profile read by the persona as the operator of the place, who may change her standing and roles: where
+      // she stands, with what the persona may change inline, and the ban opened, confirmed in the page.
+      { name: 'keeper', place: 'persona', seed: 'profile', signedIn: true, path: '/p/mara.bsky.social' },
+      {
+        name: 'keeper-ban-open',
+        place: 'persona',
+        seed: 'profile',
+        signedIn: true,
+        path: '/p/mara.bsky.social',
+        click: '.profile-standing .people-ban > summary',
+        waitFor: '.profile-standing .people-ban[open]',
+      },
     ],
   },
   // The form that takes Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted and the

@@ -11,7 +11,10 @@ namespace Tangent.Participants;
 /// reader may view. <see cref="Older"/> is the address of the page after this one, absent on the last; nothing is counted
 /// to answer it. <see cref="Can"/> is what the reader holds on the place and <see cref="Gate"/> the one reason they may
 /// not write here, where they may not. <see cref="Delegates"/> are the agents the reader approved to act as them, present
-/// only on their own profile, read in their own session. <see cref="Place"/>, <see cref="Door"/>, <see cref="Who"/> and
+/// only on their own profile, read in their own session. For a reader who holds <c>ManageStanding</c> or
+/// <c>ManageRoles</c>, <see cref="Listed"/> is the participant as the place's people list them — their standing, with when
+/// a timeout ends, their roles and what the reader may change of them — and <see cref="Forms"/> where each change posts,
+/// coming back here; both are absent for anyone else. <see cref="Place"/>, <see cref="Door"/>, <see cref="Who"/> and
 /// <see cref="SignIn"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day its times are written
 /// for.</summary>
 public sealed record ProfilePage(
@@ -35,7 +38,9 @@ public sealed record ProfilePage(
     string Door,
     string? SignIn,
     Who? Who,
-    DateOnly Day)
+    DateOnly Day,
+    PeoplePage.Listed? Listed = null,
+    PeopleForms? Forms = null)
 {
     /// <summary>The URL segment profiles answer under.</summary>
     public const string Segment = "/p/";
@@ -62,8 +67,9 @@ public sealed record ProfilePage(
     public static string AddressOf(string baseAddress, string handle) => baseAddress + Segment + Uri.EscapeDataString(handle);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so a new Post, a changed
-    /// profile or role, a changed <c>can</c> or a new day changes it. The reader's own profile carries the revoke forms
-    /// with a new antiforgery token every time, so its version never repeats.</summary>
+    /// profile or role, a changed <c>can</c> or a new day changes it. The reader's own profile carries the revoke forms,
+    /// and a profile read by whoever may change the participant the forms that do, with a new antiforgery token every
+    /// time, so its version never repeats.</summary>
     public static long Version(ProfilePage page)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;
 }

@@ -10,7 +10,7 @@ namespace Tangent.Space;
 
 /// <summary>The place's settings, in sections shown one at a time, each listed in the rail (<see cref="Sections"/>).
 /// <c>/settings</c> is general, which names and describes the place; <c>/settings/admission</c> sets how a newcomer
-/// arrives; the applications are <see cref="ApplicationsController"/>'s. Each <c>GET</c> is the section's form, one
+/// arrives; the applications are <see cref="ApplicationsController"/>'s and the people <see cref="PeopleController"/>'s. Each <c>GET</c> is the section's form, one
 /// resource both ways. General's <c>POST</c> takes <c>name</c> and <c>description</c>, admission's takes
 /// <c>admission</c> (<c>join</c> or <c>apply</c>), as a form or a JSON object, a field left as it is when not sent, and
 /// sends <see cref="ChangeTangentSpace"/>: a form is sent on, from general to the door, where the name and the description
@@ -36,12 +36,17 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     /// <summary>The section where applications are decided, listed for whoever holds <see cref="Bit.ManageStanding"/>.</summary>
     public const string ApplicationsSection = "Applications";
 
+    /// <summary>The section where the place's people are found, their standing changed and their roles given and taken,
+    /// listed for whoever holds <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>.</summary>
+    public const string PeopleSection = "People";
+
     /// <summary>The admissions a form offers, in its order.</summary>
     public static readonly IReadOnlyList<string> Admissions = [Word(Admission.Join), Word(Admission.Apply)];
 
     /// <summary>The sections of the settings the reader of <paramref name="place"/> is shown, under
-    /// <paramref name="baseAddress"/>, with <paramref name="current"/> marked: general and admission, and the applications
-    /// for whoever holds <see cref="Bit.ManageStanding"/>.</summary>
+    /// <paramref name="baseAddress"/>, with <paramref name="current"/> marked: general and admission; the applications
+    /// for whoever holds <see cref="Bit.ManageStanding"/>; and the people for whoever holds it or
+    /// <see cref="Bit.ManageRoles"/>.</summary>
     public static IReadOnlyList<SettingsSection> Sections(Capabilities place, string baseAddress, string current)
     {
         var sections = new List<SettingsSection>
@@ -51,15 +56,18 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         };
         if (place.Holds(Bit.ManageStanding))
             sections.Add(new SettingsSection(ApplicationsSection, baseAddress + ApplicationsController.Path, current == ApplicationsSection));
+        if (PeopleController.ReadGate(place) is null)
+            sections.Add(new SettingsSection(PeopleSection, baseAddress + PeopleController.Path, current == PeopleSection));
         return sections;
     }
 
     /// <summary>Where the account menu takes the reader of <paramref name="place"/> into the settings: general for whoever
-    /// holds <see cref="Bit.ManageSpace"/>, the applications for whoever holds <see cref="Bit.ManageStanding"/> alone; null
-    /// for anyone else.</summary>
+    /// holds <see cref="Bit.ManageSpace"/>, the applications for whoever holds <see cref="Bit.ManageStanding"/> without it,
+    /// the people for whoever holds <see cref="Bit.ManageRoles"/> alone; null for anyone else.</summary>
     public static string? Entry(Capabilities place, string baseAddress)
         => place.Holds(Bit.ManageSpace) ? baseAddress + Path
             : place.Holds(Bit.ManageStanding) ? baseAddress + ApplicationsController.Path
+            : place.Holds(Bit.ManageRoles) ? baseAddress + PeopleController.Path
             : null;
 
     /// <summary>The word an admission is written as, in a form and in JSON.</summary>

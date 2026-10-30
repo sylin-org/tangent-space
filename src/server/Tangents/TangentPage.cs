@@ -82,7 +82,7 @@ public sealed partial record TangentPage(
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
     /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
-    /// settings, for one who holds <c>ManageSpace</c> or <c>ManageStanding</c>.</summary>
+    /// settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are

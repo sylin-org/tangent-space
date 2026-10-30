@@ -7,8 +7,9 @@
 @using Tangent.Tangents
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
-   answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a signed-in reader
-   with news, what is new since they were here — one sentence, then who admitted them, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
+   answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
+   out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
+   them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
    in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address. *@
@@ -90,6 +91,14 @@
                     </div>
                 </section>
             }
+            @if (Model is { Gate: Capabilities.TimedOut, Until: { } until })
+            {
+                <section class="door-offers" aria-label="Your timeout">
+                    <div class="door-offer door-application" data-gate="@Model.Gate">
+                        <p class="door-offer-line">You’re timed out until <time datetime="@until.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@(global::Tangent.Participants.PeopleView.Until(until))</time>: you can read and report here, and post again then.</p>
+                    </div>
+                </section>
+            }
             @if (Model.Offers is { Count: > 0 } offers)
             {
                 <section class="door-offers" aria-label="Offers">
@@ -139,6 +148,14 @@
                         @if (news.Admitted is { } admitted)
                         {
                             <p class="tangent-description door-admitted">@admitted.Who.Name admitted you: you can start topics and reply here.</p>
+                        }
+                        @if (news.Lifted is { } lifted)
+                        {
+                            <p class="tangent-description door-admitted">@lifted.Who.Name lifted your @(lifted.Was == "banned" ? "ban" : "timeout"): you’re back, and you can start topics and reply here again.</p>
+                        }
+                        @foreach (var change in news.Roles ?? [])
+                        {
+                            <p class="tangent-description door-admitted">@change.Who.Name @(change.Given ? "made you " + Article(change.Role) + " " + change.Role : "took your " + change.Role + " role").</p>
                         }
                         <Tangent.Events.WatchedNews Model="@news.Watched" />
                         @Items("Replies to you", news.Replies)
@@ -216,11 +233,16 @@
         return string.Join(", ", parts);
     }
 
+    /// <summary>The article a role's word takes.</summary>
+    private static string Article(string role) => role.Length > 0 && "aeiou".Contains(role[0]) ? "an" : "a";
+
     /// <summary>The news in one sentence: each group that holds something, in the order the door shows them.</summary>
     private static string Sentence(Door.Since news)
     {
         var parts = new List<string>();
         if (news.Admitted is not null) parts.Add("you were admitted");
+        if (news.Lifted is not null) parts.Add("you’re back");
+        if (news.Roles is { Count: > 0 }) parts.Add("your roles changed");
         if (news.Replies.Count > 0) parts.Add(Words(news.Replies.Count, news.Replies.AtLeast, "reply", "replies") + " to you");
         if (news.Mentions.Count > 0) parts.Add(Words(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
         if (news.Taken is { Count: > 0 } taken) parts.Add(Words(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
