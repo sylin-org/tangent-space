@@ -113,6 +113,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Receipt** | What a Connection recorded for one Post at one version. | `Receipt` | — | *Publication record*, Status (for this), *Delivery* |
 | **Reference** | An inbound reply, quote, mention or like from elsewhere, attributed. | `Reference` | — | Backlink, *Interaction*, *Engagement*, Webmention (for the row) |
 | **Publication** | The Tangent Space as a `site.standard.publication`, in the proprietor's repository. | — | — | Blog, *Site* |
+| **Feed** | What anyone with a feed reader follows without an account: a public Tangent's newest Topics, or the place's articles, as Atom and as JSON Feed, each body rendered as its page renders it; a window cut by count and by bytes, newest first, none removed. It reads as a visitor, whoever asks, so a members-only Tangent and a private place have none. | `Feed`, `AtomFeed`, `JsonFeed`, `FeedLink`; `Feeds`, `FeedsController` | `/t/{tangent}/feed.atom`, `/t/{tangent}/feed.json`, `/articles.atom`, `/articles.json` | *Stream* (for this), *Syndication* (for this) |
 | **Archive** | The public pages and feeds rendered to a folder, served without the server. | `archive/` | the same URLs | Export (for this), *Snapshot*, *Mirror* |
 | **Export** | A Tangent or the Tangent Space as readable HTML with its data and media. | — | `/settings/export` | Dump, Backup (for this) |
 | **Backup** | The data folder, consistent, copied; restored by putting it back. | — | — | *Snapshot*, Export (for this) |

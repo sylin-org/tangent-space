@@ -15,7 +15,7 @@ namespace Tangent.Tangents;
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
 /// its times are written for. <see cref="Settings"/> is where the Tangent's settings are changed, present only for a
 /// reader who may change them; <see cref="NewTangent"/> is where a Tangent is created, present only for a reader who
-/// may create one.</summary>
+/// may create one. <see cref="Feeds"/> are the Tangent's feeds, present only where a visitor may read it.</summary>
 public sealed partial record TangentPage(
     string Slug,
     string Name,
@@ -36,7 +36,8 @@ public sealed partial record TangentPage(
     TangentPage.Reader? Who,
     DateOnly Day,
     string? Settings = null,
-    string? NewTangent = null)
+    string? NewTangent = null,
+    IReadOnlyList<Render.FeedLink>? Feeds = null)
 {
     /// <summary>The most characters of a body the page carries as a Topic's <see cref="Topic.Opening"/> or a reply's
     /// <see cref="Latest.Line"/>.</summary>

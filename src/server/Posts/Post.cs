@@ -50,6 +50,7 @@ public sealed class Post : Entity<Post>
     /// <summary>The Tangent the Topic is in; on every row.</summary>
     [Index(Name = "ix_post_topics", Order = 0)]
     [Index(Name = "ix_post_slugs", Order = 0)]
+    [Index(Name = "ix_post_started", Order = 0)]
     public string TangentId { get; set; } = "";
 
     /// <summary>The root of the Topic; the root's own Id on a root.</summary>
@@ -58,6 +59,8 @@ public sealed class Post : Entity<Post>
 
     /// <summary>The Post this one replies to; null on a root.</summary>
     [Index(Name = "ix_post_topics", Order = 1)]
+    [Index(Name = "ix_post_started", Order = 1)]
+    [Index(Name = "ix_post_articles", Order = 1)]
     public string? ParentId { get; set; }
 
     /// <summary>The Post this Topic was taken on a tangent from; null otherwise. Root only. In <c>ix_post_origins</c>
@@ -70,6 +73,7 @@ public sealed class Post : Entity<Post>
     public string? Slug { get; set; }
 
     /// <summary>Root only; a reply's Topic has the kind of its root.</summary>
+    [Index(Name = "ix_post_articles", Order = 0)]
     public PostKind Kind { get; set; }
 
     /// <summary>Root only. Found by its words.</summary>
@@ -106,6 +110,8 @@ public sealed class Post : Entity<Post>
 
     [Index(Name = "ix_post_origins", Order = 1)]
     [Index(Name = "ix_post_authors", Order = 1)]
+    [Index(Name = "ix_post_started", Order = 3)]
+    [Index(Name = "ix_post_articles", Order = 3)]
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>The last sequence taken in the Topic. Root only.</summary>
@@ -135,6 +141,10 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_topics", Order = 2)]
     public bool Pinned { get; set; }
 
+    /// <summary>In <c>ix_post_started</c> and <c>ix_post_articles</c> before the time a Topic started, so a Tangent's
+    /// Topics or the articles that stand, newest first, are each one range, however many were removed.</summary>
+    [Index(Name = "ix_post_started", Order = 2)]
+    [Index(Name = "ix_post_articles", Order = 2)]
     public bool Removed { get; set; }
 
     public string? RemovedBy { get; set; }
@@ -146,6 +156,9 @@ public sealed class Post : Entity<Post>
     public string? EditedBy { get; set; }
 
     public DateTimeOffset? EditedAt { get; set; }
+
+    /// <summary>When the Post's words last changed, by anyone; null until its first edit. A feed says it.</summary>
+    public DateTimeOffset? ChangedAt { get; set; }
 
     /// <summary>A Topic's root, or a refusal: the Id is a TID, the title and body are within their limits, and the Tangent
     /// and author are named. The slug is the caller's, derived from the title and already made unique in the Tangent. A
@@ -252,6 +265,7 @@ public sealed class Post : Entity<Post>
         var someoneElse = editorId != AuthorId;
         EditedBy = someoneElse ? editorId : null;
         EditedAt = someoneElse ? at : null;
+        ChangedAt = at;
         Version = checked(Version + 1);
     }
 

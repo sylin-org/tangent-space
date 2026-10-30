@@ -44,6 +44,9 @@ public sealed record Door(
     /// <summary>What the place is, in its proprietor's line; empty until they write one.</summary>
     public string Description { get; init; } = "";
 
+    /// <summary>The place's articles feeds: present only where a visitor may read the place.</summary>
+    public IReadOnlyList<Render.FeedLink>? Feeds { get; init; }
+
     /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
     public IReadOnlyList<Offered>? Offers { get; init; }
 

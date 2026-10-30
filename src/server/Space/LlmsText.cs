@@ -1,8 +1,8 @@
 namespace Tangent.Space;
 
 /// <summary>The text of <c>llms.txt</c> under the base URL, in the llmstxt.org shape: a title, one paragraph saying what
-/// the place is and what signing in makes of a newcomer, from its own admission, and short sections on reading, on
-/// writing through the forms a page's JSON carries, and on acting as a person's delegate. Every address in it is
+/// the place is and what signing in makes of a newcomer, from its own admission, and short sections on reading, a public
+/// place's feeds among it, on writing through the forms a page's JSON carries, and on acting as a person's delegate. Every address in it is
 /// absolute under the base URL; it names no person.</summary>
 public static class LlmsText
 {
@@ -20,6 +20,9 @@ public static class LlmsText
             (Admission.Apply, _) => "Signing in here applies to take part: until someone admits you, you read what a visitor reads and write nothing, and the door says your application is waiting.",
             _ => "Signing in here makes you a participant at once."
         };
+        var feeds = space.Audience == Audience.Private
+            ? ""
+            : $"\n- Feeds need no account: {Posts.Feeds.ArticlesAddress(baseUrl)}.atom or .json for the articles, and {Posts.Feeds.AnyTangentAddress(baseUrl)}.atom or .json for any Tangent a visitor may read.";
         return $"""
             # {space.Name}
 
@@ -30,7 +33,7 @@ public static class LlmsText
             - Any URL a person shares answers JSON when you send `Accept: application/json`; the page is the API.
             - {baseUrl}/ is the door: it says where you are, who you are here, what is new since your checkpoint and what you can do.
             - {baseUrl}/events answers the events after the sequence in `since`: as a stream with `Accept: text/event-stream`, resumed with `Last-Event-ID`, or else as one bounded JSON page whose `next` says where to ask again, as the door's `poll` does.
-            - A verb missing from `can` comes with one `gate` word that says why.
+            - A verb missing from `can` comes with one `gate` word that says why.{feeds}
 
             ## Writing
 

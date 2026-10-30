@@ -13,9 +13,19 @@ public sealed record DescriptorPerson(
 /// public client it presents with the Device flow.</summary>
 public sealed record DescriptorDelegated(string AuthorizationServer, string ClientId);
 
+/// <summary>One feed's two formats, by address.</summary>
+public sealed record DescriptorFeed(string Atom, string Json)
+{
+    public static DescriptorFeed At(string address) => new(address + Render.AtomFeed.Extension, address + Render.JsonFeed.Extension);
+}
+
+/// <summary>Where a visitor follows the place: its articles, and any Tangent a visitor may read, whose slug stands in for
+/// <c>{tangent}</c>.</summary>
+public sealed record DescriptorFeeds(DescriptorFeed Articles, DescriptorFeed Tangent);
+
 /// <summary>What the Tangent Space says about itself at <c>tangent.json</c> under its base URL, as stable JSON:
 /// its name, its address, <c>api</c>, its audience, the delegated door, and absolute links to the door and to
-/// <c>llms.txt</c>; for a public place also its proprietor and operator. A private place states only what a visitor needs
+/// <c>llms.txt</c>; for a public place also its proprietor, its operator and its feeds. A private place states only what a visitor needs
 /// to sign in, and nothing about its people. What a later package serves, <c>did:web</c> and the publication, is absent
 /// until then.</summary>
 public sealed record Descriptor(string Name, string Address, string Audience, DescriptorDelegated Delegated)
@@ -28,6 +38,9 @@ public sealed record Descriptor(string Name, string Address, string Audience, De
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DescriptorPerson? Operator { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DescriptorFeeds? Feeds { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Door { get; init; }
@@ -50,7 +63,8 @@ public sealed record Descriptor(string Name, string Address, string Audience, De
             : descriptor with
             {
                 Proprietor = Person(space.ProprietorId, proprietor),
-                Operator = Person(space.OperatorId, operatorRow)
+                Operator = Person(space.OperatorId, operatorRow),
+                Feeds = new DescriptorFeeds(DescriptorFeed.At(Posts.Feeds.ArticlesAddress(baseUrl)), DescriptorFeed.At(Posts.Feeds.AnyTangentAddress(baseUrl)))
             };
     }
 

@@ -90,7 +90,7 @@
     public static Frame Frame(TopicPage page)
     {
         var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.Notifications) : null;
-        return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn);
+        return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn, page.Feeds);
     }
 
     private bool Article => Model.Kind == "article";
