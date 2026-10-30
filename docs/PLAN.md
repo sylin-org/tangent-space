@@ -133,6 +133,7 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 | 5.1 The roles at `/settings/roles` over Koan's order, given and taken on People; each Tangent's access by role, its overwrites beyond its audience; and the place's own audience | 5.3 | first of its kind |
 | 5.7 Any number of Tangents and members, on Koan's roles as rows: every list of Tangents reaches every one the reader may view, a page at a time | 5.4 | repeat |
 | 5.8 An application reaches whoever decides it: on a place set to apply, whoever holds the bit to decide reads the waiting applications on their bell, in their notifications and on their door | 5.2, 6.1 | repeat |
+| 5.9 The small doors: a settings rail of what its reader may use, and a welcome on a newcomer's first door | 5.3 | repeat |
 
 ## Later slices
 
