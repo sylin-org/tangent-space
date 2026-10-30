@@ -35,7 +35,7 @@
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
-        @if (frame.Searchable)
+        @if (frame.Searchable && !Standalone)
         {
             <form class="masthead-search" role="search" method="get" action="@frame.Search" data-island="search">
                 <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>

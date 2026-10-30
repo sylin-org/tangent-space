@@ -301,6 +301,8 @@ public sealed partial class ExportTests
     /// absolute lands on a file the zip holds, at a place that file holds; and the stylesheet's fonts are beside it.</summary>
     private static void AssertOpensAlone(IReadOnlyDictionary<string, string> zip)
     {
+        // No page offers what needs the server: a search has nowhere to go.
+        Assert.DoesNotContain(zip, file => file.Key.EndsWith(".html", StringComparison.Ordinal) && file.Value.Contains("masthead-search"));
         Assert.Contains("index.html", zip.Keys);
         foreach (var (name, content) in zip.Where(file => file.Key.EndsWith(".html", StringComparison.Ordinal)))
         {
