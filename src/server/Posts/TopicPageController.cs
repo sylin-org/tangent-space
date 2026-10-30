@@ -151,7 +151,10 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
                 await PostWrites.SettingsFor(reader.Id, baseAddress, ct),
                 await Events.Notifications.Count(reader.Id, baseAddress, ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            takenFrom));
+            takenFrom,
+            space.Audience == Audience.Public && await Overwrites.AudienceOf(tangentRow.Id, ct) == Audience.Public
+                ? Feeds.TangentLinks(baseAddress, tangentRow.Id, tangentRow.Name, space.Name)
+                : null));
     }
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is

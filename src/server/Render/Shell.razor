@@ -18,6 +18,10 @@
     <link rel="stylesheet" href="@(BaseUrl)/tangent.css">
     <script src="@(BaseUrl)/theme.js"></script>
     <script type="module" src="@(BaseUrl)/tangent.js"></script>
+    @foreach (var feed in Frame?.Feeds ?? [])
+    {
+        <link rel="alternate" type="@feed.Type" title="@feed.Title" href="@feed.Address">
+    }
 </head>
 <body>
 @if (Frame is { } frame)

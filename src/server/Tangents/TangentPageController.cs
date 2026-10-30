@@ -91,7 +91,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
                 await Events.Notifications.Count(reader.Id, baseAddress, ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             TangentWrites.MayManage(capabilities) ? address + "/" + TangentWrites.SettingsSegment : null,
-            creates ? baseAddress + NewTangentController.Route : null));
+            creates ? baseAddress + NewTangentController.Route : null,
+            audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null));
     }
 
     /// <summary>What a reader without <see cref="Bit.View"/> receives: a missing resource's answer where the Tangent

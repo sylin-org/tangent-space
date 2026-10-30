@@ -83,7 +83,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | The protocol contract recorded from code as ADR 0016: `IConnectionAdapter`, `IReferenceSource`, `IAsserter`; the three events as a filter over the log | — | new | — | S | todo |
-| Feeds as a Render output: Atom and JSON Feed per Tangent and for articles | — | new | lift later | S | todo |
+| Feeds as a Render output: Atom and JSON Feed per Tangent and for articles | — | new | lift later | S | done |
 | References on a Post: Constellation and Spacedust as an optional source; "elsewhere" on the topic page | topic | new | — | M | todo |
 | Webmention: send on `post.created`, receive at an endpoint; Bridgy Fed opt-in | topic | new | — | S | todo |
 | The Mastodon package: a status under the participant's own account; replies as references | — | new | — | M | todo |

@@ -131,7 +131,7 @@
             .Select(tangent => new SwitcherItem(tangent.Name, tangent.Address, Detail(tangent), Tile.For(tangent.Slug, tangent.Name), tangent.Slug == page.Slug))
             .ToList(), page.Door + TangentsController.Route.TrimStart('/'), page.NewTangent);
         var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.Notifications) : null;
-        return new(page.Place, page.Door, [new Crumb(page.Name, page.Address, switcher)], who, page.SignIn);
+        return new(page.Place, page.Door, [new Crumb(page.Name, page.Address, switcher)], who, page.SignIn, page.Feeds);
     }
 
     /// <summary>A Tangent in the switcher: its kind and how many Topics were started there, in words.</summary>

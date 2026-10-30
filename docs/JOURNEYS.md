@@ -67,7 +67,7 @@ A person, signed in or not.
 | --- | --- | --- |
 | Articles | A Tangent whose default kind is articles lists articles and offers **New article**, and the door counts new articles. An article is a Markdown Post on the topic screen, without an article editor or a cover. | missing (slice 3): the article editor and the cover |
 | Publishing to atproto | `site.standard.document` under the proprietor's Connection. | missing (slice 3) |
-| Feeds | None yet. | missing (slice 4) |
+| Feeds | Anyone with a feed reader follows a public Tangent, or the place's articles, with no account: Atom or JSON Feed, the newest Topics with their bodies, found from any of its pages, `tangent.json` or `llms.txt`. A members-only Tangent and a private place have none; a removed Topic drops out. | works (4.2), not walked on a server |
 | Backup and restore | `scripts/tangent.ps1 backup` and `restore`, in the container too. | works when walked on 29 October; the walk runs no lifecycle command, so it was not walked again |
 | Export and the static archive | None yet: `/settings/export` answers not found. | missing (slice 7) |
 

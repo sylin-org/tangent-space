@@ -221,7 +221,7 @@
     public static Frame Frame(Door door)
     {
         var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.Notifications) : null;
-        return new(door.Name, door.Address, [new Crumb(door.Name)], who, door.SignIn);
+        return new(door.Name, door.Address, [new Crumb(door.Name)], who, door.SignIn, door.Feeds);
     }
 
     /// <summary>A participant's name, linked to their profile where the door knows it.</summary>
