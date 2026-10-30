@@ -310,31 +310,13 @@ public sealed class DelegatedDoorTests
     }
 
     [Fact]
-    public async Task A_session_post_without_its_form_token_is_refused_and_a_bearer_post_is_not_asked_for_one()
+    public async Task A_session_post_to_koans_approve_without_the_consent_pages_form_token_is_refused()
     {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, Leo)), ct: Cancellation);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await Place(tangentSpace);
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
-        var fields = new Dictionary<string, string>();
 
-        var session = await Answer(browser.Client, "/first-run", content: new FormUrlEncodedContent(fields));
-        Assert.Equal((HttpStatusCode.BadRequest, "Open the form again"), (session.Status, session.Title));
-        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-
-        var token = tangentSpace.Services.GetRequiredService<IIssuer>().Issue(new TrustClaims { Subject = Leo }, TimeSpan.FromMinutes(5), audience: BaseUrl);
-        using var bearer = new HttpRequestMessage(HttpMethod.Post, "/first-run")
-        {
-            Content = new FormUrlEncodedContent(fields),
-            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) }
-        };
-        // An agent's client, which follows no redirect: the answer is the post's own.
-        using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
-        using var established = await agent.SendAsync(bearer, Cancellation);
-        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
-        // The bearer carries no sign-in's handle claim: the place takes its name from the handle Leo's sign-in recorded.
-        Assert.Equal(("Leo's Tangent Space", Leo), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId));
-
-        // Koan's approve, posted from a session without the consent page's token, is refused the same way.
         var device = await Device(tangentSpace);
         var unsigned = await Answer(browser.Client, "/oauth/request/" + device.Code.Replace("-", "") + "/approve", content: Form(("unused", "")));
         Assert.Equal((HttpStatusCode.BadRequest, "Open the form again"), (unsigned.Status, unsigned.Title));

@@ -1,37 +1,46 @@
 @using Tangent.Render
-@* The sign-in page: one panel in the page, headed by the place's mark and name, holding the handle form with the
-   field focused. A failure of the sign-in shows above the form; a failure of the handle shows under the field it
-   concerns. *@
+@* The sign-in page: one panel in the page, headed by the place's mark and name, holding the one action, signing in
+   with Bluesky, whose own account chooser does the rest, and behind a disclosure the handle form for an account on
+   another server, open with the field focused when a sign-in by handle came back. A failure of the sign-in shows above
+   the action; a failure of the handle shows under the field it concerns. *@
 <main class="sign-in">
     <section class="sign-in-panel" aria-labelledby="sign-in-title">
         <PanelHead Frame="@Frame(Model)" />
         <div class="sign-in-body">
             <h1 id="sign-in-title" class="sign-in-title">Sign in to reply and watch</h1>
-            <p class="sign-in-lede">Use your Bluesky handle, or any AT&nbsp;Protocol account.</p>
+            <p class="sign-in-lede">Use your Bluesky account, or any AT&nbsp;Protocol account.</p>
             @if (Model.Failure is { } failure)
             {
                 <p class="sign-in-failure" id="sign-in-failure" role="alert">@failure</p>
             }
             <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()" data-island="submitting">
-                <div class="field">
-                    <label class="field-label" for="sign-in-handle">Handle</label>
-                    <span class="field-input">
-                        <span class="field-prefix" aria-hidden="true">@@</span>
-                        <input id="sign-in-handle" name="identifier" type="text" required autofocus
-                               autocomplete="username" autocapitalize="none" spellcheck="false"
-                               placeholder="yourname.bsky.social" value="@Model.Handle"
-                               aria-invalid="@(Model.HandleFailure is null ? "false" : "true")"
-                               aria-describedby="@Described()">
-                    </span>
-                    @if (Model.HandleFailure is { } refused)
-                    {
-                        <p class="field-failure" id="sign-in-handle-failure">@refused</p>
-                    }
-                </div>
                 <input type="hidden" name="return" value="@Model.ChallengeReturn()">
-                <input type="hidden" name="failure" value="@Model.FailureLanding()" data-carry="identifier" data-carry-as="handle">
-                <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
+                <input type="hidden" name="failure" value="@Model.FailureLanding()">
+                <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Sign in with Bluesky</button>
             </form>
+            <details class="sign-in-other" open="@ByHandle">
+                <summary class="sign-in-other-toggle">Use another server</summary>
+                <form class="sign-in-form" method="get" action="@Model.ChallengeAddress()" data-island="submitting">
+                    <div class="field">
+                        <label class="field-label" for="sign-in-handle">Handle</label>
+                        <span class="field-input">
+                            <span class="field-prefix" aria-hidden="true">@@</span>
+                            <input id="sign-in-handle" name="identifier" type="text" required autofocus="@ByHandle"
+                                   autocomplete="username" autocapitalize="none" spellcheck="false"
+                                   placeholder="you.example.com" value="@Model.Handle"
+                                   aria-invalid="@(Model.HandleFailure is null ? "false" : "true")"
+                                   aria-describedby="@Described()">
+                        </span>
+                        @if (Model.HandleFailure is { } refused)
+                        {
+                            <p class="field-failure" id="sign-in-handle-failure">@refused</p>
+                        }
+                    </div>
+                    <input type="hidden" name="return" value="@Model.ChallengeReturn()">
+                    <input type="hidden" name="failure" value="@Model.FailureLanding()" data-carry="identifier" data-carry-as="handle">
+                    <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
+                </form>
+            </details>
             <ul class="sign-in-gains">
                 <li>
                     <span class="sign-in-gain-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5L3.5 9.5 8 14"></path><path d="M4 9.5h7.5a5 5 0 0 1 5 5V16"></path></svg></span>
@@ -59,6 +68,9 @@
 
     /// <summary>The frame the shell draws around the page: the place, and "Sign in" as the only crumb.</summary>
     public static Frame Frame(SignIn signIn) => new(signIn.Name, signIn.Door, [new Crumb("Sign in")]);
+
+    /// <summary>Whether a sign-in by handle came back, so the handle form opens with its handle and its failure.</summary>
+    private bool ByHandle => Model.Handle is not null || Model.HandleFailure is not null;
 
     private string? Described()
         => string.Join(' ', new[] { Model.Failure is null ? null : "sign-in-failure", Model.HandleFailure is null ? null : "sign-in-handle-failure" }

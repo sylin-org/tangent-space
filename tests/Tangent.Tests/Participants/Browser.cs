@@ -41,16 +41,6 @@ public sealed partial class Browser : IDisposable
                 : target);
     }
 
-    /// <summary>Takes the one action the first-run page holds, posted with the form's token as the page posts it.</summary>
-    public Task<HttpResponseMessage> SetUp(CancellationToken ct) => Post("/first-run", new Dictionary<string, string>(), ct);
-
-    /// <summary>Reads the page at <paramref name="path"/> and posts its form back to it with the form's token.</summary>
-    private async Task<HttpResponseMessage> Post(string path, Dictionary<string, string> fields, CancellationToken ct)
-    {
-        foreach (var (key, value) in await Token(path, ct)) fields[key] = value;
-        return await Client.PostAsync(path, new FormUrlEncodedContent(fields), ct);
-    }
-
     /// <summary>The token field of the form the page at <paramref name="path"/> holds, as a form a browser keeps open
     /// carries it.</summary>
     public async Task<Dictionary<string, string>> Token(string path, CancellationToken ct)

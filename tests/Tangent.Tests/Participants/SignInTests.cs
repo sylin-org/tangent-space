@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Koan.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Events;
@@ -30,25 +31,39 @@ public sealed class SignInTests
     };
 
     [Fact]
-    public async Task The_sign_in_page_answers_as_the_handle_form_and_as_json_with_the_connectors_challenge()
+    public async Task The_sign_in_page_answers_as_the_bluesky_action_with_the_handle_form_behind_it_and_as_json_with_the_connectors_challenge()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
 
-        var html = await Read(tangentSpace, "/sign-in", "text/html");
+        var html = WebUtility.HtmlDecode(await Read(tangentSpace, "/sign-in", "text/html"));
         using var json = JsonDocument.Parse(await Read(tangentSpace, "/sign-in", "application/json"));
         using var metadata = JsonDocument.Parse(await Read(tangentSpace, "/auth/atproto/client-metadata.json", "application/json"));
 
         var comeBack = "/sign-in?return=" + Uri.EscapeDataString("/");
-        Assert.Contains($"<form class=\"sign-in-form\" method=\"get\" action=\"{BaseUrl}/auth/atproto/challenge\" data-island=\"submitting\">", html);
-        Assert.Contains("name=\"identifier\" type=\"text\" required autofocus", html);
-        Assert.Contains($"<input type=\"hidden\" name=\"return\" value=\"{WebUtility.HtmlEncode(comeBack)}\" />", html);
+        var challenge = Regex.Escape($"<form class=\"sign-in-form\" method=\"get\" action=\"{BaseUrl}/auth/atproto/challenge\" data-island=\"submitting\">");
+        var returned = Regex.Escape($"<input type=\"hidden\" name=\"return\" value=\"{comeBack}\" />");
+        // The one action signs in with Bluesky: the challenge naming no account, coming back here signed in or failed.
+        Assert.Matches(challenge + @"\s*" + returned + @"\s*"
+            + Regex.Escape($"<input type=\"hidden\" name=\"failure\" value=\"{comeBack}\" />") + @"\s*"
+            + Regex.Escape("<button type=\"submit\" class=\"sign-in-submit\" data-busy-label=\"Continuing…\">Sign in with Bluesky</button>") + @"\s*</form>", html);
+        // An account on another server signs in by the handle it types, sent to the same challenge as its identifier, behind a
+        // closed disclosure whose field takes no focus.
+        Assert.Matches(Regex.Escape("<details class=\"sign-in-other\">") + @"\s*"
+            + Regex.Escape("<summary class=\"sign-in-other-toggle\">Use another server</summary>") + @"\s*" + challenge + @"[\s\S]*?"
+            + Regex.Escape("<input id=\"sign-in-handle\" name=\"identifier\" type=\"text\" required autocomplete=\"username\"") + @"[\s\S]*?"
+            + returned + @"\s*"
+            + Regex.Escape($"<input type=\"hidden\" name=\"failure\" value=\"{comeBack}\" data-carry=\"identifier\" data-carry-as=\"handle\" />") + @"\s*"
+            + Regex.Escape("<button type=\"submit\" class=\"sign-in-submit\" data-busy-label=\"Continuing…\">Continue</button>") + @"\s*</form>\s*</details>", html);
+        Assert.DoesNotContain("autofocus", html);
         Assert.Contains("<span aria-current=\"page\" class=\"path-current path-only\">Sign in</span>", html);
         Assert.Contains("data-island=\"appearance\"", html);
         Assert.DoesNotContain("role=\"alert\"", html);
         Assert.DoesNotContain("<dialog", html);
-        Assert.Contains($"<input type=\"hidden\" name=\"failure\" value=\"{WebUtility.HtmlEncode(comeBack)}\" data-carry=\"identifier\" data-carry-as=\"handle\" />", html);
         Assert.Equal($"{BaseUrl}/auth/atproto/challenge?return={Uri.EscapeDataString(comeBack)}&failure={Uri.EscapeDataString(comeBack)}",
             json.RootElement.GetProperty("challenge").GetString());
+        Assert.Equal("For an account on a server other than Bluesky's, add identifier with its handle or DID to the challenge.",
+            json.RootElement.GetProperty("anotherServer").GetString());
         Assert.Equal("/", json.RootElement.GetProperty("return").GetString());
         Assert.False(json.RootElement.TryGetProperty("arrival", out _));
         Assert.False(json.RootElement.TryGetProperty("failure", out _));
@@ -72,6 +87,9 @@ public sealed class SignInTests
         var html = WebUtility.HtmlDecode(await Read(tangentSpace, query, "text/html"));
         using var json = JsonDocument.Parse(await Read(tangentSpace, query, "application/json"));
 
+        // Back from a sign-in by handle, the handle form is open with the handle kept and the field focused.
+        Assert.Contains("<details class=\"sign-in-other\" open>", html);
+        Assert.Contains("name=\"identifier\" type=\"text\" required autofocus", html);
         Assert.Contains("value=\"ada.bsky.social\"", html);
         Assert.DoesNotContain("provider said", html);
         if (ofHandle)

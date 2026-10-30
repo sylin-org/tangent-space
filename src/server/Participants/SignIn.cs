@@ -3,12 +3,12 @@ using Koan.Web.Auth.Infrastructure;
 namespace Tangent.Participants;
 
 /// <summary>The sign-in page as a resource, for a visitor: it says where to go, <see cref="Challenge"/>, the Koan
-/// connector's atproto challenge, which comes back here once the person has signed in and sends them on to
-/// <see cref="Return"/> (add <c>identifier</c> with a handle or DID to choose the account). A sign-in that fails comes
-/// back here too, with Koan's sanitized code in <c>error</c> (WEB-0080). <see cref="Handle"/> is the handle typed
-/// last, kept in the field after a failure; <see cref="Failure"/> is a failure of the sign-in as a whole and
-/// <see cref="HandleFailure"/> one of the handle itself, both in words. <see cref="Door"/> is the place's
-/// door.</summary>
+/// connector's atproto challenge, which starts at Bluesky, whose own account chooser picks the account, and comes back
+/// here once the person has signed in, sending them on to <see cref="Return"/>; <see cref="AnotherServer"/> says how to
+/// name an account on another server. A sign-in that fails comes back here too, with Koan's sanitized code in
+/// <c>error</c> (WEB-0080). <see cref="Handle"/> is the handle typed last, kept in the field after a failure;
+/// <see cref="Failure"/> is a failure of the sign-in as a whole and <see cref="HandleFailure"/> one of the handle
+/// itself, both in words. <see cref="Door"/> is the place's door.</summary>
 public sealed record SignIn(
     string Name,
     string Door,
@@ -18,6 +18,9 @@ public sealed record SignIn(
     string? Failure = null,
     string? HandleFailure = null)
 {
+    /// <summary>How to sign in with an account the challenge's start at Bluesky cannot find.</summary>
+    public string AnotherServer => "For an account on a server other than Bluesky's, add identifier with its handle or DID to the challenge.";
+
     /// <summary>The longest handle the page keeps: the longest a DNS name can be.</summary>
     public const int HandleLimit = 253;
 
@@ -57,10 +60,10 @@ public sealed record SignIn(
             ? value.ToString()
             : "";
 
-    /// <summary>The challenge's address without its query: where the handle form sends the handle.</summary>
+    /// <summary>The challenge's address without its query: where the sign-in forms go.</summary>
     public string ChallengeAddress() => Challenge.Split('?', 2)[0];
 
-    /// <summary>The address the challenge comes back to, as the handle form carries it.</summary>
+    /// <summary>The address the challenge comes back to, as the sign-in forms carry it.</summary>
     public string ChallengeReturn()
         => Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Challenge).Query).TryGetValue("return", out var value)
             ? value.ToString()
