@@ -10,7 +10,7 @@ import { chromium, type Browser } from 'playwright'
 import { storageKey } from '../appearance.ts'
 import { interrupted, onInterrupt } from './interrupt.ts'
 import { referencePackage, renderReference } from './reference.ts'
-import { captureOperator, capturePersona, setupCodeFill, capturePlaceName, captureThemes, nearestReadings, referenceVariants, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
+import { captureOperator, capturePersona, captureThemes, nearestReadings, referenceVariants, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
 import { doorOf, establish, forward, resolveServer, seed, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
 
 const root = fileURLToPath(new URL('../../../', import.meta.url))
@@ -101,7 +101,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
     try {
       // First run comes first: a seed writes into an established place.
       if (tangentSpace && group.place !== 'unestablished')
-        await establish(tangentSpace.listening, group.place === 'persona' ? capturePersona : captureOperator, screen.placeName ?? capturePlaceName, tangentSpace.setupCode)
+        await establish(tangentSpace.listening, group.place === 'persona' ? capturePersona : captureOperator)
       if (tangentSpace && group.seed) await seed(tangentSpace.listening, tangentSpace.baseUrl, group.seed)
       // A started Tangent Space is asked for at its base URL, which the browser maps to its loopback port.
       // A running one is asked for where --url says, and its pages link to the base URL it states.
@@ -111,7 +111,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
       const { browser, close } = await launch(args)
       try {
         for (const state of states)
-          await captureState(browser, pageBase, baseUrl, state.path ?? screen.path, state, tangentSpace?.listening, tangentSpace?.setupCode)
+          await captureState(browser, pageBase, baseUrl, state.path ?? screen.path, state, tangentSpace?.listening)
       } finally {
         await close()
       }
@@ -128,7 +128,7 @@ async function captureScreen(screen: Screen): Promise<string[]> {
 
 // A started Tangent Space answers the browser's requests to its base URL through its loopback address
 // (`listening`); one already running is asked for where --url says.
-async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path: string, state: State, listening?: URL, setupCode?: string): Promise<void> {
+async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path: string, state: State, listening?: URL): Promise<void> {
   if (state.signedIn && !listening) throw new Error(`The ${state.name} state signs in through the test connector; capture it without --url.`)
   const target = new URL(pageBase.pathname.replace(/\/$/, '') + path, pageBase)
   for (const [key, value] of Object.entries(state.query ?? {})) target.searchParams.set(key, value)
@@ -178,13 +178,9 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
         })
 
         await page.goto(target.href, { waitUntil: 'networkidle' })
-        for (const selector of state.check ?? []) await page.check(selector)
         for (const [selector, value] of Object.entries(state.values ?? {}))
           await page.$eval(selector, (field, given) => ((field as HTMLInputElement).value = given), value)
-        for (const [selector, value] of Object.entries(state.fill ?? {})) {
-          if (value === setupCodeFill && !setupCode) throw new Error(`The ${state.name} state types the setup code, and the server logged none.`)
-          await page.fill(selector, value === setupCodeFill ? setupCode! : value)
-        }
+        for (const [selector, value] of Object.entries(state.fill ?? {})) await page.fill(selector, value)
         if (state.reload) await page.reload({ waitUntil: 'networkidle' })
         if (state.click) {
           await page.click(state.click)

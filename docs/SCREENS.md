@@ -12,7 +12,7 @@ Built from the frame and the shared components, captured, and scored last as bel
 
 | Screen | Last scored | Result | Where it stood |
 | --- | --- | --- | --- |
-| first-run | 29 October 2026, round 25 | 8.50 everywhere (first scorer); 8.3–8.5 (second) | round 29 builds the two state details and the control edges, unscored |
+| first-run | 29 October 2026, round 25 | 8.50 everywhere (first scorer); 8.3–8.5 (second) | one action now, templated from the sign-in panel; captured as visitor, set up, waiting and pointers, unscored |
 | tangent | 29 October 2026, round 12 | 8.19–8.31 desktop, 8.56–8.63 phone | the no-cover article lead, participant marks, the 1024 band |
 | door | never | — | templated from the frame, `TangentTile` and `TopicRow`; captured as visitor, signed-in with news and quiet |
 | consent | never | — | templated from the sign-in panel; captured as code, request, code error, code refused and done |

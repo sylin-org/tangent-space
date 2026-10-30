@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Koan.Identity.Roles;
+using Koan.Security.Trust.Issuer;
 using Koan.Web.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,10 +17,10 @@ using Xunit;
 
 namespace Tangent.Space;
 
-/// <summary>First run: every page answers it until the place is established; only the configured operator, or whoever
-/// has the logged setup code, names the place, sees the configured base URL, declares the proprietor and becomes
-/// operator and administrator; the page then prints the site's pointers.</summary>
-public sealed partial class FirstRunTests
+/// <summary>First run: every page answers it until the place is established; the first person to sign in, or the
+/// account the configuration names by handle or DID, sets it up in one action, under the name their handle gives it,
+/// and becomes its proprietor, operator and administrator; the page then prints the site's pointers.</summary>
+public sealed class FirstRunTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
     private const string Leo = "did:plc:leo4example";
@@ -41,8 +42,6 @@ public sealed partial class FirstRunTests
         return all;
     }
 
-    private static readonly (string, string) PinnedToLeo = (FirstRun.OperatorSetting, Leo);
-
     [Fact]
     public async Task Before_first_run_the_door_and_a_tangents_page_answer_first_run_both_ways_and_health_sign_in_and_a_static_file_answer_as_themselves()
     {
@@ -60,14 +59,18 @@ public sealed partial class FirstRunTests
             Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Set up this Tangent Space</h1>", html);
             Assert.Contains($"<form class=\"sign-in-form\" method=\"get\" action=\"{BaseUrl}/auth/atproto/challenge\" data-island=\"submitting\">", html);
             Assert.Contains("<span class=\"panel-head-name\">New Tangent Space</span>", html);
-            Assert.Contains("Setting it up asks for the setup code from this Tangent Space’s log.", html);
-            Assert.Contains("<summary>Set it in configuration instead</summary>", html);
-            Assert.Contains($"Set {Code("Tangent:Operator")} to your DID and restart, and no setup code is asked.", html);
+            // Nothing before setup shows the base URL or the key that holds it, or asks for anything but the handle.
+            Assert.DoesNotContain(Code(BaseUrl), html);
+            Assert.DoesNotContain(TangentModule.BaseUrlKey, html);
+            Assert.DoesNotContain("<details", html);
+            Assert.DoesNotContain("can set it up", html);
             Assert.Equal(TangentSpace.Unnamed, json.RootElement.GetProperty("name").GetString());
-            Assert.Equal(BaseUrl, json.RootElement.GetProperty("baseUrl").GetString());
-            Assert.Equal(TangentModule.BaseUrlKey, json.RootElement.GetProperty("setting").GetString());
+            Assert.Equal(BaseUrl + "/", json.RootElement.GetProperty("door").GetString());
             Assert.Equal(challenge, json.RootElement.GetProperty("challenge").GetString());
-            Assert.False(json.RootElement.TryGetProperty("form", out _));
+            Assert.False(json.RootElement.TryGetProperty("baseUrl", out _));
+            Assert.False(json.RootElement.TryGetProperty("setting", out _));
+            Assert.False(json.RootElement.TryGetProperty("operator", out _));
+            Assert.False(json.RootElement.TryGetProperty("setUp", out _));
         }
 
         var (liveStatus, live) = await Read(tangentSpace, "/health/live", "application/json");
@@ -84,169 +87,165 @@ public sealed partial class FirstRunTests
     }
 
     [Fact]
-    public async Task First_run_by_the_configured_operator_establishes_the_place_and_makes_them_its_operator_and_an_administrator()
+    public async Task An_unconfigured_place_is_set_up_by_one_post_from_the_first_person_to_sign_in_who_becomes_its_proprietor_operator_and_administrator()
     {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(PinnedToLeo), ct: Cancellation);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
         using var browser = new Browser(tangentSpace);
-        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example");
-        using var form = await browser.Follow(HttpMethod.Get, "/first-run", Cancellation);
-        var page = await form.Content.ReadAsStringAsync(Cancellation);
+        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org");
+        using var action = await browser.Follow(HttpMethod.Get, "/first-run", Cancellation);
+        var page = WebUtility.HtmlDecode(await action.Content.ReadAsStringAsync(Cancellation));
+        var (_, body) = await Read(browser, "/first-run");
+        using var json = JsonDocument.Parse(body);
+        var setUp = json.RootElement.GetProperty("setUp");
 
-        Assert.Contains("You’re signed in as <strong>@leo.example</strong>", page);
-        Assert.Contains($"<span class=\"first-run-address\" aria-labelledby=\"first-run-address-label\">{Code(BaseUrl)}</span>", page);
-        Assert.Contains(Code("Koan:Web:ApplicationUrl"), page);
-        Assert.DoesNotContain("name=\"code\"", page);
+        Assert.Contains("You’re signed in as <strong>@leo.sylin.org</strong>", page);
+        Assert.Contains(">Set up Leo's Tangent Space</button>", page);
+        // One action: the form holds its token and the button, and nothing to fill or tick.
+        Assert.Equal(1, Regex.Count(page, "<input "));
+        Assert.Contains("<input type=\"hidden\" name=\"__RequestVerificationToken", page);
+        Assert.DoesNotContain(Code(BaseUrl), page);
+        Assert.DoesNotContain(TangentModule.BaseUrlKey, page);
+        Assert.Equal(("Leo's Tangent Space", "leo.sylin.org", $"{BaseUrl}/first-run"),
+            (setUp.GetProperty("name").GetString(), setUp.GetProperty("handle").GetString(), setUp.GetProperty("action").GetString()));
+        Assert.False(json.RootElement.TryGetProperty("baseUrl", out _));
 
-        using var established = await browser.SetUp("Field notes", Cancellation);
+        using var established = await browser.SetUp(Cancellation);
 
         Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
         Assert.Equal("/first-run", established.Headers.Location?.OriginalString);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         Assert.NotNull(space);
-        Assert.Equal(("Field notes", Leo, Leo), (space.Name, space.ProprietorId, space.OperatorId));
+        Assert.Equal(("Leo's Tangent Space", Leo, Leo), (space.Name, space.ProprietorId, space.OperatorId));
         Assert.Equal((Audience.Public, Admission.Join), (space.Audience, space.Admission));
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
         var log = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Select(e => (e.Kind, e.ActorId)).ToList();
-        // The moderators' Tangent is created with the place.
+        // Leo arrived at sign-in; the moderators' Tangent is created with the place.
         Assert.Equal([(EventKind.StandingChanged, Leo), (EventKind.TangentChanged, Leo), (EventKind.SpaceChanged, Leo)], log);
+        // Setting the place up declares nothing about the setter: their kind is still their profile's.
         var participant = await Participant.Get(Leo, Cancellation);
-        Assert.Equal((ParticipantKind.Person, KindSource.OwnChoice, Standing.Admitted, "leo.example"),
+        Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel, Standing.Admitted, "leo.sylin.org"),
             (participant?.Kind, participant?.KindSource, participant?.Standing, participant?.Handle));
         var administrator = await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation);
         Assert.Contains(Leo, administrator!.Members);
 
         using var ready = await browser.Follow(HttpMethod.Get, "/first-run", Cancellation);
-        var pointers = await ready.Content.ReadAsStringAsync(Cancellation);
+        var pointers = WebUtility.HtmlDecode(await ready.Content.ReadAsStringAsync(Cancellation));
         var (descriptorStatus, descriptor) = await Read(tangentSpace, "/tangent.json", "application/json");
         var (visitorStatus, _) = await Read(tangentSpace, "/first-run", "text/html");
 
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
-        Assert.Contains("Field notes is ready", pointers);
-        Assert.Contains(WebUtility.HtmlEncode($"<link rel=\"tangent\" href=\"{BaseUrl}\">"), pointers);
+        Assert.Contains("Leo's Tangent Space is ready", pointers);
+        Assert.Contains($"<link rel=\"tangent\" href=\"{BaseUrl}\">", pointers);
         Assert.Equal(HttpStatusCode.OK, descriptorStatus);
-        Assert.Equal("Field notes", JsonDocument.Parse(descriptor).RootElement.GetProperty("name").GetString());
+        Assert.Equal("Leo's Tangent Space", JsonDocument.Parse(descriptor).RootElement.GetProperty("name").GetString());
         Assert.Equal(HttpStatusCode.NotFound, visitorStatus);
     }
 
     [Fact]
-    public async Task A_pinned_install_shows_anyone_else_who_may_set_it_up_and_no_form()
+    public async Task A_configured_handle_matches_the_verified_handle_with_or_without_its_at_in_any_case()
     {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(PinnedToLeo), ct: Cancellation);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, "@Leo.Sylin.Org")), ct: Cancellation);
+        var (_, visitor) = await Read(tangentSpace, "/first-run", "text/html");
+        using var browser = new Browser(tangentSpace);
+        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org");
+        var (_, body) = await Read(browser, "/first-run");
+        using var json = JsonDocument.Parse(body);
+
+        Assert.Matches(@"Only\s+<strong>@leo\.sylin\.org</strong>\s+can set it up\.", visitor);
+        Assert.Equal("leo.sylin.org", json.RootElement.GetProperty("operator").GetString());
+        Assert.Equal("Leo's Tangent Space", json.RootElement.GetProperty("setUp").GetProperty("name").GetString());
+
+        using var established = await browser.SetUp(Cancellation);
+
+        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
+        Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
+    }
+
+    [Fact]
+    public async Task A_configured_handle_another_account_does_not_hold_shows_it_the_waiting_page_and_refuses_its_post()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, "leo.sylin.org")), ct: Cancellation);
         using var ada = new Browser(tangentSpace);
         using var signedIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
+
+        using var page = await ada.Follow(HttpMethod.Get, "/", Cancellation);
+        var html = await page.Content.ReadAsStringAsync(Cancellation);
+        var (_, body) = await Read(ada, "/first-run");
+        using var json = JsonDocument.Parse(body);
+
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Waiting for its operator</h1>", html);
+        Assert.Contains("You’re signed in as <strong>@ada.example</strong>, and this place is still being set up: check back soon.", html);
+        Assert.Matches(@"Only\s+<strong>@leo\.sylin\.org</strong>\s+can set it up\.", html);
+        Assert.DoesNotContain("first-run-did", html);
+        Assert.DoesNotContain("<form", html);
+        Assert.DoesNotContain("__RequestVerificationToken", html);
+        Assert.Equal("leo.sylin.org", json.RootElement.GetProperty("operator").GetString());
+        Assert.Equal(("ada.example", "leo.sylin.org"),
+            (json.RootElement.GetProperty("waiting").GetProperty("handle").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
+        Assert.False(json.RootElement.TryGetProperty("setUp", out _));
+        // The way out is the frame's account: its menu signs this person out and comes back to first run.
+        var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
+        Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
+        Assert.Contains($"<a class=\"account-item\" href=\"{WebUtility.HtmlEncode(signOut)}\">", html);
+        Assert.Contains($"<a class=\"first-run-switch\" href=\"{WebUtility.HtmlEncode(signOut)}\">Use another account</a>", html);
+
+        // Ada's own agent, posting as her with a bearer, which needs no form token, is refused all the same.
+        using var refused = await AsBearer(tangentSpace, Ada);
+        using var problem = JsonDocument.Parse(await refused.Content.ReadAsStringAsync(Cancellation));
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal("Not yours to set up", problem.RootElement.GetProperty("title").GetString());
+        Assert.Equal($"Only @leo.sylin.org, as {FirstRun.OperatorSetting} names, can set up this Tangent Space.", problem.RootElement.GetProperty("detail").GetString());
+        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
+    }
+
+    [Fact]
+    public async Task A_configured_did_names_its_account_by_the_handle_it_arrived_with_and_lets_only_that_account_set_up()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, Leo)), ct: Cancellation);
+        using var ada = new Browser(tangentSpace);
+        using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
         using var unknown = await ada.Follow(HttpMethod.Get, "/", Cancellation);
         var beforeLeo = await unknown.Content.ReadAsStringAsync(Cancellation);
         using var leo = new Browser(tangentSpace);
         using var leoIn = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example");
 
-        using var page = await ada.Follow(HttpMethod.Get, "/", Cancellation);
-        var html = await page.Content.ReadAsStringAsync(Cancellation);
-        using var asJson = new HttpRequestMessage(HttpMethod.Get, "/first-run");
-        asJson.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var answered = await ada.Client.SendAsync(asJson, Cancellation);
-        using var json = JsonDocument.Parse(await answered.Content.ReadAsStringAsync(Cancellation));
+        using var known = await ada.Follow(HttpMethod.Get, "/", Cancellation);
+        var afterLeo = await known.Content.ReadAsStringAsync(Cancellation);
+        var (_, body) = await Read(ada, "/first-run");
+        using var json = JsonDocument.Parse(body);
 
-        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Waiting for its operator</h1>", html);
         Assert.Matches($@"Only\s+{Regex.Escape(Code(Leo))}\s+can set it up\.", beforeLeo);
-        Assert.Matches($@"Only\s+<strong>@leo\.example</strong> <span class=""first-run-did"">\({Regex.Escape(Code(Leo))}\)</span>\s+can set it up\.", html);
-        Assert.Equal("leo.example", json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString());
-        Assert.DoesNotContain("<form", html);
-        Assert.DoesNotContain("__RequestVerificationToken", html);
-        Assert.Equal(Leo, json.RootElement.GetProperty("operator").GetString());
-        Assert.Equal("ada.example", json.RootElement.GetProperty("waiting").GetProperty("handle").GetString());
-        // The way out is the frame's account: its menu signs this person out and comes back to first run.
-        Assert.Contains("class=\"account-button\"", html);
-        var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
-        Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
-        Assert.Contains($"<a class=\"account-item\" href=\"{WebUtility.HtmlEncode(signOut)}\">", html);
-        Assert.Contains($"<a class=\"first-run-switch\" href=\"{WebUtility.HtmlEncode(signOut)}\">Use another account</a>", html);
-        Assert.Contains("</svg>Sign out</a>", html);
-        Assert.False(json.RootElement.TryGetProperty("form", out _));
-        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-    }
+        Assert.Matches($@"Only\s+<strong>@leo\.example</strong>\s+<span class=""first-run-did"">\({Regex.Escape(Code(Leo))}\)</span>\s+can set it up\.", afterLeo);
+        Assert.Equal((Leo, "leo.example"),
+            (json.RootElement.GetProperty("operator").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
 
-    [Fact]
-    public async Task An_unpinned_install_refuses_a_missing_or_wrong_setup_code_and_accepts_the_one_it_logged()
-    {
-        var lines = new ConcurrentQueue<string>();
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(),
-            services => services.AddSingleton<ILoggerProvider>(new Lines(lines)), Cancellation);
-        var logged = Assert.Single(lines, line => line.StartsWith("Setup code ", StringComparison.Ordinal));
-        var code = SetupCodeLine().Match(logged).Groups["code"].Value;
-        using var browser = new Browser(tangentSpace);
-        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example");
-        using var form = await browser.Follow(HttpMethod.Get, "/first-run", Cancellation);
-        var page = await form.Content.ReadAsStringAsync(Cancellation);
+        using var established = await leo.SetUp(Cancellation);
 
-        Assert.Matches("^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$", code);
-        Assert.Contains("name=\"code\"", page);
-        Assert.DoesNotContain(code, page);
-
-        using var missing = await browser.SetUp("Field notes", Cancellation);
-        using var wrong = await browser.SetUp("Field notes", Cancellation, code: "AAAA-BBBB-CCCC-DDDD");
-        var wrongPage = await wrong.Content.ReadAsStringAsync(Cancellation);
-
-        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
-        Assert.Contains("id=\"first-run-code-failure\">Write the setup code from this Tangent Space’s log.</p>", WebUtility.HtmlDecode(await missing.Content.ReadAsStringAsync(Cancellation)));
-        Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
-        Assert.Contains("id=\"first-run-code-failure\">That is not the setup code", wrongPage);
-        Assert.Matches("<input id=\"first-run-code\"[^>]* autofocus", wrongPage);
-        // The refused code stays in the field, so the sender sees what was refused.
-        Assert.Contains("value=\"AAAA-BBBB-CCCC-DDDD\"", wrongPage);
-        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-
-        // An accepted code with another refusal is said in one line and carried on unseen.
-        using var accepted = await browser.SetUp("Field notes", Cancellation, code: code, accountable: false);
-        var acceptedPage = await accepted.Content.ReadAsStringAsync(Cancellation);
-        Assert.Equal(HttpStatusCode.BadRequest, accepted.StatusCode);
-        Assert.Contains("Setup code accepted.</p>", acceptedPage);
-        Assert.Contains($"<input type=\"hidden\" name=\"code\" value=\"{code}\"", acceptedPage);
-        Assert.DoesNotContain("id=\"first-run-code\"", acceptedPage);
-        Assert.Matches("<input type=\"checkbox\" id=\"first-run-accountable\"[^>]* autofocus", acceptedPage);
-
-        using var right = await browser.SetUp("Field notes", Cancellation, code: code.ToLowerInvariant());
-
-        Assert.Equal(HttpStatusCode.SeeOther, right.StatusCode);
-        Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
-    }
-
-    [Fact]
-    public async Task The_setup_code_reaches_a_log_that_keeps_only_warnings()
-    {
-        var lines = new ConcurrentQueue<string>();
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
-            new Dictionary<string, string?> { ["Logging:LogLevel:Default"] = "Warning" },
-            services => services.AddSingleton<ILoggerProvider>(new Lines(lines)), Cancellation);
-
-        var logged = Assert.Single(lines, line => line.StartsWith("Setup code ", StringComparison.Ordinal));
-
-        Assert.Matches("^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$", SetupCodeLine().Match(logged).Groups["code"].Value);
-        Assert.DoesNotContain(lines, line => line.StartsWith("Tangent Space at ", StringComparison.Ordinal));
+        Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        Assert.Equal(("Leo's Tangent Space", Leo, Leo), (space?.Name, space?.ProprietorId, space?.OperatorId));
     }
 
     [Fact]
     public async Task A_form_kept_open_past_first_run_is_refused_as_already_set_up_for_the_operator_and_answers_missing_to_anyone_else()
     {
-        var lines = new ConcurrentQueue<string>();
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(),
-            services => services.AddSingleton<ILoggerProvider>(new Lines(lines)), Cancellation);
-        var code = SetupCodeLine().Match(Assert.Single(lines, line => line.StartsWith("Setup code ", StringComparison.Ordinal))).Groups["code"].Value;
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
         using var leo = new Browser(tangentSpace);
         using var ada = new Browser(tangentSpace);
         using var leoIn = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example");
         using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example");
         var leoForm = await leo.Token("/first-run", Cancellation);
         var adaForm = await ada.Token("/first-run", Cancellation);
-        using var established = await leo.SetUp("Field notes", Cancellation, code: code);
+        using var established = await leo.SetUp(Cancellation);
         Assert.Equal(HttpStatusCode.SeeOther, established.StatusCode);
         var events = await Event.Count.Exact(Cancellation);
 
-        using var operatorAgain = await Stale(leo, leoForm, "Leo's other place", code, "application/json");
-        using var operatorPage = await Stale(leo, leoForm, "Leo's other place", code, "text/html");
-        using var participant = await Stale(ada, adaForm, "Ada's place", code, "application/json");
-        using var visitor = await tangentSpace.Client.PostAsync("/first-run",
-            new FormUrlEncodedContent(new Dictionary<string, string> { ["name"] = "Anyone's place" }), Cancellation);
+        using var operatorAgain = await Stale(leo, leoForm, "application/json");
+        using var operatorPage = await Stale(leo, leoForm, "text/html");
+        using var participant = await Stale(ada, adaForm, "application/json");
+        using var visitor = await tangentSpace.Client.PostAsync("/first-run", new FormUrlEncodedContent(new Dictionary<string, string>()), Cancellation);
         using var problem = JsonDocument.Parse(await operatorAgain.Content.ReadAsStringAsync(Cancellation));
 
         Assert.Equal(HttpStatusCode.Conflict, operatorAgain.StatusCode);
@@ -257,36 +256,21 @@ public sealed partial class FirstRunTests
         Assert.Contains($"{BaseUrl}/first-run", await operatorPage.Content.ReadAsStringAsync(Cancellation));
         Assert.Equal(HttpStatusCode.NotFound, participant.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, visitor.StatusCode);
-        Assert.Equal(("Field notes", Leo), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId));
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        Assert.Equal(("Leo's Tangent Space", Leo), (space?.Name, space?.OperatorId));
         Assert.Equal(events, await Event.Count.Exact(Cancellation));
     }
 
-    /// <summary>Posts a first-run form the browser kept open, with the token it carried then.</summary>
-    private static async Task<HttpResponseMessage> Stale(Browser browser, Dictionary<string, string> token, string name, string code, string mediaType)
+    /// <summary>Posts the first-run action a browser kept open, with the token it carried then.</summary>
+    private static async Task<HttpResponseMessage> Stale(Browser browser, Dictionary<string, string> token, string mediaType)
     {
-        var fields = new Dictionary<string, string>(token) { ["name"] = name, ["proprietor"] = "me", ["accountable"] = "yes", ["code"] = code };
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/first-run") { Content = new FormUrlEncodedContent(fields) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/first-run") { Content = new FormUrlEncodedContent(token) };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(mediaType));
         return await browser.Client.SendAsync(request, Cancellation);
     }
 
     [Fact]
-    public async Task A_form_without_the_operators_statement_is_refused_inline_and_writes_nothing()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(PinnedToLeo), ct: Cancellation);
-        using var browser = new Browser(tangentSpace);
-        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example");
-
-        using var unstated = await browser.SetUp("Field notes", Cancellation, accountable: false);
-
-        Assert.Equal(HttpStatusCode.BadRequest, unstated.StatusCode);
-        Assert.Contains("id=\"first-run-accountable-failure\">Confirm that you are the person who answers for this place.</p>",
-            await unstated.Content.ReadAsStringAsync(Cancellation));
-        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-    }
-
-    [Fact]
-    public async Task Once_established_a_start_under_another_configured_operator_refuses_naming_both()
+    public async Task Once_established_a_start_under_another_configured_operator_starts_and_warns_once_and_one_naming_the_operator_does_not()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
@@ -295,12 +279,18 @@ public sealed partial class FirstRunTests
                 Assert.IsType<Outcome<TangentSpace>.Done>(await first.Services.GetRequiredService<WriteLoop>()
                     .Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
 
-            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => TangentSpaceFixture.StartAsync(
-                Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, Ada)), ct: Cancellation));
+            var other = new ConcurrentQueue<string>();
+            await using (var second = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, "ada.example")),
+                services => services.AddSingleton<ILoggerProvider>(new Lines(other)), Cancellation))
+                Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
+            var same = new ConcurrentQueue<string>();
+            await using (var third = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, "@Leo.Example")),
+                services => services.AddSingleton<ILoggerProvider>(new Lines(same)), Cancellation))
+                Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
 
-            Assert.Contains($"{FirstRun.OperatorSetting} names {Ada}", refused.Message);
-            Assert.Contains($"operator is {Leo}", refused.Message);
-            Assert.Contains("never transfers the place", refused.Message);
+            var warning = Assert.Single(other, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
+            Assert.Equal($"{FirstRun.OperatorSetting} names ada.example, but this Tangent Space's operator is {Leo}; the setting matters only before setup, so this start ignores it", warning);
+            Assert.DoesNotContain(same, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
         }
         finally
         {
@@ -381,79 +371,32 @@ public sealed partial class FirstRunTests
     }
 
     [Fact]
-    public async Task The_proprietor_can_be_another_participant_by_handle_and_a_handle_that_names_nobody_is_refused()
+    public async Task An_account_its_profile_labels_an_agent_sets_the_place_up_and_keeps_its_kind()
     {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(PinnedToLeo), ct: Cancellation);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var studio = new Participant { Id = "did:plc:studio4example", Handle = "studio.example", Kind = ParticipantKind.Agent };
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(studio), Cancellation));
-        using var browser = new Browser(tangentSpace);
-        using var signedIn = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example");
-        var events = await Event.Count.Exact(Cancellation);
+        var agent = new Participant { Id = Ada, Handle = "ada.example", Kind = ParticipantKind.Agent, KindSource = KindSource.ProfileLabel };
+        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(agent), Cancellation));
 
-        using var nobody = await browser.SetUp("Field notes", Cancellation, proprietorHandle: "nobody.example");
-        var refused = await nobody.Content.ReadAsStringAsync(Cancellation);
+        var outcome = await writer.Send(new Establish(Ada, "ada.example", TangentSpace.NameFor("ada.example")), Cancellation);
 
-        Assert.Equal(HttpStatusCode.BadRequest, nobody.StatusCode);
-        Assert.Contains($"<p class=\"field-failure\" id=\"first-run-handle-failure\">{WebUtility.HtmlEncode(Establish.NoParticipant("nobody.example").TrimEnd('.'))}; they sign in here first.</p>", refused);
-        Assert.Contains("value=\"nobody.example\" aria-invalid=\"true\"", refused);
-        // The page opens on the field in error, and the standing hint gives way to the error that says the same.
-        Assert.Matches("<input id=\"first-run-handle\"[^>]* autofocus", refused);
-        Assert.DoesNotMatch("<input id=\"first-run-name\"[^>]* autofocus", refused);
-        Assert.DoesNotContain("first-run-proprietor-note", refused);
-        Assert.Contains("value=\"Field notes\"", refused);
-        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-        Assert.Equal(events, await Event.Count.Exact(Cancellation));
-
-        using var named = await browser.SetUp("Field notes", Cancellation, proprietorHandle: "@Studio.Example");
-
-        Assert.Equal(HttpStatusCode.SeeOther, named.StatusCode);
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        Assert.Equal((studio.Id, Leo), (space?.ProprietorId, space?.OperatorId));
+        var space = Assert.IsType<Outcome<TangentSpace>.Done>(outcome).Result;
+        Assert.Equal(("Ada's Tangent Space", Ada, Ada), (space.Name, space.ProprietorId, space.OperatorId));
+        var after = await Participant.Get(Ada, Cancellation);
+        Assert.Equal((ParticipantKind.Agent, KindSource.ProfileLabel), (after?.Kind, after?.KindSource));
     }
 
     [Theory]
-    [InlineData(Standing.Admitted, true)]
-    [InlineData(Standing.Banned, false)]
-    public async Task A_handle_two_participants_hold_or_a_banned_participants_names_no_proprietor(Standing standing, bool shared)
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(
-            new Participant { Id = "did:plc:studio4example", Handle = "studio.example", Standing = standing }), Cancellation));
-        if (shared)
-            Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(
-                new Participant { Id = "did:plc:other4example", Handle = "studio.example" }), Cancellation));
-
-        var outcome = await writer.Send(new Establish(Leo, "leo.example", "Field notes", "studio.example"), Cancellation);
-
-        Assert.Equal(shared ? Establish.SharedHandle("studio.example") : Establish.Banned("studio.example"),
-            Assert.IsType<Outcome<TangentSpace>.Refused>(outcome).Reason);
-        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-    }
+    [InlineData("leo.sylin.org", "Leo's Tangent Space")]
+    [InlineData("@ada.bsky.social", "Ada's Tangent Space")]
+    [InlineData("lantern-works.example", "Lantern-works's Tangent Space")]
+    [InlineData("", TangentSpace.PlainName)]
+    public void The_name_is_the_first_label_of_the_handle_capitalised_as_theirs_and_plain_without_one(string handle, string name)
+        => Assert.Equal(name, TangentSpace.NameFor(handle));
 
     [Fact]
-    public async Task An_operator_whose_profile_labels_them_an_agent_stays_a_person_and_one_who_chose_agent_is_refused()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var labelled = new Participant { Id = Leo, Handle = "leo.example", Kind = ParticipantKind.Agent, KindSource = KindSource.ProfileLabel };
-        var chose = new Participant { Id = Ada, Handle = "ada.example", Kind = ParticipantKind.Agent, KindSource = KindSource.OwnChoice };
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(labelled), Cancellation));
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(chose), Cancellation));
-
-        var agent = await writer.Send(new Establish(Ada, "ada.example", "Ada's place"), Cancellation);
-
-        Assert.IsType<Outcome<TangentSpace>.Refused>(agent);
-        Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
-        var captured = await writer.Send(new CaptureProfile(new ProfileAnswer(Leo, "Leo", null, null, AgentLabel: true), DateTimeOffset.UtcNow), Cancellation);
-
-        var operatorRow = Assert.IsType<Outcome<Participant>.Done>(captured).Result;
-        Assert.Equal((ParticipantKind.Person, KindSource.OwnChoice), (operatorRow.Kind, operatorRow.KindSource));
-        Assert.Equal(ParticipantKind.Person, (await Participant.Get(Leo, Cancellation))?.Kind);
-    }
+    public void A_label_too_long_for_a_name_gives_the_plain_one()
+        => Assert.Equal(TangentSpace.PlainName, TangentSpace.NameFor(new string('a', TangentSpace.NameLimit) + ".example"));
 
     [Fact]
     public void The_pointers_carry_the_base_urls_host_and_path_and_a_path_adds_the_proxy_rule()
@@ -550,8 +493,29 @@ public sealed partial class FirstRunTests
         return (response.StatusCode, await response.Content.ReadAsStringAsync(Cancellation));
     }
 
-    [GeneratedRegex("^Setup code (?<code>[0-9A-Z-]+):")]
-    private static partial Regex SetupCodeLine();
+    /// <summary>The page at <paramref name="path"/> as JSON, read by a signed-in browser.</summary>
+    private static async Task<(HttpStatusCode Status, string Body)> Read(Browser browser, string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var response = await browser.Client.SendAsync(request, Cancellation);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync(Cancellation));
+    }
+
+    /// <summary>Posts the first-run action as an agent acting for <paramref name="did"/> does: with a bearer the place's
+    /// issuer minted for it, no session and no form token, following no redirect.</summary>
+    private static async Task<HttpResponseMessage> AsBearer(TangentSpaceFixture tangentSpace, string did)
+    {
+        var token = tangentSpace.Services.GetRequiredService<IIssuer>().Issue(new TrustClaims { Subject = did }, TimeSpan.FromMinutes(5), audience: BaseUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/first-run")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>()),
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) }
+        };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
+        return await agent.SendAsync(request, Cancellation);
+    }
 
     /// <summary>Keeps every formatted log line of the host it is added to.</summary>
     private sealed class Lines(ConcurrentQueue<string> lines) : ILoggerProvider, ILogger

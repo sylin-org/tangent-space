@@ -21,6 +21,20 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>The refusal a name outside the rule meets.</summary>
     public const string NameRule = "Name the Tangent Space in 1 to 120 characters, on one line.";
 
+    /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
+    public const string PlainName = "Tangent Space";
+
+    /// <summary>The name first run gives the place: the first label of the handle the setter's sign-in verified, its
+    /// first letter capitalised, as theirs, so <c>leo.sylin.org</c> sets up "Leo's Tangent Space"; <see cref="PlainName"/>
+    /// where no handle was verified.</summary>
+    public static string NameFor(string handle)
+    {
+        var label = handle.Trim().TrimStart('@').Split('.', 2)[0];
+        if (label.Length == 0) return PlainName;
+        var name = char.ToUpperInvariant(label[0]) + label[1..] + "'s " + PlainName;
+        return name.Length <= NameLimit && !name.Any(char.IsControl) ? name : PlainName;
+    }
+
     public TangentSpace() => Id = SingleRow;
 
     /// <summary>The row first run writes: the name, whose place it is and who answers for it, read by anyone and
@@ -46,10 +60,11 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public string Name { get; set; } = "";
 
-    /// <summary>The participant whose place this is and whose voice fronts it; null until first run declares one.</summary>
+    /// <summary>The participant whose place this is and whose voice fronts it: whoever set it up at first run; null
+    /// until then.</summary>
     public string? ProprietorId { get; set; }
 
-    /// <summary>The accountable person, declared at first run; null until then.</summary>
+    /// <summary>Who answers for the place: whoever set it up at first run; null until then.</summary>
     public string? OperatorId { get; set; }
 
     /// <summary>The slug of the moderators' own Tangent, where a report starts a Topic (<see cref="ModeratorsTangent"/>);

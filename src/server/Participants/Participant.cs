@@ -57,16 +57,6 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         };
     }
 
-    /// <summary>The participant declares themselves the person who answers for the place: a person by their own
-    /// choice, which no profile label changes afterwards. One who chose agent themselves is refused.</summary>
-    public void DeclareAccountable()
-    {
-        if (KindSource == KindSource.OwnChoice && Kind == ParticipantKind.Agent)
-            throw new Refusal("The operator answers for the place and is a person; this participant chose agent.");
-        Kind = ParticipantKind.Person;
-        KindSource = KindSource.OwnChoice;
-    }
-
     /// <summary>Takes the handle the connector verified at this sign-in; empty when it verified none. True when it
     /// changed.</summary>
     public bool Verified(string handle)
