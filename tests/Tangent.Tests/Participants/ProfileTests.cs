@@ -5,6 +5,7 @@ using Koan.Identity.Roles;
 using Koan.Web.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Delegates;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Writer;
@@ -50,7 +51,8 @@ public sealed class ProfileTests
             (profile.GetProperty("id").GetString(), profile.GetProperty("handle").GetString(), profile.GetProperty("name").GetString(),
                 profile.GetProperty("displayName").GetString(), profile.GetProperty("description").GetString(), profile.GetProperty("avatar").GetString(),
                 profile.GetProperty("kind").GetString(), profile.GetProperty("address").GetString()));
-        Assert.Equal(["Administrator"], Strings(profile.GetProperty("roles")));
+        // Signing in joined Leo to the member role besides the administrator role he was given.
+        Assert.Equal(["Administrator", "Member"], Strings(profile.GetProperty("roles")));
         Assert.NotEqual(JsonValueKind.Null, profile.GetProperty("arrived").ValueKind);
         // Newest first, the studio's Topic and the removed one absent, nothing counted.
         Assert.Equal([reply.Id, open.Id], Ids(profile));
@@ -62,7 +64,7 @@ public sealed class ProfileTests
 
         var html = await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle);
         Assert.Contains("Builds places to talk.", html.Body);
-        Assert.Contains("<span class=\"profile-roles\">Administrator</span>", html.Body);
+        Assert.Contains("<span class=\"profile-roles\">Administrator, Member</span>", html.Body);
         Assert.Contains("Lanterns at dusk", html.Body);
         Assert.DoesNotContain("The kiln budget", html.Body);
         Assert.DoesNotContain(secret.Id, html.Body);
@@ -172,9 +174,12 @@ public sealed class ProfileTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
         // Koan keeps grants that expired; more of them than the profile reads, stored before the live one, leave it listed.
-        for (var index = 0; index < Delegates.Approved.Limit + 10; index++)
-            await new AgentGrant { Subject = Ada, Capability = "mcp:grant:expired:" + index, Resource = BaseUrl, ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) }
-                .Save(Cancellation);
+        for (var index = 0; index < Approved.Limit + 10; index++)
+            await new AgentGrant
+            {
+                Subject = Ada, Capability = "mcp:grant:expired:" + index, Resource = BaseUrl, ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1),
+                IssuedAt = DateTimeOffset.UtcNow.AddDays(-31), ClientId = DelegateClient.Id
+            }.Save(Cancellation);
         var bearer = await Delegate(tangentSpace, ada);
         const string own = "/p/" + AdaHandle;
 
@@ -184,12 +189,13 @@ public sealed class ProfileTests
         var agents = mine.Json.GetProperty("delegates").GetProperty("agents");
         Assert.Equal(1, agents.GetArrayLength());
         Assert.Equal(grant.Id, agents[0].GetProperty("id").GetString());
-        var approved = agents[0].GetProperty("approved").GetDateTimeOffset();
-        Assert.InRange(approved, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddMinutes(1));
+        Assert.Equal(grant.IssuedAt, agents[0].GetProperty("approved").GetDateTimeOffset());
+        Assert.Equal((DelegateClient.Name, false), (agents[0].GetProperty("client").GetString(), agents[0].GetProperty("selfNamed").GetBoolean()));
         var revoke = new Uri(agents[0].GetProperty("revoke").GetString()!).AbsolutePath;
         Assert.Equal($"{own}/delegates/{grant.Id}/revoke", revoke);
         var page = await Send(ada.Client, HttpMethod.Get, own);
         Assert.Contains("Agents acting as you", page.Body);
+        Assert.Contains($"<span class=\"profile-delegate-name\">{DelegateClient.Name}</span>", page.Body);
         Assert.Contains("<summary class=\"post-remove-toggle\">Revoke</summary>", page.Body);
 
         // Nobody else sees them: another participant, a visitor, nor Ada's own delegate reading as her.
@@ -212,6 +218,28 @@ public sealed class ProfileTests
         Assert.Null(await AgentGrant.Get(grant.Id, Cancellation));
         Assert.Equal(0, (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates").GetProperty("agents").GetArrayLength());
         Assert.Contains("No agent acts as you here.", (await Send(ada.Client, HttpMethod.Get, own)).Body);
+    }
+
+    [Fact]
+    public async Task Each_approval_of_the_same_client_is_its_own_row_and_revokes_alone()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        await Delegate(tangentSpace, ada);
+        await Delegate(tangentSpace, ada);
+        const string own = "/p/" + AdaHandle;
+
+        var agents = (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates").GetProperty("agents");
+        Assert.Equal(2, agents.GetArrayLength());
+        Assert.True(agents[0].GetProperty("approved").GetDateTimeOffset() >= agents[1].GetProperty("approved").GetDateTimeOffset());
+        var newest = agents[0].GetProperty("id").GetString()!;
+
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, own, new Uri(agents[0].GetProperty("revoke").GetString()!).AbsolutePath, new Dictionary<string, string>())).Status);
+
+        var left = (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates").GetProperty("agents");
+        Assert.Equal(1, left.GetArrayLength());
+        Assert.NotEqual(newest, left[0].GetProperty("id").GetString());
     }
 
     [Fact]

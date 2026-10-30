@@ -35,10 +35,18 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// <summary>Why the standing is what it is, in the moderator's words.</summary>
     public string? StandingNote { get; set; }
 
-    /// <summary>The participant a person becomes at their first sign-in: a person until their profile says
-    /// otherwise, with the standing the place's admission gives — admitted where it says join, applied where it says
-    /// apply.</summary>
-    public static Participant Arrive(string personId, string handle, Admission admission)
+    /// <summary>When the participant applied, while their application is waiting or declined; null once they are
+    /// admitted, and for everyone who joined. The applications list reads it newest first.</summary>
+    [Index(Name = "ix_participant_applications")]
+    public DateTimeOffset? AppliedAt { get; set; }
+
+    /// <summary>The refusal a decision meets for a participant whose standing is not an application's.</summary>
+    public const string NotAnApplication = "Only an application waiting or declined is decided.";
+
+    /// <summary>The participant a person becomes at their first sign-in, at <paramref name="at"/>: a person until their
+    /// profile says otherwise, with the standing the place's admission gives — admitted where it says join, applied where
+    /// it says apply, from then.</summary>
+    public static Participant Arrive(string personId, string handle, Admission admission, DateTimeOffset? at = null)
     {
         if (!personId.StartsWith("did:", StringComparison.Ordinal))
             throw new Refusal("A participant signs in with an atproto identity, so the person's id is a DID.");
@@ -53,8 +61,32 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
                 Admission.Join => Standing.Admitted,
                 Admission.Apply => Standing.Applied,
                 _ => throw new Refusal($"The place's admission {admission} admits no one.")
-            }
+            },
+            AppliedAt = admission == Admission.Apply ? at ?? DateTimeOffset.UtcNow : null
         };
+    }
+
+    /// <summary>Admits an applicant, waiting or declined: they stand admitted and their application is closed. False,
+    /// with nothing changed, for one already admitted; a timed-out or banned participant is refused with
+    /// <see cref="NotAnApplication"/>.</summary>
+    public bool Admit()
+    {
+        if (Standing == Standing.Admitted) return false;
+        if (Standing is not (Standing.Applied or Standing.Declined)) throw new Refusal(NotAnApplication);
+        Standing = Standing.Admitted;
+        AppliedAt = null;
+        return true;
+    }
+
+    /// <summary>Declines a waiting application: the applicant keeps reading what a visitor reads, the application stays
+    /// listed as declined, and a later <see cref="Admit"/> reverses it. False, with nothing changed, for one already
+    /// declined; anyone else is refused with <see cref="NotAnApplication"/>.</summary>
+    public bool Decline()
+    {
+        if (Standing == Standing.Declined) return false;
+        if (Standing != Standing.Applied) throw new Refusal(NotAnApplication);
+        Standing = Standing.Declined;
+        return true;
     }
 
     /// <summary>Takes the handle the connector verified at this sign-in; empty when it verified none. True when it

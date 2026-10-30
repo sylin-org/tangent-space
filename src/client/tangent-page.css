@@ -798,6 +798,26 @@
   cursor: pointer;
 }
 
+/* The applications in the place's settings: each an Offer's line, with Admit and Decline, which opens in place to
+   say what declining leaves. */
+.applications {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.application-decline > summary {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+  cursor: pointer;
+}
+
+.application-decline[open] {
+  flex-basis: 100%;
+}
+
 /* The way to older Topics and back. */
 .topic-pages {
   margin-top: 20px;

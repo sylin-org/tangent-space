@@ -3,9 +3,9 @@ using Tangent.Writer;
 
 namespace Tangent.Space;
 
-/// <summary>The one settings row: the name of the place, whose place it is, who answers for it, where it answers when
-/// no URL is configured, who may read and how one joins, and how it looks. It exists once first run establishes it;
-/// until then the place reads as <see cref="Unestablished"/>.</summary>
+/// <summary>The one settings row: the name of the place and the line that describes it, whose place it is, who answers
+/// for it, where it answers when no URL is configured, who may read and how one joins, and how it looks. It exists once
+/// first run establishes it; until then the place reads as <see cref="Unestablished"/>.</summary>
 public sealed class TangentSpace : Entity<TangentSpace>
 {
     /// <summary>The identity of the single row.</summary>
@@ -22,6 +22,15 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     /// <summary>The refusal a name outside the rule meets.</summary>
     public const string NameRule = "Name the Tangent Space in 1 to 120 characters, on one line.";
+
+    /// <summary>The longest description a place takes: the line under its name on the door.</summary>
+    public const int DescriptionLimit = 300;
+
+    /// <summary>The refusal a description outside the rule meets.</summary>
+    public const string DescriptionRule = "Describe the Tangent Space in at most 300 characters.";
+
+    /// <summary>The refusal an admission other than join or apply meets.</summary>
+    public const string AdmissionRule = "A newcomer joins at once or applies and waits: choose join or apply.";
 
     /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
     public const string PlainName = "Tangent Space";
@@ -42,18 +51,22 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>The row first run writes: the name, whose place it is and who answers for it, read by anyone and
     /// joined at once, with the moderators' Tangent first run creates beside it.</summary>
     public static TangentSpace Establish(string name, string proprietorId, string operatorId, string moderatorsTangentId)
-    {
-        var trimmed = name.Trim();
-        if (trimmed.Length is 0 or > NameLimit || trimmed.Any(char.IsControl)) throw new Refusal(NameRule);
-        return new TangentSpace
+        => new()
         {
-            Name = trimmed,
+            Name = Named(name),
             ProprietorId = proprietorId,
             OperatorId = operatorId,
             ModeratorsTangentId = moderatorsTangentId,
             Audience = Audience.Public,
             Admission = Admission.Join
         };
+
+    /// <summary>The name as the row keeps it, trimmed, or a refusal with <see cref="NameRule"/>.</summary>
+    private static string Named(string name)
+    {
+        var trimmed = name.Trim();
+        if (trimmed.Length is 0 or > NameLimit || trimmed.Any(char.IsControl)) throw new Refusal(NameRule);
+        return trimmed;
     }
 
     /// <summary>How the place reads before first run: unnamed, with the audience and admission it will be established
@@ -61,6 +74,10 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public static TangentSpace Unestablished() => new() { Name = Unnamed };
 
     public string Name { get; set; } = "";
+
+    /// <summary>What the place is, in a line: shown under its name on the door; empty until its proprietor writes
+    /// one.</summary>
+    public string Description { get; set; } = "";
 
     /// <summary>The participant whose place this is and whose voice fronts it: whoever set it up at first run; null
     /// until then.</summary>
@@ -88,7 +105,7 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>Who may read: anyone, or participants the place admitted.</summary>
     public Audience Audience { get; set; } = Audience.Public;
 
-    /// <summary>How a participant becomes a member of a private place, or of a members-only Tangent.</summary>
+    /// <summary>How a newcomer arrives: joining at once, or applying and waiting until someone admits them.</summary>
     public Admission Admission { get; set; } = Admission.Join;
 
     /// <summary>Whether a newly admitted participant's Posts wait for approval.</summary>
@@ -97,6 +114,21 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public Appearance Appearance { get; set; } = new();
 
     public Slots Slots { get; set; } = new();
+
+    /// <summary>Renames and describes the place and sets how a newcomer arrives, a change to the row, or refuses with
+    /// <see cref="NameRule"/> or <see cref="DescriptionRule"/>; the name and the description are kept trimmed. Answers
+    /// whether anything changed.</summary>
+    public bool Change(string name, string description, Admission admission)
+    {
+        var named = Named(name);
+        var described = description.Trim();
+        if (described.Length > DescriptionLimit) throw new Refusal(DescriptionRule);
+        if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
+        if (Name == named && Description == described && Admission == admission) return false;
+        (Name, Description, Admission) = (named, described, admission);
+        Version = checked(Version + 1);
+        return true;
+    }
 
     /// <summary>Records the moderators' Tangent of a place established without one, a change to the row.</summary>
     public void RecordModerators(string tangentId)

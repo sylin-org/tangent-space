@@ -8,12 +8,12 @@ The operator, on their own computer or a hosted machine.
 
 | Step | What happens | State |
 | --- | --- | --- |
-| Get the tree | The README says what Tangent Space is and points at the documents. It doesn't say how to run one. | missing: a short "Run your own" section (package 5.6) |
+| Get the tree | The README says what Tangent Space is, points at the documents, and says how to run one: what it needs, `publish` then `launch` or `docker compose up -d`, and Sign in with Bluesky. | works (5.6) |
 | Build from a fresh clone | `scripts/prepare-framework.ps1` clones Koan from GitHub at the pinned revision. That revision has not been pushed, so a fresh clone cannot build. | missing: Koan's `dev` pushed (Leo's word) |
 | Start it | `pwsh scripts/tangent.ps1 publish`, then `launch`: one executable, one data folder, port 5220. Or `docker compose up -d`. Neither asks for an address. | works |
 | First visit | One button, **Sign in with Bluesky**; the account chooser is Bluesky's own. Accounts on another server sign in by handle, behind "Use another server". | works (1.14) |
 | Setting up | The first sign-in, or the account `Tangent:Operator` names, sets the place up. It is named from the handle ("Leo's Tangent Space"); the setter becomes proprietor, operator and administrator; they land on the ready page. | works (1.12, 1.14) |
-| The ready page | It prints the three pointers a site places to point at the Tangent Space. On a loopback address no site can use them: the DNS record reads `_tangent.127.0.0.1`. | friction: show them once the place has a public address, and say so until then (package 5.6) |
+| The ready page | On a public address it prints the three pointers a site places to point at the Tangent Space. On a loopback address it prints none and says they appear once the place answers at its public address, which it will offer. | works (5.6) |
 | The address | It is learned from the address setup happens on. When the place is reached at a public `https` address while its own is local, the operator's door offers it: Use it, or Not this one. A proxy on the same machine is believed as it is. | works (1.13) |
 
 ## 2 · Shaping the place
@@ -22,14 +22,14 @@ The proprietor and the people they trust.
 
 | Step | What happens | State |
 | --- | --- | --- |
-| The first door after setup | One Tangent, the private moderators' Tangent, and "Nothing written here yet". There is nowhere public to talk, and anyone else who signs in sees no Tangent at all. | missing: a first Tangent made at setup (package 5.6) |
+| The first door after setup | Two Tangents: *General*, public and of discussions, made at setup, and the private moderators' Tangent. Anyone else who signs in joins the member role and starts Topics in General at once; a participant who arrived before that joins it at their next sign-in. | works (5.2) |
 | Create a Tangent | **New Tangent** on the door's rail and in the Tangent switcher, for whoever holds `ManageSpace`: one field, the name; the rest defaulted behind one quiet disclosure. | works (5.5); on a phone the door hides its rail, so New Tangent is reached from a Tangent's switcher, held for the polish stage |
 | A Tangent's name, description, kind, order and audience | **Settings** on a Tangent's page, for whoever holds `ManageTangent` or `ManageSpace`: the name (its address stays), description, default kind and audience; moving it among the others needs `ManageSpace`. The moderators' Tangent keeps its access. | works (5.5) |
-| The place's name and description | Set from the handle at setup; nothing changes them. | missing (package 5.6) |
+| The place's name and description | Named from the handle at setup; **Settings** in the account menu, for whoever holds `ManageSpace`, renames it and writes the line under its name on the door. | works (5.6) |
 | Appearance: accent, light or dark | Each reader picks System, Light or Dark for themselves; the place has no accent of its own. | missing (slice 9) |
 | Roles and permissions | Seeded roles: `everyone`, member, moderator, administrator. Setup makes the proprietor an administrator, and nothing makes anyone a moderator. | missing: making a participant a moderator or an administrator, then the role editor (packages 5.3, 5.1) |
 | The people here | No directory, and no time-out or ban. | missing (package 5.3) |
-| Admission | Anyone who signs in joins. The place can't be made apply-to-join, and new accounts can't be held for approval. | missing (package 5.2) |
+| Admission | **Admission** in the place's settings, for whoever holds `ManageSpace`: join at once, the default, or apply and wait, each said in a sentence. On a place that says apply, a newcomer who signs in reads what a visitor reads, posts nothing, and their door says their application is waiting. Whoever holds `ManageStanding` finds them under **Applications**, newest first, and admits or declines each in the page, the decline confirmed inline; the applicant's door then says who admitted them, or that it was declined, and a declined one can still be admitted. | works (5.2); friction: nothing tells a decider that someone waits until they open Applications (notifications, 6.1); holding new accounts' Posts for approval is missing (its FEATURES row) |
 | Reports | A report reaches the private moderators' Tangent, taken on a tangent from the Post. | works (2.8); its readers today are the administrators alone, until moderators can be named |
 
 ## 3 · Taking part

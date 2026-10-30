@@ -92,11 +92,14 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | The role editor island over Koan's roles: Discord's model, members, permissions; the overwrites editor per Tangent | settings roles, tangent access | `RolesPanel` (harvest), `RoleUiController` rules (harvest) | `Sylin.Koan.Identity.Web` | M | todo |
-| Join or apply; standing; the one knob "new accounts post after approval", age from the DID | settings people, door | `SpaceAdmission`, `Admission` (harvest) | — | S | todo |
+| Join or apply, set at `/settings/admission`; every admitted participant in the member role, joined after the commit that admits them and at every sign-in where it is missing; the applications at `/settings/applications` for whoever holds `ManageStanding`, admitted or declined inline, each a `standing.changed` that targets the applicant; the applicant's door says where they stand | Tangent Space settings (admission, applications), door | `SpaceAdmission`, `SpaceAdmissionController`, `SpaceJoining` (harvest) | — | S | done |
+| The one knob "new accounts post after approval": a new account's Posts held until approved. Needs the account's age, which neither the profile the tree reads nor Koan's atproto connector exposes (a `did:plc`'s first operation in the PLC directory's audit log holds it; a `did:web` has none), and a held state on a Post with a place to approve it | settings people | — | atproto account age | M | todo |
 | People directory with seek cursors; time out, ban and lift inline | settings people | `TangentMemberDirectory`, `Restrictions`, `ParticipantActions` (harvest) | — | S | todo |
 | Participant profile: the PDS profile, roles, posts here, the person's grants from Koan with an inline revoke; Connections join it with slice 3 | profile | `ProfilePanel`, `ParticipantAvatar` (harvest) | `Sylin.Koan.Identity`, `Sylin.Koan.Web.Auth.Server` | S | done |
 | Creating a Tangent: New Tangent on the door and in the switcher for whoever holds `ManageSpace`; the name alone, the slug derived, everything else a quiet default | new tangent | `NewTangentPanel` (harvest) | — | S | done |
 | Tangent settings: name, description, default kind, order, and the audience as the `everyone` overwrite; the moderators' Tangent's audience and order fixed | tangent settings | `TopicSettingsPanel`, `AccessPanel` (harvest) | — | S | done |
+| The place's settings (general) at `/settings`, offered in the account menu to whoever holds `ManageSpace`: the place's name and description, `space.changed` on a change; the sections' frame the later settings join | Tangent Space settings (general) | new | — | S | done |
+| A first Tangent at setup: first run creates *General*, public and of discussions, beside the moderators' Tangent, so the place can be talked in from its first minute | door | new | — | S | done |
 
 ### 6 · Attention
 
@@ -133,7 +136,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 ## Screens
 
-The visual loop runs on each, at 1440, 1024 and 390, in light and dark: door signed-out, door signed-in, tangent (discussions), tangent (articles), topic, article, article editor, new topic, new Tangent, profile, notifications, search, sign-in, consent, first-run, bring your agent, Tangent Space settings (general, appearance, tangents, people, roles, export), Tangent settings (details, access), connections. Current scores live in [SCREENS](SCREENS.md) once the first screen passes.
+The visual loop runs on each, at 1440, 1024 and 390, in light and dark: door signed-out, door signed-in, tangent (discussions), tangent (articles), topic, article, article editor, new topic, new Tangent, profile, notifications, search, sign-in, consent, first-run, bring your agent, Tangent Space settings (general, admission, applications, appearance, tangents, people, roles, export), Tangent settings (details, access), connections. Current scores live in [SCREENS](SCREENS.md) once the first screen passes.
 
 ## Not built
 

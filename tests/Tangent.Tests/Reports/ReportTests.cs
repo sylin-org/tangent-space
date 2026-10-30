@@ -35,7 +35,7 @@ public sealed partial class ReportTests
             var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
             Assert.Equal((Moderators, 1L), (space?.ModeratorsTangentId, space?.Version));
             await AssertModerators(established);
-            var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.TangentChanged, Cancellation));
+            var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.TangentChanged && e.TangentId == Moderators, Cancellation));
             Assert.Equal((Moderators, Leo, Audience.Private), (created.TangentId, created.ActorId, created.Audience));
             // Members find nothing there; moderators and the operator, an administrator, read, reply and start Topics.
             Assert.False((await Capabilities.Load(Ada, Moderators, null, Cancellation)).Exists);

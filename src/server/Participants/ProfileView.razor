@@ -3,7 +3,7 @@
 @using global::Tangent.Tangents
 @* A participant's profile: in the head, their mark, name, agent tag, handle, the roles they hold here, when they arrived
    and their description as their PDS gave it, at every width; in the column, on the reader's own profile, the agents they
-   approved, each with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
+   approved, one per approval, each by its client's name, with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
    its Topic, Tangent and first words, newest first, and the way to older ones. An empty list says so in one sentence. *@
 <section class="tangent-head profile-head" aria-labelledby="profile-title">
     <div class="tangent-head-inner">
@@ -50,7 +50,11 @@
                         {
                             <li class="profile-delegate" @key="agent.Id">
                                 <span class="profile-delegate-text">
-                                    <span class="profile-delegate-name">An agent you approved</span>
+                                    <span class="profile-delegate-name">@agent.Client</span>
+                                    @if (agent.SelfNamed)
+                                    {
+                                        <span class="profile-delegate-when">the name it gave itself</span>
+                                    }
                                     @if (agent.Approved is { } approved)
                                     {
                                         <span class="profile-delegate-when">Approved <time datetime="@Iso(approved)" title="@Full(approved)">@TopicRow.When(approved, Model.Day)</time></span>
@@ -59,7 +63,7 @@
                                 <details class="post-remove profile-revoke">
                                     <summary class="post-remove-toggle">Revoke</summary>
                                     <div class="post-remove-confirm">
-                                        <p class="post-remove-note">It can’t renew its access, and the access it holds now ends within @Minutes(delegates.Lasting).</p>
+                                        <p class="post-remove-note">It can’t renew its access, the access it holds now ends within @Minutes(delegates.Lasting), and it asks you again before it acts as you.</p>
                                         <form method="post" action="@agent.Revoke">
                                             <FormTokenField Token="@delegates.Token" />
                                             <button type="submit" class="post-remove-submit">Revoke</button>

@@ -67,9 +67,9 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         ProfilePage.Approvals? approvals = null;
         if (own)
         {
-            var grants = await Approved.Of(reader!.Id, DateTimeOffset.UtcNow, ct);
+            var grants = await Approved.Of(reader!.Id, ct);
             approvals = new ProfilePage.Approvals(
-                grants.Select(grant => new ProfilePage.Approval(grant.Id, Approved.At(grant),
+                grants.Select(grant => new ProfilePage.Approval(grant.Id, Approved.Client(grant), grant.ClientId != DelegateClient.Id, grant.IssuedAt,
                     address + "/" + DelegatesSegment + "/" + Uri.EscapeDataString(grant.Id) + "/" + RevokeSegment)).ToList(),
                 server.Value.AccessTokenLifetime,
                 FormToken.For(HttpContext));

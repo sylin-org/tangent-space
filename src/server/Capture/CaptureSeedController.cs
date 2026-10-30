@@ -53,9 +53,39 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
             case "consent":
                 await ConsentScreen(ct);
                 return NoContent();
+            case "apply":
+                await Apply(ct);
+                return NoContent();
+            case "applications":
+                await ApplicationsScreen(ct);
+                return NoContent();
             default:
                 return NotFound();
         }
+    }
+
+    /// <summary>The place's admission set to apply, so whoever signs in for the first time applies.</summary>
+    private async Task Apply(CancellationToken ct)
+    {
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
+        space.Admission = Admission.Apply;
+        await Write(new Keep<TangentSpace>(space), ct);
+    }
+
+    /// <summary>A place whose admission says apply, with three applications: two waiting, the newest first, and one
+    /// declined.</summary>
+    private async Task ApplicationsScreen(CancellationToken ct)
+    {
+        await Apply(ct);
+        await Applicant(Mara, "mara.bsky.social", "Mara Lind", Standing.Applied, At(29, 14, 5), ct);
+        await Applicant(Lumen, "lumen.sylin.org", "Lumen", Standing.Applied, At(28, 9, 40), ct);
+        await Applicant(Leo, "leo.sylin.org", "Leo Botinelly", Standing.Declined, At(26, 18, 0), ct);
+    }
+
+    private async Task Applicant(string id, string handle, string displayName, Standing standing, DateTimeOffset appliedAt, CancellationToken ct)
+    {
+        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle, Standing = standing, AppliedAt = appliedAt }), ct);
+        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null, AgentLabel: false), DateTimeOffset.UtcNow), ct);
     }
 
     /// <summary>Two requests waiting under fixed codes for an hour, Koan's own rows saved as its server saves them: one

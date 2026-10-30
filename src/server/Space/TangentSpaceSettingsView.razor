@@ -1,0 +1,85 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* The place's settings, general: the sections of the settings in the rail, this one marked, and in one panel beside
+   them the form that names the place and writes the line under its name on the door. A reader
+   who may not change them reads why above the form, whose fields are read-only and which has no button, and a visitor
+   the way to sign in; a refusal of a field shows under that field, and any other above the form. *@
+<div class="layout layout-settings">
+    <SettingsRail Sections="@Model.Sections" />
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="space-settings-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="space-settings-heading" class="sign-in-title">@Current</h1>
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="space-settings-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else if (Model.Failure is { } failure)
+                {
+                    <p class="sign-in-failure" id="space-settings-failure" role="alert">@failure</p>
+                }
+                <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Mutable ? "submitting" : null)">
+                    <FormTokenField Token="@Model.Token" />
+                    <div class="field">
+                        <label class="field-label" for="space-settings-name">Name</label>
+                        <span class="field-input">
+                            <input id="space-settings-name" name="@TangentSpaceSettingsController.NameField" type="text" required
+                                   maxlength="@TangentSpace.NameLimit" autocomplete="off" readonly="@(!Mutable)" value="@Model.Name"
+                                   autofocus="@(Model.NameFailure is not null)" aria-invalid="@(Model.NameFailure is null ? "false" : "true")"
+                                   aria-describedby="@(Model.NameFailure is null ? null : "space-settings-name-failure")">
+                        </span>
+                        @if (Model.NameFailure is { } nameFailure)
+                        {
+                            <p class="field-failure" id="space-settings-name-failure">@nameFailure</p>
+                        }
+                    </div>
+                    <div class="field">
+                        <label class="field-label" for="space-settings-description">Description</label>
+                        <textarea class="post-form-body post-form-short" id="space-settings-description" name="@TangentSpaceSettingsController.DescriptionField"
+                                  rows="2" maxlength="@TangentSpace.DescriptionLimit" readonly="@(!Mutable)"
+                                  autofocus="@(Model.DescriptionFailure is not null)"
+                                  aria-invalid="@(Model.DescriptionFailure is null ? "false" : "true")"
+                                  aria-describedby="@(Model.DescriptionFailure is null ? "space-settings-description-note" : "space-settings-description-failure space-settings-description-note")">@Model.Description</textarea>
+                        @if (Model.DescriptionFailure is { } descriptionFailure)
+                        {
+                            <p class="field-failure" id="space-settings-description-failure">@descriptionFailure</p>
+                        }
+                        <p class="post-form-note" id="space-settings-description-note">The line under its name on the door.</p>
+                    </div>
+                    @if (Mutable)
+                    {
+                        <div class="post-form-actions">
+                            <a class="post-form-cancel" href="@Model.Door">Back to the door</a>
+                            <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Saving…">Save</button>
+                        </div>
+                    }
+                </form>
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TangentSpaceSettingsPage Model { get; set; } = default!;
+
+    /// <summary>Whether the reader may change the settings here.</summary>
+    private bool Mutable => Model.Gate is null;
+
+    /// <summary>The section the page shows.</summary>
+    private string Current => Model.Sections.FirstOrDefault(section => section.Current)?.Name ?? TangentSpaceSettingsController.General;
+
+    /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
+    /// a visitor signs in.</summary>
+    public static Frame Frame(TangentSpaceSettingsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Settings")], page.Who, page.SignIn);
+}

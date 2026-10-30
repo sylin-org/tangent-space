@@ -13,11 +13,13 @@ public sealed record Poll(long Since, long Through, bool More, IReadOnlyList<Pol
 {
     /// <summary>One row of the log as the stream and the poll send it: its sequence, what happened, the Tangent, Topic and
     /// Post it happened to, who did it and whom it concerns, the Post's version, when, the audience a Tangent has
-    /// after a <see cref="EventKind.TangentChanged"/>, and the Offer an <see cref="EventKind.OfferMade"/> made.</summary>
+    /// after a <see cref="EventKind.TangentChanged"/>, the Offer an <see cref="EventKind.OfferMade"/> made, and the
+    /// standing a decision left its target with, on a <see cref="EventKind.StandingChanged"/> that admitted or declined
+    /// them.</summary>
     public sealed record Row(long Seq, string Kind, string? Tangent, string? Topic, string? Post, string? Actor, string? Target,
-        long? Version, DateTimeOffset At, Audience? Audience, string? Offer = null)
+        long? Version, DateTimeOffset At, Audience? Audience, string? Offer = null, Participants.Standing? Standing = null)
     {
         public static Row Of(Event row) => new(row.Seq, row.Kind, row.TangentId, row.TopicId, row.PostId, row.ActorId, row.TargetId,
-            row.Version, row.At, row.Audience, row.OfferId);
+            row.Version, row.At, row.Audience, row.OfferId, row.Standing);
     }
 }

@@ -52,10 +52,15 @@ public sealed class Event : Entity<Event>
     /// <summary>The Offer made, on <see cref="EventKind.OfferMade"/>.</summary>
     public string? OfferId { get; set; }
 
+    /// <summary>The standing a decision left its target with, on <see cref="EventKind.StandingChanged"/> when someone
+    /// admitted them or declined their application.</summary>
+    public Participants.Standing? Standing { get; set; }
+
     /// <summary>The next row of the log, numbered from the mark the writer holds for the running command.</summary>
     public static Event Next(Sequences sequences, string kind, DateTimeOffset at,
         string? tangentId = null, string? topicId = null, string? postId = null, string? actorId = null,
-        string? targetId = null, long? version = null, Audience? audience = null, string? offerId = null)
+        string? targetId = null, long? version = null, Audience? audience = null, string? offerId = null,
+        Participants.Standing? standing = null)
     {
         var seq = sequences.Next(Log);
         return new Event
@@ -71,7 +76,8 @@ public sealed class Event : Entity<Event>
             Version = version,
             At = at,
             Audience = audience,
-            OfferId = offerId
+            OfferId = offerId,
+            Standing = standing
         };
     }
 }

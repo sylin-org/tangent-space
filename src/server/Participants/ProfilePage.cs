@@ -45,13 +45,15 @@ public sealed record ProfilePage(
     public sealed record Written(string Id, string Kind, string Topic, string Tangent, string TangentAddress, string Address, string Line,
         DateTimeOffset At);
 
-    /// <summary>The agents the reader approved on the consent page that may still act as them, newest first, each with
-    /// when they approved it and the form that revokes it; <see cref="Lasting"/> is how long an agent keeps the access it
+    /// <summary>The agents the reader approved on the consent page that may still act as them, one per approval, newest
+    /// first, each with its client's name, when they approved it and the form that revokes it; <see cref="Lasting"/> is how long an agent keeps the access it
     /// already holds once its approval is revoked, and <see cref="Token"/> the forms' antiforgery token.</summary>
     public sealed record Approvals(IReadOnlyList<Approval> Agents, TimeSpan Lasting, FormToken Token);
 
-    /// <summary>One approval: its id, when it was given where that is known, and where its revoke form posts.</summary>
-    public sealed record Approval(string Id, DateTimeOffset? Approved, string Revoke);
+    /// <summary>One approval: its id; its client's name, what the client registered, or its client id where it registered
+    /// none, which is <see cref="SelfNamed"/> where a client registered itself rather than being this place's own shared
+    /// client; when it was given; and where its revoke form posts.</summary>
+    public sealed record Approval(string Id, string Client, bool SelfNamed, DateTimeOffset? Approved, string Revoke);
 
     /// <summary>A participant's profile address under the base URL in force: by their handle, or by their DID where they have
     /// none.</summary>
