@@ -117,6 +117,19 @@ Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1
 
 Parallel once slice 1 lands: 2.1 and 2.2 together; then 2.3, 2.4 and 2.5; then 2.6 and 2.7; 2.8 last.
 
+## Slice 5, package by package
+
+Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end for everyone, as [JOURNEYS](JOURNEYS.md) walks it: setting up leaves no public Tangent and nothing to make one with.
+
+| Package | Depends on | Role |
+| --- | --- | --- |
+| 5.5 Creating a Tangent, and its settings: name, description, default kind, order, audience | 1.10 | repeat |
+| 5.6 The proprietor's place: a first Tangent made at setup, the place's own name and description, the ready page's pointers once the place has a public address, and "Run your own" in the README | 5.5, 1.13 | repeat |
+| 5.3 The people here: a directory with seek cursors; naming moderators and administrators; time out, ban and lift inline | 5.5 | repeat |
+| 5.2 Admission: join or apply; standing; the one knob "new accounts post after approval" | 5.3 | repeat |
+| 5.4 A participant's profile | 5.3 | repeat |
+| 5.1 The role editor island over Koan's roles, and overwrites per Tangent beyond its audience | 5.3 | first of its kind |
+
 ## Later slices
 
 The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), export through the renderer (7), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, feeds, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`, appearance. Explorer-grade: references through Constellation, the A2A card.
