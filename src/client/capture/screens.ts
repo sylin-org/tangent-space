@@ -458,7 +458,8 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // The persona's notifications: none yet; with what the notifications seed holds, newest first, those since she last
-  // opened them marked new, Wren's application, which she decides as a moderator, among them; and, as the operator of a
+  // opened them marked new, Mara's report of Lumen's reply, which she reads as a moderator, and Wren's application,
+  // which she decides as one, among them; and, as the operator of a
   // place reached at a public origin while it has no address, the Offer among them with its two answers. Last, the
   // frame's count of what she has not seen, on the door, which says how many applications wait. Opening them moves her
   // checkpoint, which the seed puts back before every width and theme.

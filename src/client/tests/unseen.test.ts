@@ -6,8 +6,9 @@ import type { LiveEvent } from '../live'
 
 // The masthead's count of unseen notifications: the server renders it, hidden at zero, with the reader, the newest
 // sequence its count read and whether the applications that wait count among them; the page's stream raises it by one
-// for each row past that sequence that targets the reader and that someone else did, and, where applications count, for
-// each application, and by nothing else.
+// for each row past that sequence that someone else did and that targets the reader or is a report, which the stream
+// delivers only to whoever may view the moderators' Tangent, and, where applications count, for each application, and by
+// nothing else.
 
 const reader = 'did:plc:ada'
 
@@ -81,4 +82,16 @@ test('an application raises the count of whoever decides it, and no one else’s
   const member = render(0, false, 40)
   delivered({ seq: 41, ...application })
   expect(member.hidden).toBe(true)
+})
+
+test('a report someone else made raises the count, and the reader’s own report raises nothing', () => {
+  const host = render(0, false, 40)
+
+  delivered({ seq: 41, tangent: 'moderators', actor: 'did:plc:mara', target: null, report: true })
+
+  expect(host.hidden).toBe(false)
+  expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('1')
+
+  delivered({ seq: 42, tangent: 'moderators', actor: reader, target: null, report: true }, { seq: 43, tangent: 'moderators', actor: 'did:plc:mo', target: null })
+  expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('1')
 })

@@ -33,6 +33,9 @@ public sealed record NotificationsPage(
         /// <summary>A mention of the reader.</summary>
         public const string Mention = "mention";
 
+        /// <summary>A report someone made, for whoever may view the moderators' Tangent, the reader among them.</summary>
+        public const string Report = "report";
+
         /// <summary>A change of the reader's standing someone else made.</summary>
         public const string Standing = "standing";
 
@@ -48,10 +51,12 @@ public sealed record NotificationsPage(
 
     /// <summary>One notification: the event's sequence, what happened (one of <see cref="Kinds"/>), whether it is new to the
     /// reader, when, who did it where the page names them, and the one address it is about: the Post, the Topic, the
-    /// door, the reader's profile, where the place answers, or the applications, for one who applied. A Post's carries its <see cref="Topic"/>, its
-    /// <see cref="Tangent"/>, its opening words (<see cref="Line"/>) and whether it is <see cref="Removed"/>; a standing's
-    /// the standing it left and the one before (<see cref="Was"/>); a role's the role and whether it was
-    /// <see cref="Given"/>; an Offer's the Offer as it stands.</summary>
+    /// report in the moderators' Tangent, the door, the reader's profile, where the place answers, or the applications,
+    /// for one who applied. A Post's carries its <see cref="Topic"/>, its <see cref="Tangent"/>, its opening words
+    /// (<see cref="Line"/>) and whether it is <see cref="Removed"/>, and a report's also the author of the Post it reports
+    /// (<see cref="Reported"/>), only where the reader may view that Post; a standing's the standing it left and the one
+    /// before (<see cref="Was"/>); a role's the role and whether it was <see cref="Given"/>; an Offer's the Offer as it
+    /// stands.</summary>
     public sealed record Entry(long Seq, string Kind, bool New, DateTimeOffset At, TangentPage.Author? Who, string? Address)
     {
         public string? Topic { get; init; }
@@ -61,6 +66,8 @@ public sealed record NotificationsPage(
         public string? Line { get; init; }
 
         public bool? Removed { get; init; }
+
+        public TangentPage.Author? Reported { get; init; }
 
         public string? Standing { get; init; }
 

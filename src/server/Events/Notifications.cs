@@ -9,16 +9,19 @@ using Tangent.Participants;
 namespace Tangent.Events;
 
 /// <summary>What is for one participant: every event that names them as its target, that someone else did, and that
-/// reaches them by the stream's rule (<see cref="Readable"/>), so a row in a Tangent they may not view is absent; and, for
-/// whoever holds <see cref="Bit.ManageStanding"/> in the place when they read, every application that waits, at its
-/// arrival's place in the log (<see cref="Applications.Waiting"/>), so a decision by any decider ends it for all of them
-/// and one who came to decide after it arrived reads it too. The events are read through <c>ix_event_targets</c>
-/// (<c>TargetId</c>, <c>Seq</c>) and the applications through <c>ix_participant_waiting</c>, newest first, one bounded range
-/// of each at a time: a page of them continued from a sealed <see cref="Cursor"/>, and how many lie past their
-/// notifications checkpoint (<see cref="Scope.Notifications"/>), counted among at most <see cref="CountLimit"/> and one more
-/// rows of each and said as a lower bound when those that reach the reader fill one. Nothing it says of the count, the
-/// number, its bound or the sequence it read through, moves for a row the reader may not see. Reads only and takes no
-/// lock; moving the checkpoint is <see cref="SeeNotifications"/>'s.</summary>
+/// reaches them by the stream's rule (<see cref="Readable"/>), so a row in a Tangent they may not view is absent; for
+/// whoever may view the moderators' Tangent when they read, every report someone else made (<see cref="Event.Report"/>),
+/// so one who came to moderate after it arrived reads it too; and, for whoever holds <see cref="Bit.ManageStanding"/> in
+/// the place when they read, every application that waits, at its arrival's place in the log
+/// (<see cref="Applications.Waiting"/>), so a decision by any decider ends it for all of them. Nothing is written for
+/// each reader of a report or an application: the events are read through <c>ix_event_targets</c> (<c>TargetId</c>,
+/// <c>Seq</c>), the reports through <c>ix_event_reports</c> (<c>Report</c>, <c>Seq</c>) and the applications through
+/// <c>ix_participant_waiting</c>, newest first, one bounded range of each at a time: a page of them continued from a
+/// sealed <see cref="Cursor"/>, and how many lie past their notifications checkpoint (<see cref="Scope.Notifications"/>),
+/// counted among at most <see cref="CountLimit"/> and one more rows of each and said as a lower bound when those that
+/// reach the reader fill one. Nothing it says of the count, the number, its bound or the sequence it read through, moves
+/// for a row the reader may not see. Reads only and takes no lock; moving the checkpoint is
+/// <see cref="SeeNotifications"/>'s.</summary>
 public static class Notifications
 {
     /// <summary>The address of a participant's notifications under the base URL.</summary>
@@ -82,9 +85,10 @@ public static class Notifications
     }
 
     /// <summary>Whether <paramref name="row"/> is a notification for <paramref name="participantId"/>: it names them as
-    /// its target, someone else did it, and it reaches them; <paramref name="readable"/> has read what that needs.</summary>
+    /// its target or is a report, someone else did it, and it reaches them, as a report does whoever may view the
+    /// moderators' Tangent; <paramref name="readable"/> has read what that needs.</summary>
     public static bool For(Event row, string participantId, Readable readable)
-        => row.TargetId == participantId && row.ActorId != participantId && readable.Reaches(row);
+        => (row.TargetId == participantId || row.Report == true) && row.ActorId != participantId && readable.Reaches(row);
 
     /// <summary>The participant's notifications checkpoint: the newest sequence they have seen there, zero before any.</summary>
     public static async Task<long> Seen(string participantId, CancellationToken ct)
@@ -97,10 +101,11 @@ public static class Notifications
 
     /// <summary>How many notifications <paramref name="participantId"/> holds past <paramref name="since"/>: one read of at
     /// most <see cref="CountLimit"/> and one more rows, newest first, and what capability reads for the Tangents they
-    /// name; and, where they decide applications, one read of at most as many applications that wait past it. Only the
-    /// rows that reach the reader count: the count is a lower bound where they alone fill a read, and it reads through the
-    /// newest of them, or stays at <paramref name="since"/> where none is, so a read holding rows the reader may not see
-    /// counts fewer than may follow and says nothing of them.</summary>
+    /// name; where they may view the moderators' Tangent, one read of at most as many reports past it; and, where they
+    /// decide applications, one read of at most as many applications that wait past it. Only the rows that reach the
+    /// reader count: the count is a lower bound where they alone fill a read, and it reads through the newest of them, or
+    /// stays at <paramref name="since"/> where none is, so a read holding rows the reader may not see counts fewer than
+    /// may follow and says nothing of them.</summary>
     public static async Task<Unseen> CountPast(string participantId, long since, string baseAddress, CancellationToken ct)
     {
         var rows = await Event.Query(e => e.TargetId == participantId && e.Seq > since,
@@ -108,20 +113,23 @@ public static class Notifications
         var readable = new Readable(participantId);
         await readable.Prepare(rows, ct);
         var notifications = rows.Where(row => For(row, participantId, readable)).ToList();
+        var reports = (await Reports(readable, since, long.MaxValue, CountLimit + 1, ct)).Where(row => For(row, participantId, readable)).ToList();
         var decides = await readable.Decides(ct);
         var waiting = decides ? await Applications.Waiting(since, long.MaxValue, CountLimit + 1, ct) : [];
-        var newest = Math.Max(notifications.Count > 0 ? notifications[0].Seq : since, waiting.Count > 0 ? waiting[0].WaitingSeq!.Value : since);
-        return new Unseen(notifications.Count + waiting.Count, notifications.Count > CountLimit || waiting.Count > CountLimit,
-            baseAddress + Path, Math.Max(since, newest), decides);
+        var newest = new[] { since, notifications.Count > 0 ? notifications[0].Seq : since, reports.Count > 0 ? reports[0].Seq : since,
+            waiting.Count > 0 ? waiting[0].WaitingSeq!.Value : since }.Max();
+        return new Unseen(notifications.Count + reports.Count + waiting.Count,
+            notifications.Count > CountLimit || reports.Count > CountLimit || waiting.Count > CountLimit, baseAddress + Path, newest, decides);
     }
 
     /// <summary>One page of <paramref name="participantId"/>'s notifications before <paramref name="before"/>, or the
-    /// newest: one read of at most <see cref="ScanLimit"/> rows that target them and, where they decide applications, one
-    /// read of at most as many applications that wait with the rows of their arrivals, newest first, keeping the
-    /// notifications among them up to <see cref="PageSize"/>. A full read stops where it reached, so the page passes
-    /// nothing below the lowest row of one, where the other may hold rows it has not read. The next page continues from
-    /// the last row this one passed, so a row the reader may not see is read once and never named, and a full read that
-    /// held fewer notifications than a page continues past it.</summary>
+    /// newest: one read of at most <see cref="ScanLimit"/> rows that target them, where they may view the moderators'
+    /// Tangent one read of at most as many reports, and, where they decide applications, one read of at most as many
+    /// applications that wait with the rows of their arrivals, newest first, keeping the notifications among them up to
+    /// <see cref="PageSize"/>. A full read stops where it reached, so the page passes nothing below the lowest row of one,
+    /// where the others may hold rows it has not read. The next page continues from the last row this one passed, so a
+    /// row the reader may not see is read once and never named, and a full read that held fewer notifications than a page
+    /// continues past it.</summary>
     public static async Task<Page> Read(string participantId, long? before, CancellationToken ct)
     {
         var bound = before ?? long.MaxValue;
@@ -129,11 +137,17 @@ public static class Notifications
             new QueryDefinition { Page = 1, PageSize = ScanLimit }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
         var readable = new Readable(participantId);
         await readable.Prepare(rows, ct);
+        var reports = await Reports(readable, 0, bound, ScanLimit, ct);
         var waiting = await readable.Decides(ct) ? await Applications.Waiting(0, bound, ScanLimit, ct) : [];
         var arrivals = await Arrivals(waiting, ct);
 
-        var floor = Math.Max(rows.Count == ScanLimit ? rows[^1].Seq : 0, waiting.Count == ScanLimit ? waiting[^1].WaitingSeq!.Value : 0);
-        var read = rows.Select(row => (Row: row, Notification: For(row, participantId, readable)))
+        var floor = new[]
+        {
+            rows.Count == ScanLimit ? rows[^1].Seq : 0,
+            reports.Count == ScanLimit ? reports[^1].Seq : 0,
+            waiting.Count == ScanLimit ? waiting[^1].WaitingSeq!.Value : 0
+        }.Max();
+        var read = rows.Concat(reports).Select(row => (Row: row, Notification: For(row, participantId, readable)))
             .Concat(arrivals.Select(row => (Row: row, Notification: true)))
             .Where(each => each.Row.Seq >= floor)
             .OrderByDescending(each => each.Row.Seq)
@@ -148,8 +162,20 @@ public static class Notifications
             if (notification) kept.Add(row);
         }
 
-        var more = passed < read.Count || rows.Count == ScanLimit || waiting.Count == ScanLimit;
+        var more = passed < read.Count || rows.Count == ScanLimit || reports.Count == ScanLimit || waiting.Count == ScanLimit;
         return new Page(kept, more && passed > 0 ? read[passed - 1].Row.Seq : null);
+    }
+
+    /// <summary>At most <paramref name="limit"/> reports, newest first, whose sequence lies after <paramref name="after"/>
+    /// and before <paramref name="before"/>: one range of <c>ix_event_reports</c>, read only where reports reach the
+    /// reader (<see cref="Readable.Reports"/>), and none otherwise.</summary>
+    private static async Task<IReadOnlyList<Event>> Reports(Readable readable, long after, long before, int limit, CancellationToken ct)
+    {
+        if (!await readable.Reports(ct)) return [];
+        var reports = await Event.Query(e => e.Report == true && e.Seq > after && e.Seq < before,
+            new QueryDefinition { Page = 1, PageSize = limit }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
+        await readable.Prepare(reports, ct);
+        return reports;
     }
 
     /// <summary>The arrivals of the applications that wait, by the sequence each waits at, in one keyed read.</summary>

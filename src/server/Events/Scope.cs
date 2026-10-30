@@ -17,7 +17,8 @@ public sealed class Scope
 
     public static Scope Topic(string topicId) => new() { Kind = ScopeKind.Topic, Id = topicId };
 
-    /// <summary>The events that target the participant (<see cref="Events.Notifications"/>), on the log's sequence.</summary>
+    /// <summary>What is for the participant (<see cref="Events.Notifications"/>) — the events that target them, and the
+    /// reports and applications that reach them — on the log's sequence.</summary>
     public static Scope Notifications => new() { Kind = ScopeKind.Notifications };
 
     public override string ToString() => Kind switch

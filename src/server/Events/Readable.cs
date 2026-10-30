@@ -7,8 +7,9 @@ namespace Tangent.Events;
 /// <summary>Which rows of the log reach one reader, by the rule the door reads by: a row in a Tangent reaches them where
 /// they may view that Tangent, and is absent otherwise; a row in no Tangent reaches them where it changed the place,
 /// where it names them as its target, or where it is an application (<see cref="Application"/>) and they hold
-/// <see cref="Bit.ManageStanding"/> in the place, which <see cref="Decides"/> says. A poll asks once; a stream holds the
-/// answers for each Tangent it has met and asks again for all of them, the place's among them, when
+/// <see cref="Bit.ManageStanding"/> in the place, which <see cref="Decides"/> says. A report is a row in the moderators'
+/// Tangent, so it reaches whoever may view that Tangent, which <see cref="Reports"/> says. A poll asks once; a stream
+/// holds the answers for each Tangent it has met and asks again for all of them, the place's among them, when
 /// <see cref="Refresh"/> has passed since it last asked, or at once when a row it is
 /// about to send changed a standing, a role, a Tangent or the place, so a reader who loses <see cref="Bit.View"/>
 /// receives nothing more from that Tangent from the first row past the change that the writer commits more than
@@ -28,6 +29,7 @@ public sealed class Readable(string? participantId)
     private DateTimeOffset _read = DateTimeOffset.MinValue;
     private bool _place = true;
     private bool _decides;
+    private string? _moderators;
     private bool _placeRead;
 
     /// <summary>Whether the reader may still read the place: false once a refresh found the place absent to them, when
@@ -62,6 +64,18 @@ public sealed class Readable(string? participantId)
         return _decides;
     }
 
+    /// <summary>Whether reports reach the reader: they may view the moderators' Tangent, where every report is written
+    /// (<see cref="Event.Report"/>). What <see cref="Prepare"/> read of the place and of that Tangent, or one read of each
+    /// now where it read none; false where the place records no moderators' Tangent.</summary>
+    public async Task<bool> Reports(CancellationToken ct)
+    {
+        if (!_placeRead) await ReadPlace(ct);
+        if (!_place || _moderators is not { } moderators) return false;
+        if (!_tangents.ContainsKey(moderators))
+            foreach (var (id, capabilities) in await Capabilities.LoadEach(participantId, [moderators], ct)) _tangents[id] = capabilities.Exists;
+        return _tangents.GetValueOrDefault(moderators);
+    }
+
     /// <summary>Whether <paramref name="row"/> reaches the reader; <see cref="Prepare"/> has read what it needs.</summary>
     public bool Reaches(Event row) => row.TangentId is { } tangent
         ? _tangents.GetValueOrDefault(tangent)
@@ -85,12 +99,15 @@ public sealed class Readable(string? participantId)
         return rows.FirstOrDefault(readable.Reaches)?.Seq ?? head;
     }
 
-    /// <summary>What the reader holds in the place: whether it exists for them, and whether they decide applications.</summary>
+    /// <summary>What the reader holds in the place: whether it exists for them, and whether they decide applications;
+    /// and which Tangent is the moderators', from the settings row the same read holds.</summary>
     private async Task ReadPlace(CancellationToken ct)
     {
-        var place = await Capabilities.Load(participantId, null, null, ct);
+        var rows = await Capabilities.LoadRows(participantId, null, ct);
+        var place = rows.For(null);
         _place = place.Exists;
         _decides = place.Holds(Bit.ManageStanding);
+        _moderators = rows.Space.ModeratorsTangentId;
         _placeRead = true;
     }
 

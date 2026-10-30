@@ -15,12 +15,14 @@ public sealed record Poll(long Since, long Through, bool More, IReadOnlyList<Pol
     /// Post it happened to, who did it and whom it concerns, the Post's version, when, the audience a Tangent has
     /// after a <see cref="EventKind.TangentChanged"/>, the Offer an <see cref="EventKind.OfferMade"/> made, the standing
     /// an arrival gave or a change left its target with, and the one a change found, on a
-    /// <see cref="EventKind.StandingChanged"/>, and the role given or taken, on a <see cref="EventKind.RoleChanged"/>.</summary>
+    /// <see cref="EventKind.StandingChanged"/>, the role given or taken, on a <see cref="EventKind.RoleChanged"/>, and
+    /// whether a <see cref="EventKind.PostCreated"/> is a report, which reaches only whoever may view the moderators'
+    /// Tangent.</summary>
     public sealed record Row(long Seq, string Kind, string? Tangent, string? Topic, string? Post, string? Actor, string? Target,
         long? Version, DateTimeOffset At, Audience? Audience, string? Offer = null, Participants.Standing? Standing = null,
-        Participants.Standing? Before = null, string? Role = null, bool? Given = null)
+        Participants.Standing? Before = null, string? Role = null, bool? Given = null, bool? Report = null)
     {
         public static Row Of(Event row) => new(row.Seq, row.Kind, row.TangentId, row.TopicId, row.PostId, row.ActorId, row.TargetId,
-            row.Version, row.At, row.Audience, row.OfferId, row.Standing, row.Before, row.Role, row.Given);
+            row.Version, row.At, row.Audience, row.OfferId, row.Standing, row.Before, row.Role, row.Given, row.Report);
     }
 }
