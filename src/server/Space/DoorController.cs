@@ -35,7 +35,9 @@ namespace Tangent.Space;
 /// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
 /// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
 /// rule, and its writers <see cref="Door.Around"/>. For the place's operator, while no URL is configured, it also reads
-/// the open Offers they decide, one bounded read, with the evidence Koan holds for each, and shows them first. A reader
+/// the open Offers they decide, one bounded read, with the evidence Koan holds for each, and shows them first. For whoever
+/// holds <see cref="Bit.ManageStanding"/> in the place, it reads how many applications wait, one bounded read of those
+/// that wait (<see cref="Applications.Waiting"/>), and says so, linked to where they are decided. A reader
 /// without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
 /// moves the reader's place checkpoint to the sequence a door read through, through the writer.</summary>
 public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, AddressOffers offers) : ControllerBase
@@ -188,6 +190,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var unseen = reader is null ? null : await Notifications.Count(reader.Id, baseAddress, ct);
         if (news is not null && unseen is { Count: > 0 }) news = news with { Notifications = unseen };
 
+        // Whoever decides applications reads how many wait, seen or not, and reaches them in one click.
+        var waiting = reader is not null && place.Holds(Bit.ManageStanding)
+            ? await Applications.Waiting(0, long.MaxValue, Notifications.CountLimit + 1, ct)
+            : [];
+
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
         return Ok(new Door(
             space.Name,
@@ -213,6 +220,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         {
             Description = space.Description,
             Offers = offered,
+            Applications = waiting.Count == 0
+                ? null
+                : new Door.Waiting(waiting.Count, waiting.Count > Notifications.CountLimit, baseAddress + ApplicationsController.Path),
             AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
             Gate = place.Gate(Bit.Post),
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null

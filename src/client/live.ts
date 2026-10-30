@@ -16,6 +16,7 @@ export interface LiveEvent {
   version?: number | null
   at: string
   audience?: string | null
+  standing?: string | null
 }
 
 export interface PollPage {
@@ -92,7 +93,7 @@ export function validateEvent(value: unknown): LiveEvent {
     !object(v) || !sequence(v.seq) || !string(v.kind, 128) || !v.kind || !string(v.at, 80)
     || !nullableString(v.tangent, 1024) || !nullableString(v.topic, 1024) || !nullableString(v.post, 1024)
     || !nullableString(v.actor) || !nullableString(v.target) || !(v.version == null || sequence(v.version))
-    || !nullableString(v.audience, 64)
+    || !nullableString(v.audience, 64) || !nullableString(v.standing, 64)
   ) throw new Error('invalid-event')
   return v as LiveEvent
 }

@@ -46,9 +46,10 @@ public sealed record Establish(
         var space = TangentSpace.Establish(Name, OperatorId, OperatorId, moderators);
         if (await Participant.Get(OperatorId, ct) is null)
         {
-            await Participant.Arrive(OperatorId, OperatorHandle, space.Admission).Save(ct);
+            var arrived = await Participant.Arrive(OperatorId, OperatorHandle, space.Admission).Save(ct);
             await Handles.Release(OperatorHandle, OperatorId, ct);
-            await Event.Next(sequences, EventKind.StandingChanged, at, actorId: OperatorId, targetId: OperatorId).Save(ct);
+            await Event.Next(sequences, EventKind.StandingChanged, at, actorId: OperatorId, targetId: OperatorId,
+                standing: arrived.Standing).Save(ct);
         }
 
         if (first is not null) await FirstTangent.Create(sequences, first, OperatorId, at, ct);

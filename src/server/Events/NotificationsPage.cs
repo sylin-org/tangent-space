@@ -41,11 +41,14 @@ public sealed record NotificationsPage(
 
         /// <summary>An Offer the reader decides.</summary>
         public const string Offer = "offer";
+
+        /// <summary>An application that waits for whoever decides it, the reader among them.</summary>
+        public const string Application = "application";
     }
 
     /// <summary>One notification: the event's sequence, what happened (one of <see cref="Kinds"/>), whether it is new to the
     /// reader, when, who did it where the page names them, and the one address it is about: the Post, the Topic, the
-    /// door, the reader's profile, or where the place answers. A Post's carries its <see cref="Topic"/>, its
+    /// door, the reader's profile, where the place answers, or the applications, for one who applied. A Post's carries its <see cref="Topic"/>, its
     /// <see cref="Tangent"/>, its opening words (<see cref="Line"/>) and whether it is <see cref="Removed"/>; a standing's
     /// the standing it left and the one before (<see cref="Was"/>); a role's the role and whether it was
     /// <see cref="Given"/>; an Offer's the Offer as it stands.</summary>

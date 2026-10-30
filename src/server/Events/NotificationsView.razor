@@ -3,8 +3,8 @@
 @using global::Tangent.Render
 @* The reader's notifications, in one panel, newest first, one line each in an Offer's line: a mark where it is new
    since they last opened them; who did it, by their mark and name, where the line names them; what happened, its
-   subject a link to what it is about — the Post, the Topic taken on a tangent, the door, their profile, or where the
-   place answers — and when; a Post's opening words under it; and an open Offer's two answers beside it, a decided one
+   subject a link to what it is about — the Post, the Topic taken on a tangent, the door, their profile, where the
+   place answers, or the applications, for someone who applied and waits — and when; a Post's opening words under it; and an open Offer's two answers beside it, a decided one
    saying how it was decided. None reads as one sentence, and a page that shows none but has older ones says so above
    the way to them. Older notifications and the newest are a link away. *@
 <div class="layout">
@@ -103,6 +103,7 @@
         NotificationsPage.Kinds.Standing => Linked(entry, Standing(entry)),
         NotificationsPage.Kinds.Role => Linked(entry, (entry.Given == true ? "made you " + Article(entry.Role ?? "") + " " + entry.Role : "took your " + entry.Role + " role") + "."),
         NotificationsPage.Kinds.Offer when entry.Offer is { } offer => Offered(entry, offer),
+        NotificationsPage.Kinds.Application => Linked(entry, "applied to join and is waiting."),
         _ => Linked(entry, "Something here concerns you.")
     };
 

@@ -13,7 +13,9 @@ namespace Tangent.Participants;
 /// <summary>The applications of a place whose admission says apply: the participants who applied, waiting or declined.
 /// <see cref="Decide"/> is what <see cref="Admit"/> and <see cref="Decline"/> share; <see cref="Read"/> is one bounded
 /// page of them, newest application first, through <c>ix_participant_applications</c>
-/// (<see cref="Participant.AppliedAt"/>), continued from a <see cref="Cursor"/>. Nothing is counted.</summary>
+/// (<see cref="Participant.AppliedAt"/>), continued from a <see cref="Cursor"/>. <see cref="Waiting"/> reads those that
+/// wait, by where they arrived in the log, through <c>ix_participant_waiting</c> (<see cref="Participant.WaitingSeq"/>),
+/// which is how they reach whoever decides them; nothing is counted past what one bounded read holds.</summary>
 public static class Applications
 {
     /// <summary>The most applications one page holds.</summary>
@@ -87,6 +89,15 @@ public static class Applications
             ? new Page(applicants.GetRange(0, PageSize), Cursor.After(applicants[PageSize - 1]))
             : new Page(applicants, null);
     }
+
+    /// <summary>At most <paramref name="limit"/> of the applications that wait, newest first: those whose arrival lies
+    /// after the log's sequence <paramref name="after"/> and before <paramref name="before"/>, one range of
+    /// <c>ix_participant_waiting</c>. An application admitted or declined no longer waits, so a decision by anyone ends it
+    /// for everyone.</summary>
+    public static Task<IReadOnlyList<Participant>> Waiting(long after, long before, int limit, CancellationToken ct)
+        => Participant.Query(participant => participant.WaitingSeq > after && participant.WaitingSeq < before,
+            new QueryDefinition { Page = 1, PageSize = limit }
+                .WithSort<Participant>(sort => sort.OrderByDescending(participant => participant.WaitingSeq)), ct);
 
     /// <summary>The applications after the cursor, newest first: made no later than the cursor's, which the index answers
     /// as a range, and, at the cursor's own instant, an id before the cursor's.</summary>

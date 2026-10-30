@@ -7,7 +7,7 @@
 @using Tangent.Tangents
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
-   answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
+   answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
    out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen and, while they have notifications they have not seen, how many, linked to them — and then the front page:
@@ -123,6 +123,17 @@
                     }
                 </section>
             }
+            @if (Model.Applications is { } applications)
+            {
+                <section class="door-offers" aria-label="Applications">
+                    <div class="door-offer door-applications">
+                        <p class="door-offer-line">@Waiting(applications)</p>
+                        <div class="door-offer-answers">
+                            <a class="tangent-new" href="@applications.Address">Applications</a>
+                        </div>
+                    </div>
+                </section>
+            }
             @if (Model.News is { } news)
             {
                 @if (news.Quiet)
@@ -226,6 +237,11 @@
         => offer is { Count: { } count, Since: { } since }
             ? " — " + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " request" : " requests") + " since " + TopicRow.When(since, Model.Day)
             : "";
+
+    /// <summary>How many applications wait, in a sentence; "at least" where the door could not finish counting.</summary>
+    private static string Waiting(Door.Waiting waiting)
+        => (waiting.AtLeast ? "At least " : "") + waiting.Count.ToString(CultureInfo.InvariantCulture)
+           + (waiting.Count == 1 && !waiting.AtLeast ? " application is waiting for a decision." : " applications are waiting for a decision.");
 
     /// <summary>A count with its noun; "at least" before it when the door could not finish counting.</summary>
     private static string Words(int count, bool atLeast, string one, string many)

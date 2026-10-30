@@ -3,17 +3,22 @@ using System.Security.Cryptography;
 using Koan.Data.Abstractions;
 using Koan.Data.Core.Sorting;
 using Microsoft.AspNetCore.DataProtection;
+using Tangent.Access;
+using Tangent.Participants;
 
 namespace Tangent.Events;
 
 /// <summary>What is for one participant: every event that names them as its target, that someone else did, and that
-/// reaches them by the stream's rule (<see cref="Readable"/>), so a row in a Tangent they may not view is absent. Read
-/// through <c>ix_event_targets</c> (<c>TargetId</c>, <c>Seq</c>), newest first, one bounded range at a time: a page of
-/// them continued from a sealed <see cref="Cursor"/>, and how many lie past their notifications checkpoint
-/// (<see cref="Scope.Notifications"/>), counted among at most <see cref="CountLimit"/> and one more rows and said as a
-/// lower bound when those that reach the reader fill them. Nothing it says of the count — the number, its bound, the
-/// sequence it read through — moves for a row the reader may not see. Reads only and takes no lock; moving the checkpoint
-/// is <see cref="SeeNotifications"/>'s.</summary>
+/// reaches them by the stream's rule (<see cref="Readable"/>), so a row in a Tangent they may not view is absent; and, for
+/// whoever holds <see cref="Bit.ManageStanding"/> in the place when they read, every application that waits, at its
+/// arrival's place in the log (<see cref="Applications.Waiting"/>), so a decision by any decider ends it for all of them
+/// and one who came to decide after it arrived reads it too. The events are read through <c>ix_event_targets</c>
+/// (<c>TargetId</c>, <c>Seq</c>) and the applications through <c>ix_participant_waiting</c>, newest first, one bounded range
+/// of each at a time: a page of them continued from a sealed <see cref="Cursor"/>, and how many lie past their
+/// notifications checkpoint (<see cref="Scope.Notifications"/>), counted among at most <see cref="CountLimit"/> and one more
+/// rows of each and said as a lower bound when those that reach the reader fill one. Nothing it says of the count, the
+/// number, its bound or the sequence it read through, moves for a row the reader may not see. Reads only and takes no
+/// lock; moving the checkpoint is <see cref="SeeNotifications"/>'s.</summary>
 public static class Notifications
 {
     /// <summary>The address of a participant's notifications under the base URL.</summary>
@@ -33,10 +38,12 @@ public static class Notifications
     public const string CursorPurpose = "Notifications.Cursor";
 
     /// <summary>How many notifications the reader has not seen: <see cref="Count"/> past their notifications checkpoint,
-    /// a lower bound where <see cref="AtLeast"/>; where they are (<see cref="Address"/>); and <see cref="Through"/>, the
+    /// a lower bound where <see cref="AtLeast"/>; where they are (<see cref="Address"/>); <see cref="Through"/>, the
     /// newest notification the count found, or the checkpoint where it found none, past which a row the page's stream
-    /// delivers that is a notification for the reader adds one.</summary>
-    public sealed record Unseen(int Count, bool AtLeast, string Address, long Through)
+    /// delivers that is a notification for the reader adds one; and whether the applications that wait count among them
+    /// (<see cref="Applications"/>), as they do for whoever decides them, so an application the stream delivers adds one
+    /// too.</summary>
+    public sealed record Unseen(int Count, bool AtLeast, string Address, long Through, bool Applications = false)
     {
         /// <summary>The count as the frame shows it: the number, with a plus where it is a lower bound, and
         /// <c>99+</c> past <see cref="CountLimit"/>.</summary>
@@ -90,9 +97,10 @@ public static class Notifications
 
     /// <summary>How many notifications <paramref name="participantId"/> holds past <paramref name="since"/>: one read of at
     /// most <see cref="CountLimit"/> and one more rows, newest first, and what capability reads for the Tangents they
-    /// name. Only the rows that reach the reader count: the count is a lower bound where they alone fill the read, and it
-    /// reads through the newest of them, or stays at <paramref name="since"/> where none is, so a read holding rows the
-    /// reader may not see counts fewer than may follow and says nothing of them.</summary>
+    /// name; and, where they decide applications, one read of at most as many applications that wait past it. Only the
+    /// rows that reach the reader count: the count is a lower bound where they alone fill a read, and it reads through the
+    /// newest of them, or stays at <paramref name="since"/> where none is, so a read holding rows the reader may not see
+    /// counts fewer than may follow and says nothing of them.</summary>
     public static async Task<Unseen> CountPast(string participantId, long since, string baseAddress, CancellationToken ct)
     {
         var rows = await Event.Query(e => e.TargetId == participantId && e.Seq > since,
@@ -100,14 +108,20 @@ public static class Notifications
         var readable = new Readable(participantId);
         await readable.Prepare(rows, ct);
         var notifications = rows.Where(row => For(row, participantId, readable)).ToList();
-        return new Unseen(notifications.Count, notifications.Count > CountLimit, baseAddress + Path,
-            notifications.Count > 0 ? Math.Max(since, notifications[0].Seq) : since);
+        var decides = await readable.Decides(ct);
+        var waiting = decides ? await Applications.Waiting(since, long.MaxValue, CountLimit + 1, ct) : [];
+        var newest = Math.Max(notifications.Count > 0 ? notifications[0].Seq : since, waiting.Count > 0 ? waiting[0].WaitingSeq!.Value : since);
+        return new Unseen(notifications.Count + waiting.Count, notifications.Count > CountLimit || waiting.Count > CountLimit,
+            baseAddress + Path, Math.Max(since, newest), decides);
     }
 
     /// <summary>One page of <paramref name="participantId"/>'s notifications before <paramref name="before"/>, or the
-    /// newest: one read of at most <see cref="ScanLimit"/> rows, newest first, keeping the notifications among them up to
-    /// <see cref="PageSize"/>. The next page continues from the last row this one passed, so a row the reader may not
-    /// see is read once and never named, and a full read that held fewer notifications than a page continues past it.</summary>
+    /// newest: one read of at most <see cref="ScanLimit"/> rows that target them and, where they decide applications, one
+    /// read of at most as many applications that wait with the rows of their arrivals, newest first, keeping the
+    /// notifications among them up to <see cref="PageSize"/>. A full read stops where it reached, so the page passes
+    /// nothing below the lowest row of one, where the other may hold rows it has not read. The next page continues from
+    /// the last row this one passed, so a row the reader may not see is read once and never named, and a full read that
+    /// held fewer notifications than a page continues past it.</summary>
     public static async Task<Page> Read(string participantId, long? before, CancellationToken ct)
     {
         var bound = before ?? long.MaxValue;
@@ -115,17 +129,35 @@ public static class Notifications
             new QueryDefinition { Page = 1, PageSize = ScanLimit }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
         var readable = new Readable(participantId);
         await readable.Prepare(rows, ct);
+        var waiting = await readable.Decides(ct) ? await Applications.Waiting(0, bound, ScanLimit, ct) : [];
+        var arrivals = await Arrivals(waiting, ct);
+
+        var floor = Math.Max(rows.Count == ScanLimit ? rows[^1].Seq : 0, waiting.Count == ScanLimit ? waiting[^1].WaitingSeq!.Value : 0);
+        var read = rows.Select(row => (Row: row, Notification: For(row, participantId, readable)))
+            .Concat(arrivals.Select(row => (Row: row, Notification: true)))
+            .Where(each => each.Row.Seq >= floor)
+            .OrderByDescending(each => each.Row.Seq)
+            .ToList();
 
         var kept = new List<Event>(PageSize);
         var passed = 0;
-        foreach (var row in rows)
+        foreach (var (row, notification) in read)
         {
             if (kept.Count == PageSize) break;
             passed++;
-            if (For(row, participantId, readable)) kept.Add(row);
+            if (notification) kept.Add(row);
         }
 
-        var more = passed < rows.Count || rows.Count == ScanLimit;
-        return new Page(kept, more && passed > 0 ? rows[passed - 1].Seq : null);
+        var more = passed < read.Count || rows.Count == ScanLimit || waiting.Count == ScanLimit;
+        return new Page(kept, more && passed > 0 ? read[passed - 1].Row.Seq : null);
+    }
+
+    /// <summary>The arrivals of the applications that wait, by the sequence each waits at, in one keyed read.</summary>
+    private static async Task<IReadOnlyList<Event>> Arrivals(IReadOnlyList<Participant> waiting, CancellationToken ct)
+    {
+        if (waiting.Count == 0) return [];
+        var applicants = waiting.ToDictionary(applicant => Event.Key(applicant.WaitingSeq!.Value), applicant => applicant.Id, StringComparer.Ordinal);
+        return (await Event.Get(applicants.Keys, ct)).OfType<Event>()
+            .Where(row => Readable.Application(row) && row.TargetId == applicants[row.Id]).ToList();
     }
 }
