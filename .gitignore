@@ -11,6 +11,7 @@
 **/.next/
 **/TestResults/
 **/data/
+**/data-before-restore-*/
 **/logs/
 *.user
 *.log
