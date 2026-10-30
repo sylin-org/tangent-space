@@ -72,8 +72,9 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
 
     /// <summary>Whoever is signed in, as the account menu shows them: their participant's display name, else their
-    /// handle; the highest seeded role they hold; and Koan's sign-out under <paramref name="address"/>, coming back here.
-    /// Null for a visitor.</summary>
+    /// handle; the highest seeded role they hold; Koan's sign-out under <paramref name="address"/>, coming back here; and,
+    /// once the place is established, the place's settings where they may change them and how many of their
+    /// notifications they have not seen. Null for a visitor.</summary>
     private static async Task<FirstRunReader?> ReaderOf(ClaimsPrincipal user, string address, PathString pathBase, CancellationToken ct)
     {
         if (PersonId(user) is not { } personId) return null;
@@ -83,10 +84,10 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         var place = participant is null ? null : await Capabilities.Load(personId, null, null, ct);
         var role = place is null ? null : Roles.Word(place.RoleIds);
         var signOut = address + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(pathBase + Path);
-        var settings = place is not null && await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null
-            ? TangentSpaceSettingsController.Entry(place, address)
-            : null;
-        return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut, settings);
+        var established = place is not null && await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null;
+        return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut,
+            established ? TangentSpaceSettingsController.Entry(place!, address) : null,
+            established ? await Events.Notifications.Count(personId, address, ct) : null);
     }
 
     /// <summary>The place before it is established, with the account the configuration names to set it up.</summary>

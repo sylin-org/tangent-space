@@ -1,0 +1,97 @@
+/* Notifications: the count beside the account in the masthead, and the page of them. */
+
+/* The count of unseen notifications: the bell in text-2 and the number on the accent, a 44px target, hidden while
+ * there are none. */
+.masthead-unseen {
+  height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 22px;
+  color: var(--ts-text-2);
+  text-decoration: none;
+}
+
+.masthead-unseen[hidden] {
+  display: none;
+}
+
+.masthead-unseen:hover {
+  background: var(--ts-hover);
+  color: var(--ts-text);
+}
+
+.masthead-unseen-icon {
+  flex: none;
+}
+
+.masthead-unseen-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--ts-radius-pill);
+  background: var(--ts-accent);
+  color: var(--ts-on-accent);
+  font: var(--ts-type-tag);
+}
+
+/* One notification in an Offer's line: the dot where it is new, who did it by their mark, what happened with its
+ * subject linked, and a Post's opening words under it; an open Offer's answers beside it. */
+.notifications {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notification {
+  align-items: flex-start;
+}
+
+.notification.is-new {
+  border-color: var(--ts-accent-line);
+}
+
+.notification-body {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notification-line {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-text {
+  min-width: 0;
+}
+
+.notification-dot {
+  flex: none;
+}
+
+.notification-link {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.notification-opening {
+  margin: 0;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui);
+  overflow-wrap: anywhere;
+}
+
+.door-notifications {
+  margin-left: auto;
+  text-decoration: none;
+}

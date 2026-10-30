@@ -256,7 +256,8 @@ public static class PostWrites
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
     /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>,
-    /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>; null for a visitor.</summary>
+    /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>, and how many of their notifications they have
+    /// not seen; null for a visitor.</summary>
     public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string baseUrl, string back, CancellationToken ct)
     {
         if (personId is null) return null;
@@ -264,7 +265,8 @@ public static class PostWrites
         var handle = participant?.Handle is { Length: > 0 } stored ? stored : personId;
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
         return new Who(personId, name, handle, Roles.Word(capabilities.RoleIds), participant?.Profile.Avatar,
-            baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back), await SettingsFor(personId, baseUrl, ct));
+            baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back), await SettingsFor(personId, baseUrl, ct),
+            await Events.Notifications.Count(personId, baseUrl, ct));
     }
 
     /// <summary>Where the place's settings open under <paramref name="baseUrl"/> for a participant who holds

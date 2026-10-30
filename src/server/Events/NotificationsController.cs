@@ -1,0 +1,179 @@
+using Koan.Web.Hosting;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
+using Tangent.Access;
+using Tangent.Offers;
+using Tangent.Participants;
+using Tangent.Posts;
+using Tangent.Render;
+using Tangent.Space;
+using Tangent.Tangents;
+using Tangent.Writer;
+
+namespace Tangent.Events;
+
+/// <summary>The signed-in reader's notifications at <see cref="Notifications.Path"/>, one resource both ways
+/// (<see cref="NotificationsPage"/>): a page of them newest first (<see cref="Notifications.Read"/>), continued from a
+/// sealed cursor that is refused with 400 when it does not open, each one line about one thing — the Post, the Topic, the
+/// door, the reader's profile, or where the place answers — with an open Offer's two answers inline. Opening them moves
+/// the reader's notifications checkpoint through the newest the page shows, through the writer (<see cref="SeeNotifications"/>),
+/// so the count every page's frame shows reads past it; it never moves backwards, and it decides no Offer. The page is
+/// never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the place receives its
+/// gate.</summary>
+public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
+{
+    /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
+    public const string After = "after";
+
+    [HttpGet(Notifications.Path)]
+    public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var personId = PostWrites.PersonId(User);
+        var place = await Capabilities.Load(personId, null, null, ct);
+        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (personId is null)
+            return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Notifications are a signed-in participant's.",
+                Capabilities.SignIn).ToResult();
+
+        Notifications.Cursor? cursor = null;
+        if (after is not null && (cursor = Notifications.Cursor.Open(after, protection)) is null)
+            return new Problem(StatusCodes.Status400BadRequest, "Not a page of your notifications",
+                $"The {After} parameter is the cursor a page of your notifications names as its next.").ToResult();
+
+        var seen = await Notifications.Seen(personId, ct);
+        var from = cursor?.From ?? seen;
+        var page = await Notifications.Read(personId, cursor?.Before, ct);
+        var newest = page.Events.Count > 0 ? page.Events[0].Seq : 0;
+        if (newest > seen)
+        {
+            switch (await writer.Send(new SeeNotifications(personId, newest), ct))
+            {
+                case Outcome<Checkpoint>.Done:
+                    break;
+                case Outcome<Checkpoint>.Refused { Reason: SeeNotifications.NoPlace }:
+                    return DoorController.Gated(Capabilities.Absent);
+                case Outcome<Checkpoint>.Failed failed:
+                    throw new InvalidOperationException($"Seeing the notifications of {personId} failed.", failed.Cause);
+                case var other:
+                    throw new InvalidOperationException($"The writer answered {other} for seeing the notifications of {personId}.");
+            }
+        }
+
+        var baseAddress = baseUrl.Resolve(HttpContext);
+        var address = baseAddress + Notifications.Path;
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
+        var reader = await PostWrites.Reader(personId, place, baseAddress, baseUrl.PathBase + Notifications.Path, ct);
+        var entries = await Entries(page.Events, from, reader, space, baseAddress, ct);
+        return Ok(new NotificationsPage(
+            space.Name,
+            baseAddress + "/",
+            address,
+            from,
+            Math.Max(seen, newest),
+            entries,
+            page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(new Notifications.Cursor(next, from).Seal(protection)) : null,
+            cursor is not null,
+            reader,
+            DateOnly.FromDateTime(DateTime.UtcNow)));
+    }
+
+    /// <summary>Each notification as the page shows it, from keyed reads of what the events name: their Posts and the
+    /// roots of their Topics, their Tangents, the Offers and the people.</summary>
+    private async Task<IReadOnlyList<NotificationsPage.Entry>> Entries(IReadOnlyList<Event> events, long from, Who? reader, TangentSpace space,
+        string baseAddress, CancellationToken ct)
+    {
+        if (events.Count == 0) return [];
+        var postIds = events.Where(e => e.PostId is not null && e.TopicId is not null)
+            .SelectMany(e => new[] { e.PostId!, e.TopicId! }).Distinct(StringComparer.Ordinal).ToList();
+        var posts = postIds.Count == 0
+            ? new Dictionary<string, Post>()
+            : (await Post.Get(postIds, ct)).OfType<Post>().ToDictionary(post => post.Id, StringComparer.Ordinal);
+        var tangentIds = events.Select(e => e.TangentId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        var tangents = tangentIds.Count == 0
+            ? new Dictionary<string, Tangents.Tangent>()
+            : (await Tangents.Tangent.Get(tangentIds, ct)).OfType<Tangents.Tangent>().ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
+        var offerIds = events.Select(e => e.OfferId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        var offers = offerIds.Count == 0
+            ? new Dictionary<string, Offer>()
+            : (await Offer.Get(offerIds, ct)).OfType<Offer>().ToDictionary(offer => offer.Id, StringComparer.Ordinal);
+        var people = await People(baseAddress,
+            events.Select(e => e.ActorId).Concat(events.Where(e => e.PostId is not null)
+                .SelectMany(e => posts.TryGetValue(e.PostId!, out var post) ? post.MentionedIds : [])),
+            ct);
+
+        var token = offers.Values.Any(offer => offer.State == OfferState.Open) ? FormToken.For(HttpContext) : null;
+        var door = baseAddress + "/";
+        var profile = reader is null ? door : ProfilePage.AddressOf(baseAddress, reader.Handle);
+        var answers = !baseUrl.IsConfigured && reader?.Id == space.OperatorId;
+        return events.Select(e =>
+        {
+            var isNew = e.Seq > from;
+            var who = e.ActorId is { } actor ? Person(people, actor) : null;
+            switch (e.Kind)
+            {
+                case EventKind.PostCreated or EventKind.Mention when posts.TryGetValue(e.PostId ?? "", out var post)
+                                                                      && posts.TryGetValue(e.TopicId ?? "", out var root):
+                    var taken = e.Kind == EventKind.PostCreated && post is { ParentId: null, OriginId: not null };
+                    var topic = PostWrites.TopicAddress(baseAddress, root.TangentId, root.Slug ?? root.Id);
+                    return new NotificationsPage.Entry(e.Seq,
+                        e.Kind == EventKind.Mention ? NotificationsPage.Kinds.Mention : taken ? NotificationsPage.Kinds.Taken : NotificationsPage.Kinds.Reply,
+                        isNew, e.At, who, post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id))
+                    {
+                        Topic = root.Title ?? "",
+                        Tangent = tangents.TryGetValue(root.TangentId, out var tangent) ? tangent.Name : root.TangentId,
+                        Line = post.Removed ? "" : TangentPage.Opening(post, people),
+                        Removed = post.Removed
+                    };
+                case EventKind.StandingChanged:
+                    // Who admitted the reader or lifted their timeout or ban is named, as the door names them; who
+                    // declined, timed out or banned them is not.
+                    var welcome = e.Standing == Participants.Standing.Admitted;
+                    return new NotificationsPage.Entry(e.Seq, NotificationsPage.Kinds.Standing, isNew, e.At, welcome ? who : null, door)
+                    {
+                        Standing = e.Standing is { } standing ? Participants.People.Word(standing) : null,
+                        Was = e.Before is { } before ? Participants.People.Word(before) : null
+                    };
+                case EventKind.RoleChanged:
+                    return new NotificationsPage.Entry(e.Seq, NotificationsPage.Kinds.Role, isNew, e.At, who, profile)
+                    {
+                        Role = Participants.People.Given.FirstOrDefault(given => given.Key == e.Role).Word ?? e.Role,
+                        Given = e.Given
+                    };
+                case EventKind.OfferMade when offers.TryGetValue(e.OfferId ?? "", out var offer):
+                    var open = offer.State == OfferState.Open && answers && offer.DeciderId == reader?.Id;
+                    return new NotificationsPage.Entry(e.Seq, NotificationsPage.Kinds.Offer, isNew, e.At, null,
+                        open ? null : baseAddress + FirstRunController.Path)
+                    {
+                        Offer = new NotificationsPage.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject,
+                            offer.State.ToString().ToLowerInvariant(), offer.DecidedAt)
+                        {
+                            Use = open ? baseAddress + OfferController.UsePath : null,
+                            Decline = open ? baseAddress + OfferController.DeclinePath : null,
+                            Token = open ? token : null
+                        }
+                    };
+                default:
+                    return new NotificationsPage.Entry(e.Seq, e.Kind, isNew, e.At, who, null);
+            }
+        }).ToList();
+    }
+
+    /// <summary>Everyone the page shows, in one keyed read, by participant Id, each with their profile's address.</summary>
+    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(string baseAddress, IEnumerable<string?> ids,
+        CancellationToken ct)
+    {
+        var wanted = ids.OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        if (wanted.Count == 0) return new Dictionary<string, TangentPage.Author>();
+        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
+        {
+            var handle = row.Handle.Length > 0 ? row.Handle : row.Id;
+            var name = row.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
+            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
+                ProfilePage.AddressOf(baseAddress, handle));
+        }, StringComparer.Ordinal);
+    }
+
+    private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
+        => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
+}

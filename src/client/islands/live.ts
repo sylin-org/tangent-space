@@ -1,6 +1,7 @@
 import { defineComponent, onUnmounted, type PropType } from 'vue'
 import { createLiveTransport, type LiveEvent, type LiveTransport } from '../live'
 import { fetchFragment } from './fragment'
+import { logEvent } from './unseen'
 
 // The live updater, one per page: it follows the log from where the page's request found it (live.ts) and patches the
 // page as rows that concern it arrive, fetching what changed as the server renders it. On a Topic's page, a new reply
@@ -8,8 +9,9 @@ import { fetchFragment } from './fragment'
 // counted in the notice below the replies, which links to it; a Post on the page that is edited or removed is fetched
 // again in place. On a Tangent's page, its list of Topics is fetched again, which marks what is new. On the door, the
 // door is fetched again from its own fragment. When the transport has fallen back to the door, which names no rows,
-// the Tangent's list and the door are fetched again and a Topic's notice says there may be new replies. It only ever
-// reads: a checkpoint moves where the reader says so (the seen island), never here.
+// the Tangent's list and the door are fetched again and a Topic's notice says there may be new replies. Every run of
+// rows is also dispatched on the document (logEvent), where the masthead's count of unseen notifications reads it. It
+// only ever reads: a checkpoint moves where the reader says so (the seen island), never here.
 export const live = defineComponent({
   name: 'LiveIsland',
   props: {
@@ -121,6 +123,7 @@ export const live = defineComponent({
     }
 
     async function onEvents(events: LiveEvent[]): Promise<boolean> {
+      document.dispatchEvent(new CustomEvent(logEvent, { detail: events }))
       if (props.page === 'topic') {
         for (const event of events) {
           try {

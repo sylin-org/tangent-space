@@ -17,7 +17,8 @@ namespace Tangent.Space;
 
 /// <summary>The door, one resource both ways, at the base URL. Its <c>GET</c> writes nothing and reads, each bounded
 /// and keyed: capability's rows for the place; the reader's place checkpoint; the newest events of the log and the
-/// newest that name the reader as their target (<see cref="LogWindow"/>); the first Tangents by order; capability once
+/// newest that name the reader as their target (<see cref="LogWindow"/>); how many of the reader's notifications they have
+/// not seen (<see cref="Notifications.Count"/>); the first Tangents by order; capability once
 /// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
 /// those Topics and Tangents; and the people it shows. An event is new to the reader when it is past their place
 /// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
@@ -27,7 +28,9 @@ namespace Tangent.Space;
 /// The Topics and Tangents among the news that the reader watches, by the watch flag on those same checkpoints, are
 /// listed first. The newest <c>standing.changed</c> among the reader's targeted events by someone else is news while they
 /// stand admitted, as their admission or as the lift of their timeout or ban, by the standing it changed; so is each
-/// <c>role.changed</c> that gave them a role or took one, the newest of each role. The door's <c>gate</c> is why they may
+/// <c>role.changed</c> that gave them a role or took one, the newest of each role. Where the reader's unseen
+/// notifications are more than the door lists of what targets them, or a count it could not finish, the news names
+/// their notifications. The door's <c>gate</c> is why they may
 /// not write in the place, which an applicant's door and a timed-out participant's, with when it ends, say in one
 /// sentence.
 /// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
@@ -182,6 +185,15 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;
         if (offered is not null) Response.Headers.CacheControl = "no-cache, no-store";
 
+        // The door names the reader's notifications where they hold more unseen than the door lists of what targets them.
+        var unseen = reader is null ? null : await Notifications.Count(reader.Id, baseAddress, ct);
+        if (news is not null && unseen is not null)
+        {
+            var shown = replies.Take(ItemLimit).Count() + mentions.Take(ItemLimit).Count() + taken.Take(ItemLimit).Count()
+                        + (admitted is null ? 0 : 1) + (lifted is null ? 0 : 1) + roleChanges.Count + (offered?.Count ?? 0);
+            if (unseen.AtLeast || unseen.Count > shown) news = news with { Notifications = unseen.Address };
+        }
+
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
         return Ok(new Door(
             space.Name,
@@ -200,7 +212,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
                 Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
-                TangentSpaceSettingsController.Entry(place, baseAddress)),
+                TangentSpaceSettingsController.Entry(place, baseAddress), unseen),
             DateOnly.FromDateTime(DateTime.UtcNow),
             Resume(baseAddress, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0)),
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
