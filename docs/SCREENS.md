@@ -20,3 +20,4 @@ Built from the frame and the shared components, captured, and scored last as bel
 | new-topic | never | — | templated from the sign-in panel's form styles; captured as empty, restored, refused and visitor |
 | edit | never | — | templated from the new-topic form; captured as form, refused, remove confirmation and not yours |
 | take-this-on-a-tangent | never | — | templated from the new-topic form; captured as form, refused and visitor; the topic screen adds taken-origin, taken-from and taken-from-unseen |
+| report | never | — | templated from the take-this-on-a-tangent form; captured as report-open, report-page and report-received; at 390 the path bar's crumbs overlap |

@@ -63,7 +63,7 @@ public sealed record StartTopic(
 
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);
-        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(ct), kind, Body, AuthorId, at, origin?.Id);
+        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(TangentId, Title, Id, ct), kind, Body, AuthorId, at, origin?.Id);
         await root.Save(ct);
         tangent.TopicStarted();
         await tangent.Save(ct);
@@ -80,24 +80,22 @@ public sealed record StartTopic(
         && existing.Kind == kind && existing.Body == Post.RootBody(Body, OriginId) && existing.AuthorId == AuthorId
         && existing.OriginId == OriginId;
 
-    /// <summary>The title's slug, or the first numbered suffix of it that no Topic in the Tangent holds; each try is one
-    /// counted query. Past the bound, the Post's own Id is the suffix, and the whole still stays within the limit.</summary>
-    private async Task<string> UniqueSlug(CancellationToken ct)
+    /// <summary>The slug of <paramref name="title"/> for a Topic whose root is <paramref name="id"/>, or the first numbered
+    /// suffix of it that no Topic in <paramref name="tangentId"/> holds; each try is one counted query. Past the bound, the
+    /// Post's own Id is the suffix, and the whole still stays within the limit.</summary>
+    internal static async Task<string> UniqueSlug(string tangentId, string title, string id, CancellationToken ct)
     {
-        var slug = Slug.From(Title);
+        var slug = Slug.From(title);
         for (var suffix = 1; suffix <= SuffixBound; suffix++)
         {
             if (suffix == 1 && Slug.Reserved.Contains(slug)) continue;
             var candidate = suffix == 1 ? slug : Slug.WithSuffix(slug, suffix);
-            if (!await Taken(candidate, ct)) return candidate;
+            if (!await Taken(tangentId, candidate, ct)) return candidate;
         }
 
-        return Slug.WithSuffix(slug, Id);
+        return Slug.WithSuffix(slug, id);
     }
 
-    private async Task<bool> Taken(string slug, CancellationToken ct)
-    {
-        var tangentId = TangentId;
-        return await Post.Count.Where(post => post.TangentId == tangentId && post.Slug == slug, CountStrategy.Exact, ct) > 0;
-    }
+    private static async Task<bool> Taken(string tangentId, string slug, CancellationToken ct)
+        => await Post.Count.Where(post => post.TangentId == tangentId && post.Slug == slug, CountStrategy.Exact, ct) > 0;
 }

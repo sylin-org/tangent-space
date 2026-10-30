@@ -209,7 +209,9 @@ export const screens: Readonly<Record<string, Screen>> = {
   // TID in every width and theme, so the server's idempotency keeps it one Post. Then take this on a tangent: a Topic
   // whose reply was taken into the workshop, each Post offering the verb and the reply listing the Topic taken from
   // it; that Topic, linked to its origin; and a Topic taken from a Post in a Tangent the persona may not view, which
-  // says only that. A signed-in state cancels the seen post the seen island sends once the window's end is on screen,
+  // says only that. Then reporting: the root's Report opened in the page, its short form under the Post; a reply's
+  // report page, the same form on a page of its own; and that page once the persona's report of the reply was
+  // received. A signed-in state cancels the seen post the seen island sends once the window's end is on screen,
   // so its control stays on the page and every width and theme reads the same checkpoints.
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
@@ -300,6 +302,27 @@ export const screens: Readonly<Record<string, Screen>> = {
         signedIn: true,
         path: '/t/workshop/the-kiln-budget',
         cancel: '/t/workshop/the-kiln-budget/seen',
+      },
+      {
+        name: 'report-open',
+        seed: 'topic',
+        signedIn: true,
+        cancel: '/t/discussions/what-kind-of-discussions/seen',
+        click: '.post-root .post-report > summary',
+        waitFor: '.post-root .post-report[open]',
+      },
+      {
+        name: 'report-page',
+        seed: 'topic-reported',
+        signedIn: true,
+        path: '/t/discussions/glazes-we-keep-coming-back-to/3mw6hf56bs224/report',
+      },
+      {
+        name: 'report-received',
+        seed: 'topic-reported',
+        signedIn: true,
+        path: '/t/discussions/glazes-we-keep-coming-back-to/3mw6hf56bs224/report',
+        query: { received: '3mw6iivles225' },
       },
     ],
   },

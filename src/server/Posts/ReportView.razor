@@ -1,0 +1,95 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* The report of one Post: one panel in the page, quoting the Post — who wrote it, when, and its words cut short, or
+   that it is removed — then the form: the reason, and the report's Id in a hidden field, minted when the page was
+   rendered, so a form sent twice is one report. A reader who may not report it reads why above the form, whose field is
+   read-only and which has no button, and a visitor the way to sign in; a refusal of the reason shows under it, and any
+   other above the form; a Post of the moderators' Tangent is not reported, which the page says instead of the form. Once
+   the reader's report is received, the panel says so and the way back to the Post, and
+   nothing of where the report went. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="report-heading">
+        <div class="sign-in-body">
+            <p class="post-form-where">From <a href="@Model.Reported.TopicAddress">@Model.Reported.Topic</a> in <a href="@Model.Reported.TangentAddress">@Model.Reported.Tangent</a></p>
+            <h1 id="report-heading" class="sign-in-title">@(Model.Received ? "Report received" : "Report this post")</h1>
+            <blockquote cite="@Model.Reported.Address">
+                <p>
+                    <a href="@Model.Reported.Address"><strong>@Model.Reported.Author.Name</strong> <span class="post-handle">@("@" + Model.Reported.Author.Handle)</span>
+                        · <time datetime="@Model.Reported.CreatedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@Model.Reported.CreatedAt.ToUniversalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</time></a>
+                </p>
+                <p>@(Model.Reported.Removed ? "This post is removed." : Model.Reported.Text)</p>
+            </blockquote>
+            @if (Model.Received)
+            {
+                <p class="report-received" role="status">The moderators have your report. Only they can read it.</p>
+                <p><a href="@Model.Reported.Address">Back to the post</a></p>
+            }
+            else
+            {
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="report-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else if (Model.Failure is { } failure)
+                {
+                    <p class="sign-in-failure" id="report-failure" role="alert">@failure</p>
+                }
+                @if (Model.Id is not null || Model.Gate is not null)
+                {
+                <form class="sign-in-form" method="post" action="@Model.Action">
+                    @if (Model.Token is { } token)
+                    {
+                        <FormTokenField Token="@token" />
+                    }
+                    @if (Model.Id is { } id)
+                    {
+                        <input type="hidden" name="@PostWrites.IdField" value="@id">
+                    }
+                    <div class="field">
+                        <label class="field-label" for="report-body">Why are you reporting this post?</label>
+                        <textarea class="post-form-body post-report-body" id="report-body" name="@PostWrites.BodyField" rows="4" required
+                                  autofocus="@(Model.Gate is null)" readonly="@(Model.Gate is not null)"
+                                  aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
+                                  aria-describedby="@(Model.BodyFailure is null ? "report-note" : "report-body-failure report-note")">@Model.Body</textarea>
+                        @if (Model.BodyFailure is { } bodyFailure)
+                        {
+                            <p class="field-failure" id="report-body-failure">@bodyFailure</p>
+                        }
+                        <p class="post-report-note" id="report-note">Only the moderators can read it.</p>
+                    </div>
+                    @if (Model.Gate is null)
+                    {
+                        <div class="post-form-actions">
+                            @if (Model.Who is { } who)
+                            {
+                                <span class="post-form-as">Reporting as <strong>@("@" + who.Handle)</strong></span>
+                            }
+                            <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Sending…">Send the report</button>
+                        </div>
+                    }
+                </form>
+                }
+            }
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public ReportPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place; the Post's Tangent and Topic and the report as
+    /// crumbs; and who reads, or where a visitor signs in.</summary>
+    public static Frame Frame(ReportPage page)
+        => new(page.Place, page.Door,
+            [new Crumb(page.Reported.Tangent, page.Reported.TangentAddress), new Crumb(page.Reported.Topic, page.Reported.TopicAddress), new Crumb("Report")],
+            page.Who, page.SignIn);
+}

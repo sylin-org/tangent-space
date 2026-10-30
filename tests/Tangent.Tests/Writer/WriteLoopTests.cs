@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Koan.Data.Abstractions.Failures;
+using Koan.Data.Core;
 using Koan.Data.Core.Transactions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -148,41 +149,60 @@ public sealed class WriteLoopTests(ITestOutputHelper output)
     public async Task A_commit_whose_outcome_is_unknown_fails_its_sender_and_reloads_every_mark_before_the_next_command()
     {
         var loads = 0;
-        // A rollback journal, where a commit needs every reader gone: a reader's shared lock makes the native COMMIT
-        // itself fail on the busy timeout, after the rows were dispatched, which Koan reports as an outcome it cannot know.
-        await using var tangentSpace = await Counted(new Dictionary<string, string?>
-            {
-                ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:02",
-                ["Koan:Data:Sqlite:JournalMode"] = "Delete"
-            },
-            () => Interlocked.Increment(ref loads));
-        var writer = Writer(tangentSpace);
-        Assert.Equal(1, Assert.IsType<Outcome<Slip>.Done>(await writer.Send(new CreateSlip("first", "s", 0, "body"), Cancellation)).Result.Sequence);
-        var loadedAtStart = loads;
-
-        Outcome<Slip> blocked;
-        await using (var reader = new SqliteConnection($"Data Source={tangentSpace.DatabasePath};Pooling=False"))
+        // The slips live in a database of their own, which only the writer and this proof open, so the lock the proof
+        // takes stops nothing else of the Tangent Space and nothing else's lock decides the outcome: the jobs worker's
+        // writes to the place's database run beside it untouched. A rollback journal, where a commit needs every reader
+        // gone: a reader's shared lock makes the native COMMIT itself fail on the busy timeout, after the rows were
+        // dispatched, which Koan reports as an outcome it cannot know.
+        var folder = Path.Combine(Path.GetTempPath(), "tangent-writer-" + Guid.CreateVersion7().ToString("n"));
+        Directory.CreateDirectory(folder);
+        var slips = Path.Combine(folder, "slips.db");
+        try
         {
-            await reader.OpenAsync(Cancellation);
-            await using var reading = reader.BeginTransaction(deferred: true);
-            await using (var read = reader.CreateCommand())
+            await using var tangentSpace = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?>
+                {
+                    ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:02",
+                    ["Koan:Data:Sqlite:JournalMode"] = "Delete",
+                    [$"Koan:Data:Sources:{Isolated}:Adapter"] = "sqlite",
+                    [$"Koan:Data:Sources:{Isolated}:ConnectionString"] = $"Data Source={slips}"
+                },
+                services => services.AddSingleton(new HighWaterMark(CreateSlip.Mark, async ct =>
+                {
+                    Interlocked.Increment(ref loads);
+                    using (EntityContext.Source(Isolated)) return await CreateSlip.HighWaterMark.Load(ct);
+                })), Cancellation);
+            var writer = Writer(tangentSpace);
+            Assert.Equal(1, Assert.IsType<Outcome<Slip>.Done>(await writer.Send(Apart(new CreateSlip("first", "s", 0, "body")), Cancellation)).Result.Sequence);
+            var loadedAtStart = loads;
+
+            Outcome<Slip> blocked;
+            await using (var reader = new SqliteConnection($"Data Source={slips};Pooling=False"))
             {
-                read.CommandText = "SELECT count(*) FROM sqlite_master";
-                await read.ExecuteScalarAsync(Cancellation);
+                await reader.OpenAsync(Cancellation);
+                await using var reading = reader.BeginTransaction(deferred: true);
+                await using (var read = reader.CreateCommand())
+                {
+                    read.CommandText = "SELECT count(*) FROM sqlite_master";
+                    await read.ExecuteScalarAsync(Cancellation);
+                }
+
+                blocked = await writer.Send(Apart(new CreateSlip("blocked", "s", 1, "body")), Cancellation);
             }
 
-            blocked = await writer.Send(new CreateSlip("blocked", "s", 1, "body"), Cancellation);
+            var next = await writer.Send(Apart(new CreateSlip("after", "s", 2, "body")), Cancellation);
+
+            var cause = Assert.IsType<TransactionException>(Assert.IsType<Outcome<Slip>.Failed>(blocked).Cause);
+            output.WriteLine($"{cause.CommitOutcome}: {cause.Message}");
+            Assert.Equal(DataCommitOutcome.Unknown, cause.CommitOutcome);
+            Assert.Equal(1, loadedAtStart);
+            Assert.Equal(2, loads);
+            using (EntityContext.Source(Isolated)) Assert.Null(await Slip.Get("blocked", Cancellation));
+            Assert.Equal(2, Assert.IsType<Outcome<Slip>.Done>(next).Result.Sequence);
         }
-
-        var next = await writer.Send(new CreateSlip("after", "s", 2, "body"), Cancellation);
-
-        var cause = Assert.IsType<TransactionException>(Assert.IsType<Outcome<Slip>.Failed>(blocked).Cause);
-        output.WriteLine($"{cause.CommitOutcome}: {cause.Message}");
-        Assert.Equal(DataCommitOutcome.Unknown, cause.CommitOutcome);
-        Assert.Equal(1, loadedAtStart);
-        Assert.Equal(2, loads);
-        Assert.Null(await Slip.Get("blocked", Cancellation));
-        Assert.Equal(2, Assert.IsType<Outcome<Slip>.Done>(next).Result.Sequence);
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     [Fact]
@@ -284,6 +304,21 @@ public sealed class WriteLoopTests(ITestOutputHelper output)
     }
 
     private static WriteLoop Writer(TangentSpaceFixture tangentSpace) => tangentSpace.Services.GetRequiredService<WriteLoop>();
+
+    /// <summary>The data source of the slips a proof keeps apart from the place's database.</summary>
+    private const string Isolated = "WriterProof";
+
+    /// <summary>A command whose reads and saves go to the slips' own database (<see cref="Isolated"/>), inside the
+    /// writer's transaction.</summary>
+    private static ICommand<T> Apart<T>(ICommand<T> command) => new OnSource<T>(Isolated, command);
+
+    private sealed record OnSource<T>(string Source, ICommand<T> Command) : ICommand<T>
+    {
+        public async Task<Outcome<T>> Run(Sequences sequences, CancellationToken ct)
+        {
+            using (EntityContext.Source(Source)) return await Command.Run(sequences, ct);
+        }
+    }
 
     /// <summary>Rows in the entity's table, counted on a connection of the test's own, outside the driver's pool; zero
     /// when the table does not exist yet.</summary>

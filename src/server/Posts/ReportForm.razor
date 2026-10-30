@@ -1,0 +1,23 @@
+@using global::Tangent.Render
+@* Report on one Post of a Topic: for a signed-in reader, on a Post that is not removed, a disclosure that opens a short
+   form in the page — the reason in a sentence or two — which posts to the Post's report address with the TID minted for
+   it, so a form sent twice is one report. *@
+@if (Model.Report is { } report)
+{
+    <details class="post-report">
+        <summary class="post-action">Report</summary>
+        <form class="post-report-form" method="post" action="@report.Action">
+            <FormTokenField Token="@report.Token" />
+            <input type="hidden" name="@PostWrites.IdField" value="@report.Id">
+            <label class="field-label" for="@("report-" + Model.Id)">Why are you reporting this post?</label>
+            <textarea class="post-form-body post-report-body" id="@("report-" + Model.Id)" name="@PostWrites.BodyField" rows="3" required
+                      aria-describedby="@("report-note-" + Model.Id)"></textarea>
+            <p class="post-report-note" id="@("report-note-" + Model.Id)">Only the moderators can read it.</p>
+            <button type="submit" class="sign-in-submit post-report-submit">Send the report</button>
+        </form>
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public TopicPage.Post Model { get; set; } = default!;
+}

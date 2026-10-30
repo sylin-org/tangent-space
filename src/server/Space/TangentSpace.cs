@@ -24,8 +24,8 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public TangentSpace() => Id = SingleRow;
 
     /// <summary>The row first run writes: the name, whose place it is and who answers for it, read by anyone and
-    /// joined at once.</summary>
-    public static TangentSpace Establish(string name, string proprietorId, string operatorId)
+    /// joined at once, with the moderators' Tangent first run creates beside it.</summary>
+    public static TangentSpace Establish(string name, string proprietorId, string operatorId, string moderatorsTangentId)
     {
         var trimmed = name.Trim();
         if (trimmed.Length is 0 or > NameLimit || trimmed.Any(char.IsControl)) throw new Refusal(NameRule);
@@ -34,6 +34,7 @@ public sealed class TangentSpace : Entity<TangentSpace>
             Name = trimmed,
             ProprietorId = proprietorId,
             OperatorId = operatorId,
+            ModeratorsTangentId = moderatorsTangentId,
             Audience = Audience.Public,
             Admission = Admission.Join
         };
@@ -51,6 +52,10 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>The accountable person, declared at first run; null until then.</summary>
     public string? OperatorId { get; set; }
 
+    /// <summary>The slug of the moderators' own Tangent, where a report starts a Topic (<see cref="ModeratorsTangent"/>);
+    /// null only for a place established before first run created one, until the next start creates it.</summary>
+    public string? ModeratorsTangentId { get; set; }
+
     /// <summary>Who may read: anyone, or participants the place admitted.</summary>
     public Audience Audience { get; set; } = Audience.Public;
 
@@ -63,6 +68,14 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public Appearance Appearance { get; set; } = new();
 
     public Slots Slots { get; set; } = new();
+
+    /// <summary>Records the moderators' Tangent of a place established without one, a change to the row.</summary>
+    public void RecordModerators(string tangentId)
+    {
+        if (ModeratorsTangentId is not null) throw new InvalidOperationException("This Tangent Space already has its moderators' Tangent.");
+        ModeratorsTangentId = tangentId;
+        Version = checked(Version + 1);
+    }
 
     /// <summary>Raised by every change to the row.</summary>
     public long Version { get; set; } = 1;

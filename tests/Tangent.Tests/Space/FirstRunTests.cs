@@ -107,7 +107,8 @@ public sealed partial class FirstRunTests
         Assert.Equal((Audience.Public, Admission.Join), (space.Audience, space.Admission));
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
         var log = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Select(e => (e.Kind, e.ActorId)).ToList();
-        Assert.Equal([(EventKind.StandingChanged, Leo), (EventKind.SpaceChanged, Leo)], log);
+        // The moderators' Tangent is created with the place.
+        Assert.Equal([(EventKind.StandingChanged, Leo), (EventKind.TangentChanged, Leo), (EventKind.SpaceChanged, Leo)], log);
         var participant = await Participant.Get(Leo, Cancellation);
         Assert.Equal((ParticipantKind.Person, KindSource.OwnChoice, Standing.Admitted, "leo.example"),
             (participant?.Kind, participant?.KindSource, participant?.Standing, participant?.Handle));
