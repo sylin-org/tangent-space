@@ -13,7 +13,7 @@ namespace Tangent.Events;
 /// <see cref="Appended"/> on them, which Koan delivers to <see cref="StreamDelivery"/> in the same order. A page it could
 /// not raise is logged and passed over: an open stream finds the rows it lacks in the log by their sequence, which has no
 /// gap. Koan discovers it as a background service and starts and stops it with the host.</summary>
-public sealed class LogAnnouncer(ILogger<LogAnnouncer> logger, IConfiguration configuration, WriteLoop writer, EventStream stream)
+public sealed class LogAnnouncer(ILogger<LogAnnouncer> logger, IConfiguration configuration, WriteLoop writer)
     : KoanBackgroundServiceBase(logger, configuration)
 {
     /// <summary>The most rows one read takes and one raise carries.</summary>
@@ -25,11 +25,13 @@ public sealed class LogAnnouncer(ILogger<LogAnnouncer> logger, IConfiguration co
 
     public override async Task ExecuteCore(CancellationToken ct)
     {
+        // Rows already in the log when it starts are not announced; a commit that lands while it subscribes is, from the
+        // log's mark read once the subscription holds.
+        var announced = await Event.HighWaterMark.Load(ct);
         writer.Committed += Noted;
         try
         {
-            // Noted before the head is read, so no commit falls between them.
-            var announced = await stream.Head(ct);
+            announced = await Announce(announced, await Event.HighWaterMark.Load(ct), ct);
             while (await _committed.Reader.WaitToReadAsync(ct))
             {
                 while (_committed.Reader.TryRead(out var through)) announced = await Announce(announced, through, ct);

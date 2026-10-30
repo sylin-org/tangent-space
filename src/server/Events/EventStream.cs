@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Tangent.Writer;
 
 namespace Tangent.Events;
 
@@ -8,8 +9,8 @@ namespace Tangent.Events;
 /// <see cref="Publish"/> queues an appended row of the log for every open stream at once and never waits: a stream
 /// whose queue already holds <see cref="QueueBound"/> rows is a slow reader, and it is closed — its queue completed and
 /// its request aborted — to resume from the last sequence it received. Who may see a row is each stream's to decide.
-/// <see cref="Head"/> is the log's last sequence as this process knows it: loaded once from the log, then raised by
-/// every row published, never ahead of what is committed.</summary>
+/// <see cref="Head"/> is the log's last committed sequence: loaded once from the log, then raised by every commit of the
+/// writer as it lands, so a stream that begins at it begins after every row already committed.</summary>
 public sealed class EventStream
 {
     /// <summary>The most rows a stream's queue holds before the stream is closed as a slow reader.</summary>
@@ -27,7 +28,15 @@ public sealed class EventStream
     private int _inAll;
     private long _head = -1;
 
-    /// <summary>The log's last sequence as this process knows it, read from the log the first time it is asked.</summary>
+    public EventStream(WriteLoop writer)
+    {
+        writer.Committed += committed =>
+        {
+            if (committed.Sequences.TryGetValue(Event.Log, out var through)) Raise(through);
+        };
+    }
+
+    /// <summary>The log's last committed sequence, read from the log the first time it is asked.</summary>
     public async ValueTask<long> Head(CancellationToken ct)
     {
         var head = Volatile.Read(ref _head);
@@ -57,7 +66,6 @@ public sealed class EventStream
     /// <summary>Queues <paramref name="row"/> for every open stream, closing each whose queue is full.</summary>
     public void Publish(Event row)
     {
-        Raise(row.Seq);
         foreach (var connection in _open.Keys) connection.Offer(row);
     }
 
