@@ -90,9 +90,13 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_windows", Order = 1)]
     public long Sequence { get; set; }
 
+    /// <summary>Who wrote it. In <c>ix_post_authors</c> before the time it was written, so a participant's Posts,
+    /// newest first, are one range of it.</summary>
+    [Index(Name = "ix_post_authors", Order = 0)]
     public string AuthorId { get; set; } = "";
 
     [Index(Name = "ix_post_origins", Order = 1)]
+    [Index(Name = "ix_post_authors", Order = 1)]
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>The last sequence taken in the Topic. Root only.</summary>

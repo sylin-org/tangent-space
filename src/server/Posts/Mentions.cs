@@ -47,7 +47,7 @@ public static partial class Mentions
         return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(participant => participant.Id, participant =>
         {
             var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-            return new TopicPage.Mention(participant.Id, handle, baseUrl + "/p/" + Uri.EscapeDataString(handle));
+            return new TopicPage.Mention(participant.Id, handle, ProfilePage.AddressOf(baseUrl, handle));
         }, StringComparer.Ordinal);
     }
 

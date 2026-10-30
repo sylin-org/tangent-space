@@ -1,0 +1,217 @@
+using Koan.Data.Abstractions;
+using Koan.Data.Core.Sorting;
+using Koan.Identity.Roles;
+using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Auth.Server.Options;
+using Koan.Web.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Tangent.Access;
+using Tangent.Delegates;
+using Tangent.Posts;
+using Tangent.Render;
+using Tangent.Space;
+using Tangent.Tangents;
+using KoanPerson = Koan.Identity.Identity;
+
+namespace Tangent.Participants;
+
+/// <summary>A participant's profile, one resource both ways, at <c>/p/{handle}</c>: the profile their PDS gave, their
+/// kind, the roles they hold here, when they arrived, and their recent Posts in the Tangents the reader may view, left to
+/// the formatter as HTML, a fragment or JSON. A reader without <see cref="Bit.View"/> on the place receives its gate, the
+/// same for every handle, held or not; a handle no participant holds now answers as a missing resource. The address
+/// takes a handle, matched as the participant's row keeps it, or a participant's DID. Every read is bounded and keyed:
+/// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; the
+/// Tangents, at most as many as a place holds, with their overwrites from Koan's cache; one page of their Posts in those
+/// the reader may view; the roots of the replies among them; the participants those Posts mention; and, on the reader's
+/// own profile in their own session, their approvals. A revoke posts back here and is the reader's alone.</summary>
+public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles, IOptions<RoleOptions> roleOptions,
+    IOptions<AuthServerOptions> server) : ControllerBase
+{
+    /// <summary>The query parameter that carries the cursor of the page of Posts to continue from.</summary>
+    public const string Before = "before";
+
+    /// <summary>The segment under the reader's own profile where an approval is revoked: <c>…/delegates/{id}/revoke</c>.</summary>
+    public const string DelegatesSegment = "delegates";
+
+    public const string RevokeSegment = "revoke";
+
+    /// <summary>The most participants read for one handle: a handle moves between accounts, and a row keeps the one it
+    /// was last verified with until that participant signs in again.</summary>
+    private const int HolderRead = 8;
+
+    [HttpGet(ProfilePage.Segment + "{handle}")]
+    [HttpHead(ProfilePage.Segment + "{handle}")]
+    public async Task<IActionResult> Get(string handle, [FromQuery(Name = Before)] string? before, CancellationToken ct)
+    {
+        var personId = PostWrites.PersonId(User);
+        var rows = await Capabilities.LoadRows(personId, null, ct);
+        var place = rows.For(null);
+        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (await Holder(handle, ct) is not { } subject) return PostWrites.Absent();
+
+        RecentPosts.Cursor? cursor = null;
+        if (before is not null && (cursor = RecentPosts.Cursor.Parse(before)) is null)
+            return new Problem(StatusCodes.Status400BadRequest, "Not a page of these posts",
+                $"The {Before} parameter is the cursor a page of this profile names as its older.").ToResult();
+
+        var tangents = await Viewable(personId, ct);
+        var page = await RecentPosts.Read(subject.Id, tangents.Keys.ToList(), cursor, ct);
+        var roots = await Roots(page.Posts, ct);
+        var people = await Mentioned(page.Posts, ct);
+        var held = (await roles.ForPerson(subject.Id, ct)).Where(role => role.Id != Roles.Everyone).Select(role => role.Name)
+            .Order(StringComparer.Ordinal).ToList();
+        var person = await KoanPerson.Get(subject.Id, ct);
+
+        var baseAddress = BaseAddress();
+        var (name, shownHandle) = Named(subject);
+        var address = ProfilePage.AddressOf(baseAddress, shownHandle);
+        var reader = rows.Participant;
+        var own = reader is not null && reader.Id == subject.Id && !DelegateIdentity.Delegated(HttpContext);
+        ProfilePage.Approvals? approvals = null;
+        if (own)
+        {
+            var grants = await Approved.Of(reader!.Id, DateTimeOffset.UtcNow, ct);
+            approvals = new ProfilePage.Approvals(
+                grants.Select(grant => new ProfilePage.Approval(grant.Id, Approved.At(grant),
+                    address + "/" + DelegatesSegment + "/" + Uri.EscapeDataString(grant.Id) + "/" + RevokeSegment)).ToList(),
+                server.Value.AccessTokenLifetime,
+                FormToken.For(HttpContext));
+            // The reader's own profile carries the revoke forms with a fresh antiforgery token, so it is never stored or
+            // revalidated; anyone else's, read signed in, is theirs alone to cache.
+            Response.Headers.CacheControl = "no-cache, no-store";
+        }
+        else if (reader is not null)
+        {
+            Response.Headers.CacheControl = "private";
+        }
+
+        var back = Uri.EscapeDataString(baseUrl.PathBase + ProfilePage.Segment + shownHandle);
+        return Ok(new ProfilePage(
+            subject.Id,
+            shownHandle,
+            name,
+            subject.Profile.DisplayName is { Length: > 0 } displayName ? displayName : null,
+            subject.Profile.Description is { Length: > 0 } description ? description : null,
+            Monogram.Avatar(subject.Profile.Avatar),
+            subject.Kind.ToString().ToLowerInvariant(),
+            held,
+            person?.CreatedAt,
+            address,
+            place.Can,
+            place.Gate(Bit.Post),
+            page.Posts.Select(post => Written(post, roots, tangents, people, baseAddress)).ToList(),
+            page.Next is { } next ? address + "?" + Before + "=" + Uri.EscapeDataString(next.ToString()) : null,
+            cursor is not null,
+            approvals,
+            rows.Space.Name,
+            baseAddress + "/",
+            reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
+            reader is null ? null : Reader(reader, place, back),
+            DateOnly.FromDateTime(DateTime.UtcNow)));
+    }
+
+    /// <summary>Revokes one of the reader's own approvals and sends them back to their profile, or answers <c>204</c> as
+    /// JSON. Only the person does it, in their own session with the form's token: a delegate's bearer is refused, and
+    /// a profile that is not the reader's own, or an approval that is not theirs or no longer stands, is answered as the
+    /// revoke is, with nothing changed.</summary>
+    [HttpPost(ProfilePage.Segment + "{handle}/" + DelegatesSegment + "/{grant}/" + RevokeSegment)]
+    public async Task<IActionResult> Revoke(string handle, string grant, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (DelegateIdentity.Delegated(HttpContext))
+            return new Problem(StatusCodes.Status403Forbidden, "Only the person revokes",
+                "A request made with a bearer token can’t revoke an agent; the person signs in and revokes it on their profile.").ToResult();
+        if (PostWrites.PersonId(User) is not { } personId)
+            return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Revoking an agent needs the person who approved it, signed in.",
+                Capabilities.SignIn).ToResult();
+        if (!await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
+        if (await Holder(handle, ct) is not { } subject || subject.Id != personId) return PostWrites.Absent();
+
+        await Approved.Revoke(personId, grant, ct);
+        if (PostWrites.WantsJson(Request)) return NoContent();
+        Response.Headers.Location = baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(Named(subject).Handle);
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    /// <summary>The participant the address names: by Id where it is a DID; otherwise the participant whose row keeps the
+    /// handle, as written or in lower case, as atproto writes handles, and among rows that still keep a handle another
+    /// account took since, the one whose profile was captured last.</summary>
+    private static async Task<Participant?> Holder(string handle, CancellationToken ct)
+    {
+        if (handle.Length is 0 or > Mentions.IdentityLimit) return null;
+        if (handle.StartsWith("did:", StringComparison.Ordinal)) return await Participant.Get(handle, ct);
+        if (handle.Length > Participants.SignIn.HandleLimit) return null;
+        var query = new QueryDefinition { Page = 1, PageSize = HolderRead };
+        var rows = await Participant.Query(participant => participant.Handle == handle, query, ct);
+        var lower = handle.ToLowerInvariant();
+        if (rows.Count == 0 && lower != handle) rows = await Participant.Query(participant => participant.Handle == lower, query, ct);
+        return rows.OrderByDescending(row => row.Profile.CapturedAt ?? DateTimeOffset.MinValue).ThenBy(row => row.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    /// <summary>The Tangents the reader may view, by slug: every Tangent of the place, at most as many as Koan lets one
+    /// subject hold overwrites for, which bounds them, and their overwrites from Koan's cache.</summary>
+    private async Task<IReadOnlyDictionary<string, Tangents.Tangent>> Viewable(string? personId, CancellationToken ct)
+    {
+        var all = await Tangents.Tangent.All(new QueryDefinition { Page = 1, PageSize = roleOptions.Value.MaxOverwritesPerSubject }
+            .WithSort<Tangents.Tangent>(sort => sort.OrderBy(tangent => tangent.Order).ThenBy(tangent => tangent.Id)), ct);
+        var each = await Capabilities.LoadEach(personId, all.Select(tangent => tangent.Id).ToList(), ct);
+        return all.Where(tangent => each[tangent.Id].Exists).ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
+    }
+
+    /// <summary>The roots of the replies among the Posts, by Id, in one keyed read.</summary>
+    private static async Task<IReadOnlyDictionary<string, Post>> Roots(IReadOnlyList<Post> posts, CancellationToken ct)
+    {
+        var ids = posts.Where(post => post.ParentId is not null).Select(post => post.TopicId).Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return new Dictionary<string, Post>();
+        return (await Post.Get(ids, ct)).OfType<Post>().ToDictionary(post => post.Id, StringComparer.Ordinal);
+    }
+
+    /// <summary>The participants the Posts mention, as their openings read them, in one keyed read.</summary>
+    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> Mentioned(IReadOnlyList<Post> posts, CancellationToken ct)
+    {
+        var ids = posts.SelectMany(post => post.MentionedIds).Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return new Dictionary<string, TangentPage.Author>();
+        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
+        {
+            var (name, handle) = Named(row);
+            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar);
+        }, StringComparer.Ordinal);
+    }
+
+    private static ProfilePage.Written Written(Post post, IReadOnlyDictionary<string, Post> roots, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
+        IReadOnlyDictionary<string, TangentPage.Author> people, string baseAddress)
+    {
+        var root = post.ParentId is null ? post : roots.GetValueOrDefault(post.TopicId);
+        var tangent = tangents[post.TangentId];
+        var slug = root?.Slug ?? post.TopicId;
+        return new ProfilePage.Written(
+            post.Id,
+            post.ParentId is null ? post.Kind.ToString().ToLowerInvariant() : "reply",
+            root?.Title ?? "",
+            tangent.Name,
+            baseAddress + "/t/" + Uri.EscapeDataString(tangent.Id),
+            post.ParentId is null ? PostWrites.TopicAddress(baseAddress, tangent.Id, slug) : PostWrites.Address(baseAddress, tangent.Id, slug, post.Id),
+            TangentPage.Opening(post, people),
+            post.CreatedAt);
+    }
+
+    /// <summary>The signed-in reader as the account menu shows them, signing out back to this profile.</summary>
+    private Who Reader(Participant reader, Capabilities place, string back)
+    {
+        var (name, handle) = Named(reader);
+        return new Who(reader.Id, name, handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
+            BaseAddress() + AuthConstants.Routes.Logout + "?return=" + back);
+    }
+
+    /// <summary>The name a participant is shown by, and their handle: the profile's display name, else the handle, else
+    /// their Id.</summary>
+    private static (string Name, string Handle) Named(Participant participant)
+    {
+        var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
+        return (participant.Profile.DisplayName is { Length: > 0 } name ? name : handle, handle);
+    }
+
+    private string BaseAddress() => baseUrl.Resolve(HttpContext);
+}

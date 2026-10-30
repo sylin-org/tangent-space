@@ -73,8 +73,9 @@ public sealed partial record TangentPage(
     /// reader.</summary>
     public sealed record Latest(string Id, Author Author, string Line, DateTimeOffset At, bool New);
 
-    /// <summary>A participant as the page shows them: the name to show, their handle, and their kind and avatar.</summary>
-    public sealed record Author(string Id, string Handle, string Name, string Kind, string? Avatar);
+    /// <summary>A participant as the page shows them: the name to show, their handle, their kind and avatar, and, where
+    /// the page links their name, their profile's address.</summary>
+    public sealed record Author(string Id, string Handle, string Name, string Kind, string? Avatar, string? Profile = null);
 
     /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there.</summary>
     public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount);

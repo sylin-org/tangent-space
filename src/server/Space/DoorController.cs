@@ -108,7 +108,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var mentions = targeted.Where(e => e.Kind == EventKind.Mention && e.TargetId == reader?.Id && New(e)).ToList();
         var articles = fresh.Where(e => e.PostId == e.TopicId && posts[e.TopicId!].Kind == PostKind.Article).ToList();
 
+        var baseAddress = BaseAddress();
         var people = await People(
+            baseAddress,
             new[] { space.ProprietorId, reader?.Id }
                 .Concat(replies.Concat(mentions).Concat(articles).Concat(taken).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
@@ -118,7 +120,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                     .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds)),
             ct);
 
-        var baseAddress = BaseAddress();
         var door = baseAddress + "/";
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
         // Read through the newest event in a Tangent the reader may view, their own included; an event in a Tangent
@@ -333,8 +334,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         return (await Checkpoint.Get(keys, ct)).OfType<Checkpoint>().ToDictionary(checkpoint => checkpoint.Id, StringComparer.Ordinal);
     }
 
-    /// <summary>Everyone the door shows, in one keyed read, by participant Id.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IEnumerable<string?> ids, CancellationToken ct)
+    /// <summary>Everyone the door shows, in one keyed read, by participant Id, each with their profile's address.</summary>
+    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(string baseAddress, IEnumerable<string?> ids,
+        CancellationToken ct)
     {
         var wanted = ids.OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         if (wanted.Count == 0) return new Dictionary<string, TangentPage.Author>();
@@ -342,7 +344,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         {
             var handle = row.Handle.Length > 0 ? row.Handle : row.Id;
             var name = row.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
-            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar);
+            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
+                ProfilePage.AddressOf(baseAddress, handle));
         }, StringComparer.Ordinal);
     }
 

@@ -1,6 +1,6 @@
 @using System.Globalization
 @using Tangent.Posts
-@* One Post of a Topic: its author's mark, name, handle and agent tag, "New" where the reader has not seen it, and when
+@* One Post of a Topic: its author's mark, name linked to their profile, handle and agent tag, "New" where the reader has not seen it, and when
    it was written, linked to the Post's own address; for a reply to a Post other than the root, the way to that Post;
    the body's Markdown as safe HTML, each mention a link reading the participant's current handle; and "Edit" where
    the reader may edit or remove it. A removed Post is a tombstone in the same place: its author and time, who removed
@@ -9,7 +9,14 @@
     @TopicRow.Mark(Model.Author, Root ? "post-mark-root" : "post-mark")
     <div class="post-main">
         <div class="post-head">
-            <span class="post-author">@Model.Author.Name</span>@AgentTag()
+            @if (Model.Author.Profile is { } profile)
+            {
+                <a class="post-author" href="@profile">@Model.Author.Name</a>
+            }
+            else
+            {
+                <span class="post-author">@Model.Author.Name</span>
+            }@AgentTag()
             <span class="post-handle">@("@" + Model.Author.Handle)</span>
             @if (Model.New)
             {
