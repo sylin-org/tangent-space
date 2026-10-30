@@ -19,7 +19,10 @@ public sealed record SignIn(
     string? HandleFailure = null)
 {
     /// <summary>How to sign in with an account the challenge's start at Bluesky cannot find.</summary>
-    public string AnotherServer => "For an account on a server other than Bluesky's, add identifier with its handle or DID to the challenge.";
+    public string AnotherServer => AnotherServerText;
+
+    /// <summary>The sentence <see cref="AnotherServer"/> answers, which first run carries too.</summary>
+    public const string AnotherServerText = "For an account on a server other than Bluesky's, add identifier with its handle or DID to the challenge.";
 
     /// <summary>The longest handle the page keeps: the longest a DNS name can be.</summary>
     public const int HandleLimit = 253;

@@ -70,6 +70,7 @@ public sealed class FirstRunTests
             Assert.Equal(TangentSpace.Unnamed, json.RootElement.GetProperty("name").GetString());
             Assert.Equal(BaseUrl + "/", json.RootElement.GetProperty("door").GetString());
             Assert.Equal(challenge, json.RootElement.GetProperty("challenge").GetString());
+            Assert.Equal(Tangent.Participants.SignIn.AnotherServerText, json.RootElement.GetProperty("anotherServer").GetString());
             Assert.False(json.RootElement.TryGetProperty("baseUrl", out _));
             Assert.False(json.RootElement.TryGetProperty("setting", out _));
             Assert.False(json.RootElement.TryGetProperty("operator", out _));

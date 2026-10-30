@@ -25,6 +25,9 @@ public sealed record FirstRun(
     /// <summary>The configuration key that names the account that may set the place up.</summary>
     public const string OperatorSetting = "Tangent:Operator";
 
+    /// <summary>Beside <see cref="Challenge"/>, how to sign in with an account on a server other than Bluesky's.</summary>
+    public string? AnotherServer => Challenge is null ? null : Participants.SignIn.AnotherServerText;
+
     /// <summary>The challenge's address without its query: where the sign-in forms go.</summary>
     public string ChallengeAddress() => (Challenge ?? "").Split('?', 2)[0];
 
