@@ -8,7 +8,8 @@ namespace Tangent.Participants;
 /// name an account on another server. A sign-in that fails comes back here too, with Koan's sanitized code in
 /// <c>error</c> (WEB-0080). <see cref="Handle"/> is the handle typed last, kept in the field after a failure;
 /// <see cref="Failure"/> is a failure of the sign-in as a whole and <see cref="HandleFailure"/> one of the handle
-/// itself, both in words. <see cref="Door"/> is the place's door.</summary>
+/// itself, both in words. <see cref="Door"/> is the place's door. <see cref="Private"/> says the place is read by its
+/// participants alone, so signing in is how to read it.</summary>
 public sealed record SignIn(
     string Name,
     string Door,
@@ -16,7 +17,8 @@ public sealed record SignIn(
     string Challenge,
     string? Handle = null,
     string? Failure = null,
-    string? HandleFailure = null)
+    string? HandleFailure = null,
+    bool Private = false)
 {
     /// <summary>How to sign in with an account the challenge's start at Bluesky cannot find.</summary>
     public string AnotherServer => AnotherServerText;

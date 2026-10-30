@@ -44,7 +44,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
     /// <summary>The field that says how long a timeout lasts: one of <see cref="People.Durations"/>.</summary>
     public const string ForField = "for";
 
-    /// <summary>The field that names the role given or taken: one of <see cref="People.Given"/>.</summary>
+    /// <summary>The field that names the role given or taken, by its word (<see cref="Roles.Word(string)"/>): one of a
+    /// participant's <c>give</c> or <c>take</c>.</summary>
     public const string RoleField = "role";
 
     /// <summary>The field that names the page a form returns to.</summary>
@@ -92,13 +93,13 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
     [HttpPost(GivePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     public Task<IActionResult> PostGive(CancellationToken ct) => Change((fields, actor, participant) =>
-        People.KeyOf(fields.GetValueOrDefault(RoleField)) is { } role ? new ChangeRole(actor, participant, role, Give: true) : null,
+        Roles.KeyOf(fields.GetValueOrDefault(RoleField)) is { } role ? new ChangeRole(actor, participant, role, Give: true) : null,
         People.NotARole, ct);
 
     [HttpPost(TakePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     public Task<IActionResult> PostTake(CancellationToken ct) => Change((fields, actor, participant) =>
-        People.KeyOf(fields.GetValueOrDefault(RoleField)) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
+        Roles.KeyOf(fields.GetValueOrDefault(RoleField)) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
         People.NotARole, ct);
 
     /// <summary>One change: the form's token, the place, the fields; the command <paramref name="command"/> builds from
@@ -197,7 +198,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
     };
 
     /// <summary>Whether a refusal is the rule of who changes whose standing and roles, rather than a missing verb.</summary>
-    private static bool Rule(string reason) => reason is People.Themselves or People.Operator or People.NotBelow or People.NotHeld;
+    private static bool Rule(string reason) => reason is People.Themselves or People.Operator or People.NotBelow or People.NotHeld or People.NotManaged;
 
     private async Task<PeoplePage> Page(Capabilities place, string? personId, string? start, People.Cursor? cursor, CancellationToken ct)
     {
@@ -254,8 +255,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
             standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Words(durations) + ".")) : null,
             standing ? Changing(BanPath, "ban in their can") : null,
             standing ? Changing(LiftPath, "lift in their can") : null,
-            roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, "The role to give: moderator or administrator, one in their give.")) : null,
-            roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, "The role to take: moderator or administrator, one in their take.")) : null,
+            roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, "The role to give, by its word, one in their give.")) : null,
+            roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, "The role to take, by its word, one in their take.")) : null,
             durations);
     }
 
@@ -284,29 +285,30 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);
 
-    /// <summary>What one reader may see and do of the people on one page, read once — the place's row, and the roles
-    /// given here with what they grant — and then each participant's row from Koan's bag for them, with the names of
-    /// their roles read once per role.</summary>
+    /// <summary>What one reader may see and do of the people on one page, read once — the place's row, and one page of
+    /// the roles in their order, the highest first, with what each grants — and then each participant's row from Koan's
+    /// bag for them, with any role of theirs past that page read once.</summary>
     public sealed class Lister
     {
         private readonly RoleCollection _roles;
         private readonly Capabilities _reader;
         private readonly string? _readerId;
-        private readonly IReadOnlyDictionary<string, Role> _given;
+        private readonly IReadOnlyList<Role> _given;
         private readonly string _baseAddress;
-        private readonly Dictionary<string, string> _names = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Role?> _read = new(StringComparer.Ordinal);
         private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
 
-        private Lister(RoleCollection roles, Capabilities reader, string? readerId, TangentSpace space, IReadOnlyDictionary<string, Role> given,
+        private Lister(RoleCollection roles, Capabilities reader, string? readerId, TangentSpace space, IReadOnlyList<Role> read,
             string baseAddress)
         {
             _roles = roles;
             _reader = reader;
             _readerId = readerId;
             Space = space;
-            _given = given;
+            // A row offers the roles given here lowest first.
+            _given = read.Where(role => Roles.Given(role.Key)).OrderBy(role => role.Position).ToList();
             _baseAddress = baseAddress;
-            foreach (var role in given.Values) _names[role.Key] = role.Name;
+            foreach (var role in read) _read[role.Key] = role;
         }
 
         /// <summary>The place's row.</summary>
@@ -315,13 +317,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
         public static async Task<Lister> Load(RoleCollection roles, Capabilities reader, string? readerId, string baseAddress, CancellationToken ct)
         {
             var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-            var given = new Dictionary<string, Role>(StringComparer.Ordinal);
-            foreach (var (_, key) in People.Given)
-            {
-                if (await roles.Get(key, ct) is { } role) given[key] = role;
-            }
-
-            return new Lister(roles, reader, readerId, space, given, baseAddress);
+            var read = await roles.Page(pageSize: People.GivenRead, ct: ct);
+            return new Lister(roles, reader, readerId, space, read.Items, baseAddress);
         }
 
         /// <summary>One participant as the people list them for the reader.</summary>
@@ -329,9 +326,14 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
         {
             var bag = await _roles.Bag(participant.Id, authenticated: true, ct);
             var held = bag.Roles.Where(role => role is not (RoleTokens.Everyone or RoleTokens.Authenticated)).ToList();
-            var names = new List<(int Order, string Name)>(held.Count);
-            foreach (var key in held) names.Add((Order(key), await Name(key, ct)));
-            var offer = People.Offered(_reader, _readerId, participant, bag.Roles, Space, _given, _now);
+            var names = new List<(int Position, string Name)>(held.Count);
+            foreach (var key in held)
+            {
+                var role = await Read(key, ct);
+                names.Add((role?.Position ?? 0, role?.Name ?? key));
+            }
+
+            var offer = People.Offered(_reader, _readerId, participant, bag, Space, _given, _now);
             var standing = participant.StandingAt(_now);
             var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
             return new PeoplePage.Listed(
@@ -342,28 +344,19 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
                 participant.Kind.ToString().ToLowerInvariant(),
                 People.Word(standing),
                 standing == Standing.TimedOut ? participant.StandingUntil : null,
-                names.OrderBy(name => name.Order).ThenBy(name => name.Name, StringComparer.Ordinal).Select(name => name.Name).ToList(),
+                names.OrderByDescending(name => name.Position).ThenBy(name => name.Name, StringComparer.Ordinal).Select(name => name.Name).ToList(),
                 offer.Can,
                 offer.Give,
                 offer.Take);
         }
 
-        /// <summary>A role's name, read once per role; its key where the role is gone.</summary>
-        private async Task<string> Name(string key, CancellationToken ct)
+        /// <summary>A role's row, read once per role; null where the role is gone.</summary>
+        private async Task<Role?> Read(string key, CancellationToken ct)
         {
-            if (_names.TryGetValue(key, out var name)) return name;
-            name = (await _roles.Get(key, ct))?.Name ?? key;
-            _names[key] = name;
-            return name;
+            if (_read.TryGetValue(key, out var role)) return role;
+            role = await _roles.Get(key, ct);
+            _read[key] = role;
+            return role;
         }
-
-        /// <summary>The seeded roles first, highest first; every other role after them.</summary>
-        private static int Order(string key) => key switch
-        {
-            Roles.Administrator => 0,
-            Roles.Moderator => 1,
-            Roles.Member => 2,
-            _ => 3
-        };
     }
 }

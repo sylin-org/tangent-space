@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Tangent.Access;
+using Tangent.Posts;
 using Tangent.Space;
 
 namespace Tangent.Participants;
@@ -11,8 +13,10 @@ namespace Tangent.Participants;
 /// signed in, the first sign-in having made the person a participant on the way, and a signed-in person is sent where
 /// they were going. A failed sign-in comes back here with Koan's sanitized code in <c>error</c>. It answers as itself
 /// before first run, for a place that reads as unestablished, and sends everyone on to first run, where a sign-in that
-/// set the place up finds its pointers.</summary>
+/// set the place up finds its pointers. A private place answers every other page to a visitor with this one
+/// (<see cref="Answer"/>).</summary>
 [AnswersBeforeFirstRun]
+[AnswersEveryVisitor]
 public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The page's path under the base URL.</summary>
@@ -30,22 +34,43 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
         var to = space is null ? baseUrl.PathBase + FirstRunController.Path : Destination(destination);
         if (User.Identity?.IsAuthenticated == true && User.FindFirst(ClaimTypes.NameIdentifier) is not null) return Redirect(to);
         var name = (space ?? TangentSpace.Unestablished()).Name;
-        return new ObjectResult(Participants.SignIn.ForVisitor(name, BaseAddress() + "/", to, Challenge(to), handle, error));
+        return new ObjectResult(Participants.SignIn.ForVisitor(name, BaseAddress() + "/", to, Challenge(baseUrl, HttpContext, to), handle, error)
+            with { Private = space?.Audience == Audience.Private });
+    }
+
+    /// <summary>What a private place answers a visitor at any page of the tree but this: for JSON, the problem whose gate is
+    /// <c>sign-in</c>; otherwise this page, which brings them back to the address of a <c>GET</c> once they have signed
+    /// in, or to the door from any other request; both <c>401</c>.</summary>
+    public static IActionResult Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpace space)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        if (PostWrites.WantsJson(http.Request)) return PostWrites.Gated(Capabilities.SignIn);
+        var requested = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method)
+            ? http.Request.PathBase + http.Request.Path + http.Request.QueryString
+            : null;
+        var to = Destination(baseUrl, requested);
+        return new ObjectResult(Participants.SignIn.ForVisitor(space.Name, baseUrl.Resolve(http) + "/", to, Challenge(baseUrl, http, to), null, null)
+            with { Private = true })
+        {
+            StatusCode = StatusCodes.Status401Unauthorized
+        };
     }
 
     /// <summary>The connector's challenge, coming back to this page with where the participant goes next, signed in
     /// or failed (WEB-0080).</summary>
-    private string Challenge(string to)
+    private static string Challenge(KoanWebBaseUrl baseUrl, HttpContext http, string to)
     {
         var here = Uri.EscapeDataString(baseUrl.PathBase + Path + "?return=" + Uri.EscapeDataString(to));
-        return BaseAddress() + ChallengePath + "?return=" + here + "&" + AuthConstants.Query.Failure + "=" + here;
+        return baseUrl.Resolve(http) + ChallengePath + "?return=" + here + "&" + AuthConstants.Query.Failure + "=" + here;
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);
 
+    private string Destination(string? requested) => Destination(baseUrl, requested);
+
     /// <summary>Where the participant goes next: a relative path under the base URL, of visible characters, without
     /// scheme or authority; anything else is the door.</summary>
-    private string Destination(string? requested)
+    private static string Destination(KoanWebBaseUrl baseUrl, string? requested)
     {
         var door = baseUrl.PathBase + "/";
         if (requested is not { Length: > 0 } || requested[0] != '/' || requested.Length > 1 && requested[1] is '/' or '\\'

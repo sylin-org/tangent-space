@@ -7,6 +7,7 @@ namespace Tangent.Space;
 
 /// <summary>The descriptor and <c>llms.txt</c>: files composed from the one row, and from the participants it names for
 /// a public place, each read by key, so a request reads at most three rows.</summary>
+[AnswersEveryVisitor]
 public sealed class DescriptorController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };

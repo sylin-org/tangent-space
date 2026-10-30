@@ -10,9 +10,10 @@ namespace Tangent.Space;
 
 /// <summary>The place's settings, in sections shown one at a time, each listed in the rail (<see cref="Sections"/>).
 /// <c>/settings</c> is general, which names and describes the place; <c>/settings/admission</c> sets how a newcomer
-/// arrives; the applications are <see cref="ApplicationsController"/>'s and the people <see cref="PeopleController"/>'s. Each <c>GET</c> is the section's form, one
-/// resource both ways. General's <c>POST</c> takes <c>name</c> and <c>description</c>, admission's takes
-/// <c>admission</c> (<c>join</c> or <c>apply</c>), as a form or a JSON object, a field left as it is when not sent, and
+/// arrives; the applications are <see cref="ApplicationsController"/>'s, the people <see cref="PeopleController"/>'s and
+/// the roles <see cref="RolesController"/>'s. Each <c>GET</c> is the section's form, one resource both ways. General's
+/// <c>POST</c> takes <c>name</c>, <c>description</c> and <c>audience</c> (<c>public</c> or <c>private</c>), admission's
+/// takes <c>admission</c> (<c>join</c> or <c>apply</c>), as a form or a JSON object, a field left as it is when not sent, and
 /// sends <see cref="ChangeTangentSpace"/>: a form is sent on, from general to the door, where the name and the description
 /// show, and from admission back to admission; a JSON request reads the place (<c>200</c>); a refusal reads the form
 /// again with the reason inline, or a problem with the gate. A reader for whom the place does not exist receives what an
@@ -26,11 +27,13 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     public const string NameField = "name";
     public const string DescriptionField = "description";
     public const string AdmissionField = "admission";
+    public const string AudienceField = "audience";
 
-    /// <summary>The form that changes the place's name and description, under <paramref name="baseAddress"/>.</summary>
+    /// <summary>The form that changes the place's name, description and audience, under <paramref name="baseAddress"/>.</summary>
     private static Form GeneralForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + Path, token,
         new Form.Field(NameField, $"The place's name, 1 to {TangentSpace.NameLimit} characters on one line; left out, it stays."),
-        new Form.Field(DescriptionField, $"The line under its name on the door, at most {TangentSpace.DescriptionLimit} characters; left out, it stays."));
+        new Form.Field(DescriptionField, $"The line under its name on the door, at most {TangentSpace.DescriptionLimit} characters; left out, it stays."),
+        new Form.Field(AudienceField, "public, where anyone reads the place, or private, where its participants alone do and a visitor finds the sign-in; left out, it stays."));
 
     /// <summary>The form that sets how a newcomer arrives, under <paramref name="baseAddress"/>.</summary>
     private static Form AdmissionForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + AdmissionPath, token,
@@ -50,13 +53,20 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     /// listed for whoever holds <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>.</summary>
     public const string PeopleSection = "People";
 
+    /// <summary>The section where the place's roles are created, changed, ordered and deleted, listed for whoever holds
+    /// <see cref="Bit.ManageRoles"/>.</summary>
+    public const string RolesSection = "Roles";
+
     /// <summary>The admissions a form offers, in its order.</summary>
     public static readonly IReadOnlyList<string> Admissions = [Word(Admission.Join), Word(Admission.Apply)];
 
+    /// <summary>The audiences a form offers, in its order.</summary>
+    public static readonly IReadOnlyList<string> Audiences = [Tangents.TangentWrites.Word(Audience.Public), Tangents.TangentWrites.Word(Audience.Private)];
+
     /// <summary>The sections of the settings the reader of <paramref name="place"/> is shown, under
     /// <paramref name="baseAddress"/>, with <paramref name="current"/> marked: general and admission; the applications
-    /// for whoever holds <see cref="Bit.ManageStanding"/>; and the people for whoever holds it or
-    /// <see cref="Bit.ManageRoles"/>.</summary>
+    /// for whoever holds <see cref="Bit.ManageStanding"/>; the people for whoever holds it or
+    /// <see cref="Bit.ManageRoles"/>; and the roles for whoever holds <see cref="Bit.ManageRoles"/>.</summary>
     public static IReadOnlyList<SettingsSection> Sections(Capabilities place, string baseAddress, string current)
     {
         var sections = new List<SettingsSection>
@@ -68,6 +78,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             sections.Add(new SettingsSection(ApplicationsSection, baseAddress + ApplicationsController.Path, current == ApplicationsSection));
         if (PeopleController.ReadGate(place) is null)
             sections.Add(new SettingsSection(PeopleSection, baseAddress + PeopleController.Path, current == PeopleSection));
+        if (place.Holds(Bit.ManageRoles))
+            sections.Add(new SettingsSection(RolesSection, baseAddress + RolesController.Path, current == RolesSection));
         return sections;
     }
 
@@ -104,8 +116,15 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
+        Audience? audience = null;
+        if (fields.GetValueOrDefault(AudienceField) is { } sent)
+        {
+            if (!Audiences.Contains(sent, StringComparer.Ordinal)) return await Refused(personId, fields, TangentSpace.AudienceRule, ct);
+            audience = Enum.Parse<Audience>(sent, ignoreCase: true);
+        }
+
         var outcome = await writer.Send(new ChangeTangentSpace(personId ?? "", fields.GetValueOrDefault(NameField),
-            fields.GetValueOrDefault(DescriptionField)), ct);
+            fields.GetValueOrDefault(DescriptionField), Audience: audience), ct);
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
@@ -212,7 +231,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         }
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        return new ObjectResult(new WrittenTangentSpace(space.Name, space.Description, Word(space.Admission), door, BaseAddress() + Path, place.Can))
+        return new ObjectResult(new WrittenTangentSpace(space.Name, space.Description, Word(space.Admission), Tangents.TangentWrites.Word(space.Audience),
+            door, BaseAddress() + Path, place.Can))
         {
             ContentTypes = { "application/json" }
         };
@@ -222,7 +242,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     /// keeping what was sent, with the reason where it belongs.</summary>
     private async Task<IActionResult> Refused(string? personId, IReadOnlyDictionary<string, string> fields, string reason, CancellationToken ct)
     {
-        var gated = reason is not (TangentSpace.NameRule or TangentSpace.DescriptionRule);
+        var gated = reason is not (TangentSpace.NameRule or TangentSpace.DescriptionRule or TangentSpace.AudienceRule);
         if (PostWrites.WantsJson(Request))
             return gated ? PostWrites.Gated(reason) : new Problem(StatusCodes.Status400BadRequest, "Not written", reason).ToResult();
 
@@ -232,12 +252,14 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         page = page with
         {
             Name = fields.GetValueOrDefault(NameField) ?? page.Name,
-            Description = fields.GetValueOrDefault(DescriptionField) ?? page.Description
+            Description = fields.GetValueOrDefault(DescriptionField) ?? page.Description,
+            Audience = fields.GetValueOrDefault(AudienceField) is { } audience && Audiences.Contains(audience, StringComparer.Ordinal) ? audience : page.Audience
         };
         page = reason switch
         {
             TangentSpace.NameRule => page with { NameFailure = reason },
             TangentSpace.DescriptionRule => page with { DescriptionFailure = reason },
+            TangentSpace.AudienceRule => page with { Failure = reason },
             _ => page with { Gate = reason, Change = null }
         };
         return new ObjectResult(page) { StatusCode = gated ? PostWrites.Status(reason) : StatusCodes.Status400BadRequest };
@@ -252,6 +274,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             Sections(place, baseAddress, General),
             space.Name,
             space.Description,
+            Tangents.TangentWrites.Word(space.Audience),
+            Audiences,
             place.Gate(Bit.ManageSpace) is null ? GeneralForm(baseAddress, FormToken.For(HttpContext)) : null,
             place.Can,
             place.Gate(Bit.ManageSpace),

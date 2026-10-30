@@ -17,9 +17,10 @@ namespace Tangent.Participants;
 /// the participants admitted to the place — standing admitted, timed out or banned; an applicant stays among the
 /// <see cref="Applications"/> — people and agents alike, in handle order through <c>ix_participant_handles</c>,
 /// continued from a sealed <see cref="Cursor"/>, and narrowed to the handles that start with what the reader typed, one
-/// range of the same index. <see cref="Refusal"/> is the one rule every change of standing or role answers to: the
-/// seeded roles stand one above another — administrator, moderator, member — and the operator above every role, and a
-/// participant changes the standing or roles only of someone below them, never their own, never the operator's.
+/// range of the same index. <see cref="Refusal"/> is the one rule every change of standing or role answers to: the roles
+/// stand in Koan's one order (<see cref="Role.Position"/>) and the operator above every role, and a participant changes
+/// the standing or roles only of someone whose highest role stands below theirs (<see cref="RoleBag.Highest"/>), never
+/// their own, never the operator's; they give and take only the roles they manage (<see cref="Manages"/>).
 /// <see cref="Offered"/> asks the same rule for what a page offers, so a page offers only what the writer would
 /// do.</summary>
 public static class People
@@ -40,10 +41,13 @@ public static class People
         public const string Lift = "lift";
     }
 
-    /// <summary>The roles given and taken here, by the word a form sends.</summary>
+    /// <summary>The seeded roles given and taken here, by the word a form sends (<see cref="Roles.Word(string)"/>).</summary>
     public const string Moderator = "moderator";
 
     public const string Administrator = "administrator";
+
+    /// <summary>The most roles a page of the people reads to offer, the highest first: one page of Koan's order.</summary>
+    public const int GivenRead = 100;
 
     /// <summary>The answer to a change of someone who never arrived.</summary>
     public const string NoOne = "No one by that id has arrived here.";
@@ -52,20 +56,19 @@ public static class People
 
     public const string Operator = "The operator answers for this place: no one times them out, bans them or changes their roles.";
 
-    public const string NotBelow = "You change the standing and roles only of someone whose role is below yours.";
+    public const string NotBelow = "You change the standing and roles only of someone whose highest role is below yours.";
 
     public const string NotHeld = "No one gives or takes a role whose permissions they do not hold.";
 
-    public const string NotARole = "The roles given and taken here are moderator and administrator.";
+    public const string NotManaged = "You give and take only the roles below your own highest role.";
+
+    public const string NotARole = "Give or take a role this place has; the member role is admission’s.";
 
     public const string NotADuration = "A timeout lasts an hour, a day or a week: send hour, day or week.";
 
     /// <summary>How long a timeout lasts, by the word a form sends, shortest first.</summary>
     public static readonly IReadOnlyList<(string Word, TimeSpan Length)> Durations =
         [("hour", TimeSpan.FromHours(1)), ("day", TimeSpan.FromDays(1)), ("week", TimeSpan.FromDays(7))];
-
-    /// <summary>The roles given and taken here, by word and key, lowest first. The member role is admission's.</summary>
-    public static readonly IReadOnlyList<(string Word, string Key)> Given = [(Moderator, Roles.Moderator), (Administrator, Roles.Administrator)];
 
     /// <summary>The length a duration's word names; null for any other word.</summary>
     public static TimeSpan? Length(string? word)
@@ -78,9 +81,6 @@ public static class People
         return null;
     }
 
-    /// <summary>The key of the role a word names among <see cref="Given"/>; null for any other word.</summary>
-    public static string? KeyOf(string? word) => Given.FirstOrDefault(role => role.Word == word).Key;
-
     /// <summary>A standing as a page and JSON write it.</summary>
     public static string Word(Standing standing) => standing switch
     {
@@ -90,28 +90,39 @@ public static class People
 
     /// <summary>Null where the reader <paramref name="actorId"/>, who holds <paramref name="actor"/> in the place, may
     /// change <paramref name="target"/>'s standing (<see cref="Bit.ManageStanding"/>) or roles
-    /// (<see cref="Bit.ManageRoles"/>), the target being in <paramref name="targetRoles"/>; otherwise why not, the first
-    /// of: the verb's gate in the place; the target is the reader; an applicant, decided among the applications; the
-    /// operator, whom no one changes; a target whose highest seeded role is not below the reader's, the operator standing
-    /// above every role. The target's standing is read as it stands at <paramref name="now"/>.</summary>
-    public static string? Refusal(Capabilities actor, string actorId, Participant target, IReadOnlyCollection<string> targetRoles,
-        TangentSpace space, Bit verb, DateTimeOffset now)
+    /// (<see cref="Bit.ManageRoles"/>), Koan's bag for the target being <paramref name="targetBag"/>; otherwise why not,
+    /// the first of: the verb's gate in the place; the target is the reader; an applicant, decided among the
+    /// applications; the operator, whom no one changes; a target whose highest role does not stand below the reader's,
+    /// the operator standing above every role. The target's standing is read as it stands at <paramref name="now"/>.</summary>
+    public static string? Refusal(Capabilities actor, string actorId, Participant target, RoleBag targetBag, TangentSpace space, Bit verb,
+        DateTimeOffset now)
     {
         if (actor.Gate(verb) is { } gate) return gate;
         if (target.Id == actorId) return Themselves;
         if (target.StandingAt(now) is Standing.Applied or Standing.Declined) return Participant.NotAdmitted;
         if (target.Id == space.OperatorId) return Operator;
-        return Height(actorId, actor.RoleIds, space) > Height(target.Id, targetRoles, space) ? null : NotBelow;
+        return Height(actorId, actor.Bag, space) > Height(target.Id, targetBag, space) ? null : NotBelow;
     }
+
+    /// <summary>Whether <paramref name="actorId"/>, holding <paramref name="actor"/> in the place, manages
+    /// <paramref name="role"/> — changes it, gives and takes it, sets its access to a Tangent — and, given
+    /// <paramref name="to"/>, may move it there: the operator, above every role, manages each and moves each but
+    /// everyone; anyone else as Koan's order decides (<see cref="RoleBag.Manages"/>): the roles below their highest, every
+    /// role for an administrator, and never their own highest.</summary>
+    public static bool Manages(Capabilities actor, string? actorId, TangentSpace space, Role role, int? to = null)
+        => actorId is not null && actorId == space.OperatorId
+            ? to is null || role.Key != Roles.Everyone
+            : actor.Bag.Manages(role, to);
 
     /// <summary>Null where <paramref name="actor"/> holds every permission <paramref name="role"/> grants, in the place,
     /// so they may give or take it; <see cref="NotHeld"/> otherwise. A bit of authorship, which holds only on one's own
     /// Post, counts as held where nothing but authorship withholds it in the place.</summary>
-    public static string? Holding(Capabilities actor, Role role)
-    {
-        var grants = Bits.InTokens(role.Permissions);
-        return Bits.Each.Where(bit => grants.HasFlag(bit)).All(bit => actor.Holds(bit) || actor.Gate(bit) == Capabilities.NotYours) ? null : NotHeld;
-    }
+    public static string? Holding(Capabilities actor, Role role) => Holds(actor, Bits.InTokens(role.Permissions)) ? null : NotHeld;
+
+    /// <summary>Whether <paramref name="actor"/> holds each of <paramref name="bits"/> in the place, a bit of authorship
+    /// counting as held where nothing but authorship withholds it.</summary>
+    public static bool Holds(Capabilities actor, Bit bits)
+        => Bits.Each.Where(bit => bits.HasFlag(bit)).All(bit => actor.Holds(bit) || actor.Gate(bit) == Capabilities.NotYours);
 
     /// <summary>What a reader may do to one participant, by <see cref="Refusal"/>: the standing verbs (<see cref="Verb"/>),
     /// in <c>can</c>, and the roles they may give and take, by word.</summary>
@@ -121,16 +132,16 @@ public static class People
     }
 
     /// <summary>What <paramref name="actorId"/>, holding <paramref name="actor"/> in the place, may do to
-    /// <paramref name="target"/> at <paramref name="now"/>: time out and ban someone admitted, lift and ban someone timed
-    /// out, lift someone banned; of the roles of <paramref name="given"/> whose permissions they hold, take each from
-    /// someone who holds it, and give each to someone not banned whose highest seeded role is below it, so an
-    /// administrator is not offered the moderator role. Nothing for a visitor.</summary>
-    public static Offer Offered(Capabilities actor, string? actorId, Participant target, IReadOnlyCollection<string> targetRoles,
-        TangentSpace space, IReadOnlyDictionary<string, Role> given, DateTimeOffset now)
+    /// <paramref name="target"/>, in <paramref name="targetBag"/>, at <paramref name="now"/>: time out and ban someone
+    /// admitted, lift and ban someone timed out, lift someone banned; of the roles of <paramref name="given"/> given here
+    /// (<see cref="Roles.Given"/>) that they manage and whose permissions they hold, take each from someone who holds it,
+    /// and give each to someone not banned who does not. Nothing for a visitor.</summary>
+    public static Offer Offered(Capabilities actor, string? actorId, Participant target, RoleBag targetBag, TangentSpace space,
+        IReadOnlyList<Role> given, DateTimeOffset now)
     {
         if (actorId is null) return Offer.None;
         var can = new List<string>();
-        if (Refusal(actor, actorId, target, targetRoles, space, Bit.ManageStanding, now) is null)
+        if (Refusal(actor, actorId, target, targetBag, space, Bit.ManageStanding, now) is null)
         {
             can.AddRange(target.StandingAt(now) switch
             {
@@ -143,14 +154,13 @@ public static class People
 
         var give = new List<string>();
         var take = new List<string>();
-        if (Refusal(actor, actorId, target, targetRoles, space, Bit.ManageRoles, now) is null)
+        if (Refusal(actor, actorId, target, targetBag, space, Bit.ManageRoles, now) is null)
         {
-            var height = Height(target.Id, targetRoles, space);
-            foreach (var (word, key) in Given)
+            foreach (var role in given)
             {
-                if (!given.TryGetValue(key, out var role) || Holding(actor, role) is not null) continue;
-                if (targetRoles.Contains(key)) take.Add(word);
-                else if (height < RoleHeight(key) && target.StandingAt(now) != Standing.Banned) give.Add(word);
+                if (!Roles.Given(role.Key) || Holding(actor, role) is not null || !Manages(actor, actorId, space, role)) continue;
+                if (targetBag.InRole(role.Key)) take.Add(Roles.Word(role.Key));
+                else if (target.StandingAt(now) != Standing.Banned) give.Add(Roles.Word(role.Key));
             }
         }
 
@@ -176,7 +186,7 @@ public static class People
         if (string.IsNullOrWhiteSpace(participantId) || await Participant.Get(participantId, ct) is not { } target)
             return new Judged(space, actor, null, null, NoOne);
         var bag = await AppHost.GetRequiredService<RoleCollection>(nameof(People)).Bag(target.Id, authenticated: true, ct);
-        return new Judged(space, actor, target, bag, Refusal(actor, actorId, target, bag.Roles, space, verb, now));
+        return new Judged(space, actor, target, bag, Refusal(actor, actorId, target, bag, space, verb, now));
     }
 
     /// <summary>One change of standing, by <paramref name="actorId"/>, judged by <see cref="Judge"/>: where
@@ -199,19 +209,9 @@ public static class People
         return new Outcome<Participant>.Done(target);
     }
 
-    /// <summary>Where a participant stands among the roles, lowest first: no seeded role, member, moderator,
-    /// administrator; the operator above every role.</summary>
-    private static int Height(string id, IEnumerable<string> roleIds, TangentSpace space)
-        => id == space.OperatorId ? RoleHeight(Roles.Administrator) + 1 : roleIds.Select(RoleHeight).DefaultIfEmpty(0).Max();
-
-    /// <summary>Where a seeded role stands among them, lowest first; every other role stands with none.</summary>
-    private static int RoleHeight(string key) => key switch
-    {
-        Roles.Administrator => 3,
-        Roles.Moderator => 2,
-        Roles.Member => 1,
-        _ => 0
-    };
+    /// <summary>Where a participant stands among the roles: where the highest role of their bag stands in Koan's order,
+    /// the operator above every role.</summary>
+    private static long Height(string id, RoleBag bag, TangentSpace space) => id == space.OperatorId ? long.MaxValue : bag.Highest;
 
     /// <summary>A page of participants and where the next one starts; <see cref="Next"/> is null on the last page.</summary>
     public sealed record Page(IReadOnlyList<Participant> Participants, Cursor? Next);

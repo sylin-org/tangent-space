@@ -1,0 +1,161 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@using global::Tangent.Space
+@* The place's settings, roles: the sections of the settings in the rail, this one marked, and in one panel beside them a
+   sentence on how roles stand, the new role's form behind one quiet disclosure, then the roles in their order, the
+   highest first and everyone last, one line each — the name and what it grants in plain words — with what the reader
+   may do to it inline: move it one place higher or lower, change its name and what it grants, which opens in place, and
+   delete it, which opens in place to say what deleting does and holds the one button that does it, never a dialog. The
+   pages beside this one are a link away. A reader who may not shape the roles reads why, and a visitor the way to sign
+   in; a refusal shows above the list. *@
+<div class="layout layout-settings">
+    <SettingsRail Sections="@Model.Sections" />
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="roles-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="roles-heading" class="sign-in-title">@TangentSpaceSettingsController.RolesSection</h1>
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="roles-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else
+                {
+                    @if (Model.Failure is { } failure)
+                    {
+                        <p class="sign-in-failure" id="roles-failure" role="alert">@failure</p>
+                    }
+                    <p class="post-form-note">Roles stand one above another, the highest first. You shape the roles below your own highest, and change the standing and roles of someone whose highest role is below yours.</p>
+                    @if (Model.Forms is { } forms)
+                    {
+                        <details class="post-form-more roles-new" open="@(Model.Chosen is not null)">
+                            <summary class="sign-in-other-toggle">New role</summary>
+                            <div class="post-form-more-body">
+                                <form class="sign-in-form" method="post" action="@forms.Create.Action" data-island="submitting">
+                                    <FormTokenField Token="@forms.Create.Token" />
+                                    <div class="field">
+                                        <label class="field-label" for="role-new-name">Name</label>
+                                        <span class="field-input">
+                                            <input id="role-new-name" name="@RolesController.NameField" type="text" required maxlength="@RoleSettings.NameLimit"
+                                                   autocomplete="off" value="@Model.Name">
+                                        </span>
+                                    </div>
+                                    <RolePermissions Prefix="role-new" Permissions="@Model.Permissions" Chosen="@(Model.Chosen ?? [])" />
+                                    <p class="post-form-note">It stands directly above the member role until you move it.</p>
+                                    <div class="post-form-actions">
+                                        <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Creating…">Create role</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </details>
+                    }
+                    <ul class="door-offers applications people roles">
+                        @foreach (var role in Model.Roles)
+                        {
+                            <li class="door-offer" @key="role.Word">
+                                <p class="door-offer-line">
+                                    @role.Name <span class="topic-row-none">· @Grants(role)</span>
+                                </p>
+                                @if (Model.Forms is { } roleForms && role.Can.Count > 0)
+                                {
+                                    <div class="door-offer-answers people-answers">
+                                        @if (role.Can.Contains(RolesPage.Verb.Higher))
+                                        {
+                                            @Moved(roleForms.Change, role, RoleMove.Higher, "Move higher")
+                                        }
+                                        @if (role.Can.Contains(RolesPage.Verb.Lower))
+                                        {
+                                            @Moved(roleForms.Change, role, RoleMove.Lower, "Move lower")
+                                        }
+                                        @if (role.Can.Contains(RolesPage.Verb.Change))
+                                        {
+                                            <details class="application-decline roles-change">
+                                                <summary class="watch-button">Change</summary>
+                                                <div class="post-remove-confirm">
+                                                    <form class="sign-in-form" method="post" action="@roleForms.Change.Action">
+                                                        <FormTokenField Token="@roleForms.Change.Token" />
+                                                        <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
+                                                        <div class="field">
+                                                            <label class="field-label" for="@("role-" + role.Word + "-name")">Name</label>
+                                                            <span class="field-input">
+                                                                <input id="@("role-" + role.Word + "-name")" name="@RolesController.NameField" type="text" required
+                                                                       maxlength="@RoleSettings.NameLimit" autocomplete="off" value="@role.Name">
+                                                            </span>
+                                                        </div>
+                                                        <RolePermissions Prefix="@("role-" + role.Word)" Permissions="@Model.Permissions" Chosen="@role.Permissions" />
+                                                        <button type="submit" class="watch-button">Save</button>
+                                                    </form>
+                                                </div>
+                                            </details>
+                                        }
+                                        @if (role.Can.Contains(RolesPage.Verb.Delete))
+                                        {
+                                            <details class="application-decline roles-delete">
+                                                <summary class="watch-button">Delete</summary>
+                                                <div class="post-remove-confirm">
+                                                    <p class="post-remove-note">Everyone in it loses it, and so does every Tangent’s access for it.</p>
+                                                    <form method="post" action="@roleForms.Delete.Action">
+                                                        <FormTokenField Token="@roleForms.Delete.Token" />
+                                                        <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
+                                                        <button type="submit" class="post-remove-submit">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </details>
+                                        }
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                    @if (Model.Previous is not null || Model.Next is not null)
+                    {
+                        <nav class="topic-pages" aria-label="More roles">
+                            @if (Model.Previous is { } previous)
+                            {
+                                <a href="@previous">Higher roles</a>
+                            }
+                            @if (Model.Next is { } next)
+                            {
+                                <a class="topic-pages-next" href="@next">Lower roles</a>
+                            }
+                        </nav>
+                    }
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public RolesPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
+    /// a visitor signs in.</summary>
+    public static Frame Frame(RolesPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Settings")], page.Who, page.SignIn);
+
+    /// <summary>What a role grants, in plain words.</summary>
+    private string Grants(RolesPage.Listed role)
+    {
+        if (role.Word == Roles.Everyone) return "every reader; the place’s audience says what they read";
+        if (role.Permissions.Count == 0) return "grants nothing of its own";
+        var words = Model.Permissions.ToDictionary(permission => permission.Bit, permission => permission.Words, StringComparer.Ordinal);
+        return string.Join(", ", role.Permissions.Select(bit => words.GetValueOrDefault(bit, bit)));
+    }
+
+    /// <summary>One move as a small form of its own, posting the role and the move alone.</summary>
+    private static RenderFragment Moved(Form change, RolesPage.Listed role, RoleMove move, string label) => @<form method="post" action="@change.Action">
+        <FormTokenField Token="@change.Token" />
+        <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
+        <button type="submit" class="watch-button" name="@RolesController.MoveField" value="@RolesController.Word(move)">@label</button>
+    </form>;
+}

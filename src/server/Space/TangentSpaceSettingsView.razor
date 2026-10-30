@@ -1,9 +1,10 @@
 @using global::Tangent.Posts
 @using global::Tangent.Render
 @* The place's settings, general: the sections of the settings in the rail, this one marked, and in one panel beside
-   them the form that names the place and writes the line under its name on the door. A reader
-   who may not change them reads why above the form, whose fields are read-only and which has no button, and a visitor
-   the way to sign in; a refusal of a field shows under that field, and any other above the form. *@
+   them the form that names the place, writes the line under its name on the door, and chooses who reads it, two cards,
+   each saying in a sentence what it means. A reader who may not change them reads why above the form, whose fields are
+   read-only, whose choices are disabled and which has no button, and a visitor the way to sign in; a refusal of a field
+   shows under that field, and any other above the form. *@
 <div class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
     <main>
@@ -59,6 +60,22 @@
                         }
                         <p class="post-form-note" id="space-settings-description-note">The line under its name on the door.</p>
                     </div>
+                    <fieldset class="post-form-choice">
+                        <legend class="field-label">Who reads it</legend>
+                        <div class="post-form-options">
+                            @foreach (var word in Model.Audiences)
+                            {
+                                <label class="post-form-option">
+                                    <span class="post-form-option-text">
+                                        <span class="post-form-option-name">@AudienceName(word)</span>
+                                        <span class="post-form-option-detail">@AudienceDetail(word)</span>
+                                    </span>
+                                    <input type="radio" name="@TangentSpaceSettingsController.AudienceField" value="@word"
+                                           checked="@(word == Model.Audience)" disabled="@(!Mutable)">
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
                     @if (Mutable)
                     {
                         <div class="post-form-actions">
@@ -77,6 +94,12 @@
 
     /// <summary>Whether the reader may change the settings here.</summary>
     private bool Mutable => Model.Gate is null;
+
+    private static string AudienceName(string word) => word == Tangents.TangentWrites.Word(Audience.Private) ? "Private" : "Public";
+
+    private static string AudienceDetail(string word) => word == Tangents.TangentWrites.Word(Audience.Private)
+        ? "Only its participants read it; a visitor finds the sign-in, and search engines index nothing."
+        : "Anyone reads it, signed in or not, as each Tangent’s audience allows.";
 
     /// <summary>The section the page shows.</summary>
     private string Current => Model.Sections.FirstOrDefault(section => section.Current)?.Name ?? TangentSpaceSettingsController.General;

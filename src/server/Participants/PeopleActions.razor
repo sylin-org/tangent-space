@@ -38,7 +38,7 @@
                 <form method="post" action="@give.Action">
                     @Fields(give)
                     <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                    <button type="submit" class="watch-button">Make @role</button>
+                    <button type="submit" class="watch-button">Make @Spoken(role)</button>
                 </form>
             }
         }
@@ -49,7 +49,7 @@
                 <form method="post" action="@take.Action">
                     @Fields(take)
                     <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                    <button type="submit" class="watch-button">Take @role role</button>
+                    <button type="submit" class="watch-button">Take @Spoken(role) role</button>
                 </form>
             }
         }
@@ -80,6 +80,9 @@
         <input type="hidden" name="@PeopleController.ParticipantField" value="@Person.Id">
         <input type="hidden" name="@PeopleController.BackField" value="@form.Value(PeopleController.BackField)">
     </text>;
+
+    /// <summary>A role's word as a button says it: "night shift" for <c>night-shift</c>.</summary>
+    private static string Spoken(string role) => role.Replace('-', ' ');
 
     /// <summary>A duration's button, in words.</summary>
     private static string For(string duration) => duration switch

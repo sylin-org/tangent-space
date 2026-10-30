@@ -132,8 +132,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         // The roles someone gave the reader or took from them since their checkpoint, the newest change of each.
         var roleChanges = reader is null
             ? []
-            : targeted.Where(e => e is { Kind: EventKind.RoleChanged, ActorId: not null, Role: not null, Given: not null } && e.ActorId != reader.Id
-                                  && Participants.People.Given.Any(given => given.Key == e.Role))
+            : targeted.Where(e => e is { Kind: EventKind.RoleChanged, ActorId: not null, Role: not null, Given: not null } && e.ActorId != reader.Id)
                 .GroupBy(e => e.Role!, StringComparer.Ordinal).Select(changes => changes.First()).ToList();
 
         var baseAddress = BaseAddress();
@@ -176,7 +175,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                 admitted is null ? null : new Door.Decision(Person(people, admitted.ActorId!), admitted.At),
                 lifted is null ? null : new Door.Decision(Person(people, lifted.ActorId!), lifted.At, Participants.People.Word(lifted.Before!.Value)),
                 roleChanges.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At,
-                    Participants.People.Given.First(given => given.Key == e.Role).Word, e.Given!.Value)).ToList());
+                    Roles.Word(e.Role!), e.Given!.Value)).ToList());
             // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
             // other door of a signed-in reader is theirs alone to cache.
             if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through, FormToken.For(HttpContext)) };

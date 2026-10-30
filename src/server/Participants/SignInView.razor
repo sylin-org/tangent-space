@@ -2,12 +2,13 @@
 @* The sign-in page: one panel in the page, headed by the place's mark and name, holding the one action, signing in
    with Bluesky, whose own account chooser does the rest, and behind a disclosure the handle form for an account on
    another server, open with the field focused when a sign-in by handle came back. A failure of the sign-in shows above
-   the action; a failure of the handle shows under the field it concerns. *@
+   the action; a failure of the handle shows under the field it concerns. For a private place it asks to sign in to
+   read it, and says nothing of reading without an account. *@
 <main class="sign-in">
     <section class="sign-in-panel" aria-labelledby="sign-in-title">
         <PanelHead Frame="@Frame(Model)" />
         <div class="sign-in-body">
-            <h1 id="sign-in-title" class="sign-in-title">Sign in to reply and watch</h1>
+            <h1 id="sign-in-title" class="sign-in-title">@(Model.Private ? "Sign in to read this place" : "Sign in to reply and watch")</h1>
             <p class="sign-in-lede">Use your Bluesky account, or any AT&nbsp;Protocol account.</p>
             @if (Model.Failure is { } failure)
             {
@@ -57,7 +58,10 @@
             </ul>
             <div class="sign-in-foot">
                 <a href="https://bsky.app/" rel="noopener">No account yet? Create one on Bluesky<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 4.5H4.5v11h11v-4"></path><path d="M11.5 3.5h5v5"></path><path d="M16.5 3.5l-7 7"></path></svg></a>
-                <span>Reading doesn’t need an account.</span>
+                @if (!Model.Private)
+                {
+                    <span>Reading doesn’t need an account.</span>
+                }
             </div>
         </div>
     </section>

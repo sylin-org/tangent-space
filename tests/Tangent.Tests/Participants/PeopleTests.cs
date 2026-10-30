@@ -284,9 +284,12 @@ public sealed class PeopleTests
         var gated = await Json(mo, path, PeopleController.GivePath, new { participant = Bea, role = People.Moderator });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles)), (gated.Status, gated.Gate));
 
-        // The administrator is offered both roles on a member, and gives the moderator role from the people page.
+        // The administrator is offered the moderator role on a member, never their own highest, and gives it from the
+        // people page.
         var beaRow = Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Bea);
-        Assert.Equal([People.Moderator, People.Administrator], Strings(beaRow, "give"));
+        Assert.Equal([People.Moderator], Strings(beaRow, "give"));
+        var notManaged = await Json(leo, path, PeopleController.GivePath, new { participant = Bea, role = People.Administrator });
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged), (notManaged.Status, notManaged.Gate));
         Assert.Contains("Make moderator", (await Send(leo.Client, HttpMethod.Get, path)).Body);
         var before = await Head();
         var given = await Form(leo, path, PeopleController.GivePath, new Dictionary<string, string>
