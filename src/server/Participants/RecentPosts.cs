@@ -7,14 +7,20 @@ using Tangent.Posts;
 namespace Tangent.Participants;
 
 /// <summary>One bounded page of a participant's Posts, newest first, read through <c>ix_post_authors</c>
-/// (<c>AuthorId</c>, <c>CreatedAt</c>): only Posts in the Tangents the caller names and none removed, so a Post the reader
-/// may not view is never read and nothing past it is said. A page holds at most <see cref="PageSize"/> Posts and continues
-/// from a <see cref="Cursor"/>, the place of the last Post a page held, so a Post present for the whole read is on
-/// exactly one page. Nothing is counted. Reads only and takes no lock.</summary>
+/// (<c>AuthorId</c>, <c>CreatedAt</c>), none removed: one scan of at most <see cref="ScanSize"/> of their Posts after the
+/// cursor, of which the page keeps those in the Tangents the caller says the reader may view, at most
+/// <see cref="PageSize"/>. A page continues from a <see cref="Cursor"/>: the last Post it holds where the scan holds more
+/// it may keep, otherwise the last Post the scan read, so a Post present for the whole read is on exactly one page, and a
+/// page can hold fewer than <see cref="PageSize"/> Posts, or none, while a next page follows. That cursor is all a page
+/// says of the Posts the reader may not view — that one was written at its instant — and only where a whole scan held no
+/// more than a page of those they may. Nothing is counted. Reads only and takes no lock.</summary>
 public static class RecentPosts
 {
     /// <summary>The most Posts one page holds.</summary>
     public const int PageSize = 20;
+
+    /// <summary>The most Posts one page reads to find those it holds.</summary>
+    public const int ScanSize = 100;
 
     /// <summary>A page of Posts and where the next one starts; <see cref="Next"/> is null on the last page.</summary>
     public sealed record Page(IReadOnlyList<Post> Posts, Cursor? Next);
@@ -39,20 +45,26 @@ public static class RecentPosts
         public override string ToString() => At.UtcTicks.ToString(CultureInfo.InvariantCulture) + "." + Id;
     }
 
-    /// <summary>The page of <paramref name="authorId"/>'s Posts in <paramref name="tangentIds"/> after
-    /// <paramref name="after"/>, or the first page: one read, limited to one more than the page, which says whether a
-    /// next page exists. No Tangent named reads nothing.</summary>
-    public static async Task<Page> Read(string authorId, IReadOnlyList<string> tangentIds, Cursor? after, CancellationToken ct)
+    /// <summary>The page of <paramref name="authorId"/>'s Posts after <paramref name="after"/>, or the first page: one
+    /// read of at most <see cref="ScanSize"/> Posts, and one question to <paramref name="viewable"/>, which answers which
+    /// of the Tangents those Posts are in the reader may view.</summary>
+    public static async Task<Page> Read(string authorId, Func<IReadOnlyList<string>, Task<IReadOnlySet<string>>> viewable, Cursor? after,
+        CancellationToken ct)
     {
-        if (tangentIds.Count == 0) return new Page([], null);
-        var filters = new List<Filter> { Filter.On(FieldPath.Of(nameof(Post.TangentId)), FilterOperator.In, FilterValue.Many([.. tangentIds])) };
-        if (after is not null) filters.Add(Seek(after));
-        var query = new QueryDefinition { Filter = Filter.All([.. filters]), Page = 1, PageSize = PageSize + 1 }
+        var query = new QueryDefinition { Filter = after is null ? null : Seek(after), Page = 1, PageSize = ScanSize }
             .WithSort<Post>(sort => sort.OrderByDescending(post => post.CreatedAt).ThenByDescending(post => post.Id));
         var rows = await Post.Query(post => post.AuthorId == authorId && !post.Removed, query, ct);
-        return rows.Count > PageSize
-            ? new Page(rows.Take(PageSize).ToList(), Cursor.After(rows[PageSize - 1]))
-            : new Page(rows, null);
+        if (rows.Count == 0) return new Page([], null);
+        var may = await viewable(rows.Select(post => post.TangentId).Distinct(StringComparer.Ordinal).ToList());
+        var kept = new List<Post>(PageSize);
+        foreach (var post in rows)
+        {
+            if (!may.Contains(post.TangentId)) continue;
+            if (kept.Count == PageSize) return new Page(kept, Cursor.After(kept[^1]));
+            kept.Add(post);
+        }
+
+        return new Page(kept, rows.Count < ScanSize ? null : Cursor.After(rows[^1]));
     }
 
     /// <summary>The Posts after the cursor in the order a page reads them: written no later than the cursor's Post,

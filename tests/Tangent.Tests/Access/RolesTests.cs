@@ -21,12 +21,12 @@ public sealed class RolesTests
             {
                 Assert.Equal(4, await Role.Count.Exact(Cancellation));
                 // Everyone holds no bit of its own: a public place gives everyone View through its audience.
-                Assert.Empty((await Role.Get(Roles.Everyone, Cancellation))!.Permissions);
+                Assert.Empty((await Role.Get(Role.KeyFor(Roles.Everyone), Cancellation))!.Permissions);
                 Assert.Equal(Roles.MemberBits, await BitsOf(Roles.Member));
                 Assert.Equal(Roles.ModeratorBits, await BitsOf(Roles.Moderator));
                 Assert.Equal(Bit.Administrator, await BitsOf(Roles.Administrator));
-                Assert.Equal([Bits.Token(Bit.Administrator)], (await Role.Get(Roles.Administrator, Cancellation))!.Permissions);
-                Assert.All(await Role.All(Cancellation), role => Assert.Empty(role.Members));
+                Assert.Equal([Bits.Token(Bit.Administrator)], (await Role.Get(Role.KeyFor(Roles.Administrator), Cancellation))!.Permissions);
+                Assert.Equal(0, await RoleMember.Count.Exact(Cancellation));
 
                 var roles = first.Services.GetRequiredService<RoleCollection>();
                 await roles.SetPermissions(Roles.Member, Bits.Tokens(Roles.MemberBits | Bit.Moderate), Cancellation);
@@ -63,7 +63,7 @@ public sealed class RolesTests
 
             await using var second = await TangentSpaceFixture.StartAsync(Settings(dataFolder), ct: Cancellation);
 
-            var permissions = (await Role.Get(Roles.Administrator, Cancellation))!.Permissions;
+            var permissions = (await Role.Get(Role.KeyFor(Roles.Administrator), Cancellation))!.Permissions;
             Assert.Equal(new[] { "global:Administrator", Bits.Token(Bit.ManageSpace), RoleTokens.Administrator }.Order(StringComparer.Ordinal),
                 permissions.Order(StringComparer.Ordinal));
             Assert.Equal(Bit.Administrator | Bit.ManageSpace, await BitsOf(Roles.Administrator));
@@ -75,7 +75,7 @@ public sealed class RolesTests
         }
     }
 
-    private static async Task<Bit> BitsOf(string roleId) => Bits.InTokens((await Role.Get(roleId, Cancellation))!.Permissions);
+    private static async Task<Bit> BitsOf(string roleId) => Bits.InTokens((await Role.Get(Role.KeyFor(roleId), Cancellation))!.Permissions);
 
     private static Dictionary<string, string?> Settings(string dataFolder) => new() { ["Tangent:DataFolder"] = dataFolder };
 }

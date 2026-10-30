@@ -123,8 +123,7 @@ public sealed class FirstRunTests
         var participant = await Participant.Get(Leo, Cancellation);
         Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel, Standing.Admitted, "leo.sylin.org"),
             (participant?.Kind, participant?.KindSource, participant?.Standing, participant?.Handle));
-        var administrator = await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation);
-        Assert.Contains(Leo, administrator!.Members);
+        Assert.Contains(Leo, await Administrators(tangentSpace.Services));
 
         var (descriptorStatus, descriptor) = await Read(tangentSpace, "/tangent.json", "application/json");
         var (visitorStatus, _) = await Read(tangentSpace, "/first-run", "text/html");
@@ -179,7 +178,7 @@ public sealed class FirstRunTests
         Assert.Contains($"<a class=\"account-item\" href=\"{WebUtility.HtmlEncode(signOut)}\">", html);
         Assert.Contains($"<a class=\"first-run-switch\" href=\"{WebUtility.HtmlEncode(signOut)}\">Use another account</a>", html);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
-        Assert.DoesNotContain(Ada, (await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation))!.Members);
+        Assert.DoesNotContain(Ada, await Administrators(tangentSpace.Services));
 
         using var leo = new Browser(tangentSpace);
         using var ready = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org", comeBack: FirstRunController.Path);
@@ -238,7 +237,7 @@ public sealed class FirstRunTests
         Assert.Equal((established?.Name, established?.OperatorId, established?.Version), (space?.Name, space?.OperatorId, space?.Version));
         // Ada's arrival is the one thing written.
         Assert.Equal(events + 1, await Event.Count.Exact(Cancellation));
-        Assert.Equal([Leo], (await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation))!.Members);
+        Assert.Equal([Leo], await Administrators(tangentSpace.Services));
     }
 
     [Fact]
@@ -262,7 +261,7 @@ public sealed class FirstRunTests
             Assert.Contains($"{space.Name} is ready", WebUtility.HtmlDecode(await winner.Content.ReadAsStringAsync(Cancellation)));
             Assert.Equal(HttpStatusCode.NotFound, loser.StatusCode);
             Assert.Single(await Event.All(Cancellation), e => e.Kind == EventKind.SpaceChanged);
-            Assert.Equal([space.OperatorId!], (await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation))!.Members);
+            Assert.Equal([space.OperatorId!], await Administrators(tangentSpace.Services));
         }
         finally
         {
@@ -309,14 +308,11 @@ public sealed class FirstRunTests
             {
                 Assert.IsType<Outcome<TangentSpace>.Done>(await first.Services.GetRequiredService<WriteLoop>()
                     .Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
-                var before = await first.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation);
-                Assert.DoesNotContain(Leo, before!.Members);
+                Assert.DoesNotContain(Leo, await Administrators(first.Services));
             }
 
             await using var second = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl), ct: Cancellation);
-            var after = await second.Services.GetRequiredService<RoleCollection>().Get(Roles.Administrator, Cancellation);
-
-            Assert.Contains(Leo, after!.Members);
+            Assert.Contains(Leo, await Administrators(second.Services));
         }
         finally
         {
@@ -476,7 +472,7 @@ public sealed class FirstRunTests
         Assert.Equal(("General", "", Posts.PostKind.Topic, 1, Audience.Public),
             (first.Name, first.Description, first.DefaultKind, first.Order, first.LoggedAudience));
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
-        Assert.Equal(Audience.Public, await Tangents.Overwrites.AudienceOf(roles, FirstTangent.Slug, Cancellation));
+        Assert.Equal(Audience.Public, await Tangents.Overwrites.AudienceOf(FirstTangent.Slug, Cancellation));
         var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.TangentChanged && e.TangentId == FirstTangent.Slug, Cancellation));
         Assert.Equal((Leo, Audience.Public), (created.ActorId, created.Audience));
 
@@ -555,6 +551,11 @@ public sealed class FirstRunTests
         => "<code class=\"code-text\">" + string.Join("<wbr />", text.Split('/').Select((run, index) => index < text.Split('/').Length - 1
             ? $"<span class=\"code-run\">{WebUtility.HtmlEncode(run)}/</span>"
             : $"<span class=\"code-run\">{WebUtility.HtmlEncode(run)}</span>")) + "</code>";
+
+    /// <summary>The members of the administrator role, by person: one page of Koan's membership rows.</summary>
+    private static async Task<List<string>> Administrators(IServiceProvider services)
+        => (await services.GetRequiredService<RoleCollection>().Members(Roles.Administrator, ct: Cancellation)).Items
+            .Select(member => member.PersonId).ToList();
 
     /// <summary>A base URL as Koan holds it.</summary>
     private static string Normalised(string url) => new KoanWebBaseUrl(url).Configured!;

@@ -1,5 +1,4 @@
 using Koan.Data.Abstractions;
-using Koan.Data.Core.Sorting;
 using Koan.Identity.Roles;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Auth.Server.Options;
@@ -21,12 +20,12 @@ namespace Tangent.Participants;
 /// the formatter as HTML, a fragment or JSON. A reader without <see cref="Bit.View"/> on the place receives its gate, the
 /// same for every handle, held or not; a handle no participant holds now answers as a missing resource. The address
 /// takes a handle, matched as the participant's row keeps it, or a participant's DID. Every read is bounded and keyed:
-/// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; the
-/// Tangents, at most as many as a place holds, with their overwrites from Koan's cache; one page of their Posts in those
-/// the reader may view; the roots of the replies among them; the participants those Posts mention; and, on the reader's
-/// own profile in their own session, their approvals. A revoke posts back here and is the reader's alone.</summary>
-public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles, IOptions<RoleOptions> roleOptions,
-    IOptions<AuthServerOptions> server) : ControllerBase
+/// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; one
+/// scan of their Posts (<see cref="RecentPosts"/>) and the Tangents those are in, by Id, with what the reader holds on
+/// each from Koan's cache, which keeps the page to the Tangents the reader may view; the roots of the replies among them;
+/// the participants those Posts mention; and, on the reader's own profile in their own session, their approvals. A
+/// revoke posts back here and is the reader's alone.</summary>
+public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles, IOptions<AuthServerOptions> server) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page of Posts to continue from.</summary>
     public const string Before = "before";
@@ -51,11 +50,12 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             return new Problem(StatusCodes.Status400BadRequest, "Not a page of these posts",
                 $"The {Before} parameter is the cursor a page of this profile names as its older.").ToResult();
 
-        var tangents = await Viewable(personId, ct);
-        var page = await RecentPosts.Read(subject.Id, tangents.Keys.ToList(), cursor, ct);
+        IReadOnlyDictionary<string, Tangents.Tangent> tangents = new Dictionary<string, Tangents.Tangent>();
+        var page = await RecentPosts.Read(subject.Id,
+            async ids => (tangents = await Viewable(personId, ids, ct)).Keys.ToHashSet(StringComparer.Ordinal), cursor, ct);
         var roots = await Roots(page.Posts, ct);
         var people = await Mentioned(page.Posts, ct);
-        var held = (await roles.ForPerson(subject.Id, ct)).Where(role => role.Id != Roles.Everyone).Select(role => role.Name)
+        var held = (await roles.ForPerson(subject.Id, ct)).Where(role => role.Key != Roles.Everyone).Select(role => role.Name)
             .Order(StringComparer.Ordinal).ToList();
         var person = await KoanPerson.Get(subject.Id, ct);
 
@@ -146,14 +146,14 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         return rows.FirstOrDefault();
     }
 
-    /// <summary>The Tangents the reader may view, by slug: every Tangent of the place, at most as many as Koan lets one
-    /// subject hold overwrites for, which bounds them, and their overwrites from Koan's cache.</summary>
-    private async Task<IReadOnlyDictionary<string, Tangents.Tangent>> Viewable(string? personId, CancellationToken ct)
+    /// <summary>The Tangents among <paramref name="ids"/> that the reader may view, by slug: one keyed read of their rows,
+    /// and what the reader holds on each from Koan's cache. An id no Tangent has is not among them.</summary>
+    private static async Task<IReadOnlyDictionary<string, Tangents.Tangent>> Viewable(string? personId, IReadOnlyList<string> ids,
+        CancellationToken ct)
     {
-        var all = await Tangents.Tangent.All(new QueryDefinition { Page = 1, PageSize = roleOptions.Value.MaxOverwritesPerSubject }
-            .WithSort<Tangents.Tangent>(sort => sort.OrderBy(tangent => tangent.Order).ThenBy(tangent => tangent.Id)), ct);
-        var each = await Capabilities.LoadEach(personId, all.Select(tangent => tangent.Id).ToList(), ct);
-        return all.Where(tangent => each[tangent.Id].Exists).ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
+        var found = (await Tangents.Tangent.Get(ids, ct)).OfType<Tangents.Tangent>().ToList();
+        var each = await Capabilities.LoadEach(personId, found.Select(tangent => tangent.Id).ToList(), ct);
+        return found.Where(tangent => each[tangent.Id].Exists).ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
     }
 
     /// <summary>The roots of the replies among the Posts, by Id, in one keyed read.</summary>

@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Koan.Data.Abstractions;
 using Koan.Data.Core.Sorting;
-using Koan.Identity.Roles;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +20,7 @@ namespace Tangent.Tangents;
 /// most two reads of Topics, their latest replies by Id, the people on the page, the reader's checkpoints for those
 /// Topics and for the Tangent, whose watch flag the page's watch form shows, the first <see cref="SwitcherLimit"/> Tangents by order with their overwrites for the switcher, and, for a
 /// signed-in reader, what they hold in the place, which says whether the switcher offers a new Tangent.</summary>
-public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
+public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
     public const string After = "after";
@@ -57,7 +56,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl, RoleCollection
         var seen = await Seen(reader, page.Topics, ct);
         var watched = reader is not null && (await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Tangent(row.Id)), ct))?.Watch == true;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
-        var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(roles, row.Id, ct) == Audience.Private
+        var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(row.Id, ct) == Audience.Private
             ? Audience.Private
             : Audience.Public;
 

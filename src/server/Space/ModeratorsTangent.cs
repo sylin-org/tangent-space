@@ -68,27 +68,27 @@ public static class ModeratorsTangent
 
     /// <summary>Whether a participant holding the moderator role and nothing more may view the Tangent
     /// <paramref name="tangentId"/>: Koan's resolution over that role's bag, <paramref name="space"/>'s audience and the
-    /// Tangent's overwrites; two keyed reads of roles and the overwrites from Koan's cache. It decides what a report
-    /// carries of the reported Topic.</summary>
+    /// overwrites that bag meets on the Tangent's resource; two keyed reads of roles and the overwrites from Koan's cache.
+    /// It decides what a report carries of the reported Topic.</summary>
     public static async Task<bool> MayView(string tangentId, TangentSpace space, CancellationToken ct)
     {
         var roles = Collection();
         var moderator = await roles.Get(Roles.Moderator, ct);
         var everyone = await roles.Get(Roles.Everyone, ct);
-        IEnumerable<string> tokens =
-            [RoleTokens.Everyone, RoleTokens.Authenticated, Roles.Moderator, .. moderator?.Permissions ?? [], .. everyone?.Permissions ?? []];
+        IEnumerable<string> permissions = [.. moderator?.Permissions ?? [], .. everyone?.Permissions ?? []];
         var holder = new Participants.Participant { Id = Roles.Moderator, Standing = Participants.Standing.Admitted };
-        return Capabilities.For(holder, tokens, space, await roles.Overwrites(Overwrites.Resource(tangentId), ct), DateTimeOffset.UtcNow).Exists;
+        var bag = new RoleBag(holder.Id, authenticated: true, [Roles.Moderator],
+            permissions.Where(permission => permission.StartsWith(RoleTokens.GlobalPrefix, StringComparison.Ordinal)));
+        var overwrites = await roles.OverwritesFor(bag, Overwrites.Resource(tangentId), ct);
+        return Capabilities.For(holder, bag.Tokens, space, tangentId, overwrites, DateTimeOffset.UtcNow).Exists;
     }
 
     /// <summary>Whether Koan's rows on <paramref name="slug"/>'s resource state its access: a private audience, and the
-    /// moderator role allowed <see cref="ModeratorBits"/>.</summary>
+    /// moderator role allowed <see cref="ModeratorBits"/>; two keyed reads.</summary>
     private static async Task<bool> HasAccess(string slug, CancellationToken ct)
     {
-        var roles = Collection();
-        if (await Overwrites.AudienceOf(roles, slug, ct) != Audience.Private) return false;
-        var moderator = (await roles.Overwrites(Overwrites.Resource(slug), ct))
-            .FirstOrDefault(row => row.SubjectKind == OverwriteSubjectKind.Role && row.SubjectId == Roles.Moderator);
+        if (await Overwrites.AudienceOf(slug, ct) != Audience.Private) return false;
+        var moderator = await Overwrites.Of(slug, Roles.Moderator, ct);
         return moderator is not null && Bits.InTokens(moderator.Allow) == ModeratorBits && moderator.Deny.Count == 0;
     }
 

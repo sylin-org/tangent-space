@@ -1,7 +1,6 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Sorting;
-using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -21,7 +20,7 @@ namespace Tangent.Tangents;
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
 /// gate. Both resolve the address as the Tangent page does (<see cref="PostWrites.Locate"/>) before anything else is
 /// judged, so a Tangent the reader may not view and one no row has answer alike.</summary>
-public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
 
@@ -137,7 +136,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
             row.Name,
             row.Description,
             PostWrites.Word(row.DefaultKind),
-            TangentWrites.Word(await Overwrites.AudienceOf(roles, row.Id, ct) ?? Audience.Public),
+            TangentWrites.Word(await Overwrites.AudienceOf(row.Id, ct) ?? Audience.Public),
             neighbours ? (await Neighbour(personId, row, earlier: true, ct))?.Name : null,
             neighbours ? (await Neighbour(personId, row, earlier: false, ct))?.Name : null,
             moderators,

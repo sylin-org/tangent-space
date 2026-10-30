@@ -77,7 +77,6 @@ public static class TangentWrites
         Tangent.DescriptionTooLong => About.Description,
         Tangent.NeedsSlug or Tangent.SlugReserved or KindRule or AudienceRule or MoveRule or ChangeTangent.Fixed or ChangeTangent.NoAudience
             or CreateTangent.NoAudience or NewTangentController.NoSlug => About.Sent,
-        _ when reason.StartsWith(CreateTangent.AtBoundOpening, StringComparison.Ordinal) => About.Sent,
         _ => About.Gate
     };
 
@@ -106,7 +105,7 @@ public static class TangentWrites
         http.Response.Headers.Location = address;
         var capabilities = await Capabilities.Load(personId, tangent.Id, null, ct);
         var arranges = (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace);
-        var audience = await Overwrites.AudienceOf(http.RequestServices.GetRequiredService<Koan.Identity.Roles.RoleCollection>(), tangent.Id, ct);
+        var audience = await Overwrites.AudienceOf(tangent.Id, ct);
         return new ObjectResult(new WrittenTangent(tangent.Id, tangent.Name, tangent.Description, PostWrites.Word(tangent.DefaultKind),
             Word(audience ?? Audience.Public), arranges ? tangent.Order : null, address, address + "/" + SettingsSegment, capabilities.Can))
         {

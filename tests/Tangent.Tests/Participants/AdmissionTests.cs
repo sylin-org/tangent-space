@@ -82,7 +82,8 @@ public sealed class AdmissionTests
 
         // A second sign-in finds the role in place and writes nothing more.
         using var again = await SignedIn(tangentSpace, Grace);
-        Assert.Single((await tangentSpace.Services.GetRequiredService<RoleCollection>().Get(Roles.Member, Cancellation))!.Members, Grace);
+        Assert.Single((await tangentSpace.Services.GetRequiredService<RoleCollection>().Members(Roles.Member, ct: Cancellation)).Items,
+            member => member.PersonId == Grace);
     }
 
     [Fact]

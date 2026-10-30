@@ -269,6 +269,38 @@ public sealed class ProfileTests
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
     }
 
+    /// <summary>A page reads one scan of the participant's Posts: where more of them lie in Tangents the reader may not
+    /// view than one scan holds, the page holds fewer than its size and continues past them to the Posts the reader may
+    /// view, none of the others shown.</summary>
+    [Fact]
+    public async Task Posts_past_more_than_a_scan_the_reader_may_not_view_are_reached_on_the_next_page()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        var older = new List<string>();
+        for (var index = 0; index < 2; index++) older.Add((await Started(writer, Leo, "Older " + index, "Body.")).Id);
+        for (var index = 0; index < RecentPosts.ScanSize + 1; index++) await Started(writer, Leo, "Studio " + index, "Body.", Studio);
+        var newer = new List<string>();
+        for (var index = 0; index < 3; index++) newer.Add((await Started(writer, Leo, "Newer " + index, "Body.")).Id);
+        older.Reverse();
+        newer.Reverse();
+
+        var first = (await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle, json: true)).Json;
+        Assert.Equal(newer, Ids(first));
+        var next = new Uri(first.GetProperty("older").GetString()!);
+        var second = (await Send(ada.Client, HttpMethod.Get, next.PathAndQuery, json: true)).Json;
+        Assert.Equal(older, Ids(second));
+        Assert.True(Missing(second, "older"));
+
+        // An administrator may view the studio: their first page is full of it after the newest.
+        var asLeo = (await Send(leo.Client, HttpMethod.Get, "/p/" + LeoHandle, json: true)).Json;
+        Assert.Equal(RecentPosts.PageSize, Ids(asLeo).Count);
+        Assert.Equal(newer, Ids(asLeo).Take(3));
+    }
+
     /// <summary>Whether the answer leaves the member out, as a null one is.</summary>
     private static bool Missing(JsonElement value, string name) => !value.TryGetProperty(name, out var member) || member.ValueKind == JsonValueKind.Null;
 

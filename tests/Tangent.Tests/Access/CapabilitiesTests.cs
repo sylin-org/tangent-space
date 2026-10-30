@@ -86,7 +86,7 @@ public sealed class CapabilitiesTests
         if (role is not null) overwrites.Add(Over(Roles.Member, Rule(role, Bit.Topic), Rule(role, Bit.Topic, deny: true)));
         if (own is not null) overwrites.Add(Over(Leo, Rule(own, Bit.Topic), Rule(own, Bit.Topic, deny: true)));
 
-        var capabilities = Capabilities.For(Participant(), bag, PublicPlace, overwrites, Now);
+        var capabilities = Capabilities.For(Participant(), bag, PublicPlace, Workshop, overwrites, Now);
 
         Assert.Equal((row, held, gate), (row, capabilities.Holds(Bit.Topic), capabilities.Gate(Bit.Topic)));
 
@@ -96,9 +96,9 @@ public sealed class CapabilitiesTests
     [Fact]
     public void An_administrator_holds_every_bit_and_an_overwrite_grants_administrator_to_no_one()
     {
-        var administrator = Capabilities.For(Participant(), Bag(Bit.Administrator, Roles.Administrator), PublicPlace,
+        var administrator = Capabilities.For(Participant(), Bag(Bit.Administrator, Roles.Administrator), PublicPlace, Workshop,
             [Over(RoleTokens.Everyone, deny: Bits.All), Over(Roles.Administrator, deny: Bits.All), Over(Leo, deny: Bits.All)], Now, Root());
-        var granted = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, allow: Bit.Administrator)], Now);
+        var granted = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(RoleTokens.Everyone, allow: Bit.Administrator)], Now);
 
         Assert.Equal(Bits.All, administrator.Held);
         Assert.Equal(Bits.Names(Bits.All), administrator.Can);
@@ -111,9 +111,9 @@ public sealed class CapabilitiesTests
     {
         var overwrites = new List<PermissionOverwrite> { Over(Roles.Moderator, allow: Bit.Moderate), Over(Ada, allow: Bit.ManageTangent) };
 
-        var member = Capabilities.For(Participant(), Member(), PublicPlace, overwrites, Now);
-        var moderator = Capabilities.For(Participant(), Bag(Roles.MemberBits, Roles.Member, Roles.Moderator), PublicPlace, overwrites, Now);
-        var ada = Capabilities.For(Participant(Ada), Member(), PublicPlace, overwrites, Now);
+        var member = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, overwrites, Now);
+        var moderator = Capabilities.For(Participant(), Bag(Roles.MemberBits, Roles.Member, Roles.Moderator), PublicPlace, Workshop, overwrites, Now);
+        var ada = Capabilities.For(Participant(Ada), Member(), PublicPlace, Workshop, overwrites, Now);
 
         Assert.Equal(OnTangent, member.Held);
         Assert.Equal(OnTangent | Bit.Moderate, moderator.Held);
@@ -123,13 +123,13 @@ public sealed class CapabilitiesTests
     [Fact]
     public void Standing_precedes_everything()
     {
-        var banned = Capabilities.For(Participant(standing: Standing.Banned), Member(), PublicPlace, [], Now, Root());
-        var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, [], Now, Root());
-        var appliedPublic = Capabilities.For(Participant(standing: Standing.Applied), Member(), PublicPlace, [], Now);
-        var appliedPrivate = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, [], Now);
-        var visitorPublic = Capabilities.For(null, Visitor, PublicPlace, [], Now);
-        var visitorPrivate = Capabilities.For(null, Visitor, PrivatePlace, [], Now);
-        var visitorWidened = Capabilities.For(null, [.. Visitor, .. Bits.Tokens(Roles.MemberBits)], PublicPlace, [Over(RoleTokens.Everyone, allow: Bits.All)], Now);
+        var banned = Capabilities.For(Participant(standing: Standing.Banned), Member(), PublicPlace, Workshop, [], Now, Root());
+        var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, [], Now, Root());
+        var appliedPublic = Capabilities.For(Participant(standing: Standing.Applied), Member(), PublicPlace, Workshop, [], Now);
+        var appliedPrivate = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, Workshop, [], Now);
+        var visitorPublic = Capabilities.For(null, Visitor, PublicPlace, Workshop, [], Now);
+        var visitorPrivate = Capabilities.For(null, Visitor, PrivatePlace, Workshop, [], Now);
+        var visitorWidened = Capabilities.For(null, [.. Visitor, .. Bits.Tokens(Roles.MemberBits)], PublicPlace, Workshop, [Over(RoleTokens.Everyone, allow: Bits.All)], Now);
 
         Assert.Equal((Bit.None, false, Capabilities.Absent), (banned.Held, banned.Exists, banned.Gate(Bit.View)));
         Assert.Equal((Bit.View, true, Capabilities.TimedOut), (timedOut.Held, timedOut.Exists, timedOut.Gate(Bit.Post)));
@@ -144,10 +144,10 @@ public sealed class CapabilitiesTests
     [Fact]
     public void A_timeout_that_has_ended_reads_as_admitted_and_one_that_has_not_keeps_view_alone()
     {
-        var ended = Capabilities.For(Participant(standing: Standing.TimedOut, until: Now.AddDays(-1)), Member(), PublicPlace, [], Now, Root());
-        var endsNow = Capabilities.For(Participant(standing: Standing.TimedOut, until: Now), Member(), PublicPlace, [], Now, Root());
-        var running = Capabilities.For(Participant(standing: Standing.TimedOut, until: Now.AddDays(1)), Member(), PublicPlace, [], Now, Root());
-        var open = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, [], Now, Root());
+        var ended = Capabilities.For(Participant(standing: Standing.TimedOut, until: Now.AddDays(-1)), Member(), PublicPlace, Workshop, [], Now, Root());
+        var endsNow = Capabilities.For(Participant(standing: Standing.TimedOut, until: Now), Member(), PublicPlace, Workshop, [], Now, Root());
+        var running = Capabilities.For(Participant(standing: Standing.TimedOut, until: Now.AddDays(1)), Member(), PublicPlace, Workshop, [], Now, Root());
+        var open = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, [], Now, Root());
 
         Assert.Equal(Roles.MemberBits, ended.Held);
         Assert.Equal(Roles.MemberBits, endsNow.Held);
@@ -158,12 +158,12 @@ public sealed class CapabilitiesTests
     [Fact]
     public void View_on_a_public_place_comes_from_its_audience_and_on_a_tangent_from_its_everyone_overwrite()
     {
-        var visitorWithoutRoleView = Capabilities.For(null, Visitor, PublicPlace, [], Now);
-        var memberOnPrivatePlace = Capabilities.For(Participant(), Member(), PrivatePlace, [], Now);
-        var roleWithoutView = Capabilities.For(Participant(), Bag(Bit.Post | Bit.Topic, Roles.Member), PrivatePlace, [], Now);
-        var open = Capabilities.For(null, Visitor, PublicPlace, [ForAudience(Audience.Public)], Now);
-        var closed = Capabilities.For(null, Visitor, PublicPlace, [ForAudience(Audience.Private)], Now);
-        var member = Capabilities.For(Participant(), Member(), PublicPlace, [ForAudience(Audience.Private), Over(Roles.Member, allow: Bit.View)], Now);
+        var visitorWithoutRoleView = Capabilities.For(null, Visitor, PublicPlace, Workshop, [], Now);
+        var memberOnPrivatePlace = Capabilities.For(Participant(), Member(), PrivatePlace, Workshop, [], Now);
+        var roleWithoutView = Capabilities.For(Participant(), Bag(Bit.Post | Bit.Topic, Roles.Member), PrivatePlace, Workshop, [], Now);
+        var open = Capabilities.For(null, Visitor, PublicPlace, Workshop, [ForAudience(Audience.Public)], Now);
+        var closed = Capabilities.For(null, Visitor, PublicPlace, Workshop, [ForAudience(Audience.Private)], Now);
+        var member = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [ForAudience(Audience.Private), Over(Roles.Member, allow: Bit.View)], Now);
 
         Assert.True(visitorWithoutRoleView.Holds(Bit.View));
         Assert.Equal(OnTangent, memberOnPrivatePlace.Held);
@@ -177,9 +177,9 @@ public sealed class CapabilitiesTests
     public void What_a_reader_may_not_view_does_not_exist_for_them_and_nothing_else_is_said()
     {
         IReadOnlyList<PermissionOverwrite> closed = [ForAudience(Audience.Private)];
-        var member = Capabilities.For(Participant(), Member(), PublicPlace, closed, Now, Root(Leo, locked: true));
-        var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, closed, Now, Root(Leo, locked: true));
-        var moderator = Capabilities.For(Participant(), Moderator(), PublicPlace, [Over(Roles.Moderator, deny: Bit.View)], Now, Root(Ada, removed: true));
+        var member = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, Root(Leo, locked: true));
+        var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, closed, Now, Root(Leo, locked: true));
+        var moderator = Capabilities.For(Participant(), Moderator(), PublicPlace, Workshop, [Over(Roles.Moderator, deny: Bit.View)], Now, Root(Ada, removed: true));
 
         Assert.False(member.Exists);
         Assert.All(Bits.Each, verb => Assert.Equal(Capabilities.Absent, member.Gate(verb)));
@@ -191,11 +191,11 @@ public sealed class CapabilitiesTests
     [Fact]
     public void Edit_own_and_remove_own_apply_to_my_post_nothing_applies_to_a_removed_post_and_post_is_absent_on_a_locked_topic()
     {
-        var mine = Capabilities.For(Participant(), Member(), PublicPlace, [], Now, Root(Leo));
-        var another = Capabilities.For(Participant(), Member(), PublicPlace, [], Now, Root(Ada));
-        var noPost = Capabilities.For(Participant(), Member(), PublicPlace, [], Now);
-        var removed = Capabilities.For(Participant(), Moderator(), PublicPlace, [], Now, Root(Leo, removed: true));
-        var locked = Capabilities.For(Participant(), Member(), PublicPlace, [], Now, Root(Leo, locked: true));
+        var mine = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, Root(Leo));
+        var another = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, Root(Ada));
+        var noPost = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now);
+        var removed = Capabilities.For(Participant(), Moderator(), PublicPlace, Workshop, [], Now, Root(Leo, removed: true));
+        var locked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, Root(Leo, locked: true));
 
         Assert.True(mine.Holds(Bit.EditOwn | Bit.RemoveOwn));
         Assert.Equal((Capabilities.NotYours, Capabilities.NotYours), (another.Gate(Bit.EditOwn), another.Gate(Bit.RemoveOwn)));
@@ -213,16 +213,16 @@ public sealed class CapabilitiesTests
         var removedRoot = Root(Leo, removed: true);
         IReadOnlyList<PermissionOverwrite> closed = [ForAudience(Audience.Private)];
 
-        var timedOutOnLocked = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, [], Now, lockedRoot);
-        var visitorOnLocked = Capabilities.For(null, Visitor, PublicPlace, [], Now, lockedRoot);
-        var appliedOnLocked = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, [], Now, lockedRoot);
-        var unseenLocked = Capabilities.For(Participant(), Member(), PublicPlace, closed, Now, lockedRoot);
-        var unseenRemoved = Capabilities.For(Participant(), Member(), PublicPlace, closed, Now, removedRoot);
-        var memberOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, [], Now, lockedRoot);
-        var deniedOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, deny: Bit.Post)], Now, lockedRoot);
-        var visitorOnRemoved = Capabilities.For(null, Visitor, PublicPlace, [], Now, removedRoot);
-        var memberOnRemoved = Capabilities.For(Participant(), Member(), PublicPlace, [], Now, removedRoot);
-        var moderatorOnRemoved = Capabilities.For(Participant(), Moderator(), PublicPlace, [], Now, removedRoot);
+        var timedOutOnLocked = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, [], Now, lockedRoot);
+        var visitorOnLocked = Capabilities.For(null, Visitor, PublicPlace, Workshop, [], Now, lockedRoot);
+        var appliedOnLocked = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, Workshop, [], Now, lockedRoot);
+        var unseenLocked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, lockedRoot);
+        var unseenRemoved = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, removedRoot);
+        var memberOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, lockedRoot);
+        var deniedOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(RoleTokens.Everyone, deny: Bit.Post)], Now, lockedRoot);
+        var visitorOnRemoved = Capabilities.For(null, Visitor, PublicPlace, Workshop, [], Now, removedRoot);
+        var memberOnRemoved = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, removedRoot);
+        var moderatorOnRemoved = Capabilities.For(Participant(), Moderator(), PublicPlace, Workshop, [], Now, removedRoot);
 
         Assert.Equal(Capabilities.TimedOut, timedOutOnLocked.Gate(Bit.Post));
         Assert.Equal(Capabilities.SignIn, visitorOnLocked.Gate(Bit.Post));
@@ -240,12 +240,12 @@ public sealed class CapabilitiesTests
     [Fact]
     public void For_a_verb_the_bag_denies_the_answer_names_the_deciding_role_or_overwrite()
     {
-        var everyone = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, deny: Bit.Topic)], Now);
-        var role = Capabilities.For(Participant(), Bag(Roles.MemberBits, Roles.Member, Roles.Moderator), PublicPlace,
+        var everyone = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(RoleTokens.Everyone, deny: Bit.Topic)], Now);
+        var role = Capabilities.For(Participant(), Bag(Roles.MemberBits, Roles.Member, Roles.Moderator), PublicPlace, Workshop,
             [Over(RoleTokens.Everyone, allow: Bit.Post), Over(Roles.Moderator, deny: Bit.Post)], Now);
-        var own = Capabilities.For(Participant(), Member(), PublicPlace, [Over(Roles.Member, allow: Bit.Post), Over(Leo, deny: Bit.Post)], Now);
-        var noRole = Capabilities.For(Participant(), Member(), PublicPlace, [], Now);
-        var overruled = Capabilities.For(Participant(), Member(), PublicPlace, [Over(RoleTokens.Everyone, deny: Bit.Topic), Over(Leo, allow: Bit.Topic)], Now);
+        var own = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(Roles.Member, allow: Bit.Post), Over(Leo, deny: Bit.Post)], Now);
+        var noRole = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now);
+        var overruled = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(RoleTokens.Everyone, deny: Bit.Topic), Over(Leo, allow: Bit.Topic)], Now);
 
         Assert.Equal("everyone denies Topic", everyone.Gate(Bit.Topic));
         Assert.Equal("role:moderator denies Post", role.Gate(Bit.Post));

@@ -37,7 +37,7 @@ public static class FirstTangent
     public static async Task<Tangents.Tangent> Create(Sequences sequences, string slug, string actorId, DateTimeOffset at, CancellationToken ct)
     {
         var tangent = Tangents.Tangent.Create(slug, Name, "", PostKind.Topic, await Tangents.Tangent.NextOrder(ct));
-        if (await Overwrites.AudienceOf(Collection(), slug, ct) != Audience.Public) throw new Refusal(NoAudience);
+        if (await Overwrites.AudienceOf(slug, ct) != Audience.Public) throw new Refusal(NoAudience);
         tangent.LoggedAudience = Audience.Public;
         await tangent.Save(ct);
         await Event.Next(sequences, EventKind.TangentChanged, at, tangentId: tangent.Id, actorId: actorId, audience: Audience.Public).Save(ct);
