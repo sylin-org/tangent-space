@@ -2,6 +2,7 @@ using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
+using Tangent.Delegates;
 using Tangent.Offers;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -15,11 +16,13 @@ namespace Tangent.Events;
 /// <summary>The signed-in reader's notifications at <see cref="Notifications.Path"/>, one resource both ways
 /// (<see cref="NotificationsPage"/>): a page of them newest first (<see cref="Notifications.Read"/>), continued from a
 /// sealed cursor that is refused with 400 when it does not open, each one line about one thing — the Post, the Topic, the
-/// door, the reader's profile, or where the place answers — with an open Offer's two answers inline. Opening them moves
-/// the reader's notifications checkpoint through the newest the page shows, through the writer (<see cref="SeeNotifications"/>),
-/// so the count every page's frame shows reads past it; it never moves backwards, and it decides no Offer. The page is
-/// never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the place receives its
-/// gate.</summary>
+/// door, the reader's profile, or where the place answers — with an open Offer's two answers inline. The person opening
+/// them in their own session moves their notifications checkpoint through the newest the page shows
+/// (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past it; it never moves backwards, and
+/// it decides no Offer. The mark is handed to the writer only where its queue is not full and is never waited on: the page
+/// answers whatever becomes of it, and a later opening makes good one that did not land. A delegate reads them as its
+/// person does and moves nothing, since seen means the person saw them. The page is never stored. A visitor is asked to
+/// sign in, and a reader without <see cref="Bit.View"/> on the place receives its gate.</summary>
 public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
@@ -45,32 +48,23 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
         var from = cursor?.From ?? seen;
         var page = await Notifications.Read(personId, cursor?.Before, ct);
         var newest = page.Events.Count > 0 ? page.Events[0].Seq : 0;
-        if (newest > seen)
-        {
-            switch (await writer.Send(new SeeNotifications(personId, newest), ct))
-            {
-                case Outcome<Checkpoint>.Done:
-                    break;
-                case Outcome<Checkpoint>.Refused { Reason: SeeNotifications.NoPlace }:
-                    return DoorController.Gated(Capabilities.Absent);
-                case Outcome<Checkpoint>.Failed failed:
-                    throw new InvalidOperationException($"Seeing the notifications of {personId} failed.", failed.Cause);
-                case var other:
-                    throw new InvalidOperationException($"The writer answered {other} for seeing the notifications of {personId}.");
-            }
-        }
+        // Only the person's own opening marks them seen, and it never waits for the writer to do it.
+        var marked = newest > seen && !DelegateIdentity.Delegated(HttpContext) && writer.TrySend(new SeeNotifications(personId, newest)) is not null;
+        var through = marked ? newest : seen;
 
         var baseAddress = baseUrl.Resolve(HttpContext);
         var address = baseAddress + Notifications.Path;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var reader = await PostWrites.Reader(personId, place, baseAddress, baseUrl.PathBase + Notifications.Path, ct);
+        // The frame counts past the mark this page handed the writer, whether or not it has landed yet.
+        if (marked && reader is not null) reader = reader with { Notifications = await Notifications.CountPast(personId, through, baseAddress, ct) };
         var entries = await Entries(page.Events, from, reader, space, baseAddress, ct);
         return Ok(new NotificationsPage(
             space.Name,
             baseAddress + "/",
             address,
             from,
-            Math.Max(seen, newest),
+            through,
             entries,
             page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(new Notifications.Cursor(next, from).Seal(protection)) : null,
             cursor is not null,

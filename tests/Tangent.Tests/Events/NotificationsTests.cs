@@ -73,17 +73,31 @@ public sealed class NotificationsTests
         await Replied(writer, mine, Bea, "I do, at six.");
         var newest = await Replied(writer, mine, Mo, "At dusk, always.");
         using var ada = await SignedIn(tangentSpace, Ada);
-        Assert.Equal(2, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
+        var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
+        Assert.Equal(2, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        // The door names them with how many while there are some, though it lists both replies itself.
+        Assert.Equal(2, door.GetProperty("news").GetProperty("replies").GetProperty("count").GetInt32());
+        Assert.Equal((2, BaseUrl + Notifications.Path), (door.GetProperty("news").GetProperty("notifications").GetProperty("count").GetInt32(),
+            door.GetProperty("news").GetProperty("notifications").GetProperty("address").GetString()));
+        Assert.Contains($"<a class=\"watch-button door-notifications\" href=\"{BaseUrl}/notifications\">2 new notifications</a>",
+            (await Send(ada.Client, HttpMethod.Get, "/")).Body);
 
         var opened = await Send(ada.Client, HttpMethod.Get, Notifications.Path);
         Assert.Equal(HttpStatusCode.OK, opened.Status);
+        // The page's own frame already reads past what it showed.
+        Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden", opened.Body);
         Assert.Contains("no-store", await CacheControl(ada.Client, Notifications.Path));
+        await Reached.Settled(tangentSpace, Cancellation);
         var through = (await Created(newest)).Seq;
         Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
         Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Place), Cancellation));
 
-        // The count drops on every page, and the masthead shows nothing.
-        Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
+        // The count drops on every page, the masthead shows nothing, and the door, which still lists the replies past its
+        // own checkpoint, names no notifications.
+        door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
+        Assert.Equal(0, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        Assert.Equal(2, door.GetProperty("news").GetProperty("replies").GetProperty("count").GetInt32());
+        Assert.False(door.GetProperty("news").TryGetProperty("notifications", out _));
         Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
 
         // A new reply counts past it, and opening them again moves it on, never back.
@@ -92,6 +106,7 @@ public sealed class NotificationsTests
         var json = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
         Assert.Equal((through, through + 1), (json.GetProperty("from").GetInt64(), json.GetProperty("through").GetInt64()));
         Assert.Equal(new[] { true, false, false }, json.GetProperty("entries").EnumerateArray().Select(entry => entry.GetProperty("new").GetBoolean()));
+        await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal(through + 1, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
         Assert.Equal(through + 1, Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new SeeNotifications(Ada, through), Cancellation)).Result.Seq);
         Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
@@ -133,20 +148,21 @@ public sealed class NotificationsTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         var writer = await Place(tangentSpace);
         var theirs = await Started(writer, Bea, "Lanterns", "Who lights theirs first?");
-        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Mentions(Bea, Ada, theirs, Notifications.CountLimit + 5), Cancellation));
+        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.Mention, Bea, Ada, theirs, Notifications.CountLimit + 5), Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var unseen = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("notifications");
         Assert.True(unseen.GetProperty("atLeast").GetBoolean());
         Assert.Equal(Notifications.CountLimit + 1, unseen.GetProperty("count").GetInt32());
+        Assert.Equal((await Event.All(Cancellation)).Max(e => e.Seq), unseen.GetProperty("through").GetInt64());
         var html = WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, "/")).Body);
         Assert.Contains("<span class=\"masthead-unseen-count\">99+</span>", html);
         Assert.Contains($"aria-label=\"At least {Notifications.CountLimit + 1} new notifications\"", html);
 
-        // The door holds more than it lists of what targets the reader, and names the notifications.
+        // The door names them in the same words.
         var news = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
-        Assert.Equal(BaseUrl + Notifications.Path, news.GetProperty("notifications").GetString());
-        Assert.Contains($"<a class=\"watch-button door-notifications\" href=\"{BaseUrl}/notifications\">All notifications</a>", html);
+        Assert.True(news.GetProperty("notifications").GetProperty("atLeast").GetBoolean());
+        Assert.Contains($"<a class=\"watch-button door-notifications\" href=\"{BaseUrl}/notifications\">At least {Notifications.CountLimit + 1} new notifications</a>", html);
     }
 
     [Fact]
@@ -173,6 +189,7 @@ public sealed class NotificationsTests
         // What was new when the reader opened them stays new on the pages after, and the checkpoint stays where the first
         // page put it.
         Assert.All(second.GetProperty("entries").EnumerateArray(), entry => Assert.True(entry.GetProperty("new").GetBoolean()));
+        await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal((await Created(replies[^1])).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
         Assert.Contains("Newest notifications", (await Send(ada.Client, HttpMethod.Get, next[BaseUrl.Length..])).Body);
 
@@ -261,6 +278,7 @@ public sealed class NotificationsTests
                 offered.GetProperty("subject").GetString(), offered.GetProperty("state").GetString(), offered.GetProperty("use").GetString(),
                 offered.GetProperty("decline").GetString()));
         Assert.NotEmpty(offered.GetProperty("token").GetProperty("value").GetString()!);
+        await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal(made.Seq, (await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Notifications), Cancellation))!.Seq);
         Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
         var html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, Notifications.Path)).Body);
@@ -290,9 +308,132 @@ public sealed class NotificationsTests
         Assert.DoesNotContain("/offers/use", html);
     }
 
+    [Fact]
+    public async Task Rows_the_reader_may_not_view_move_neither_the_count_nor_where_it_reads_through_and_a_newest_page_of_them_offers_the_older_one()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
+        var visible = await Replied(writer, mine, Bea, "I do, at six.");
+        var secret = await Started(writer, Leo, "Studio notes", "Only for us.", Studio);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var shownThrough = (await Created(visible)).Seq;
+        Assert.Equal((1, false, shownThrough), Unseen(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
+
+        // Replies to Ada in the studio, which she may not view, move neither the count nor where it reads through.
+        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.PostCreated, Leo, Ada, secret, 3), Cancellation));
+        Assert.Equal((1, false, shownThrough), Unseen(await Send(ada.Client, HttpMethod.Get, TopicPath(mine), json: true)));
+
+        // Ninety-nine of them and one she may see fill the read: the count is that one, not a lower bound.
+        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.PostCreated, Leo, Ada, secret, Notifications.CountLimit - 3), Cancellation));
+        Assert.Equal((1, false, shownThrough), Unseen(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
+        Assert.Contains("<span class=\"masthead-unseen-count\">1</span>", WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, "/")).Body));
+
+        // A hundred of them after the newest she may see: the count finds none and says nothing of them, and the door
+        // names nothing.
+        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.PostCreated, Leo, Ada, secret, 1), Cancellation));
+        var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
+        Assert.Equal((0, false, 0L), Unseen(door));
+        Assert.False(door.GetProperty("news").TryGetProperty("notifications", out _));
+
+        // The newest page holds none she may see: it says so, offers the older page and marks nothing; the older page
+        // shows her reply, and marks it seen.
+        var newest = await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true);
+        Assert.Empty(newest.Json.GetProperty("entries").EnumerateArray());
+        var next = newest.Json.GetProperty("next").GetString()!;
+        Assert.Equal((0L, 0L), (newest.Json.GetProperty("from").GetInt64(), newest.Json.GetProperty("through").GetInt64()));
+        var html = WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, Notifications.Path)).Body);
+        Assert.Contains("Nothing to show among the newest; older notifications follow.", html);
+        Assert.DoesNotContain("Nothing for you yet", html);
+        Assert.Contains("Older notifications →", html);
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
+
+        var older = (await Send(ada.Client, HttpMethod.Get, next[BaseUrl.Length..], json: true)).Json;
+        Assert.Equal([AddressOf(mine, visible)], Posts(older));
+        Assert.Equal(shownThrough, older.GetProperty("through").GetInt64());
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Equal(shownThrough, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
+        Assert.DoesNotContain("Studio notes", newest.Body + older.GetRawText());
+    }
+
+    [Fact]
+    public async Task A_delegate_reads_its_persons_notifications_and_leaves_them_unseen_and_the_persons_own_opening_sees_them()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
+        var reply = await Replied(writer, mine, Bea, "I do, at six.");
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var bearer = await Delegate(tangentSpace, ada);
+        using var agent = Agent(tangentSpace);
+
+        var read = await Send(agent, HttpMethod.Get, Notifications.Path, json: true, bearer: bearer);
+        Assert.Equal(HttpStatusCode.OK, read.Status);
+        Assert.Equal([AddressOf(mine, reply)], Posts(read.Json));
+        Assert.Equal((0L, 0L, 1), (read.Json.GetProperty("from").GetInt64(), read.Json.GetProperty("through").GetInt64(),
+            read.Json.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32()));
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
+        Assert.Equal(1, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
+
+        Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, Notifications.Path)).Status);
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
+        Assert.Equal(0, Count(await Send(agent, HttpMethod.Get, "/", json: true, bearer: bearer)));
+    }
+
+    [Fact]
+    public async Task The_page_answers_its_list_without_waiting_when_the_writers_queue_is_full()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
+        var reply = await Replied(writer, mine, Bea, "I do, at six.");
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var release = new TaskCompletionSource();
+        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = writer.Send(new Hold(release.Task, running), Cancellation);
+        await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
+        var queued = new List<Task<Outcome<bool>>>();
+        while (queued.Count <= WriteLoop.QueueBound && writer.TrySend(new Hold(Task.CompletedTask)) is { } sent) queued.Add(sent);
+        Assert.Equal(WriteLoop.QueueBound, queued.Count);
+        try
+        {
+            var page = await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true).WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
+            Assert.Equal(HttpStatusCode.OK, page.Status);
+            Assert.Equal([AddressOf(mine, reply)], Posts(page.Json));
+            Assert.Equal(0L, page.Json.GetProperty("through").GetInt64());
+        }
+        finally
+        {
+            release.SetResult();
+            await held;
+            await Task.WhenAll(queued);
+        }
+
+        // Nothing was marked; the next opening marks it.
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
+        Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, Notifications.Path)).Status);
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Equal((await Created(reply)).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
+    }
+
     /// <summary>The name a participant written by <see cref="Given.AParticipant"/> shows until they sign in: the handle it
     /// gives them.</summary>
     private static string Name(string id) => id + ".example";
+
+    /// <summary>How many notifications the reader has not seen, whether that is a lower bound, and where the count reads
+    /// through, as a page's JSON says.</summary>
+    private static (int Count, bool AtLeast, long Through) Unseen(Answered page) => Unseen(page.Json);
+
+    private static (int Count, bool AtLeast, long Through) Unseen(JsonElement page)
+    {
+        var unseen = page.GetProperty("who").GetProperty("notifications");
+        return (unseen.GetProperty("count").GetInt32(), unseen.GetProperty("atLeast").GetBoolean(), unseen.GetProperty("through").GetInt64());
+    }
 
     /// <summary>How many notifications the reader has not seen, as a page's JSON says.</summary>
     private static int Count(Answered page) => page.Json.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32();
@@ -330,14 +471,26 @@ public sealed class NotificationsTests
         }
     }
 
-    /// <summary>Appends <paramref name="Times"/> mentions of <paramref name="TargetId"/> in <paramref name="Root"/> by
-    /// <paramref name="ActorId"/> in one transaction.</summary>
-    private sealed record Mentions(string ActorId, string TargetId, Post Root, int Times) : ICommand<int>
+    /// <summary>Holds the writer until <paramref name="Until"/> completes, saying when it began through
+    /// <paramref name="Running"/>; writes nothing.</summary>
+    private sealed record Hold(Task Until, TaskCompletionSource? Running = null) : ICommand<bool>
+    {
+        public async Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct)
+        {
+            Running?.TrySetResult();
+            await Until;
+            return new Outcome<bool>.Done(true);
+        }
+    }
+
+    /// <summary>Appends <paramref name="Times"/> events of <paramref name="Kind"/> about <paramref name="Root"/> by
+    /// <paramref name="ActorId"/> targeting <paramref name="TargetId"/>, in one transaction.</summary>
+    private sealed record Many(string Kind, string ActorId, string TargetId, Post Root, int Times) : ICommand<int>
     {
         public async Task<Outcome<int>> Run(Sequences sequences, CancellationToken ct)
         {
             for (var index = 0; index < Times; index++)
-                await Event.Next(sequences, EventKind.Mention, DateTimeOffset.UtcNow, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
+                await Event.Next(sequences, Kind, DateTimeOffset.UtcNow, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
                     actorId: ActorId, targetId: TargetId).Save(ct);
             return new Outcome<int>.Done(Times);
         }

@@ -10,9 +10,9 @@
    answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
    out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
-   it seen and, where their notifications hold more than this lists, the way to them — and then the front page: the
-   featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front page,
-   with the way to their notifications where those hold more. A count the door could not finish reads "at least". The whole door is the
+   it seen and, while they have notifications they have not seen, how many, linked to them — and then the front page:
+   the featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front
+   page, with how many notifications they have not seen, linked to them, while there are some. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address. *@
 <main data-island="fragment" data-props="@JsonSerializer.Serialize(new { url = Model.Address })">
     <section class="tangent-head" aria-labelledby="door-title">
@@ -131,7 +131,7 @@
                         <p class="topic-empty-title">Nothing new since you were here.</p>
                         @if (news.Notifications is { } notifications)
                         {
-                            <p class="tangent-description"><a href="@notifications">Your notifications</a> hold more for you.</p>
+                            <p class="tangent-description"><a href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a></p>
                         }
                     </div>
                 }
@@ -142,7 +142,7 @@
                             <h2 id="door-news-title" class="topic-list-title">Since you were here</h2>
                             @if (news.Notifications is { } notifications)
                             {
-                                <a class="watch-button door-notifications" href="@notifications">All notifications</a>
+                                <a class="watch-button door-notifications" href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a>
                             }
                             @if (news.CaughtUp is { } caughtUp)
                             {

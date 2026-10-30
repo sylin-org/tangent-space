@@ -93,5 +93,7 @@
 
 .door-notifications {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
 }

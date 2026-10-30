@@ -64,8 +64,8 @@ public sealed record Door(
     /// is news. <see cref="Admitted"/> is who admitted the reader and when, and <see cref="Lifted"/> who lifted their
     /// timeout or ban and when, where that happened since their checkpoint and they stand admitted still;
     /// <see cref="Roles"/> are the roles someone gave them or took from them since then, the newest change of each.
-    /// <see cref="Notifications"/> is where the reader's notifications are, present where they hold more unseen than the
-    /// door lists of what targets them.</summary>
+    /// <see cref="Notifications"/> is how many of the reader's notifications they have not seen and where they are,
+    /// present while there are some.</summary>
     public sealed record Since(
         long From,
         long Through,
@@ -80,8 +80,9 @@ public sealed record Door(
         Decision? Lifted = null,
         IReadOnlyList<RoleChange>? Roles = null)
     {
-        /// <summary>Where the reader's notifications are, present where they hold more unseen than the door lists.</summary>
-        public string? Notifications { get; init; }
+        /// <summary>How many of the reader's notifications they have not seen and where they are, present while there are
+        /// some.</summary>
+        public Events.Notifications.Unseen? Notifications { get; init; }
 
         /// <summary>Whether nothing is new to the reader.</summary>
         public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0

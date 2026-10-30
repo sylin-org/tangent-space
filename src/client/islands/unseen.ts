@@ -18,7 +18,7 @@ export function label(count: number, atLeast: boolean): string {
 }
 
 // How many of the reader's notifications they have not seen, in the masthead: the server's count, raised by one for each
-// row the page's stream delivers past the newest the count read that targets the reader and that someone else did,
+// row the page's stream delivers past where the count reads through that targets the reader and that someone else did,
 // the rule the server counts by; the stream only delivers rows that reach the reader. Hidden while it is zero. It
 // only ever counts up: opening the notifications is what brings it down, on the next page.
 export const unseen = defineComponent({

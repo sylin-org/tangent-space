@@ -5,7 +5,8 @@ namespace Tangent.Events;
 
 /// <summary>The reader's notifications, one resource both ways: a page of <see cref="Entries"/>, newest first, each new
 /// where it lies past <see cref="From"/>, the notifications checkpoint the reading began from; <see cref="Through"/>, where
-/// that checkpoint stands once this page was shown; <see cref="Next"/>, the address of the older page, null on the last,
+/// this page leaves that checkpoint: the newest it shows where the person's own opening marked them seen, else where it
+/// stood; <see cref="Next"/>, the address of the older page, null on the last,
 /// and <see cref="Continued"/> for a page that follows another, whose newest is at <see cref="Address"/>. <see cref="Who"/>
 /// is the signed-in reader and <see cref="Day"/> the UTC day the times are written for.</summary>
 public sealed record NotificationsPage(
