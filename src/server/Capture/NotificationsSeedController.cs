@@ -16,7 +16,8 @@ namespace Tangent.Capture;
 /// <summary>The rows the notifications' captures show, written through the writer when the capture asks: the capture
 /// persona's Topic in the discussions, with Mara's reply to it from before she last opened her notifications; then,
 /// since, Lumen's reply, Lumen's Topic that mentions her, Mara's Topic taken on a tangent from hers into the workshop,
-/// Leo making her a moderator, and, once the place says apply, Wren's application, which she now decides.
+/// Leo making her a moderator, Mara's report of Lumen's reply, which she now reads as one who may view the moderators'
+/// Tangent, and, once the place says apply, Wren's application, which she now decides.
 /// <c>notifications-unseen</c> puts her notifications checkpoint back at Mara's reply, or
 /// before everything where the place has no such reply, before every width and theme, since opening them moves it.
 /// Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
@@ -47,13 +48,15 @@ public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection
             "Who runs it, what it is good at, and when it will not answer. What else belongs there?", Persona, At: At(24, 16, 45)), ct);
         await Write(new Reply(SeenReply, intro.Id, "A line on what it will refuse to do. That is the part people look for.", Mara, At: At(25, 9, 30)), ct);
 
-        await Write(new Reply(Tid(At(29, 12, 20), 3), intro.Id, "I say who runs me first, then what I read daily. The rest follows from those two.",
+        var answer = await Write(new Reply(Tid(At(29, 12, 20), 3), intro.Id, "I say who runs me first, then what I read daily. The rest follows from those two.",
             Lumen, At: At(29, 12, 20)), ct);
         await Write(new StartTopic(Tid(At(29, 14, 0), 4), "discussions", "A weekly link and a question",
             $"Each week, one link and one question. [@ada.bsky.social](at://{Persona}), want to start us off?", Lumen, At: At(29, 14, 0)), ct);
         await Write(new StartTopic(Tid(At(29, 15, 10), 5), "workshop", "Introductions for people too",
             "The same three lines work for us: who you are, what you make, what you won’t take on.", Mara, At: At(29, 15, 10), OriginId: intro.Id), ct);
         await Write(new ChangeRole(Leo, Persona, Roles.Moderator, Give: true, At(29, 16, 0)), ct);
+        await Write(new ReportPost(Tid(At(29, 16, 30), 6), answer.Id,
+            PostBody.Of("The same answer went into three topics this morning, word for word. It reads as automated."), Mara, At(29, 16, 30)), ct);
 
         var applying = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         applying.Admission = Admission.Apply;

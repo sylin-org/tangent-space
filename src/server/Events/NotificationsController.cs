@@ -16,15 +16,17 @@ namespace Tangent.Events;
 /// <summary>The signed-in reader's notifications at <see cref="Notifications.Path"/>, one resource both ways
 /// (<see cref="NotificationsPage"/>): a page of them newest first (<see cref="Notifications.Read"/>), continued from a
 /// sealed cursor that is refused with 400 when it does not open, each one line about one thing — the Post, the Topic, the
-/// door, the reader's profile, where the place answers, or, for an application that waits, the applications — with an
-/// open Offer's two answers inline. The person opening them in their own session moves their notifications checkpoint
+/// report in the moderators' Tangent, naming the reported Post's author where the reader may view that Post, the door,
+/// the reader's profile, where the place answers, or, for an application that waits, the applications — with an open
+/// Offer's two answers inline. The person opening them in their own session moves their notifications checkpoint
 /// through the newest the page shows (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past
 /// it; it never moves backwards, and it decides no Offer and no application. The mark is handed to the writer only where
 /// its queue is not full and is never waited on: the page answers whatever becomes of it, and a later opening makes good
 /// one that did not land. A delegate reads them as its person does and moves nothing, since seen means the person saw
 /// them. The page is never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the
 /// place receives its gate.</summary>
-public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
+public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection,
+    [FromKeyedServices(Readable.Clock)] TimeProvider clock) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
     public const string After = "after";
@@ -47,7 +49,7 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
 
         var seen = await Notifications.Seen(personId, ct);
         var from = cursor?.From ?? seen;
-        var page = await Notifications.Read(personId, cursor?.Before, ct);
+        var page = await Notifications.Read(personId, cursor?.Before, ct, clock);
         var newest = page.Events.Count > 0 ? page.Events[0].Seq : 0;
         // Only the person's own opening marks them seen, and it never waits for the writer to do it.
         var marked = newest > seen && !DelegateIdentity.Delegated(HttpContext) && writer.TrySend(new SeeNotifications(personId, newest)) is not null;
@@ -74,7 +76,8 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
     }
 
     /// <summary>Each notification as the page shows it, from keyed reads of what the events name: their Posts and the
-    /// roots of their Topics, their Tangents, the Offers and the people.</summary>
+    /// roots of their Topics, their Tangents, the Offers, the Posts the reports report (<see cref="ReportedBy"/>) and the
+    /// people.</summary>
     private async Task<IReadOnlyList<NotificationsPage.Entry>> Entries(IReadOnlyList<Event> events, long from, Who? reader, TangentSpace space,
         string baseAddress, CancellationToken ct)
     {
@@ -92,9 +95,11 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
         var offers = offerIds.Count == 0
             ? new Dictionary<string, Offer>()
             : (await Offer.Get(offerIds, ct)).OfType<Offer>().ToDictionary(offer => offer.Id, StringComparer.Ordinal);
+        var reported = await ReportedBy(events, posts, reader?.Id, ct);
         var people = await People(baseAddress,
             events.Select(e => e.ActorId).Concat(events.Where(e => e.PostId is not null)
-                .SelectMany(e => posts.TryGetValue(e.PostId!, out var post) ? post.MentionedIds : [])),
+                .SelectMany(e => posts.TryGetValue(e.PostId!, out var post) ? post.MentionedIds : []))
+                .Concat(reported.Values.Select(origin => origin.AuthorId)),
             ct);
 
         var token = offers.Values.Any(offer => offer.State == OfferState.Open) ? FormToken.For(HttpContext) : null;
@@ -107,6 +112,20 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
             var who = e.ActorId is { } actor ? Person(people, actor) : null;
             switch (e.Kind)
             {
+                case EventKind.PostCreated when e.Report == true && posts.TryGetValue(e.PostId ?? "", out var report)
+                                                                 && posts.TryGetValue(e.TopicId ?? "", out var reportRoot):
+                    // Someone reported a Post, and the report reaches whoever may view the moderators' Tangent: the
+                    // reader, among them. The reported Post's author is named only where the reader may view it.
+                    var reportTopic = PostWrites.TopicAddress(baseAddress, reportRoot.TangentId, reportRoot.Slug ?? reportRoot.Id);
+                    return new NotificationsPage.Entry(e.Seq, NotificationsPage.Kinds.Report, isNew, e.At, who,
+                        report.Id == reportRoot.Id ? reportTopic : reportTopic + "/" + Uri.EscapeDataString(report.Id))
+                    {
+                        Topic = reportRoot.Title ?? "",
+                        Tangent = tangents.TryGetValue(reportRoot.TangentId, out var moderators) ? moderators.Name : reportRoot.TangentId,
+                        Line = report.Removed ? "" : TangentPage.Opening(report, people),
+                        Removed = report.Removed,
+                        Reported = reportRoot.OriginId is { } originId && reported.TryGetValue(originId, out var origin) ? Person(people, origin.AuthorId) : null
+                    };
                 case EventKind.PostCreated or EventKind.Mention when posts.TryGetValue(e.PostId ?? "", out var post)
                                                                       && posts.TryGetValue(e.TopicId ?? "", out var root):
                     var taken = e.Kind == EventKind.PostCreated && post is { ParentId: null, OriginId: not null };
@@ -156,6 +175,24 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
                     return new NotificationsPage.Entry(e.Seq, e.Kind, isNew, e.At, who, null);
             }
         }).ToList();
+    }
+
+    /// <summary>The Posts the reports among <paramref name="events"/> report, by Id, each only where the reader may view it,
+    /// so a report names its author to whoever may view it and to no one else: one keyed read of the Posts the reports'
+    /// roots name as their origin, one of their Tangents' rows, and what capability reads there.</summary>
+    private static async Task<IReadOnlyDictionary<string, Post>> ReportedBy(IReadOnlyList<Event> events, IReadOnlyDictionary<string, Post> posts,
+        string? readerId, CancellationToken ct)
+    {
+        var ids = events.Where(e => e.Report == true)
+            .Select(e => posts.TryGetValue(e.TopicId ?? "", out var root) ? root.OriginId : null)
+            .OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return new Dictionary<string, Post>();
+        var origins = (await Post.Get(ids, ct)).OfType<Post>().ToList();
+        var tangentIds = origins.Select(origin => origin.TangentId).Distinct(StringComparer.Ordinal).ToList();
+        var tangents = (await Tangents.Tangent.Get(tangentIds, ct)).OfType<Tangents.Tangent>().Select(tangent => tangent.Id).ToList();
+        var viewable = await Capabilities.LoadEach(readerId, tangents, ct);
+        return origins.Where(origin => viewable.TryGetValue(origin.TangentId, out var capabilities) && capabilities.Exists)
+            .ToDictionary(origin => origin.Id, StringComparer.Ordinal);
     }
 
     /// <summary>Everyone the page shows, in one keyed read, by participant Id, each with their profile's address.</summary>

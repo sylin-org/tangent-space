@@ -17,7 +17,9 @@ namespace Tangent.Posts;
 /// refused with <see cref="Capabilities.SignIn"/>; a Post of the moderators' Tangent with <see cref="InModerators"/>; a
 /// removed Post with <see cref="Capabilities.Removed"/>; a reason of
 /// nothing but white space with <see cref="NeedsReason"/>. The <see cref="EventKind.PostCreated"/> it appends targets
-/// nobody, so the reported author hears nothing of it, and one <see cref="EventKind.Mention"/> goes to each participant
+/// nobody, so the reported author hears nothing of it, and is marked a report (<see cref="Event.Report"/>), which is how it
+/// reaches everyone who may view the moderators' Tangent when they read their notifications, without one row written for
+/// each of them (<see cref="Notifications"/>); and one <see cref="EventKind.Mention"/> goes to each participant
 /// the reason mentions who may view the moderators' Tangent (<see cref="Mentions.Notify"/>). A participant who reports
 /// the same Post again while their earlier report stands — its root neither removed nor locked — replies in that
 /// report's Topic with the new reason, so the moderators keep one Topic per reporter and Post with every reason in
@@ -91,7 +93,8 @@ public sealed record ReportPost(
         }
 
         await Event.Next(sequences, EventKind.PostCreated, at,
-            tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version).Save(ct);
+            tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version,
+            report: true).Save(ct);
         await Mentions.Notify(sequences, written, ReporterId, [], at, ct);
         return new Outcome<Post>.Done(written);
     }

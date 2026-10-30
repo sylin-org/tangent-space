@@ -17,6 +17,7 @@ export interface LiveEvent {
   at: string
   audience?: string | null
   standing?: string | null
+  report?: boolean | null
 }
 
 export interface PollPage {
@@ -94,6 +95,7 @@ export function validateEvent(value: unknown): LiveEvent {
     || !nullableString(v.tangent, 1024) || !nullableString(v.topic, 1024) || !nullableString(v.post, 1024)
     || !nullableString(v.actor) || !nullableString(v.target) || !(v.version == null || sequence(v.version))
     || !nullableString(v.audience, 64) || !nullableString(v.standing, 64)
+    || !(v.report == null || typeof v.report === 'boolean')
   ) throw new Error('invalid-event')
   return v as LiveEvent
 }

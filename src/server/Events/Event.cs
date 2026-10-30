@@ -22,6 +22,7 @@ public sealed class Event : Entity<Event>
 
     [Index(Name = "ix_event_seq", Unique = true)]
     [Index(Name = "ix_event_targets", Order = 1)]
+    [Index(Name = "ix_event_reports", Order = 1)]
     public long Seq { get; set; }
 
     /// <summary>One of <see cref="EventKind"/>.</summary>
@@ -68,11 +69,18 @@ public sealed class Event : Entity<Event>
     /// <summary>Whether the role was given (true) or taken (false), on <see cref="EventKind.RoleChanged"/>.</summary>
     public bool? Given { get; set; }
 
+    /// <summary>True on the <see cref="EventKind.PostCreated"/> of a report (<see cref="Posts.ReportPost"/>), the Topic
+    /// or reply it wrote in the moderators' Tangent; null on every other row. The reports are one range of
+    /// <c>ix_event_reports</c>, newest first, which is how they reach whoever may view that Tangent.</summary>
+    [Index(Name = "ix_event_reports", Order = 0)]
+    public bool? Report { get; set; }
+
     /// <summary>The next row of the log, numbered from the mark the writer holds for the running command.</summary>
     public static Event Next(Sequences sequences, string kind, DateTimeOffset at,
         string? tangentId = null, string? topicId = null, string? postId = null, string? actorId = null,
         string? targetId = null, long? version = null, Audience? audience = null, string? offerId = null,
-        Participants.Standing? standing = null, Participants.Standing? before = null, string? role = null, bool? given = null)
+        Participants.Standing? standing = null, Participants.Standing? before = null, string? role = null, bool? given = null,
+        bool? report = null)
     {
         var seq = sequences.Next(Log);
         return new Event
@@ -92,7 +100,8 @@ public sealed class Event : Entity<Event>
             Standing = standing,
             Before = before,
             Role = role,
-            Given = given
+            Given = given,
+            Report = report
         };
     }
 }
