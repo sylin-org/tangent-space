@@ -71,6 +71,10 @@ const consentSettings = { 'Koan:Web:Auth:Server:UserCodeVerificationRateLimitPer
 // public origin it is also reached at.
 const offerSettings = { 'Koan:Web:ApplicationUrl': '', ASPNETCORE_ENVIRONMENT: 'Production' } as const
 
+// A Tangent Space whose configured base URL is a loopback address, which only its own machine reaches; in Development,
+// where atproto sign-in has a loopback http client.
+const localSettings = { 'Koan:Web:ApplicationUrl': 'http://localhost', ASPNETCORE_ENVIRONMENT: 'Development' } as const
+
 // A screen's name is its name in docs/FEATURES.md "Screens", lowercase, with hyphens between words:
 // "Tangent Space settings (general)" is tangent-space-settings-general. The door's two screens are the
 // door's states.
@@ -78,8 +82,9 @@ export const screens: Readonly<Record<string, Screen>> = {
   // A visitor's front page; the capture persona with news since her place checkpoint — replies to her Topic, a
   // mention of her, new articles and new Posts in each Tangent; and the same persona with her checkpoint at the
   // log's last sequence, quiet; and the persona as the one who set the place up, who administers it and is offered a
-  // new Tangent. Then the persona as the operator of a place reached at a public origin while it has
-  // no address: the Offer on her door, with its evidence and its two answers; where Use it lands, first run's
+  // new Tangent, with her account open, where the place's settings are offered; and her first door after setup,
+  // holding the first Tangent and the moderators'. Then the persona as the operator of a place reached at a public
+  // origin while it has no address: the Offer on her door, with its evidence and its two answers; where Use it lands, first run's
   // pointers under the origin she used; and her door once she said Not this one.
   door: {
     path: '/',
@@ -88,6 +93,8 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'signed-in-with-news', seed: 'door', signedIn: true },
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
       { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
+      { name: 'administrator-account', place: 'persona', seed: 'door', signedIn: true, click: '.account-button' },
+      { name: 'first', place: 'persona', signedIn: true },
       { name: 'offer', seed: 'offer', place: 'persona', signedIn: true, settings: offerSettings },
       { name: 'offer-used', seed: 'offer-used', place: 'persona', signedIn: true, settings: offerSettings, path: '/first-run' },
       { name: 'offer-declined', seed: 'offer-declined', place: 'persona', signedIn: true, settings: offerSettings },
@@ -109,13 +116,25 @@ export const screens: Readonly<Record<string, Screen>> = {
   },
   // A visitor, before anyone signs in, whose sign-in sets the place up; signed in where the configuration names
   // someone else's handle as operator, waiting; and set up by the persona's sign-in, ready, with the site's pointers
-  // for its operator, under the name her handle gives the place.
+  // for its operator, under the name her handle gives the place; and ready at a loopback address, which no site can
+  // point at, saying when the pointers appear instead.
   'first-run': {
     path: '/first-run',
     states: [
       { name: 'visitor', place: 'unestablished' },
       { name: 'waiting', place: 'unestablished', signedIn: true, settings: { 'Tangent:Operator': captureOperator.handle } },
       { name: 'ready', place: 'persona', signedIn: true },
+      { name: 'ready-local', place: 'persona', signedIn: true, settings: localSettings },
+    ],
+  },
+  // The place's settings, general, read by the persona, who set the place up and so holds ManageSpace: the sections
+  // in the rail and the name and description; and by the persona in a place someone else set up, where she holds no
+  // role, refused with the gate above read-only fields.
+  'tangent-space-settings-general': {
+    path: '/settings',
+    states: [
+      { name: 'proprietor', place: 'persona', signedIn: true },
+      { name: 'refused', signedIn: true },
     ],
   },
   // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the

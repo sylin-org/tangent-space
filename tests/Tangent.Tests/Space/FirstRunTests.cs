@@ -117,8 +117,8 @@ public sealed class FirstRunTests
         Assert.Null(space.Address);
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
         var log = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Select(e => (e.Kind, e.ActorId)).ToList();
-        // Leo arrived at sign-in; the moderators' Tangent is created with the place.
-        Assert.Equal([(EventKind.StandingChanged, Leo), (EventKind.TangentChanged, Leo), (EventKind.SpaceChanged, Leo)], log);
+        // Leo arrived at sign-in; the first Tangent and the moderators' Tangent are created with the place.
+        Assert.Equal([(EventKind.StandingChanged, Leo), (EventKind.TangentChanged, Leo), (EventKind.TangentChanged, Leo), (EventKind.SpaceChanged, Leo)], log);
         // Setting the place up declares nothing about the setter: their kind is still their profile's.
         var participant = await Participant.Get(Leo, Cancellation);
         Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel, Standing.Admitted, "leo.sylin.org"),
@@ -462,6 +462,92 @@ public sealed class FirstRunTests
 
         Assert.IsType<Outcome<TangentSpace>.Done>(outcome);
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
+    }
+
+    [Fact]
+    public async Task Setting_up_creates_a_public_first_tangent_of_discussions_that_a_second_participant_sees_and_starts_a_topic_in()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        using var leo = new Browser(tangentSpace);
+        (await leo.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org", comeBack: FirstRunController.Path)).Dispose();
+
+        var first = await Tangents.Tangent.Get(FirstTangent.Slug, Cancellation);
+        Assert.NotNull(first);
+        Assert.Equal(("General", "", Posts.PostKind.Topic, 1, Audience.Public),
+            (first.Name, first.Description, first.DefaultKind, first.Order, first.LoggedAudience));
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        Assert.Equal(Audience.Public, await Tangents.Overwrites.AudienceOf(roles, FirstTangent.Slug, Cancellation));
+        var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.TangentChanged && e.TangentId == FirstTangent.Slug, Cancellation));
+        Assert.Equal((Leo, Audience.Public), (created.ActorId, created.Audience));
+
+        // The setter's first door has somewhere to start a Topic: the first Tangent, before the moderators'.
+        var (_, door) = await Read(leo, "/");
+        using (var json = JsonDocument.Parse(door))
+            Assert.Equal([FirstTangent.Slug, ModeratorsTangent.Slug],
+                json.RootElement.GetProperty("tangents").EnumerateArray().Select(tangent => tangent.GetProperty("slug").GetString()).ToList());
+
+        // Someone else who signs in finds it; a member starts a Topic there.
+        using var ada = new Browser(tangentSpace);
+        (await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example")).Dispose();
+        var (_, adaDoor) = await Read(ada, "/");
+        using (var json = JsonDocument.Parse(adaDoor))
+            Assert.Equal([FirstTangent.Slug],
+                json.RootElement.GetProperty("tangents").EnumerateArray().Select(tangent => tangent.GetProperty("slug").GetString()).ToList());
+        await roles.Add(Roles.Member, Ada, Cancellation);
+        var started = await Posts.Writing.Json(ada, "/t/general/new", "/t/general/new",
+            new { id = Posts.Tids.Mint(), title = "Hello", body = "The first words here." });
+        Assert.Equal(HttpStatusCode.Created, started.Status);
+        Assert.Equal(1, (await Tangents.Tangent.Get(FirstTangent.Slug, Cancellation))!.TopicCount);
+    }
+
+    [Fact]
+    public async Task The_ready_page_holds_its_pointers_while_the_address_is_loopback_and_shows_them_once_the_place_uses_its_public_address()
+    {
+        const string Public = "https://tangent.example.org";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation, environment: "Development");
+        var loopback = tangentSpace.Client.BaseAddress!.GetLeftPart(UriPartial.Authority);
+        using var leo = new Browser(tangentSpace);
+
+        using var landed = await leo.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org", comeBack: FirstRunController.Path);
+        var local = WebUtility.HtmlDecode(await landed.Content.ReadAsStringAsync(Cancellation));
+
+        Assert.Equal(loopback, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
+        Assert.Contains("Leo's Tangent Space is ready", local);
+        Assert.Contains($"It answers at <a href=\"{loopback}/\">", local);
+        Assert.Contains(Pointers.Later(configured: false), local);
+        Assert.DoesNotContain("first-run-pointer", local);
+        Assert.DoesNotContain("rel=\"tangent\"", local);
+        Assert.DoesNotContain("_tangent.", local);
+        var (_, localBody) = await Read(leo, FirstRunController.Path);
+        using (var json = JsonDocument.Parse(localBody))
+        {
+            Assert.Equal(0, json.RootElement.GetProperty("pointers").GetArrayLength());
+            Assert.Equal(Pointers.Later(configured: false), json.RootElement.GetProperty("pointersLater").GetString());
+        }
+
+        // Reached at its public address, the place offers it on the operator's door; used, the pointers show under it.
+        await Reached.On(tangentSpace, Public, Cancellation);
+        await Reached.Settled(tangentSpace, Cancellation);
+        var offer = Assert.Single(await Offers.Offer.All(Cancellation));
+        var form = await leo.Token("/", Cancellation);
+        form[Offers.OfferController.Field] = offer.Id;
+        using (var used = await leo.Client.PostAsync(Offers.OfferController.UsePath, new FormUrlEncodedContent(form), Cancellation))
+            Assert.Equal(HttpStatusCode.SeeOther, used.StatusCode);
+
+        var (_, publicBody) = await Read(leo, FirstRunController.Path);
+        using (var json = JsonDocument.Parse(publicBody))
+        {
+            Assert.Equal(Public, json.RootElement.GetProperty("baseUrl").GetString());
+            Assert.Equal([Pointers.Link, Pointers.WellKnown, Pointers.Txt],
+                json.RootElement.GetProperty("pointers").EnumerateArray().Select(pointer => pointer.GetProperty("kind").GetString()).ToList());
+            Assert.False(json.RootElement.TryGetProperty("pointersLater", out _));
+        }
+
+        using var page = await leo.Follow(HttpMethod.Get, FirstRunController.Path, Cancellation);
+        var shown = WebUtility.HtmlDecode(await page.Content.ReadAsStringAsync(Cancellation));
+        Assert.Contains($"<link rel=\"tangent\" href=\"{Public}\">", shown);
+        Assert.Contains("_tangent.example.org. IN TXT", shown);
+        Assert.DoesNotContain(Pointers.Later(configured: false), shown);
     }
 
     /// <summary>Code as a sentence sets it: in runs between slashes, a break opportunity after each slash.</summary>

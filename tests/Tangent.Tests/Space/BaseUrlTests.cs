@@ -147,7 +147,9 @@ public sealed class BaseUrlTests
         Assert.Equal((HttpStatusCode.OK, FirstRunController.Path), (landed.StatusCode, landed.RequestMessage!.RequestUri!.AbsolutePath));
         Assert.Equal(origin, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
         Assert.Equal(origin, tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Accepted);
-        Assert.Contains($"<link rel=\"tangent\" href=\"{origin}\">", pointers);
+        // A loopback address is one no site can point at: the ready page says when its pointers appear instead.
+        Assert.DoesNotContain("rel=\"tangent\"", pointers);
+        Assert.Contains(Pointers.Later(configured: false), pointers);
     }
 
     [Fact]

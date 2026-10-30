@@ -2,8 +2,8 @@
    the base URL. The theme script blocks in <head> so the saved appearance applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in,
-   their account opening in the page with their name, handle and role and the way to sign out, or for a visitor the
-   way to sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
+   their account opening in the page with their name, handle and role, the place's settings for whoever may change them,
+   and the way to sign out, or for a visitor the way to sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
    in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. Nothing here is a dialog. *@
 <!DOCTYPE html>
 <html lang="en">
@@ -48,6 +48,10 @@
                             </div>
                         </div>
                         <ul class="account-items">
+                            @if (who.Settings is { } settings)
+                            {
+                                <li><a class="account-item" href="@settings">@Icon(SettingsIcon)Settings</a></li>
+                            }
                             <li><a class="account-item" href="@who.SignOut">@Icon(SignOutIcon)Sign out</a></li>
                         </ul>
                     </div>
@@ -146,6 +150,7 @@ else
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private const string AppearanceIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
+    private const string SettingsIcon = "<circle cx=\"10\" cy=\"10\" r=\"2.5\"></circle><path d=\"M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4\"></path>";
     private const string SignOutIcon = "<path d=\"M8 4.5H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3\"></path><path d=\"M12.5 6.5L16 10l-3.5 3.5\"></path><path d=\"M16 10H8\"></path>";
     private const string CheckIcon = "<path d=\"M5 10.5l3.2 3.2L15 7\"></path>";
     private const string NewIcon = "<path d=\"M10 4.5v11M4.5 10h11\"></path>";

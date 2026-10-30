@@ -1,4 +1,6 @@
+using Koan.Data.Abstractions;
 using Koan.Data.Core.Model;
+using Koan.Data.Core.Sorting;
 using Tangent.Posts;
 using Tangent.Writer;
 
@@ -73,6 +75,15 @@ public sealed class Tangent : Entity<Tangent>
         }
 
         return null;
+    }
+
+    /// <summary>The order that puts a new Tangent after the existing ones, the moderators' Tangent aside, which comes after
+    /// every other: one more than the highest below it; one bounded read of one row.</summary>
+    public static async Task<int> NextOrder(CancellationToken ct)
+    {
+        var last = await Query(tangent => tangent.Order < Space.ModeratorsTangent.Order,
+            new QueryDefinition { Page = 1, PageSize = 1 }.WithSort<Tangent>(sort => sort.OrderByDescending(tangent => tangent.Order)), ct);
+        return last.Count == 0 ? 1 : last[0].Order + 1;
     }
 
     private static void Check(string name, string description)

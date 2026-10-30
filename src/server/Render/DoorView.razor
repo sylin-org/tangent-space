@@ -3,7 +3,7 @@
 @using Tangent.Offers
 @using Tangent.Space
 @using Tangent.Tangents
-@* The door: whose place this is, in the head with what it holds; the Tangents the reader may view, where a new one is
+@* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the Tangents the reader may view, where a new one is
    created for whoever may, and who is around in the rail; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
    answers; for a signed-in reader with news, what is new since they were here — one sentence,
    then replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
@@ -16,6 +16,10 @@
             <TangentTile Tile="@(new Tile(Tile.Tones[0], Initial))" Size="head" />
             <div class="tangent-head-text">
                 <h1 id="door-title" class="tangent-title">@Model.Name</h1>
+                @if (Model.Description.Length > 0)
+                {
+                    <p class="tangent-description door-description">@Model.Description</p>
+                }
                 @if (Model.Proprietor is { } proprietor)
                 {
                     <p class="tangent-description">The place of @proprietor.Name, @("@" + proprietor.Handle)</p>
@@ -152,7 +156,7 @@
     /// reads, or where a visitor signs in.</summary>
     public static Frame Frame(Door door)
     {
-        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut) : null;
+        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings) : null;
         return new(door.Name, door.Address, [new Crumb(door.Name)], who, door.SignIn);
     }
 
