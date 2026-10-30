@@ -9,7 +9,7 @@ The operator, on their own computer or a hosted machine.
 | Step | What happens | State |
 | --- | --- | --- |
 | Get the tree | The README says what Tangent Space is, points at the documents, and says how to run one: what it needs, `publish` then `launch` or `docker compose up -d`, and Sign in with Bluesky. | works (5.6) |
-| Build from a fresh clone | `scripts/prepare-framework.ps1` clones Koan from GitHub at the pinned revision, `1dbea23`. That revision is on none of the repository's branches: its `dev` there stands 161 commits behind the pin, so a fresh clone cannot build. | missing: Koan's `dev` pushed (Leo's word) |
+| Build from a fresh clone | `scripts/prepare-framework.ps1` clones Koan from GitHub at the pinned revision, which Koan's `dev` there carries. | works |
 | Start it | `pwsh scripts/tangent.ps1 publish`, then `launch`: one executable, one data folder, port 5220 or the one `-Port` names. Or `docker compose up -d`. Neither asks for an address. | works when walked on 29 October; the walk starts no server, so it was not walked again |
 | First visit | Until the place is set up, every address answers the set-up page: one button, **Sign in with Bluesky**, which leads to bsky.social's own account chooser. Accounts on another server sign in by handle, behind "Use another server". | works (1.14) |
 | Setting up | The first sign-in, or the account `Tangent:Operator` names, sets the place up. It is named from the handle ("Leo's Tangent Space"); the setter becomes proprietor, operator and administrator, as `tangent.json` says; the set-up page's sign-in lands them on the ready page. | works (1.12, 1.14) |
@@ -73,9 +73,8 @@ A person, signed in or not.
 ## The order these close in
 
 What stops a person first comes first, then what keeps someone waiting unseen:
-1. **Koan's `dev` pushed (Leo's word),** so a fresh clone builds: until then nobody else can run a Tangent Space.
-2. **Moderating a Post:** a mark on a Post someone else changed, and the author told when a moderator removes it.
-3. **The small doors:** the settings rail shows a moderator only what they may use, and a newcomer's first door welcomes them.
-4. **The role editor and overwrites (5.1),** which also bring members-only Tangents.
-5. **The place's own audience:** public or private, set in the place's settings.
-6. **Slice 3, articles and publication.**
+1. **Moderating a Post:** a mark on a Post someone else changed, and the author told when a moderator removes it.
+2. **The small doors:** the settings rail shows a moderator only what they may use, and a newcomer's first door welcomes them.
+3. **The role editor and overwrites (5.1),** which also bring members-only Tangents.
+4. **The place's own audience:** public or private, set in the place's settings.
+5. **Slice 3, articles and publication.**
