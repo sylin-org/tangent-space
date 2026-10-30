@@ -276,10 +276,12 @@ public static class MarkdownHtml
             held.Select(entry => entry.Target).ToList());
     }
 
-    /// <summary>Where <paramref name="markdown"/> holds its prose: each run of the source that reads as the words it
-    /// is, in the order of the source — never code, a link's words or its target, an image's description, an autolink,
-    /// or a character a backslash escapes. One parse; ask <see cref="Tractable"/> first, since Markdig throws
-    /// <see cref="ArgumentException"/> past its nesting limit.</summary>
+    /// <summary>Where <paramref name="markdown"/> holds its prose: each run of the source that reads as words, in the
+    /// order of the source — never code, a link's words or its target, an image's description or an autolink. A run is
+    /// where its words stand within the source Markdig places them in, which may hold more: a table cell's padding, or
+    /// the backslash of an escape; where the words are not found there as they read, the whole place is the run. One
+    /// parse; ask <see cref="Tractable"/> first, since Markdig throws <see cref="ArgumentException"/> past its nesting
+    /// limit.</summary>
     public static IReadOnlyList<Range> Prose(string markdown)
     {
         Interlocked.Increment(ref _parses);
@@ -288,9 +290,9 @@ public static class MarkdownHtml
         {
             var span = literal.Span;
             if (InLink(literal) || span.IsEmpty || span.Start < 0 || span.End >= markdown.Length) continue;
-            // A run whose source is not its words, such as an escape, is not prose as typed.
-            if (!markdown.AsSpan(span.Start, span.Length).SequenceEqual(literal.Content.AsSpan())) continue;
-            runs.Add(span.Start..(span.End + 1));
+            var words = literal.Content.AsSpan();
+            var at = words.IsEmpty ? -1 : markdown.AsSpan(span.Start, span.Length).IndexOf(words);
+            runs.Add(at >= 0 ? (span.Start + at)..(span.Start + at + words.Length) : span.Start..(span.End + 1));
         }
 
         return runs;

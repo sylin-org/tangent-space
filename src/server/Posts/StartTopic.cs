@@ -14,9 +14,9 @@ namespace Tangent.Posts;
 /// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. A command that
 /// names no kind starts a Topic of the Tangent's <see cref="Tangents.Tangent.DefaultKind"/>, so a Topic started in an
 /// articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
-/// before any gate, so a replay is safe; a Post of this Tangent holding the Id with a different title, kind, body or
-/// author is a conflict, and a Post anywhere else holding it is refused with <see cref="Post.IdTaken"/>, which says
-/// nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in the
+/// before any gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Tangent holding the
+/// Id with a different title, kind, body or author is a conflict, and a Post anywhere else holding it is refused with
+/// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in the
 /// writer. A Topic taken on a tangent names its <see cref="OriginId"/>: the origin exists for the author, who holds
 /// <see cref="Bit.View"/> in its Tangent, or the command answers that no Post has the Id before anything else; a removed
 /// origin is refused with <see cref="Capabilities.Removed"/>; the root carries the origin, may start without a body of
@@ -74,10 +74,11 @@ public sealed record StartTopic(
         return new Outcome<Post>.Done(root);
     }
 
-    /// <summary>Whether the existing row is this request: the same Tangent, title, kind, body, author and origin.</summary>
+    /// <summary>Whether the existing row is this request: the same Tangent, title, kind, author and origin, and the same
+    /// words sent, whoever their typed handles name now.</summary>
     private bool Same(Post existing, PostKind kind) =>
         existing.ParentId is null && existing.TangentId == TangentId && existing.Title == Title.Trim()
-        && existing.Kind == kind && existing.Body == Post.RootBody(Body, OriginId) && existing.AuthorId == AuthorId
+        && existing.Kind == kind && existing.SentHash == Body.SentHash && existing.AuthorId == AuthorId
         && existing.OriginId == OriginId;
 
     /// <summary>The slug of <paramref name="title"/> for a Topic whose root is <paramref name="id"/>, or the first numbered

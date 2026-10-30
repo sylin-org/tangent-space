@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Koan.Data.Abstractions;
@@ -31,6 +32,10 @@ public static partial class Mentions
 
     /// <summary>What one resolved mention may weigh in an answer: its DID, handle and address, with room to spare.</summary>
     public const int Weight = 2048;
+
+    /// <summary>The most UTF-8 bytes writing one typed handle as its mention adds to a body: <c>[</c> before it, and
+    /// <c>](at://</c>, the DID and <c>)</c> after it.</summary>
+    public const int TypedWeight = 9 + IdentityLimit;
 
     /// <summary>The DID a link target names when it is a mention; null for any other target.</summary>
     public static string? Identity(string target)
@@ -97,13 +102,13 @@ public static partial class Mentions
     /// <summary><paramref name="body"/> with each handle typed in its prose that names a participant here written as
     /// their mention, <c>[@handle](at://did)</c> with the words as typed, so the body keeps their identity and a handle
     /// that changes later changes nothing in it. A typed handle is atproto's handle syntax after an <c>@</c> that begins
-    /// a word — at the start of a line, or after whitespace or an opening parenthesis, with any marks that open emphasis,
-    /// a quote or a table cell between — and is never inside a URL, so an address (<c>ines@bsky.social</c>) and a path
+    /// a word (<see cref="BeginsAWord"/>) and is never inside a URL, so an address (<c>ines@bsky.social</c>) and a path
     /// (<c>/@ines.bsky.social</c>) stay as typed; only prose is read (<see cref="MarkdownHtml.Prose"/>), so code, a link's
     /// words and an image's description stay as typed too. The first <see cref="Limit"/> handles typed are read in one
     /// keyed read of the participants, each as typed or in lower case, as atproto writes handles; a handle no participant
-    /// holds stays the words typed. A body without an <c>@</c> is returned unparsed; ask
-    /// <see cref="MarkdownHtml.Tractable"/> first.</summary>
+    /// holds stays the words typed. At most <see cref="Limit"/> are written, the first typed, each adding at most
+    /// <see cref="TypedWeight"/>, so the body grows within <see cref="Post.KeptBodyLimit"/>. A body without an <c>@</c>
+    /// is returned unparsed; ask <see cref="MarkdownHtml.Tractable"/> first.</summary>
     public static async Task<string> Typed(string body, CancellationToken ct)
     {
         var typed = TypedHandles(body);
@@ -117,14 +122,13 @@ public static partial class Mentions
         if (holders.Count == 0) return body;
 
         var written = new StringBuilder(body.Length);
-        var at = 0;
+        int at = 0, count = 0;
         foreach (var (start, length, handle) in typed)
         {
-            // Past what a Post holds, the body is refused whatever follows, so nothing more is written into it.
-            if (written.Length > Post.BodyLimit) break;
             if ((holders.GetValueOrDefault(handle) ?? holders.GetValueOrDefault(handle.ToLowerInvariant())) is not { } did) continue;
             written.Append(body, at, start - at).Append('[').Append(body, start, length).Append("](").Append(Scheme).Append(did).Append(')');
             at = start + length;
+            if (++count == Limit) break;
         }
 
         return written.Append(body, at, body.Length - at).ToString();
@@ -172,13 +176,21 @@ public static partial class Mentions
         return found;
     }
 
-    /// <summary>Whether the <c>@</c> at <paramref name="sign"/> begins a word: at the start of a line, or after
-    /// whitespace or an opening parenthesis, with any marks that open emphasis, a quote or a table cell between.</summary>
+    /// <summary>Whether the <c>@</c> at <paramref name="sign"/> begins a word: unless the character before it, past any
+    /// emphasis marks (<c>*</c> and <c>_</c>) right before it, belongs to a word — a letter, a digit or a mark that joins
+    /// one — or to an address or a path: <c>.</c>, <c>+</c>, <c>-</c>, <c>/</c>, <c>\</c>, <c>=</c>, <c>%</c>,
+    /// <c>&amp;</c>, <c>~</c>, <c>#</c> or <c>@</c>. So the start of a line, whitespace, a quotation mark of any kind, a
+    /// dash other than the hyphen, a colon, a bracket and other punctuation begin one, <c>_@</c> opening emphasis does,
+    /// and <c>snake_@</c> does not.</summary>
     private static bool BeginsAWord(string body, int sign)
     {
         var before = sign;
-        while (before > 0 && body[before - 1] is '*' or '_' or '>' or '|') before--;
-        return before == 0 || char.IsWhiteSpace(body[before - 1]) || body[before - 1] == '(';
+        while (before > 0 && body[before - 1] is '*' or '_') before--;
+        if (before == 0) return true;
+        if (body[before - 1] is '.' or '+' or '-' or '/' or '\\' or '=' or '%' or '&' or '~' or '#' or '@') return false;
+        Rune.DecodeLastFromUtf16(body.AsSpan(0, before), out var rune, out _);
+        return !Rune.IsLetterOrDigit(rune) && Rune.GetUnicodeCategory(rune) is not
+            (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark);
     }
 
     [GeneratedRegex(@"^did:[a-z]+:[A-Za-z0-9._:%-]+$")]
