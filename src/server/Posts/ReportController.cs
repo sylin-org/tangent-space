@@ -145,7 +145,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         return new ReportPage(
             new TakeOnATangentPage.Quoted(reported.Id, address, author, reported.CreatedAt,
                 reported.Removed ? null : TangentPage.Opening(reported, people), reported.Removed, root.Title ?? "", topicAddress,
-                found.Tangent.Name, tangentAddress),
+                found.Tangent.Name, tangentAddress, TangentPage.EditedOf(reported, people)),
             received,
             received || inModerators || gate is not null ? null : PostWrites.ReportForm(address + "/" + Segment, Tid.Mint(DateTimeOffset.UtcNow), FormToken.For(HttpContext)),
             gate,

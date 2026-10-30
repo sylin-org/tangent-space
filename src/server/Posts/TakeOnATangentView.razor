@@ -17,6 +17,10 @@
                         · <time datetime="@Model.Origin.CreatedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@Model.Origin.CreatedAt.ToUniversalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</time></a>
                 </p>
                 <p>@(Model.Origin.Removed ? "This post is removed." : Model.Origin.Text)</p>
+                @if (Model.Origin.Edited is { } edited)
+                {
+                    <p class="post-edited">Edited by @edited.By.Name</p>
+                }
             </blockquote>
             @if (Model.Gate is { } gate)
             {

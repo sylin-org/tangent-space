@@ -49,7 +49,8 @@ public sealed partial record TangentPage(
     /// minutes it takes to read, its reply count, when it started and when it last gained a Post, whether it is pinned
     /// or locked, its <see cref="Latest"/> reply and its most recent <see cref="People"/>, and, for a signed-in reader,
     /// whether it is <see cref="New"/> to them — its last sequence past their checkpoint for it, or no checkpoint at
-    /// all — with <see cref="NewPosts"/>, how many of its Posts they have not seen.</summary>
+    /// all — with <see cref="NewPosts"/>, how many of its Posts they have not seen. <see cref="Edited"/> says who other
+    /// than its author last edited its root, where someone did.</summary>
     public sealed record Topic(
         string Id,
         string Slug,
@@ -67,11 +68,16 @@ public sealed partial record TangentPage(
         Latest? Latest,
         IReadOnlyList<Author> People,
         bool New,
-        long NewPosts);
+        long NewPosts,
+        Edited? Edited = null);
 
-    /// <summary>A Topic's latest reply: its author, its first words, when it was written, and whether it is new to the
-    /// reader.</summary>
-    public sealed record Latest(string Id, Author Author, string Line, DateTimeOffset At, bool New);
+    /// <summary>A Topic's latest reply: its author, its first words, when it was written, whether it is new to the
+    /// reader, and who other than its author last edited it, where someone did.</summary>
+    public sealed record Latest(string Id, Author Author, string Line, DateTimeOffset At, bool New, Edited? Edited = null);
+
+    /// <summary>Someone other than a Post's author last edited it, so its words are not said to be its author's: who, and
+    /// when. It travels with the Post wherever its words are read.</summary>
+    public sealed record Edited(Author By, DateTimeOffset At);
 
     /// <summary>A participant as the page shows them: the name to show, their handle, their kind and avatar, and, where
     /// the page links their name, their profile's address.</summary>
@@ -100,6 +106,12 @@ public sealed partial record TangentPage(
         var words = Whitespace().Split(body.Trim()).Count(word => word.Any(char.IsLetterOrDigit));
         return Math.Max(1, (words + WordsPerMinute - 1) / WordsPerMinute);
     }
+
+    /// <summary>Who other than its author last edited <paramref name="post"/> and when, named from
+    /// <paramref name="people"/>; null where nobody did.</summary>
+    public static Edited? EditedOf(Post post, IReadOnlyDictionary<string, Author> people) => post.EditedBy is { } by
+        ? new Edited(people.TryGetValue(by, out var person) ? person : new Author(by, by, by, "person", null), post.EditedAt ?? post.CreatedAt)
+        : null;
 
     /// <summary>The opening words of a Post's body as plain text on one line, each mention of a participant among
     /// <paramref name="people"/> their current handle (<see cref="Mentions.PlainText"/>), cut at a word within

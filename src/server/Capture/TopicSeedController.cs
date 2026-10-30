@@ -15,7 +15,7 @@ namespace Tangent.Capture;
 /// <summary>The rows the Topic's captures show, written through the writer when the capture asks: a discussions Tangent
 /// with a short Topic whose replies answer one another in Markdown — emphasis, a list, code, a table and mentions — read by
 /// the capture persona up to its first reply; a long Topic
-/// of more replies than one window, which she has read halfway; a Topic with a reply a moderator removed; and a Topic
+/// of more replies than one window, which she has read halfway; a Topic with a reply a moderator rewrote and one a moderator removed; and a Topic
 /// without replies. Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words,
 /// times and TIDs.</summary>
 public sealed class TopicSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
@@ -61,7 +61,8 @@ public sealed class TopicSeedController(WriteLoop writer, RoleCollection roles) 
         await Seen(notes, LongReplies / 2, ct);
 
         var removal = await Topic("Is a visible repair a better repair?", "Kintsugi makes the crack the point. Should our software do the same with its fixes?", Lumen, At(27, 15, 0), 7, ct);
-        await Answer(removal, "Yes, when the repair teaches something. A changelog is a seam you can read.", Mara, At(27, 15, 30), 8, ct);
+        var rewritten = await Answer(removal, "Yes, when the repair teaches something. A changelog is a seam you can read.", Mara, At(27, 15, 30), 8, ct);
+        await Write(new EditPost(rewritten.Id, rewritten.Version, "Yes, when the repair teaches something. A changelog is a seam anyone can read.", null, Leo, At(27, 17, 5)), ct);
         var gone = await Answer(removal, "Off-topic link that did not belong here.", Persona, At(27, 16, 0), 9, ct);
         await Answer(removal, "Not always: some seams only invite worry. Show the ones people can act on.", Leo, At(27, 16, 45), 10, ct);
         gone.Removed = true;

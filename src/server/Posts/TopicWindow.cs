@@ -87,7 +87,9 @@ public static class TopicWindow
         post.AuthorId,
         post.CreatedAt,
         post.RemovedBy,
-        post.RemovedAt
+        post.RemovedAt,
+        post.EditedBy,
+        post.EditedAt
     }).Length;
 
     /// <summary>What the window's replies may weigh: the Topic's budget less its root, which every answer carries.</summary>

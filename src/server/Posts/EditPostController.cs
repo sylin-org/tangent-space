@@ -193,7 +193,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
-            BodyOptional: bodyOptional);
+            BodyOptional: bodyOptional,
+            Edited: row.EditedBy is null ? null : Tangents.TangentPage.EditedOf(row, await TakeOnATangentController.People(row, ct)));
     }
 
     private string Address(Post root, Post row) => PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, row.Id);

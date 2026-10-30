@@ -16,7 +16,8 @@ namespace Tangent.Capture;
 /// <summary>The rows the notifications' captures show, written through the writer when the capture asks: the capture
 /// persona's Topic in the discussions, with Mara's reply to it from before she last opened her notifications; then,
 /// since, Lumen's reply, Lumen's Topic that mentions her, Mara's Topic taken on a tangent from hers into the workshop,
-/// Leo making her a moderator, Mara's report of Lumen's reply, which she now reads as one who may view the moderators'
+/// Leo making her a moderator, Leo's rewrite of her Topic's opening and his removal of a reply of hers, Mara's report of
+/// Lumen's reply, which she now reads as one who may view the moderators'
 /// Tangent, and, once the place says apply, Wren's application, which she now decides.
 /// <c>notifications-unseen</c> puts her notifications checkpoint back at Mara's reply, or
 /// before everything where the place has no such reply, before every width and theme, since opening them moves it.
@@ -55,6 +56,9 @@ public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection
         await Write(new StartTopic(Tid(At(29, 15, 10), 5), "workshop", "Introductions for people too",
             "The same three lines work for us: who you are, what you make, what you won’t take on.", Mara, At: At(29, 15, 10), OriginId: intro.Id), ct);
         await Write(new ChangeRole(Leo, Persona, Roles.Moderator, Give: true, At(29, 16, 0)), ct);
+        await Write(new EditPost(intro.Id, intro.Version, "Who runs it, what it is good at, and when it will not answer. What else belongs in one?", null, Leo, At(29, 16, 10)), ct);
+        var strayed = await Write(new Reply(Tid(At(29, 16, 15), 7), intro.Id, "An off-topic link that did not belong here.", Persona, At: At(29, 16, 15)), ct);
+        await Write(new RemovePost(strayed.Id, Leo, At(29, 16, 20)), ct);
         await Write(new ReportPost(Tid(At(29, 16, 30), 6), answer.Id,
             PostBody.Of("The same answer went into three topics this morning, word for word. It reads as automated."), Mara, At(29, 16, 30)), ct);
 

@@ -88,9 +88,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             ? [.. page.Tangents, reports]
             : page.Tangents;
 
-        // The events that speak of Posts in a Tangent the reader may view; every other one is absent here.
+        // The events that speak of Posts in a Tangent the reader may view; every other one is absent here. Someone's edit
+        // or removal speaks here only to the Post's author, whom it targets.
         var concerning = window.Concat(targeted)
-            .Where(e => e.Kind is EventKind.PostCreated or EventKind.Mention && Viewable(e.TangentId) && e.PostId is not null && e.TopicId is not null)
+            .Where(e => (e.Kind is EventKind.PostCreated or EventKind.Mention || (e.Kind is EventKind.PostEdited or EventKind.PostRemoved && e.TargetId is not null && e.TargetId == reader?.Id))
+                        && Viewable(e.TangentId) && e.PostId is not null && e.TopicId is not null)
             .ToList();
         var posts = await Posts(concerning, ct);
         var seen = reader is null ? new Dictionary<string, Checkpoint>() : await Seen(reader.Id, concerning, ct);
@@ -102,6 +104,12 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             && (e.Kind == EventKind.Mention
                 || !seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Topic(root.Id)), out var topicSeen) || post.Sequence > topicSeen.Seq)
             && (!seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Tangent(root.TangentId)), out var tangentSeen) || e.Seq > tangentSeen.Seq);
+        // Someone else edited or removed the reader's Post, past their checkpoints: the tombstone is the news, so a removed
+        // Post is no reason to say nothing.
+        bool Changed(Event e) =>
+            reader is not null && e.TargetId == reader.Id && e.Seq > since && e.ActorId != reader.Id && Viewable(e.TangentId)
+            && posts.ContainsKey(e.PostId ?? "") && posts.ContainsKey(e.TopicId ?? "")
+            && (!seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Tangent(e.TangentId!)), out var tangentSeen) || e.Seq > tangentSeen.Seq);
         bool Watched(Scope scope) => reader is not null && seen.TryGetValue(Checkpoint.Key(reader.Id, scope), out var checkpoint) && checkpoint.Watch;
 
         var created = window.Where(e => e.Kind == EventKind.PostCreated && Viewable(e.TangentId)).ToList();
@@ -121,6 +129,10 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var taken = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e) && TakenOnATangent(e)).ToList();
         var mentions = targeted.Where(e => e.Kind == EventKind.Mention && e.TargetId == reader?.Id && New(e)).ToList();
         var articles = fresh.Where(e => e.PostId == e.TopicId && posts[e.TopicId!].Kind == PostKind.Article).ToList();
+        // The reader's Posts someone else edited that still stand, the newest edit of each, and those someone else removed.
+        var edited = targeted.Where(e => e.Kind == EventKind.PostEdited && Changed(e) && !posts[e.PostId!].Removed)
+            .GroupBy(e => e.PostId!, StringComparer.Ordinal).Select(edits => edits.First()).ToList();
+        var removed = targeted.Where(e => e.Kind == EventKind.PostRemoved && Changed(e)).ToList();
         // Someone admitted the reader, or lifted their timeout or ban, since their checkpoint, and they stand admitted
         // still: the newest change someone else made of their standing says which.
         var now = DateTimeOffset.UtcNow;
@@ -139,12 +151,13 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var people = await People(
             baseAddress,
             new[] { space.ProprietorId, reader?.Id, admitted?.ActorId, lifted?.ActorId }.Concat(roleChanges.Select(e => e.ActorId))
-                .Concat(replies.Concat(mentions).Concat(articles).Concat(taken).Select(e => e.ActorId))
+                .Concat(replies.Concat(mentions).Concat(articles).Concat(taken).Concat(edited).Concat(removed).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
                 .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
                 .Concat(replies.Take(ItemLimit).Concat(mentions.Take(ItemLimit)).Concat(articles.Take(ItemLimit)).Concat(taken.Take(ItemLimit))
+                    .Concat(edited.Take(ItemLimit))
                     .Select(e => posts[e.PostId!])
-                    .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds)),
+                    .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds.Append(post.EditedBy))),
             ct);
 
         var door = baseAddress + "/";
@@ -175,7 +188,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                 admitted is null ? null : new Door.Decision(Person(people, admitted.ActorId!), admitted.At),
                 lifted is null ? null : new Door.Decision(Person(people, lifted.ActorId!), lifted.At, Participants.People.Word(lifted.Before!.Value)),
                 roleChanges.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At,
-                    Roles.Word(e.Role!), e.Given!.Value)).ToList());
+                    Roles.Word(e.Role!), e.Given!.Value)).ToList(),
+                Group(edited, targetedFull, posts, tangents, people),
+                Group(removed, targetedFull, posts, tangents, people));
             // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
             // other door of a signed-in reader is theirs alone to cache.
             if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through, FormToken.For(HttpContext)) };
@@ -315,7 +330,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             var root = posts[e.TopicId!];
             var topic = TopicAddress(root);
             return new Door.NewPost(post.Id, Person(people, e.ActorId ?? post.AuthorId), root.Title ?? "", Name(tangents, root.TangentId),
-                post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id), TangentPage.Opening(post, people), e.At);
+                post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id), TangentPage.Opening(post, people), e.At, TangentPage.EditedOf(post, people));
         }).ToList());
 
     /// <summary>A Topic on the front page, new to the reader by the door's own rule: as many of its Posts as the
@@ -341,7 +356,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             null,
             root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Select(id => Person(people, id)).ToList(),
             unseen > 0,
-            unseen));
+            unseen,
+            TangentPage.EditedOf(root, people)));
     }
 
     /// <summary>The listed Tangents and the other viewable Tangents the events name, by slug: one keyed read of the

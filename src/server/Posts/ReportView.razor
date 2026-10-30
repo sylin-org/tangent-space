@@ -18,6 +18,10 @@
                         · <time datetime="@Model.Reported.CreatedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@Model.Reported.CreatedAt.ToUniversalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</time></a>
                 </p>
                 <p>@(Model.Reported.Removed ? "This post is removed." : Model.Reported.Text)</p>
+                @if (Model.Reported.Edited is { } edited)
+                {
+                    <p class="post-edited">Edited by @edited.By.Name</p>
+                }
             </blockquote>
             @if (Model.Received)
             {

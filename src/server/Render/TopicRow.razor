@@ -1,7 +1,7 @@
 @using System.Globalization
 @using Tangent.Tangents
 @* One Topic in a Tangent's list. In a discussions Tangent it is a row of the table: a dot when it is new to the
-   reader, its title with any pin or lock, who started it and its opening words, its latest reply on the page's colour
+   reader, its title with any pin or lock, who started it and its opening words, who else edited a Post beside its author where someone did, its latest reply on the page's colour
    with "New" when the reader has not seen it, the faces of its recent authors, its replies with how many Posts are
    new, and when it last gained a Post and from whom. In an articles Tangent it is an article: the lead, first on the
    first page, with its cover, date and read time, opening, author and latest-reply strip; the rest as rows. An
@@ -33,7 +33,7 @@
             }
             <p class="article-card-author">
                 @Mark(Model.Author, Lead ? "author-mark-lead" : "author-mark-small")
-                <span class="article-card-name">@Model.Author.Name</span>@AgentTag(Model.Author)
+                <span class="article-card-name">@Model.Author.Name</span>@AgentTag(Model.Author)@Edited(Model.Edited)
                 @if (!Lead || Model.Latest is null)
                 {
                     <span aria-hidden="true">·</span>
@@ -45,7 +45,7 @@
             {
                 <a class="article-strip" href="@Model.Address">
                     @Mark(latest.Author, "author-mark")
-                    <span class="article-strip-line"><b>@latest.Author.Name</b> @Clip(latest.Line, StripLimit)</span>
+                    <span class="article-strip-line"><b>@latest.Author.Name</b>@Edited(latest.Edited) @Clip(latest.Line, StripLimit)</span>
                     <span class="article-strip-count">@Replies()</span>
                     @NewReplies()
                 </a>
@@ -64,12 +64,12 @@ else
         </span>
         <span class="topic-row-body">
             <span class="topic-row-title">@Model.Title @Flags()</span>
-            <span class="topic-row-opening"><span class="topic-row-author">@Model.Author.Name</span>@AgentTag(Model.Author)@(Model.Opening.Length > 0 ? ": " + Model.Opening : "")</span>
+            <span class="topic-row-opening"><span class="topic-row-author">@Model.Author.Name</span>@AgentTag(Model.Author)@Edited(Model.Edited)@(Model.Opening.Length > 0 ? ": " + Model.Opening : "")</span>
             @if (Model.Latest is { } latest)
             {
                 <span class="topic-row-latest-reply">
                     @Mark(latest.Author, "reply-mark")
-                    <span class="topic-row-latest-line"><b>@latest.Author.Name</b> @Clip(latest.Line, PreviewLimit)@if (latest.New)
+                    <span class="topic-row-latest-line"><b>@latest.Author.Name</b>@Edited(latest.Edited) @Clip(latest.Line, PreviewLimit)@if (latest.New)
                         {
                             <span class="new-label new-inline">New</span>
                         }</span>
@@ -183,6 +183,17 @@ else
     {
         if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"topic-flag\">Pinned</span>");
         if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"topic-flag\">Locked</span>");
+    };
+
+    /// <summary>Beside a Post's first words, right after its author, who else edited them, so they never read as the
+    /// author's own; nothing where nobody did.</summary>
+    public static RenderFragment Edited(TangentPage.Edited? edited) => builder =>
+    {
+        if (edited is null) return;
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "edited-by");
+        builder.AddContent(2, " (edited by " + edited.By.Name + ")");
+        builder.CloseElement();
     };
 
     /// <summary>A participant's mark: their avatar, or two letters of their handle on their own tint; round for a

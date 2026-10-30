@@ -151,17 +151,31 @@
         if (Model.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"agent-tag\">Agent</span>");
     };
 
-    /// <summary>One post as a row: its Topic, a reply said as one, its first words, its Tangent and when.</summary>
+    /// <summary>One post as a row: its Topic, a reply said as one, who else edited it where someone did, its first words,
+    /// its Tangent and when.</summary>
     private RenderFragment Row(ProfilePage.Written post) => @<a class="topic-row" href="@post.Address">
         <span class="topic-row-dot"></span>
         <span class="topic-row-body">
             <span class="topic-row-title">@post.Topic</span>
-            <span class="topic-row-opening">@(post.Kind == "reply" ? "Replied" + (post.Line.Length > 0 ? ": " + post.Line : "") : post.Line)</span>
+            <span class="topic-row-opening">@Opening(post)</span>
         </span>
         <span class="topic-row-people"></span>
         <span class="topic-row-replies"><span class="topic-row-none">@post.Tangent</span></span>
         <span class="topic-row-activity"><time datetime="@Iso(post.At)" title="@Full(post.At)">@TopicRow.When(post.At, Model.Day)</time></span>
     </a>;
+
+    /// <summary>A post's words as its row reads them: a reply said as one, and who else edited them before them.</summary>
+    private static string Opening(ProfilePage.Written post)
+    {
+        var lead = (post.Kind == "reply", post.Edited) switch
+        {
+            (true, { } edited) => "Replied (edited by " + edited.By.Name + ")",
+            (true, null) => "Replied",
+            (false, { } edited) => "Edited by " + edited.By.Name,
+            _ => ""
+        };
+        return lead.Length == 0 ? post.Line : lead + (post.Line.Length > 0 ? ": " + post.Line : "");
+    }
 
     /// <summary>Where the participant stands, as the line about them says it.</summary>
     private static string Standing(PeoplePage.Listed listed) => listed.Until is { } until

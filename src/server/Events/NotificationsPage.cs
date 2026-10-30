@@ -33,6 +33,12 @@ public sealed record NotificationsPage(
         /// <summary>A mention of the reader.</summary>
         public const string Mention = "mention";
 
+        /// <summary>The reader's Post someone else edited.</summary>
+        public const string Edited = "edited";
+
+        /// <summary>The reader's Post someone else removed.</summary>
+        public const string Removed = "removed";
+
         /// <summary>A report someone made, for whoever may view the moderators' Tangent, the reader among them.</summary>
         public const string Report = "report";
 
@@ -53,7 +59,8 @@ public sealed record NotificationsPage(
     /// reader, when, who did it where the page names them, and the one address it is about: the Post, the Topic, the
     /// report in the moderators' Tangent, the door, the reader's profile, where the place answers, or the applications,
     /// for one who applied. A Post's carries its <see cref="Topic"/>, its <see cref="Tangent"/>, its opening words
-    /// (<see cref="Line"/>) and whether it is <see cref="Removed"/>, and a report's also the author of the Post it reports
+    /// (<see cref="Line"/>), whether it is <see cref="Removed"/> and who other than its author last edited it
+    /// (<see cref="Edited"/>), and a report's also the author of the Post it reports
     /// (<see cref="Reported"/>), only where the reader may view that Post; a standing's the standing it left and the one
     /// before (<see cref="Was"/>); a role's the role and whether it was <see cref="Given"/>; an Offer's the Offer as it
     /// stands.</summary>
@@ -66,6 +73,8 @@ public sealed record NotificationsPage(
         public string? Line { get; init; }
 
         public bool? Removed { get; init; }
+
+        public TangentPage.Edited? Edited { get; init; }
 
         public TangentPage.Author? Reported { get; init; }
 

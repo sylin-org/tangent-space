@@ -6,7 +6,7 @@
    subject a link to what it is about — the Post, the Topic taken on a tangent, the report in the moderators' Tangent,
    whose line names the reported Post's author where the reader may view that Post, the door, their profile, where the
    place answers, or the applications, for someone who applied and waits — and when; a Post's opening words under it,
-   a report's its reason's; and an open Offer's two answers beside it, a decided one
+   a report's its reason's, first saying who else edited them where someone did and the line above does not; and an open Offer's two answers beside it, a decided one
    saying how it was decided. None reads as one sentence, and a page that shows none but has older ones says so above
    the way to them. Older notifications and the newest are a link away. *@
 <div class="layout">
@@ -39,7 +39,10 @@
                                     </p>
                                     @if (entry.Line is { Length: > 0 } opening)
                                     {
-                                        <p class="notification-opening">@opening</p>
+                                        <p class="notification-opening">@if (entry.Kind != NotificationsPage.Kinds.Edited && entry.Edited is not null)
+                                            {
+                                                @TopicRow.Edited(entry.Edited)@(" ")
+                                            }@opening</p>
                                     }
                                 </div>
                                 @if (entry.Offer is { Use: { } use, Decline: { } decline })
@@ -102,6 +105,8 @@
         NotificationsPage.Kinds.Reply => Named(entry, "replied to you in", entry.Removed == true ? " — since removed" : ""),
         NotificationsPage.Kinds.Mention => Named(entry, "mentioned you in", entry.Removed == true ? " — since removed" : ""),
         NotificationsPage.Kinds.Taken => Named(entry, "took your post on a tangent:", ""),
+        NotificationsPage.Kinds.Edited => Named(entry, "edited your post in", entry.Removed == true ? " — since removed" : ""),
+        NotificationsPage.Kinds.Removed => Named(entry, "removed your post in", ""),
         NotificationsPage.Kinds.Report => Reported(entry),
         NotificationsPage.Kinds.Standing => Linked(entry, Standing(entry)),
         NotificationsPage.Kinds.Role => Linked(entry, global::Tangent.Access.Roles.Changed(entry.Role ?? "", entry.Given == true) + "."),

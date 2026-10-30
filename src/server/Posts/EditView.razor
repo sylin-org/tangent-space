@@ -4,12 +4,17 @@
    behind a disclosure that says what removing does and holds the one button that does it: the confirmation is in the
    page, never a dialog. A reader who may not edit reads why above the form, whose fields are read-only and which has
    no button; a tombstone says it is removed and holds nothing to change. After an edit made from another version the
-   fields hold the current text, and the words that were not saved stay below them to copy from. *@
+   fields hold the current text, and the words that were not saved stay below them to copy from. Words someone other
+   than the author last edited say who, above the form. *@
 <main class="sign-in post-form">
     <section class="sign-in-panel post-form-panel" aria-labelledby="edit-heading">
         <div class="sign-in-body">
             <p class="post-form-where">In <a href="@Model.TopicAddress">@Model.TopicTitle</a></p>
             <h1 id="edit-heading" class="sign-in-title">@(Model.Root ? "Edit topic" : "Edit post")</h1>
+            @if (Model.Edited is { } edited)
+            {
+                <p class="post-form-note">Last edited by @edited.By.Name.</p>
+            }
             @if (Model.Failure is { } failure)
             {
                 <p class="sign-in-failure" id="edit-failure" role="alert" data-gate="@Model.FailureGate">@failure</p>
