@@ -10,8 +10,8 @@ namespace Tangent.Space;
 
 /// <summary>The place's settings, in sections shown one at a time, each listed in the rail for whoever may use it
 /// (<see cref="Sections"/>). <c>/settings</c> is general, which names and describes the place; <c>/settings/admission</c> sets how a newcomer
-/// arrives; <c>/settings/appearance</c> sets the place's accent; the applications are <see cref="ApplicationsController"/>'s, the people <see cref="PeopleController"/>'s and
-/// the roles <see cref="RolesController"/>'s. Each <c>GET</c> is the section's form, one resource both ways. General's
+/// arrives; <c>/settings/appearance</c> sets the place's accent; the applications are <see cref="ApplicationsController"/>'s, the people <see cref="PeopleController"/>'s,
+/// the roles <see cref="RolesController"/>'s and export <see cref="Lifecycle.ExportController"/>'s. Each <c>GET</c> is the section's form, one resource both ways. General's
 /// <c>POST</c> takes <c>name</c>, <c>description</c> and <c>audience</c> (<c>public</c> or <c>private</c>), admission's
 /// takes <c>admission</c> (<c>join</c> or <c>apply</c>), appearance's takes <c>accent</c> (<c>gold</c>, <c>jade</c>, <c>iris</c> or <c>copper</c>), as a form or a JSON object, a field left as it is when not sent, and
 /// sends <see cref="ChangeTangentSpace"/>: a form is sent on, from general to the door, where the name and the description
@@ -68,6 +68,10 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     /// <see cref="Bit.ManageRoles"/>.</summary>
     public const string RolesSection = "Roles";
 
+    /// <summary>The section where the place is taken along, one Tangent or all of it, listed for whoever holds
+    /// <see cref="Bit.ManageSpace"/>.</summary>
+    public const string ExportSection = "Export";
+
     /// <summary>The admissions a form offers, in its order.</summary>
     public static readonly IReadOnlyList<string> Admissions = [Word(Admission.Join), Word(Admission.Apply)];
 
@@ -77,7 +81,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     /// <summary>The sections of the settings the reader of <paramref name="place"/> may use, under
     /// <paramref name="baseAddress"/>, with <paramref name="current"/> marked: general, admission and appearance for whoever
     /// holds <see cref="Bit.ManageSpace"/>; the applications for whoever holds <see cref="Bit.ManageStanding"/>; the people for
-    /// whoever holds it or <see cref="Bit.ManageRoles"/>; and the roles for whoever holds <see cref="Bit.ManageRoles"/>.
+    /// whoever holds it or <see cref="Bit.ManageRoles"/>; the roles for whoever holds <see cref="Bit.ManageRoles"/>; and
+    /// export for whoever holds <see cref="Bit.ManageSpace"/>.
     /// A reader who may use none has none.</summary>
     public static IReadOnlyList<SettingsSection> Sections(Capabilities place, string baseAddress, string current)
     {
@@ -95,6 +100,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             sections.Add(new SettingsSection(PeopleSection, baseAddress + PeopleController.Path, current == PeopleSection));
         if (place.Holds(Bit.ManageRoles))
             sections.Add(new SettingsSection(RolesSection, baseAddress + RolesController.Path, current == RolesSection));
+        if (place.Holds(Bit.ManageSpace))
+            sections.Add(new SettingsSection(ExportSection, baseAddress + Lifecycle.ExportController.Path, current == ExportSection));
         return sections;
     }
 

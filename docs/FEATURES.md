@@ -119,7 +119,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Export a Tangent or the Tangent Space as readable HTML with data and media, streamed, through the one renderer | settings export | new | lift later | M | todo |
+| Export a Tangent or the Tangent Space, as far as whoever holds `ManageSpace` may view it, as a zip of readable pages that open with no server beside their data as JSON, streamed in bounded reads through the one renderer, tombstones kept, at `/settings/export`; a Post's images stay the addresses its body names | settings export | new | lift later | M | done |
 | Backup and restore of the folder, verified by restoring | — | `scripts/server-lifecycle.ps1` (harvest) | — | S | done |
 | Static archive: every public page and feed rendered to a folder with the same URLs; retirement mode | — | new | lift later | M | todo |
 

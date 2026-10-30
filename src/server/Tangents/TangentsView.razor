@@ -21,7 +21,7 @@
                             <li class="door-offer" @key="tangent.Slug">
                                 <p class="door-offer-line">
                                     <a href="@tangent.Address">@tangent.Name</a>
-                                    <span class="topic-row-none">· @Detail(tangent)</span>
+                                    <span class="topic-row-none">· @Detail(tangent.Kind, tangent.TopicCount)</span>
                                 </p>
                             </li>
                         }
@@ -57,7 +57,8 @@
     public static Frame Frame(TangentsPage page)
         => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Tangents")], page.Who, page.SignIn);
 
-    private static string Detail(TangentPage.Listed tangent) => tangent.Kind == PostWrites.Word(PostKind.Article)
-        ? "Articles · " + TopicRow.Count(tangent.TopicCount, "article", "articles", "no articles yet")
-        : "Discussions · " + TopicRow.Count(tangent.TopicCount, "topic", "topics", "no topics yet");
+    /// <summary>A Tangent's kind and how many Topics were started there, in words.</summary>
+    public static string Detail(string kind, int topicCount) => kind == PostWrites.Word(PostKind.Article)
+        ? "Articles · " + TopicRow.Count(topicCount, "article", "articles", "no articles yet")
+        : "Discussions · " + TopicRow.Count(topicCount, "topic", "topics", "no topics yet");
 }

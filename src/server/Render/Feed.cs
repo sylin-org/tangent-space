@@ -49,11 +49,20 @@ public sealed partial record Feed(string Title, string Description, string Home,
     public static string Absolute(string html, string origin, string address)
         => LinkTag().Replace(html, tag => RelativeTarget().Replace(tag.Value, target => target.Value == "/" ? origin + "/" : address + "#"));
 
+    /// <summary><paramref name="html"/> with each link and image that starts at a host's root made absolute from
+    /// <paramref name="origin"/>, since a page standing alone has no host. Only tags are touched, as in
+    /// <see cref="Absolute"/>.</summary>
+    public static string Rooted(string html, string origin)
+        => LinkTag().Replace(html, tag => RootTarget().Replace(tag.Value, _ => origin + "/"));
+
     [GeneratedRegex("<(?:a|img)\\s(?:[^>\"]|\"[^\"]*\")*>", RegexOptions.CultureInvariant)]
     private static partial Regex LinkTag();
 
     [GeneratedRegex("(?<=\\s(?:href|src)=\")[/#]", RegexOptions.CultureInvariant)]
     private static partial Regex RelativeTarget();
+
+    [GeneratedRegex("(?<=\\s(?:href|src)=\")/", RegexOptions.CultureInvariant)]
+    private static partial Regex RootTarget();
 }
 
 /// <summary>A feed as a page advertises it: its title, its media type and its address.</summary>

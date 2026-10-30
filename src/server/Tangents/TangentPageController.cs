@@ -110,7 +110,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         _ => new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent is not open to you.", gate).ToResult()
     };
 
-    private static TangentPage.Topic Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, TangentPage.Author> people,
+    public static TangentPage.Topic Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, TangentPage.Author> people,
         IReadOnlyDictionary<string, Post> latest, IReadOnlyDictionary<string, long> seen, bool signedIn)
     {
         var known = seen.TryGetValue(root.Id, out var last);
@@ -145,7 +145,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
 
     /// <summary>The latest reply of each Topic on the page that has one, by its Id, in one keyed read.</summary>
-    private static async Task<IReadOnlyDictionary<string, Post>> LatestReplies(IReadOnlyList<Post> topics, CancellationToken ct)
+    public static async Task<IReadOnlyDictionary<string, Post>> LatestReplies(IReadOnlyList<Post> topics, CancellationToken ct)
     {
         var ids = topics.Select(topic => topic.LatestReplyId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, Post>();
@@ -154,7 +154,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
 
     /// <summary>Everyone the page shows (the Topics' authors, their recent authors, the authors of their latest
     /// replies, whom those openings and replies mention, and who else edited them) in one keyed read, by participant Id.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> topics, IEnumerable<Post> latest,
+    public static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> topics, IEnumerable<Post> latest,
         CancellationToken ct)
     {
         var ids = topics.SelectMany(topic => topic.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(topic.AuthorId))
