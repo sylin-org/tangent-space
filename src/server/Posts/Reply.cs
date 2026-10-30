@@ -50,6 +50,7 @@ public sealed record Reply(
         var reply = root.Reply(Id, Body, AuthorId, parent.Id, at);
         await reply.Save(ct);
         await root.Save(ct);
+        await MediaUse.Record(reply, reply.AuthorId, [], ct);
         await Event.Next(sequences, EventKind.PostCreated, at,
             tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
             targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version).Save(ct);

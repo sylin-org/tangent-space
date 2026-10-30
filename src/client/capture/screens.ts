@@ -265,6 +265,25 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'visitor', seed: 'write' },
     ],
   },
+  // The article editor, the persona writing: a new article as it opens; her article, its cover, heading, list, quote and
+  // image in their places, as it will read; the same in its source view; and a new article whose title and words she
+  // typed, the page opened again, which brings them back.
+  'article-editor': {
+    path: '/t/articles/new',
+    states: [
+      { name: 'empty', seed: 'article', signedIn: true },
+      { name: 'writing', seed: 'article', signedIn: true, path: '/t/articles/mending-with-gold/3mwgqaw5is227/edit' },
+      { name: 'source', seed: 'article', signedIn: true, path: '/t/articles/mending-with-gold/3mwgqaw5is227/edit', click: '.article-views button[title="Markdown source"]' },
+    ],
+  },
+  // The article as it reads: the same article the editor holds, to the persona and to a visitor.
+  article: {
+    path: '/t/articles/mending-with-gold',
+    states: [
+      { name: 'read', seed: 'article', signedIn: true },
+      { name: 'visitor', seed: 'article' },
+    ],
+  },
   // The form that creates a Tangent, read by the persona, who set the place up and so administers it, in a place that
   // holds only the moderators' Tangent: as it opens, the name alone with the rest at its defaults behind one line; and
   // sent with a name of nothing but spaces, refused under the name.
@@ -337,6 +356,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'discussions-empty', seed: 'tangent', signedIn: true, path: '/t/workshop' },
       { name: 'articles', seed: 'tangent', signedIn: true, path: '/t/articles' },
       { name: 'articles-empty', seed: 'tangent', signedIn: true, path: '/t/field-notes' },
+      { name: 'articles-covered', seed: 'article', signedIn: true, path: '/t/articles' },
       { name: 'many-switcher', seed: 'many-tangents', signedIn: true, path: '/t/tangent-01', click: '.switcher-button' },
     ],
   },

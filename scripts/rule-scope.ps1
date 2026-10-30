@@ -3,7 +3,7 @@
 
 $script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'poc'
 $script:ExcludedDirectories = '.git', 'node_modules', 'bin', 'obj'
-$script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md'
+$script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md', 'src/server/wwwroot'
 $script:TextExtensions = '.md', '.cs', '.razor', '.ts', '.vue', '.js', '.mjs', '.json', '.ps1', '.yaml', '.yml', '.css', '.html',
     '.csproj', '.props', '.targets', '.sln', '.sh', '.cmd', '.bat', '.xml'
 $script:TextNames = 'Dockerfile'

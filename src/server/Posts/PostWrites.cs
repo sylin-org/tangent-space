@@ -27,6 +27,7 @@ public static class PostWrites
     public const string KindField = "kind";
     public const string ParentField = "parent";
     public const string VersionField = "version";
+    public const string CoverField = "cover";
 
     /// <summary>The refusal of a kind that is not one of <see cref="PostKind"/>'s words.</summary>
     public const string KindRule = "A Topic's kind is topic or article.";
@@ -43,6 +44,9 @@ public static class PostWrites
         Sent,
         Gate
     }
+
+    /// <summary>A title as a form sent it: on one line, since an article's title field wraps as the title does.</summary>
+    public static string? Title(IReadOnlyDictionary<string, string> fields) => fields.GetValueOrDefault(TitleField)?.ReplaceLineEndings(" ");
 
     public static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
@@ -172,22 +176,38 @@ public static class PostWrites
 
     /// <summary>The form that starts a Topic at <paramref name="action"/>, a Tangent's, whose default kind is
     /// <paramref name="kind"/>: a TID minted for it, the title, the body and the kind.</summary>
-    public static Form StartForm(string action, PostKind kind, FormToken token) => Form.Posting(action, token,
-        Form.Minted(IdField, "Topic", Tid.Mint(DateTimeOffset.UtcNow)),
-        new Form.Field(TitleField, TitleHolds("The Topic's title")),
-        new Form.Field(BodyField, BodyHolds("Its opening Post")),
-        new Form.Field(KindField, $"{Word(PostKind.Topic)} or {Word(PostKind.Article)}; left out, the Tangent's default, {Word(kind)}."));
+    public static Form StartForm(string action, PostKind kind, FormToken token)
+    {
+        Form.Field[] fields =
+        [
+            Form.Minted(IdField, "Topic", Tid.Mint(DateTimeOffset.UtcNow)),
+            new Form.Field(TitleField, TitleHolds("The Topic's title")),
+            new Form.Field(BodyField, BodyHolds("Its opening Post")),
+            new Form.Field(KindField, $"{Word(PostKind.Topic)} or {Word(PostKind.Article)}; left out, the Tangent's default, {Word(kind)}.")
+        ];
+        return Form.Posting(action, token, kind == PostKind.Article ? [.. fields, new Form.Field(CoverField, CoverHolds)] : fields);
+    }
+
+    /// <summary>What a new article's cover field holds.</summary>
+    public const string CoverHolds = "The Id of the image that leads the article, as the form that brings an image answers it; left out, the article has none.";
+
+    /// <summary>The form that brings an image in for someone writing at <paramref name="tangentAddress"/>.</summary>
+    public static Form MediaForm(string tangentAddress, FormToken token) => Form.Posting(tangentAddress + "/" + NewMediaController.Segment, token,
+        new Form.Field(NewMediaController.FileField, "A PNG, JPEG or WebP image, at most 20 MiB: a file of a multipart form, or its bytes in base64 in one JSON object. The answer's id is a cover's value, and its reference is what a body's Markdown names it by: ![what it shows](reference)."));
 
     /// <summary>The form that edits a Post at <paramref name="action"/> from the <paramref name="version"/> its editor read:
     /// the version, the title on a Topic's <paramref name="root"/>, and the body, which may be empty on a root taken on a
     /// tangent.</summary>
-    public static Form EditForm(string action, long version, bool root, bool bodyOptional, FormToken token)
+    public static Form EditForm(string action, long version, bool root, bool bodyOptional, FormToken token, string? cover = null, bool article = false)
     {
         var body = new Form.Field(BodyField, BodyHolds("The Post's words, which replace what it says now")
                                              + (bodyOptional ? " Empty, the Post it was taken on a tangent from speaks for it." : ""));
         var from = new Form.Field(VersionField,
             "The version of the Post the edit was made from: one made from another changes nothing and answers with the Post as it stands.",
             version.ToString(CultureInfo.InvariantCulture));
+        if (article)
+            return Form.Posting(action, token, from, new Form.Field(TitleField, TitleHolds("The Topic's title") + " Left out, it stays."), body,
+                new Form.Field(CoverField, "The Id of the image that leads the article, as the form that brings an image answers it; empty, it has none; left out, it stays.", cover ?? ""));
         return root
             ? Form.Posting(action, token, from, new Form.Field(TitleField, TitleHolds("The Topic's title") + " Left out, it stays."), body)
             : Form.Posting(action, token, from, body);
@@ -222,9 +242,9 @@ public static class PostWrites
     public static About Concerning(string reason) => reason switch
     {
         Post.NeedsTitle or Post.TitleTooLong => About.Title,
-        Post.NeedsBody or Post.BodyTooLong or Post.BodyHasNul or Post.BodyRendersTooLong or Post.TooManyMentions or Post.BodyTooIntricate => About.Body,
+        Post.NeedsBody or Post.BodyTooLong or Post.BodyHasNul or Post.BodyRendersTooLong or Post.TooManyMentions or Post.TooManyImages or Post.BodyTooIntricate => About.Body,
         Post.NeedsTid or Post.NeedsTangent or Post.NeedsAuthor or Post.NotARoot or Post.TopicLocked or Post.TopicRemoved
-            or Post.NoTitleOnReply or Post.BodyNotJudged or Post.PostRemoved or Post.NeedsRemover or Post.IdTaken or Reply.NoParent or KindRule or VersionRule
+            or Post.NoTitleOnReply or Post.BodyNotJudged or Post.PostRemoved or Post.NeedsRemover or Post.IdTaken or Reply.NoParent or KindRule or VersionRule or Post.NoCover or Post.CoverOnArticle
             => About.Sent,
         _ => About.Gate
     };

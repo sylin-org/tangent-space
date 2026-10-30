@@ -83,9 +83,12 @@ public static class MarkdownHtml
     /// <summary>One parse's result: the HTML and the plain text in pieces, and the targets of the held links by index.
     /// <see cref="HtmlBytes"/> is what the HTML weighs with every held link as its own words; <see cref="Fits"/> says
     /// whether it stays within <see cref="HtmlLimit"/> with every held link written at <see cref="LinkLimit"/>.</summary>
-    public sealed class Rendered(IReadOnlyList<Piece> html, IReadOnlyList<Piece> plain, IReadOnlyList<string> held)
+    public sealed class Rendered(IReadOnlyList<Piece> html, IReadOnlyList<Piece> plain, IReadOnlyList<string> held, IReadOnlyList<string> images)
     {
         public IReadOnlyList<string> Held { get; } = held;
+
+        /// <summary>The target of each image the body shows, in the order of the source.</summary>
+        public IReadOnlyList<string> Images { get; } = images;
 
         public long HtmlBytes { get; } = html.Sum(piece => (long)Encoding.UTF8.GetByteCount(piece.Text));
 
@@ -260,6 +263,7 @@ public static class MarkdownHtml
             link.IsImage = false;
         }
 
+        var images = document.Descendants<LinkInline>().Where(link => link.IsImage).Select(Target).OfType<string>().ToList();
         var html = Sanitizer.Sanitize(document.ToHtml(Pipeline));
         if (Encoding.UTF8.GetByteCount(html) <= HtmlLimit && Figured(html)) html = FigureCaptions(html);
 
@@ -273,7 +277,7 @@ public static class MarkdownHtml
         var labels = new Dictionary<int, string>();
         foreach (Match match in HeldAnchor.Matches(html)) labels.TryAdd(int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), match.Groups[2].Value);
         return new Rendered(Pieces(html, HeldAnchor, match => match.Groups[2].Value), Pieces(Plain(document), HeldWords, match => Words(labels, match)),
-            held.Select(entry => entry.Target).ToList());
+            held.Select(entry => entry.Target).ToList(), images);
     }
 
     /// <summary>Where <paramref name="markdown"/> holds its prose: each run of the source that reads as words, in the

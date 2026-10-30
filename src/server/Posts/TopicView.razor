@@ -38,15 +38,27 @@
         }
     </aside>
     <main class="topic-main">
-        <h1 class="topic-title">@Model.Title@Flags()</h1>
-        <p class="topic-meta">
-            <span>Started <time datetime="@Model.Root.CreatedAt.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@TopicRow.When(Model.Root.CreatedAt, Model.Day)</time></span>
-            <span aria-hidden="true">·</span>
-            <span>@TopicRow.Count(Model.ReplyCount, "reply", "replies", "No replies yet")</span>
-        </p>
-        <TakenFrom Model="@Model.TakenFrom" />
-        <Tangent.Events.WatchForm Model="@Model.Watching" />
-        <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Anchor="@(Model.Anchor == Model.Root.Id)" />
+        @if (Article)
+        {
+            <article class="article">
+                <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Flags="@Flags()" />
+                <TakenFrom Model="@Model.TakenFrom" />
+                <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" />
+            </article>
+            <Tangent.Events.WatchForm Model="@Model.Watching" />
+        }
+        else
+        {
+            <h1 class="topic-title">@Model.Title@Flags()</h1>
+            <p class="topic-meta">
+                <span>Started <time datetime="@Model.Root.CreatedAt.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@TopicRow.When(Model.Root.CreatedAt, Model.Day)</time></span>
+                <span aria-hidden="true">·</span>
+                <span>@TopicRow.Count(Model.ReplyCount, "reply", "replies", "No replies yet")</span>
+            </p>
+            <TakenFrom Model="@Model.TakenFrom" />
+            <Tangent.Events.WatchForm Model="@Model.Watching" />
+            <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" />
+        }
         <section class="topic-replies" aria-labelledby="topic-replies-title">
             <div class="topic-replies-head">
                 <h2 id="topic-replies-title" class="topic-replies-title">Replies</h2>
@@ -67,7 +79,7 @@
             }
             @foreach (var reply in Model.Replies)
             {
-                <TopicPost Model="@reply" Today="@Model.Day" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" />
+                <TopicPost Model="@reply" Today="@Model.Day" Door="@Model.Door" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" />
             }
             <Tangent.Events.TopicSeenForm Model="@Model.Seen" />
             <Tangent.Events.Live Page="topic" Tangent="@Model.Tangent.Slug" Topic="@Model.Id" Address="@Model.Address" Newest="@(Model.Newer is null)" />

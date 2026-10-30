@@ -19,7 +19,8 @@ namespace Tangent.Posts;
 /// a reply it did not show, and <see cref="Watching"/> their watch flag on it with the form that sets it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for. <see cref="TakenFrom"/> is
-/// where a Topic taken on a tangent was taken from, as the reader may know it.</summary>
+/// where a Topic taken on a tangent was taken from, as the reader may know it. <see cref="Cover"/> is the address of an
+/// article's cover, while its root stands and has one; <see cref="ReadMinutes"/> what its body takes to read.</summary>
 public sealed record TopicPage(
     string Id,
     string Slug,
@@ -48,7 +49,9 @@ public sealed record TopicPage(
     string? SignIn,
     TopicPage.Reader? Who,
     DateOnly Day,
-    TopicPage.Origin? TakenFrom = null)
+    TopicPage.Origin? TakenFrom = null,
+    string? Cover = null,
+    int ReadMinutes = 1)
 {
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
     /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is

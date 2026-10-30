@@ -10,7 +10,9 @@ namespace Tangent.Posts;
 /// sent and says why; after an edit made from another version it holds the current text and version, and the words
 /// that were not saved in <see cref="SentTitle"/> and <see cref="SentBody"/>. <see cref="BodyOptional"/> marks a Topic's
 /// root taken on a tangent, which may keep no body of its author's own. <see cref="Edited"/> says who other than its
-/// author last edited the words the form holds, where someone did.</summary>
+/// author last edited the words the form holds, where someone did. On an article, <see cref="CoverId"/> is its cover,
+/// <see cref="Bring"/> the form that brings an image in, <see cref="Author"/> who wrote it and <see cref="CreatedAt"/>
+/// when.</summary>
 public sealed record EditPage(
     string Id,
     string Address,
@@ -40,4 +42,9 @@ public sealed record EditPage(
     string? SentTitle = null,
     string? SentBody = null,
     bool BodyOptional = false,
-    Tangents.TangentPage.Edited? Edited = null);
+    Tangents.TangentPage.Edited? Edited = null,
+    string Kind = "topic",
+    string? CoverId = null,
+    Form? Bring = null,
+    Tangents.TangentPage.Author? Author = null,
+    DateTimeOffset CreatedAt = default);

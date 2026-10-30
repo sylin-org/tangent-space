@@ -95,6 +95,7 @@ public sealed record ReportPost(
         await Event.Next(sequences, EventKind.PostCreated, at,
             tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version,
             report: true).Save(ct);
+        await MediaUse.Record(written, ReporterId, [], ct);
         await Mentions.Notify(sequences, written, ReporterId, [], at, ct);
         return new Outcome<Post>.Done(written);
     }

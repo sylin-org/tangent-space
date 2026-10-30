@@ -17,7 +17,8 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Topic** | One conversation: a root Post and its replies. | a root `Post` (`ParentId` null); `Topics` is a query, not a table | `/t/{tangent}/{topic}` | Thread, *Discussion*, Conversation (as a noun) |
 | **Post** | One message, a root or a reply. The only content primitive. | `Post` | `/t/{tangent}/{topic}/{post}` | *Message*, *Comment*, *Entry*, *Item* |
 | **Reply** | A Post that is not its Topic's root; a Topic counts its replies. Also the verb. | a `Post` with a `ParentId`; `Post.ReplyCount` on the root | `/t/{tangent}/{topic}/{post}` | *Answer* (for the noun), *Response*, *Comment* |
-| **Article** | A Topic whose root Post is a published piece. | `Post.Kind = Article` | same as its Topic | Blog post, *Page*, Story |
+| **Article** | A Topic whose root Post is a published piece. It opens with its cover, title, author and date, then its body, in type of its own, and is written in the same place and type (`ArticleForm`). | `Post.Kind = Article`; `ArticleHead`, `ArticleForm` | same as its Topic | Blog post, *Page*, Story |
+| **Article editor** | Where an article is written so it looks as it will read: the visual view over the article's Markdown, offered while it holds the Markdown's whole meaning, and the source view, which is the form's own body field. Nothing a person did not change is rewritten. Without script the form's plain fields post. | `writeArticle`, `canEditMarkdownRichly` (`src/client/article/`); the island `article` | `/t/{tangent}/new`, `/t/{tangent}/{topic}/{post}/edit` | *WYSIWYG*, *Rich text*, *CMS* |
 | **Base URL** | Scheme, host and optional path where the Tangent Space answers; every absolute link derives from it. A configured one wins; otherwise it is the place's address, which it learns — the origin its first run completed on, or one its operator used from an Offer — and until it has one, each request's own. `tangent.<domain>` is the suggested address, not a rule. | Koan's `KoanWebBaseUrl`, read with `Resolve` in a request and `Current` outside one: `Koan:Web:ApplicationUrl` when configured, else the address the place accepted, kept as `TangentSpace.Address` through `PlaceAddress` | — | Origin (for this), *Root*, *Prefix* |
 | **First run** | The one page every address answers until the Tangent Space is established: the first person to sign in, or the one the configuration names, sets the place up by signing in and lands on the site's pointers, which it shows once the base URL is public and, while it is local, says when they will appear. | `FirstRun`, `FirstRunGate`, `FirstRunSignIn`; `Tangent:Operator` names who sets it up, by handle or DID | `/first-run` | *Setup wizard*, *Onboarding*, *Install* |
 | **Establish** | What first run does once: write the settings row, named from the setter's handle ("Leo's Tangent Space"), the first Tangent and the moderators' Tangent, the events, and the operator's role. A place is established when its row exists. | `Establish` (the command), `TangentSpace.NameFor` | — | *Initialize*, *Bootstrap*, *Claim* |
@@ -94,14 +95,16 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Snapshot** | The copy of a Post as it stood before an edit or a removal, kept in Koan's audit partition under `{id}#v{version}`. | `AuditPartition.Snapshot` | — | *Backup* (for this), *History entry* |
 | **Window** | One bounded run of a Topic's replies in sequence order, cut by count and by bytes, with cursors to the older and newer runs; opened at the reader's first unread or around an anchor. | `TopicWindow`, `WindowPlanner` | `/t/{tangent}/{topic}` | *Page* (for this), *Thread view*, *Feed* |
 | **Anchor** | The Post a window opens around when its address is followed. | `TopicPage.Anchor` | `/t/{tangent}/{topic}/{post}` | *Permalink* (for this), *Jump target* |
-| **Draft** | Words a person has typed into the composer and not yet posted, kept in their browser by scope until the server confirms the Post. | `composer.ts` | — | *Unsaved post*, *Pending* (for this) |
+| **Draft** | Words a person has typed into the composer or the article editor and not yet posted, with an article's title and cover, kept in their browser by scope until the server confirms the Post, or, for an edit of an article, by the version it was made from. | `composer.ts` | — | *Unsaved post*, *Pending* (for this) |
 | **Slug** | The URL name of a Topic or a Tangent, from its title or name at creation, deduplicated with a numbered suffix, never renamed. | `Post.Slug`; a Tangent's `Id` | — | *Key*, Permalink, Handle (for this) |
 | **Opening** | A Topic's first words on a list row: the root's body as plain text, cut short. | `TopicRow.Opening` | — | *Excerpt*, *Preview* (for this), *Teaser* |
 | **TID** | atproto's timestamp identifier: thirteen characters, sortable by time, minted by the client as a Post's Id and the idempotency key of its command. | `Tid` (the shape check); `Post.Id` | `/t/{tangent}/{topic}/{post}` | *UUID* (for a Post), *Sequence* (for this) |
 | **Search** | The Posts whose title or body hold the words of a text, best first; bounded in text, page and snippet; reads only. | `PostSearch.Run`; the Post index is Koan's lexical index over `Post.Title` and `Post.Body` | `/search` | *Query* (for this), *Lookup*, *Find* (for this) |
 | **Snippet** | The marked words of a Post around a search's matches, a bounded window wide. | `PostSearch.Hit.Snippet` | — | *Excerpt* (for this), *Highlight*, *Preview* (for this) |
-| **Media** | A file a Post references, stored once by content hash on Koan.Media. | `MediaEntity<…>` | — | Attachment, *Upload*, *Asset*, Blob (outside atproto) |
-| **Cover** | An article's lead image. | `Post.CoverId` | — | Hero, Banner, Featured image |
+| **Media** | A file a Post references, stored once by content hash on Koan.Media: a PNG, a JPEG or a WebP, encoded again with its metadata removed and its colour profile kept. It reaches whoever may view a Tangent one of its Posts is in and whoever brought it in, and is absent to everyone else. A body names one as `/media/{id}`. | `Media` (a `MediaEntity<…>`), `Media.Keep`, `Media.Reference`, `Post.MediaIds`, `GatedMedia`, `MediaRecipes` | `/media/{id}`, `/media/{id}/card` | Attachment, *Upload*, *Asset*, Blob (outside atproto) |
+| **Use** | What lets someone see a piece of Media: a Post that uses it, or the participant who brought it in. | `MediaUse`, `MediaUse.Reaches`, `MediaUse.Record` | — | *Reference* (for this), *Binding*, *Link* (for this) |
+| **Bring in** | What someone writing does with an image: it comes into the place in the page, or through the form an agent follows, before any Post uses it. | `BringMedia`, `NewMediaController`, `PostWrites.MediaForm`; `bring` on the wire | `/t/{tangent}/media` | *Upload* (as the verb on the screen), *Attach* |
+| **Cover** | An article's lead image: shown above its title where it is read and while it is written, and with it on its Tangent's list. | `Post.CoverId`; `cover` on the wire | — | Hero, Banner, Featured image |
 
 ## Outside
 
@@ -117,7 +120,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 
 ## Verbs
 
-reply · edit · remove · lock · pin · move · take on a tangent · join · apply · admit · decline · time out · ban · lift · give a role · take a role · report · revoke · publish · retract · watch · connect · export · archive · restore
+reply · edit · remove · bring in · lock · pin · move · take on a tangent · join · apply · admit · decline · time out · ban · lift · give a role · take a role · report · revoke · publish · retract · watch · connect · export · archive · restore
 
 ## Koan's words
 

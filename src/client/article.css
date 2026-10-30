@@ -1,0 +1,491 @@
+/* An article, read and written in one set of rules: its cover, its title, its byline and its body in the article's
+ * type. The form an article is written in wears them, so what the writer sees is what the reader gets. */
+.article-figure {
+  position: relative;
+  margin: 0 0 28px;
+  overflow: hidden;
+  border-radius: var(--ts-radius-image);
+  background: var(--ts-image-band);
+  aspect-ratio: 16 / 9;
+}
+
+.article-figure > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.article-figure.is-coming > img {
+  opacity: 0.6;
+}
+
+.article-title {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ts-text);
+  font: var(--ts-type-article-title);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.article-title .topic-flag {
+  vertical-align: 14px;
+}
+
+.article-byline {
+  margin: 18px 0 0;
+  padding-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--ts-line);
+}
+
+.article-byline-mark {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  font-size: 14px;
+}
+
+.article-byline-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.article-byline-name {
+  color: var(--ts-text);
+  font: var(--ts-type-ui-large);
+  text-decoration: none;
+}
+
+a.article-byline-name:hover {
+  text-decoration: underline;
+}
+
+.article-byline-text .agent-tag {
+  margin-left: 6px;
+}
+
+.article-byline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+/* An article's root is its body alone. */
+.post-article {
+  display: block;
+  margin-top: 0;
+  padding-top: 26px;
+}
+
+/* The body in the article's type. */
+.article-prose {
+  color: var(--ts-text);
+  font: var(--ts-type-article-body);
+  overflow-wrap: anywhere;
+}
+
+.article-prose > :first-child {
+  margin-top: 0;
+}
+
+.article-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.article-prose :is(p, ul, ol, blockquote, pre, table, figure, hr) {
+  margin: 0 0 1.1em;
+}
+
+.article-prose h1,
+.article-prose h2 {
+  margin: 1.5em 0 0.5em;
+  font: var(--ts-type-section);
+  letter-spacing: -0.01em;
+}
+
+.article-prose :is(h3, h4, h5, h6) {
+  margin: 1.4em 0 0.4em;
+  font: 600 23px/1.25 var(--ts-font-display);
+}
+
+.article-prose :is(ul, ol) {
+  padding-left: 1.3em;
+}
+
+.article-prose li {
+  margin: 0.25em 0;
+}
+
+.article-prose li > p {
+  margin: 0;
+}
+
+.article-prose blockquote {
+  padding-left: 20px;
+  border-left: 3px solid var(--ts-accent);
+  color: var(--ts-text-2);
+  font-style: italic;
+}
+
+.article-prose blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.article-prose a {
+  color: var(--ts-accent);
+}
+
+.article-prose code {
+  font: 0.84em/1.5 var(--ts-font-mono);
+}
+
+.article-prose pre {
+  max-width: 100%;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-row);
+  background: var(--ts-surface);
+  overflow-wrap: normal;
+}
+
+.article-prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font: var(--ts-type-ui);
+}
+
+.article-prose :is(th, td) {
+  padding: 6px 12px;
+  border: 1px solid var(--ts-line);
+  text-align: left;
+}
+
+.article-prose hr {
+  border: 0;
+  border-top: 1px solid var(--ts-line);
+}
+
+.article-prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--ts-radius-row);
+}
+
+.article-prose figcaption,
+.article-surface p:has(> img:not(.ProseMirror-separator)) + p:has(> em:only-child) {
+  margin-top: 8px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+}
+
+/* An image and the emphasis under it read as the figure they will be. The editor's own marks after an image take no
+ * line of their own, so the image stands as it will. */
+.article-surface p:has(> img:not(.ProseMirror-separator)) + p:has(> em:only-child) em,
+.article-prose figcaption em {
+  font-style: normal;
+}
+
+.article-surface p:has(> img:not(.ProseMirror-separator)):has(+ p > em:only-child) {
+  margin-bottom: 0;
+}
+
+.article-surface p:has(> img:not(.ProseMirror-separator)) > :is(img.ProseMirror-separator, br.ProseMirror-trailingBreak) {
+  display: none !important;
+}
+
+/* The form an article is written in. Without script the body is a plain field under its label; with it the field stands
+ * for the source view, and the surface takes its place. */
+.article-form .article-byline {
+  margin-bottom: 26px;
+}
+
+.article-title-field {
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+
+.article-title-field::placeholder {
+  color: var(--ts-text-3);
+  opacity: 1;
+}
+
+.article-title-wrap .field-failure {
+  margin: 6px 0 0;
+}
+
+.article-cover-field:empty {
+  display: none;
+}
+
+.article-cover-offer {
+  margin-bottom: 18px;
+  padding: 8px 0;
+  width: 100%;
+  border: 1px dashed var(--ts-connector);
+  border-radius: var(--ts-radius-row);
+  background: transparent;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+  cursor: pointer;
+}
+
+.article-cover-offer:hover {
+  border-color: var(--ts-text-3);
+  color: var(--ts-text);
+}
+
+.article-cover-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.article-cover-actions .article-tool {
+  background: var(--ts-surface);
+  border-color: var(--ts-line);
+}
+
+.article-source {
+  font: 400 15px/1.6 var(--ts-font-mono);
+}
+
+.article-body-field:not(.is-visual) .article-source {
+  min-height: 420px;
+}
+
+.article-surface {
+  min-height: 320px;
+  outline: none;
+}
+
+.article-surface p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--ts-text-3);
+  pointer-events: none;
+}
+
+.article-surface img.ProseMirror-selectednode {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 2px;
+}
+
+.article-image-coming {
+  display: block;
+  margin-bottom: 1.1em;
+  opacity: 0.55;
+}
+
+.article-image-coming img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--ts-radius-row);
+}
+
+.article-toolbar {
+  position: sticky;
+  top: calc(var(--ts-header-height) + var(--ts-pathbar-height));
+  z-index: 2;
+  margin: 0 0 22px;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--ts-line);
+  background: var(--ts-page);
+}
+
+.article-tools {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.article-tool {
+  height: 32px;
+  padding: 0 8px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ts-text-2);
+  font: 600 13px/1 var(--ts-font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.article-tool:hover:not(:disabled) {
+  background: var(--ts-hover);
+  color: var(--ts-text);
+}
+
+.article-tool:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.article-tool[aria-pressed="true"] {
+  background: var(--ts-accent-soft);
+  color: var(--ts-text);
+}
+
+.article-views {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.article-status {
+  margin: 0 0 16px;
+}
+
+.article-panel {
+  margin: 0 0 22px;
+  padding: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-row);
+  background: var(--ts-surface);
+}
+
+.article-panel[hidden] {
+  display: none;
+}
+
+.article-panel-field {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+}
+
+.article-panel-field input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+  background: var(--ts-page);
+  color: var(--ts-text);
+  font: var(--ts-type-ui);
+}
+
+.article-form-actions {
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ts-line);
+}
+
+.article-form-actions .post-form-as a {
+  color: var(--ts-text-2);
+  font-weight: 600;
+}
+
+.article-writing .sign-in-failure {
+  margin-bottom: 18px;
+}
+
+.article-writing .post-remove {
+  margin-top: 28px;
+}
+
+/* A list's covers. */
+.article-cover-image {
+  display: block;
+  background: var(--ts-image-band);
+}
+
+/* Once the lead stacks, its cover takes the column's width at its own shape. */
+@media (max-width: 1199px) {
+  .article-cover-image {
+    width: 100%;
+    height: auto;
+    padding: 0;
+    aspect-ratio: 16 / 9;
+  }
+}
+
+.article-cover-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.article-card-covered {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 24px;
+}
+
+.article-card-cover {
+  width: 168px;
+  height: 112px;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--ts-radius-row);
+  background: var(--ts-image-band);
+}
+
+.article-card-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The phone: the title and the body a size smaller, the cover from edge to edge of the column. */
+@media (max-width: 719px) {
+  .article-title {
+    font-size: 36px;
+  }
+
+  .article-prose {
+    font-size: 18px;
+  }
+
+  .article-prose h1,
+  .article-prose h2 {
+    font-size: 26px;
+  }
+
+  .article-prose :is(h3, h4, h5, h6) {
+    font-size: 21px;
+  }
+
+  .article-card-cover {
+    width: 96px;
+    height: 72px;
+  }
+
+  .article-card-covered {
+    gap: 14px;
+  }
+}

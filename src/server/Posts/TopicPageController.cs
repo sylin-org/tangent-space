@@ -151,7 +151,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
                 await PostWrites.SettingsFor(reader.Id, baseAddress, ct),
                 await Events.Notifications.Count(reader.Id, baseAddress, ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            takenFrom));
+            takenFrom,
+            root.CoverId is { } cover ? baseAddress + Media.Reference(cover) : null,
+            TangentPage.ReadTime(root.Body)));
     }
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is

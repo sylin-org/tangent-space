@@ -1,0 +1,67 @@
+@using System.Globalization
+@using global::Tangent.Render
+@using global::Tangent.Tangents
+@* How an article opens, the same when it is read and while it is written: its cover, its title, then who wrote it and
+   when. While it is written the title and cover are the fields they will be read as, given by the form. *@
+<header class="article-head">
+    @if (CoverSlot is not null)
+    {
+        @CoverSlot
+    }
+    else if (Cover is { } cover)
+    {
+        <figure class="article-figure"><img src="@cover" srcset="@(cover + "/" + MediaRecipes.CardName + " " + MediaRecipes.CardWidth.ToString(CultureInfo.InvariantCulture) + "w, " + cover + " " + Media.LongestEdge.ToString(CultureInfo.InvariantCulture) + "w")" sizes="(max-width: 719px) 100vw, 680px" alt="" decoding="async"></figure>
+    }
+    @if (TitleSlot is not null)
+    {
+        @TitleSlot
+    }
+    else
+    {
+        <h1 class="article-title">@Title@Flags</h1>
+    }
+    <p class="article-byline">
+        @TopicRow.Mark(Author, "article-byline-mark")
+        <span class="article-byline-text">
+            @if (Author.Profile is { } profile)
+            {
+                <a class="article-byline-name" href="@profile">@Author.Name</a>
+            }
+            else
+            {
+                <span class="article-byline-name">@Author.Name</span>
+            }@if (Author.Kind == "agent")
+            {
+                <span class="agent-tag">Agent</span>
+            }
+            <span class="article-byline-meta">
+                <time datetime="@At.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@At.ToUniversalTime().ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+                <span aria-hidden="true">·</span>
+                <span data-article-minutes>@Minutes.ToString(CultureInfo.InvariantCulture) min read</span>
+            </span>
+        </span>
+    </p>
+</header>
+
+@code {
+    /// <summary>The article's title as it is read; unused where <see cref="TitleSlot"/> holds its field.</summary>
+    [Parameter] public string Title { get; set; } = "";
+
+    /// <summary>The address of its cover, where it has one.</summary>
+    [Parameter] public string? Cover { get; set; }
+
+    [Parameter, EditorRequired] public TangentPage.Author Author { get; set; } = default!;
+
+    [Parameter, EditorRequired] public DateTimeOffset At { get; set; }
+
+    [Parameter] public int Minutes { get; set; } = 1;
+
+    /// <summary>The pin or lock beside the title.</summary>
+    [Parameter] public RenderFragment? Flags { get; set; }
+
+    /// <summary>The cover while it is written: the field, in the cover's place.</summary>
+    [Parameter] public RenderFragment? CoverSlot { get; set; }
+
+    /// <summary>The title while it is written: the field, in the title's place.</summary>
+    [Parameter] public RenderFragment? TitleSlot { get; set; }
+}

@@ -47,11 +47,11 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var body = fields.GetValueOrDefault(PostWrites.BodyField) ?? "";
-        var title = fields.GetValueOrDefault(PostWrites.TitleField);
+        var title = PostWrites.Title(fields);
         if (PostWrites.Version(fields) is not { } version) return await Refused(root, row, personId, fields, PostWrites.VersionRule, ct);
         var may = found.Capabilities;
         var outcome = await writer.Send(new EditPost(row.Id, version, await PostWrites.Body(fields, may.Holds(Bit.EditOwn) || may.Holds(Bit.Moderate), ct), title,
-            personId ?? ""), ct);
+            personId ?? "", CoverId: fields.GetValueOrDefault(PostWrites.CoverField)), ct);
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var edited }:
@@ -111,8 +111,9 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         {
             var sent = page with
             {
-                Title = page.Root ? fields.GetValueOrDefault(PostWrites.TitleField) ?? page.Title : null,
-                Body = fields.GetValueOrDefault(PostWrites.BodyField) ?? page.Body
+                Title = page.Root ? PostWrites.Title(fields) ?? page.Title : null,
+                Body = fields.GetValueOrDefault(PostWrites.BodyField) ?? page.Body,
+                CoverId = fields.GetValueOrDefault(PostWrites.CoverField) is { } cover ? (cover.Length > 0 ? cover : null) : page.CoverId
             };
             return PostWrites.Concerning(reason) switch
             {
@@ -171,6 +172,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         var removable = capabilities.Holds(Bit.RemoveOwn) || capabilities.Holds(Bit.Moderate);
         var token = editable || removable ? FormToken.For(HttpContext) : null;
         var bodyOptional = row.ParentId is null && row.OriginId is not null;
+        var article = row.ParentId is null && row.Kind == PostKind.Article;
+        var author = await Participants.Participant.Get(row.AuthorId, ct);
         return new EditPage(
             row.Id,
             address,
@@ -184,7 +187,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             row.Body,
             row.Version,
             row.Removed,
-            editable ? PostWrites.EditForm(address + "/" + EditSegment, row.Version, row.ParentId is null, bodyOptional, token!) : null,
+            editable ? PostWrites.EditForm(address + "/" + EditSegment, row.Version, row.ParentId is null, bodyOptional, token!, row.CoverId, article) : null,
             removable ? PostWrites.RemoveForm(address + "/" + RemoveSegment, token!) : null,
             capabilities.Can,
             editable ? null : capabilities.Gate(Bit.EditOwn),
@@ -194,7 +197,13 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             baseAddress + "/",
             await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
             BodyOptional: bodyOptional,
-            Edited: row.EditedBy is null ? null : Tangents.TangentPage.EditedOf(row, await TakeOnATangentController.People(row, ct)));
+            Edited: row.EditedBy is null ? null : Tangents.TangentPage.EditedOf(row, await TakeOnATangentController.People(row, ct)),
+            Kind: PostWrites.Word(row.ParentId is null ? row.Kind : PostKind.Topic),
+            CoverId: row.CoverId,
+            Bring: article && editable ? PostWrites.MediaForm(PostWrites.TangentAddress(baseAddress, root.TangentId), token!) : null,
+            Author: article ? new Tangents.TangentPage.Author(row.AuthorId, author?.Handle ?? row.AuthorId, author?.Profile.DisplayName is { Length: > 0 } name ? name : author?.Handle ?? row.AuthorId,
+                author?.Kind.ToString().ToLowerInvariant() ?? "person", author?.Profile.Avatar) : null,
+            CreatedAt: row.CreatedAt);
     }
 
     private string Address(Post root, Post row) => PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, row.Id);
