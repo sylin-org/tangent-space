@@ -43,6 +43,9 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
             case "tangent":
                 await TangentScreen(ct);
                 return NoContent();
+            case "discussions-reopened":
+                await Write(new ChangeTangent("discussions", Leo, Audience: Audience.Public), ct);
+                return NoContent();
             case "tangent-manager":
                 await TangentScreen(ct);
                 await roles.Overwrite(Overwrites.Resource("discussions"), OverwriteSubjectKind.Person, Persona, [Bits.Token(Bit.ManageTangent)], [], ct: ct);

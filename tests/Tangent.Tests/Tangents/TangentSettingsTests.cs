@@ -305,6 +305,56 @@ public sealed class TangentSettingsTests
         Assert.Equal(recorded + 1, await Event.Count.Exact(Cancellation));
     }
 
+    [Fact]
+    public async Task A_json_change_gives_the_order_only_to_whoever_arranges_the_list_and_a_change_that_closes_the_tangent_says_only_that_it_saved()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await roles.Overwrite(Overwrites.Resource("workshop"), OverwriteSubjectKind.Person, Bea, [Bits.Token(Bit.ManageTangent)], [], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var bea = await SignedIn(tangentSpace, Bea);
+
+        var described = await Json(bea, "/t/workshop", "/t/workshop/settings", new { description = "x" });
+        Assert.Equal(HttpStatusCode.OK, described.Status);
+        Assert.Equal("x", described.Json.GetProperty("description").GetString());
+        Assert.False(described.Json.TryGetProperty("order", out _));
+        var arranged = await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { description = "y" });
+        Assert.Equal(1, arranged.Json.GetProperty("order").GetInt32());
+
+        var closed = await Json(bea, "/t/workshop", "/t/workshop/settings", new { audience = "private" });
+
+        Assert.Equal(HttpStatusCode.OK, closed.Status);
+        Assert.Equal(("workshop is private now, and no longer shows for you.", BaseUrl + "/"),
+            (closed.Json.GetProperty("saved").GetString(), closed.Json.GetProperty("door").GetString()));
+        foreach (var property in new[] { "slug", "description", "audience", "order", "address", "settings", "can" })
+            Assert.False(closed.Json.TryGetProperty(property, out _), property);
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf(roles, "workshop", Cancellation));
+    }
+
+    [Fact]
+    public async Task A_tangent_that_knows_no_logged_audience_takes_koans_quietly_and_a_change_of_nothing_writes_nothing()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        Assert.Null((await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
+        var before = await Event.Count.Exact(Cancellation);
+
+        var saved = await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop());
+
+        Assert.Equal(HttpStatusCode.SeeOther, saved.Status);
+        Assert.Equal(before, await Event.Count.Exact(Cancellation));
+        Assert.Null((await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
+
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop("The workshop"))).Status);
+        var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
+        Assert.Equal((Leo, Audience.Public), (logged.ActorId, logged.Audience));
+        Assert.Equal(Audience.Public, (await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
+    }
+
     /// <summary>The slugs of the Tangents the door lists for the reader, in its order.</summary>
     private static async Task<List<string?>> DoorOrder(Participants.Browser reader)
         => (await Send(reader.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("tangents").EnumerateArray()

@@ -55,6 +55,9 @@ public sealed record ChangeTangent(
     /// judgement.</summary>
     private bool _judged;
 
+    /// <summary>Whether <see cref="Prepare"/> wrote the audience, which <see cref="Run"/> then records in the log.</summary>
+    private bool _audienceWritten;
+
     /// <summary>Judges the change and writes the audience, before the transaction opens, since Koan commits an overwrite
     /// only outside one; only where <see cref="Run"/> goes on to change the Tangent — it exists for the actor, who may
     /// make this change (<see cref="Judge"/>), and its name and description are a Tangent's — and the audience differs
@@ -68,12 +71,15 @@ public sealed record ChangeTangent(
         try { tangent.Change(Name ?? tangent.Name, Description ?? tangent.Description, DefaultKind ?? tangent.DefaultKind); }
         catch (Refusal) { return; }
         _judged = true;
-        if (Audience is { } audience && actual != audience) await Overwrites.SetAudience(roles, Slug, audience, ct);
+        if (Audience is not { } audience || actual == audience) return;
+        await Overwrites.SetAudience(roles, Slug, audience, ct);
+        _audienceWritten = true;
     }
 
     /// <summary>Changes the Tangent where <see cref="Prepare"/> judged the actor may, or where they may now, and records
-    /// the audience Koan's rows state wherever the log last said another (<see cref="Tangent.LoggedAudience"/>): the change
-    /// this command wrote, or one an earlier command wrote and could not record, whoever sends this one.</summary>
+    /// the audience Koan's rows state where this command wrote it or where the log last said another
+    /// (<see cref="Tangent.LoggedAudience"/>): one an earlier command wrote and could not record, whoever sends this one. A
+    /// row that knows no logged audience takes Koan's with the next change it saves, and appends nothing for it.</summary>
     public async Task<Outcome<Tangent>> Run(Sequences sequences, CancellationToken ct)
     {
         if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(NoTangent);
@@ -82,8 +88,9 @@ public sealed record ChangeTangent(
 
         var changed = tangent.Change(Name ?? tangent.Name, Description ?? tangent.Description, DefaultKind ?? tangent.DefaultKind);
         if (Audience is { } wanted && actual != wanted) return new Outcome<Tangent>.Refused(NoAudience);
-        var recorded = actual is { } stated && tangent.LoggedAudience != stated;
-        if (recorded) tangent.LoggedAudience = actual;
+        // A row that knows no logged audience was recorded by its own creation's event: it takes Koan's quietly.
+        var recorded = actual is { } stated && (_audienceWritten || (tangent.LoggedAudience is { } logged && logged != stated));
+        if (actual is not null) tangent.LoggedAudience = actual;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
         var moved = Move is { } move && await Reorder(tangent, move, space?.ModeratorsTangentId, ct);
         if (!changed && !moved && !recorded) return new Outcome<Tangent>.Done(tangent);

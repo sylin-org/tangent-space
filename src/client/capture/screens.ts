@@ -39,6 +39,9 @@ export interface State {
   /** The rows the Tangent Space holds, by the name of a seed the capture host writes before any page opens
    *  (src/server/Capture). States with the same seed and settings share one Tangent Space. */
   seed?: string
+  /** A seed the capture host writes again before every width and theme, for a state whose click changes what the
+   *  next width and theme would open. */
+  reseed?: string
   /** Signed in as the capture persona through Koan's test connector before the page opens. */
   signedIn?: boolean
   /** A path under the base URL whose requests are cancelled: a click that would leave the page shows the moment
@@ -156,13 +159,23 @@ export const screens: Readonly<Record<string, Screen>> = {
   },
   // The discussions Tangent's settings, read by the persona, who set the place up and so administers it: its name,
   // description, kind and audience, and its place between its neighbours with the two moves; by the persona as a member
-  // who holds ManageTangent there alone, who reads nothing of where it stands; and the moderators' Tangent's, whose
-  // audience and place stay as they are.
+  // who holds ManageTangent there alone, who reads nothing of where it stands; the moderators' Tangent's, whose
+  // audience and place stay as they are; and, last, the same member making it private, which closes it to her and
+  // lands on the page that says it is saved, the Tangent opened again before every width and theme.
   'tangent-settings-details': {
     path: '/t/discussions/settings',
     states: [
       { name: 'administrator', place: 'persona', seed: 'tangent', signedIn: true },
       { name: 'manager', seed: 'tangent-manager', signedIn: true },
+      {
+        name: 'closed',
+        seed: 'tangent-manager',
+        signedIn: true,
+        reseed: 'discussions-reopened',
+        values: { 'input[name="audience"][value="public"]': 'private' },
+        click: '.post-form-submit',
+        waitFor: '#closed-heading',
+      },
       { name: 'moderators', place: 'persona', seed: 'tangent', signedIn: true, path: '/t/moderators/settings' },
     ],
   },

@@ -135,6 +135,7 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
   const tangentSpace = new Set([pageBase.origin, baseUrl.origin])
   for (const width of widths)
     for (const theme of captureThemes) {
+      if (state.reseed && listening) await seed(listening, baseUrl, state.reseed)
       const context = await browser.newContext({
         viewport: { width, height: viewportHeight[width] },
         deviceScaleFactor: 1,

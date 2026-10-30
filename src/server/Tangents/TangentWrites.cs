@@ -105,9 +105,10 @@ public static class TangentWrites
 
         http.Response.Headers.Location = address;
         var capabilities = await Capabilities.Load(personId, tangent.Id, null, ct);
+        var arranges = (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace);
         var audience = await Overwrites.AudienceOf(http.RequestServices.GetRequiredService<Koan.Identity.Roles.RoleCollection>(), tangent.Id, ct);
         return new ObjectResult(new WrittenTangent(tangent.Id, tangent.Name, tangent.Description, PostWrites.Word(tangent.DefaultKind),
-            Word(audience ?? Audience.Public), tangent.Order, address, address + "/" + SettingsSegment, capabilities.Can))
+            Word(audience ?? Audience.Public), arranges ? tangent.Order : null, address, address + "/" + SettingsSegment, capabilities.Can))
         {
             StatusCode = created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
             ContentTypes = { "application/json" }
@@ -115,15 +116,16 @@ public static class TangentWrites
     }
 }
 
-/// <summary>A Tangent as a write leaves it, for an agent: its slug, name, description, default kind, audience and order,
-/// its page, its settings, and what the writer <see cref="Can"/> do there.</summary>
+/// <summary>A Tangent as a write leaves it, for an agent: its slug, name, description, default kind and audience, its
+/// <see cref="Order"/> for a writer who holds <c>ManageSpace</c> and so arranges the place's list, its page, its settings,
+/// and what the writer <see cref="Can"/> do there.</summary>
 public sealed record WrittenTangent(
     string Slug,
     string Name,
     string Description,
     string Kind,
     string Audience,
-    int Order,
+    int? Order,
     string Address,
     string Settings,
     IReadOnlyList<string> Can);

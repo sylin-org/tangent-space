@@ -259,3 +259,16 @@
   cursor: default;
   opacity: 0.5;
 }
+
+/* The page a change that closed a Tangent to its sender lands on: the sentence, then the way to the door as the
+ * form's button. */
+.post-form-closed {
+  margin-top: 18px;
+}
+
+.post-form-closed .sign-in-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}

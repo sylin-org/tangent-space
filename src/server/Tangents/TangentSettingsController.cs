@@ -16,7 +16,8 @@ namespace Tangent.Tangents;
 /// (<see cref="TangentSettingsPage"/>). Its <c>POST</c> takes <c>name</c>, <c>description</c>, <c>kind</c>,
 /// <c>audience</c> and <c>move</c>, as a form or a JSON object, each left as it is when not sent, and sends
 /// <see cref="ChangeTangent"/>: a form is sent on to the Tangent's page, or back to its settings after a move, or, where
-/// the change closed the Tangent to its sender, reads that it is saved (<see cref="TangentClosed"/>); a JSON
+/// the change closed the Tangent to its sender, reads that it is saved (<see cref="TangentClosed"/>), as a JSON request
+/// does; a JSON
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
 /// gate. Both resolve the address as the Tangent page does (<see cref="PostWrites.Locate"/>) before anything else is
 /// judged, so a Tangent the reader may not view and one no row has answer alike.</summary>
@@ -66,8 +67,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         switch (outcome)
         {
             case Outcome<Tangent>.Done { Result: var changed }:
-                if (!PostWrites.WantsJson(Request) && !(await Capabilities.Load(personId, changed.Id, null, ct)).Exists)
-                    return await Closed(changed, personId, ct);
+                if (!(await Capabilities.Load(personId, changed.Id, null, ct)).Exists) return await Closed(changed, personId, ct);
                 var address = PostWrites.TangentAddress(Configured(), changed.Id);
                 return await TangentWrites.Written(HttpContext, changed, Configured(), personId, created: false,
                     move is null ? address : address + "/" + TangentWrites.SettingsSegment, ct);
@@ -82,8 +82,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         }
     }
 
-    /// <summary>What a form answers whose change closed the Tangent to its own sender: it is saved, and absent to them
-    /// now, so the page says so in a sentence and leads to the door.</summary>
+    /// <summary>What a change answers that closed the Tangent to its own sender, as a page or as JSON: it is saved, and
+    /// absent to them now, so it says so in a sentence and leads to the door, and says nothing else of the Tangent.</summary>
     private async Task<IActionResult> Closed(Tangent tangent, string? personId, CancellationToken ct)
     {
         var configured = Configured();
