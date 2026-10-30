@@ -1,22 +1,18 @@
 using System.Net;
 using Koan.Core;
 using Koan.Core.Modules;
-using Koan.Web.Auth.Connector.Atproto.Options;
 using Koan.Web.Options;
 using Microsoft.Extensions.Options;
 using Tangent.Space;
 
 namespace Tangent.Participants;
 
-/// <summary>What participants need composed: the profile reader with its bounds; the atproto connector's session
-/// store and the data-protection key ring, through Koan's <c>Koan:Web:KeyRingDirectory</c>, inside the data folder, so
-/// sessions and cookies survive a new binary or container and a backup of the folder carries them; and antiforgery
-/// for the forms a page posts.</summary>
+/// <summary>What participants need composed: the profile reader with its bounds; the data-protection key ring, through
+/// Koan's <c>Koan:Web:KeyRingDirectory</c>, inside the data folder, so cookies and the atproto sessions Koan keeps as rows
+/// in the store survive a new binary or container and a backup of the folder carries them; and antiforgery for the
+/// forms a page posts.</summary>
 public static class ParticipantsComposition
 {
-    /// <summary>The atproto sessions' folder inside the data folder.</summary>
-    public const string SessionFolder = "atproto";
-
     /// <summary>The data-protection key ring's folder inside the data folder.</summary>
     public const string KeyFolder = "keys";
 
@@ -36,10 +32,6 @@ public static class ParticipantsComposition
                 UseCookies = false,
                 AutomaticDecompression = DecompressionMethods.None
             });
-
-        services.AddOptions<AtprotoOptions>()
-            .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((atproto, tangent, environment) =>
-                atproto.SessionDirectory = Path.Combine(tangent.Value.DataFolderPath(environment.ContentRootPath), SessionFolder));
 
         // Koan persists the ring there, remembers the application's name in it and creates it at start.
         services.AddOptions<KoanWebOptions>()

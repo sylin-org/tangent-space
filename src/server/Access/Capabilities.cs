@@ -177,7 +177,7 @@ public sealed class Capabilities
     {
         var view = Bits.Token(Bit.View);
         if (space.Audience == Audience.Public && !bag.Permissions.Contains(view, StringComparer.Ordinal))
-            bag = new RoleBag(bag.PersonId, bag.IsAuthenticated, bag.Roles, [.. bag.Permissions, view]);
+            bag = new RoleBag(bag.PersonId, bag.IsAuthenticated, bag.Roles, [.. bag.Permissions, view], bag.Highest);
         var here = bag.On(ResourceOf(tangentId) ?? Place, overwrites, now);
         var granted = here.IsAdministrator ? Bits.All : Bits.InTokens(here.Permissions);
         var withheld = Bits.Each.Where(bit => !granted.HasFlag(bit))

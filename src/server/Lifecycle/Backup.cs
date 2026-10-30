@@ -23,16 +23,14 @@ public static class Backup
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     /// <summary>The database and the files SQLite keeps beside it, whose content leaves through <c>VACUUM INTO</c>,
-    /// and the files that belong to the running process: its mark, and the lock Koan's atproto connector holds on its
-    /// session folder.</summary>
+    /// and the file that belongs to the running process: its mark.</summary>
     private static readonly string[] NotCopied =
     [
         TangentSpaceOptions.DatabaseFile,
         TangentSpaceOptions.DatabaseFile + "-journal",
         TangentSpaceOptions.DatabaseFile + "-wal",
         TangentSpaceOptions.DatabaseFile + "-shm",
-        RunningMark.FileName,
-        Path.Combine(Participants.ParticipantsComposition.SessionFolder, "owner.lock")
+        RunningMark.FileName
     ];
 
     /// <summary>How often a file another process holds is tried before the backup reports it, and how long apart.</summary>

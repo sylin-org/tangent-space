@@ -44,7 +44,7 @@ public sealed class ProfileJobTests
 
         // Within the day: another run reads nothing, and a sign-in submits nothing.
         var again = await participant.Job.Submit(ct: Cancellation);
-        Assert.Equal(JobStatus.Completed, (await again.Completion(Bound, Cancellation)).Status);
+        Assert.True((await again.Completion(Bound, Cancellation)).Succeeded);
         using var signedInAgain = await browser.SignIn("ada", did, Cancellation, handle: "ada.example");
         Assert.Equal(HttpStatusCode.OK, signedInAgain.StatusCode);
 
@@ -93,7 +93,7 @@ public sealed class ProfileJobTests
         Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(stored), Cancellation));
 
         var job = await stored.Job.Submit(ct: Cancellation);
-        Assert.Equal(JobStatus.Completed, (await job.Completion(Bound, Cancellation)).Status);
+        Assert.True((await job.Completion(Bound, Cancellation)).Succeeded);
         var after = await Participant.Get(did, Cancellation);
 
         Assert.NotNull(after);
@@ -129,7 +129,7 @@ public sealed class ProfileJobTests
 
         Assert.Contains(reason, failure.Message);
         Assert.True(reading.Elapsed < TimeSpan.FromSeconds(5), $"The read took {reading.Elapsed}.");
-        Assert.Equal(JobStatus.Completed, outcome.Status);
+        Assert.True(outcome.Succeeded);
         Assert.Equal([did, did], stub.Requests);
         var after = await Participant.Get(did, Cancellation);
         Assert.NotNull(after);

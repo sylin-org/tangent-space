@@ -53,27 +53,22 @@ public sealed class BackupTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task A_live_backup_leaves_out_the_connectors_session_lock_and_reports_a_file_another_process_holds()
+    public async Task A_live_backup_reports_a_file_another_process_holds()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var backups = Path.Combine(tangentSpace.Folder, "backups");
-        var sessions = Directory.CreateDirectory(Path.Combine(tangentSpace.DataFolder, Participants.ParticipantsComposition.SessionFolder));
         var held = Path.Combine(tangentSpace.DataFolder, "held.txt");
         await File.WriteAllTextAsync(held, "held", Cancellation);
 
-        using (new FileStream(Path.Combine(sessions.FullName, "owner.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        await Server(0, "backup", backups, $"--Tangent:DataFolder={tangentSpace.DataFolder}");
+        using (new FileStream(held, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
-            await Server(0, "backup", backups, $"--Tangent:DataFolder={tangentSpace.DataFolder}");
-            using (new FileStream(held, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            {
-                var refused = await Server(1, "backup", backups, $"--Tangent:DataFolder={tangentSpace.DataFolder}");
-                Assert.Contains("held.txt in the data folder is held by another process", refused);
-            }
+            var refused = await Server(1, "backup", backups, $"--Tangent:DataFolder={tangentSpace.DataFolder}");
+            Assert.Contains("held.txt in the data folder is held by another process", refused);
         }
 
         var backup = Assert.Single(Directory.GetDirectories(backups));
         Assert.True(File.Exists(Path.Combine(backup, "held.txt")));
-        Assert.False(File.Exists(Path.Combine(backup, Participants.ParticipantsComposition.SessionFolder, "owner.lock")));
     }
 
     [Fact]
