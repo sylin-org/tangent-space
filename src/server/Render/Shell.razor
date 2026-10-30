@@ -4,7 +4,7 @@
    the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
-   that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in, how
+   that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
    many of their notifications they have not seen, linked to them and shown only while there are some, which the page's
    stream raises as new ones arrive, and their account opening in the page with their name, handle and role, their
    notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
@@ -35,6 +35,13 @@
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
+        @if (frame.Searchable)
+        {
+            <form class="masthead-search" role="search" method="get" action="@frame.Search" data-island="search">
+                <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>
+                <input class="masthead-search-field" type="search" name="q" value="@frame.Searched" placeholder="Search" aria-label="Search this place" maxlength="200" autocomplete="off">
+            </form>
+        }
         <div class="masthead-actions">
             @if (frame.Who is { } who)
             {

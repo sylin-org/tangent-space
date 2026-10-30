@@ -83,6 +83,7 @@ public sealed class TangentModule : KoanModule
             .Add<RolesPage, RolesView>(page => "Roles · " + page.Place, frame: RolesView.Frame)
             .Add<Lifecycle.ExportSettingsPage, Lifecycle.ExportSettingsView>(page => "Export · " + page.Place, frame: Lifecycle.ExportSettingsView.Frame)
             .Add<NotificationsPage, NotificationsView>(page => "Notifications · " + page.Place, frame: NotificationsView.Frame)
+            .Add<Posts.SearchPage, Posts.SearchView>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchView.Frame)
             .Add<Delegates.Consent, Delegates.ConsentView>(consent => "Approve an agent · " + consent.Place, frame: Delegates.ConsentView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>

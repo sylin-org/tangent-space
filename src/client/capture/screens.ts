@@ -546,6 +546,26 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'count', seed: 'notifications', reseed: 'notifications-unseen', signedIn: true, path: '/' },
     ],
   },
+  // A search of the Topic seed's words: found, read by the persona and by a visitor; words nothing here holds; the page
+  // before anyone has searched, which points at the box; and the box's suggestions as someone types, on the door.
+  search: {
+    path: '/search',
+    states: [
+      { name: 'found', seed: 'topic', signedIn: true, query: { q: 'half' } },
+      { name: 'visitor', seed: 'topic', query: { q: 'half' } },
+      { name: 'nothing', seed: 'topic', signedIn: true, query: { q: 'porcelain' } },
+      { name: 'start', seed: 'topic', signedIn: true },
+      {
+        name: 'suggestions',
+        seed: 'topic',
+        signedIn: true,
+        path: '/',
+        fill: { '.masthead-search-field': 'hal' },
+        click: '.masthead-search-field',
+        waitFor: '.masthead-search-hit',
+      },
+    ],
+  },
   // The form that takes Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted and the
   // Tangents she may start a Topic in listed; sent with a title of nothing but spaces, refused under the title; and as a
   // visitor reads it, who is told to sign in.

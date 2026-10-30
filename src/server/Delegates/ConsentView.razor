@@ -93,7 +93,7 @@
 
     /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and the account of
     /// whoever decides.</summary>
-    public static Frame Frame(Consent consent) => new(consent.Place, consent.Door, [new Crumb("Approve an agent")], consent.Reader);
+    public static Frame Frame(Consent consent) => new(consent.Place, consent.Door, [new Crumb("Approve an agent")], consent.Reader, Searchable: false);
 
     private string Handle => Model.Reader is { } reader ? "@" + reader.Handle : "you";
 }
