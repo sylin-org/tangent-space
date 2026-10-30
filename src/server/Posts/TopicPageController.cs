@@ -220,18 +220,18 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         _ => new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent is not open to you.", gate).ToResult()
     };
 
-    private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
+    public static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
         => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
 
-    /// <summary>The authors of these Posts, then who removed or else edited any of them, at most <see cref="PeopleLimit"/>, in one keyed
+    /// <summary>The authors of these Posts, then who removed or else edited any of them, at most <paramref name="limit"/>, in one keyed
     /// read, by participant Id, each with their profile's address.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> posts, string baseAddress,
-        CancellationToken ct)
+    public static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> posts, string baseAddress,
+        CancellationToken ct, int limit = PeopleLimit)
     {
         var ids = posts.Select(post => post.AuthorId)
             .Concat(posts.Where(post => post.Removed).Select(post => post.RemovedBy).OfType<string>())
             .Concat(posts.Select(post => post.EditedBy).OfType<string>())
-            .Distinct(StringComparer.Ordinal).Take(PeopleLimit).ToList();
+            .Distinct(StringComparer.Ordinal).Take(limit).ToList();
         var found = await Participant.Get(ids, ct);
         return found.OfType<Participant>().ToDictionary(row => row.Id, row =>
         {

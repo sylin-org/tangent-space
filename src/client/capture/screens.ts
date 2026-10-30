@@ -203,6 +203,15 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'refused', signedIn: true },
     ],
   },
+  // Export, read by the persona, who set the place up and so holds ManageSpace: the whole place and each Tangent with
+  // its download; and by the persona in a place someone else set up, refused with no download.
+  'tangent-space-settings-export': {
+    path: '/settings/export',
+    states: [
+      { name: 'proprietor', place: 'persona', signedIn: true },
+      { name: 'refused', signedIn: true },
+    ],
+  },
   // The place's applications, read by the persona, who set the place up and so decides them: two waiting and one
   // declined; the first one's decline opened, confirmed in the page; and none.
   'tangent-space-settings-applications': {

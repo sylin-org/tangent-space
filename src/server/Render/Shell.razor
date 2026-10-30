@@ -2,7 +2,8 @@
 @using System.Text.Json
 @* The page around one resource's component: the place's accent on <html>, and the stylesheet and the two scripts every page loads, absolute from
    the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
-   page script is a module, deferred by nature, that mounts the islands once the document is parsed. A resource
+   page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
+   opens with no server and no script: the device decides its theme, and no island answers on it. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in, how
    many of their notifications they have not seen, linked to them and shown only while there are some, which the page's
    stream raises as new ones arrive, and their account opening in the page with their name, handle and role, their
@@ -15,9 +16,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@Title</title>
-    <link rel="stylesheet" href="@(BaseUrl)/tangent.css">
-    <script src="@(BaseUrl)/theme.js"></script>
-    <script type="module" src="@(BaseUrl)/tangent.js"></script>
+    <link rel="stylesheet" href="@(BaseUrl + "/" + HtmlFormatter.Stylesheet)">
+    @if (!Standalone)
+    {
+        <script src="@(BaseUrl)/theme.js"></script>
+        <script type="module" src="@(BaseUrl)/tangent.js"></script>
+    }
     @foreach (var feed in Frame?.Feeds ?? [])
     {
         <link rel="alternate" type="@feed.Type" title="@feed.Title" href="@feed.Address">
@@ -140,22 +144,25 @@
             }
         </ol>
     </nav>
-    @ChildContent
+    <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
     <footer class="footer">
         <span class="footer-powered">Powered by Tangent Space</span>
-        <div class="footer-end appearance" data-island="appearance">
-            <span id="appearance-label">Appearance</span>
-            <div class="segmented" role="group" aria-labelledby="appearance-label">
-                <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
-                <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
-                <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        @if (!Standalone)
+        {
+            <div class="footer-end appearance" data-island="appearance">
+                <span id="appearance-label">Appearance</span>
+                <div class="segmented" role="group" aria-labelledby="appearance-label">
+                    <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+                    <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+                    <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+                </div>
             </div>
-        </div>
+        }
     </footer>
 }
 else
 {
-    @ChildContent
+    <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
 }
 </body>
 </html>
@@ -168,6 +175,9 @@ else
     [Parameter, EditorRequired] public string Accent { get; set; } = "";
 
     [Parameter] public Frame? Frame { get; set; }
+
+    /// <summary>Whether the page opens with no server. The components inside it read the same, by this name.</summary>
+    [Parameter] public bool Standalone { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 

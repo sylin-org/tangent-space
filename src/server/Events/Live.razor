@@ -6,15 +6,18 @@
 @* The live updater's island, one per page: it streams the log from where the page's request found it and patches the
    page as rows that concern it arrive — on a Topic, a new reply appended at the newest window or announced by the
    notice below the replies, and a Post edited or removed fetched again in place; on a Tangent, its list of Topics;
-   on the door, the door. It never moves a checkpoint. *@
-<div class="live" data-island="live" data-props="@Props()">
-    @if (Page == TopicPage)
-    {
-        <nav class="topic-pages" aria-live="polite" hidden>
-            <a class="topic-pages-next" href="@Address">New replies →</a>
-        </nav>
-    }
-</div>
+   on the door, the door. It never moves a checkpoint. A page standing alone has no log to stream, and none of it. *@
+@if (!Standalone)
+{
+    <div class="live" data-island="live" data-props="@Props()">
+        @if (Page == TopicPage)
+        {
+            <nav class="topic-pages" aria-live="polite" hidden>
+                <a class="topic-pages-next" href="@Address">New replies →</a>
+            </nav>
+        }
+    </div>
+}
 
 @code {
     public const string DoorPage = "door";
@@ -36,9 +39,14 @@
     /// <summary>Whether a Topic's page shows its newest window, where a new reply is appended.</summary>
     [Parameter] public bool Newest { get; set; }
 
+    [CascadingParameter(Name = nameof(Standalone))] public bool Standalone { get; set; }
+
     private long? _since;
 
-    protected override async Task OnInitializedAsync() => _since = await Position.Since(CancellationToken.None);
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Standalone) _since = await Position.Since(CancellationToken.None);
+    }
 
     private string Props()
     {

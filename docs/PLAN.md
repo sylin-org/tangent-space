@@ -141,6 +141,12 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 | 5.8 An application reaches whoever decides it: on a place set to apply, whoever holds the bit to decide reads the waiting applications on their bell, in their notifications and on their door | 5.2, 6.1 | repeat |
 | 5.9 The small doors: a settings rail of what its reader may use, and a welcome on a newcomer's first door | 5.3 | repeat |
 
+## Slice 7, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 7.1 Export: one Tangent or the whole place as a zip of readable pages beside their data, streamed in bounded reads through the one renderer, at `/settings/export` | 5.7, 5.1 | first of its kind |
+
 ## Slice 9, package by package
 
 | Package | After | Role |
@@ -149,7 +155,7 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 
 ## Later slices
 
-The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), export through the renderer (7), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`. Explorer-grade: references through Constellation, the A2A card.
+The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`. Explorer-grade: references through Constellation, the A2A card.
 
 A slice closes when its packages work and FEATURES says so. Until Leo calls the polish stage, screens are built from the frame and the existing components, captured, and listed in `docs/SCREENS.md` as owing the visual gate; the polish stage holds every one of them to it.
 

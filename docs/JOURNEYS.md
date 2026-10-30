@@ -69,7 +69,8 @@ A person, signed in or not.
 | Publishing to atproto | `site.standard.document` under the proprietor's Connection. | missing (slice 3) |
 | Feeds | Anyone with a feed reader follows a public Tangent, or the place's articles, with no account: Atom or JSON Feed, the newest Topics with their bodies, found from any of its pages, `tangent.json` or `llms.txt`. A members-only Tangent and a private place have none; a removed Topic drops out. | works (4.2), not walked on a server |
 | Backup and restore | `scripts/tangent.ps1 backup` and `restore`, in the container too. | works when walked on 29 October; the walk runs no lifecycle command, so it was not walked again |
-| Export and the static archive | None yet: `/settings/export` answers not found. | missing (slice 7) |
+| Export | Whoever holds `ManageSpace` opens Export in the settings and downloads the whole place or one Tangent: a zip of pages that open with no server, each beside its data as JSON, holding everything they may view, members-only Tangents among it, and removed Posts as tombstones. | works (7.1), not walked on a server |
+| The static archive | None yet. | missing (slice 7) |
 
 ## The order these close in
 
