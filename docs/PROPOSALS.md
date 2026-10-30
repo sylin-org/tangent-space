@@ -29,3 +29,11 @@ What the delight filter held back: things a person or an agent would meet that s
 | A custom timeout duration | Moderators | A length other than an hour, a day or a week | A field for a rare need | 3 | 30 October 2026, package 5.3 |
 | An undo after a standing or role change | Moderators and administrators | A slip is reversed at once | A lift and a take are already one click each | 2 | 30 October 2026, package 5.3 |
 | Giving the administrator role confirms inline first | Administrators and the operator | Guards a rare, weighty grant | The button names the role, it is rare, and the operator can take it back | 4 | 30 October 2026, package 5.3 |
+| Filters by kind on `/notifications` | Every reader of their notifications | Finds one kind quickly | A rail and states for a list each line of which already says what it is, in a place where a person holds few | 3 | 30 October 2026, package 6.1 |
+| Notification preferences (toggles per kind) | Every participant | Hides kinds they skip | A settings panel to hide lines that never leave the place and can be skipped | 3 | 30 October 2026, package 6.1 |
+| Notifications grouped by day | Every reader of their notifications | Scans by day | Every line already carries its time | 4 | 30 October 2026, package 6.1 |
+| A read state per notification | Every reader of their notifications | Each line marked on its own | A click per line, and per-entry rows beside the one checkpoint that is all a participant's state | 3 | 30 October 2026, package 6.1 |
+| Mark a notification unread | Every reader of their notifications | Keeps one for later | A control on every line for a rare need | 2 | 30 October 2026, package 6.1 |
+| Mark all seen on `/notifications` | Every reader of their notifications | One click | Opening the page already marks them seen | 2 | 30 October 2026, package 6.1 |
+| Return to `/notifications` after answering an Offer there | The operator | Lands back where they answered | A guarded return field to save one hop; Use it lands on first run's pointers and Not this one on the door, as from the door | 4 | 30 October 2026, package 6.1 |
+| An Offer's request-count evidence on `/notifications` | The operator | The evidence beside the answer | It repeats the door, which shows it | 4 | 30 October 2026, package 6.1 |
