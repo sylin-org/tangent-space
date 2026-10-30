@@ -1,0 +1,102 @@
+@using System.Globalization
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@using global::Tangent.Space
+@* The place's settings, applications: the sections of the settings in the rail, this one marked, and in one panel
+   beside them the applicants, newest first, one line each — their name and handle, linked to their profile, and when
+   they applied — with its answers: a waiting application is admitted with one button, and declined behind a disclosure
+   that says what declining leaves and holds the one button that does it, the confirmation in the page; a declined one
+   says so and can still be admitted. No applicant reads as one sentence. Older applications and the newest are a link
+   away. A reader who may not decide reads why, and a visitor the way to sign in; a refusal shows above the list. *@
+<div class="layout layout-settings">
+    <SettingsRail Sections="@Model.Sections" />
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="applications-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="applications-heading" class="sign-in-title">@TangentSpaceSettingsController.ApplicationsSection</h1>
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="applications-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else
+                {
+                    @if (Model.Failure is { } failure)
+                    {
+                        <p class="sign-in-failure" id="applications-failure" role="alert">@failure</p>
+                    }
+                    @if (Model.Applications.Count == 0)
+                    {
+                        <p class="post-form-note">@(Model.Continued ? "No older applications." : "No one is waiting to be admitted.")</p>
+                    }
+                    else
+                    {
+                        <ul class="door-offers applications">
+                            @foreach (var applicant in Model.Applications)
+                            {
+                                <li class="door-offer" @key="applicant.Id">
+                                    <p class="door-offer-line">
+                                        <a href="@applicant.Profile">@applicant.Name</a> @("@" + applicant.Handle)
+                                        <span class="topic-row-none">· applied @TopicRow.When(applicant.AppliedAt, Model.Day)@(applicant.State == ApplicationsPage.Declined ? " · declined" : "")</span>
+                                    </p>
+                                    <div class="door-offer-answers">
+                                        <form method="post" action="@Model.Admit">
+                                            <FormTokenField Token="@Model.Token" />
+                                            <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
+                                            <button type="submit" class="tangent-new">Admit</button>
+                                        </form>
+                                        @if (applicant.State == ApplicationsPage.Waiting)
+                                        {
+                                            <details class="application-decline">
+                                                <summary class="watch-button">Decline</summary>
+                                                <div class="post-remove-confirm">
+                                                    <p class="post-remove-note">They keep reading what a visitor reads, and you can still admit them later.</p>
+                                                    <form method="post" action="@Model.Decline">
+                                                        <FormTokenField Token="@Model.Token" />
+                                                        <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
+                                                        <button type="submit" class="post-remove-submit">Decline</button>
+                                                    </form>
+                                                </div>
+                                            </details>
+                                        }
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    @if (Model.Continued || Model.Next is not null)
+                    {
+                        <nav class="topic-pages" aria-label="More applications">
+                            @if (Model.Continued)
+                            {
+                                <a href="@Model.First">Newest applications</a>
+                            }
+                            @if (Model.Next is { } next)
+                            {
+                                <a class="topic-pages-next" href="@next">Older applications</a>
+                            }
+                        </nav>
+                    }
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ApplicationsPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
+    /// a visitor signs in.</summary>
+    public static Frame Frame(ApplicationsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Settings")], page.Who, page.SignIn);
+}

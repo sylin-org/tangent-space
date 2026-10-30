@@ -14,12 +14,15 @@ namespace Tangent.Access;
 /// nothing else is said; the Post's state; the bag and the overwrites for every other bit; authorship. Koan resolves the
 /// bag and the overwrites (<see cref="RoleBag.On"/>) and names the fact that decided each missing bit; the first step
 /// that drops a verb names its gate, which puts the words in their precedence: <see cref="SignIn"/>, <see cref="Apply"/>,
-/// <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Locked"/>, <see cref="Removed"/>. Computed per request from a
+/// <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Locked"/>, <see cref="Removed"/>. Computed per request from a
 /// few small rows; nothing stores it.</summary>
 public sealed class Capabilities
 {
     public const string SignIn = "sign-in";
     public const string Apply = "apply";
+
+    /// <summary>The participant's application was declined: they read what a visitor reads, and nothing more.</summary>
+    public const string Declined = "declined";
     public const string TimedOut = "timed-out";
 
     /// <summary>The resource does not exist for this reader: banned, or without <see cref="Bit.View"/> where they
@@ -62,7 +65,7 @@ public sealed class Capabilities
     public bool Holds(Bit verb) => (Held & verb) == verb;
 
     /// <summary>Null when the verb is held; otherwise the one reason it is not: <see cref="SignIn"/>,
-    /// <see cref="Apply"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Locked"/> or <see cref="Removed"/>
+    /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Locked"/> or <see cref="Removed"/>
     /// where standing, audience or state decided, or the deciding overwrite or the absence of a role where the bag and
     /// the overwrites decided.</summary>
     public string? Gate(Bit verb)
@@ -117,6 +120,9 @@ public sealed class Capabilities
                 break;
             case Standing.Applied:
                 Drop(Bits.All & ~viewIfPublic, Apply);
+                break;
+            case Standing.Declined:
+                Drop(Bits.All & ~viewIfPublic, Declined);
                 break;
             case Standing.TimedOut:
                 Drop(Bits.All & ~Bit.View, TimedOut);

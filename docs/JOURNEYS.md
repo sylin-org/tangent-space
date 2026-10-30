@@ -22,14 +22,14 @@ The proprietor and the people they trust.
 
 | Step | What happens | State |
 | --- | --- | --- |
-| The first door after setup | Two Tangents: *General*, public and of discussions, made at setup, and the private moderators' Tangent. Anyone else who signs in sees General; a member starts Topics there, but nothing makes a newcomer a member, so they only read. | friction: a newcomer who signs in holds no role and cannot start a Topic (packages 5.2, 5.3) |
+| The first door after setup | Two Tangents: *General*, public and of discussions, made at setup, and the private moderators' Tangent. Anyone else who signs in joins the member role and starts Topics in General at once; a participant who arrived before that joins it at their next sign-in. | works (5.2) |
 | Create a Tangent | **New Tangent** on the door's rail and in the Tangent switcher, for whoever holds `ManageSpace`: one field, the name; the rest defaulted behind one quiet disclosure. | works (5.5); on a phone the door hides its rail, so New Tangent is reached from a Tangent's switcher, held for the polish stage |
 | A Tangent's name, description, kind, order and audience | **Settings** on a Tangent's page, for whoever holds `ManageTangent` or `ManageSpace`: the name (its address stays), description, default kind and audience; moving it among the others needs `ManageSpace`. The moderators' Tangent keeps its access. | works (5.5) |
 | The place's name and description | Named from the handle at setup; **Settings** in the account menu, for whoever holds `ManageSpace`, renames it and writes the line under its name on the door. | works (5.6) |
 | Appearance: accent, light or dark | Each reader picks System, Light or Dark for themselves; the place has no accent of its own. | missing (slice 9) |
 | Roles and permissions | Seeded roles: `everyone`, member, moderator, administrator. Setup makes the proprietor an administrator, and nothing makes anyone a moderator. | missing: making a participant a moderator or an administrator, then the role editor (packages 5.3, 5.1) |
 | The people here | No directory, and no time-out or ban. | missing (package 5.3) |
-| Admission | Anyone who signs in joins. The place can't be made apply-to-join, and new accounts can't be held for approval. | missing (package 5.2) |
+| Admission | **Admission** in the place's settings, for whoever holds `ManageSpace`: join at once, the default, or apply and wait, each said in a sentence. On a place that says apply, a newcomer who signs in reads what a visitor reads, posts nothing, and their door says their application is waiting. Whoever holds `ManageStanding` finds them under **Applications**, newest first, and admits or declines each in the page, the decline confirmed inline; the applicant's door then says who admitted them, or that it was declined, and a declined one can still be admitted. | works (5.2); friction: nothing tells a decider that someone waits until they open Applications (notifications, 6.1); holding new accounts' Posts for approval is missing (its FEATURES row) |
 | Reports | A report reaches the private moderators' Tangent, taken on a tangent from the Post. | works (2.8); its readers today are the administrators alone, until moderators can be named |
 
 ## 3 · Taking part

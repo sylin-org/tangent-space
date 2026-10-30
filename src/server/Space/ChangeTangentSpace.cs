@@ -5,7 +5,7 @@ using Tangent.Writer;
 
 namespace Tangent.Space;
 
-/// <summary>Renames and describes the place (<see cref="TangentSpace.Change"/>), and appends
+/// <summary>Renames and describes the place and sets its admission (<see cref="TangentSpace.Change"/>), and appends
 /// <see cref="EventKind.SpaceChanged"/>. A field left null stays as it is. The place exists for the actor, who holds
 /// <see cref="Bit.View"/> on it, or the command answers that no place is here; the actor holds
 /// <see cref="Bit.ManageSpace"/>, or is refused with the gate word. A command that changes nothing writes
@@ -14,6 +14,7 @@ public sealed record ChangeTangentSpace(
     string ActorId,
     string? Name = null,
     string? Description = null,
+    Admission? Admission = null,
     DateTimeOffset? At = null) : ICommand<TangentSpace>
 {
     /// <summary>The answer to an actor for whom the place does not exist.</summary>
@@ -26,7 +27,7 @@ public sealed record ChangeTangentSpace(
         if (!capabilities.Exists) return new Outcome<TangentSpace>.Refused(NoPlace);
         if (capabilities.Gate(Bit.ManageSpace) is { } gate) return new Outcome<TangentSpace>.Refused(gate);
 
-        if (!space.Change(Name ?? space.Name, Description ?? space.Description)) return new Outcome<TangentSpace>.Done(space);
+        if (!space.Change(Name ?? space.Name, Description ?? space.Description, Admission ?? space.Admission)) return new Outcome<TangentSpace>.Done(space);
         await space.Save(ct);
         await Event.Next(sequences, EventKind.SpaceChanged, At ?? DateTimeOffset.UtcNow, actorId: ActorId).Save(ct);
         return new Outcome<TangentSpace>.Done(space);

@@ -17,7 +17,9 @@ namespace Tangent.Space;
 /// newest event the door read that the reader may see, or past the newest of its window where the window held none of
 /// those, which the stream at the same address also answers. For the place's operator, <see cref="Offers"/> are the
 /// open Offers they decide, shown first; for anyone else there are none, and the field is absent. <see cref="NewTangent"/> is where a
-/// Tangent is created, present only for a reader who may create one.
+/// Tangent is created, present only for a reader who may create one. <see cref="Gate"/> is why the reader may not write
+/// in the place, absent where they may: for an applicant, that their application is waiting, or was declined, which the
+/// page says in one sentence.
 /// <c>api</c> is the stability promise an agent reads.</summary>
 public sealed record Door(
     string Name,
@@ -44,12 +46,16 @@ public sealed record Door(
     /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
     public IReadOnlyList<Offered>? Offers { get; init; }
 
+    /// <summary>Why the reader may not write in the place — <c>sign-in</c>, <c>apply</c>, <c>declined</c>, or another
+    /// gate — absent where they may.</summary>
+    public string? Gate { get; init; }
+
     /// <summary>What is new to a signed-in reader: the place checkpoint the door read past (<see cref="From"/>, zero
     /// when they have none) and the sequence it read through (<see cref="Through"/>); first the Topics and Tangents they
     /// watch that hold something new, then replies to them, mentions of them, what is new in each Tangent and the new
     /// articles; <see cref="Taken"/> holds the Topics taken on a tangent from their Posts, which are not replies.
     /// <see cref="CaughtUp"/> is the form that moves the place checkpoint to <see cref="Through"/>, present while there
-    /// is news.</summary>
+    /// is news. <see cref="Admitted"/> is who admitted the reader and when, where that happened since their checkpoint.</summary>
     public sealed record Since(
         long From,
         long Through,
@@ -59,11 +65,16 @@ public sealed record Door(
         IReadOnlyList<InTangent> PerTangent,
         Group Articles,
         CaughtUp? CaughtUp,
-        Group? Taken = null)
+        Group? Taken = null,
+        Decision? Admitted = null)
     {
         /// <summary>Whether nothing is new to the reader.</summary>
-        public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0;
+        public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
+                             && Admitted is null;
     }
+
+    /// <summary>A decision about the reader's standing: who made it, and when.</summary>
+    public sealed record Decision(TangentPage.Author Who, DateTimeOffset At);
 
     /// <summary>How many of a kind are new, whether that is a lower bound because the window the door read was full,
     /// and the newest of them, a few at most.</summary>
@@ -104,7 +115,7 @@ public sealed record Door(
 
     /// <summary>The signed-in reader: their id, the name to show, their handle, the highest role they hold where they
     /// hold one, their avatar, where they sign out, coming back to the door, and the place's settings, for one who holds
-    /// <c>ManageSpace</c>.</summary>
+    /// <c>ManageSpace</c> or <c>ManageStanding</c>.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null);
 
     /// <summary>Where the door stands in the log and where to ask again: the sequence it read through for this reader, and the

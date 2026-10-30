@@ -232,6 +232,7 @@ public static class PostWrites
     {
         Capabilities.SignIn => "Sign in first",
         Capabilities.Apply => "Waiting to be admitted",
+        Capabilities.Declined => "Not admitted",
         Capabilities.TimedOut => "Timed out",
         Capabilities.Locked => "Locked",
         Capabilities.Removed => "Removed",
@@ -244,7 +245,8 @@ public static class PostWrites
     public static string Sentence(string gate) => gate switch
     {
         Capabilities.SignIn => "Sign in to write here.",
-        Capabilities.Apply => "You can write here once the proprietor admits you.",
+        Capabilities.Apply => "Your application is waiting: you can write here once someone admits you.",
+        Capabilities.Declined => "Your application was declined, so you read here and don’t write.",
         Capabilities.TimedOut => "You’re timed out: you can read here, and write again once it ends.",
         Capabilities.Locked => "This topic is locked, so no one replies in it.",
         Capabilities.Removed => "This post is removed, so nothing changes it now.",
@@ -253,8 +255,8 @@ public static class PostWrites
     };
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
-    /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>; null for a
-    /// visitor.</summary>
+    /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/> or
+    /// <see cref="Bit.ManageStanding"/>; null for a visitor.</summary>
     public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string baseUrl, string back, CancellationToken ct)
     {
         if (personId is null) return null;
@@ -265,9 +267,9 @@ public static class PostWrites
             baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back), await SettingsFor(personId, baseUrl, ct));
     }
 
-    /// <summary>The place's settings under <paramref name="baseUrl"/> for a participant who holds
-    /// <see cref="Bit.ManageSpace"/> in the place, judged in the place rather than in any one Tangent; null for anyone
-    /// else.</summary>
+    /// <summary>Where the place's settings open under <paramref name="baseUrl"/> for a participant who holds
+    /// <see cref="Bit.ManageSpace"/> or <see cref="Bit.ManageStanding"/> in the place, judged in the place rather than in
+    /// any one Tangent (<see cref="Space.TangentSpaceSettingsController.Entry"/>); null for anyone else.</summary>
     public static async Task<string?> SettingsFor(string personId, string baseUrl, CancellationToken ct)
-        => (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace) ? baseUrl + Space.TangentSpaceSettingsController.Path : null;
+        => Space.TangentSpaceSettingsController.Entry(await Capabilities.Load(personId, null, null, ct), baseUrl);
 }

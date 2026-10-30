@@ -1,19 +1,11 @@
 @using global::Tangent.Posts
 @using global::Tangent.Render
-@* The place's settings: the sections of the settings in the rail, the one shown marked, and that section in one panel
-   beside them — general, with the form that names the place and writes the line under its name on the door. A reader
+@* The place's settings, general: the sections of the settings in the rail, this one marked, and in one panel beside
+   them the form that names the place and writes the line under its name on the door. A reader
    who may not change them reads why above the form, whose fields are read-only and which has no button, and a visitor
    the way to sign in; a refusal of a field shows under that field, and any other above the form. *@
 <div class="layout layout-settings">
-    <aside class="rail" aria-label="Settings">
-        <h2 class="rail-heading">Settings</h2>
-        <ul class="rail-views">
-            @foreach (var section in Model.Sections)
-            {
-                <li><a href="@section.Address" aria-current="@(section.Current ? "page" : null)">@section.Name</a></li>
-            }
-        </ul>
-    </aside>
+    <SettingsRail Sections="@Model.Sections" />
     <main>
         <section class="sign-in-panel post-form-panel" aria-labelledby="space-settings-heading">
             <div class="sign-in-body">

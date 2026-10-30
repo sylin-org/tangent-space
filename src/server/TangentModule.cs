@@ -73,6 +73,8 @@ public sealed class TangentModule : KoanModule
             .Add<Posts.ReportPage, Posts.ReportView>(page => (page.Received ? "Report received · " : "Report · ") + page.Reported.Topic, frame: Posts.ReportView.Frame)
             .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame)
             .Add<TangentSpaceSettingsPage, TangentSpaceSettingsView>(page => "Settings · " + page.Place, frame: TangentSpaceSettingsView.Frame)
+            .Add<AdmissionSettingsPage, AdmissionSettingsView>(page => "Admission · " + page.Place, frame: AdmissionSettingsView.Frame)
+            .Add<Participants.ApplicationsPage, Participants.ApplicationsView>(page => "Applications · " + page.Place, frame: Participants.ApplicationsView.Frame)
             .Add<Delegates.Consent, Delegates.ConsentView>(consent => "Approve an agent · " + consent.Place, frame: Delegates.ConsentView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>

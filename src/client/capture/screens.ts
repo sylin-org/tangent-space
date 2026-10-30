@@ -85,7 +85,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   // new Tangent, with her account open, where the place's settings are offered; and her first door after setup,
   // holding the first Tangent and the moderators'. Then the persona as the operator of a place reached at a public
   // origin while it has no address: the Offer on her door, with its evidence and its two answers; where Use it lands, first run's
-  // pointers under the origin she used; and her door once she said Not this one.
+  // pointers under the origin she used; and her door once she said Not this one. Last, the persona arriving at a place
+  // whose admission says apply: her door says her application is waiting.
   door: {
     path: '/',
     states: [
@@ -98,6 +99,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'offer', seed: 'offer', place: 'persona', signedIn: true, settings: offerSettings },
       { name: 'offer-used', seed: 'offer-used', place: 'persona', signedIn: true, settings: offerSettings, path: '/first-run' },
       { name: 'offer-declined', seed: 'offer-declined', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'applicant', seed: 'apply', signedIn: true },
     ],
   },
   // What a visitor reads: the action that signs in with Bluesky; on its way once pressed; the handle form for another
@@ -135,6 +137,26 @@ export const screens: Readonly<Record<string, Screen>> = {
     states: [
       { name: 'proprietor', place: 'persona', signedIn: true },
       { name: 'refused', signedIn: true },
+    ],
+  },
+  // The place's admission, read by the persona, who set the place up and so holds ManageSpace: join at once, and apply
+  // and wait once the place says so; and by the persona in a place someone else set up, refused above disabled choices.
+  'tangent-space-settings-admission': {
+    path: '/settings/admission',
+    states: [
+      { name: 'proprietor', place: 'persona', signedIn: true },
+      { name: 'apply', place: 'persona', seed: 'apply', signedIn: true },
+      { name: 'refused', signedIn: true },
+    ],
+  },
+  // The place's applications, read by the persona, who set the place up and so decides them: two waiting and one
+  // declined; the first one's decline opened, confirmed in the page; and none.
+  'tangent-space-settings-applications': {
+    path: '/settings/applications',
+    states: [
+      { name: 'with-applicants', place: 'persona', seed: 'applications', signedIn: true },
+      { name: 'decline-confirmation', place: 'persona', seed: 'applications', signedIn: true, click: '.application-decline summary' },
+      { name: 'empty', place: 'persona', signedIn: true },
     ],
   },
   // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the

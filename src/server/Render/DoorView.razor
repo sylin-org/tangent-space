@@ -1,12 +1,14 @@
 @using System.Globalization
 @using System.Text.Json
+@using Tangent.Access
 @using Tangent.Offers
+@using Tangent.Posts
 @using Tangent.Space
 @using Tangent.Tangents
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the Tangents the reader may view, where a new one is
    created for whoever may, and who is around in the rail; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
-   answers; for a signed-in reader with news, what is new since they were here — one sentence,
-   then replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
+   answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a signed-in reader
+   with news, what is new since they were here — one sentence, then who admitted them, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
    in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address. *@
@@ -72,6 +74,14 @@
             }
         </aside>
         <div class="tangent-main">
+            @if (Model.Gate is Capabilities.Apply or Capabilities.Declined)
+            {
+                <section class="door-offers" aria-label="Your application">
+                    <div class="door-offer door-application" data-gate="@Model.Gate">
+                        <p class="door-offer-line">@PostWrites.Sentence(Model.Gate)</p>
+                    </div>
+                </section>
+            }
             @if (Model.Offers is { Count: > 0 } offers)
             {
                 <section class="door-offers" aria-label="Offers">
@@ -118,6 +128,10 @@
                             }
                         </div>
                         <p class="tangent-description">@Sentence(news)</p>
+                        @if (news.Admitted is { } admitted)
+                        {
+                            <p class="tangent-description door-admitted">@admitted.Who.Name admitted you: you can start topics and reply here.</p>
+                        }
                         <Tangent.Events.WatchedNews Model="@news.Watched" />
                         @Items("Replies to you", news.Replies)
                         @Items("Mentions of you", news.Mentions)
@@ -188,6 +202,7 @@
     private static string Sentence(Door.Since news)
     {
         var parts = new List<string>();
+        if (news.Admitted is not null) parts.Add("you were admitted");
         if (news.Replies.Count > 0) parts.Add(Words(news.Replies.Count, news.Replies.AtLeast, "reply", "replies") + " to you");
         if (news.Mentions.Count > 0) parts.Add(Words(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
         if (news.Taken is { Count: > 0 } taken) parts.Add(Words(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");

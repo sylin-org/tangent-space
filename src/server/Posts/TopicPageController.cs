@@ -204,7 +204,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         Capabilities.SignIn => new Problem(StatusCodes.Status401Unauthorized, "Sign in to read",
             "This Tangent Space is read by its participants.", gate).ToResult(),
         Capabilities.Apply => new Problem(StatusCodes.Status403Forbidden, "Waiting to be admitted",
-            "The proprietor admits new participants; you can read once you are admitted.", gate).ToResult(),
+            "Your application is waiting: you can read here once someone admits you.", gate).ToResult(),
+        Capabilities.Declined => new Problem(StatusCodes.Status403Forbidden, "Not admitted",
+            "Your application was declined, so this Tangent Space is not open to you.", gate).ToResult(),
         _ => new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent is not open to you.", gate).ToResult()
     };
 

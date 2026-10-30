@@ -25,7 +25,9 @@ namespace Tangent.Space;
 /// mention is not judged by the Topic's checkpoint: that counts the Topic's Posts as they arrived, and an edit can
 /// mention the reader in a Post they read long before, so a mention is new by its own place in the log alone.
 /// The Topics and Tangents among the news that the reader watches, by the watch flag on those same checkpoints, are
-/// listed first.
+/// listed first. A <c>standing.changed</c> among the reader's targeted events that admitted them, by someone else, is news
+/// while they stand admitted; the door's <c>gate</c> is why they may not write in the place, which an applicant's door
+/// says in one sentence.
 /// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
 /// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
 /// rule, and its writers <see cref="Door.Around"/>. For the place's operator, while no URL is configured, it also reads
@@ -107,9 +109,13 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var taken = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e) && TakenOnATangent(e)).ToList();
         var mentions = targeted.Where(e => e.Kind == EventKind.Mention && e.TargetId == reader?.Id && New(e)).ToList();
         var articles = fresh.Where(e => e.PostId == e.TopicId && posts[e.TopicId!].Kind == PostKind.Article).ToList();
+        // Someone admitted the reader since their checkpoint, and they stand admitted still.
+        var admitted = reader is { Standing: Standing.Admitted }
+            ? targeted.FirstOrDefault(e => e is { Kind: EventKind.StandingChanged, Standing: Standing.Admitted, ActorId: not null } && e.ActorId != reader.Id)
+            : null;
 
         var people = await People(
-            new[] { space.ProprietorId, reader?.Id }
+            new[] { space.ProprietorId, reader?.Id, admitted?.ActorId }
                 .Concat(replies.Concat(mentions).Concat(articles).Concat(taken).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
                 .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
@@ -121,9 +127,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var baseAddress = BaseAddress();
         var door = baseAddress + "/";
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
-        // Read through the newest event in a Tangent the reader may view, their own included; an event in a Tangent
-        // they may not view moves nothing they can see.
-        var newestViewable = window.Concat(targeted).Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
+        // Read through the newest event in a Tangent the reader may view, their own included, and their admission; an
+        // event in a Tangent they may not view moves nothing they can see.
+        var newestViewable = window.Concat(targeted).Where(e => Viewable(e.TangentId) || e == admitted).Select(e => e.Seq).DefaultIfEmpty(0).Max();
         var through = Math.Max(since, newestViewable);
         Door.Since? news = null;
         if (reader is not null)
@@ -142,7 +148,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                     .ToList(),
                 Group(articles, partial, posts, tangents, people),
                 null,
-                Group(taken, targetedFull, posts, tangents, people));
+                Group(taken, targetedFull, posts, tangents, people),
+                admitted is null ? null : new Door.Decision(Person(people, admitted.ActorId!), admitted.At));
             // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
             // other door of a signed-in reader is theirs alone to cache.
             if (!news.Quiet) news = news with { CaughtUp = new Door.CaughtUp(door, through, FormToken.For(HttpContext)) };
@@ -171,13 +178,14 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
                 Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
-                place.Holds(Bit.ManageSpace) ? baseAddress + TangentSpaceSettingsController.Path : null),
+                TangentSpaceSettingsController.Entry(place, baseAddress)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             Resume(baseAddress, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0)),
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
         {
             Description = space.Description,
-            Offers = offered
+            Offers = offered,
+            Gate = place.Gate(Bit.Post)
         });
     }
 
@@ -245,7 +253,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         Capabilities.SignIn => new Problem(StatusCodes.Status401Unauthorized, "Sign in to read",
             "This Tangent Space is read by its participants.", gate).ToResult(),
         Capabilities.Apply => new Problem(StatusCodes.Status403Forbidden, "Waiting to be admitted",
-            "The proprietor admits new participants; you can read once you are admitted.", gate).ToResult(),
+            "Your application is waiting: you can read here once someone admits you.", gate).ToResult(),
+        Capabilities.Declined => new Problem(StatusCodes.Status403Forbidden, "Not admitted",
+            "Your application was declined, so this Tangent Space is not open to you.", gate).ToResult(),
         _ => new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent Space is not open to you.", gate).ToResult()
     };
 
