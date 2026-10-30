@@ -1,7 +1,7 @@
 # Shared by the rule checks: lists the prose and source files of the tree.
 # Each file comes back as @{ Path = <full path>; Relative = <path from the tree base, forward slashes> }.
 
-$script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'poc'
+$script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'poc', 'publish'
 $script:ExcludedDirectories = '.git', 'node_modules', 'bin', 'obj'
 $script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md', 'src/server/wwwroot'
 $script:TextExtensions = '.md', '.cs', '.razor', '.ts', '.vue', '.js', '.mjs', '.json', '.ps1', '.yaml', '.yml', '.css', '.html',

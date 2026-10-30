@@ -11,9 +11,10 @@ import { canEditMarkdownRichly } from './markdown-roundtrip'
 // visual editor writes its Markdown back there on every change, so drafts, sending and everything the form does go on
 // as they do without it, and the source view is that field itself. The visual view is offered only while it holds the
 // Markdown's whole meaning; otherwise the field stands, and nothing it holds is touched. An edit made nowhere rewrites
-// nothing: Markdown is written back only once the person changes something. An image pasted, dropped or chosen appears
-// where it was put at once, from the person's own file, while the writing goes on; it joins the words once the place
-// has it, and a form holding one on its way waits for it.
+// nothing: Markdown is written back only once the person changes something. What was loaded is where undo stops, and a
+// body emptied in the visual view leaves its words in the draft. An image pasted, dropped or chosen appears where it
+// was put at once, from the person's own file, while the writing goes on; it joins the words once the place has it, and
+// the form and the view switch wait for it. Pasted text that carries a picture of itself is text.
 
 export interface ArticleProps {
   host: HTMLElement
@@ -25,6 +26,7 @@ export interface ArticleProps {
 }
 
 const noImages = 'Images come in where the place lets you write them.'
+const viewWaits = 'Source opens once your image has come.'
 const notSafe = 'This article uses formatting the visual editor cannot preserve. Edit its Markdown source to keep every part intact.'
 
 // Where images on their way stand: a mark in the text that moves with it and is never part of the words.
@@ -136,6 +138,7 @@ export function writeArticle(props: ArticleProps): () => void {
   const uploads = new AbortController()
   const cleanups: (() => void)[] = [() => uploads.abort()]
   let coming = 0
+  let comingInWords = 0
   let nextComing = 0
   let lastEmitted = source.value
 
@@ -157,7 +160,7 @@ export function writeArticle(props: ArticleProps): () => void {
   const keepEdit = () => {
     if (!editKey) return
     const changed = source.value !== source.defaultValue || (titleField && titleField.value !== titleField.defaultValue) || (coverField && coverField.value !== coverField.defaultValue)
-    writeDraft(editKey, changed ? { id: '2222222222222', body: source.value, title: titleField?.value, cover: coverField?.value, sent: false } : null)
+    writeDraft(editKey, changed ? { id: '2222222222222', body: source.value || source.dataset.heldWords || '', title: titleField?.value, cover: coverField?.value, sent: false } : null)
   }
   if (editKey) {
     // A draft is of one version: those of an earlier one stand for words that were saved or set aside.
@@ -177,6 +180,11 @@ export function writeArticle(props: ArticleProps): () => void {
     }
     form.addEventListener('input', keepEdit)
     cleanups.push(() => form.removeEventListener('input', keepEdit))
+    // Words set aside with Cancel stay set aside.
+    const cancel = form.querySelector<HTMLAnchorElement>('.post-form-cancel')
+    const setAside = () => writeDraft(editKey, null)
+    cancel?.addEventListener('click', setAside)
+    cleanups.push(() => cancel?.removeEventListener('click', setAside))
   }
 
   const countWords = () => {
@@ -190,7 +198,8 @@ export function writeArticle(props: ArticleProps): () => void {
     editorProps: {
       attributes: { class: 'article-prose article-surface', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'Article' },
       handlePaste(_view, event) {
-        const files = imagesIn(event.clipboardData)
+        // Word and Excel put a picture of what was copied beside its text: the text is what was meant.
+        const files = event.clipboardData?.getData('text/plain').trim() ? [] : imagesIn(event.clipboardData)
         if (files.length === 0) return false
         event.preventDefault()
         for (const file of files) void bringInto(file, editor.state.selection.from)
@@ -213,6 +222,8 @@ export function writeArticle(props: ArticleProps): () => void {
 
   function writeBack(markdown: string) {
     if (markdown === lastEmitted) return
+    if (markdown === '') source.dataset.heldWords = lastEmitted || source.dataset.heldWords || ''
+    else delete source.dataset.heldWords
     lastEmitted = markdown
     source.value = markdown
     // The form's own listeners keep the draft from here.
@@ -224,6 +235,8 @@ export function writeArticle(props: ArticleProps): () => void {
 
   function holdForm() {
     if (submit) submit.disabled = coming > 0
+    markdown.setAttribute('aria-disabled', String(comingInWords > 0))
+    if (comingInWords === 0 && status.textContent === viewWaits) say('')
   }
 
   async function bringInto(file: File, at: number) {
@@ -233,6 +246,7 @@ export function writeArticle(props: ArticleProps): () => void {
     const id = ++nextComing
     const preview = URL.createObjectURL(file)
     coming++
+    comingInWords++
     holdForm()
     say('')
     editor.view.dispatch(editor.state.tr.setMeta(comingKey, { add: { id, at, preview } } satisfies Coming))
@@ -249,6 +263,7 @@ export function writeArticle(props: ArticleProps): () => void {
     } finally {
       URL.revokeObjectURL(preview)
       coming--
+      comingInWords--
       holdForm()
     }
   }
@@ -283,8 +298,13 @@ export function writeArticle(props: ArticleProps): () => void {
   views.className = 'article-views'
   views.setAttribute('role', 'group')
   views.setAttribute('aria-label', 'Editor view')
-  const visual = button('Visual', 'Visual', () => showRich())
-  const markdown = button('Source', 'Markdown source', () => showSource())
+  const visual = button('Visual', 'Visual', () => {
+    if (!rich) showRich()
+  })
+  const markdown = button('Source', 'Markdown source', () => {
+    if (comingInWords > 0) say(viewWaits)
+    else if (rich) showSource()
+  })
   views.append(visual, markdown)
   toolbar.append(formatting, views)
 
@@ -313,6 +333,15 @@ export function writeArticle(props: ArticleProps): () => void {
   })
   addLink.className = 'watch-button'
   linkPanel.append(linkAddress.wrap, linkWords.wrap, addLink)
+  // Enter in a panel's field answers the panel; it never sends the form around it.
+  const enterAnswers = (element: HTMLElement, answer: () => void) =>
+    element.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || !(event.target instanceof HTMLInputElement)) return
+      event.preventDefault()
+      event.stopPropagation()
+      answer()
+    })
+  enterAnswers(linkPanel, () => addLink.click())
 
   const imagePanel = panel()
   const chooser = document.createElement('input')
@@ -348,6 +377,7 @@ export function writeArticle(props: ArticleProps): () => void {
   })
   removeImage.className = 'watch-button'
   imagePanel.append(chooseImage, imageAddress.wrap, imageWords.wrap, placeAddress, removeImage, chooser)
+  enterAnswers(imagePanel, () => placeAddress.click())
 
   function openPanel(which: HTMLElement) {
     const open = which.hidden
@@ -387,7 +417,8 @@ export function writeArticle(props: ArticleProps): () => void {
   }
 
   function showRich() {
-    editor.commands.setContent(source.value, { contentType: 'markdown', emitUpdate: false })
+    // Loading is no step of the writing: undo stops at what was loaded.
+    editor.chain().setMeta('addToHistory', false).setContent(source.value, { contentType: 'markdown', emitUpdate: false }).run()
     if (!canEditMarkdownRichly(source.value, editor.getMarkdown())) {
       say(notSafe)
       showSource(true)
@@ -412,6 +443,7 @@ export function writeArticle(props: ArticleProps): () => void {
 
   // The composer changes the words when it brings a draft back, and whether they may change while they are on their way.
   const composerAnswered = () => {
+    if (source.value) delete source.dataset.heldWords
     if (rich && source.value !== lastEmitted) showRich()
     else if (!rich) lastEmitted = source.value
     editor.setEditable(!source.readOnly)
@@ -420,7 +452,10 @@ export function writeArticle(props: ArticleProps): () => void {
   }
   form.addEventListener(composerChanged, composerAnswered)
   cleanups.push(() => form.removeEventListener(composerChanged, composerAnswered))
-  const sourceTyped = () => countWords()
+  const sourceTyped = () => {
+    if (!rich) delete source.dataset.heldWords
+    countWords()
+  }
   source.addEventListener('input', sourceTyped)
   cleanups.push(() => source.removeEventListener('input', sourceTyped))
 

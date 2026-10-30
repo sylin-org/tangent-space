@@ -67,7 +67,8 @@ export const composer = defineComponent({
     let home = key()
     const current = (sent: boolean): Draft => ({
       id: id.value,
-      body: body.value,
+      // A body the article editor emptied keeps its words in the draft, so a slip never costs them.
+      body: body.value || body.dataset.heldWords || '',
       title: title ? title.value : undefined,
       parent: parent?.value || undefined,
       cover: cover?.value || undefined,

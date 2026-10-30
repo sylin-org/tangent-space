@@ -222,3 +222,140 @@ test('an edit keeps its own draft by the version it was made from, and drops tho
   source.dispatchEvent(new Event('input', { bubbles: true }))
   expect(localStorage.getItem(key)).toBeNull()
 })
+
+const pasteOf = (files: File[], text = '') => {
+  const paste = new Event('paste', { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown }
+  paste.clipboardData = { files, types: text ? ['text/plain', 'Files'] : ['Files'], getData: (type: string) => (type === 'text/plain' ? text : '') }
+  return paste
+}
+const tool = (host: HTMLElement, title: string) => host.querySelector<HTMLButtonElement>(`button[title="${title}"]`)!
+const enter = () => new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+
+test('Enter in a panel’s field answers the panel and never sends the form', () => {
+  const { host, form, source } = page('Words.')
+  const sent = vi.fn((event: Event) => event.preventDefault())
+  form.addEventListener('submit', sent)
+
+  tool(host, 'Insert link').click()
+  const address = host.querySelector<HTMLInputElement>('.article-panel input[type="url"]')!
+  address.value = 'https://example.com/notes'
+  const pressed = enter()
+  address.dispatchEvent(pressed)
+
+  expect(pressed.defaultPrevented).toBe(true)
+  expect(address.closest<HTMLElement>('.article-panel')!.hidden).toBe(true)
+  expect(source.value).toContain('(https://example.com/notes)')
+
+  tool(host, 'Insert image').click()
+  const panel = [...host.querySelectorAll<HTMLElement>('.article-panel')].find((element) => !element.hidden)!
+  panel.querySelector<HTMLInputElement>('input[type="url"]')!.value = 'https://example.com/lamp.jpg'
+  const description = panel.querySelector<HTMLInputElement>('input[type="text"]')!
+  description.value = 'A lamp'
+  const again = enter()
+  description.dispatchEvent(again)
+
+  expect(again.defaultPrevented).toBe(true)
+  expect(panel.hidden).toBe(true)
+  expect(source.value).toContain('![A lamp](https://example.com/lamp.jpg)')
+  expect(sent).not.toHaveBeenCalled()
+  expect(fetched).not.toHaveBeenCalled()
+})
+
+test('undo stops at what was loaded, also after the source view, and never empties the draft', async () => {
+  const { host, source, surface } = page('Loaded words.')
+  const undo = tool(host, 'Undo')
+  for (let press = 0; press < 3; press++) undo.click()
+  expect(source.value).toBe('Loaded words.')
+  expect(surface().textContent).toBe('Loaded words.')
+  expect(localStorage.getItem(draftKey(participant, scope))).toBeNull()
+
+  surface().querySelector('p')!.textContent = 'Loaded words, and more.'
+  await vi.waitFor(() => expect(source.value).toBe('Loaded words, and more.'))
+  for (let press = 0; press < 5; press++) undo.click()
+  await vi.waitFor(() => expect(source.value).toBe('Loaded words.'))
+  expect(surface().textContent).toBe('Loaded words.')
+
+  // Coming back from the source view is a loading too.
+  tool(host, 'Markdown source').click()
+  source.value = 'Typed in the source.'
+  source.dispatchEvent(new Event('input', { bubbles: true }))
+  tool(host, 'Visual').click()
+  expect(surface().textContent).toBe('Typed in the source.')
+  for (let press = 0; press < 5; press++) undo.click()
+  expect(source.value).toBe('Typed in the source.')
+  expect(surface().textContent).toBe('Typed in the source.')
+})
+
+test('a body emptied in the visual view leaves its words in the draft, whatever is typed in the title after', async () => {
+  const { form, source, surface } = page('Words that matter.')
+  surface().querySelector('p')!.textContent = 'Words that matter, kept.'
+  await vi.waitFor(() => expect(JSON.parse(localStorage.getItem(draftKey(participant, scope))!).body).toBe('Words that matter, kept.'))
+
+  surface().querySelector('p')!.textContent = ''
+  await vi.waitFor(() => expect(source.value).toBe(''))
+  expect(JSON.parse(localStorage.getItem(draftKey(participant, scope))!).body).toBe('Words that matter, kept.')
+
+  const title = form.querySelector<HTMLTextAreaElement>('textarea[name="title"]')!
+  title.value = 'A title'
+  title.dispatchEvent(new Event('input', { bubbles: true }))
+  const draft = JSON.parse(localStorage.getItem(draftKey(participant, scope))!)
+  expect(draft.title).toBe('A title')
+  expect(draft.body).toBe('Words that matter, kept.')
+})
+
+test('pasted text that carries a picture of itself stays text, and an image alone is an image', async () => {
+  fetched.mockResolvedValue(new Response(JSON.stringify({ id: 'abc', reference: '/media/abc', address: 'https://tangent.example/media/abc' }), { status: 201 }))
+  const { source, surface } = page('Before.')
+
+  const fromWord = pasteOf([new File(['x'], 'image.png', { type: 'image/png' })], 'Words from Word.')
+  surface().dispatchEvent(fromWord)
+
+  expect(fetched).not.toHaveBeenCalled()
+  expect(surface().querySelector('.article-image-coming')).toBeNull()
+  await vi.waitFor(() => expect(source.value).toContain('Words from Word.'))
+
+  surface().dispatchEvent(pasteOf([new File(['x'], 'kiln.png', { type: 'image/png' })]))
+  expect(fetched).toHaveBeenCalledOnce()
+  await vi.waitFor(() => expect(source.value).toContain('![kiln](/media/abc)'))
+})
+
+test('the source view waits for an image on its way, says so, and the image lands', async () => {
+  let answer!: (response: Response) => void
+  fetched.mockImplementation(() => new Promise<Response>((resolve) => (answer = resolve)))
+  const { host, source, surface } = page('Words.')
+  surface().dispatchEvent(pasteOf([new File(['x'], 'kiln.png', { type: 'image/png' })]))
+
+  tool(host, 'Markdown source').click()
+  expect(host.classList.contains('is-visual')).toBe(true)
+  expect(source.hidden).toBe(true)
+  expect(host.querySelector('.article-status')!.textContent).toBe('Source opens once your image has come.')
+  expect(tool(host, 'Markdown source').getAttribute('aria-disabled')).toBe('true')
+  // Asking for the view it is already in changes nothing, and the image keeps its place.
+  tool(host, 'Visual').click()
+  expect(surface().querySelector('.article-image-coming')).not.toBeNull()
+
+  answer(new Response(JSON.stringify({ id: 'abc', reference: '/media/abc', address: 'https://tangent.example/media/abc' }), { status: 201 }))
+  await vi.waitFor(() => expect(source.value).toContain('![kiln](/media/abc)'))
+  expect(host.querySelector<HTMLElement>('.article-status')!.hidden).toBe(true)
+
+  tool(host, 'Markdown source').click()
+  expect(source.hidden).toBe(false)
+  expect(source.value).toContain('![kiln](/media/abc)')
+})
+
+test('words set aside with Cancel do not come back on the next edit', () => {
+  const key = draftKey(participant, 'edit:post:2')
+  document.body.innerHTML =
+    '<form method="post" action="https://tangent.example/edit"><input type="hidden" name="cover" value="">' +
+    '<textarea name="title">Lanterns</textarea><div class="host"><label>Article</label><textarea name="body">First words.</textarea></div>' +
+    '<a class="post-form-cancel" href="#read">Cancel</a><button type="submit">Save</button></form>'
+  stops.push(writeArticle({ host: document.querySelector<HTMLElement>('.host')!, door: '/', bring: null, token: null, participant, edit: 'edit:post:2' }))
+  const source = document.querySelector<HTMLTextAreaElement>('textarea[name="body"]')!
+  source.value = 'Words to set aside.'
+  source.dispatchEvent(new Event('input', { bubbles: true }))
+  expect(localStorage.getItem(key)).not.toBeNull()
+
+  document.querySelector<HTMLAnchorElement>('.post-form-cancel')!.click()
+
+  expect(localStorage.getItem(key)).toBeNull()
+})
