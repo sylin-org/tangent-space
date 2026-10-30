@@ -99,6 +99,24 @@ test('the built stylesheet carries every token of the reference stylesheet with 
   expect(differences(expected, await builtTokens())).toEqual([])
 })
 
+test('the place\'s first four tokens are named as site.standard.theme.basic names them', async () => {
+  const built = await builtTokens()
+  expect(['background', 'foreground', 'accent', 'accent-foreground'].map((name) => built.get(`:root | --ts-${name}`))).toEqual([
+    'var(--ts-page)',
+    'var(--ts-text)',
+    'var(--ts-accent-light)',
+    'var(--ts-on-accent)',
+  ])
+})
+
+test('each accent\'s swatch carries the tones the page takes for it', async () => {
+  const built = await builtTokens()
+  for (const [accent, tones] of Object.entries(catalog.spaceAccent.options)) {
+    const swatch = `.accent-swatch[data-swatch="${accent}"]`
+    expect([built.get(`${swatch} | --ts-accent-light`), built.get(`${swatch} | --ts-accent-dark`)]).toEqual([tones.light, tones.dark])
+  }
+})
+
 test('the built stylesheet carries every token of the reference catalog with its value', async () => {
   expect(Object.keys(catalog).sort()).toEqual(
     ['$meta', 'color', 'contrast', 'font', 'fontSource', 'layout', 'radius', 'roleColor', 'shadow', 'spaceAccent', 'tangentAccent', 'type'].sort(),

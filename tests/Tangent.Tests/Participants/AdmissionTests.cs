@@ -99,7 +99,7 @@ public sealed class AdmissionTests
         var page = await Send(leo.Client, HttpMethod.Get, path, json: true);
         Assert.Equal((HttpStatusCode.OK, "join"), (page.Status, page.Json.GetProperty("admission").GetString()));
         Assert.Equal(["join", "apply"], page.Json.GetProperty("admissions").EnumerateArray().Select(word => word.GetString()));
-        Assert.Equal(["General", "Admission", "Applications", "People", "Roles"], page.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
+        Assert.Equal(["General", "Admission", "Applications", "Appearance", "People", "Roles"], page.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
         Assert.False(page.Json.TryGetProperty("gate", out _));
         var html = await Send(leo.Client, HttpMethod.Get, path);
         Assert.Contains("Join at once", html.Body);

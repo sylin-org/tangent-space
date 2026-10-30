@@ -138,7 +138,8 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Appearance: light, dark, system; accent; the published `site.standard.theme.basic` as the first four tokens | settings appearance | `AppearanceSwitch`, `TangentAccentPalette` (transplant) | — | S | todo |
+| Appearance: light, dark, system, each reader's own with no flash of the other; the accent at `/settings/appearance` for whoever holds `ManageSpace`, `space.changed` on a change, on every page for every reader; the first four tokens named as `site.standard.theme.basic` names them | settings appearance | `AppearanceSwitch`, `TangentAccentPalette` (transplant) | — | S | done |
+| The published `site.standard.theme.basic`, from the first four tokens | — | new | — | S | todo |
 | Slots with sanitized HTML (head, masthead, door intro, article header, footer) and a bounded typed settings schema; identical in the site, the archive and exports | settings appearance | new | — | M | todo |
 
 ## Screens
