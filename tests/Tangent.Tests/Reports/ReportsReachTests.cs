@@ -1,5 +1,6 @@
 using System.Net;
 using Koan.Data.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
@@ -13,8 +14,9 @@ namespace Tangent.Posts;
 /// <summary>A report reaches whoever may act on it: a report writes one event, however many may view the moderators'
 /// Tangent; whoever may view it when they read finds the report in their count, on <c>/notifications</c> linked to the
 /// report's Topic, and on their stream; a member, the reporter and the reported author find none of it, not even a
-/// position that moved; someone made a moderator after it arrived learns of it; opening the notifications sees it; and a
-/// report older than a full read of rows the moderator may not view is never skipped.</summary>
+/// position that moved; someone made a moderator after it arrived learns of it; opening the notifications sees it; a
+/// report older than a full read of rows the moderator may not view is never skipped; and a page whose reading outlasts
+/// a refresh still shows every notification beside a newer report.</summary>
 public sealed class ReportsReachTests
 {
     private const string Leo = "did:plc:leo4reportsreach";
@@ -185,6 +187,30 @@ public sealed class ReportsReachTests
         Assert.DoesNotContain("Studio notes", (await Send(mo.Client, HttpMethod.Get, Notifications.Path)).Body);
     }
 
+    [Fact]
+    public async Task A_page_whose_reading_outlasts_a_refresh_shows_a_reply_beside_a_newer_report_and_sees_only_what_it_showed()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services: services => services.AddKeyedSingleton<TimeProvider>(Readable.Clock, new Jumping()), ct: Cancellation);
+        var writer = await Reporting(tangentSpace);
+        var mine = await Started(writer, Mo, "Kiln schedule", "Firing on Thursday.");
+        var reply = await Replied(writer, mine, Bea, "I bring the glazes.");
+        var lanterns = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var report = await Reported(writer, Ada, lanterns, "Unkind.");
+        var created = Assert.Single(await Event.Query(e => e.PostId == report.Id, Cancellation));
+        using var mo = await SignedIn(tangentSpace, Mo);
+
+        var page = (await Send(mo.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
+
+        var entries = page.GetProperty("entries").EnumerateArray().ToList();
+        Assert.Equal(["report", "reply"], entries.Select(entry => entry.GetProperty("kind").GetString()));
+        Assert.Equal(AddressOf(mine, reply), entries[1].GetProperty("address").GetString());
+        Assert.False(page.TryGetProperty("next", out var next) && next.ValueKind != System.Text.Json.JsonValueKind.Null);
+        // Opening them sees through the newest shown, which every notification below it was shown beside.
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Equal(created.Seq, (await Checkpoint.Get(Checkpoint.Key(Mo, Scope.Notifications), Cancellation))!.Seq);
+    }
+
     /// <summary>The place every proof of the write verbs starts from, with the moderators' Tangent a start creates for it.</summary>
     private static async Task<WriteLoop> Reporting(TangentSpaceFixture tangentSpace)
     {
@@ -203,6 +229,15 @@ public sealed class ReportsReachTests
     private static (long Through, long Poll) Positions(Answered door)
         => (door.Json.GetProperty("who").GetProperty("notifications").GetProperty("through").GetInt64(),
             door.Json.GetProperty("poll").GetProperty("through").GetInt64());
+
+    /// <summary>A clock that moves a whole refresh on at each reading, so whatever a reading of what reaches a reader
+    /// read is stale by its next reading.</summary>
+    private sealed class Jumping : TimeProvider
+    {
+        private long _readings;
+
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch + Readable.Refresh * Interlocked.Increment(ref _readings);
+    }
 
     /// <summary>Appends <paramref name="Times"/> replies about <paramref name="Root"/> by <paramref name="ActorId"/> targeting
     /// <paramref name="TargetId"/>, in one transaction.</summary>

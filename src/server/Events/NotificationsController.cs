@@ -25,7 +25,8 @@ namespace Tangent.Events;
 /// one that did not land. A delegate reads them as its person does and moves nothing, since seen means the person saw
 /// them. The page is never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the
 /// place receives its gate.</summary>
-public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
+public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection,
+    [FromKeyedServices(Readable.Clock)] TimeProvider clock) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
     public const string After = "after";
@@ -48,7 +49,7 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
 
         var seen = await Notifications.Seen(personId, ct);
         var from = cursor?.From ?? seen;
-        var page = await Notifications.Read(personId, cursor?.Before, ct);
+        var page = await Notifications.Read(personId, cursor?.Before, ct, clock);
         var newest = page.Events.Count > 0 ? page.Events[0].Seq : 0;
         // Only the person's own opening marks them seen, and it never waits for the writer to do it.
         var marked = newest > seen && !DelegateIdentity.Delegated(HttpContext) && writer.TrySend(new SeeNotifications(personId, newest)) is not null;

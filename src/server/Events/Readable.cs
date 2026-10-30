@@ -16,10 +16,14 @@ namespace Tangent.Events;
 /// <see cref="Refresh"/> after it, and from the very next row where the change is itself in the log. Each ask is the bounded,
 /// lock-free read capability makes (<see cref="Capabilities.LoadEach"/>), for the Tangents the rows name and nothing
 /// else.</summary>
-public sealed class Readable(string? participantId)
+public sealed class Readable(string? participantId, TimeProvider? clock = null)
 {
     /// <summary>How long a stream holds what it read of a reader's capabilities before it reads them again.</summary>
     public static readonly TimeSpan Refresh = TimeSpan.FromSeconds(1);
+
+    /// <summary>The key, among the services, of the clock a page's reading measures <see cref="Refresh"/> by: the
+    /// system's (<see cref="LiveComposition"/>), or the one a proof stands in its place.</summary>
+    public const string Clock = "Tangent.Events.Readable.Clock";
 
     /// <summary>The most rows one read of the log for a reader takes: a poll's page, a stream's catch-up, where a reader
     /// begins.</summary>
@@ -40,7 +44,7 @@ public sealed class Readable(string? participantId)
     /// first forgetting everything when it is stale or a row changed what anyone may read.</summary>
     public async Task Prepare(IReadOnlyList<Event> rows, CancellationToken ct)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = (clock ?? TimeProvider.System).GetUtcNow();
         if (now - _read >= Refresh || rows.Any(Changes))
         {
             _tangents.Clear();

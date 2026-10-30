@@ -103,17 +103,18 @@ public static class Notifications
     /// most <see cref="CountLimit"/> and one more rows, newest first, and what capability reads for the Tangents they
     /// name; where they may view the moderators' Tangent, one read of at most as many reports past it; and, where they
     /// decide applications, one read of at most as many applications that wait past it. Only the rows that reach the
-    /// reader count: the count is a lower bound where they alone fill a read, and it reads through the newest of them, or
-    /// stays at <paramref name="since"/> where none is, so a read holding rows the reader may not see counts fewer than
-    /// may follow and says nothing of them.</summary>
+    /// reader count, each decided against one reading of what reaches them: the count is a lower bound where they alone
+    /// fill a read, and it reads through the newest of them, or stays at <paramref name="since"/> where none is, so a read
+    /// holding rows the reader may not see counts fewer than may follow and says nothing of them.</summary>
     public static async Task<Unseen> CountPast(string participantId, long since, string baseAddress, CancellationToken ct)
     {
         var rows = await Event.Query(e => e.TargetId == participantId && e.Seq > since,
             new QueryDefinition { Page = 1, PageSize = CountLimit + 1 }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
         var readable = new Readable(participantId);
-        await readable.Prepare(rows, ct);
+        var read = await Reports(readable, since, long.MaxValue, CountLimit + 1, ct);
+        await readable.Prepare([.. rows, .. read], ct);
         var notifications = rows.Where(row => For(row, participantId, readable)).ToList();
-        var reports = (await Reports(readable, since, long.MaxValue, CountLimit + 1, ct)).Where(row => For(row, participantId, readable)).ToList();
+        var reports = read.Where(row => For(row, participantId, readable)).ToList();
         var decides = await readable.Decides(ct);
         var waiting = decides ? await Applications.Waiting(since, long.MaxValue, CountLimit + 1, ct) : [];
         var newest = new[] { since, notifications.Count > 0 ? notifications[0].Seq : since, reports.Count > 0 ? reports[0].Seq : since,
@@ -126,20 +127,21 @@ public static class Notifications
     /// newest: one read of at most <see cref="ScanLimit"/> rows that target them, where they may view the moderators'
     /// Tangent one read of at most as many reports, and, where they decide applications, one read of at most as many
     /// applications that wait with the rows of their arrivals, newest first, keeping the notifications among them up to
-    /// <see cref="PageSize"/>. A full read stops where it reached, so the page passes nothing below the lowest row of one,
-    /// where the others may hold rows it has not read. The next page continues from the last row this one passed, so a
-    /// row the reader may not see is read once and never named, and a full read that held fewer notifications than a page
+    /// <see cref="PageSize"/>, every row decided against one reading of what reaches the reader, made once all of them
+    /// are read. A full read stops where it reached, so the page passes nothing below the lowest row of one, where the
+    /// others may hold rows it has not read. The next page continues from the last row this one passed, so a row the
+    /// reader may not see is read once and never named, and a full read that held fewer notifications than a page
     /// continues past it.</summary>
-    public static async Task<Page> Read(string participantId, long? before, CancellationToken ct)
+    public static async Task<Page> Read(string participantId, long? before, CancellationToken ct, TimeProvider? clock = null)
     {
         var bound = before ?? long.MaxValue;
         var rows = await Event.Query(e => e.TargetId == participantId && e.Seq < bound,
             new QueryDefinition { Page = 1, PageSize = ScanLimit }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
-        var readable = new Readable(participantId);
-        await readable.Prepare(rows, ct);
+        var readable = new Readable(participantId, clock);
         var reports = await Reports(readable, 0, bound, ScanLimit, ct);
         var waiting = await readable.Decides(ct) ? await Applications.Waiting(0, bound, ScanLimit, ct) : [];
         var arrivals = await Arrivals(waiting, ct);
+        await readable.Prepare([.. rows, .. reports], ct);
 
         var floor = new[]
         {
@@ -168,15 +170,13 @@ public static class Notifications
 
     /// <summary>At most <paramref name="limit"/> reports, newest first, whose sequence lies after <paramref name="after"/>
     /// and before <paramref name="before"/>: one range of <c>ix_event_reports</c>, read only where reports reach the
-    /// reader (<see cref="Readable.Reports"/>), and none otherwise.</summary>
+    /// reader (<see cref="Readable.Reports"/>), and none otherwise. Whether each reaches them is decided with the other
+    /// rows the read holds, once all of them are read.</summary>
     private static async Task<IReadOnlyList<Event>> Reports(Readable readable, long after, long before, int limit, CancellationToken ct)
-    {
-        if (!await readable.Reports(ct)) return [];
-        var reports = await Event.Query(e => e.Report == true && e.Seq > after && e.Seq < before,
-            new QueryDefinition { Page = 1, PageSize = limit }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
-        await readable.Prepare(reports, ct);
-        return reports;
-    }
+        => await readable.Reports(ct)
+            ? await Event.Query(e => e.Report == true && e.Seq > after && e.Seq < before,
+                new QueryDefinition { Page = 1, PageSize = limit }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct)
+            : [];
 
     /// <summary>The arrivals of the applications that wait, by the sequence each waits at, in one keyed read.</summary>
     private static async Task<IReadOnlyList<Event>> Arrivals(IReadOnlyList<Participant> waiting, CancellationToken ct)
