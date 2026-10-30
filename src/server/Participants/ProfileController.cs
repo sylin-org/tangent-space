@@ -66,7 +66,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var tangents = whole.Tangents.ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
         var page = await RecentPosts.Read(subject.Id, tangents.Keys.ToHashSet(StringComparer.Ordinal), whole.Others, cursor, ct);
         var roots = await Roots(page.Posts, ct);
-        var people = await Mentioned(page.Posts, ct);
+        var people = await Named(page.Posts, ct);
         var held = (await roles.ForPerson(subject.Id, ct)).Where(role => role.Key != Roles.Everyone).Select(role => role.Name)
             .Order(StringComparer.Ordinal).ToList();
         var person = await KoanPerson.Get(subject.Id, ct);
@@ -181,10 +181,10 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         return (await Post.Get(ids, ct)).OfType<Post>().ToDictionary(post => post.Id, StringComparer.Ordinal);
     }
 
-    /// <summary>The participants the Posts mention, as their openings read them, in one keyed read.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> Mentioned(IReadOnlyList<Post> posts, CancellationToken ct)
+    /// <summary>The participants the Posts mention and who else edited them, as their openings read them, in one keyed read.</summary>
+    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> Named(IReadOnlyList<Post> posts, CancellationToken ct)
     {
-        var ids = posts.SelectMany(post => post.MentionedIds).Distinct(StringComparer.Ordinal).ToList();
+        var ids = posts.SelectMany(post => post.MentionedIds).Concat(posts.Select(post => post.EditedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, TangentPage.Author>();
         return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
         {
@@ -207,7 +207,8 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             baseAddress + "/t/" + Uri.EscapeDataString(tangent.Id),
             post.ParentId is null ? PostWrites.TopicAddress(baseAddress, tangent.Id, slug) : PostWrites.Address(baseAddress, tangent.Id, slug, post.Id),
             TangentPage.Opening(post, people),
-            post.CreatedAt);
+            post.CreatedAt,
+            TangentPage.EditedOf(post, people));
     }
 
     /// <summary>The signed-in reader as the account menu shows them, signing out back to this profile, with how many of

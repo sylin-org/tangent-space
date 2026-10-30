@@ -55,6 +55,8 @@ public sealed record TopicPage(
     /// the Markdown as written, and <see cref="Mentions"/> are the participants it mentions as they are now, which the
     /// HTML renders as links reading their current handles. A removed Post
     /// is a tombstone that keeps its place, author and time, carries no body and says who removed it and when.
+    /// <see cref="Edited"/> says who other than its author last edited it and when, where someone did: the words are not
+    /// said to be the author's.
     /// <see cref="New"/> marks a Post a signed-in reader has not seen — past their checkpoint on the Topic, or every
     /// Post where they have none. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
     /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is where the reader
@@ -79,7 +81,8 @@ public sealed record TopicPage(
         string? Edit,
         string? TakeOnATangent = null,
         TopicPage.Taken? Taken = null,
-        Form? Report = null);
+        Form? Report = null,
+        TangentPage.Edited? Edited = null);
 
     /// <summary>A participant a body mentions: their DID, which the body's link names, their handle now, and their
     /// address.</summary>

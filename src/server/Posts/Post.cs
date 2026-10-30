@@ -141,6 +141,12 @@ public sealed class Post : Entity<Post>
 
     public DateTimeOffset? RemovedAt { get; set; }
 
+    /// <summary>Who other than the author last edited the Post, while the words are theirs; null otherwise. An edit by
+    /// the author clears it, and so does a removal.</summary>
+    public string? EditedBy { get; set; }
+
+    public DateTimeOffset? EditedAt { get; set; }
+
     /// <summary>A Topic's root, or a refusal: the Id is a TID, the title and body are within their limits, and the Tangent
     /// and author are named. The slug is the caller's, derived from the title and already made unique in the Tangent. A
     /// Topic taken on a tangent names its <paramref name="originId"/>, already known to be a Post its author may view, and
@@ -225,9 +231,10 @@ public sealed class Post : Entity<Post>
 
     /// <summary>Changes the body, and a root's title when one is sent, and raises <see cref="Version"/>, or a refusal: the
     /// Post is not removed, the body and title are within their limits, and a reply is sent no title. A root taken on a
-    /// tangent may keep no body of its author's own (<see cref="RootBody"/>); every other Post needs one. The pre-edit
-    /// snapshot is the caller's, taken before this.</summary>
-    public void Edit(PostBody body, string? title)
+    /// tangent may keep no body of its author's own (<see cref="RootBody"/>); every other Post needs one. An edit by
+    /// anyone but the author names them and when (<see cref="EditedBy"/>), and the author's own leaves the words theirs
+    /// again. The pre-edit snapshot is the caller's, taken before this.</summary>
+    public void Edit(PostBody body, string? title, string editorId, DateTimeOffset at)
     {
         if (Removed) throw new Refusal(PostRemoved);
         var text = ParentId is null ? RootBody(body, OriginId) : body.Text;
@@ -242,13 +249,16 @@ public sealed class Post : Entity<Post>
         Body = text;
         MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [];
         SentHash = body.SentHash;
+        var someoneElse = editorId != AuthorId;
+        EditedBy = someoneElse ? editorId : null;
+        EditedAt = someoneElse ? at : null;
         Version = checked(Version + 1);
     }
 
     /// <summary>Makes this Post a tombstone, or a refusal when it already is one or no one is named: it is removed, by
-    /// whom and when, and its body is cleared from the row. It keeps its place, its author and its version, and a
-    /// root keeps its title, slug and counters, so a Topic whose root is removed keeps its replies. The snapshot that
-    /// holds the body is the caller's, taken before this.</summary>
+    /// whom and when, and its body, and who last edited it, are cleared from the row. It keeps its place, its author and
+    /// its version, and a root keeps its title, slug and counters, so a Topic whose root is removed keeps its replies. The
+    /// snapshot that holds the body is the caller's, taken before this.</summary>
     public void Remove(string removedBy, DateTimeOffset at)
     {
         if (Removed) throw new Refusal(PostRemoved);
@@ -259,6 +269,8 @@ public sealed class Post : Entity<Post>
         Body = "";
         MentionedIds = [];
         SentHash = "";
+        EditedBy = null;
+        EditedAt = null;
     }
 
     /// <summary>Refuses a body that is empty, holds a NUL, was sent with more than <see cref="BodyLimit"/> bytes or would

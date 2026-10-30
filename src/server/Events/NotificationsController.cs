@@ -98,7 +98,7 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
         var reported = await ReportedBy(events, posts, reader?.Id, ct);
         var people = await People(baseAddress,
             events.Select(e => e.ActorId).Concat(events.Where(e => e.PostId is not null)
-                .SelectMany(e => posts.TryGetValue(e.PostId!, out var post) ? post.MentionedIds : []))
+                .SelectMany(e => posts.TryGetValue(e.PostId!, out var post) ? post.MentionedIds.Append(post.EditedBy) : []))
                 .Concat(reported.Values.Select(origin => origin.AuthorId)),
             ct);
 
@@ -124,20 +124,27 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
                         Tangent = tangents.TryGetValue(reportRoot.TangentId, out var moderators) ? moderators.Name : reportRoot.TangentId,
                         Line = report.Removed ? "" : TangentPage.Opening(report, people),
                         Removed = report.Removed,
+                        Edited = TangentPage.EditedOf(report, people),
                         Reported = reportRoot.OriginId is { } originId && reported.TryGetValue(originId, out var origin) ? Person(people, origin.AuthorId) : null
                     };
-                case EventKind.PostCreated or EventKind.Mention when posts.TryGetValue(e.PostId ?? "", out var post)
-                                                                      && posts.TryGetValue(e.TopicId ?? "", out var root):
+                case EventKind.PostCreated or EventKind.Mention or EventKind.PostEdited or EventKind.PostRemoved
+                    when posts.TryGetValue(e.PostId ?? "", out var post) && posts.TryGetValue(e.TopicId ?? "", out var root):
                     var taken = e.Kind == EventKind.PostCreated && post is { ParentId: null, OriginId: not null };
                     var topic = PostWrites.TopicAddress(baseAddress, root.TangentId, root.Slug ?? root.Id);
-                    return new NotificationsPage.Entry(e.Seq,
-                        e.Kind == EventKind.Mention ? NotificationsPage.Kinds.Mention : taken ? NotificationsPage.Kinds.Taken : NotificationsPage.Kinds.Reply,
-                        isNew, e.At, who, post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id))
+                    var kind = e.Kind switch
+                    {
+                        EventKind.Mention => NotificationsPage.Kinds.Mention,
+                        EventKind.PostEdited => NotificationsPage.Kinds.Edited,
+                        EventKind.PostRemoved => NotificationsPage.Kinds.Removed,
+                        _ => taken ? NotificationsPage.Kinds.Taken : NotificationsPage.Kinds.Reply
+                    };
+                    return new NotificationsPage.Entry(e.Seq, kind, isNew, e.At, who, post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id))
                     {
                         Topic = root.Title ?? "",
                         Tangent = tangents.TryGetValue(root.TangentId, out var tangent) ? tangent.Name : root.TangentId,
                         Line = post.Removed ? "" : TangentPage.Opening(post, people),
-                        Removed = post.Removed
+                        Removed = post.Removed,
+                        Edited = TangentPage.EditedOf(post, people)
                     };
                 case EventKind.StandingChanged when Readable.Application(e):
                     // Someone applied, and waits for whoever decides: the reader, among them.

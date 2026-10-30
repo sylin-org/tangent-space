@@ -38,7 +38,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     /// <summary>The segment under a Post's address where it is edited, with its inline remove.</summary>
     public const string EditSegment = "edit";
 
-    /// <summary>The most participants the page resolves: the window's authors first, then who removed its Posts.</summary>
+    /// <summary>The most participants the page resolves: the window's authors first, then who removed or else edited its Posts.</summary>
     public const int PeopleLimit = 32;
 
     [HttpGet("/t/{tangent}/{topic}")]
@@ -185,7 +185,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             takeOn && !post.Removed ? address + "/" + TakeOnATangentController.Segment : null,
             taken.GetValueOrDefault(post.Id),
             token is not null && !post.Removed && post.AuthorId != reader?.Id && post.TangentId != rows.Space.ModeratorsTangentId
-                ? PostWrites.ReportForm(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow), token) : null);
+                ? PostWrites.ReportForm(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow), token) : null,
+            TangentPage.EditedOf(post, people));
     }
 
     /// <summary>The Post a reply from this page answers: the reply the page's address named, where it named one by
@@ -219,13 +220,14 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
         => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
 
-    /// <summary>The authors of these Posts, then who removed any of them, at most <see cref="PeopleLimit"/>, in one keyed
+    /// <summary>The authors of these Posts, then who removed or else edited any of them, at most <see cref="PeopleLimit"/>, in one keyed
     /// read, by participant Id, each with their profile's address.</summary>
     private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> posts, string baseAddress,
         CancellationToken ct)
     {
         var ids = posts.Select(post => post.AuthorId)
             .Concat(posts.Where(post => post.Removed).Select(post => post.RemovedBy).OfType<string>())
+            .Concat(posts.Select(post => post.EditedBy).OfType<string>())
             .Distinct(StringComparer.Ordinal).Take(PeopleLimit).ToList();
         var found = await Participant.Get(ids, ct);
         return found.OfType<Participant>().ToDictionary(row => row.Id, row =>

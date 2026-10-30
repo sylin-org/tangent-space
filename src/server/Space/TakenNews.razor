@@ -14,7 +14,7 @@
                     <span class="topic-row-dot"><span class="new-dot" role="img" aria-label="Unread"></span></span>
                     <span class="topic-row-body">
                         <span class="topic-row-title">@post.Topic</span>
-                        <span class="topic-row-opening"><span class="topic-row-author">@post.Who.Name</span>@(post.Line.Length > 0 ? ": " + post.Line : "")</span>
+                        <span class="topic-row-opening"><span class="topic-row-author">@post.Who.Name</span>@TopicRow.Edited(post.Edited)@(post.Line.Length > 0 ? ": " + post.Line : "")</span>
                     </span>
                     <span class="topic-row-people">@TopicRow.Mark(post.Who, "face")</span>
                     <span class="topic-row-replies"><span class="topic-row-none">@post.Tangent</span></span>

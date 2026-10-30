@@ -118,7 +118,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         TangentPage.Latest? reply = null;
         if (root.LatestReplyId is { } replyId && latest.TryGetValue(replyId, out var post))
             reply = new TangentPage.Latest(post.Id, Person(people, post.AuthorId), TangentPage.Opening(post, people), post.CreatedAt,
-                signedIn && (!known || post.Sequence > last));
+                signedIn && (!known || post.Sequence > last), TangentPage.EditedOf(post, people));
         return new TangentPage.Topic(
             root.Id,
             root.Slug ?? root.Id,
@@ -136,7 +136,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             reply,
             root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Select(id => Person(people, id)).ToList(),
             unseen > 0,
-            unseen);
+            unseen,
+            TangentPage.EditedOf(root, people));
     }
 
     private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
@@ -151,13 +152,14 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     }
 
     /// <summary>Everyone the page shows (the Topics' authors, their recent authors, the authors of their latest
-    /// replies, and whom those openings and replies mention) in one keyed read, by participant Id.</summary>
+    /// replies, whom those openings and replies mention, and who else edited them) in one keyed read, by participant Id.</summary>
     private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> topics, IEnumerable<Post> latest,
         CancellationToken ct)
     {
         var ids = topics.SelectMany(topic => topic.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(topic.AuthorId))
             .Concat(latest.Select(post => post.AuthorId))
-            .Concat(topics.Concat(latest).SelectMany(post => post.MentionedIds)).Distinct(StringComparer.Ordinal).ToList();
+            .Concat(topics.Concat(latest).SelectMany(post => post.MentionedIds))
+            .Concat(topics.Concat(latest).Select(post => post.EditedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, TangentPage.Author>();
         var rows = await Participant.Get(ids, ct);
         return rows.OfType<Participant>().ToDictionary(row => row.Id, row =>

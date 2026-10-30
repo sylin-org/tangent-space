@@ -248,6 +248,17 @@
   font-style: italic;
 }
 
+.post-edited {
+  margin: 6px 0 0;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+}
+
+.edited-by {
+  color: var(--ts-text-3);
+  font-weight: 400;
+}
+
 .post-actions {
   margin: 6px 0 0 -8px;
   display: flex;

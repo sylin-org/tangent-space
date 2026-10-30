@@ -68,7 +68,9 @@ public sealed record Door(
     /// <see cref="CaughtUp"/> is the form that moves the place checkpoint to <see cref="Through"/>, present while there
     /// is news. <see cref="Admitted"/> is who admitted the reader and when, and <see cref="Lifted"/> who lifted their
     /// timeout or ban and when, where that happened since their checkpoint and they stand admitted still;
-    /// <see cref="Roles"/> are the roles someone gave them or took from them since then, the newest change of each.
+    /// <see cref="Roles"/> are the roles someone gave them or took from them since then, the newest change of each;
+    /// <see cref="Edited"/> holds their Posts someone else edited since then and still stand, each once, and
+    /// <see cref="Removed"/> those someone else removed, each with who did it.
     /// <see cref="Notifications"/> is how many of the reader's notifications they have not seen and where they are,
     /// present while there are some.</summary>
     public sealed record Since(
@@ -83,7 +85,9 @@ public sealed record Door(
         Group? Taken = null,
         Decision? Admitted = null,
         Decision? Lifted = null,
-        IReadOnlyList<RoleChange>? Roles = null)
+        IReadOnlyList<RoleChange>? Roles = null,
+        Group? Edited = null,
+        Group? Removed = null)
     {
         /// <summary>How many of the reader's notifications they have not seen and where they are, present while there are
         /// some.</summary>
@@ -91,7 +95,7 @@ public sealed record Door(
 
         /// <summary>Whether nothing is new to the reader.</summary>
         public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
-                             && Admitted is null && Lifted is null && (Roles?.Count ?? 0) == 0;
+                             && Admitted is null && Lifted is null && (Roles?.Count ?? 0) == 0 && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0;
     }
 
     /// <summary>A decision about the reader's standing: who made it, and when; for a lift, the standing it lifted
@@ -106,8 +110,10 @@ public sealed record Door(
     /// and the newest of them, a few at most.</summary>
     public sealed record Group(int Count, bool AtLeast, IReadOnlyList<NewPost> Posts);
 
-    /// <summary>One new Post: who wrote it, the Topic and Tangent it is in, its address, its first words and when.</summary>
-    public sealed record NewPost(string PostId, TangentPage.Author Who, string Topic, string Tangent, string Address, string Line, DateTimeOffset At);
+    /// <summary>One new Post: who wrote it, or who edited or removed it, the Topic and Tangent it is in, its address, its
+    /// first words, when, and who other than its author last edited it, where someone did.</summary>
+    public sealed record NewPost(string PostId, TangentPage.Author Who, string Topic, string Tangent, string Address, string Line, DateTimeOffset At,
+        TangentPage.Edited? Edited = null);
 
     /// <summary>A Topic or a Tangent the reader watches that holds new Posts: its scope (<c>topic</c> or <c>tangent</c>),
     /// its name, the Tangent it is in (itself, for a Tangent), its address, how many of its Posts are new, and whether

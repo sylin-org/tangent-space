@@ -30,7 +30,8 @@ public sealed record TakeOnATangentPage(
     string? BodyFailure = null)
 {
     /// <summary>The Post taken on a tangent: its address, who wrote it and when, its words as plain text cut short —
-    /// none on a tombstone, which is <see cref="Removed"/> — and the Topic and Tangent it is in.</summary>
+    /// none on a tombstone, which is <see cref="Removed"/> — the Topic and Tangent it is in, and who other than its author
+    /// last edited it, where someone did.</summary>
     public sealed record Quoted(
         string Id,
         string Address,
@@ -41,7 +42,8 @@ public sealed record TakeOnATangentPage(
         string Topic,
         string TopicAddress,
         string Tangent,
-        string TangentAddress);
+        string TangentAddress,
+        TangentPage.Edited? Edited = null);
 
     /// <summary>The address of the form with the next page of Tangents to choose from; null on the last.</summary>
     public string? More { get; init; }

@@ -57,6 +57,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Topic window: bounded, lock-free, cursors are sequence numbers, anchor first | topic | `ConversationService.Window`, `WindowPlanner`, `History` (harvest) | — | M | done |
 | Post, reply, edit, remove through the writer: TID ids, pre-edit snapshots in the audit partition, visible tombstones | topic | `PostChanges` snapshot chain (harvest) | audit partition | M | done |
+| A moderator's hand is visible: a Post someone other than its author edited says who and when wherever it or its first words are read, as a page and as JSON, until the author's own edit makes the words theirs again; the author is told of someone else's edit or removal in their notifications and on their door, with who did it; editing or removing your own Post tells no one | topic, tangent, door, profile, notifications, edit, report, take-this-on-a-tangent | new | — | S | done |
 | Markdown body, sanitized HTML, mentions as identity-bearing links resolved at render | topic | `PostMarkup` (harvest) | — | S | done |
 | The composer island: drafts in `localStorage` by scope; an uncertain submit reconciles by `GET` of the minted Id; never auto-posts | topic | `composables/conversation.ts` intents (harvest) | — | S | done |
 | Live: the event stream, one per page, fragment patch; the door as the poll | topic | `activity/transport.ts` framing (harvest) | `Sylin.Koan.Web.Sse`, `Sylin.Koan.Communication` | M | done |

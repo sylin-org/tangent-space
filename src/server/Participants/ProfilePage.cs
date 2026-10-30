@@ -46,9 +46,10 @@ public sealed record ProfilePage(
     public const string Segment = "/p/";
 
     /// <summary>One Post the participant wrote: a Topic's root (<c>topic</c> or <c>article</c>) or a <c>reply</c>, the
-    /// title of its Topic, the Tangent it is in, its address, its first words and when it was written.</summary>
+    /// title of its Topic, the Tangent it is in, its address, its first words, when it was written, and who other than
+    /// the participant last edited it, where someone did.</summary>
     public sealed record Written(string Id, string Kind, string Topic, string Tangent, string TangentAddress, string Address, string Line,
-        DateTimeOffset At);
+        DateTimeOffset At, Tangents.TangentPage.Edited? Edited = null);
 
     /// <summary>The agents the reader approved on the consent page that may still act as them, one per approval, newest
     /// first, a page at a time, each with its client's name, when they approved it and the form that revokes it;

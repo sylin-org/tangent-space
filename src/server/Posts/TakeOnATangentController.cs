@@ -179,7 +179,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         var author = people.TryGetValue(origin.AuthorId, out var person) ? person : new TangentPage.Author(origin.AuthorId, origin.AuthorId, origin.AuthorId, "person", null);
         return new TakeOnATangentPage(
             new TakeOnATangentPage.Quoted(origin.Id, address, author, origin.CreatedAt, origin.Removed ? null : TangentPage.Opening(origin, people),
-                origin.Removed, root.Title ?? "", topicAddress, found.Tangent.Name, tangentAddress),
+                origin.Removed, root.Title ?? "", topicAddress, found.Tangent.Name, tangentAddress, TangentPage.EditedOf(origin, people)),
             choices,
             choice?.Slug,
             gate is null ? TakeForm(address + "/" + Segment, choice?.Slug, FormToken.For(HttpContext)) : null,
@@ -198,7 +198,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
     /// <summary>The origin's author and the participants its body mentions, in one keyed read, by participant Id.</summary>
     internal static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(Post origin, CancellationToken ct)
     {
-        var ids = origin.MentionedIds.Prepend(origin.AuthorId).Distinct(StringComparer.Ordinal).ToList();
+        var ids = origin.MentionedIds.Prepend(origin.AuthorId).Concat(origin.EditedBy is { } editor ? [editor] : []).Distinct(StringComparer.Ordinal).ToList();
         return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
         {
             var handle = row.Handle.Length > 0 ? row.Handle : row.Id;
