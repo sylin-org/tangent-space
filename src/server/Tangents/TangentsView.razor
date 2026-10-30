@@ -1,0 +1,63 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* Every Tangent the reader may view, in one panel: each its name, linked to it, its kind and how many Topics were
+   started there, in the Tangents' order; where a new one is created, for whoever may; and the Tangents after and the
+   first ones a link away. None reads as one sentence. *@
+<div class="layout">
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="tangents-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">In <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="tangents-heading" class="sign-in-title">Tangents</h1>
+                @if (Model.Tangents.Count == 0)
+                {
+                    <p class="post-form-note">@(Model.Continued ? "No more Tangents." : "No Tangent is open to you here.")</p>
+                }
+                else
+                {
+                    <ul class="door-offers tangents-all">
+                        @foreach (var tangent in Model.Tangents)
+                        {
+                            <li class="door-offer" @key="tangent.Slug">
+                                <p class="door-offer-line">
+                                    <a href="@tangent.Address">@tangent.Name</a>
+                                    <span class="topic-row-none">· @Detail(tangent)</span>
+                                </p>
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (Model.NewTangent is { } created)
+                {
+                    <a class="rail-new" href="@created">New Tangent</a>
+                }
+                @if (Model.Continued || Model.Next is not null)
+                {
+                    <nav class="topic-pages" aria-label="More Tangents">
+                        @if (Model.Continued)
+                        {
+                            <a href="@Model.First">First Tangents</a>
+                        }
+                        @if (Model.Next is { } next)
+                        {
+                            <a class="topic-pages-next" href="@next">More Tangents →</a>
+                        }
+                    </nav>
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TangentsPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and its Tangents as crumbs, and who reads, or where a
+    /// visitor signs in.</summary>
+    public static Frame Frame(TangentsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Tangents")], page.Who, page.SignIn);
+
+    private static string Detail(TangentPage.Listed tangent) => tangent.Kind == PostWrites.Word(PostKind.Article)
+        ? "Articles · " + TopicRow.Count(tangent.TopicCount, "article", "articles", "no articles yet")
+        : "Discussions · " + TopicRow.Count(tangent.TopicCount, "topic", "topics", "no topics yet");
+}

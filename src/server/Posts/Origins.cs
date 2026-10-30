@@ -14,8 +14,8 @@ namespace Tangent.Posts;
 /// takes no lock; a Tangent's row is read before its overwrites.</summary>
 public static class Origins
 {
-    /// <summary>The most Tangents read, by order, for the Tangents a reader may start a Topic in.</summary>
-    public const int TangentLimit = TangentPageController.SwitcherLimit;
+    /// <summary>The most Tangents one page of destinations lists.</summary>
+    public const int DestinationLimit = TangentPageController.SwitcherLimit;
 
     /// <summary>The most Topics taken from one Post that a page shows; past it, the page says "at least".</summary>
     public const int TakenLimit = 5;
@@ -24,16 +24,13 @@ public static class Origins
     /// few in Tangents the reader may not view leave room for those they may.</summary>
     public const int TakenRead = 12;
 
-    /// <summary>The Tangents among the first <see cref="TangentLimit"/> by order where the reader holds
-    /// <see cref="Bit.Topic"/>, in order: one read of the Tangents and one of their overwrites from Koan's cache. None for a
-    /// visitor, who starts a Topic nowhere.</summary>
-    public static async Task<IReadOnlyList<Tangents.Tangent>> Destinations(string? personId, CancellationToken ct)
+    /// <summary>A page of the Tangents where the reader holds <see cref="Bit.Topic"/>, in order, at most
+    /// <paramref name="take"/>, after <paramref name="after"/> or from the first (<see cref="ViewableTangents"/>). None for
+    /// a visitor, who starts a Topic nowhere.</summary>
+    public static async Task<ViewableTangents.Page> Destinations(string? personId, ViewableTangents.Cursor? after, int take, CancellationToken ct)
     {
-        if (personId is null) return [];
-        var rows = await Tangents.Tangent.All(new QueryDefinition { Page = 1, PageSize = TangentLimit }
-            .WithSort<Tangents.Tangent>(sort => sort.OrderBy(tangent => tangent.Order).ThenBy(tangent => tangent.Id)), ct);
-        var each = await Capabilities.LoadEach(personId, rows.Select(row => row.Id).ToList(), ct);
-        return rows.Where(row => each[row.Id].Holds(Bit.Topic)).ToList();
+        if (personId is null) return new ViewableTangents.Page([], new Dictionary<string, Capabilities>(), null);
+        return await ViewableTangents.Read(personId, capabilities => capabilities.Holds(Bit.Topic), after, take, ct);
     }
 
     /// <summary>Where <paramref name="root"/> was taken on a tangent from, as the reader may know it; null for a Topic

@@ -108,7 +108,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var topicCan = rows.For(root);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + (anchor is null ? "" : "/" + anchor.Id));
         var space = rows.Space;
-        var takeOn = reader is not null && (place.Holds(Bit.Topic) || (await Origins.Destinations(personId, ct)).Count > 0);
+        var takeOn = reader is not null && (place.Holds(Bit.Topic) || (await Origins.Destinations(personId, null, 1, ct)).Tangents.Count > 0);
         // A signed-in reader's page carries their forms with a fresh antiforgery token, so it is never stored or
         // revalidated. The page shows the root and the window's replies through its last, the root alone when it holds
         // none. The seen form is offered only for a window that continues from what the reader has seen — its first

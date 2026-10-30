@@ -1,3 +1,4 @@
+using System.Globalization;
 using Koan.Data.Abstractions;
 using Koan.Identity.Roles;
 using Koan.Web.Auth.Infrastructure;
@@ -20,15 +21,18 @@ namespace Tangent.Participants;
 /// the formatter as HTML, a fragment or JSON. A reader without <see cref="Bit.View"/> on the place receives its gate, the
 /// same for every handle, held or not; a handle no participant holds now answers as a missing resource. The address
 /// takes a handle, matched as the participant's row keeps it, or a participant's DID. Every read is bounded and keyed:
-/// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; one
-/// scan of their Posts (<see cref="RecentPosts"/>) and the Tangents those are in, by Id, with what the reader holds on
-/// each from Koan's cache, which keeps the page to the Tangents the reader may view; the roots of the replies among them;
-/// the participants those Posts mention; and, on the reader's own profile in their own session, their approvals. A
-/// revoke posts back here and is the reader's alone.</summary>
+/// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; the
+/// Tangents the reader may view (<see cref="ViewableTangents.All"/>), every Tangent judged from Koan's compiled state, so
+/// as many as the place holds; one page of their Posts in those (<see cref="RecentPosts"/>); the roots of the replies
+/// among them; the participants those Posts mention; and, on the reader's own profile in their own session, a page of
+/// their approvals. A revoke posts back here and is the reader's alone.</summary>
 public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles, IOptions<AuthServerOptions> server) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page of Posts to continue from.</summary>
     public const string Before = "before";
+
+    /// <summary>The query parameter that carries the page of the reader's own approvals, from one.</summary>
+    public const string AgentsPage = "agents";
 
     /// <summary>The segment under the reader's own profile where an approval is revoked: <c>…/delegates/{id}/revoke</c>.</summary>
     public const string DelegatesSegment = "delegates";
@@ -37,7 +41,8 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
 
     [HttpGet(ProfilePage.Segment + "{handle}")]
     [HttpHead(ProfilePage.Segment + "{handle}")]
-    public async Task<IActionResult> Get(string handle, [FromQuery(Name = Before)] string? before, CancellationToken ct)
+    public async Task<IActionResult> Get(string handle, [FromQuery(Name = Before)] string? before, [FromQuery(Name = AgentsPage)] string? agents,
+        CancellationToken ct)
     {
         var personId = PostWrites.PersonId(User);
         var rows = await Capabilities.LoadRows(personId, null, ct);
@@ -49,10 +54,15 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         if (before is not null && (cursor = RecentPosts.Cursor.Parse(before)) is null)
             return new Problem(StatusCodes.Status400BadRequest, "Not a page of these posts",
                 $"The {Before} parameter is the cursor a page of this profile names as its older.").ToResult();
+        var agentsPage = 1;
+        if (agents is not null && (!int.TryParse(agents, NumberStyles.None, CultureInfo.InvariantCulture, out agentsPage)
+                                   || agentsPage is < 1 or > Approved.LastPage))
+            return new Problem(StatusCodes.Status400BadRequest, "Not a page of these agents",
+                $"The {AgentsPage} parameter is the number of a page of the agents acting as you, from 1.").ToResult();
 
-        IReadOnlyDictionary<string, Tangents.Tangent> tangents = new Dictionary<string, Tangents.Tangent>();
-        var page = await RecentPosts.Read(subject.Id,
-            async ids => (tangents = await Viewable(personId, ids, ct)).Keys.ToHashSet(StringComparer.Ordinal), cursor, ct);
+        var whole = await ViewableTangents.All(personId, ct);
+        var tangents = whole.Tangents.ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
+        var page = await RecentPosts.Read(subject.Id, tangents.Keys, whole.Others, cursor, ct);
         var roots = await Roots(page.Posts, ct);
         var people = await Mentioned(page.Posts, ct);
         var held = (await roles.ForPerson(subject.Id, ct)).Where(role => role.Key != Roles.Everyone).Select(role => role.Name)
@@ -67,12 +77,14 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         ProfilePage.Approvals? approvals = null;
         if (own)
         {
-            var grants = await Approved.Of(reader!.Id, ct);
+            var (grants, more) = await Approved.Of(reader!.Id, agentsPage, ct);
             approvals = new ProfilePage.Approvals(
                 grants.Select(grant => new ProfilePage.Approval(grant.Id, Approved.Client(grant), grant.ClientId != DelegateClient.Id, grant.IssuedAt,
                     address + "/" + DelegatesSegment + "/" + Uri.EscapeDataString(grant.Id) + "/" + RevokeSegment)).ToList(),
                 server.Value.AccessTokenLifetime,
-                FormToken.For(HttpContext));
+                FormToken.For(HttpContext),
+                more ? address + "?" + AgentsPage + "=" + (agentsPage + 1).ToString(CultureInfo.InvariantCulture) : null,
+                agentsPage > 1 ? address : null);
             // The reader's own profile carries the revoke forms with a fresh antiforgery token, so it is never stored or
             // revalidated; anyone else's, read signed in, is theirs alone to cache.
             Response.Headers.CacheControl = "no-cache, no-store";
@@ -96,7 +108,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             address,
             place.Can,
             place.Gate(Bit.Post),
-            page.Posts.Select(post => Written(post, roots, tangents, people, baseAddress)).ToList(),
+            page.Posts.Where(post => tangents.ContainsKey(post.TangentId)).Select(post => Written(post, roots, tangents, people, baseAddress)).ToList(),
             page.Next is { } next ? address + "?" + Before + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             approvals,
@@ -144,16 +156,6 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var lower = handle.ToLowerInvariant();
         if (rows.Count == 0 && lower != handle) rows = await Participant.Query(participant => participant.Handle == lower, query, ct);
         return rows.FirstOrDefault();
-    }
-
-    /// <summary>The Tangents among <paramref name="ids"/> that the reader may view, by slug: one keyed read of their rows,
-    /// and what the reader holds on each from Koan's cache. An id no Tangent has is not among them.</summary>
-    private static async Task<IReadOnlyDictionary<string, Tangents.Tangent>> Viewable(string? personId, IReadOnlyList<string> ids,
-        CancellationToken ct)
-    {
-        var found = (await Tangents.Tangent.Get(ids, ct)).OfType<Tangents.Tangent>().ToList();
-        var each = await Capabilities.LoadEach(personId, found.Select(tangent => tangent.Id).ToList(), ct);
-        return found.Where(tangent => each[tangent.Id].Exists).ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
     }
 
     /// <summary>The roots of the replies among the Posts, by Id, in one keyed read.</summary>

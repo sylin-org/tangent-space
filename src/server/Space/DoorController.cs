@@ -39,8 +39,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
     /// <summary>The form field that carries the sequence the door was read through.</summary>
     public const string Through = "through";
 
-    /// <summary>The most Tangents the door lists, by order. It reads one more, and says there are more only when that
-    /// one is among the Tangents the reader may view.</summary>
+    /// <summary>The most Tangents the door lists: the first page of those the reader may view
+    /// (<see cref="ViewableTangents"/>), with the moderators' Tangent after them for whoever may view it, and, where more
+    /// follow, a link to all of them (<see cref="TangentsController"/>).</summary>
     public const int TangentLimit = TangentPageController.SwitcherLimit;
 
     public const int FeaturedLimit = 3;
@@ -67,14 +68,19 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var window = await LogWindow.Newest(ct);
         IReadOnlyList<Event> targeted = reader is null ? [] : await LogWindow.Targeting(reader.Id, since, ct);
 
-        var listed = await Tangents.Tangent.All(new QueryDefinition { Page = 1, PageSize = TangentLimit + 1 }
-            .WithSort<Tangents.Tangent>(sort => sort.OrderBy(tangent => tangent.Order).ThenBy(tangent => tangent.Id)), ct);
-        var tangentIds = listed.Select(tangent => tangent.Id)
-            .Concat(window.Concat(targeted).Select(e => e.TangentId).OfType<string>())
-            .Distinct(StringComparer.Ordinal).ToList();
-        var each = await Capabilities.LoadEach(personId, tangentIds, ct);
+        var page = await ViewableTangents.Read(personId, ViewableTangents.Views, null, TangentLimit, ct);
+        var tangentIds = window.Concat(targeted).Select(e => e.TangentId).OfType<string>()
+            .Concat(space.ModeratorsTangentId is { } moderators ? [moderators] : [])
+            .Distinct(StringComparer.Ordinal).Where(id => !page.Each.ContainsKey(id)).ToList();
+        var each = new Dictionary<string, Capabilities>(page.Each, StringComparer.Ordinal);
+        foreach (var (id, on) in await Capabilities.LoadEach(personId, tangentIds, ct)) each[id] = on;
         bool Viewable(string? tangentId) => tangentId is not null && each.TryGetValue(tangentId, out var on) && on.Exists;
-        var tangents = await BySlug(listed, tangentIds.Where(Viewable).ToList(), ct);
+        var tangents = await BySlug(page.Tangents, tangentIds.Where(Viewable).ToList(), ct);
+        // The moderators' Tangent comes after every other, so past the first page of a long list; whoever may view it
+        // finds it on the door whatever the place holds.
+        var listed = space.ModeratorsTangentId is { } kept && page.Tangents.All(tangent => tangent.Id != kept) && tangents.TryGetValue(kept, out var reports)
+            ? [.. page.Tangents, reports]
+            : page.Tangents;
 
         // The events that speak of Posts in a Tangent the reader may view; every other one is absent here.
         var concerning = window.Concat(targeted)
@@ -160,7 +166,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;
         if (offered is not null) Response.Headers.CacheControl = "no-cache, no-store";
 
-        var viewable = listed.Where(tangent => Viewable(tangent.Id)).ToList();
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
         return Ok(new Door(
             space.Name,
@@ -168,11 +173,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             space.ProprietorId is { } proprietor ? Person(people, proprietor) : null,
             place.Can,
             news,
-            viewable.Take(TangentLimit)
+            listed
                 .Select(tangent => new Door.Listed(tangent.Id, tangent.Name, Word(tangent.DefaultKind), Address(tangent.Id), tangent.TopicCount,
                     newIn?.GetValueOrDefault(tangent.Id) ?? 0))
                 .ToList(),
-            viewable.Count > TangentLimit,
+            page.Next is not null,
             featured.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             alive.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             new Door.Crowd(writers.Count, full, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
@@ -186,6 +191,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         {
             Description = space.Description,
             Offers = offered,
+            AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
             Gate = place.Gate(Bit.Post)
         });
     }

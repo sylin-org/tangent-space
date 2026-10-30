@@ -1,6 +1,3 @@
-using Koan.Data.Abstractions;
-using Koan.Data.Abstractions.Filtering;
-using Koan.Data.Core.Sorting;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -23,9 +20,6 @@ namespace Tangent.Tangents;
 public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
-
-    /// <summary>The most Tangents on either side the page reads to name the nearest one the reader may view.</summary>
-    public const int NeighbourRead = TangentPageController.SwitcherLimit;
 
     [HttpGet(Route)]
     public async Task<IActionResult> Get(string tangent, CancellationToken ct)
@@ -155,28 +149,20 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
     }
 
     /// <summary>The nearest Tangent before or after <paramref name="tangent"/> in the Tangents' order that the reader may
-    /// view, among the <see cref="NeighbourRead"/> nearest, the moderators' Tangent, which comes after every other, aside;
-    /// null where none is. One bounded read, and what the reader holds on each from Koan's cache.</summary>
+    /// view, the moderators' Tangent, which comes after every other, aside; null where none is. The Tangents that way are
+    /// read a page at a time (<see cref="Tangent.InOrder"/>), each judged from Koan's cache, until one is found.</summary>
     private static async Task<Tangent?> Neighbour(string? personId, Tangent tangent, bool earlier, CancellationToken ct)
     {
-        var order = FieldPath.Of(nameof(Tangent.Order));
-        var id = FieldPath.Of(nameof(Tangent.Id));
-        var beyond = earlier ? FilterOperator.Lt : FilterOperator.Gt;
-        var query = new QueryDefinition
+        (int Order, string Id)? from = (tangent.Order, tangent.Id);
+        while (true)
         {
-            Filter = Filter.Any(
-                Filter.On(order, beyond, FilterValue.Of(tangent.Order)),
-                Filter.All(Filter.On(order, FilterOperator.Eq, FilterValue.Of(tangent.Order)), Filter.On(id, beyond, FilterValue.Of(tangent.Id)))),
-            Page = 1,
-            PageSize = NeighbourRead
-        }.WithSort<Tangent>(sort =>
-        {
-            if (earlier) sort.OrderByDescending(row => row.Order).ThenByDescending(row => row.Id);
-            else sort.OrderBy(row => row.Order).ThenBy(row => row.Id);
-        });
-        var rows = await Tangent.Query(row => row.Order < ModeratorsTangent.Order, query, ct);
-        var each = await Capabilities.LoadEach(personId, rows.Select(row => row.Id).ToList(), ct);
-        return rows.FirstOrDefault(row => each[row.Id].Exists);
+            var rows = await Tangent.InOrder(from, earlier, aside: null, ViewableTangents.ReadSize, ct);
+            var candidates = rows.Where(row => row.Order < ModeratorsTangent.Order).ToList();
+            var each = await Capabilities.LoadEach(personId, candidates.Select(row => row.Id).ToList(), ct);
+            if (candidates.FirstOrDefault(row => each[row.Id].Exists) is { } found) return found;
+            if (rows.Count < ViewableTangents.ReadSize) return null;
+            from = (rows[^1].Order, rows[^1].Id);
+        }
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

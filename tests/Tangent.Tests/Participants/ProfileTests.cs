@@ -174,7 +174,7 @@ public sealed class ProfileTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
         // Koan keeps grants that expired; more of them than the profile reads, stored before the live one, leave it listed.
-        for (var index = 0; index < Approved.Limit + 10; index++)
+        for (var index = 0; index < Approved.PageSize + 10; index++)
             await new AgentGrant
             {
                 Subject = Ada, Capability = "mcp:grant:expired:" + index, Resource = BaseUrl, ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1),
@@ -269,11 +269,10 @@ public sealed class ProfileTests
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
     }
 
-    /// <summary>A page reads one scan of the participant's Posts: where more of them lie in Tangents the reader may not
-    /// view than one scan holds, the page holds fewer than its size and continues past them to the Posts the reader may
-    /// view, none of the others shown.</summary>
+    /// <summary>A page reads only the Tangents the reader may view: however many Posts lie in the others, a page is
+    /// full of those the reader may view, and neither its length nor its cursor says anything of the rest.</summary>
     [Fact]
-    public async Task Posts_past_more_than_a_scan_the_reader_may_not_view_are_reached_on_the_next_page()
+    public async Task Posts_in_a_tangent_the_reader_may_not_view_leave_no_trace_on_a_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         var writer = await Place(tangentSpace);
@@ -282,23 +281,52 @@ public sealed class ProfileTests
         using var leo = await SignedIn(tangentSpace, Leo);
         var older = new List<string>();
         for (var index = 0; index < 2; index++) older.Add((await Started(writer, Leo, "Older " + index, "Body.")).Id);
-        for (var index = 0; index < RecentPosts.ScanSize + 1; index++) await Started(writer, Leo, "Studio " + index, "Body.", Studio);
+        var hidden = new List<string>();
+        for (var index = 0; index < 101; index++) hidden.Add((await Started(writer, Leo, "Studio " + index, "Body.", Studio)).Id);
         var newer = new List<string>();
         for (var index = 0; index < 3; index++) newer.Add((await Started(writer, Leo, "Newer " + index, "Body.")).Id);
         older.Reverse();
         newer.Reverse();
 
-        var first = (await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle, json: true)).Json;
-        Assert.Equal(newer, Ids(first));
-        var next = new Uri(first.GetProperty("older").GetString()!);
-        var second = (await Send(ada.Client, HttpMethod.Get, next.PathAndQuery, json: true)).Json;
-        Assert.Equal(older, Ids(second));
-        Assert.True(Missing(second, "older"));
+        var asAda = await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle, json: true);
+        Assert.Equal([.. newer, .. older], Ids(asAda.Json));
+        Assert.True(Missing(asAda.Json, "older"));
+        Assert.DoesNotContain(hidden, id => asAda.Body.Contains(id, StringComparison.Ordinal));
 
-        // An administrator may view the studio: their first page is full of it after the newest.
+        // An administrator may view the studio: their first page is full, and continues from a Post they may view.
         var asLeo = (await Send(leo.Client, HttpMethod.Get, "/p/" + LeoHandle, json: true)).Json;
         Assert.Equal(RecentPosts.PageSize, Ids(asLeo).Count);
         Assert.Equal(newer, Ids(asLeo).Take(3));
+        Assert.Contains(Ids(asLeo)[^1], asLeo.GetProperty("older").GetString()!);
+    }
+
+    /// <summary>Your own approvals page: past one page of them, the rest are a link away, and nothing is left out.</summary>
+    [Fact]
+    public async Task Your_approvals_page_past_the_first_page()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var issued = DateTimeOffset.UtcNow.AddDays(-1);
+        for (var index = 0; index < Approved.PageSize + 5; index++)
+            await new AgentGrant
+            {
+                Subject = Ada, Capability = "mcp:grant:live:" + index, Resource = BaseUrl, ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+                IssuedAt = issued.AddMinutes(index), ClientId = DelegateClient.Id
+            }.Save(Cancellation);
+        const string own = "/p/" + AdaHandle;
+
+        var first = (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates");
+        Assert.Equal(Approved.PageSize, first.GetProperty("agents").GetArrayLength());
+        var more = new Uri(first.GetProperty("more").GetString()!);
+        var second = (await Send(ada.Client, HttpMethod.Get, more.PathAndQuery, json: true)).Json.GetProperty("delegates");
+        Assert.Equal(5, second.GetProperty("agents").GetArrayLength());
+        Assert.True(Missing(second, "more"));
+        var ids = first.GetProperty("agents").EnumerateArray().Concat(second.GetProperty("agents").EnumerateArray())
+            .Select(agent => agent.GetProperty("id").GetString()).ToList();
+        Assert.Equal(Approved.PageSize + 5, ids.Distinct().Count());
+        Assert.Contains("More agents", (await Send(ada.Client, HttpMethod.Get, own)).Body);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, own + "?agents=0", json: true)).Status);
     }
 
     /// <summary>Whether the answer leaves the member out, as a null one is.</summary>

@@ -7,16 +7,20 @@ using Tangent.Space;
 using Tangent.Tangents;
 using Tangent.Writer;
 using Xunit;
+using static Tangent.Posts.Writing;
 
 namespace Tangent.Access;
 
 /// <summary>Nothing bounds how many Tangents a place holds or how many members a role holds: a place of eleven hundred
 /// Tangents, each created by command, evaluates access on the last as on the first and moves it; and a member role of
-/// more than four thousand ninety-six members joins one more who then posts.</summary>
+/// more than four thousand ninety-six members joins one more who then posts; a move among tied orders across many pages
+/// changes only the pair's place; and the door, the list of Tangents and the moderators' Tangent reach every Tangent the
+/// reader may view however many come before them.</summary>
 public sealed class PlaceSizeTests(ITestOutputHelper output)
 {
     private const string Leo = "did:plc:leo4size";
     private const string Ada = "did:plc:ada4size";
+    private const string Mo = "did:plc:mo4size";
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
@@ -86,4 +90,87 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         Assert.True(capabilities.Holds(Bit.View | Bit.Post | Bit.Topic));
         Assert.Equal("Member", Roles.Word(capabilities.RoleIds));
     }
+
+    [Fact]
+    public async Task A_move_among_tied_orders_across_pages_changes_only_the_pairs_place_and_leaves_a_total_order()
+    {
+        const int count = 150;
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        // Every Tangent at order one, as Tangents created at once can stand: the slug orders them.
+        for (var index = 1; index <= count; index++) await Given.ATangent(tangentSpace, Slug(index), ct: Cancellation);
+        var expected = Enumerable.Range(1, count).Select(Slug).ToList();
+
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new ChangeTangent(Slug(20), Leo, Move: Move.Earlier), Cancellation));
+        (expected[18], expected[19]) = (expected[19], expected[18]);
+        Assert.Equal(expected, await InOrder());
+
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new ChangeTangent(Slug(120), Leo, Move: Move.Later), Cancellation));
+        (expected[119], expected[120]) = (expected[120], expected[119]);
+        Assert.Equal(expected, await InOrder());
+
+        var orders = (await Tangents.Tangent.All(Cancellation)).Select(tangent => tangent.Order).ToList();
+        Assert.Equal(orders.Count, orders.Distinct().Count());
+
+        static async Task<List<string>> InOrder() => (await Tangents.Tangent.All(Cancellation))
+            .OrderBy(tangent => tangent.Order).ThenBy(tangent => tangent.Id, StringComparer.Ordinal).Select(tangent => tangent.Id).ToList();
+    }
+
+    [Fact]
+    public async Task The_door_and_the_list_of_tangents_reach_those_the_reader_may_view_past_sixty_others()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
+        for (var index = 1; index <= 120; index++)
+            await Given.ATangent(tangentSpace, Slug(index), index <= 60 ? Audience.Private : Audience.Public, ct: Cancellation);
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
+        Assert.Equal(Enumerable.Range(61, 50).Select(Slug), Slugs(door.Json.GetProperty("tangents")));
+        Assert.True(door.Json.GetProperty("moreTangents").GetBoolean());
+        var all = new Uri(door.Json.GetProperty("allTangents").GetString()!);
+        Assert.Contains("All Tangents", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
+
+        var first = (await Send(ada.Client, HttpMethod.Get, all.PathAndQuery, json: true)).Json;
+        Assert.Equal(Enumerable.Range(61, 50).Select(Slug), Slugs(first.GetProperty("tangents")));
+        var next = new Uri(first.GetProperty("next").GetString()!);
+        Assert.Contains(Slug(110), next.Query);
+        var second = (await Send(ada.Client, HttpMethod.Get, next.PathAndQuery, json: true)).Json;
+        Assert.Equal(Enumerable.Range(111, 10).Select(Slug), Slugs(second.GetProperty("tangents")));
+        Assert.True(Missing(second, "next"));
+        Assert.Contains("More Tangents", (await Send(ada.Client, HttpMethod.Get, all.PathAndQuery)).Body);
+
+        // The switcher on a Tangent's page lists the same first page and sends the reader to all of them.
+        var page = (await Send(ada.Client, HttpMethod.Get, "/t/" + Slug(61))).Body;
+        Assert.Contains("href=\"" + all + "\"", page);
+    }
+
+    [Fact]
+    public async Task A_moderator_reaches_the_moderators_tangent_from_the_door_past_sixty_tangents()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation));
+        await Given.AParticipant(tangentSpace, Mo, [Roles.Moderator], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
+        for (var index = 1; index <= 60; index++) await Given.ATangent(tangentSpace, Slug(index), ct: Cancellation);
+        using var mo = await SignedIn(tangentSpace, Mo);
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var asMo = Slugs((await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("tangents"));
+        Assert.Equal(51, asMo.Count);
+        Assert.Equal(ModeratorsTangent.Slug, asMo[^1]);
+        Assert.Contains("/t/" + ModeratorsTangent.Slug, (await Send(mo.Client, HttpMethod.Get, "/")).Body);
+        Assert.DoesNotContain(ModeratorsTangent.Slug, Slugs((await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("tangents")));
+    }
+
+    private static List<string> Slugs(System.Text.Json.JsonElement tangents)
+        => tangents.EnumerateArray().Select(tangent => tangent.GetProperty("slug").GetString()!).ToList();
+
+    private static bool Missing(System.Text.Json.JsonElement value, string name)
+        => !value.TryGetProperty(name, out var member) || member.ValueKind == System.Text.Json.JsonValueKind.Null;
 }

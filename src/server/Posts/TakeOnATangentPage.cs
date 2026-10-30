@@ -45,6 +45,12 @@ public sealed record TakeOnATangentPage(
         string Tangent,
         string TangentAddress);
 
+    /// <summary>The address of the form with the next page of Tangents to choose from; null on the last.</summary>
+    public string? More { get; init; }
+
+    /// <summary>The address of the form with the first page of Tangents, on a later page.</summary>
+    public string? First { get; init; }
+
     /// <summary>A Tangent the reader may start a Topic in: its slug, its name, and the kind a Topic started there takes.</summary>
     public sealed record Choice(string Slug, string Name, string Kind);
 }

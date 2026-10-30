@@ -46,6 +46,9 @@ public sealed record Door(
     /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
     public IReadOnlyList<Offered>? Offers { get; init; }
 
+    /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
+    public string? AllTangents { get; init; }
+
     /// <summary>Why the reader may not write in the place — <c>sign-in</c>, <c>apply</c>, <c>declined</c>, or another
     /// gate — absent where they may.</summary>
     public string? Gate { get; init; }
