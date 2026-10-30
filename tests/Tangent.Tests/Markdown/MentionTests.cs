@@ -183,7 +183,8 @@ public sealed class MentionTests
         Assert.Empty(page.Json.GetProperty("root").GetProperty("mentions").EnumerateArray());
         var html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;
         Assert.Contains("alt=\"see @ada\"", html);
-        Assert.DoesNotContain("/p/", html);
+        // Bea's name links to her profile; nothing links to Ada's.
+        Assert.DoesNotContain("/p/" + Uri.EscapeDataString(Ada + ".example"), html);
     }
 
     /// <summary>The mention events of one Post, in the order of the log.</summary>

@@ -59,8 +59,8 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 | **Bit** | One permission of the model: `View`, `Post`, `Topic`, `EditOwn`, `RemoveOwn`, `Moderate`, `ManageTangent`, `ManageRoles`, `ManageStanding`, `ManageSpace`; `Administrator` implies all. On a role and in an overwrite as Koan's `global:` token of its name; `Administrator` as Koan's `global:administrator`, which only a role grants. | `Bit`, `Bits` | — | *Right*, *Privilege*, *Claim* (for this), *Scope* (for this) |
 | **Absent** | What a reader may not `View`: it does not exist for them, and every answer is the one a missing resource gets. | `Capabilities.Exists`, `Capabilities.Absent` | not found | *Hidden*, *Forbidden* (for this), *Denied* (for this) |
 | **Kind** | A participant's classification, person or agent, shown and never evaluated: an agent when the account labels itself `bot` on its own AT Protocol profile, a person otherwise, until the participant chooses for themselves. | `Participant.Kind`, `Participant.KindSource` (`ProfileLabel`, `OwnChoice`) | — | *Type*, *Classification*, *Nature* |
-| **Profile** | A participant's handle, display name, description and avatar, read from their PDS and cached with the time of capture; nothing is edited here. | `Participant.Profile` (`DisplayName`, `Description`, `Avatar`, `CapturedAt`) | `/p/{handle}` | *Bio*, *User profile*, *Account* (for this) |
-| **Delegate** | An agent acting as a person: it holds a token the person approved on the consent page, reads and acts with the person's identity and everything the person can do, never more, and is not a participant of its own. | `DelegateIdentity`; the public client `delegate` (`DelegatedDoor.ClientId`) | — | *Integration*, *App* (for this), *Impersonator*, *Proxy* (for this) |
+| **Profile** | A participant's handle, display name, description and avatar, read from their PDS and cached with the time of capture; nothing is edited here. | `Participant.Profile` (`DisplayName`, `Description`, `Avatar`, `CapturedAt`); the page, `ProfilePage` | `/p/{handle}` | *Bio*, *User profile*, *Account* (for this) |
+| **Delegate** | An agent acting as a person: it holds a token the person approved on the consent page, reads and acts with the person's identity and everything the person can do, never more, and is not a participant of its own. | `DelegateIdentity`; the public client `delegate` (`DelegatedDoor.ClientId`); a person's approvals, `Approved`, revoked on their own profile | — | *Integration*, *App* (for this), *Impersonator*, *Proxy* (for this) |
 | **Consent page** | Where a signed-in person approves or denies a delegate: by the code a device or agent shows them, or a loopback client's request. Only a person's session decides there. | `ConsentController`, `ConsentView` | `/consent`, `/consent/done` | *Authorize screen*, *Connect* (for this), *Permission prompt* |
 
 ## Movement and attention
@@ -111,7 +111,7 @@ Singular in a type name, plural for a collection (`Tangent`, `Tangents`). Capita
 
 ## Verbs
 
-reply · edit · remove · lock · pin · move · take on a tangent · join · apply · admit · decline · time out · ban · lift · report · publish · retract · watch · connect · export · archive · restore
+reply · edit · remove · lock · pin · move · take on a tangent · join · apply · admit · decline · time out · ban · lift · report · revoke · publish · retract · watch · connect · export · archive · restore
 
 ## Koan's words
 

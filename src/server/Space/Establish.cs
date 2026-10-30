@@ -7,7 +7,8 @@ namespace Tangent.Space;
 
 /// <summary>First run: writes the one <see cref="TangentSpace"/> row with its name, and whoever sends it as both its
 /// proprietor and its operator, and appends <see cref="EventKind.SpaceChanged"/>. One whose first sign-in left
-/// no participant arrives here, with <see cref="EventKind.StandingChanged"/>. The moderators' Tangent is created with
+/// no participant arrives here, with <see cref="EventKind.StandingChanged"/>, taking their handle from any other
+/// participant who still keeps it. The moderators' Tangent is created with
 /// the row and recorded on it (<see cref="ModeratorsTangent"/>), and so is the first Tangent, public, where the place is
 /// talked in from its first minute (<see cref="FirstTangent"/>), each in this transaction with its access written before
 /// the transaction opens. A place that already has its row refuses with <see cref="AlreadyEstablished"/> and nothing is
@@ -46,6 +47,7 @@ public sealed record Establish(
         if (await Participant.Get(OperatorId, ct) is null)
         {
             await Participant.Arrive(OperatorId, OperatorHandle, space.Admission).Save(ct);
+            await Handles.Release(OperatorHandle, OperatorId, ct);
             await Event.Next(sequences, EventKind.StandingChanged, at, actorId: OperatorId, targetId: OperatorId).Save(ct);
         }
 

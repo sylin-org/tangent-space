@@ -98,8 +98,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             : seen is { } checkpoint && checkpoint.Seq >= root.LastSequence ? await TopicWindow.Latest(root, ct)
             : await TopicWindow.After(root, seen?.Seq ?? 0, ct);
 
-        var people = await People(window.Replies.Prepend(root).ToList(), ct);
         var baseAddress = BaseAddress();
+        var people = await People(window.Replies.Prepend(root).ToList(), baseAddress, ct);
         var mentioned = await Mentions.Resolve(window.Replies.Prepend(root), baseAddress, ct);
         var taken = await Origins.From(window.Replies.Prepend(root).ToList(), personId, baseAddress, ct);
         var takenFrom = await Origins.Of(root, personId, baseAddress, ct);
@@ -214,8 +214,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
 
     /// <summary>The authors of these Posts, then who removed any of them, at most <see cref="PeopleLimit"/>, in one keyed
-    /// read, by participant Id.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> posts, CancellationToken ct)
+    /// read, by participant Id, each with their profile's address.</summary>
+    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> posts, string baseAddress,
+        CancellationToken ct)
     {
         var ids = posts.Select(post => post.AuthorId)
             .Concat(posts.Where(post => post.Removed).Select(post => post.RemovedBy).OfType<string>())
@@ -224,7 +225,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         return found.OfType<Participant>().ToDictionary(row => row.Id, row =>
         {
             var (name, handle) = Named(row);
-            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar);
+            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
+                ProfilePage.AddressOf(baseAddress, handle));
         }, StringComparer.Ordinal);
     }
 

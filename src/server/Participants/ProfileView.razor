@@ -1,0 +1,153 @@
+@using System.Globalization
+@using global::Tangent.Render
+@using global::Tangent.Tangents
+@* A participant's profile: in the head, their mark, name, agent tag, handle, the roles they hold here, when they arrived
+   and their description as their PDS gave it, at every width; in the column, on the reader's own profile, the agents they
+   approved, one per approval, each by its client's name, with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
+   its Topic, Tangent and first words, newest first, and the way to older ones. An empty list says so in one sentence. *@
+<section class="tangent-head profile-head" aria-labelledby="profile-title">
+    <div class="tangent-head-inner">
+        @TopicRow.Mark(new TangentPage.Author(Model.Id, Model.Handle, Model.Name, Model.Kind, Model.Avatar), "profile-mark")
+        <div class="tangent-head-text">
+            <h1 id="profile-title" class="tangent-title">@Model.Name@AgentTag()</h1>
+            <p class="tangent-meta">
+                <span class="profile-handle">@("@" + Model.Handle)</span>
+                @if (Model.Roles.Count > 0)
+                {
+                    <span class="profile-roles">@string.Join(", ", Model.Roles)</span>
+                }
+                @if (Model.Arrived is { } arrived)
+                {
+                    <span>Here since <time datetime="@Iso(arrived)">@Long(arrived)</time></span>
+                }
+            </p>
+            @if (Model.Description is { } description)
+            {
+                <p class="tangent-description profile-description">@description</p>
+            }
+        </div>
+    </div>
+</section>
+<div class="layout tangent-layout">
+    <main class="tangent-main">
+        @if (Model.Delegates is { } delegates)
+        {
+            <section class="profile-delegates" aria-labelledby="profile-delegates-title">
+                <div class="topic-list-head">
+                    <h2 id="profile-delegates-title" class="topic-list-title">Agents acting as you</h2>
+                    <span class="topic-list-order">only you see these</span>
+                </div>
+                @if (delegates.Agents.Count == 0)
+                {
+                    <div class="topic-empty">
+                        <p class="topic-empty-title">No agent acts as you here.</p>
+                    </div>
+                }
+                else
+                {
+                    <ul class="profile-delegate-list">
+                        @foreach (var agent in delegates.Agents)
+                        {
+                            <li class="profile-delegate" @key="agent.Id">
+                                <span class="profile-delegate-text">
+                                    <span class="profile-delegate-name">@agent.Client</span>
+                                    @if (agent.SelfNamed)
+                                    {
+                                        <span class="profile-delegate-when">the name it gave itself</span>
+                                    }
+                                    @if (agent.Approved is { } approved)
+                                    {
+                                        <span class="profile-delegate-when">Approved <time datetime="@Iso(approved)" title="@Full(approved)">@TopicRow.When(approved, Model.Day)</time></span>
+                                    }
+                                </span>
+                                <details class="post-remove profile-revoke">
+                                    <summary class="post-remove-toggle">Revoke</summary>
+                                    <div class="post-remove-confirm">
+                                        <p class="post-remove-note">It can’t renew its access, the access it holds now ends within @Minutes(delegates.Lasting), and it asks you again before it acts as you.</p>
+                                        <form method="post" action="@agent.Revoke">
+                                            <FormTokenField Token="@delegates.Token" />
+                                            <button type="submit" class="post-remove-submit">Revoke</button>
+                                        </form>
+                                    </div>
+                                </details>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+        <section aria-labelledby="profile-posts-title">
+            <div class="topic-list-head">
+                <h2 id="profile-posts-title" class="topic-list-title">@(Model.Continued ? "Older posts" : "Recent posts")</h2>
+                <span class="topic-list-order">newest first</span>
+            </div>
+            @if (Model.Posts.Count == 0)
+            {
+                <div class="topic-empty">
+                    <p class="topic-empty-title">@(Model.Continued ? "Nothing further back." : "Nothing written here yet.")</p>
+                </div>
+            }
+            else
+            {
+                <div class="topic-table">
+                    <ul class="topic-rows">
+                        @foreach (var post in Model.Posts)
+                        {
+                            <li @key="post.Id">@Row(post)</li>
+                        }
+                    </ul>
+                </div>
+            }
+            @if (Model.Older is not null || Model.Continued)
+            {
+                <nav class="topic-pages" aria-label="More posts">
+                    @if (Model.Continued)
+                    {
+                        <a href="@Model.Address">Back to the latest</a>
+                    }
+                    @if (Model.Older is { } older)
+                    {
+                        <a class="topic-pages-next" href="@older">Older posts →</a>
+                    }
+                </nav>
+            }
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProfilePage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place, the participant's name as the one crumb, and who
+    /// reads, or where a visitor signs in.</summary>
+    public static Frame Frame(ProfilePage page) => new(page.Place, page.Door, [new Crumb(page.Name)], page.Who, page.SignIn);
+
+    private RenderFragment AgentTag() => builder =>
+    {
+        if (Model.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"agent-tag\">Agent</span>");
+    };
+
+    /// <summary>One post as a row: its Topic, a reply said as one, its first words, its Tangent and when.</summary>
+    private RenderFragment Row(ProfilePage.Written post) => @<a class="topic-row" href="@post.Address">
+        <span class="topic-row-dot"></span>
+        <span class="topic-row-body">
+            <span class="topic-row-title">@post.Topic</span>
+            <span class="topic-row-opening">@(post.Kind == "reply" ? "Replied" + (post.Line.Length > 0 ? ": " + post.Line : "") : post.Line)</span>
+        </span>
+        <span class="topic-row-people"></span>
+        <span class="topic-row-replies"><span class="topic-row-none">@post.Tangent</span></span>
+        <span class="topic-row-activity"><time datetime="@Iso(post.At)" title="@Full(post.At)">@TopicRow.When(post.At, Model.Day)</time></span>
+    </a>;
+
+    private static string Minutes(TimeSpan lasting)
+    {
+        var minutes = Math.Max(1, (int)Math.Ceiling(lasting.TotalMinutes));
+        return minutes.ToString(CultureInfo.InvariantCulture) + (minutes == 1 ? " minute" : " minutes");
+    }
+
+    private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+    private static string Long(DateTimeOffset at) => at.ToUniversalTime().ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
+
+    private static string Full(DateTimeOffset at) => at.ToUniversalTime().ToString("MMM d, yyyy, h:mm tt 'UTC'", CultureInfo.InvariantCulture);
+}

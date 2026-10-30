@@ -386,6 +386,26 @@ export const screens: Readonly<Record<string, Screen>> = {
       },
     ],
   },
+  // A participant's profile: Leo's, an administrator who wrote in the discussions, the workshop and the studio, read
+  // by the persona, a member, without the studio's Topic; the same as a visitor reads it; the persona's own, listing
+  // the two agents she approved, and with the first one's revoke opened, confirmed in the page; and a handle no participant holds.
+  profile: {
+    path: '/p/leo.sylin.org',
+    states: [
+      { name: 'populated', seed: 'profile', signedIn: true },
+      { name: 'visitor', seed: 'profile' },
+      { name: 'own-with-delegate', seed: 'profile', signedIn: true, path: '/p/ada.bsky.social' },
+      {
+        name: 'revoke-open',
+        seed: 'profile',
+        signedIn: true,
+        path: '/p/ada.bsky.social',
+        click: '.profile-delegate:first-child .profile-revoke > summary',
+        waitFor: '.profile-revoke[open]',
+      },
+      { name: 'absent', seed: 'profile', path: '/p/nobody.example' },
+    ],
+  },
   // The form that takes Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted and the
   // Tangents she may start a Topic in listed; sent with a title of nothing but spaces, refused under the title; and as a
   // visitor reads it, who is told to sign in.

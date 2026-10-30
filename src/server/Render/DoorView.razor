@@ -6,7 +6,7 @@
 @using Tangent.Space
 @using Tangent.Tangents
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the Tangents the reader may view, where a new one is
-   created for whoever may, and who is around in the rail; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
+   created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
    answers; for an applicant, in one sentence, that their application is waiting, or was declined; for a signed-in reader
    with news, what is new since they were here — one sentence, then who admitted them, where someone did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads that
@@ -68,7 +68,11 @@
                     </span>
                     <span class="rail-audience-text">
                         <span class="rail-audience-name">@Words(Model.Around.Count, Model.Around.AtLeast, "participant", "participants")</span>
-                        <span class="rail-audience-note">wrote lately: @string.Join(", ", Model.Around.People.Select(person => person.Name))</span>
+                        <span class="rail-audience-note">wrote lately: @for (var index = 0; index < Model.Around.People.Count; index++)
+                            {
+                                var person = Model.Around.People[index];
+                                @(index > 0 ? ", " : "")@Named(person)
+                            }</span>
                     </span>
                 </div>
             }
@@ -173,6 +177,16 @@
         var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings) : null;
         return new(door.Name, door.Address, [new Crumb(door.Name)], who, door.SignIn);
     }
+
+    /// <summary>A participant's name, linked to their profile where the door knows it.</summary>
+    private static RenderFragment Named(TangentPage.Author person) => @<text>@if (person.Profile is { } profile)
+        {
+            <a class="around-name" href="@profile">@person.Name</a>
+        }
+        else
+        {
+            @person.Name
+        }</text>;
 
     private string Initial => Model.Name.Length > 0 ? char.ToUpperInvariant(Model.Name[0]).ToString() : "T";
 

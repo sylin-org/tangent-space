@@ -42,7 +42,7 @@ A person, signed in or not.
 | Signing in | One button. | works |
 | What's new | The door, since the reader's checkpoint: replies to them, mentions, Topics taken on a tangent from their Posts, new per Tangent, new articles, and Mark all seen. | works |
 | Talking | Start a Topic, reply, mention, edit, remove, take on a tangent, report, watch; live updates while a page is open. Drafts survive a closed tab. | works |
-| Someone's profile | A name is a name; there is no profile to open. | missing (package 5.4) |
+| Someone's profile | A name on a Post or among who is around opens `/p/{handle}`: who they are as their PDS says, their roles here, when they arrived, and their recent posts in the Tangents the reader may view. Your own also lists the agents you approved, each revoked in the page. | works (5.4) |
 | Notifications | The door's groups cover replies and mentions; there is no page of them. | missing (6.1) |
 | Search | None. | missing (6.3) |
 | On a phone | It works; the layouts are tuned at the polish stage. | friction, held for the polish stage |
