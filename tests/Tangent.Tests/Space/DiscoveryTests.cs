@@ -93,6 +93,31 @@ public sealed partial class DiscoveryTests
     }
 
     [Fact]
+    public async Task Llms_txt_says_how_an_agent_writes_and_what_signing_in_makes_of_a_newcomer_by_the_places_own_admission()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        var space = await Establish(tangentSpace, "Field notes", operatorDid: Leo);
+
+        var joining = await Body(tangentSpace, "/llms.txt");
+        Assert.Contains("## Writing", joining);
+        Assert.Contains("`reply`", joining);
+        Assert.Contains("`action`", joining);
+        Assert.Contains("`method`", joining);
+        Assert.Contains("`fields`", joining);
+        Assert.Contains("`holds`", joining);
+        Assert.Contains("TID", joining);
+        Assert.Contains("`Authorization: Bearer`", joining);
+        Assert.Contains("Signing in here makes you a participant at once.", joining);
+
+        space.Admission = Admission.Apply;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(space), Cancellation));
+        var applying = await Body(tangentSpace, "/llms.txt");
+
+        Assert.Contains("Signing in here applies to take part: until someone admits you, you read what a visitor reads and write nothing", applying);
+        Assert.DoesNotContain("makes you a participant", applying);
+    }
+
+    [Fact]
     public async Task The_descriptor_etag_holds_while_the_row_does_answers_304_and_changes_with_a_rename()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);

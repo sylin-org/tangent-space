@@ -152,7 +152,7 @@ public sealed class StartAndReplyTests
         var workshop = await Json(ada, articles, "/t/" + Workshop + "/new", new { id = Tids.Mint(), title = "In the workshop", body = "Plain." });
         var unknown = await Json(ada, articles, articles, new { id = Tids.Mint(), title = "Odd", body = "Odd kind.", kind = "essay" });
 
-        Assert.Equal(("article", true), (page.Json.GetProperty("kind").GetString(), Tid.IsValid(page.Json.GetProperty("id").GetString())));
+        Assert.Equal(("article", true), (page.Json.GetProperty("kind").GetString(), Tid.IsValid(Valued(page.Json.GetProperty("start"), PostWrites.IdField))));
         Assert.Equal("article", article.Json.GetProperty("kind").GetString());
         Assert.Equal(PostKind.Article, (await Post.Get(article.Json.GetProperty("id").GetString()!, Cancellation))?.Kind);
         Assert.Equal("topic", topic.Json.GetProperty("kind").GetString());

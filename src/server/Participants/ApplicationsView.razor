@@ -48,9 +48,11 @@
                                         <a href="@applicant.Profile">@applicant.Name</a> @("@" + applicant.Handle)
                                         <span class="topic-row-none">· applied @TopicRow.When(applicant.AppliedAt, Model.Day)@(applicant.State == ApplicationsPage.Declined ? " · declined" : "")</span>
                                     </p>
+                                    @if (Model.Admit is { } admit && Model.Decline is { } decline)
+                                    {
                                     <div class="door-offer-answers">
-                                        <form method="post" action="@Model.Admit">
-                                            <FormTokenField Token="@Model.Token" />
+                                        <form method="post" action="@admit.Action">
+                                            <FormTokenField Token="@admit.Token" />
                                             <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
                                             <button type="submit" class="tangent-new">Admit</button>
                                         </form>
@@ -60,8 +62,8 @@
                                                 <summary class="watch-button">Decline</summary>
                                                 <div class="post-remove-confirm">
                                                     <p class="post-remove-note">They keep reading what a visitor reads, and you can still admit them later.</p>
-                                                    <form method="post" action="@Model.Decline">
-                                                        <FormTokenField Token="@Model.Token" />
+                                                    <form method="post" action="@decline.Action">
+                                                        <FormTokenField Token="@decline.Token" />
                                                         <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
                                                         <button type="submit" class="post-remove-submit">Decline</button>
                                                     </form>
@@ -69,6 +71,7 @@
                                             </details>
                                         }
                                     </div>
+                                    }
                                 </li>
                             }
                         </ul>

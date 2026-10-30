@@ -32,6 +32,18 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop write
     /// is), and whether the participant watches it.</summary>
     public sealed record Answer(string Scope, long? Seq, bool Watch);
 
+    /// <summary>The form that moves the reader's checkpoint on the Topic at <paramref name="topicAddress"/> through
+    /// <paramref name="through"/>, the sequence its page showed.</summary>
+    public static Form SeenForm(string topicAddress, long through, FormToken token) => Form.Posting(topicAddress + "/" + SeenSegment, token,
+        new Form.Field(ThroughField,
+            "The sequence of this Topic the reader has seen through: the last the page shows, or any other of the Topic. The checkpoint never moves back.",
+            through.ToString(CultureInfo.InvariantCulture)));
+
+    /// <summary>The reader's watch flag on the Tangent or Topic at <paramref name="address"/>, <paramref name="watch"/>,
+    /// with the form that sets it, carrying the opposite.</summary>
+    public static Watching WatchingOf(string address, bool watch, FormToken token) => new(watch, Form.Posting(address + "/" + WatchSegment, token,
+        new Form.Field(WatchField, "true to watch it, false to stop; the value given is the opposite of where the flag stands.", watch ? "false" : "true")));
+
     [HttpPost("/t/{tangent}/{topic}/" + SeenSegment)]
     public async Task<IActionResult> Seen(string tangent, string topic, CancellationToken ct)
     {

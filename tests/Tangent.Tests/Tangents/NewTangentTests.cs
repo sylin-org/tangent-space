@@ -129,7 +129,8 @@ public sealed class NewTangentTests
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var form = (await Send(leo.Client, HttpMethod.Get, "/t/new", json: true)).Json;
-        Assert.Equal(BaseUrl + "/t/new", form.GetProperty("action").GetString());
+        Assert.Equal(BaseUrl + "/t/new", form.GetProperty("create").GetProperty("action").GetString());
+        Assert.Equal(["name", "description", "kind", "audience"], FieldNames(form.GetProperty("create")));
         Assert.Contains("ManageSpace", Strings(form.GetProperty("can")));
         Assert.False(form.TryGetProperty("gate", out _));
         Assert.Equal(("", "", "topic", "public"), (form.GetProperty("name").GetString(), form.GetProperty("description").GetString(),
@@ -139,6 +140,7 @@ public sealed class NewTangentTests
         var member = (await Send(ada.Client, HttpMethod.Get, "/t/new", json: true)).Json;
         Assert.Equal(Capabilities.NoRoleGrants(Bit.ManageSpace), member.GetProperty("gate").GetString());
         Assert.DoesNotContain("ManageSpace", Strings(member.GetProperty("can")));
+        Assert.False(member.TryGetProperty("create", out _));
 
         var created = await Json(leo, "/t/new", "/t/new", new { name = "Field guides", kind = "article", audience = "private" });
 

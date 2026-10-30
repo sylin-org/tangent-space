@@ -44,6 +44,30 @@ public static class TangentWrites
         Gate
     }
 
+    /// <summary>The form that creates a Tangent at <paramref name="action"/>: its name, and what else stands at its default
+    /// until it is sent.</summary>
+    public static Form CreateForm(string action, FormToken token) => Form.Posting(action, token,
+        new Form.Field(NameField, $"The Tangent's name, 1 to {Tangent.NameLimit} characters; its address derives from it and never changes."),
+        new Form.Field(DescriptionField, $"What it is for, at most {Tangent.DescriptionLimit} characters; left out, none."),
+        new Form.Field(KindField, "The kind a Topic started there takes: topic or article; left out, topic."),
+        new Form.Field(AudienceField, "Who reads it: public, everyone who reads the place, where members post, or private; left out, public."));
+
+    /// <summary>The form that changes a Tangent's settings at <paramref name="action"/>, each field left as it is when not
+    /// sent: its audience only where it is not <paramref name="fixedAudience"/>, its place among the Tangents only where
+    /// the reader <paramref name="movable"/> it.</summary>
+    public static Form ChangeForm(string action, bool fixedAudience, bool movable, FormToken token)
+    {
+        List<Form.Field> fields =
+        [
+            new(NameField, $"The Tangent's name, 1 to {Tangent.NameLimit} characters; left out, it stays. Its address never changes."),
+            new(DescriptionField, $"What it is for, at most {Tangent.DescriptionLimit} characters; left out, it stays."),
+            new(KindField, "The kind a Topic started there takes: topic or article; left out, it stays.")
+        ];
+        if (!fixedAudience) fields.Add(new(AudienceField, "Who reads it: public or private; left out, it stays."));
+        if (movable && !fixedAudience) fields.Add(new(MoveField, "earlier or later, to move it one place among the Tangents; sent alone, it changes nothing else."));
+        return new Form(action, HttpMethods.Post, fields, token);
+    }
+
     public static string Word(Audience audience) => audience.ToString().ToLowerInvariant();
 
     public static string Word(Move move) => move.ToString().ToLowerInvariant();

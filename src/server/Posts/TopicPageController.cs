@@ -131,10 +131,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             root.ReplyCount,
             topicCan.Can,
             topicCan.Gate(Bit.Post),
-            token is not null && continues && shownThrough > seenSeq
-                ? new TopicSeen(address + "/" + CheckpointController.SeenSegment, shownThrough, token)
-                : null,
-            token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, seen?.Watch ?? false, token),
+            token is not null && topicCan.Gate(Bit.Post) is null ? PostWrites.ReplyForm(address, Answered(anchor, reader), token) : null,
+            token is not null && continues && shownThrough > seenSeq ? CheckpointController.SeenForm(address, shownThrough, token) : null,
+            token is null ? null : CheckpointController.WatchingOf(address, seen?.Watch ?? false, token),
             Shown(root, root, address, rows, people, mentioned, seen, reader, taken, takeOn, token),
             window.Replies.Select(reply => Shown(reply, root, address, rows, people, mentioned, seen, reader, taken, takeOn, token)).ToList(),
             window.Replies.Count == 0 ? null : window.Low,
@@ -186,8 +185,14 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             takeOn && !post.Removed ? address + "/" + TakeOnATangentController.Segment : null,
             taken.GetValueOrDefault(post.Id),
             token is not null && !post.Removed && post.AuthorId != reader?.Id && post.TangentId != rows.Space.ModeratorsTangentId
-                ? new TopicPage.Report(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow), token) : null);
+                ? PostWrites.ReportForm(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow), token) : null);
     }
+
+    /// <summary>The Post a reply from this page answers: the reply the page's address named, where it named one by
+    /// someone else that is not removed; null, the Topic, otherwise. The address a reader lands on after replying names
+    /// their own reply, and they go on replying to the Topic, as they do at a tombstone's address.</summary>
+    private static string? Answered(Post? anchor, Participant? reader)
+        => anchor is { ParentId: not null, Removed: false } && anchor.AuthorId != reader?.Id ? anchor.Id : null;
 
     /// <summary>A cursor's sequence: a non-negative whole number; null when the text is not one.</summary>
     private static long? Sequence(string text)

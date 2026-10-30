@@ -31,12 +31,12 @@
             {
                 <p class="first-run-note consent-redirect">That name is the one it gave itself. Once you decide, it continues at <CodeText Text="@redirect" />.</p>
             }
-            <form class="sign-in-form consent-approve" method="post" action="@decision.Approve" data-island="submitting">
-                <FormTokenField Token="@decision.Token" />
+            <form class="sign-in-form consent-approve" method="post" action="@decision.Approve.Action" data-island="submitting">
+                <FormTokenField Token="@decision.Approve.Token" />
                 <button type="submit" class="sign-in-submit" data-busy-label="Approving…">Approve</button>
             </form>
-            <form class="consent-deny" method="post" action="@decision.Deny">
-                <FormTokenField Token="@decision.Token" />
+            <form class="consent-deny" method="post" action="@decision.Deny.Action">
+                <FormTokenField Token="@decision.Deny.Token" />
                 <p class="first-run-onward"><button type="submit" class="first-run-switch">Deny</button></p>
             </form>
         }

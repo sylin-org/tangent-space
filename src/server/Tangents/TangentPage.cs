@@ -9,8 +9,8 @@ namespace Tangent.Tangents;
 /// <see cref="Can"/> do here, and one bounded page of its <see cref="Topics"/>, pinned first and then by last
 /// activity. <see cref="Next"/> is the address of the page after this one, absent on the last; nothing is counted to
 /// answer it. <see cref="NewTopic"/> is where a Topic is started, present only when <see cref="Can"/> holds
-/// <c>Topic</c>; <see cref="Watching"/> is the form that sets or clears a signed-in reader's watch flag on the
-/// Tangent; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
+/// <c>Topic</c>; <see cref="Watching"/> is a signed-in reader's watch flag on the Tangent, with the form that sets it;
+/// <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
 /// Tangents the reader may view, this one among them, with the Topics started in each. <see cref="Place"/>,
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
 /// its times are written for. <see cref="Settings"/> is where the Tangent's settings are changed, present only for a

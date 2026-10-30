@@ -58,7 +58,10 @@
                                         <a href="@person.Profile">@person.Name</a> @("@" + person.Handle)
                                         <span class="topic-row-none">· @person.Kind · @Standing(person)@(person.Roles.Count > 0 ? " · " + string.Join(", ", person.Roles) : "")</span>
                                     </p>
-                                    <PeopleActions Person="@person" Forms="@Model.Forms" />
+                                    @if (Model.Forms is { } forms)
+                                    {
+                                        <PeopleActions Person="@person" Forms="@forms" />
+                                    }
                                 </li>
                             }
                         </ul>

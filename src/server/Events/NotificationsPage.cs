@@ -82,14 +82,12 @@ public sealed record NotificationsPage(
 
     /// <summary>An Offer as its decider reads it among their notifications: its Id, what it would do (<c>address</c>: use
     /// <see cref="Subject"/>, an origin, as the place's address), where it stands (<c>open</c>, <c>accepted</c>,
-    /// <c>declined</c> or <c>lapsed</c>) and when it was decided; while it is open, its two answers as addresses to post
-    /// to, each carrying the Id in the <c>offer</c> field, with the form's antiforgery token.</summary>
+    /// <c>declined</c> or <c>lapsed</c>) and when it was decided; while it is open, its two answers, each a form carrying
+    /// the Id in its <c>offer</c> field.</summary>
     public sealed record Offered(string Id, string Kind, string Subject, string State, DateTimeOffset? Decided)
     {
-        public string? Use { get; init; }
+        public Form? Use { get; init; }
 
-        public string? Decline { get; init; }
-
-        public FormToken? Token { get; init; }
+        public Form? Decline { get; init; }
     }
 }

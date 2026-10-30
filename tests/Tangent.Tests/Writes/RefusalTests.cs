@@ -56,10 +56,11 @@ public sealed class RefusalTests
         var remove = PostPath(root, root) + "/remove";
 
         var page = await Send(bea.Client, HttpMethod.Get, edit);
-        var editJson = await Json(bea, edit, edit, new { title = "Mine", body = "Mine now.", version = 1 });
-        var editForm = await Form(bea, edit, edit, new Dictionary<string, string> { ["title"] = "Mine", ["body"] = "Mine now.", ["version"] = "1" });
-        var removeJson = await Json(bea, edit, remove, new { });
-        var removeForm = await Form(bea, edit, remove, new Dictionary<string, string>());
+        // The edit page offers Bea no form, so her session's token comes from the Topic's page, which carries one.
+        var editJson = await Json(bea, TopicPath(root), edit, new { title = "Mine", body = "Mine now.", version = 1 });
+        var editForm = await Form(bea, TopicPath(root), edit, new Dictionary<string, string> { ["title"] = "Mine", ["body"] = "Mine now.", ["version"] = "1" });
+        var removeJson = await Json(bea, TopicPath(root), remove, new { });
+        var removeForm = await Form(bea, TopicPath(root), remove, new Dictionary<string, string>());
 
         Assert.Equal(HttpStatusCode.OK, page.Status);
         Assert.Contains("data-gate=\"not yours\"", page.Body);

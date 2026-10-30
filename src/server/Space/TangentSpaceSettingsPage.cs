@@ -4,8 +4,8 @@ namespace Tangent.Space;
 
 /// <summary>The place's settings, one resource both ways: the <see cref="Sections"/> of the settings, the one this page
 /// shows marked current, and that section, general: the place's <see cref="Name"/> and its <see cref="Description"/>,
-/// the line under the name on the door. <see cref="Action"/> takes <c>name</c> and <c>description</c>, each left as it
-/// is when not sent; <see cref="Token"/> is the form's antiforgery token. <see cref="Can"/> is what the reader holds in
+/// the line under the name on the door. <see cref="Change"/>, present only where the reader may change them, takes
+/// <c>name</c> and <c>description</c>, each left as it is when not sent. <see cref="Can"/> is what the reader holds in
 /// the place, and <see cref="Gate"/> why they may not change its settings, null when they may; <see cref="SignIn"/> is
 /// where a visitor signs in, coming back here. After a refusal the form keeps what was sent and says why: under the
 /// name, under the description, or above the form.</summary>
@@ -13,8 +13,7 @@ public sealed record TangentSpaceSettingsPage(
     IReadOnlyList<SettingsSection> Sections,
     string Name,
     string Description,
-    string Action,
-    FormToken Token,
+    Form? Change,
     IReadOnlyList<string> Can,
     string? Gate,
     string? SignIn,

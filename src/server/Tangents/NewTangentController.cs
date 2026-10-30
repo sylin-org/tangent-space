@@ -103,7 +103,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
             TangentWrites.About.Name => page with { NameFailure = reason },
             TangentWrites.About.Description => page with { DescriptionFailure = reason },
             TangentWrites.About.Sent => page with { Failure = reason },
-            _ => page with { Gate = reason }
+            _ => page with { Gate = reason, Create = null }
         };
         return new ObjectResult(page) { StatusCode = TangentWrites.Status(reason) };
     }
@@ -118,8 +118,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         var here = baseUrl.PathBase + Route;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         return new NewTangentPage(
-            baseAddress + Route,
-            FormToken.For(HttpContext),
+            place.Gate(Bit.ManageSpace) is null ? TangentWrites.CreateForm(baseAddress + Route, FormToken.For(HttpContext)) : null,
             place.Can,
             place.Gate(Bit.ManageSpace),
             "",

@@ -31,11 +31,10 @@ public sealed class AdmissionTests
     private static async Task<IReadOnlyList<string?>> Can(Browser browser, string path)
         => (await Send(browser.Client, HttpMethod.Get, path, json: true)).Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()).ToList();
 
+    /// <summary>Starts a Topic in <paramref name="tangent"/> as JSON, with the session's token from the Tangent's page, which
+    /// carries a form for every signed-in reader, so an applicant the new-topic page offers no form still sends one.</summary>
     private static Task<Answered> StartIn(Browser browser, string tangent, string title)
-    {
-        var form = "/t/" + tangent + "/new";
-        return Json(browser, form, form, new { id = Tids.Mint(), title, body = "Hello, everyone." });
-    }
+        => Json(browser, "/t/" + tangent, "/t/" + tangent + "/new", new { id = Tids.Mint(), title, body = "Hello, everyone." });
 
     [Fact]
     public async Task On_a_join_place_a_newcomer_who_signs_in_is_a_member_and_starts_a_topic_in_general()
@@ -128,7 +127,7 @@ public sealed class AdmissionTests
         var read = await Send(ada.Client, HttpMethod.Get, path, json: true);
         Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace)), (read.Status, read.Json.GetProperty("gate").GetString()));
         Assert.Equal(["General", "Admission"], read.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
-        var refused = await Json(ada, path, path, new { admission = "apply" });
+        var refused = await Json(ada, "/t/" + Workshop, path, new { admission = "apply" });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace)), (refused.Status, refused.Gate));
         Assert.Equal(Admission.Join, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Admission);
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
@@ -226,8 +225,8 @@ public sealed class AdmissionTests
         // Deciding an admitted participant again: admitting writes nothing, and declining is refused.
         using var ivy = await SignedIn(tangentSpace, Ivy);
         var events = await Event.Count.Exact(Cancellation);
-        // No application is listed now, so the token comes from the settings' general form.
-        var settings = TangentSpaceSettingsController.Path;
+        // No application is listed now, so the token comes from the page of a Tangent, which carries a form.
+        var settings = "/t/" + General;
         Assert.Equal(HttpStatusCode.OK, (await Json(mo, settings, ApplicationsController.AdmitPath, new { participant = Hal })).Status);
         Assert.Equal(HttpStatusCode.Conflict, (await Json(mo, settings, ApplicationsController.DeclinePath, new { participant = Grace })).Status);
         Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, settings, ApplicationsController.AdmitPath, new { participant = "did:plc:nobody" })).Status);
@@ -241,7 +240,7 @@ public sealed class AdmissionTests
         Assert.DoesNotContain("ivy4admission", (await Send(ada.Client, HttpMethod.Get, path)).Body);
         Assert.DoesNotContain("Applications", (await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
-        var refused = await Json(ada, TangentSpaceSettingsController.Path, ApplicationsController.AdmitPath, new { participant = Ivy });
+        var refused = await Json(ada, "/t/" + General, ApplicationsController.AdmitPath, new { participant = Ivy });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (refused.Status, refused.Gate));
         Assert.Equal(Standing.Applied, (await Participant.Get(Ivy, Cancellation))!.Standing);
         using var visitor = Agent(tangentSpace);

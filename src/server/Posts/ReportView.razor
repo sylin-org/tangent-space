@@ -43,16 +43,13 @@
                 {
                     <p class="sign-in-failure" id="report-failure" role="alert">@failure</p>
                 }
-                @if (Model.Id is not null || Model.Gate is not null)
+                @if (Model.Report is not null || Model.Gate is not null)
                 {
-                <form class="sign-in-form" method="post" action="@Model.Action">
-                    @if (Model.Token is { } token)
+                <form class="sign-in-form" method="post" action="@Model.Report?.Action">
+                    @if (Model.Report is { } report)
                     {
-                        <FormTokenField Token="@token" />
-                    }
-                    @if (Model.Id is { } id)
-                    {
-                        <input type="hidden" name="@PostWrites.IdField" value="@id">
+                        <FormTokenField Token="@report.Token" />
+                        <input type="hidden" name="@PostWrites.IdField" value="@report.Value(PostWrites.IdField)">
                     }
                     <div class="field">
                         <label class="field-label" for="report-body">Why are you reporting this post?</label>

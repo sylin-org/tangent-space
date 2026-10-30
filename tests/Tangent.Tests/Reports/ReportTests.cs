@@ -358,8 +358,7 @@ public sealed partial class ReportTests
         Assert.Contains(ReportPost.InModerators, WebUtility.HtmlDecode(form.Body));
         Assert.DoesNotContain("<form class=\"sign-in-form\"", form.Body);
         Assert.DoesNotContain("name=\"id\"", form.Body);
-        Assert.False(Present(formJson.Json, "id"));
-        Assert.False(Present(formJson.Json, "token"));
+        Assert.False(Present(formJson.Json, "report"));
         Assert.Equal(ReportPost.InModerators, formJson.Json.GetProperty("failure").GetString());
     }
 

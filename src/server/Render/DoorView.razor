@@ -108,14 +108,14 @@
                         <div class="door-offer" @key="offer.Offer">
                             <p class="door-offer-line">This place is being reached at <strong>@offer.Subject</strong>@Evidence(offer). Use it as its address?</p>
                             <div class="door-offer-answers">
-                                <form method="post" action="@offer.Use">
-                                    <FormTokenField Token="@offer.Token" />
-                                    <input type="hidden" name="@OfferController.Field" value="@offer.Offer">
+                                <form method="post" action="@offer.Use.Action">
+                                    <FormTokenField Token="@offer.Use.Token" />
+                                    <input type="hidden" name="@OfferController.Field" value="@offer.Use.Value(OfferController.Field)">
                                     <button type="submit" class="tangent-new">Use it</button>
                                 </form>
-                                <form method="post" action="@offer.Decline">
-                                    <FormTokenField Token="@offer.Token" />
-                                    <input type="hidden" name="@OfferController.Field" value="@offer.Offer">
+                                <form method="post" action="@offer.Decline.Action">
+                                    <FormTokenField Token="@offer.Decline.Token" />
+                                    <input type="hidden" name="@OfferController.Field" value="@offer.Decline.Value(OfferController.Field)">
                                     <button type="submit" class="watch-button">Not this one</button>
                                 </form>
                             </div>
@@ -159,7 +159,7 @@
                             {
                                 <form method="post" action="@caughtUp.Action">
                                     <FormTokenField Token="@caughtUp.Token" />
-                                    <input type="hidden" name="@DoorController.Through" value="@caughtUp.Through.ToString(CultureInfo.InvariantCulture)">
+                                    <input type="hidden" name="@DoorController.Through" value="@caughtUp.Value(DoorController.Through)">
                                     <button type="submit" class="tangent-new">Mark all seen</button>
                                 </form>
                             }

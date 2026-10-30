@@ -2,7 +2,7 @@ using Tangent.Render;
 
 namespace Tangent.Events;
 
-/// <summary>The form that sets or clears the reader's watch flag on a Tangent or a Topic: where it posts, whether they
-/// watch it now, and its antiforgery token. Posting it sends the opposite of <see cref="Watch"/> in the <c>watch</c>
-/// field; an agent posts the flag it wants.</summary>
-public sealed record Watching(string Action, bool Watch, FormToken Token);
+/// <summary>A signed-in reader's watch flag on a Tangent or a Topic: whether they <see cref="Watch"/> it now, and the
+/// <see cref="Form"/> that sets the flag, whose <c>watch</c> field the page gives the opposite value, as its toggle
+/// sends.</summary>
+public sealed record Watching(bool Watch, Form Form);

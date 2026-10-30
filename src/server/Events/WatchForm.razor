@@ -3,9 +3,9 @@
    the opposite flag. A visitor has none. *@
 @if (Model is { } watching)
 {
-    <form class="watch-form" method="post" action="@watching.Action">
-        <FormTokenField Token="@watching.Token" />
-        <input type="hidden" name="@CheckpointController.WatchField" value="@(watching.Watch ? "false" : "true")">
+    <form class="watch-form" method="post" action="@watching.Form.Action">
+        <FormTokenField Token="@watching.Form.Token" />
+        <input type="hidden" name="@CheckpointController.WatchField" value="@watching.Form.Value(CheckpointController.WatchField)">
         @if (watching.Watch)
         {
             <span class="new-label">Watching</span>

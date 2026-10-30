@@ -80,7 +80,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             capabilities.Holds(Bit.Topic) ? address + "/" + NewTopicSegment : null,
-            token is null ? null : new Watching(address + "/" + CheckpointController.WatchSegment, watched, token),
+            token is null ? null : CheckpointController.WatchingOf(address, watched, token),
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             await Viewable(personId, row, ct),
             space.Name,

@@ -8,7 +8,8 @@ namespace Tangent.Participants;
 /// <see cref="Next"/> is the address of the page after this one, null on the last, and <see cref="First"/> the first
 /// page's, for a page that <see cref="Continued"/> from a cursor. <see cref="Handle"/> is the start of a handle the page
 /// is narrowed to, empty for none, and <see cref="Search"/> where the search form asks, by the <c>handle</c> parameter.
-/// <see cref="Forms"/> is where each verb posts. <see cref="Can"/> is what the reader holds in the place, and
+/// <see cref="Forms"/> are the forms of the verbs, present only where the reader may read the people.
+/// <see cref="Can"/> is what the reader holds in the place, and
 /// <see cref="Gate"/> why they may not read the people, null when they may, when the list is empty whoever is here;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the times are
 /// written for. After a refusal the page says why above the list.</summary>
@@ -20,7 +21,7 @@ public sealed record PeoplePage(
     string First,
     string Handle,
     string Search,
-    PeopleForms Forms,
+    PeopleForms? Forms,
     IReadOnlyList<string> Can,
     string? Gate,
     string? SignIn,
@@ -40,9 +41,9 @@ public sealed record PeoplePage(
         IReadOnlyList<string> Roles, IReadOnlyList<string> Can, IReadOnlyList<string> Give, IReadOnlyList<string> Take);
 }
 
-/// <summary>Where the inline changes of standing and roles post, each taking the participant's id in
-/// <c>participant</c>: <see cref="TimeOut"/> with how long in <c>for</c>, one of <see cref="Durations"/>; <see cref="Ban"/>;
-/// <see cref="Lift"/>; and <see cref="Give"/> and <see cref="Take"/> with the role in <c>role</c>. <see cref="Token"/>
-/// is the forms' antiforgery token, and <see cref="Back"/> the page a form returns to, sent in <c>back</c>.</summary>
-public sealed record PeopleForms(string TimeOut, string Ban, string Lift, string Give, string Take, IReadOnlyList<string> Durations,
-    FormToken Token, string Back);
+/// <summary>The forms of the inline changes of standing and roles, each taking the participant's id in
+/// <c>participant</c> and the page it returns to in <c>back</c>: <see cref="TimeOut"/>, with how long in <c>for</c>, one
+/// of <see cref="Durations"/>, <see cref="Ban"/> and <see cref="Lift"/>, present where the reader holds
+/// <c>ManageStanding</c>; <see cref="Give"/> and <see cref="Take"/>, with the role in <c>role</c>, present where they hold
+/// <c>ManageRoles</c>. A participant's own row says which of them the reader may use on them.</summary>
+public sealed record PeopleForms(Form? TimeOut, Form? Ban, Form? Lift, Form? Give, Form? Take, IReadOnlyList<string> Durations);

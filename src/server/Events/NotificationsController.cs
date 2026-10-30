@@ -166,9 +166,8 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
                         Offer = new NotificationsPage.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject,
                             offer.State.ToString().ToLowerInvariant(), offer.DecidedAt)
                         {
-                            Use = open ? baseAddress + OfferController.UsePath : null,
-                            Decline = open ? baseAddress + OfferController.DeclinePath : null,
-                            Token = open ? token : null
+                            Use = open ? OfferController.UseForm(baseAddress, offer.Id, token!) : null,
+                            Decline = open ? OfferController.DeclineForm(baseAddress, offer.Id, token!) : null
                         }
                     };
                 default:

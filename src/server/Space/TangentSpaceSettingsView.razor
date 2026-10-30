@@ -28,8 +28,11 @@
                 {
                     <p class="sign-in-failure" id="space-settings-failure" role="alert">@failure</p>
                 }
-                <form class="sign-in-form" method="post" action="@Model.Action" data-island="@(Mutable ? "submitting" : null)">
-                    <FormTokenField Token="@Model.Token" />
+                <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+                    @if (Model.Change is { } change)
+                    {
+                        <FormTokenField Token="@change.Token" />
+                    }
                     <div class="field">
                         <label class="field-label" for="space-settings-name">Name</label>
                         <span class="field-input">

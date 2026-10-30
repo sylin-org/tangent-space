@@ -29,9 +29,12 @@
             }
             @if (!Model.Removed)
             {
-                <form class="sign-in-form" method="post" action="@Model.Action" data-island="submitting">
-                    <FormTokenField Token="@Model.Token" />
-                    <input type="hidden" name="@PostWrites.VersionField" value="@Model.Version">
+                <form class="sign-in-form" method="post" action="@Model.Edit?.Action" data-island="submitting">
+                    @if (Model.Edit is { } edit)
+                    {
+                        <FormTokenField Token="@edit.Token" />
+                        <input type="hidden" name="@PostWrites.VersionField" value="@edit.Value(PostWrites.VersionField)">
+                    }
                     @if (Model.Root)
                     {
                         <div class="field">
@@ -78,7 +81,7 @@
                         </div>
                     }
                 </form>
-                @if (Model.RemoveGate is null)
+                @if (Model.Remove is { } remove)
                 {
                     <details class="post-remove">
                         <summary class="post-remove-toggle">@(Model.Root ? "Remove this topic’s opening post" : "Remove this post")</summary>
@@ -93,8 +96,8 @@
                                     <text>Its words leave the page and a tombstone stays in their place.</text>
                                 }
                             </p>
-                            <form method="post" action="@Model.RemoveAction">
-                                <FormTokenField Token="@Model.Token" />
+                            <form method="post" action="@remove.Action">
+                                <FormTokenField Token="@remove.Token" />
                                 <button type="submit" class="post-remove-submit">Remove</button>
                             </form>
                         </div>

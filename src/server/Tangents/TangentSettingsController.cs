@@ -109,7 +109,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
             TangentWrites.About.Name => page with { NameFailure = reason },
             TangentWrites.About.Description => page with { DescriptionFailure = reason },
             TangentWrites.About.Sent => page with { Failure = reason },
-            _ => page with { Gate = reason }
+            _ => page with { Gate = reason, Change = null }
         };
         return new ObjectResult(page) { StatusCode = TangentWrites.Status(reason) };
     }
@@ -136,8 +136,9 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
             moderators,
             movable,
             address,
-            address + "/" + TangentWrites.SettingsSegment,
-            FormToken.For(HttpContext),
+            TangentWrites.MayManage(capabilities)
+                ? TangentWrites.ChangeForm(address + "/" + TangentWrites.SettingsSegment, moderators, movable, FormToken.For(HttpContext))
+                : null,
             capabilities.Can,
             TangentWrites.ManageGate(capabilities),
             TangentWrites.Kinds,

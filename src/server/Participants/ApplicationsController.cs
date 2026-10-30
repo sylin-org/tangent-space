@@ -34,6 +34,10 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
     public const string After = "after";
 
+    /// <summary>The form that decides an application at <paramref name="action"/>: admit or decline, by the applicant's id.</summary>
+    private static Form Deciding(string action, FormToken token) => Form.Posting(action, token,
+        new Form.Field(ParticipantField, "The id of an applicant this page lists."));
+
     [HttpGet(Path)]
     public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
     {
@@ -152,6 +156,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
         var gate = place.Gate(Bit.ManageStanding);
         var read = gate is null ? await Applications.Read(cursor, ct) : new Applications.Page([], null);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
+        var token = gate is null ? FormToken.For(HttpContext) : null;
         return new ApplicationsPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.ApplicationsSection),
             read.Applicants.Select(applicant =>
@@ -164,9 +169,8 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
             read.Next is { } next ? applications + "?" + After + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             applications,
-            baseAddress + AdmitPath,
-            baseAddress + DeclinePath,
-            FormToken.For(HttpContext),
+            token is null ? null : Deciding(baseAddress + AdmitPath, token),
+            token is null ? null : Deciding(baseAddress + DeclinePath, token),
             place.Can,
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,

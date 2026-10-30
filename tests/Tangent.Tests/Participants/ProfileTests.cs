@@ -191,7 +191,7 @@ public sealed class ProfileTests
         Assert.Equal(grant.Id, agents[0].GetProperty("id").GetString());
         Assert.Equal(grant.IssuedAt, agents[0].GetProperty("approved").GetDateTimeOffset());
         Assert.Equal((DelegateClient.Name, false), (agents[0].GetProperty("client").GetString(), agents[0].GetProperty("selfNamed").GetBoolean()));
-        var revoke = new Uri(agents[0].GetProperty("revoke").GetString()!).AbsolutePath;
+        var revoke = new Uri(agents[0].GetProperty("revoke").GetProperty("action").GetString()!).AbsolutePath;
         Assert.Equal($"{own}/delegates/{grant.Id}/revoke", revoke);
         var page = await Send(ada.Client, HttpMethod.Get, own);
         Assert.Contains("Agents acting as you", page.Body);
@@ -235,7 +235,7 @@ public sealed class ProfileTests
         Assert.True(agents[0].GetProperty("approved").GetDateTimeOffset() >= agents[1].GetProperty("approved").GetDateTimeOffset());
         var newest = agents[0].GetProperty("id").GetString()!;
 
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, own, new Uri(agents[0].GetProperty("revoke").GetString()!).AbsolutePath, new Dictionary<string, string>())).Status);
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, own, new Uri(agents[0].GetProperty("revoke").GetProperty("action").GetString()!).AbsolutePath, new Dictionary<string, string>())).Status);
 
         var left = (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates").GetProperty("agents");
         Assert.Equal(1, left.GetArrayLength());

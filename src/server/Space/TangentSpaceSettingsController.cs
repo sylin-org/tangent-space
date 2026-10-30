@@ -27,6 +27,16 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     public const string DescriptionField = "description";
     public const string AdmissionField = "admission";
 
+    /// <summary>The form that changes the place's name and description, under <paramref name="baseAddress"/>.</summary>
+    private static Form GeneralForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + Path, token,
+        new Form.Field(NameField, $"The place's name, 1 to {TangentSpace.NameLimit} characters on one line; left out, it stays."),
+        new Form.Field(DescriptionField, $"The line under its name on the door, at most {TangentSpace.DescriptionLimit} characters; left out, it stays."));
+
+    /// <summary>The form that sets how a newcomer arrives, under <paramref name="baseAddress"/>.</summary>
+    private static Form AdmissionForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + AdmissionPath, token,
+        new Form.Field(AdmissionField,
+            "join, where a newcomer who signs in is admitted at once, or apply, where they wait to be admitted; everyone already here stays as they are."));
+
     /// <summary>The section that names and describes the place.</summary>
     public const string General = "General";
 
@@ -168,7 +178,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
         var page = await AdmissionPage(place, personId, ct);
         if (sent is not null && Admissions.Contains(sent, StringComparer.Ordinal)) page = page with { Admission = sent };
-        page = gated ? page with { Gate = reason } : page with { Failure = reason };
+        page = gated ? page with { Gate = reason, Change = null } : page with { Failure = reason };
         return new ObjectResult(page) { StatusCode = gated ? PostWrites.Status(reason) : StatusCodes.Status400BadRequest };
     }
 
@@ -181,8 +191,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             Sections(place, baseAddress, AdmissionSection),
             Word(space.Admission),
             Admissions,
-            baseAddress + AdmissionPath,
-            FormToken.For(HttpContext),
+            place.Gate(Bit.ManageSpace) is null ? AdmissionForm(baseAddress, FormToken.For(HttpContext)) : null,
             place.Can,
             place.Gate(Bit.ManageSpace),
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
@@ -229,7 +238,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         {
             TangentSpace.NameRule => page with { NameFailure = reason },
             TangentSpace.DescriptionRule => page with { DescriptionFailure = reason },
-            _ => page with { Gate = reason }
+            _ => page with { Gate = reason, Change = null }
         };
         return new ObjectResult(page) { StatusCode = gated ? PostWrites.Status(reason) : StatusCodes.Status400BadRequest };
     }
@@ -243,8 +252,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             Sections(place, baseAddress, General),
             space.Name,
             space.Description,
-            baseAddress + Path,
-            FormToken.For(HttpContext),
+            place.Gate(Bit.ManageSpace) is null ? GeneralForm(baseAddress, FormToken.For(HttpContext)) : null,
             place.Can,
             place.Gate(Bit.ManageSpace),
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,

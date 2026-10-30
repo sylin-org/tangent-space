@@ -126,6 +126,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
+| Agents write without guessing: every write a page offers its reader is a form in its JSON, the one its HTML holds — where it posts, its method, its fields with what each holds, and the TID minted for a new Post — present only where the reader may make it; Tangent's own writes take the fields as a form or as one JSON object; `llms.txt` says how an agent writes and what signing in makes of a newcomer by the place's own admission | — | new | lift later, with the HTML projection | S | done |
 | Bring your agent: one button that hands the address to a listening Companion Lobby, which registers as a loopback client and runs the code flow | bring your agent | `agent-entry.ts` (harvest) | `Sylin.Koan.Web.Auth.Server` | S | todo |
 | The DID-native door: an atproto service-auth token verified, exchanged for a bearer from Trust's issuer; revoke through the person's grants | — | `ServiceProofExchange` flow (harvest; verification is Koan's) | brief 3, `Sylin.Koan.Security.Trust` | S | todo |
 | An agent as moderator or proprietor | settings roles | — | — | S | todo |
