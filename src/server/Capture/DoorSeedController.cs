@@ -15,8 +15,10 @@ namespace Tangent.Capture;
 /// <summary>The rows the door's captures show, written through the writer when the capture asks: a place with articles,
 /// discussions and a workshop, people who wrote in them, a Topic of the capture persona's with replies to her, and a
 /// mention of her. For <c>door</c> her place checkpoint sits behind the newest of them, so the door has news for her;
-/// for <c>door-quiet</c> it sits at the log's last sequence, so the door has none. Compiled only into the capture host,
-/// like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
+/// for <c>door-quiet</c> it sits at the log's last sequence, so the door has none; for <c>door-newcomer</c> she has none,
+/// and nothing there is hers or names her, so it is her first door. <c>door-first</c> takes her place checkpoint away, before every width and theme of a state
+/// that shows a first door, since opening it begins one. Compiled only into the capture host, like
+/// <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
 public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
@@ -38,7 +40,22 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
         return NoContent();
     }
 
-    private async Task Door(bool quiet, CancellationToken ct)
+    [HttpPost("/capture/seed/door-newcomer")]
+    public async Task<IActionResult> Newcomer(CancellationToken ct)
+    {
+        await Door(quiet: false, ct, newcomer: true);
+        await Write(new NeverHere(), ct);
+        return NoContent();
+    }
+
+    [HttpPost("/capture/seed/door-first")]
+    public async Task<IActionResult> First(CancellationToken ct)
+    {
+        await Write(new NeverHere(), ct);
+        return NoContent();
+    }
+
+    private async Task Door(bool quiet, CancellationToken ct, bool newcomer = false)
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         space.Name = "Kintsugi Architecture";
@@ -58,7 +75,7 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
         await Write(new Keep<Post>(Pinned(await Post.Get(rules.Id, ct))), ct);
         var reading = await Topic("workshop", "Reading list for October", "Three books and one long essay I keep coming back to. Add yours; one line on why is plenty.", Mara, At(24, 8, 30), 3, ct);
         await Answer(reading, "Seconding the essay. It changed how I write release notes.", Leo, At(24, 9, 2), 4, ct);
-        var intro = await Topic("discussions", "What should an agent’s introduction say?", "Who runs it, what it is good at, and when it will not answer. What else belongs there?", Persona, At(26, 16, 45), 5, ct);
+        var intro = await Topic("discussions", "What should an agent’s introduction say?", "Who runs it, what it is good at, and when it will not answer. What else belongs there?", newcomer ? Mara : Persona, At(26, 16, 45), 5, ct);
         var shower = await Topic("articles", "Why Your Best Ideas Come in the Shower", "The mind files best when nobody is supervising it. On idle time, and how to make room for it on purpose.", Leo, At(26, 18, 0), 6, ct);
 
         // What the persona saw last: everything up to here.
@@ -70,7 +87,7 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
         await Answer(intro, "A line on what it will refuse to do. That is the part people look for.", Mara, At(29, 13, 5), 10, ct);
         await Answer(reading, "Adding a paper on repair as a design practice; it reads quickly.", Lumen, At(29, 9, 40), 11, ct);
         var weekly = await Topic("discussions", "A weekly link and a question", "Each week, one link and one question. [@ada.bsky.social](https://bsky.app/profile/ada.bsky.social), want to start us off?", Lumen, At(29, 14, 0), 12, ct);
-        await Write(new Mention(weekly, Persona), ct);
+        if (!newcomer) await Write(new Mention(weekly, Persona), ct);
         await Answer(shower, "Mine come on long walks instead. Same mechanism, I suspect.", Mara, At(29, 15, 10), 13, ct);
 
         if (quiet) await Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Place, await Event.HighWaterMark.Load(ct))), ct);
@@ -129,6 +146,16 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
                 tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id, actorId: Root.AuthorId, targetId: TargetId);
             await mention.Save(ct);
             return new Outcome<Event>.Done(mention);
+        }
+    }
+
+    /// <summary>Takes the persona's place checkpoint away, where she has one.</summary>
+    private sealed record NeverHere : ICommand<bool>
+    {
+        public async Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct)
+        {
+            if (await Checkpoint.Get(Checkpoint.Key(Persona, Scope.Place), ct) is { } checkpoint) await checkpoint.Remove(ct);
+            return new Outcome<bool>.Done(true);
         }
     }
 

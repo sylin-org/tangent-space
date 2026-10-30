@@ -123,10 +123,10 @@ public sealed class AdmissionTests
         Assert.Equal(HttpStatusCode.OK, (await Json(leo, path, path, new { admission = "join" })).Status);
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
 
-        // A member reads the choice and changes nothing; Applications is not in their rail.
+        // A member reads the choice and changes nothing, and their rail lists nothing, for they may use none of it.
         var read = await Send(ada.Client, HttpMethod.Get, path, json: true);
         Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace)), (read.Status, read.Json.GetProperty("gate").GetString()));
-        Assert.Equal(["General", "Admission"], read.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
+        Assert.Equal(0, read.Json.GetProperty("sections").GetArrayLength());
         var refused = await Json(ada, "/t/" + Workshop, path, new { admission = "apply" });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace)), (refused.Status, refused.Gate));
         Assert.Equal(Admission.Join, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Admission);

@@ -5,6 +5,7 @@ using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
+using Tangent.Delegates;
 using Tangent.Events;
 using Tangent.Offers;
 using Tangent.Participants;
@@ -15,12 +16,16 @@ using Tangent.Writer;
 
 namespace Tangent.Space;
 
-/// <summary>The door, one resource both ways, at the base URL. Its <c>GET</c> writes nothing and reads, each bounded
+/// <summary>The door, one resource both ways, at the base URL. Its <c>GET</c> reads, each bounded
 /// and keyed: capability's rows for the place; the reader's place checkpoint; the newest events of the log and the
 /// newest that name the reader as their target (<see cref="LogWindow"/>); how many of the reader's notifications they have
 /// not seen (<see cref="Notifications.Count"/>); the first Tangents by order; capability once
 /// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
-/// those Topics and Tangents; and the people it shows. An event is new to the reader when it is past their place
+/// those Topics and Tangents; and the people it shows. A reader with no place checkpoint is at their first door: nothing
+/// in the place counts as new to them, whatever it holds, so it says none of it, and what concerns them alone still
+/// shows. Their own opening of it, never a delegate's, begins their place checkpoint through what it read, handed to the
+/// writer only where its queue is not full and never waited on, and a later opening makes good one that did not land; it
+/// is the one thing the door's <c>GET</c> writes, and from then on the door reads past that checkpoint. An event is new to the reader when it is past their place
 /// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
 /// not their own, and in a Tangent they may view; an event in a Tangent they may not view does not exist for them. A
 /// mention is not judged by the Topic's checkpoint: that counts the Topic's Posts as they arrived, and an edit can
@@ -70,7 +75,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         var reader = personId is null ? null : await Participant.Get(personId, ct);
 
-        var since = reader is null ? 0 : (await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Place), ct))?.Seq ?? 0;
+        var checkpoint = reader is null ? null : await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Place), ct);
+        var since = checkpoint?.Seq ?? 0;
+        var first = reader is not null && checkpoint is null;
         var window = await LogWindow.Newest(ct);
         IReadOnlyList<Event> targeted = reader is null ? [] : await LogWindow.Targeting(reader.Id, since, ct);
 
@@ -120,7 +127,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         var writers = created.Select(e => e.ActorId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         var full = window.Count >= LogWindow.Size;
 
-        var fresh = window.Where(e => e.Kind == EventKind.PostCreated && New(e)).ToList();
+        // At a first door everything the place holds is what it holds, not what is new.
+        var fresh = first ? [] : window.Where(e => e.Kind == EventKind.PostCreated && New(e)).ToList();
         var freshIn = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal).ToDictionary(topic => topic.Key, topic => topic.Count(), StringComparer.Ordinal);
         // A Topic taken on a tangent from the reader's Post targets them too; its root is not a reply, so it is a group of
         // its own.
@@ -191,10 +199,14 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                     Roles.Word(e.Role!), e.Given!.Value)).ToList(),
                 Group(edited, targetedFull, posts, tangents, people),
                 Group(removed, targetedFull, posts, tangents, people));
-            // A door that carries the form carries a fresh antiforgery token, so it is never stored or revalidated; any
-            // other door of a signed-in reader is theirs alone to cache.
-            if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through, FormToken.For(HttpContext)) };
-            Response.Headers.CacheControl = news.CaughtUp is null ? "private" : "no-cache, no-store";
+            // A door that carries the form carries a fresh antiforgery token, and a first door is read once, so neither is
+            // stored or revalidated; any other door of a signed-in reader is theirs alone to cache.
+            if (first) news = news with { First = true };
+            else if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through, FormToken.For(HttpContext)) };
+            Response.Headers.CacheControl = news.CaughtUp is null && !first ? "private" : "no-cache, no-store";
+            // Their own arrival is on the log, so a place with nothing in it to read still has somewhere to begin.
+            if (first && HttpMethods.IsGet(Request.Method) && !DelegateIdentity.Delegated(HttpContext))
+                _ = writer.TrySend(new CatchUp(reader.Id, Math.Max(through, targeted.Where(e => e.TangentId is null).Select(e => e.Seq).DefaultIfEmpty(0).Max())));
         }
 
         var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;

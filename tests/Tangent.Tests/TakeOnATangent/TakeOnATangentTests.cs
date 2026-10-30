@@ -239,6 +239,7 @@ public sealed class TakeOnATangentTests
         var reply = await Replied(writer, topic, Bea, "I do, at six.");
         var answer = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), topic.Id, "Six is early.", Ada, reply.Id), Cancellation)).Result;
         using var bea = await SignedIn(tangentSpace, Bea);
+        await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
         var before = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
 
         var taken = await Taken(writer, Ada, reply, Garden, "Six o’clock lanterns");

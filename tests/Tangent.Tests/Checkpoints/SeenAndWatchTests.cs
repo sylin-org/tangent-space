@@ -66,6 +66,7 @@ public sealed class SeenAndWatchTests
         var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
         await Replied(writer, root, Mo, "From a hook.");
         using var bea = await SignedIn(tangentSpace, Bea);
+        await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
 
         Assert.True(await NewOnTangentPage(bea, root));
         Assert.Equal(2, await NewOnDoor(bea));
@@ -205,6 +206,7 @@ public sealed class SeenAndWatchTests
         var watchedTopic = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
         var other = await Started(writer, Ada, "Kites", "Who flies one?");
         using var bea = await SignedIn(tangentSpace, Bea);
+        await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
         await Form(bea, TopicPath(watchedTopic), TopicPath(watchedTopic) + "/" + CheckpointController.WatchSegment,
             new Dictionary<string, string> { ["watch"] = "true" });
         await Replied(writer, watchedTopic, Mo, "From a hook.");

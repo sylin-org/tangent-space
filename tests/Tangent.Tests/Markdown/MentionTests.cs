@@ -126,6 +126,7 @@ public sealed class MentionTests
         var writer = await Place(tangentSpace);
         var root = await Started(writer, Ada, "A lantern question", $"What do you think, {Mention(Bea, "bea")}?");
         using var bea = await SignedIn(tangentSpace, Bea);
+        await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
 
         var door = await Send(bea.Client, HttpMethod.Get, "/", json: true);
         Assert.Equal(HttpStatusCode.OK, door.Status);
@@ -151,6 +152,7 @@ public sealed class MentionTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         var writer = await Place(tangentSpace);
         using var bea = await SignedIn(tangentSpace, Bea);
+        await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
         await Started(writer, Ada, "A lantern question", $"{Mention(Bea, "ada.example")} has a question about [@ghost](at://{Ghost}).");
         using var visitor = Agent(tangentSpace);
 

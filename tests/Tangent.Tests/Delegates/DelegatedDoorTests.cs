@@ -563,6 +563,29 @@ public sealed class DelegatedDoorTests
     }
 
     [Fact]
+    public async Task A_delegate_reads_its_persons_first_door_as_theirs_and_it_stays_first_until_the_person_opens_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await PrivatePlace(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example", comeBack: "/first-run")).Dispose();
+        var token = await Delegate(tangentSpace, browser);
+
+        using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/") { Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) } };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var door = await agent.SendAsync(request, Cancellation);
+        using var json = JsonDocument.Parse(await door.Content.ReadAsStringAsync(Cancellation));
+        Assert.True(json.RootElement.GetProperty("news").GetProperty("first").GetBoolean());
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Place), Cancellation));
+
+        (await browser.Client.GetAsync("/", Cancellation)).Dispose();
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.NotNull(await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Place), Cancellation));
+    }
+
+    [Fact]
     public async Task Marking_the_door_seen_takes_a_bearer_without_a_form_token_and_refuses_a_session_without_one()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
@@ -571,10 +594,11 @@ public sealed class DelegatedDoorTests
         (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
         var token = await Delegate(tangentSpace, browser);
         var through = (await Event.HighWaterMark.Load(Cancellation)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await Given.BeenAtTheDoor(tangentSpace, Leo, Cancellation);
 
         var session = await Answer(browser.Client, "/", content: Form((DoorController.Through, through)));
         Assert.Equal((HttpStatusCode.BadRequest, "Open the door again"), (session.Status, session.Title));
-        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Place), Cancellation));
+        Assert.Equal(0, (await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Place), Cancellation))!.Seq);
 
         using var agent = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
         using var marked = new HttpRequestMessage(HttpMethod.Post, "/")

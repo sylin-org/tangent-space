@@ -302,7 +302,7 @@ public static class PostWrites
         Capabilities.Locked => "This topic is locked, so no one replies in it.",
         Capabilities.Removed => "This post is removed, so nothing changes it now.",
         Capabilities.NotYours => "Only its author, or a moderator, can change this post.",
-        _ => "This isn’t open to you here: " + gate + "."
+        _ => "This isn’t open to you here."
     };
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a

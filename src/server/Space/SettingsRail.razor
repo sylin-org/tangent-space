@@ -1,13 +1,17 @@
-@* The rail of the place's settings: each section the reader is shown, the one the page shows marked. *@
-<aside class="rail" aria-label="Settings">
-    <h2 class="rail-heading">Settings</h2>
-    <ul class="rail-views">
-        @foreach (var section in Sections)
-        {
-            <li><a href="@section.Address" aria-current="@(section.Current ? "page" : null)">@section.Name</a></li>
-        }
-    </ul>
-</aside>
+@* The rail of the place's settings: each section the reader may use, the one the page shows marked; no rail for a
+   reader who may use none. *@
+@if (Sections.Count > 0)
+{
+    <aside class="rail" aria-label="Settings">
+        <h2 class="rail-heading">Settings</h2>
+        <ul class="rail-views">
+            @foreach (var section in Sections)
+            {
+                <li><a href="@section.Address" aria-current="@(section.Current ? "page" : null)">@section.Name</a></li>
+            }
+        </ul>
+    </aside>
+}
 
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<SettingsSection> Sections { get; set; } = [];

@@ -121,6 +121,7 @@ public sealed partial class ReportTests
         using var bea = await SignedIn(tangentSpace, Bea);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var mo = await SignedIn(tangentSpace, Mo);
+        await Given.BeenAtTheDoor(tangentSpace, Mo, Cancellation);
 
         var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostCreated && e.PostId == report.Id, Cancellation));
         Assert.Null(created.TargetId);

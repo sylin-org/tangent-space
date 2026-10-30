@@ -154,6 +154,7 @@ public sealed class PeopleTests
         var writer = await Place(tangentSpace);
         using var mo = await SignedIn(tangentSpace, Mo);
         using var ada = await SignedIn(tangentSpace, Ada);
+        await Given.BeenAtTheDoor(tangentSpace, Ada, Cancellation);
         await using var stream = await Streamed.Open(ada.Client, EventsController.Path);
         Assert.Equal("open", (await stream.Any()).Comment);
         var path = PeopleController.Path;
@@ -284,6 +285,7 @@ public sealed class PeopleTests
         var gated = await Json(mo, path, PeopleController.GivePath, new { participant = Bea, role = People.Moderator });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles)), (gated.Status, gated.Gate));
 
+        await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
         // The administrator is offered the moderator role on a member, never their own highest, and gives it from the
         // people page.
         var beaRow = Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Bea);

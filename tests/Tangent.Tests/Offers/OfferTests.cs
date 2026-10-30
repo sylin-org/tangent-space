@@ -327,9 +327,6 @@ public sealed class OfferTests
         var accepted = Offer.Make(OfferKind.Address, Public, Leo, DateTimeOffset.UtcNow);
         accepted.Accept(DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Offer>.Done>(await keptWriter.Send(new Store<Offer>(accepted), Cancellation));
-        // Something new to Leo, so his door holds a form to take a token from.
-        Assert.IsType<Outcome<Post>.Done>(await keptWriter.Send(
-            new StartTopic(Tids.Mint(), "workshop", "Kilns", "Which kiln runs hottest?", Ada), Cancellation));
         var keptUrl = kept.Services.GetRequiredService<KoanWebBaseUrl>();
         Assert.Null(keptUrl.Current);
         using var leo = await SignedIn(kept, "leo", Leo);
@@ -522,10 +519,10 @@ public sealed class OfferTests
     }
 
     /// <summary>Posts one answer to an Offer, as its form does, with the token of <paramref name="form"/>, or of the form
-    /// the door holds now.</summary>
+    /// the workshop's page holds now.</summary>
     private static async Task<HttpResponseMessage> Answer(Browser browser, string path, string offerId, Dictionary<string, string>? form = null)
     {
-        var fields = new Dictionary<string, string>(form ?? await browser.Token("/", Cancellation));
+        var fields = new Dictionary<string, string>(form ?? await browser.Token("/t/workshop", Cancellation));
         fields[OfferController.Field] = offerId;
         return await browser.Client.PostAsync(path, new FormUrlEncodedContent(fields), Cancellation);
     }

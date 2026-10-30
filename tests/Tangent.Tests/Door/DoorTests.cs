@@ -110,6 +110,99 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task A_newcomers_first_door_welcomes_them_with_nothing_counted_as_new_and_their_second_reads_past_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var topic = await Started(writer, Workshop, "What should we build?", "ada");
+        await Replied(writer, topic, "leo");
+        await Started(writer, Articles, "On lanterns", "leo", PostKind.Article);
+        var through = await Event.HighWaterMark.Load(Cancellation);
+
+        // Signing in at a page of the place leaves the door unopened.
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation));
+
+        var first = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
+        Assert.Contains("Welcome to Lantern Works.", first);
+        Assert.Contains("What should we build?", first);
+        Assert.DoesNotContain("Since you were here", first);
+        Assert.DoesNotContain("Nothing new since", first);
+        Assert.DoesNotContain("Mark all seen", first);
+        Assert.DoesNotContain("new post", first);
+        Assert.DoesNotContain("class=\"new-dot\"", first);
+
+        // Opening it began their checkpoint, past everything it showed.
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.True((await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq >= through);
+        var second = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
+        Assert.Contains("Nothing new since you were here.", second);
+        Assert.DoesNotContain("Welcome to", second);
+
+        await Replied(writer, topic, "ada");
+        var third = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
+        Assert.Contains("Since you were here: 1 new post in The workshop.", third);
+        Assert.Contains("Mark all seen", third);
+        Assert.DoesNotContain("Welcome to", third);
+    }
+
+    [Fact]
+    public async Task A_first_door_as_json_says_it_is_first_with_nothing_new_and_a_head_leaves_it_first()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var topic = await Started(writer, Workshop, "What should we build?", "ada");
+        await Replied(writer, topic, "leo");
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
+
+        using (var head = new HttpRequestMessage(HttpMethod.Head, "/"))
+            (await browser.Client.SendAsync(head, Cancellation)).Dispose();
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation));
+
+        using (var json = await Json(browser.Client, "/"))
+        {
+            var root = json.RootElement;
+            var news = root.GetProperty("news");
+            Assert.True(news.GetProperty("first").GetBoolean());
+            Assert.True(news.GetProperty("quiet").GetBoolean());
+            Assert.Equal(0, news.GetProperty("perTangent").GetArrayLength());
+            Assert.False(news.TryGetProperty("caughtUp", out _));
+            Assert.False(root.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
+            Assert.All(root.GetProperty("tangents").EnumerateArray(), tangent => Assert.Equal(0, tangent.GetProperty("new").GetInt32()));
+        }
+
+        await Reached.Settled(tangentSpace, Cancellation);
+        using (var json = await Json(browser.Client, "/"))
+            Assert.False(json.RootElement.GetProperty("news").GetProperty("first").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_first_door_keeps_what_concerns_the_reader_under_the_welcome_with_no_catching_up_and_shows_it_once()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
+        var mine = await Started(writer, Workshop, "My question", Reader);
+        var reply = await Replied(writer, mine, "ada");
+
+        var first = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
+        Assert.Contains("Welcome to Lantern Works", first);
+        Assert.Contains("Replies to you", first);
+        Assert.Contains($"href=\"{BaseUrl}/t/{Workshop}/my-question/{reply.Id}\"", first);
+        Assert.DoesNotContain("Since you were here", first);
+        Assert.DoesNotContain("New in each Tangent", first);
+        Assert.DoesNotContain("Mark all seen", first);
+
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Contains("Nothing new since you were here.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
+    }
+
+    [Fact]
     public async Task An_event_in_a_tangent_the_reader_may_not_view_is_in_no_group_and_a_topic_checkpoint_past_an_event_hides_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
@@ -153,6 +246,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         for (var index = 0; index < LogWindow.Size + 5; index++) await Replied(writer, topic, index % 2 == 0 ? "ada" : "leo");
 
         using var browser = await SignedIn(tangentSpace);
+        await Given.BeenAtTheDoor(tangentSpace, Reader, Cancellation);
         using (var json = await Json(browser.Client, "/"))
         {
             var news = json.RootElement.GetProperty("news");
@@ -186,6 +280,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         var mine = await Started(writer, Workshop, "My question", Reader);
         await Replied(writer, mine, "ada");
         using var browser = await SignedIn(tangentSpace);
+        await Given.BeenAtTheDoor(tangentSpace, Reader, Cancellation);
 
         using (var json = await Json(browser.Client, "/"))
             Assert.True(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
@@ -200,7 +295,7 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using (var refused = await browser.Client.PostAsync("/", Form(new() { [DoorController.Through] = through.ToString(CultureInfo.InvariantCulture) }), Cancellation))
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
-        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation));
+        Assert.Equal(0, (await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq);
 
         var token = await Token(browser);
         using (var marked = await MarkSeen(browser, through, new Dictionary<string, string>(token)))
