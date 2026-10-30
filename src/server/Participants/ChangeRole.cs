@@ -7,10 +7,11 @@ using Tangent.Writer;
 
 namespace Tangent.Participants;
 
-/// <summary>Gives a participant one of the roles given here (<see cref="People.Given"/>: moderator or administrator), or
-/// takes it from them where <see cref="Give"/> is false. Judged by <see cref="People.Judge"/> for
+/// <summary>Gives a participant one of the roles given here (<see cref="Roles.Given"/>: every role but everyone and
+/// member), or takes it from them where <see cref="Give"/> is false. Judged by <see cref="People.Judge"/> for
 /// <see cref="Bit.ManageRoles"/>; the role is one given here, or the command is refused with
-/// <see cref="People.NotARole"/>; the actor holds every permission it grants, or is refused with
+/// <see cref="People.NotARole"/>; the actor manages it (<see cref="People.Manages"/>), or is refused with
+/// <see cref="People.NotManaged"/>; the actor holds every permission it grants, or is refused with
 /// <see cref="People.NotHeld"/>. Koan's role write is not part of a transaction, so <see cref="Prepare"/> judges the change
 /// and makes it before the transaction opens, and <see cref="Run"/>, in the same turn of the loop, keeps that judgement and
 /// appends one <see cref="EventKind.RoleChanged"/> with the actor, the participant as its target, the role and whether it
@@ -53,15 +54,16 @@ public sealed record ChangeRole(string ActorId, string ParticipantId, string Rol
         return new Outcome<Participant>.Done(target);
     }
 
-    /// <summary>The judgement of <see cref="People.Judge"/>, then whether the role is one given here and whether the actor
-    /// holds what it grants.</summary>
+    /// <summary>The judgement of <see cref="People.Judge"/>, then whether the role is one given here, whether the actor
+    /// manages it and whether they hold what it grants.</summary>
     private async Task<People.Judged> Judge(CancellationToken ct)
     {
         var judged = await People.Judge(ActorId, ParticipantId, Bit.ManageRoles, At ?? DateTimeOffset.UtcNow, ct);
         if (judged.Refusal is not null) return judged;
-        if (People.Given.All(given => given.Key != Role)) return judged with { Refusal = People.NotARole };
+        if (!Roles.Given(Role)) return judged with { Refusal = People.NotARole };
         var role = await AppHost.GetRequiredService<RoleCollection>(nameof(ChangeRole)).Get(Role, ct);
         if (role is null) return judged with { Refusal = People.NotARole };
+        if (!People.Manages(judged.Actor!, ActorId, judged.Space!, role)) return judged with { Refusal = People.NotManaged };
         return People.Holding(judged.Actor!, role) is { } refusal ? judged with { Refusal = refusal } : judged;
     }
 }

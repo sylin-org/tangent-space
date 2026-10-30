@@ -136,6 +136,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
             moderators,
             movable,
             address,
+            address + "/" + TangentWrites.SettingsSegment + "/" + TangentAccessController.Segment,
             TangentWrites.MayManage(capabilities)
                 ? TangentWrites.ChangeForm(address + "/" + TangentWrites.SettingsSegment, moderators, movable, FormToken.For(HttpContext))
                 : null,

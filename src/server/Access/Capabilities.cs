@@ -41,16 +41,22 @@ public sealed class Capabilities
 
     private readonly Dictionary<Bit, string> _missing;
 
-    private Capabilities(Bit held, bool exists, Dictionary<Bit, string> missing, IReadOnlyList<string> roleIds)
+    private Capabilities(Bit held, bool exists, Dictionary<Bit, string> missing, IReadOnlyList<string> roleIds, RoleBag bag)
     {
         Held = held;
         Exists = exists;
         _missing = missing;
         RoleIds = roleIds;
+        Bag = bag;
     }
 
     /// <summary>The roles in the participant's bag, by id; empty for a visitor.</summary>
     public IReadOnlyList<string> RoleIds { get; }
+
+    /// <summary>Koan's bag for the participant, the anonymous bag for a visitor: the roles they are in and where the
+    /// highest of them stands (<see cref="RoleBag.Highest"/>), which decides whose standing and roles they change and
+    /// which roles they manage (<see cref="RoleBag.Manages"/>).</summary>
+    public RoleBag Bag { get; }
 
     /// <summary>The bits the participant holds on this resource.</summary>
     public Bit Held { get; }
@@ -135,7 +141,7 @@ public sealed class Capabilities
         {
             var reason = missing[Bit.View];
             foreach (var bit in Bits.Each) missing[bit] = reason;
-            return new Capabilities(Bit.None, false, missing, resolved.RoleIds);
+            return new Capabilities(Bit.None, false, missing, resolved.RoleIds, resolved.Bag);
         }
 
         // Replying is judged by the Topic, whose state lives on its root; everything else by the Post itself.
@@ -148,7 +154,7 @@ public sealed class Capabilities
 
         if (post is null || participant is null || post.AuthorId != participant.Id) Drop(Bit.EditOwn | Bit.RemoveOwn, NotYours);
 
-        return new Capabilities(held, true, missing, resolved.RoleIds);
+        return new Capabilities(held, true, missing, resolved.RoleIds, resolved.Bag);
 
         void Drop(Bit bits, string reason)
         {
@@ -164,8 +170,8 @@ public sealed class Capabilities
     }
 
     /// <summary>What the bag and the overwrites leave for one reader on one resource: the bits granted, the reason for
-    /// each bit withheld, and the roles in the bag.</summary>
-    internal sealed record Resolved(Bit Granted, IReadOnlyList<(Bit Bit, string Reason)> Withheld, IReadOnlyList<string> RoleIds);
+    /// each bit withheld, the roles in the bag, and the bag.</summary>
+    internal sealed record Resolved(Bit Granted, IReadOnlyList<(Bit Bit, string Reason)> Withheld, IReadOnlyList<string> RoleIds, RoleBag Bag);
 
     /// <summary>Koan's resolution in Discord's order (<see cref="RoleBag.On"/>) over the bag, with everyone's
     /// <see cref="Bit.View"/> on a public place in its base, and the overwrites on the resource of
@@ -185,7 +191,7 @@ public sealed class Capabilities
         IReadOnlyList<string> roleIds = participant is null
             ? []
             : bag.Roles.Where(role => role is not (RoleTokens.Everyone or RoleTokens.Authenticated)).ToList();
-        return new Resolved(granted, withheld, roleIds);
+        return new Resolved(granted, withheld, roleIds, bag);
     }
 
     /// <summary>Koan's deciding fact for a missing bit, in Tangent's words.</summary>

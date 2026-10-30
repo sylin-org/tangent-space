@@ -32,6 +32,9 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>The refusal an admission other than join or apply meets.</summary>
     public const string AdmissionRule = "A newcomer joins at once or applies and waits: choose join or apply.";
 
+    /// <summary>The refusal an audience other than public or private meets.</summary>
+    public const string AudienceRule = "The place is read by anyone or by its participants alone: choose public or private.";
+
     /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
     public const string PlainName = "Tangent Space";
 
@@ -102,7 +105,8 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>Whether <paramref name="address"/> is local: none, or a loopback host.</summary>
     public static bool IsLocal(string? address) => address is null || new Uri(address).IsLoopback;
 
-    /// <summary>Who may read: anyone, or participants the place admitted.</summary>
+    /// <summary>Who may read: anyone, or participants the place admitted. A private place shows a visitor only the
+    /// sign-in, and asks search engines to index none of it.</summary>
     public Audience Audience { get; set; } = Audience.Public;
 
     /// <summary>How a newcomer arrives: joining at once, or applying and waiting until someone admits them.</summary>
@@ -115,17 +119,18 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public Slots Slots { get; set; } = new();
 
-    /// <summary>Renames and describes the place and sets how a newcomer arrives, a change to the row, or refuses with
-    /// <see cref="NameRule"/> or <see cref="DescriptionRule"/>; the name and the description are kept trimmed. Answers
-    /// whether anything changed.</summary>
-    public bool Change(string name, string description, Admission admission)
+    /// <summary>Renames and describes the place, sets how a newcomer arrives and who reads it, a change to the row, or
+    /// refuses with <see cref="NameRule"/>, <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/> or
+    /// <see cref="AudienceRule"/>; the name and the description are kept trimmed. Answers whether anything changed.</summary>
+    public bool Change(string name, string description, Admission admission, Audience audience)
     {
         var named = Named(name);
         var described = description.Trim();
         if (described.Length > DescriptionLimit) throw new Refusal(DescriptionRule);
         if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
-        if (Name == named && Description == described && Admission == admission) return false;
-        (Name, Description, Admission) = (named, described, admission);
+        if (!Enum.IsDefined(audience)) throw new Refusal(AudienceRule);
+        if (Name == named && Description == described && Admission == admission && Audience == audience) return false;
+        (Name, Description, Admission, Audience) = (named, described, admission, audience);
         Version = checked(Version + 1);
         return true;
     }

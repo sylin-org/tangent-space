@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Writer;
@@ -39,7 +40,7 @@ public sealed class TangentSpaceSettingsTests
         Assert.Contains(nameof(Bit.ManageSpace), page.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         Assert.False(page.Json.TryGetProperty("gate", out _));
         Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications", false),
-                ("People", settings + "/people", false)],
+                ("People", settings + "/people", false), ("Roles", settings + "/roles", false)],
             page.Json.GetProperty("sections").EnumerateArray().Select(section =>
                 (section.GetProperty("name").GetString(), section.GetProperty("address").GetString(), section.GetProperty("current").GetBoolean())));
         var before = await Event.Count.Exact(Cancellation);
@@ -118,5 +119,70 @@ public sealed class TangentSpaceSettingsTests
 
         Assert.Equal("Field notes", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Name);
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
+    }
+
+    /// <summary>A page as a browser asks for it, with the header that asks search engines not to index it, if any.</summary>
+    private static async Task<(HttpStatusCode Status, string Body, string? Robots)> Page(HttpClient client, string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        using var response = await client.SendAsync(request, Cancellation);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync(Cancellation),
+            response.Headers.TryGetValues(PrivatePlaceGate.RobotsHeader, out var robots) ? string.Join(",", robots) : null);
+    }
+
+    [Fact]
+    public async Task A_private_place_serves_a_visitor_only_the_sign_in_and_asks_that_nothing_be_indexed_while_its_participants_read_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Started(writer, Ada, "What should we build?", "Kilns, glazes, lanterns.");
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var visitor = Agent(tangentSpace);
+        Assert.Equal("public", (await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json.GetProperty("audience").GetString());
+        Assert.Contains("What should we build?", (await Page(visitor, "/")).Body);
+
+        // Made private from the general section: one space.changed.
+        var before = await Event.Count.Exact(Cancellation);
+        var made = await Form(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, new Dictionary<string, string>
+        {
+            [TangentSpaceSettingsController.AudienceField] = "private"
+        });
+        Assert.Equal(HttpStatusCode.SeeOther, made.Status);
+        Assert.Equal(Audience.Private, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Audience);
+        Assert.Equal(EventKind.SpaceChanged, Assert.Single(await Event.All(Cancellation), e => e.Seq > before).Kind);
+
+        // A visitor reads the sign-in at every address, which brings them back there, and is told no page is to be indexed.
+        foreach (var path in new[] { "/", "/t/" + Workshop, "/t/" + Workshop + "/what-should-we-build", "/t/nowhere", "/p/" + Ada.Split(':')[^1] + ".example" })
+        {
+            var (status, body, robots) = await Page(visitor, path);
+            Assert.Equal((HttpStatusCode.Unauthorized, "noindex"), (status, robots));
+            Assert.Contains("Sign in to read this place", body);
+            Assert.Contains("return=" + Uri.EscapeDataString(path), body);
+            Assert.DoesNotContain("What should we build?", body);
+        }
+
+        var asJson = await Send(visitor, HttpMethod.Get, "/t/" + Workshop, json: true);
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (asJson.Status, asJson.Gate));
+        var posted = await Send(visitor, HttpMethod.Post, "/t/" + Workshop + "/new", JsonBody(new { title = "Hello" }), json: true);
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (posted.Status, posted.Gate));
+        Assert.Equal(HttpStatusCode.OK, (await Page(visitor, "/sign-in")).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/tangent.json", json: true)).Status);
+
+        // Its participants read it as they did, and are told the same of indexing.
+        var read = await Page(ada.Client, "/t/" + Workshop);
+        Assert.Equal((HttpStatusCode.OK, "noindex"), (read.Status, read.Robots));
+        Assert.Contains("What should we build?", read.Body);
+
+        // Public again, as JSON: the visitor reads, and nothing asks against indexing.
+        var opened = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, new { audience = "public" });
+        Assert.Equal((HttpStatusCode.OK, "public"), (opened.Status, opened.Json.GetProperty("audience").GetString()));
+        var again = await Page(visitor, "/");
+        Assert.Equal((HttpStatusCode.OK, null), (again.Status, again.Robots));
+        Assert.Contains("What should we build?", again.Body);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path,
+            new { audience = "members" })).Status);
     }
 }

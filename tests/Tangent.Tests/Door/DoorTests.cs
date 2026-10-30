@@ -287,7 +287,7 @@ public sealed class DoorTests(ITestOutputHelper output)
             using var page = await tangentSpace.Client.SendAsync(request, Cancellation);
             var gatedHtml = await page.Content.ReadAsStringAsync(Cancellation);
             Assert.Equal(HttpStatusCode.Unauthorized, page.StatusCode);
-            Assert.Contains("<p data-gate=\"sign-in\">sign-in</p>", gatedHtml);
+            Assert.Contains("Sign in to read this place", gatedHtml);
             Assert.DoesNotContain("What should we build?", gatedHtml);
         }
     }

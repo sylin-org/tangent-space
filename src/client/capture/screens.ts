@@ -120,7 +120,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   },
   // What a visitor reads: the action that signs in with Bluesky; on its way once pressed; the handle form for another
   // server, opened; and back from a failed sign-in with Koan's code: one through Bluesky that the provider did not
-  // confirm, and by handle, the typed handle kept, one refused on the provider's page and a handle no account answers to.
+  // confirm, and by handle, the typed handle kept, one refused on the provider's page and a handle no account answers to;
+  // and what a private place answers a visitor at the address of one of its Tangents.
   'sign-in': {
     path: '/sign-in',
     states: [
@@ -130,6 +131,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'sign-in-failed', query: { error: 'sign_in_failed' } },
       { name: 'access-denied', query: { error: 'access_denied', handle: 'ada.bsky.social' } },
       { name: 'handle-unresolved', query: { error: 'handle_unresolved', handle: 'ada.bsky.socail' } },
+      { name: 'private-place', seed: 'private-place', path: '/t/discussions' },
     ],
   },
   // A visitor, before anyone signs in, whose sign-in sets the place up; signed in where the configuration names
@@ -146,12 +148,34 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // The place's settings, general, read by the persona, who set the place up and so holds ManageSpace: the sections
-  // in the rail and the name and description; and by the persona in a place someone else set up, where she holds no
-  // role, refused with the gate above read-only fields.
+  // in the rail, the name and description, and who reads it, public; the same once the place is private; and by the
+  // persona in a place someone else set up, where she holds no role, refused with the gate above read-only fields.
   'tangent-space-settings-general': {
     path: '/settings',
     states: [
       { name: 'proprietor', place: 'persona', signedIn: true },
+      { name: 'private', place: 'persona', seed: 'private-place', signedIn: true },
+      { name: 'refused', signedIn: true },
+    ],
+  },
+  // The place's roles, read by the persona, who set the place up and so shapes every role: administrator, moderator,
+  // the night shift and patrons, member and everyone, each with what she may do to it; the new role's form opened; the
+  // night shift's change opened in place; its deletion opened, confirmed in the page; and refused, read by the persona
+  // as a member of a place someone else set up.
+  'tangent-space-settings-roles': {
+    path: '/settings/roles',
+    states: [
+      { name: 'with-roles', place: 'persona', seed: 'roles', signedIn: true },
+      { name: 'new-role-open', place: 'persona', seed: 'roles', signedIn: true, click: '.roles-new > summary', waitFor: '.roles-new[open]' },
+      { name: 'change-open', place: 'persona', seed: 'roles', signedIn: true, click: '.roles-change > summary', waitFor: '.roles-change[open]' },
+      {
+        name: 'delete-confirmation',
+        place: 'persona',
+        seed: 'roles',
+        signedIn: true,
+        click: '.roles-delete > summary',
+        waitFor: '.roles-delete[open]',
+      },
       { name: 'refused', signedIn: true },
     ],
   },
@@ -266,6 +290,19 @@ export const screens: Readonly<Record<string, Screen>> = {
         waitFor: '#closed-heading',
       },
       { name: 'moderators', place: 'persona', seed: 'tangent', signedIn: true, path: '/t/moderators/settings' },
+    ],
+  },
+  // A Tangent's access, read by the persona, who set the place up and so manages every role: the studio, private, whose
+  // member role reads and posts there, members-only, where patrons read alone; the public discussions, where each role
+  // holds what it holds in the place; the moderators' Tangent, whose access stays as it is; and refused, read by the
+  // persona as a member of a place someone else set up, who reads the gate and no role.
+  'tangent-settings-access': {
+    path: '/t/studio/settings/access',
+    states: [
+      { name: 'members-only', place: 'persona', seed: 'roles', signedIn: true },
+      { name: 'public', place: 'persona', seed: 'roles', signedIn: true, path: '/t/discussions/settings/access' },
+      { name: 'moderators', place: 'persona', seed: 'roles', signedIn: true, path: '/t/moderators/settings/access' },
+      { name: 'refused', seed: 'roles', signedIn: true, path: '/t/discussions/settings/access' },
     ],
   },
   // The form that edits the persona's own Topic: as it opens; sent with a body of nothing but spaces, refused under

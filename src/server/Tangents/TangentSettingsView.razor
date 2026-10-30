@@ -51,6 +51,10 @@
                 <TangentChoices Prefix="settings" Description="@Model.Description" Kind="@Model.Kind" Audience="@Model.Audience"
                                 Kinds="@Model.Kinds" Audiences="@Model.Audiences" DescriptionFailure="@Model.DescriptionFailure"
                                 ReadOnly="@(!Mutable)" AudienceFixed="@(Model.Fixed ? "Only moderators read this Tangent; its audience stays as it is." : null)" />
+                @if (Mutable && !Model.Fixed)
+                {
+                    <p class="post-form-note"><a href="@Model.Access">Access</a> sets which roles read and post here.</p>
+                }
                 @if (Mutable)
                 {
                     <div class="post-form-actions">

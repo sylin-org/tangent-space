@@ -155,7 +155,7 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, WriteLoop wr
                 case EventKind.RoleChanged:
                     return new NotificationsPage.Entry(e.Seq, NotificationsPage.Kinds.Role, isNew, e.At, who, profile)
                     {
-                        Role = Participants.People.Given.FirstOrDefault(given => given.Key == e.Role).Word ?? e.Role,
+                        Role = e.Role is { } role ? Roles.Word(role) : null,
                         Given = e.Given
                     };
                 case EventKind.OfferMade when offers.TryGetValue(e.OfferId ?? "", out var offer):

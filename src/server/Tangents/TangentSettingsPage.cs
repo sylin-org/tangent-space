@@ -10,7 +10,8 @@ namespace Tangent.Tangents;
 /// reader may view, null at either end and for every other reader. <see cref="Change"/>, present only where the reader
 /// may change the Tangent, takes <c>name</c>, <c>description</c>, <c>kind</c>, <c>audience</c> and <c>move</c>
 /// (<c>earlier</c> or <c>later</c>), each left as it is when not sent. <see cref="Fixed"/> says this is the moderators'
-/// Tangent, whose audience and place stay as they are. <see cref="Can"/> is what the reader holds on the Tangent, and
+/// Tangent, whose audience and place stay as they are. <see cref="Access"/> is where the roles' access to it is set
+/// (<see cref="TangentAccessPage"/>). <see cref="Can"/> is what the reader holds on the Tangent, and
 /// <see cref="Gate"/> why they may not change it, null when they may; <see cref="SignIn"/> is where a visitor signs in,
 /// coming back here. After a refusal the form keeps what was sent and says why: under the name, under the description,
 /// or above the form.</summary>
@@ -25,6 +26,7 @@ public sealed record TangentSettingsPage(
     bool Fixed,
     bool Movable,
     string Address,
+    string Access,
     Form? Change,
     IReadOnlyList<string> Can,
     string? Gate,

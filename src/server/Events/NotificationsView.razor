@@ -104,7 +104,7 @@
         NotificationsPage.Kinds.Taken => Named(entry, "took your post on a tangent:", ""),
         NotificationsPage.Kinds.Report => Reported(entry),
         NotificationsPage.Kinds.Standing => Linked(entry, Standing(entry)),
-        NotificationsPage.Kinds.Role => Linked(entry, (entry.Given == true ? "made you " + Article(entry.Role ?? "") + " " + entry.Role : "took your " + entry.Role + " role") + "."),
+        NotificationsPage.Kinds.Role => Linked(entry, global::Tangent.Access.Roles.Changed(entry.Role ?? "", entry.Given == true) + "."),
         NotificationsPage.Kinds.Offer when entry.Offer is { } offer => Offered(entry, offer),
         NotificationsPage.Kinds.Application => Linked(entry, "applied to join and is waiting."),
         _ => Linked(entry, "Something here concerns you.")
@@ -156,7 +156,4 @@
 
     private static RenderFragment Decided(NotificationsPage.Entry entry, string before, string subject, string after)
         => @<text>@before<a class="notification-link" href="@entry.Address">@subject</a>@after</text>;
-
-    /// <summary>The article a role's word takes.</summary>
-    private static string Article(string role) => role.Length > 0 && "aeiou".Contains(role[0]) ? "an" : "a";
 }

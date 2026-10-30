@@ -58,8 +58,9 @@ public static class PostWrites
     }
 
     /// <summary>The fields a write sent, by name: a form's, or the string, number and true or false members of a JSON
-    /// object, each as its text; an empty
-    /// set for a body of neither kind, and null for a JSON body that is not one object.</summary>
+    /// object, each as its text; a form field sent more than once, as checkboxes of one name are, and a JSON array of
+    /// strings hold their values joined by single spaces, the empty ones left out. An empty set for a body of neither kind,
+    /// and null for a JSON body that is not one object.</summary>
     public static async Task<IReadOnlyDictionary<string, string>?> Fields(HttpRequest request, CancellationToken ct)
     {
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -67,7 +68,8 @@ public static class PostWrites
         {
             foreach (var (name, values) in await request.ReadFormAsync(ct))
             {
-                if (values.FirstOrDefault() is { } value) fields[name] = value;
+                if (values.Count > 1) fields[name] = string.Join(' ', values.Where(value => !string.IsNullOrEmpty(value)));
+                else if (values.FirstOrDefault() is { } value) fields[name] = value;
             }
 
             return fields;
@@ -82,6 +84,8 @@ public static class PostWrites
             {
                 if (member.Value.ValueKind == JsonValueKind.String) fields[member.Name] = member.Value.GetString()!;
                 else if (member.Value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False) fields[member.Name] = member.Value.GetRawText();
+                else if (member.Value.ValueKind == JsonValueKind.Array && member.Value.EnumerateArray().All(item => item.ValueKind == JsonValueKind.String))
+                    fields[member.Name] = string.Join(' ', member.Value.EnumerateArray().Select(item => item.GetString()).Where(value => !string.IsNullOrEmpty(value)));
             }
 
             return fields;

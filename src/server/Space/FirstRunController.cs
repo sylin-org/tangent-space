@@ -20,6 +20,7 @@ namespace Tangent.Space;
 /// to everyone else it answers as a missing resource. Every other page of the tree answers this resource until the
 /// place is established (<see cref="FirstRunGate"/>).</summary>
 [AnswersBeforeFirstRun]
+[AnswersEveryVisitor]
 public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, IServer server) : ControllerBase
 {
     /// <summary>The page's path under the base URL.</summary>
