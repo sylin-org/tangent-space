@@ -76,7 +76,7 @@ public sealed class OfferTests
     }
 
     [Fact]
-    public async Task A_new_origin_that_meets_a_full_writer_is_dropped_without_waiting_and_offered_later()
+    public async Task A_new_origin_that_meets_a_full_writer_is_dropped_without_waiting_and_offered_at_the_next_commit()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
@@ -99,8 +99,41 @@ public sealed class OfferTests
         await Reached.Settled(tangentSpace, Cancellation);
         Assert.Empty(await Offer.All(Cancellation));
 
-        await tangentSpace.Services.GetRequiredService<AddressOffers>().OfferNext(Cancellation);
-        Assert.Equal(Public, Assert.Single(await Offer.All(Cancellation)).Subject);
+        // An ordinary commit, with no Offer open, retries what was dropped.
+        await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
+        Assert.Equal(Public, (await Eventually(async () => (await Offer.All(Cancellation)).SingleOrDefault()))?.Subject);
+    }
+
+    [Fact]
+    public async Task A_use_the_writer_finishes_after_the_store_stops_waiting_answers_that_it_is_under_way_and_the_origin_is_held_once_it_commits()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(),
+            services => services.AddSingleton(provider => new PlaceAddress(provider.GetRequiredService<WriteLoop>(), TimeSpan.FromMilliseconds(300))),
+            Cancellation);
+        await APlaceWithNews(tangentSpace);
+        await Reached.On(tangentSpace, Public, Cancellation);
+        await Reached.Settled(tangentSpace, Cancellation);
+        var offer = Assert.Single(await Offer.All(Cancellation));
+        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
+        var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
+        using var leo = await SignedIn(tangentSpace, "leo", Leo);
+        var form = await leo.Token("/", Cancellation);
+
+        var release = new TaskCompletionSource();
+        var held = writer.Send(new Hold(release.Task), Cancellation);
+        using (var posted = await Answer(leo, OfferController.UsePath, offer.Id, form))
+        {
+            Assert.Equal(HttpStatusCode.Accepted, posted.StatusCode);
+            Assert.Contains($"This is taking longer than usual; the place moves to {Public} as soon as it’s done.",
+                WebUtility.HtmlDecode(await posted.Content.ReadAsStringAsync(Cancellation)));
+        }
+        Assert.Null(baseUrl.Current);
+
+        release.SetResult();
+        await held;
+        Assert.Equal(Public, await Eventually(() => Task.FromResult(baseUrl.Current)));
+        Assert.Equal(Public, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
+        Assert.Equal(OfferState.Accepted, (await Offer.Get(offer.Id, Cancellation))!.State);
     }
 
     [Fact]
@@ -436,6 +469,19 @@ public sealed class OfferTests
             SqliteConnection.ClearAllPools();
             if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
         }
+    }
+
+    /// <summary>What <paramref name="read"/> answers once it answers something, read every tenth of a second for at most
+    /// ten seconds; null if it never does.</summary>
+    private static async Task<T?> Eventually<T>(Func<Task<T?>> read) where T : class
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (await read() is { } found) return found;
+            await Task.Delay(TimeSpan.FromMilliseconds(100), Cancellation);
+        }
+
+        return null;
     }
 
     /// <summary>A command that keeps the writer busy until <see cref="Until"/> completes, writing nothing.</summary>

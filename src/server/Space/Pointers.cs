@@ -73,10 +73,10 @@ public static class Pointers
         var path = Uri.UnescapeDataString(encoded);
         if (path.Contains('$') || path.Any(char.IsControl))
             return new Pointer(Proxy,
-                $"nginx cannot express the path `{path}` safely, since it reads `$` as a variable; pass `{path}/` unchanged to `{upstream}` on your reverse proxy by hand, with `X-Forwarded-Proto` and `X-Forwarded-For`. A proxy on this machine is believed as it is; list one elsewhere under `Koan:Web:TrustedProxies`.",
+                $"nginx cannot express the path `{path}` safely, since it reads `$` as a variable; pass `{path}/` unchanged to `{upstream}` on your reverse proxy by hand, with `X-Forwarded-Proto` and `X-Forwarded-For`. A proxy on this machine is believed as it is; add one elsewhere as `Koan:Web:TrustedProxies:2`.",
                 "");
         return new Pointer(Proxy,
-            $"In the server block for `{address.Authority}` on your reverse proxy. A proxy on this machine is believed as it is; list one elsewhere under `Koan:Web:TrustedProxies`.",
+            $"In the server block for `{address.Authority}` on your reverse proxy. A proxy on this machine is believed as it is; add one elsewhere as `Koan:Web:TrustedProxies:2`.",
             $$"""
             location = {{Nginx(path)}} {
                 return 308 {{Nginx(encoded + "/")}};

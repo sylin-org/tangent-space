@@ -15,7 +15,9 @@ namespace Tangent.Offers;
 /// and lands on the door, offering the next origin seen where there is one. To anyone but the place's operator an
 /// Offer does not exist, and the answer is a missing resource's. A second post of the same answer changes nothing
 /// and lands where the first did, and where the address the first one kept is not the one Koan holds — its request
-/// ended after the writer kept it — Koan is made to hold it.</summary>
+/// ended after the writer kept it — Koan is made to hold it. A use the writer is too busy to finish within the store's
+/// bound answers that it is under way, in one sentence: the writer still runs it, and the place moves once it
+/// commits.</summary>
 public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, AddressOffers offers) : ControllerBase
 {
     public const string UsePath = "/offers/use";
@@ -43,6 +45,9 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
                 return (await Offer.Get(row.Id, ct))?.State == OfferState.Accepted ? await Landed(row, ct) : NoLongerOpen();
             case Outcome<Offer>.Refused refused:
                 return new Problem(StatusCodes.Status409Conflict, "Not used", refused.Reason).ToResult();
+            case Outcome<Offer>.Failed { Cause: TimeoutException }:
+                return new Problem(StatusCodes.Status202Accepted, "Under way",
+                    $"This is taking longer than usual; the place moves to {row.Subject} as soon as it’s done.").ToResult();
             case Outcome<Offer>.Failed failed:
                 throw new InvalidOperationException($"Using the offer {row.Id} failed.", failed.Cause);
             case var other:

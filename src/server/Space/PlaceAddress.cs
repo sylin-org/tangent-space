@@ -10,12 +10,13 @@ namespace Tangent.Space;
 /// (<see cref="DerivesUntilAccepted"/>), so a place is set up on the address its first run is reached at. Only the writer
 /// writes: a plain accept keeps the address (<see cref="KeepAddress"/>); an accept that uses an Offer
 /// (<see cref="Use"/>) runs that Offer's own command, which judges it, keeps the address and accepts the Offer in one
-/// transaction.</summary>
-public sealed class PlaceAddress(WriteLoop writer) : IApplicationUrlStore
+/// transaction. A save waits for the writer at most <paramref name="bound"/>, on its own clock and never the request's:
+/// once the writer has the command it commits whatever becomes of the request, and a commit that lands after the wait
+/// gave up is held by <see cref="AddressOffers"/>, which hears it.</summary>
+public sealed class PlaceAddress(WriteLoop writer, TimeSpan bound) : IApplicationUrlStore
 {
-    /// <summary>How long a save waits for the writer. The wait is the store's own and never the request's: once the
-    /// writer has the command it commits whatever becomes of the request, and Koan must then hold what it kept.</summary>
-    public static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    /// <summary>How long a save waits for the writer unless the composition names another.</summary>
+    public static readonly TimeSpan DefaultBound = TimeSpan.FromSeconds(30);
 
     /// <summary>The Offer being used on this flow, which <see cref="Save"/> runs in place of a plain keep.</summary>
     private static readonly AsyncLocal<Using?> Pending = new();
@@ -24,19 +25,20 @@ public sealed class PlaceAddress(WriteLoop writer) : IApplicationUrlStore
 
     public async Task<string?> Load(CancellationToken ct) => (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.Address;
 
-    /// <summary>Keeps <paramref name="applicationUrl"/> through the writer, waiting at most <see cref="Bound"/>, whatever
-    /// becomes of the request <paramref name="ct"/> belongs to.</summary>
+    /// <summary>Keeps <paramref name="applicationUrl"/> through the writer, waiting at most the store's bound, whatever
+    /// becomes of the request <paramref name="ct"/> belongs to. A wait that gives up throws <see cref="TimeoutException"/>;
+    /// the command still runs, and once it commits the address is held.</summary>
     public async Task Save(string applicationUrl, CancellationToken ct)
     {
-        using var bound = new CancellationTokenSource(Bound);
+        using var waited = new CancellationTokenSource(bound);
         try
         {
-            await Keep(applicationUrl, bound.Token);
+            await Keep(applicationUrl, waited.Token);
         }
-        catch (OperationCanceledException) when (bound.IsCancellationRequested)
+        catch (OperationCanceledException) when (waited.IsCancellationRequested)
         {
-            throw new TimeoutException($"The writer did not keep {applicationUrl} as the place's address within {Bound.TotalSeconds} seconds; "
-                + "if it keeps it later, the next start, or the next post of the Offer that offered it, holds it.");
+            throw new TimeoutException($"The writer did not keep {applicationUrl} as the place's address within {bound}; "
+                + "it is held once the writer commits it.");
         }
     }
 

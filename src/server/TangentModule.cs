@@ -35,7 +35,7 @@ public sealed class TangentModule : KoanModule
                 "Tangent:DataFolder must name a folder.");
 
         // The address the place accepts lives on its row; Koan reads it before the host serves.
-        services.AddSingleton<PlaceAddress>();
+        services.AddSingleton(provider => new PlaceAddress(provider.GetRequiredService<WriteLoop>(), PlaceAddress.DefaultBound));
         services.AddSingleton<IApplicationUrlStore>(provider => provider.GetRequiredService<PlaceAddress>());
         services.AddSingleton<Offers.AddressOffers>();
 
