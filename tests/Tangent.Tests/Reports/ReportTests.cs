@@ -350,6 +350,17 @@ public sealed partial class ReportTests
         Assert.True(Present(Shown(json.Json, topic.Id), "report"));
         Assert.False(Present(moderators.Json.GetProperty("root"), "report"));
         Assert.Equal(ReportPost.InModerators, Assert.IsType<Outcome<Post>.Refused>(nested).Reason);
+
+        // Its report address answers the refusal the post would get: no form, no Id.
+        var form = await Send(mo.Client, HttpMethod.Get, PostPath(report, report) + "/report");
+        var formJson = await Send(mo.Client, HttpMethod.Get, PostPath(report, report) + "/report", json: true);
+        Assert.Equal((HttpStatusCode.BadRequest, HttpStatusCode.BadRequest), (form.Status, formJson.Status));
+        Assert.Contains(ReportPost.InModerators, WebUtility.HtmlDecode(form.Body));
+        Assert.DoesNotContain("<form class=\"sign-in-form\"", form.Body);
+        Assert.DoesNotContain("name=\"id\"", form.Body);
+        Assert.False(Present(formJson.Json, "id"));
+        Assert.False(Present(formJson.Json, "token"));
+        Assert.Equal(ReportPost.InModerators, formJson.Json.GetProperty("failure").GetString());
     }
 
     /// <summary>The place every proof of the write verbs starts from, with the moderators' Tangent a start creates for it.</summary>

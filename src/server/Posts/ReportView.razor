@@ -4,7 +4,8 @@
    that it is removed — then the form: the reason, and the report's Id in a hidden field, minted when the page was
    rendered, so a form sent twice is one report. A reader who may not report it reads why above the form, whose field is
    read-only and which has no button, and a visitor the way to sign in; a refusal of the reason shows under it, and any
-   other above the form. Once the reader's report is received, the panel says so and the way back to the Post, and
+   other above the form; a Post of the moderators' Tangent is not reported, which the page says instead of the form. Once
+   the reader's report is received, the panel says so and the way back to the Post, and
    nothing of where the report went. *@
 <main class="sign-in post-form">
     <section class="sign-in-panel post-form-panel" aria-labelledby="report-heading">
@@ -20,7 +21,7 @@
             </blockquote>
             @if (Model.Received)
             {
-                <p class="report-received" role="status">The moderators have your report. Only they can read it; nobody is notified that it was sent.</p>
+                <p class="report-received" role="status">The moderators have your report. Only they can read it.</p>
                 <p><a href="@Model.Reported.Address">Back to the post</a></p>
             }
             else
@@ -42,6 +43,8 @@
                 {
                     <p class="sign-in-failure" id="report-failure" role="alert">@failure</p>
                 }
+                @if (Model.Id is not null || Model.Gate is not null)
+                {
                 <form class="sign-in-form" method="post" action="@Model.Action">
                     @if (Model.Token is { } token)
                     {
@@ -61,7 +64,7 @@
                         {
                             <p class="field-failure" id="report-body-failure">@bodyFailure</p>
                         }
-                        <p class="post-report-note" id="report-note">Only the moderators can read it; nobody is notified that it was sent.</p>
+                        <p class="post-report-note" id="report-note">Only the moderators can read it.</p>
                     </div>
                     @if (Model.Gate is null)
                     {
@@ -74,6 +77,7 @@
                         </div>
                     }
                 </form>
+                }
             }
         </div>
     </section>

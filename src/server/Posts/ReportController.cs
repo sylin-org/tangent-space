@@ -36,7 +36,8 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         if (found is null) return unseen!;
         var theirs = personId is not null && Tid.IsValid(received) && found.Rows.Space.ModeratorsTangentId is { } moderators
                      && await Post.Get(received!, ct) is { } report && await ReportPost.IsReport(report, moderators, personId, found.Post!.Id, ct);
-        return Ok(await Page(found, personId, theirs, ct));
+        var page = await Page(found, personId, theirs, ct);
+        return page.Failure == ReportPost.InModerators ? new ObjectResult(page) { StatusCode = StatusCodes.Status400BadRequest } : Ok(page);
     }
 
     [HttpPost(Route)]
@@ -122,7 +123,8 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
 
     /// <summary>The page for the Post the address names: the Post quoted, and the form — with a gate where the reader
     /// may not report it: <see cref="Capabilities.SignIn"/> for a visitor, <see cref="Capabilities.Removed"/> for a
-    /// tombstone — or, where <paramref name="received"/>, only that the report was received.</summary>
+    /// tombstone — or, where <paramref name="received"/>, only that the report was received. A Post of the moderators'
+    /// Tangent carries no form and no Id, only <see cref="ReportPost.InModerators"/>, as sending one is answered.</summary>
     private async Task<ReportPage> Page(PostWrites.Located found, string? personId, bool received, CancellationToken ct)
     {
         var reported = found.Post!;
@@ -134,6 +136,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         var back = baseUrl.PathBase + "/t/" + found.Tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + reported.Id + "/" + Segment;
         var reader = found.Rows.Participant;
         var gate = received ? null : reader is null ? Capabilities.SignIn : reported.Removed ? Capabilities.Removed : null;
+        var inModerators = !received && reported.TangentId == found.Rows.Space.ModeratorsTangentId;
 
         var people = await TakeOnATangentController.People(reported, ct);
         var author = people.TryGetValue(reported.AuthorId, out var person)
@@ -145,13 +148,14 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
                 found.Tangent.Name, tangentAddress),
             received,
             address + "/" + Segment,
-            received || reader is null ? null : FormToken.For(HttpContext),
-            received || gate is not null ? null : Tid.Mint(DateTimeOffset.UtcNow),
+            received || inModerators || reader is null ? null : FormToken.For(HttpContext),
+            received || inModerators || gate is not null ? null : Tid.Mint(DateTimeOffset.UtcNow),
             gate,
             personId is null ? configured + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
             found.Rows.Space.Name,
             configured + "/",
-            await PostWrites.Reader(personId, found.Rows.For(null), configured, back, ct));
+            await PostWrites.Reader(personId, found.Rows.For(null), configured, back, ct),
+            Failure: inModerators ? ReportPost.InModerators : null);
     }
 
     /// <summary>The reported Post's address.</summary>

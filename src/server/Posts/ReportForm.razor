@@ -12,7 +12,7 @@
             <label class="field-label" for="@("report-" + Model.Id)">Why are you reporting this post?</label>
             <textarea class="post-form-body post-report-body" id="@("report-" + Model.Id)" name="@PostWrites.BodyField" rows="3" required
                       aria-describedby="@("report-note-" + Model.Id)"></textarea>
-            <p class="post-report-note" id="@("report-note-" + Model.Id)">Only the moderators can read it; nobody is notified that it was sent.</p>
+            <p class="post-report-note" id="@("report-note-" + Model.Id)">Only the moderators can read it.</p>
             <button type="submit" class="sign-in-submit post-report-submit">Send the report</button>
         </form>
     </details>
