@@ -3,6 +3,7 @@ using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
+using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Space;
 using Tangent.Writer;
@@ -60,11 +61,13 @@ public sealed class PeopleSeedController(WriteLoop writer, RoleCollection roles)
         return NoContent();
     }
 
-    /// <summary>The capture persona, a member who arrived before she signs in, and the operator who acts on her.</summary>
+    /// <summary>The capture persona, a member who arrived and has been at her door before she signs in, and the operator
+    /// who acts on her.</summary>
     private async Task<string> PersonaArrived(CancellationToken ct)
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         await Person(Persona, "ada.bsky.social", "Ada Okafor", ParticipantKind.Person, Standing.Admitted, null, [Roles.Member], ct);
+        await Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Place, 0)), ct);
         return space.OperatorId ?? throw new InvalidOperationException("The place has no operator.");
     }
 

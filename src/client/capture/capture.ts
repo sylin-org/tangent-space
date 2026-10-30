@@ -139,7 +139,6 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
   const tangentSpace = new Set([pageBase.origin, baseUrl.origin, ...(listening ? [new URL(captureOfferedUrl).origin] : [])])
   for (const width of widths)
     for (const theme of captureThemes) {
-      if (state.reseed && listening) await seed(listening, baseUrl, state.reseed)
       const context = await browser.newContext({
         viewport: { width, height: viewportHeight[width] },
         deviceScaleFactor: 1,
@@ -166,6 +165,8 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
           const session = await signIn(listening, capturePersona)
           await context.addCookies([...session].map(([name, value]) => ({ name, value, domain: baseUrl.hostname, path: '/', httpOnly: true })))
         }
+        // After the sign-in, whose way back opens the door: what it wrote is written over.
+        if (state.reseed && listening) await seed(listening, baseUrl, state.reseed)
         const page = await context.newPage()
         let opened: string | undefined
         page.on('dialog', (dialog) => {

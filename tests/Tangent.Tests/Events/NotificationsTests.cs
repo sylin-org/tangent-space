@@ -73,6 +73,7 @@ public sealed class NotificationsTests
         await Replied(writer, mine, Bea, "I do, at six.");
         var newest = await Replied(writer, mine, Mo, "At dusk, always.");
         using var ada = await SignedIn(tangentSpace, Ada);
+        await Given.BeenAtTheDoor(tangentSpace, Ada, Cancellation);
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal(2, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
         // The door names them with how many while there are some, though it lists both replies itself.
@@ -90,7 +91,7 @@ public sealed class NotificationsTests
         await Reached.Settled(tangentSpace, Cancellation);
         var through = (await Created(newest)).Seq;
         Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
-        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Place), Cancellation));
+        Assert.Equal(0, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Place), Cancellation))!.Seq);
 
         // The count drops on every page, the masthead shows nothing, and the door, which still lists the replies past its
         // own checkpoint, names no notifications.
@@ -150,6 +151,7 @@ public sealed class NotificationsTests
         var theirs = await Started(writer, Bea, "Lanterns", "Who lights theirs first?");
         Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.Mention, Bea, Ada, theirs, Notifications.CountLimit + 5), Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
+        await Given.BeenAtTheDoor(tangentSpace, Ada, Cancellation);
 
         var unseen = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("notifications");
         Assert.True(unseen.GetProperty("atLeast").GetBoolean());

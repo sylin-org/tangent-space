@@ -89,7 +89,9 @@ export const screens: Readonly<Record<string, Screen>> = {
   // whose admission says apply: her door says her application is waiting. And the persona as a moderator of a place of
   // sixty Tangents after its first: the first page of them, the moderators' Tangent after it, and the way to all of them.
   // Last, the persona timed out by the operator, whose door says until when; and lifted and made a moderator, whose door
-  // says she is back and what she was made.
+  // says she is back and what she was made. A first door welcomes its reader, and opening it begins their checkpoint, so
+  // each state that shows one is written again before every width and theme: the newcomer's, in a place with plenty in
+  // it, and the setter's, the Offer's, the applicant's and the moderator's in a place of sixty Tangents.
   door: {
     path: '/',
     states: [
@@ -98,12 +100,13 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
       { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
       { name: 'administrator-account', place: 'persona', seed: 'door', signedIn: true, click: '.account-button' },
-      { name: 'first', place: 'persona', signedIn: true },
-      { name: 'offer', seed: 'offer', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'newcomer', seed: 'door-newcomer', reseed: 'door-first', signedIn: true },
+      { name: 'first', place: 'persona', reseed: 'door-first', signedIn: true },
+      { name: 'offer', seed: 'offer', reseed: 'door-first', place: 'persona', signedIn: true, settings: offerSettings },
       { name: 'offer-used', seed: 'offer-used', place: 'persona', signedIn: true, settings: offerSettings, path: '/first-run' },
-      { name: 'offer-declined', seed: 'offer-declined', place: 'persona', signedIn: true, settings: offerSettings },
-      { name: 'applicant', seed: 'apply', signedIn: true },
-      { name: 'many-tangents', seed: 'many-tangents', signedIn: true },
+      { name: 'offer-declined', seed: 'offer-declined', reseed: 'door-first', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'applicant', seed: 'apply', reseed: 'door-first', signedIn: true },
+      { name: 'many-tangents', seed: 'many-tangents', reseed: 'door-first', signedIn: true },
       { name: 'timed-out', seed: 'timed-out', signedIn: true },
       { name: 'lifted', seed: 'lifted', signedIn: true },
     ],
@@ -202,7 +205,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   // The place's people, read by the persona, who set the place up and so is its operator and acts on everyone else:
   // an administrator, a moderator, members, one an agent, one timed out and one banned, each with what she may change
   // of them; the first time out opened, with its durations; the first ban opened, confirmed in the page; the start of a
-  // handle found; and refused, read by the persona as a member of a place someone else set up.
+  // handle found; as a moderator of a place someone else set up, whose rail lists only what she may use; and refused,
+  // read by the persona as a member of a place someone else set up.
   'tangent-space-settings-people': {
     path: '/settings/people',
     states: [
@@ -217,6 +221,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       },
       { name: 'ban-confirmation', place: 'persona', seed: 'people', signedIn: true, click: '.people-ban > summary', waitFor: '.people-ban[open]' },
       { name: 'found', place: 'persona', seed: 'people', signedIn: true, query: { handle: 'ma' } },
+      { name: 'moderator', seed: 'many-tangents', signedIn: true },
       { name: 'refused', signedIn: true },
     ],
   },

@@ -72,7 +72,8 @@ public sealed record Door(
     /// <see cref="Edited"/> holds their Posts someone else edited since then and still stand, each once, and
     /// <see cref="Removed"/> those someone else removed, each with who did it.
     /// <see cref="Notifications"/> is how many of the reader's notifications they have not seen and where they are,
-    /// present while there are some.</summary>
+    /// present while there are some. <see cref="First"/> says this is their first door: they have no place checkpoint, so
+    /// nothing in the place counts as new to them and only what concerns them is here.</summary>
     public sealed record Since(
         long From,
         long Through,
@@ -92,6 +93,9 @@ public sealed record Door(
         /// <summary>How many of the reader's notifications they have not seen and where they are, present while there are
         /// some.</summary>
         public Events.Notifications.Unseen? Notifications { get; init; }
+
+        /// <summary>Whether the reader has never been at the door.</summary>
+        public bool First { get; init; }
 
         /// <summary>Whether nothing is new to the reader.</summary>
         public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0

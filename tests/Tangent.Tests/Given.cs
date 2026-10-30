@@ -46,4 +46,10 @@ public static class Given
         foreach (var role in roles) await collection.Add(role, id, ct);
         return participant;
     }
+
+    /// <summary>A participant who was at the door before anything the log holds, so everything in it is new to them and
+    /// their door is not their first.</summary>
+    public static async Task BeenAtTheDoor(TangentSpaceFixture tangentSpace, string id, CancellationToken ct = default)
+        => Assert.IsType<Outcome<Events.Checkpoint>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>()
+            .Send(new Store<Events.Checkpoint>(Events.Checkpoint.At(id, Events.Scope.Place, 0)), ct));
 }

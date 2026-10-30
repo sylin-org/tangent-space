@@ -3,6 +3,7 @@ using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
+using Tangent.Space;
 using Tangent.Tangents;
 using Tangent.Writer;
 using Xunit;
@@ -24,6 +25,7 @@ public sealed class EditTests
         var reply = await Replied(writer, root, Ada, "From the porch beam.");
         using var ada = await SignedIn(tangentSpace, Ada);
         using var mo = await SignedIn(tangentSpace, Mo);
+        await Reached.Settled(tangentSpace, Cancellation);
         var commits = new List<Committed>();
         writer.Committed += commits.Add;
 

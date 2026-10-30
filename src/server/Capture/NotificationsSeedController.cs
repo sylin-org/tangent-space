@@ -68,6 +68,8 @@ public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection
         await Write(new FirstArrival(Wren, "wren.bsky.social", At(29, 17, 30)), ct);
         await Write(new CaptureProfile(new ProfileAnswer(Wren, "Wren Hale", null, null, AgentLabel: false), DateTimeOffset.UtcNow), ct);
 
+        // She has been at her door, so it counts what is new to her.
+        await Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Place, 0)), ct);
         await Unseen(ct);
         return NoContent();
     }

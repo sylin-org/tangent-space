@@ -8,7 +8,7 @@
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
    answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
-   out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
+   out, until when; for a reader at their first door, a welcome, with only what concerns them under it and no form; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
    it seen and, while they have notifications they have not seen, how many, linked to them — and then the front page:
    the featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front
@@ -139,7 +139,7 @@
                 @if (news.Quiet)
                 {
                     <div class="topic-empty">
-                        <p class="topic-empty-title">Nothing new since you were here.</p>
+                        <p class="topic-empty-title">@(news.First ? $"Welcome to {Model.Name}." : "Nothing new since you were here.")</p>
                         @if (news.Notifications is { } notifications)
                         {
                             <p class="tangent-description"><a href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a></p>
@@ -150,7 +150,7 @@
                 {
                     <section class="door-news" aria-labelledby="door-news-title">
                         <div class="topic-list-head">
-                            <h2 id="door-news-title" class="topic-list-title">Since you were here</h2>
+                            <h2 id="door-news-title" class="topic-list-title">@(news.First ? $"Welcome to {Model.Name}" : "Since you were here")</h2>
                             @if (news.Notifications is { } notifications)
                             {
                                 <a class="watch-button door-notifications" href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a>
@@ -164,7 +164,10 @@
                                 </form>
                             }
                         </div>
-                        <p class="tangent-description">@Sentence(news)</p>
+                        @if (!news.First)
+                        {
+                            <p class="tangent-description">@Sentence(news)</p>
+                        }
                         @if (news.Admitted is { } admitted)
                         {
                             <p class="tangent-description door-admitted">@admitted.Who.Name admitted you: you can start topics and reply here.</p>

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using Tangent.Access;
 using Tangent.Events;
+using Tangent.Participants;
 using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -10,7 +11,8 @@ namespace Tangent.Space;
 
 /// <summary>The place's settings at <c>/settings</c>: offered in the account menu to whoever holds ManageSpace; general
 /// renames the place and writes the line under its name on the door, appending space.changed; a refused name keeps the
-/// form; anyone else is refused with the gate; and the settings answer JSON with <c>can</c> and <c>gate</c>.</summary>
+/// form; anyone else is refused with the gate; the rail lists only what its reader may use, and a person sent to a section
+/// they may not use lands on the first they may; and the settings answer JSON with <c>can</c> and <c>gate</c>.</summary>
 public sealed class TangentSpaceSettingsTests
 {
     private const string Leo = "did:plc:leo4place";
@@ -120,6 +122,53 @@ public sealed class TangentSpaceSettingsTests
         Assert.Equal("Field notes", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Name);
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
     }
+
+    [Fact]
+    public async Task A_moderators_rail_lists_only_what_they_may_use_and_general_and_admission_send_them_to_the_first_of_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        const string mod = "did:plc:mo4place";
+        await Given.AParticipant(tangentSpace, mod, [Roles.Member, Roles.Moderator], ct: Cancellation);
+        using var mo = await SignedIn(tangentSpace, mod);
+        var applications = BaseUrl + ApplicationsController.Path;
+
+        Assert.Equal((HttpStatusCode.SeeOther, applications), Sent(await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path)));
+        Assert.Equal((HttpStatusCode.SeeOther, applications), Sent(await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.AdmissionPath)));
+
+        var landed = await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path);
+        Assert.Equal(HttpStatusCode.OK, landed.Status);
+        Assert.Contains($"href=\"{applications}\"", landed.Body);
+        Assert.Contains($"href=\"{BaseUrl}{PeopleController.Path}\"", landed.Body);
+        Assert.DoesNotContain($">{TangentSpaceSettingsController.General}<", landed.Body);
+        Assert.DoesNotContain($">{TangentSpaceSettingsController.AdmissionSection}<", landed.Body);
+        Assert.DoesNotContain($">{TangentSpaceSettingsController.RolesSection}<", landed.Body);
+
+        // An agent reading as JSON reads the gate and the sections it may use, and the account menu opens the first of them.
+        var read = await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
+        Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace)), (read.Status, read.Json.GetProperty("gate").GetString()));
+        Assert.Equal([TangentSpaceSettingsController.ApplicationsSection, TangentSpaceSettingsController.PeopleSection],
+            read.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
+        Assert.Equal(applications, (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
+    }
+
+    [Fact]
+    public async Task A_member_who_may_use_no_section_reads_general_without_a_rail_under_a_plain_sentence()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var page = await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path);
+        var html = WebUtility.HtmlDecode(page.Body);
+        Assert.Equal(HttpStatusCode.OK, page.Status);
+        Assert.DoesNotContain("aria-label=\"Settings\"", html);
+        Assert.Contains("This isn\u2019t open to you here.", html);
+        Assert.DoesNotContain(">no role grants", html);
+        Assert.DoesNotContain("here: no role grants", html);
+    }
+
+    private static (HttpStatusCode Status, string Location) Sent(Answered answered) => (answered.Status, answered.Location ?? "");
 
     /// <summary>A page as a browser asks for it, with the header that asks search engines not to index it, if any.</summary>
     private static async Task<(HttpStatusCode Status, string Body, string? Robots)> Page(HttpClient client, string path)
