@@ -2,8 +2,8 @@ namespace Tangent.Render;
 
 /// <summary>A write a resource offers its reader, said one way wherever a page offers one, so its HTML form and its JSON
 /// say the same: <see cref="Action"/>, the address it posts to; <see cref="Method"/>, how; <see cref="Fields"/>, each
-/// with what it holds; and <see cref="Token"/>, the antiforgery token a session sends in the field it names, which a
-/// request with a bearer leaves out. A field with a value carries what the page put there — the TID minted for the form
+/// with what it holds; and <see cref="Token"/>, the antiforgery token a session sends in the field it names, or as JSON in
+/// ASP.NET's <c>RequestVerificationToken</c> header, which a request with a bearer leaves out. A field with a value carries what the page put there — the TID minted for the form
 /// among them — and is sent as it is unless the field offers a choice; one without is the sender's to fill as it holds,
 /// or to leave out where it holds that it may be. Tangent's own writes take the fields as a form or as one JSON object.
 /// A resource carries a form only where its reader may make the write, as its HTML offers one only there.</summary>

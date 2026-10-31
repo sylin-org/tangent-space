@@ -14,7 +14,7 @@ public sealed class TangentSpaceOptions
     public string DataFolder { get; set; } = "data";
 
     /// <summary>The account that may set up the Tangent Space at first run: its handle, with or without <c>@</c>, or
-    /// its DID. Unset, the first person to sign in sets it up. It matters only until the place is set up.</summary>
+    /// its DID. Unset, whoever signs in first sets it up. It matters only until the place is set up.</summary>
     public string? Operator { get; set; }
 
     /// <summary>The archive this Tangent Space answers from, retired, resolved against the executable's folder unless
