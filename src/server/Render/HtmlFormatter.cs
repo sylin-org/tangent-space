@@ -50,7 +50,6 @@ public sealed class HtmlFormatter : TextOutputFormatter
         var resource = _components.For(context.ObjectType!);
         var renderer = http.RequestServices.GetRequiredService<HtmlRenderer>();
         var fragment = IsFragment(http.Request);
-        var accent = fragment ? "" : await Appearance.OfRequest(http);
         var card = fragment || resource.Card?.Invoke(value) is not { } values ? null : _cards.RenderHead(values, http.Request);
         var html = fragment
             ? await renderer.Dispatcher.InvokeAsync(async () =>
@@ -58,14 +57,22 @@ public sealed class HtmlFormatter : TextOutputFormatter
                 var alone = ParameterView.FromDictionary(new Dictionary<string, object?> { [ModelParameter] = value });
                 return (await renderer.RenderComponentAsync(resource.Component, alone)).ToHtmlString();
             })
-            : await Whole(renderer, resource, value, _baseUrl.Resolve(http), accent, resource.Frame?.Invoke(value), card: card);
+            : await WholeForRequest(http, renderer, resource, value, card);
         await http.Response.WriteAsync(html, selectedEncoding, http.RequestAborted);
     }
 
+    private async Task<string> WholeForRequest(HttpContext http, HtmlRenderer renderer, ResourceComponent resource, object value, string? card)
+    {
+        var space = await TangentSpace.OfRequest(http);
+        return await Whole(renderer, resource, value, _baseUrl.Resolve(http), Appearance.Word(space.Appearance.Accent), space.Slots,
+            resource.Frame?.Invoke(value), card: card);
+    }
+
     /// <summary>A resource as a whole page: its component in the shell and the <paramref name="frame"/> around it, its files
-    /// at <paramref name="baseUrl"/>. A <paramref name="standalone"/> page opens with no server and counts on no
-    /// script; <paramref name="retired"/> is the line that says the place is retired, on a page of its archive.</summary>
-    public static Task<string> Whole(HtmlRenderer renderer, ResourceComponent resource, object value, string baseUrl, string accent, Frame? frame,
+    /// at <paramref name="baseUrl"/>, with the place's <paramref name="accent"/> and <paramref name="slots"/>. A
+    /// <paramref name="standalone"/> page opens with no server and counts on no script; <paramref name="retired"/> is the
+    /// line that says the place is retired, on a page of its archive.</summary>
+    public static Task<string> Whole(HtmlRenderer renderer, ResourceComponent resource, object value, string baseUrl, string accent, Slots slots, Frame? frame,
         bool standalone = false, string? card = null, string? retired = null) => renderer.Dispatcher.InvokeAsync(async () =>
     {
         var shell = ParameterView.FromDictionary(new Dictionary<string, object?>
@@ -73,6 +80,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
             [nameof(Shell.Title)] = resource.Title(value),
             [nameof(Shell.BaseUrl)] = baseUrl,
             [nameof(Shell.Accent)] = accent,
+            [nameof(Shell.Slots)] = slots,
             [nameof(Shell.Card)] = card,
             [nameof(Shell.Frame)] = frame,
             [nameof(Shell.Standalone)] = standalone,

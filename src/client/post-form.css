@@ -227,6 +227,10 @@
   text-wrap: pretty;
 }
 
+.post-form-body.slot-source {
+  font: 400 13px/1.55 var(--ts-font-mono);
+}
+
 .post-form-more-body {
   margin-top: 12px;
   display: flex;

@@ -5,7 +5,7 @@
 @using Tangent.Posts
 @using Tangent.Space
 @using Tangent.Tangents
-@* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
+@* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the proprietor's door intro under it, where they wrote one; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
    answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
    out, until when; for a reader at their first door, a welcome, with only what concerns them under it and no form; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
@@ -35,6 +35,7 @@
             </div>
         </div>
     </section>
+    <Slot Name="door-intro" Html="@Model.Intro" Prose="true" />
     <div class="layout tangent-layout">
         <aside class="rail" aria-label="In this Tangent Space">
             <h2 class="rail-heading">Tangents</h2>

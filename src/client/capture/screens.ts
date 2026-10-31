@@ -96,6 +96,7 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/',
     states: [
       { name: 'visitor', seed: 'door' },
+      { name: 'slots', seed: 'slots' },
       { name: 'signed-in-with-news', seed: 'door', signedIn: true },
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
       { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
@@ -193,13 +194,14 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // The place's appearance, read by the persona, who set the place up and so holds ManageSpace: gold, the accent a place
-  // starts with, and jade once the place says so; and by the persona in a place someone else set up, refused above
-  // disabled choices.
+  // starts with, jade once the place says so, and slots, each written, with the frame around the form carrying them; and
+  // by the persona in a place someone else set up, refused above disabled choices.
   'tangent-space-settings-appearance': {
     path: '/settings/appearance',
     states: [
       { name: 'proprietor', place: 'persona', signedIn: true },
       { name: 'jade', place: 'persona', seed: 'jade', signedIn: true },
+      { name: 'slots', place: 'persona', seed: 'slots', signedIn: true },
       { name: 'refused', signedIn: true },
     ],
   },

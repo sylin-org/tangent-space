@@ -15,7 +15,8 @@ namespace Tangent.Posts;
 /// tables, and a single line break kept as a break; raw HTML in the source is shown as text. A link or image whose
 /// target is not safe — anything but an absolute <c>http</c> or <c>https</c> URL with a host, a root-relative path or a
 /// fragment, and never with a control character, a backslash or a leading <c>//</c> — points at <c>#</c>, and such an
-/// image becomes a link. What Markdig writes then passes an allow-list: paragraphs, breaks, rules, headings, quotes,
+/// image becomes a link, as does an image on the place's own origin anywhere but under <c>/media/</c>
+/// (<see cref="SafeImage"/>). What Markdig writes then passes an allow-list: paragraphs, breaks, rules, headings, quotes,
 /// lists, code, emphasis, strikethrough, links, images and tables; the attributes <c>href</c>, <c>src</c>, <c>alt</c> and
 /// <c>title</c>; the schemes <c>http</c> and <c>https</c>; no style. Every image loads lazily and sends no referrer. An
 /// image followed by emphasis alone, in its paragraph or the next, becomes a figure with that caption. A caller may
@@ -55,7 +56,20 @@ public static class MarkdownHtml
     private static readonly MarkdownPipeline Located = new MarkdownPipelineBuilder()
         .UsePipeTables().UseSoftlineBreakAsHardlineBreak().DisableHtml().UsePreciseSourceLocation().Build();
 
-    private static readonly HtmlSanitizer Sanitizer = CreateSanitizer();
+    /// <summary>Where an image on the place's own origin may point.</summary>
+    private const string MediaPath = "/media/";
+
+    /// <summary>How many times an image's path is decoded before one still changing is refused.</summary>
+    private const int MediaPathDecodings = 4;
+
+    /// <summary>The tags a Post's body keeps.</summary>
+    internal static readonly IReadOnlyList<string> BodyTags = ["p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "li", "pre", "code",
+        "em", "strong", "del", "a", "img", "table", "thead", "tbody", "tr", "th", "td"];
+
+    /// <summary>The attributes a Post's body keeps.</summary>
+    internal static readonly IReadOnlyList<string> BodyAttributes = ["href", "src", "alt", "title"];
+
+    private static readonly HtmlSanitizer Sanitizer = CreateSanitizer(BodyTags, BodyAttributes);
 
     /// <summary>The target a held link carries through the parse: this process's own, which no input can know.</summary>
     private static readonly string HeldPrefix = "https://held.invalid/" + Guid.NewGuid().ToString("N") + "/";
@@ -254,7 +268,7 @@ public static class MarkdownHtml
 
         foreach (var link in document.Descendants<LinkInline>())
         {
-            if (SafeUrl(Target(link))) continue;
+            if (link.IsImage ? SafeImage(Target(link)) : SafeUrl(Target(link))) continue;
             link.Url = "#";
             link.GetDynamicUrl = null;
             link.IsImage = false;
@@ -403,20 +417,49 @@ public static class MarkdownHtml
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && !string.IsNullOrWhiteSpace(uri.Host);
     }
 
-    private static HtmlSanitizer CreateSanitizer()
+    /// <summary>Whether an image may load from <paramref name="value"/>. Loading one is a request with the reader's cookies
+    /// that they never chose to make, so on the place's own origin it reaches only what is there to be looked at, under
+    /// <c>/media/</c>: anywhere else it could sign them out or mark what they have seen. The path is read as a server and a
+    /// browser would read it, decoded until it stops changing, and any segment starting with a dot is refused rather than
+    /// resolved. An absolute address on another host is as safe as a link.</summary>
+    internal static bool SafeImage(string? value)
+    {
+        if (!SafeUrl(value) || value![0] == '#') return false;
+        if (value[0] != '/') return true;
+        var path = value;
+        if (path.IndexOfAny(['?', '#']) is >= 0 and var end) path = path[..end];
+        for (var round = 0; Uri.UnescapeDataString(path) is var decoded && decoded != path; round++)
+        {
+            if (round == MediaPathDecodings) return false;
+            path = decoded;
+        }
+
+        return path.StartsWith(MediaPath, StringComparison.Ordinal) && path.Length > MediaPath.Length
+            && !path.Contains('\\') && !path.Any(char.IsControl) && !path.Split('/').Any(segment => segment.StartsWith('.'));
+    }
+
+    /// <summary>A sanitizer that keeps <paramref name="tags"/> and <paramref name="attributes"/> and nothing else: http and
+    /// https the only schemes, no CSS, and an image only from where <see cref="SafeImage"/> allows, which loads lazily and
+    /// sends no referrer.</summary>
+    internal static HtmlSanitizer CreateSanitizer(IEnumerable<string> tags, IEnumerable<string> attributes)
     {
         var sanitizer = new HtmlSanitizer();
         sanitizer.AllowedTags.Clear();
-        sanitizer.AllowedTags.UnionWith(["p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "li", "pre", "code",
-            "em", "strong", "del", "a", "img", "table", "thead", "tbody", "tr", "th", "td"]);
+        sanitizer.AllowedTags.UnionWith(tags);
         sanitizer.AllowedAttributes.Clear();
-        sanitizer.AllowedAttributes.UnionWith(["href", "src", "alt", "title"]);
+        sanitizer.AllowedAttributes.UnionWith(attributes);
         sanitizer.AllowedSchemes.Clear();
         sanitizer.AllowedSchemes.UnionWith(["http", "https"]);
         sanitizer.AllowedCssProperties.Clear();
         sanitizer.PostProcessNode += (_, args) =>
         {
             if (args.Node is not IElement { LocalName: "img" } image) return;
+            if (!SafeImage(image.GetAttribute("src")))
+            {
+                image.Remove();
+                return;
+            }
+
             image.SetAttribute("loading", "lazy");
             image.SetAttribute("decoding", "async");
             image.SetAttribute("referrerpolicy", "no-referrer");

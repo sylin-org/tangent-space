@@ -1,9 +1,11 @@
 @using global::Tangent.Posts
 @using global::Tangent.Render
 @* The place's settings, appearance: the sections of the settings in the rail, this one marked, and in one panel beside
-   them the choice of the place's accent, four cards, each with its colour in the reader's theme, and a note that light or
-   dark stays each reader's own. A reader who may not change it reads why above the form, whose choices are disabled and
-   which has no button, and a visitor the way to sign in; a refusal shows above the form. *@
+   them the choice of the place's accent, four cards, each with its colour in the reader's theme, a note that light or
+   dark stays each reader's own, and behind one quiet disclosure, open once any holds something or a refusal needs it, the
+   place's slots, each a field of its own HTML that says what it keeps. A reader who may not change them reads why above
+   the form, whose choices are disabled, whose fields are read-only and which has no button, and a visitor the way to
+   sign in; a refusal shows above the form. *@
 <div class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
     <main>
@@ -50,6 +52,22 @@
                         </div>
                     </fieldset>
                     <p class="post-form-note">Links, buttons and what is new take it on every page, for everyone. Light or dark is each reader's own, at the foot of any page.</p>
+                    <details class="post-form-more" open="@(Model.Failure is not null || Model.Slots != new Slots())">
+                        <summary class="sign-in-other-toggle">Your own HTML</summary>
+                        <div class="post-form-more-body">
+                            @SlotField(TangentSpaceSettingsController.HeadField, "Head", Model.Slots.Head, 5, Slots.HeadLimit,
+                                "In every page's head: meta tags and icon links.")
+                            @SlotField(TangentSpaceSettingsController.MastheadField, "Masthead", Model.Slots.Masthead, 2, Slots.MastheadLimit,
+                                "Beside the place's name on every page: links, images and a few words.")
+                            @SlotField(TangentSpaceSettingsController.DoorIntroField, "Door intro", Model.Slots.DoorIntro, 4, Slots.DoorIntroLimit,
+                                "Under the door's head: prose, links and images.")
+                            @SlotField(TangentSpaceSettingsController.ArticleHeaderField, "Article header", Model.Slots.ArticleHeader, 3, Slots.ArticleHeaderLimit,
+                                "Above every article's title: prose, links and images.")
+                            @SlotField(TangentSpaceSettingsController.FooterField, "Footer", Model.Slots.Footer, 2, Slots.FooterLimit,
+                                "In every page's footer: links, images and a few words.")
+                            <p class="post-form-note">Whatever else you write is taken out when you save: no scripts, no forms, no handlers, no CSS. The design's own classes work. An image or an icon comes from another site or from under /media/ here. The pages of an export and of the archive carry the same.</p>
+                        </div>
+                    </details>
                     @if (Mutable)
                     {
                         <div class="post-form-actions">
@@ -66,8 +84,16 @@
 @code {
     [Parameter, EditorRequired] public AppearanceSettingsPage Model { get; set; } = default!;
 
-    /// <summary>Whether the reader may change the accent here.</summary>
+    /// <summary>Whether the reader may change the accent and the slots here.</summary>
     private bool Mutable => Model.Gate is null;
+
+    /// <summary>One slot's field: its source as it stands, and what it keeps and how much.</summary>
+    private RenderFragment SlotField(string field, string label, string value, int rows, int limit, string note) => @<div class="field">
+        <label class="field-label" for="@("space-appearance-" + field)">@label</label>
+        <textarea class="post-form-body post-form-short slot-source" id="@("space-appearance-" + field)" name="@field" rows="@rows" spellcheck="false"
+                  readonly="@(!Mutable)" aria-describedby="@("space-appearance-" + field + "-note")">@value</textarea>
+        <p class="post-form-note" id="@("space-appearance-" + field + "-note")">@note At most @limit.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) characters.</p>
+    </div>;
 
     private static string Name(string word) => char.ToUpperInvariant(word[0]) + word[1..];
 

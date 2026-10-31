@@ -11,8 +11,8 @@ namespace Tangent.Render;
 /// <summary>A resource's response varies by <c>Accept</c> and the fragment header, carries a weak <c>ETag</c> from
 /// the resource's version and the representation chosen for it, and is a <c>304</c> when <c>If-None-Match</c>
 /// already holds that tag. One version has three tags, since a cache revalidates with every tag it holds for the
-/// address. A whole page's tag also names the place's accent, which its shell carries, so a change of accent reaches a
-/// page a cache already holds.</summary>
+/// address. A whole page's tag also names the place's accent and the version of its row, whose slots its shell carries, so
+/// a change of either reaches a page a cache already holds.</summary>
 public sealed class ETagFilter(
     ResourceComponents components,
     OutputFormatterSelector selector,
@@ -30,7 +30,7 @@ public sealed class ETagFilter(
                 && result.StatusCode is null or (>= 200 and < 300)
                 && Representation(context.HttpContext, result, value) is { } representation)
             {
-                var spelled = representation == "html" ? $"html.{await Appearance.OfRequest(context.HttpContext)}" : representation;
+                var spelled = representation == "html" ? await Whole(context.HttpContext) : representation;
                 var tag = new EntityTagHeaderValue($"\"{version(value)}.{spelled}\"", isWeak: true);
                 response.GetTypedHeaders().ETag = tag;
                 if (request.GetTypedHeaders().IfNoneMatch.Any(held => held.Equals(EntityTagHeaderValue.Any) || held.Compare(tag, useStrongComparison: false)))
@@ -38,6 +38,13 @@ public sealed class ETagFilter(
             }
         }
         await next();
+    }
+
+    /// <summary>A whole page as the tag spells it.</summary>
+    private static async ValueTask<string> Whole(HttpContext http)
+    {
+        var space = await TangentSpace.OfRequest(http);
+        return $"html.{Appearance.Word(space.Appearance.Accent)}.{space.Version}";
     }
 
     /// <summary>The representation the formatter will choose for this request, as the tag spells it: <c>html</c>,

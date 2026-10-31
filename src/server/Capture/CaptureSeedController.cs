@@ -62,6 +62,9 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
             case "jade":
                 await Jade(ct);
                 return NoContent();
+            case "slots":
+                await WrittenSlots(ct);
+                return NoContent();
             default:
                 return NotFound();
         }
@@ -80,6 +83,19 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         space.Appearance.Accent = Accent.Jade;
+        await Write(new Keep<TangentSpace>(space), ct);
+    }
+
+    /// <summary>The place's slots written, each with what a proprietor would put there.</summary>
+    private async Task WrittenSlots(CancellationToken ct)
+    {
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
+        space.Slots = space.Slots.Written(
+            "<meta name=\"theme-color\" content=\"#2f6f5e\">\n<link rel=\"me\" href=\"https://sylin.org/\">",
+            "<a href=\"https://sylin.org/\">Our site</a>",
+            "<h2>Welcome to the workshop</h2><p>This place is for people who make things by hand. Read anything; <a href=\"https://sylin.org/\">say hello</a> before you post.</p>",
+            "<p><small>From the workshop's long reads.</small></p>",
+            "<nav><a href=\"https://sylin.org/about\">About</a> <a href=\"https://sylin.org/rules\">Rules</a></nav>");
         await Write(new Keep<TangentSpace>(space), ct);
     }
 

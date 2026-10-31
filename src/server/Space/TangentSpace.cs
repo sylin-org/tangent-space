@@ -52,6 +52,19 @@ public sealed class TangentSpace : Entity<TangentSpace>
         return name.Length <= NameLimit && !name.Any(char.IsControl) ? name : PlainName;
     }
 
+    private static readonly object OnRequest = new();
+
+    /// <summary>The place as this request's page carries it: its accent, its slots and its version, and as
+    /// <see cref="Unestablished"/> before first run. One bounded read of the row by its key per request, however many
+    /// ask.</summary>
+    public static async ValueTask<TangentSpace> OfRequest(HttpContext http)
+    {
+        if (http.Items.TryGetValue(OnRequest, out var held)) return (TangentSpace)held!;
+        var space = await Get(SingleRow, http.RequestAborted) ?? Unestablished();
+        http.Items[OnRequest] = space;
+        return space;
+    }
+
     public TangentSpace() => Id = SingleRow;
 
     /// <summary>The row first run writes: the name, whose place it is and who answers for it, read by anyone and
@@ -122,11 +135,11 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public Slots Slots { get; set; } = new();
 
-    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it and its accent, a change to the
-    /// row, or refuses with <see cref="NameRule"/>, <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/>,
+    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it, its accent and its slots, a
+    /// change to the row, or refuses with <see cref="NameRule"/>, <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/>,
     /// <see cref="AudienceRule"/> or <see cref="AccentRule"/>; the name and the description are kept trimmed. Answers
     /// whether anything changed.</summary>
-    public bool Change(string name, string description, Admission admission, Audience audience, Accent accent)
+    public bool Change(string name, string description, Admission admission, Audience audience, Accent accent, Slots slots)
     {
         var named = Named(name);
         var described = description.Trim();
@@ -134,8 +147,8 @@ public sealed class TangentSpace : Entity<TangentSpace>
         if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
         if (!Enum.IsDefined(audience)) throw new Refusal(AudienceRule);
         if (!Enum.IsDefined(accent)) throw new Refusal(AccentRule);
-        if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Accent == accent) return false;
-        (Name, Description, Admission, Audience, Appearance.Accent) = (named, described, admission, audience, accent);
+        if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Accent == accent && Slots == slots) return false;
+        (Name, Description, Admission, Audience, Appearance.Accent, Slots) = (named, described, admission, audience, accent, slots);
         Version = checked(Version + 1);
         return true;
     }

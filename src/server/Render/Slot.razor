@@ -1,0 +1,14 @@
+@* One of the place's slots, its HTML sanitized when it was written: nothing at all where it is empty, and read as a Post's
+   body where it holds prose. *@
+@if (!string.IsNullOrEmpty(Html))
+{
+    <div class="@($"slot slot-{Name}{(Prose ? " post-body" : "")}")">@((MarkupString)Html)</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    [Parameter] public string? Html { get; set; }
+
+    [Parameter] public bool Prose { get; set; }
+}
