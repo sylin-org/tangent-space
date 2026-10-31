@@ -52,7 +52,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     /// <summary>The form that sets the place's accent and its slots, under <paramref name="baseAddress"/>.</summary>
     private static Form AppearanceForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + AppearancePath, token,
         new Form.Field(AccentField, "gold, jade, iris or copper: the colour links, buttons and what is new take on every page, for every reader; left out, it stays."),
-        new Form.Field(HeadField, $"HTML for every page's head, sanitized to meta, icon links and a style that fetches nothing, at most {Slots.HeadLimit} characters; left out, it stays."),
+        new Form.Field(HeadField, $"HTML for every page's head, sanitized to meta and icon links, at most {Slots.HeadLimit} characters; left out, it stays."),
         new Form.Field(MastheadField, $"HTML beside the place's name on every page, sanitized to a line of links, images and words, at most {Slots.MastheadLimit} characters; left out, it stays."),
         new Form.Field(DoorIntroField, $"HTML under the door's head, sanitized to prose, at most {Slots.DoorIntroLimit} characters; left out, it stays."),
         new Form.Field(ArticleHeaderField, $"HTML above every article's title, sanitized to prose, at most {Slots.ArticleHeaderLimit} characters; left out, it stays."),

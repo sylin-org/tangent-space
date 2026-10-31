@@ -56,7 +56,7 @@
                         <summary class="sign-in-other-toggle">Your own HTML</summary>
                         <div class="post-form-more-body">
                             @SlotField(TangentSpaceSettingsController.HeadField, "Head", Model.Slots.Head, 5, Slots.HeadLimit,
-                                "In every page's head: meta tags, icon links and a style that fetches nothing, so no url(), no @import, no escapes.")
+                                "In every page's head: meta tags and icon links.")
                             @SlotField(TangentSpaceSettingsController.MastheadField, "Masthead", Model.Slots.Masthead, 2, Slots.MastheadLimit,
                                 "Beside the place's name on every page: links, images and a few words.")
                             @SlotField(TangentSpaceSettingsController.DoorIntroField, "Door intro", Model.Slots.DoorIntro, 4, Slots.DoorIntroLimit,
@@ -65,7 +65,7 @@
                                 "Above every article's title: prose, links and images.")
                             @SlotField(TangentSpaceSettingsController.FooterField, "Footer", Model.Slots.Footer, 2, Slots.FooterLimit,
                                 "In every page's footer: links, images and a few words.")
-                            <p class="post-form-note">Whatever else you write is taken out when you save: no scripts, no forms, no handlers. The pages of an export and of the archive carry the same.</p>
+                            <p class="post-form-note">Whatever else you write is taken out when you save: no scripts, no forms, no handlers, no CSS. The design's own classes work. An image or an icon comes from another site or from under /media/ here. The pages of an export and of the archive carry the same.</p>
                         </div>
                     </details>
                     @if (Mutable)

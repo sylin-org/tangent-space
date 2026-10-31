@@ -1,6 +1,4 @@
-using System.Text.RegularExpressions;
 using AngleSharp.Dom;
-using AngleSharp.Html.Parser;
 using Ganss.Xss;
 using Tangent.Posts;
 using Tangent.Writer;
@@ -11,20 +9,26 @@ namespace Tangent.Space;
 /// exports. Each is sanitized when it is written and rendered as it stands after that, so a slot holds only what its
 /// policy keeps.
 /// <para>A slot can never run a script or reach a reader's session. Every policy is the sanitizer a Post's body goes through,
-/// http and https its only schemes, so no <c>script</c>, no event handler and no <c>javascript:</c> link survives. None keeps
-/// <c>form</c>, <c>input</c>, <c>base</c>, <c>iframe</c> or <c>svg</c>, nor <c>id</c>, <c>style</c> or a <c>data-</c> attribute, and
-/// only a head's <c>meta</c> keeps <c>name</c>: a slot can post nothing with a reader's token, move where a page's links and
-/// forms lead, clobber what a script looks up, or start an island. <c>class</c> is kept, which only names what CSS reads.</para>
+/// http and https its only schemes, an image on the place's own origin only under <c>/media/</c>
+/// (<see cref="MarkdownHtml.SafeImage"/>), so no <c>script</c>, no event handler and no <c>javascript:</c> link survives, and no
+/// image signs a reader out by loading. None keeps <c>form</c>, <c>input</c>, <c>base</c>, <c>iframe</c> or <c>svg</c>, nor <c>id</c>
+/// or a <c>data-</c> attribute, and only a head's <c>meta</c> keeps <c>name</c>: a slot can post nothing with a reader's token,
+/// move where a page's links and forms lead, clobber what a script looks up, or start an island.</para>
+/// <para>No slot holds CSS, as a <c>style</c> element, a <c>style</c> attribute or a stylesheet. A selector reads a form's token
+/// from its attribute, and keywords alone can then bring a lazy image into view, which sends what was read to another host:
+/// no list of allowed CSS closes that. <c>class</c> is kept, so a slot can wear the design's own classes, and they are all it
+/// reaches: a script looks a class up only inside an <c>article</c>, a <c>main</c> or an island's own element, none of which a
+/// slot can hold.</para>
 /// <para>A slot's bound is on what it keeps, so what it already holds is never refused when a form sends it back.</para></summary>
-public sealed partial record Slots
+public sealed record Slots
 {
-    public const int HeadLimit = 16000;
+    public const int HeadLimit = 4000;
     public const int MastheadLimit = 2000;
     public const int DoorIntroLimit = 8000;
     public const int ArticleHeaderLimit = 8000;
     public const int FooterLimit = 2000;
 
-    public const string HeadRule = "The head holds at most 16000 characters.";
+    public const string HeadRule = "The head holds at most 4000 characters.";
     public const string MastheadRule = "The masthead holds at most 2000 characters.";
     public const string DoorIntroRule = "The door intro holds at most 8000 characters.";
     public const string ArticleHeaderRule = "The article header holds at most 8000 characters.";
@@ -41,30 +45,21 @@ public sealed partial record Slots
         [.. MarkdownHtml.BodyTags, "div", "span", "small", "figure", "figcaption"],
         [.. MarkdownHtml.BodyAttributes, "class", "width", "height"]);
 
-    /// <summary>A head holds what a page says about itself to other machines, and the place's look, and nothing else:
+    /// <summary>A head holds what a page says about itself to other machines, and nothing else:
     /// <list type="bullet">
     /// <item><c>meta</c> by <c>name</c> or <c>property</c>, for a site's verification, a theme colour or a credit; never
     /// <c>http-equiv</c>, which redirects a page or sets its cookies and policies, nor the name <c>referrer</c>, which would
     /// hand every page's address to wherever it links.</item>
-    /// <item><c>link</c> for icons and <c>rel="me"</c> alone; never a stylesheet, whose rules the place cannot read, nor a
-    /// preload. <c>base</c> is not kept: it would carry every relative link and form, with a reader's token, elsewhere.</item>
-    /// <item><c>style</c>, as <see cref="Fetchless"/> says, since a slot's HTML has no other way to look like the place.</item>
+    /// <item><c>link</c> for icons, which a browser loads as it does an image and so are judged as one, and <c>rel="me"</c>,
+    /// which it never loads; never a stylesheet or a preload. <c>base</c> is not kept: it would carry every relative link and
+    /// form, with a reader's token, elsewhere.</item>
     /// </list>
     /// Text has no place in a head, whose end it would be.</summary>
     private static readonly HtmlSanitizer HeadElements = CreateHeadElements();
 
-    private static readonly HashSet<string> LinkRelations = new(["icon", "shortcut", "apple-touch-icon", "me"], StringComparer.OrdinalIgnoreCase);
+    private const string Me = "me";
 
-    /// <summary>The CSS functions a head's <c>style</c> may call: values, gradients, transforms, filters and selectors, none
-    /// of which fetches anything.</summary>
-    private static readonly HashSet<string> CssFunctions = new(
-    [
-        "var", "calc", "min", "max", "clamp", "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix", "light-dark",
-        "linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
-        "translate", "translatex", "translatey", "rotate", "scale", "skew", "cubic-bezier", "steps", "minmax", "repeat", "fit-content",
-        "blur", "brightness", "contrast", "drop-shadow", "grayscale", "opacity", "saturate", "sepia",
-        "not", "is", "where", "nth-child", "nth-last-child", "nth-of-type", "nth-last-of-type", "lang", "dir", "media"
-    ], StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> LinkRelations = new(["icon", "shortcut", "apple-touch-icon", Me], StringComparer.OrdinalIgnoreCase);
 
     public string Head { get; set; } = "";
 
@@ -84,7 +79,7 @@ public sealed partial record Slots
     /// than its bound; one left null stays as it is.</summary>
     public Slots Written(string? head, string? masthead, string? doorIntro, string? articleHeader, string? footer) => new()
     {
-        Head = Kept(head, Head, HeadOf, HeadLimit, HeadRule),
+        Head = Kept(head, Head, html => HeadElements.Sanitize(html), HeadLimit, HeadRule),
         Masthead = Kept(masthead, Masthead, html => Bar.Sanitize(html), MastheadLimit, MastheadRule),
         DoorIntro = Kept(doorIntro, DoorIntro, html => Prose.Sanitize(html), DoorIntroLimit, DoorIntroRule),
         ArticleHeader = Kept(articleHeader, ArticleHeader, html => Prose.Sanitize(html), ArticleHeaderLimit, ArticleHeaderRule),
@@ -97,32 +92,6 @@ public sealed partial record Slots
         var kept = sanitized(written).Trim();
         return kept.Length <= limit ? kept : throw new Refusal(rule);
     }
-
-    /// <summary>A head as written, keeping what <see cref="HeadElements"/> says: its elements, then each <c>style</c> that
-    /// fetches nothing, whose text no sanitizer would leave as CSS can read it.</summary>
-    private static string HeadOf(string written)
-    {
-        using var document = new HtmlParser().ParseDocument("<!doctype html><html><body>" + written);
-        var styles = document.QuerySelectorAll("style").ToList();
-        var kept = styles.Select(style => style.TextContent.Trim()).Where(Fetchless).Select(css => "<style>\n" + css + "\n</style>").ToList();
-        foreach (var style in styles) style.Remove();
-        var elements = HeadElements.Sanitize(document.Body!.InnerHtml).Trim();
-        return string.Join("\n", elements.Length > 0 ? kept.Prepend(elements) : kept);
-    }
-
-    /// <summary>Whether CSS can reach nothing outside the page. A rule's selector can read a form's token from its
-    /// attribute, so CSS that can fetch can send that token away, one request per character. CSS that fetches nothing can
-    /// restyle what the proprietor already owns and tell no one: so <c>@media</c> is its only at-rule, it calls only
-    /// <see cref="CssFunctions"/>, which leaves out <c>url()</c>, <c>image-set()</c> and <c>src()</c> and any function a browser
-    /// adds later, and it holds no escape, which could spell one of those, and no <c>&lt;</c>, which could end the element.
-    /// <c>:has()</c> is left out too: without it what a selector reads of a token stays with that field and its siblings,
-    /// and cannot show an image elsewhere on the page, whose lazy load would be a fetch. One that fails is taken out
-    /// whole.</summary>
-    private static bool Fetchless(string css)
-        => css.Length > 0
-           && css.IndexOfAny(['\\', '<']) < 0
-           && AtRule().Matches(css).All(rule => rule.Value.Equals("@media", StringComparison.OrdinalIgnoreCase))
-           && CssFunction().Matches(css).All(call => CssFunctions.Contains(call.Groups[1].Value));
 
     private static HtmlSanitizer CreateHeadElements()
     {
@@ -143,13 +112,8 @@ public sealed partial record Slots
                   && !string.Equals(element.GetAttribute("name")?.Trim(), "referrer", StringComparison.OrdinalIgnoreCase),
         "link" => !string.IsNullOrWhiteSpace(element.GetAttribute("href"))
                   && element.GetAttribute("rel")?.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries) is { Length: > 0 } relations
-                  && relations.All(LinkRelations.Contains),
+                  && relations.All(LinkRelations.Contains)
+                  && (relations.All(relation => relation.Equals(Me, StringComparison.OrdinalIgnoreCase)) || MarkdownHtml.SafeImage(element.GetAttribute("href"))),
         _ => false
     };
-
-    [GeneratedRegex(@"@[-\w]*", RegexOptions.CultureInvariant)]
-    private static partial Regex AtRule();
-
-    [GeneratedRegex(@"([-\w]+)\(", RegexOptions.CultureInvariant)]
-    private static partial Regex CssFunction();
 }

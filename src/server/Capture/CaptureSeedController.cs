@@ -91,7 +91,7 @@ public sealed class CaptureSeedController(WriteLoop writer, RoleCollection roles
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         space.Slots = space.Slots.Written(
-            "<meta name=\"theme-color\" content=\"#2f6f5e\">\n<link rel=\"me\" href=\"https://sylin.org/\">\n<style>\n.slot-door-intro { border-left: 3px solid var(--ts-accent); padding-left: 16px; }\n</style>",
+            "<meta name=\"theme-color\" content=\"#2f6f5e\">\n<link rel=\"me\" href=\"https://sylin.org/\">",
             "<a href=\"https://sylin.org/\">Our site</a>",
             "<h2>Welcome to the workshop</h2><p>This place is for people who make things by hand. Read anything; <a href=\"https://sylin.org/\">say hello</a> before you post.</p>",
             "<p><small>From the workshop's long reads.</small></p>",
