@@ -78,7 +78,7 @@ public sealed class ProofDoorTests
         Assert.Equal("Whoever is first home.", Assert.Single(await Post.Query(post => post.AuthorId == Scout.Did, Cancellation)).Body);
 
         // Signing out ends it, the way a browser's ends.
-        (await session.Follow(HttpMethod.Get, who.GetProperty("signOut").GetString()![BaseUrl.Length..], Cancellation)).Dispose();
+        (await session.Follow(HttpMethod.Post, who.GetProperty("signOut").GetString()![BaseUrl.Length..], Cancellation)).Dispose();
         Assert.False((await Send(session.Client, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("who", out var after) && after.ValueKind == JsonValueKind.Object);
     }
 
