@@ -55,7 +55,14 @@ public static class MarkdownHtml
     private static readonly MarkdownPipeline Located = new MarkdownPipelineBuilder()
         .UsePipeTables().UseSoftlineBreakAsHardlineBreak().DisableHtml().UsePreciseSourceLocation().Build();
 
-    private static readonly HtmlSanitizer Sanitizer = CreateSanitizer();
+    /// <summary>The tags a Post's body keeps.</summary>
+    internal static readonly IReadOnlyList<string> BodyTags = ["p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "li", "pre", "code",
+        "em", "strong", "del", "a", "img", "table", "thead", "tbody", "tr", "th", "td"];
+
+    /// <summary>The attributes a Post's body keeps.</summary>
+    internal static readonly IReadOnlyList<string> BodyAttributes = ["href", "src", "alt", "title"];
+
+    private static readonly HtmlSanitizer Sanitizer = CreateSanitizer(BodyTags, BodyAttributes);
 
     /// <summary>The target a held link carries through the parse: this process's own, which no input can know.</summary>
     private static readonly string HeldPrefix = "https://held.invalid/" + Guid.NewGuid().ToString("N") + "/";
@@ -403,14 +410,15 @@ public static class MarkdownHtml
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && !string.IsNullOrWhiteSpace(uri.Host);
     }
 
-    private static HtmlSanitizer CreateSanitizer()
+    /// <summary>A sanitizer that keeps <paramref name="tags"/> and <paramref name="attributes"/> and nothing else: http and
+    /// https the only schemes, no CSS, and an image that loads lazily and sends no referrer.</summary>
+    internal static HtmlSanitizer CreateSanitizer(IEnumerable<string> tags, IEnumerable<string> attributes)
     {
         var sanitizer = new HtmlSanitizer();
         sanitizer.AllowedTags.Clear();
-        sanitizer.AllowedTags.UnionWith(["p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "li", "pre", "code",
-            "em", "strong", "del", "a", "img", "table", "thead", "tbody", "tr", "th", "td"]);
+        sanitizer.AllowedTags.UnionWith(tags);
         sanitizer.AllowedAttributes.Clear();
-        sanitizer.AllowedAttributes.UnionWith(["href", "src", "alt", "title"]);
+        sanitizer.AllowedAttributes.UnionWith(attributes);
         sanitizer.AllowedSchemes.Clear();
         sanitizer.AllowedSchemes.UnionWith(["http", "https"]);
         sanitizer.AllowedCssProperties.Clear();

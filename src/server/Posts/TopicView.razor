@@ -3,7 +3,8 @@
 @* The Topic page: the rail with the way back to the Tangent and the replies this window holds; then the title with
    any pin or lock, when it started and how many replies it has, the root, and one window of replies in order, with
    the way to the older window above them and to the newer below, and where the reader replies or why they may not. A
-   Topic without replies says so in one sentence. Zeros are said in words. *@
+   Topic without replies says so in one sentence. Zeros are said in words. An article opens with the proprietor's article
+   header, where they wrote one. *@
 <div class="layout layout-reading topic-layout">
     <aside class="rail" aria-label="In this Tangent">
         <h2 class="rail-heading">@Model.Tangent.Name</h2>
@@ -38,6 +39,7 @@
         }
     </aside>
     <main class="topic-main">
+        <Slot Name="article-header" Html="@Model.ArticleHeader" Prose="true" />
         <h1 class="topic-title">@Model.Title@Flags()</h1>
         <p class="topic-meta">
             <span>Started <time datetime="@Model.Root.CreatedAt.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@TopicRow.When(Model.Root.CreatedAt, Model.Day)</time></span>

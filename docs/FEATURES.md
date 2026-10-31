@@ -140,7 +140,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Appearance: light, dark, system, each reader's own with no flash of the other; the accent at `/settings/appearance` for whoever holds `ManageSpace`, `space.changed` on a change, on every page for every reader; the first four tokens named as `site.standard.theme.basic` names them | settings appearance | `AppearanceSwitch`, `TangentAccentPalette` (transplant) | — | S | done |
 | The published `site.standard.theme.basic`, from the first four tokens | — | new | — | S | todo |
-| Slots with sanitized HTML (head, masthead, door intro, article header, footer) and a bounded typed settings schema; identical in the site, the archive and exports | settings appearance | new | — | M | todo |
+| Slots with sanitized HTML (head, masthead, door intro, article header, footer), each bounded, for whoever holds `ManageSpace`, `space.changed` on a change; identical in the site, the archive and exports. The article header renders above the title on an article's Topic page (`TopicPage.ArticleHeader`), the seam the article's own page takes over in 3.1. The typed settings schema scored 3 and is in PROPOSALS | settings appearance | new | — | M | done |
 
 ## Screens
 

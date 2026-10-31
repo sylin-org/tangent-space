@@ -669,6 +669,43 @@ h3 {
   color: var(--ts-text-3);
 }
 
+/* The place's own slots: the masthead's and the footer's a line, the door intro's under the door's head at the width of
+   what follows it, each image held to what it stands in. */
+.slot img {
+  max-width: 100%;
+  height: auto;
+}
+
+.slot-masthead {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.slot-masthead img {
+  max-height: 28px;
+  width: auto;
+}
+
+.slot-footer :is(p, nav) {
+  margin: 0;
+}
+
+.slot.slot-door-intro {
+  width: min(100% - 2 * var(--ts-page-gutter), var(--ts-home-container));
+  margin: 32px auto 0;
+}
+
+.slot.slot-article-header {
+  margin: 0 0 16px;
+}
+
 /* The one line a page of a retired place's archive opens with. */
 .retired-line {
   margin: 0;
@@ -804,6 +841,11 @@ h3 {
   }
 
   .layout {
+    width: calc(100% - 2 * var(--ts-phone-gutter));
+    margin-top: 24px;
+  }
+
+  .slot.slot-door-intro {
     width: calc(100% - 2 * var(--ts-phone-gutter));
     margin-top: 24px;
   }

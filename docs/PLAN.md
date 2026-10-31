@@ -174,10 +174,11 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 | Package | After | Role |
 | --- | --- | --- |
 | 9.1 Appearance: each reader's theme with no flash, the place's accent at `/settings/appearance`, the first four tokens named as `site.standard.theme.basic` names them | 5.1 | repeat |
+| 9.2 Slots: the place's own HTML at `/settings/appearance`, sanitized on save and bounded per slot, the same on the site, in exports and in the archive | 9.1, 7.2 | first of its kind |
 
 ## Later slices
 
-The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`. Explorer-grade: references through Constellation, the A2A card.
+The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), the static archive (7), the DID-native door (8), the labeler (8). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`. Explorer-grade: references through Constellation, the A2A card.
 
 A slice closes when its packages work and FEATURES says so. Until Leo calls the polish stage, screens are built from the frame and the existing components, captured, and listed in `docs/SCREENS.md` as owing the visual gate; the polish stage holds every one of them to it.
 

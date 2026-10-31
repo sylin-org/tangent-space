@@ -263,7 +263,8 @@ public sealed class Export
             null,
             Undated,
             takenFrom,
-            FeedsOf(tangent));
+            FeedsOf(tangent),
+            TopicPage.HeaderOf(root.Kind, _space.Slots));
     }
 
     private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, TangentPage.Author> people,
@@ -374,7 +375,7 @@ public sealed class Export
         var resource = _components.For(typeof(TResource));
         string html;
         await using (var renderer = new HtmlRenderer(_services, _logs))
-            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, frame ?? resource.Frame?.Invoke(model), standalone: true, _retired);
+            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, _space.Slots, frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
         await _files.Write(path + ".html", Encoding.UTF8.GetBytes(Render.Feed.Rooted(html, _origin)), ct);
         if (!Retired) await _files.Write(path + ".json", Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model, _json)), ct);
     }

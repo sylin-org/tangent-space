@@ -50,6 +50,10 @@ public sealed record Door(
     /// <summary>What the place is, in its proprietor's line; empty until they write one.</summary>
     public string Description { get; init; } = "";
 
+    /// <summary>The proprietor's own HTML that opens the door, sanitized when it was written: present only where they wrote
+    /// some.</summary>
+    public string? Intro { get; init; }
+
     /// <summary>The place's articles feeds: present only where a visitor may read the place.</summary>
     public IReadOnlyList<Render.FeedLink>? Feeds { get; init; }
 

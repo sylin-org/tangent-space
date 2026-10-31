@@ -21,7 +21,8 @@ namespace Tangent.Posts;
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for. <see cref="TakenFrom"/> is
 /// where a Topic taken on a tangent was taken from, as the reader may know it. <see cref="Feeds"/> are its Tangent's
-/// feeds, present only where a visitor may read that Tangent.</summary>
+/// feeds, present only where a visitor may read that Tangent. <see cref="ArticleHeader"/> is the proprietor's own HTML that
+/// heads an article, present only on an article and only where they wrote some.</summary>
 public sealed record TopicPage(
     string Id,
     string Slug,
@@ -51,8 +52,13 @@ public sealed record TopicPage(
     TopicPage.Reader? Who,
     DateOnly Day,
     TopicPage.Origin? TakenFrom = null,
-    IReadOnlyList<FeedLink>? Feeds = null)
+    IReadOnlyList<FeedLink>? Feeds = null,
+    string? ArticleHeader = null)
 {
+    /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="slots"/>.</summary>
+    public static string? HeaderOf(PostKind kind, Space.Slots slots)
+        => kind == PostKind.Article && slots.ArticleHeader.Length > 0 ? slots.ArticleHeader : null;
+
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
     /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is
     /// the Markdown as written, and <see cref="Mentions"/> are the participants it mentions as they are now, which the

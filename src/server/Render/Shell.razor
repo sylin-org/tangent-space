@@ -1,5 +1,6 @@
 @using System.Globalization
 @using System.Text.Json
+@using Tangent.Space
 @* The page around one resource's component: the place's accent on <html>, and the stylesheet and the two scripts every page loads, absolute from
    the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
@@ -10,7 +11,8 @@
    notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
    in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. A page a visitor may
-   read carries in its head the card a link to it previews. A page of the place's archive opens with the one line that says it is retired.
+   read carries in its head the card a link to it previews. A page of the place's archive opens with the one line that says it is retired. The place's own
+   slots come through here: its head last in <head>, so what it sets wins, its masthead after the place's name and its footer first in the footer, each adding nothing while it is empty.
    Nothing here is a dialog. *@
 <!DOCTYPE html>
 <html lang="en" data-accent="@Accent">
@@ -32,6 +34,10 @@
     {
         @((MarkupString)Card)
     }
+    @if (Slots.Head.Length > 0)
+    {
+        @((MarkupString)Slots.Head)
+    }
 </head>
 <body>
 @if (Retired is { } retired)
@@ -45,6 +51,7 @@
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
+        <Slot Name="masthead" Html="@Slots.Masthead" />
         @if (frame.Searchable && !Standalone)
         {
             <form class="masthead-search" role="search" method="get" action="@frame.Search" data-island="search">
@@ -163,6 +170,7 @@
     </nav>
     <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
     <footer class="footer">
+        <Slot Name="footer" Html="@Slots.Footer" />
         <span class="footer-powered">Powered by Tangent Space</span>
         @if (!Standalone)
         {
@@ -190,6 +198,9 @@ else
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
 
     [Parameter, EditorRequired] public string Accent { get; set; } = "";
+
+    /// <summary>The place's own HTML, sanitized when it was written, so the same on the site, in an export and in the archive.</summary>
+    [Parameter, EditorRequired] public Slots Slots { get; set; } = new();
 
     [Parameter] public Frame? Frame { get; set; }
 
