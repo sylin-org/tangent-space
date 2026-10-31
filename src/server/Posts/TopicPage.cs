@@ -58,9 +58,10 @@ public sealed record TopicPage(
     string? Cover = null,
     int ReadMinutes = 1)
 {
-    /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="slots"/>.</summary>
-    public static string? HeaderOf(PostKind kind, Space.Slots slots)
-        => kind == PostKind.Article && slots.ArticleHeader.Length > 0 ? slots.ArticleHeader : null;
+    /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="slots"/>, its images under
+    /// <paramref name="door"/>.</summary>
+    public static string? HeaderOf(PostKind kind, Space.Slots slots, string door)
+        => kind == PostKind.Article && slots.ArticleHeader.Length > 0 ? Media.Placed(slots.ArticleHeader, door) : null;
 
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
     /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is

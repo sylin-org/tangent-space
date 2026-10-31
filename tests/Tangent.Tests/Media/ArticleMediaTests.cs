@@ -404,6 +404,91 @@ public sealed class ArticleMediaTests
         Assert.Contains($"<img src=\"{reference}\"", new Slots().Written(null, null, null, $"<img src=\"{reference}\" alt=\"\">", null).ArticleHeader);
     }
 
+    private const string Keeper = "did:plc:leo4writes";
+
+    private static string Img(string id) => $"<img src=\"/media/{id}\" alt=\"\">";
+
+    private static async Task Slots(WriteLoop writer, string? masthead = null, string? doorIntro = null, string? footer = null, string? head = null, Audience? audience = null)
+        => Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(
+            new ChangeTangentSpace(Keeper, Masthead: masthead, DoorIntro: doorIntro, Footer: footer, Head: head, Audience: audience), Cancellation));
+
+    [Fact]
+    public async Task An_image_a_slot_names_reaches_whoever_reads_its_page_and_ends_when_no_slot_names_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Keeper);
+        using var visitor = Agent(tangentSpace);
+        var logo = IdOf(await Bring(leo, Jpeg(64)));
+        var icon = IdOf(await Bring(leo, Jpeg(32)));
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
+
+        await Slots(writer, masthead: Img(logo), head: $"<link rel=\"icon\" href=\"/media/{icon}\">");
+        Assert.Contains($"src=\"{BaseUrl}/media/{logo}\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
+        foreach (var path in new[] { "/media/" + logo, $"/media/{logo}/{MediaRecipes.CardName}", "/media/" + icon })
+            Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, path)).Status);
+
+        // Moved to another slot it stays, even for someone who reaches it only through the slot; named in no slot it ends.
+        await Slots(writer, masthead: "", footer: Img(logo));
+        Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
+        Assert.Null(await MediaUse.Get(MediaUse.Key(logo, "slot:" + Space.Slots.MastheadName), Cancellation));
+        await Slots(writer, footer: "");
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Send(leo.Client, HttpMethod.Get, "/media/" + logo)).Status);
+
+        // An image used elsewhere goes on being used; a slot is no way to reach an image its writer may not see.
+        var hidden = IdOf(await Bring(leo, Jpeg(50), Studio, "/t/" + Studio + "/new"));
+        await Started(writer, Keeper, "Plans", "![The plan](/media/" + hidden + ")", Studio);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + hidden)).Status);
+        var keeperRole = "role:keeper";
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await roles.Define(keeperRole, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "did:plc:kay4writes", [Roles.Member, keeperRole], ct: Cancellation);
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace("did:plc:kay4writes", Masthead: Img(hidden)), Cancellation));
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + hidden)).Status);
+    }
+
+    [Fact]
+    public async Task In_a_private_place_an_image_on_every_page_reaches_a_visitor_and_one_on_the_door_does_not()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Keeper);
+        using var bea = await SignedIn(tangentSpace, Bea);
+        using var visitor = Agent(tangentSpace);
+        var logo = IdOf(await Bring(leo, Jpeg(64)));
+        var welcome = IdOf(await Bring(leo, Jpeg(65)));
+        await Slots(writer, masthead: Img(logo), doorIntro: Img(welcome), audience: Audience.Private);
+
+        // The sign-in, all a visitor reads here, carries the masthead, so its logo shows; the door's picture stays inside.
+        Assert.Contains($"src=\"{BaseUrl}/media/{logo}\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
+        Assert.DoesNotContain(welcome, (await Send(visitor, HttpMethod.Get, "/")).Body);
+        Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + welcome)).Status);
+        Assert.Contains($"src=\"{BaseUrl}/media/{welcome}\"", (await Send(bea.Client, HttpMethod.Get, "/")).Body);
+        Assert.Equal(HttpStatusCode.OK, (await Send(bea.Client, HttpMethod.Get, "/media/" + welcome)).Status);
+    }
+
+    [Fact]
+    public async Task Under_a_path_an_image_a_slot_names_is_at_its_address()
+    {
+        const string place = "https://tangent.example/notes";
+        var settings = Settings();
+        settings["Koan:Web:ApplicationUrl"] = place;
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(settings, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
+        var logo = await Media.Keep(Jpeg(), Cancellation);
+        Assert.IsType<Outcome<MediaUse>.Done>(await writer.Send(new BringMedia(logo.Id, Keeper), Cancellation));
+        await Slots(writer, masthead: Img(logo.Id));
+        using var visitor = Agent(tangentSpace);
+
+        Assert.Contains($"src=\"{place}/media/{logo.Id}\"", (await Send(visitor, HttpMethod.Get, "/notes/")).Body);
+        Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/notes/media/" + logo.Id)).Status);
+    }
+
     [Fact]
     public async Task Llms_txt_says_how_a_picture_comes_into_an_article()
     {

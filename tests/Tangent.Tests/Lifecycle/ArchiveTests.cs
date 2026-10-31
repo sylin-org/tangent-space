@@ -265,6 +265,41 @@ public sealed partial class ArchiveTests
     }
 
     [Fact]
+    public async Task An_image_a_slot_names_is_in_the_archive_at_its_address_and_one_named_no_more_is_not()
+    {
+        const string Leo = "did:plc:leo4archive";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var visitor = Agent(tangentSpace);
+        var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
+        var icon = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(61)));
+        var gone = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62)));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo, Footer: $"<img src=\"/media/{gone}\" alt=\"\">"), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo,
+            Masthead: $"<img src=\"/media/{logo}\" alt=\"\">", Head: $"<link rel=\"icon\" href=\"/media/{icon}\">", Footer: ""), Cancellation));
+        var bytes = await visitor.GetByteArrayAsync("/media/" + logo, Cancellation);
+
+        var folder = Path.Combine(tangentSpace.Folder, "archive");
+        await Archive.Write(folder, tangentSpace.Services, Cancellation);
+
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(folder, "media", logo), Cancellation));
+        Assert.True(File.Exists(Path.Combine(folder, "media", icon)));
+        Assert.False(File.Exists(Path.Combine(folder, "media", gone)));
+        var door = await Read(folder, "index.html");
+        Assert.Contains($"src=\"./media/{logo}\"", door);
+        Assert.Contains($"href=\"./media/{icon}\"", door);
+        Assert.Contains($"src=\"../../media/{logo}\"", await Read(folder, "t", Workshop, "index.html"));
+        await AssertStandsAlone(folder);
+
+        await tangentSpace.StopAsync(Cancellation);
+        await using var retired = await Retired(folder);
+        using var client = Client(retired);
+        Assert.Equal(HttpStatusCode.OK, (await Send(client, HttpMethod.Get, "/media/" + logo)).Status);
+    }
+
+    [Fact]
     public void No_archive_named_is_no_retirement_and_one_that_is_not_there_is_no_start()
     {
         var unnamed = WebApplication.CreateBuilder();

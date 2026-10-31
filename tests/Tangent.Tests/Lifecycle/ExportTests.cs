@@ -335,6 +335,29 @@ public sealed partial class ExportTests
         Assert.Contains($"media/{hidden}.jpg", (await Downloaded(leo, Path + ".zip")).Keys);
     }
 
+    [Fact]
+    public async Task An_image_a_slot_names_comes_along_for_a_holder_who_did_not_bring_it()
+    {
+        const string keeper = "role:keeper";
+        const string Keeping = "did:plc:keeper4export";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await roles.Define(keeper, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Keeping, [Roles.Member, keeper], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var keeping = await SignedIn(tangentSpace, Keeping);
+        var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo, Masthead: $"<img src=\"/media/{logo}\" alt=\"\">"), Cancellation));
+
+        var zip = await Downloaded(keeping, Path + ".zip");
+
+        Assert.Contains($"media/{logo}.jpg", zip.Keys);
+        Assert.Contains($"src=\"./media/{logo}.jpg\"", zip["index.html"]);
+        AssertOpensAlone(zip);
+    }
+
     private static async Task<Post> Taken(WriteLoop writer, Post origin, string tangent, string title)
         => Assert.IsType<Outcome<Post>.Done>(await writer.Send(
             new StartTopic(Tids.Mint(), tangent, title, "", Leo, OriginId: origin.Id), Cancellation)).Result;

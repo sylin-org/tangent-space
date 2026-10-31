@@ -82,7 +82,7 @@ public sealed class Export
         _json = services.GetRequiredService<IOptions<MvcNewtonsoftJsonOptions>>().Value.SerializerSettings;
         _logs = services.GetRequiredService<ILoggerFactory>();
         _retired = retired;
-        _shownImage = new Regex("(?<=\\ssrc=\")" + Regex.Escape(baseAddress) + "/media/(?<id>[0-9a-f-]{32,36})(?=\")", RegexOptions.CultureInvariant);
+        _shownImage = new Regex("(?<=\\s(?:src|href)=\")" + Regex.Escape(baseAddress) + "/media/(?<id>[0-9a-f-]{32,36})(?=\")", RegexOptions.CultureInvariant);
     }
 
     /// <summary>The walk an archive makes: every Tangent a visitor may view, onto <paramref name="files"/>, each page
@@ -281,7 +281,7 @@ public sealed class Export
             Undated,
             takenFrom,
             FeedsOf(tangent),
-            TopicPage.HeaderOf(root.Kind, _space.Slots),
+            TopicPage.HeaderOf(root.Kind, _space.Slots, _base + "/"),
             root.CoverId is { } cover ? _base + Media.Reference(cover) : null,
             TangentPage.ReadTime(root.Body));
     }
@@ -430,7 +430,7 @@ public sealed class Export
         var resource = _components.For(typeof(TResource));
         string html;
         await using (var renderer = new HtmlRenderer(_services, _logs))
-            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, _space.Slots, frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
+            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, _space.Slots.Placed(_base + "/"), frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
         await _files.Write(path + ".html", Encoding.UTF8.GetBytes(await WithImages(Render.Feed.Rooted(html, _origin), up, ct)), ct);
         if (!Retired) await _files.Write(path + ".json", Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model, _json)), ct);
     }

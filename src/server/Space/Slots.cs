@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using Ganss.Xss;
 using Tangent.Posts;
@@ -19,9 +20,18 @@ namespace Tangent.Space;
 /// no list of allowed CSS closes that. <c>class</c> is kept, so a slot can wear the design's own classes, and they are all it
 /// reaches: a script looks a class up only inside an <c>article</c>, a <c>main</c> or an island's own element, none of which a
 /// slot can hold.</para>
-/// <para>A slot's bound is on what it keeps, so what it already holds is never refused when a form sends it back.</para></summary>
-public sealed record Slots
+/// <para>A slot's bound is on what it keeps, so what it already holds is never refused when a form sends it back.</para>
+/// <para>An image of the place a slot names is a use of it (<see cref="MediaUse"/>), so it reaches whoever reads a page that
+/// carries the slot: the head, the masthead and the footer stand on every page, a private place's sign-in among them, and
+/// reach everyone; the door intro and the article header reach whoever the place exists for.</para></summary>
+public sealed partial record Slots
 {
+    public const string HeadName = "head";
+    public const string MastheadName = "masthead";
+    public const string DoorIntroName = "door-intro";
+    public const string ArticleHeaderName = "article-header";
+    public const string FooterName = "footer";
+
     public const int HeadLimit = 4000;
     public const int MastheadLimit = 2000;
     public const int DoorIntroLimit = 8000;
@@ -70,6 +80,34 @@ public sealed record Slots
     public string ArticleHeader { get; set; } = "";
 
     public string Footer { get; set; } = "";
+
+    /// <summary>Whether the slot of this name stands on every page, a private place's sign-in among them.</summary>
+    public static bool OnEveryPage(string slot) => slot is HeadName or MastheadName or FooterName;
+
+    /// <summary>Each image of the place these slots name, once for each slot that names it, by the slot's name and the
+    /// image's Id.</summary>
+    public IReadOnlySet<(string Slot, string Media)> Images()
+    {
+        var named = new HashSet<(string, string)>();
+        foreach (var (slot, html) in new[] { (HeadName, Head), (MastheadName, Masthead), (DoorIntroName, DoorIntro), (ArticleHeaderName, ArticleHeader), (FooterName, Footer) })
+            foreach (Match target in Target().Matches(html))
+                if (Media.IdIn(target.Groups[1].Value) is { } id) named.Add((slot, id));
+        return named;
+    }
+
+    /// <summary>These slots as a page renders them, each image of the place at its address under the base URL, which ends in
+    /// a slash.</summary>
+    public Slots Placed(string door) => new()
+    {
+        Head = Media.Placed(Head, door),
+        Masthead = Media.Placed(Masthead, door),
+        DoorIntro = Media.Placed(DoorIntro, door),
+        ArticleHeader = Media.Placed(ArticleHeader, door),
+        Footer = Media.Placed(Footer, door)
+    };
+
+    [GeneratedRegex("\\s(?:src|href)=\"(/media/[^\"]*)\"", RegexOptions.CultureInvariant)]
+    private static partial Regex Target();
 
     /// <summary>Whether <paramref name="reason"/> is a slot's refusal.</summary>
     public static bool IsRule(string reason)
