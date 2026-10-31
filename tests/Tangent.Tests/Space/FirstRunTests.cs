@@ -167,7 +167,7 @@ public sealed class FirstRunTests
         Assert.Contains("You’re signed in as <strong>@ada.example</strong>, and this place is still being set up: check back soon.", html);
         Assert.Matches(@"Only\s+<strong>@leo\.sylin\.org</strong>\s+can set it up\.", html);
         Assert.DoesNotContain("first-run-did", html);
-        Assert.DoesNotContain("<form", html);
+        Assert.DoesNotContain("type=\"submit\"", html);
         Assert.Equal("leo.sylin.org", json.RootElement.GetProperty("operator").GetString());
         Assert.Equal(("ada.example", "leo.sylin.org"),
             (json.RootElement.GetProperty("waiting").GetProperty("handle").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
@@ -175,8 +175,8 @@ public sealed class FirstRunTests
         // The way out is the frame's account: its menu signs this person out and comes back to first run.
         var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
         Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
-        Assert.Contains($"<a class=\"account-item\" href=\"{WebUtility.HtmlEncode(signOut)}\">", html);
-        Assert.Contains($"<a class=\"first-run-switch\" href=\"{WebUtility.HtmlEncode(signOut)}\">Use another account</a>", html);
+        Assert.Contains($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button class=\"account-item account-sign-out\">", html);
+        Assert.Contains($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button class=\"first-run-switch\">Use another account</button></form>", html);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
         Assert.DoesNotContain(Ada, await Administrators(tangentSpace.Services));
 

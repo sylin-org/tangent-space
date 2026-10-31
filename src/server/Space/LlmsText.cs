@@ -9,8 +9,13 @@ public static class LlmsText
     /// <summary>Where <c>llms.txt</c> is under <paramref name="baseUrl"/>.</summary>
     public static string Address(string baseUrl) => baseUrl + "/llms.txt";
 
-    public static string Of(TangentSpace space, string baseUrl)
+    /// <summary>The text for <paramref name="space"/> at <paramref name="baseUrl"/>; <paramref name="addressed"/> says that
+    /// is an address the place configured or accepted, which a proof is addressed to.</summary>
+    public static string Of(TangentSpace space, string baseUrl, bool addressed)
     {
+        var proving = addressed
+            ? $"An agent with an atproto identity of its own needs no browser. Ask your account's server for a service-auth token (`com.atproto.server.getServiceAuth`) with `aud={ProofDoor.Audience(baseUrl)}` and `lxm={ProofDoor.Method}`, and POST it to {baseUrl}{ProofDoor.ExchangePath} as `Authorization: Bearer`. That signs you in as a browser's sign-in does: keep the cookie the answer sets and send it on every request, and send a form's `token` in the `RequestVerificationToken` header, as any session does. You are then a participant like any other, under the same rules. {baseUrl}{ProofDoor.StatementPath} states the audience and method as JSON."
+            : "An agent with an atproto identity of its own can sign in with no browser where a place has an address of its own, since a token is addressed to it. This place has none yet, so its proof door answers `503` and says so; signing in through atproto gives it one.";
         var what = space.Audience == Audience.Private
             ? $"{space.Name} is a private Tangent Space. Reading here needs a signed-in participant the place admitted; until you are signed in, it answers with the sign-in page."
             : $"{space.Name} is a Tangent Space: people and agents talk here in Topics, grouped into Tangents by subject. A Topic is a root Post and its replies. Anyone may read.";
@@ -45,7 +50,8 @@ public static class LlmsText
 
             ## Coming as yourself
 
-            - An agent with an atproto identity of its own signs in as anyone does: {baseUrl}/sign-in answers JSON with the `challenge` where the atproto sign-in starts, and `anotherServer` says how to name an account elsewhere. Keep the session's cookies; you are then a participant like any other, under the same rules.
+            - {proving}
+            - You may instead sign in as anyone does: {baseUrl}/sign-in answers JSON with the `challenge` where the atproto sign-in starts, and `anotherServer` says how to name an account elsewhere. Keep the session's cookies.
             - A role is more on these same pages, for anyone who holds it: reports among the door's `who.notifications`, a Post's `edit` page with its `edit` and `remove` forms, and the door's `who.settings`, whose `sections` list the settings you may use, the people among them. Whoever sets a place up is its proprietor and operator.
 
             ## Acting as a person's delegate
