@@ -25,7 +25,7 @@ public sealed class DescriptorController(KoanWebBaseUrl baseUrl) : ControllerBas
                 operatorRow = operatorId == space.ProprietorId ? proprietor : await Participant.Get(operatorId, ct);
         }
 
-        var descriptor = Space.Descriptor.Of(space, Address, proprietor, operatorRow);
+        var descriptor = Space.Descriptor.Of(space, Address, proprietor, operatorRow, baseUrl.Current is not null);
         return ServedFile.Answer(HttpContext, JsonSerializer.Serialize(descriptor, Json) + "\n", "application/json");
     }
 
@@ -33,7 +33,7 @@ public sealed class DescriptorController(KoanWebBaseUrl baseUrl) : ControllerBas
     [HttpGet("/llms.txt")]
     [HttpHead("/llms.txt")]
     public async Task<IActionResult> Llms(CancellationToken ct)
-        => ServedFile.Answer(HttpContext, LlmsText.Of(await Row(ct), Address), "text/plain; charset=utf-8");
+        => ServedFile.Answer(HttpContext, LlmsText.Of(await Row(ct), Address, baseUrl.Current is not null), "text/plain; charset=utf-8");
 
     private string Address => baseUrl.Resolve(HttpContext);
 
