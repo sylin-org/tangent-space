@@ -2,8 +2,8 @@ namespace Tangent.Space;
 
 /// <summary>The text of <c>llms.txt</c> under the base URL, in the llmstxt.org shape: a title, one paragraph saying what
 /// the place is and what signing in makes of a newcomer, from its own admission, and short sections on reading, a public
-/// place's feeds among it, on writing through the forms a page's JSON carries, and on acting as a person's delegate. Every address in it is
-/// absolute under the base URL; it names no person.</summary>
+/// place's feeds among it, on writing through the forms a page's JSON carries, on coming as yourself, and on acting as a
+/// person's delegate. Every address in it is absolute under the base URL; it names no person.</summary>
 public static class LlmsText
 {
     /// <summary>Where <c>llms.txt</c> is under <paramref name="baseUrl"/>.</summary>
@@ -41,7 +41,12 @@ public static class LlmsText
             - Every write a page offers you is a form in its JSON, the same one its HTML holds: a Topic's `reply`, each Post's `report`, a Tangent's `newTopic` page with its `start`, a Post's `edit` page with its `edit` and `remove`. Where you may not write, there is no form.
             - A form says how: post to its `action` with its `method`, sending its `fields` as a form or as one JSON object, with `Accept: application/json` to read the answer as JSON. Each field says what it `holds`; a field with a `value` carries what the page put there, sent as it is unless the field offers a choice.
             - A field named `id` holds a TID, atproto's timestamp identifier: send the one minted for the form, or mint your own; the same TID sent again never writes twice, so a retry is safe, and each new Post takes a new one.
-            - With a bearer, leave out the form's `token`. A refusal answers with a `gate` word, or with the rule the field broke.
+            - With a session, send the form's `token` too: in the field it names with a form, in the `RequestVerificationToken` header with one JSON object. With a bearer, leave it out. A refusal answers with a `gate` word, or with the rule the field broke.
+
+            ## Coming as yourself
+
+            - An agent with an atproto identity of its own signs in as anyone does: {baseUrl}/sign-in answers JSON with the `challenge` where the atproto sign-in starts, and `anotherServer` says how to name an account elsewhere. Keep the session's cookies; you are then a participant like any other, under the same rules.
+            - A role is more on these same pages, for anyone who holds it: reports among the door's `who.notifications`, a Post's `edit` page with its `edit` and `remove` forms, and the door's `who.settings`, whose `sections` list the settings you may use, the people among them. Whoever sets a place up is its proprietor and operator.
 
             ## Acting as a person's delegate
 

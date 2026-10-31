@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Tangent.Space;
 
-/// <summary>First run: every page answers it until the place is established; the first person to sign in, or the
+/// <summary>First run: every page answers it until the place is established; whoever signs in first, or the
 /// account the configuration names by handle or DID, sets it up by signing in, under the name their handle gives it,
 /// and becomes its proprietor, operator and administrator; first run then prints the site's pointers.</summary>
 public sealed class FirstRunTests

@@ -40,7 +40,7 @@ public sealed class AdmissionTests
     public async Task On_a_join_place_a_newcomer_who_signs_in_is_a_member_and_starts_a_topic_in_general()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        // First run, as the first person to sign in sets the place up: General is there from its first minute.
+        // First run, as whoever signs in first sets the place up: General is there from its first minute.
         using var leo = new Browser(tangentSpace);
         (await leo.SignIn("leo", "did:plc:leo4admission", Cancellation, handle: "leo.example")).Dispose();
         Assert.Equal(Admission.Join, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Admission);
