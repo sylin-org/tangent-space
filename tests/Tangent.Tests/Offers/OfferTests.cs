@@ -24,6 +24,7 @@ public sealed class OfferTests
     private const string Ada = "did:plc:ada4offers";
     private const string Public = "https://tangent.example.org";
     private const string Other = "https://www.example.org";
+    private const string OnAPort = "https://tangent.example.org:8443";
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
@@ -42,6 +43,75 @@ public sealed class OfferTests
         Assert.Equal("address/https%3A%2F%2Ftangent.example.org", offer.Id);
         var made = Assert.Single(await Event.All(Cancellation), e => e.Kind == EventKind.OfferMade);
         Assert.Equal((Leo, offer.Id, (string?)null, (string?)null), (made.TargetId, made.OfferId, made.ActorId, made.TangentId));
+    }
+
+    [Fact]
+    public async Task An_https_origin_on_a_port_of_its_own_is_not_offered_and_the_same_host_on_the_default_port_is()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
+
+        await Reached.On(tangentSpace, OnAPort, Cancellation, times: 3);
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Empty(await Offer.All(Cancellation));
+
+        await Reached.On(tangentSpace, Public, Cancellation);
+        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Equal(Public, Assert.Single(await Offer.All(Cancellation)).Subject);
+    }
+
+    [Fact]
+    public async Task Using_an_open_offer_of_an_origin_koan_will_not_take_says_why_keeps_nothing_and_it_can_still_be_declined()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await APlaceWithNews(tangentSpace);
+        var offer = Assert.IsType<Outcome<Offer>.Done>(
+            await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new MakeOffer(OnAPort), Cancellation)).Result;
+        using var leo = await SignedIn(tangentSpace, "leo", Leo);
+
+        using (var used = await Answer(leo, OfferController.UsePath, offer.Id))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, used.StatusCode);
+            Assert.Contains("a port of its own", WebUtility.HtmlDecode(await used.Content.ReadAsStringAsync(Cancellation)));
+        }
+
+        Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
+        Assert.Null((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
+        Assert.Null(tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Current);
+        using var declined = await Answer(leo, OfferController.DeclinePath, offer.Id);
+        Assert.Equal(HttpStatusCode.SeeOther, declined.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_place_whose_row_keeps_an_address_on_a_port_of_its_own_starts_on_each_request_s_origin_and_its_used_offer_still_lands()
+    {
+        var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
+        try
+        {
+            await using (var kept = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
+            {
+                await APlaceWithNews(kept, OnAPort);
+                var used = Offer.Make(OfferKind.Address, OnAPort, Leo, DateTimeOffset.UtcNow);
+                used.Accept(DateTimeOffset.UtcNow);
+                Assert.IsType<Outcome<Offer>.Done>(await kept.Services.GetRequiredService<WriteLoop>().Send(new Store<Offer>(used), Cancellation));
+            }
+
+            await using var restarted = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation);
+            var baseUrl = restarted.Services.GetRequiredService<KoanWebBaseUrl>();
+            Assert.Null(baseUrl.Accepted);
+            Assert.True(baseUrl.DerivesFromRequests);
+            Assert.Equal(OnAPort, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
+
+            using var leo = await SignedIn(restarted, "leo", Leo);
+            using var again = await Answer(leo, OfferController.UsePath, Offer.IdFor(OfferKind.Address, OnAPort));
+            Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
+            Assert.Null(baseUrl.Accepted);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
+        }
     }
 
     [Fact]
@@ -501,9 +571,9 @@ public sealed class OfferTests
 
     /// <summary>A place Leo set up and operates, with no address yet, where Ada is a member and Leo started a Topic, so
     /// her door has news and the form that marks it seen.</summary>
-    private static async Task APlaceWithNews(TangentSpaceFixture tangentSpace)
+    private static async Task APlaceWithNews(TangentSpaceFixture tangentSpace, string? address = null)
     {
-        await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
+        await Reached.APlace(tangentSpace, Leo, address, Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         await Given.ATangent(tangentSpace, "workshop", ct: Cancellation);
