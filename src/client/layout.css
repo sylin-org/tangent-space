@@ -309,6 +309,14 @@ h3 {
   background: var(--ts-hover);
 }
 
+.account-sign-out {
+  width: 100%;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
 /* A visitor's way in: the primary button where a participant's account would be. */
 .masthead-sign-in {
   height: 38px;

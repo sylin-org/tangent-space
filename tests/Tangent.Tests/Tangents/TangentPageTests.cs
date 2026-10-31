@@ -34,6 +34,23 @@ public sealed class TangentPageTests
     };
 
     [Fact]
+    public async Task Signing_out_takes_the_mastheads_form_and_a_request_for_its_address_ends_nothing()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
+        Assert.Contains("<details class=\"account\">", await Html(browser.Client, "/"));
+
+        using (var image = await browser.Client.GetAsync("/auth/logout", Cancellation))
+            Assert.Equal(HttpStatusCode.NotFound, image.StatusCode);
+        Assert.Contains("<details class=\"account\">", await Html(browser.Client, "/"));
+
+        using (var form = await browser.Client.PostAsync("/auth/logout", null, Cancellation))
+            Assert.True(form.IsSuccessStatusCode || form.StatusCode == HttpStatusCode.Redirect);
+        Assert.DoesNotContain("<details class=\"account\">", await Html(browser.Client, "/"));
+    }
+
+    [Fact]
     public async Task The_page_as_html_and_json_carries_the_tangent_its_can_and_its_topics_pinned_first_then_by_last_activity_and_a_reply_moves_its_topic_to_the_top()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
@@ -161,8 +178,8 @@ public sealed class TangentPageTests
         Assert.Contains("<span class=\"new-label\">1 new</span>", html);
         // The reader's account opens in the page, with the way to sign out and come back here.
         Assert.Contains("<details class=\"account\">", html);
-        Assert.Contains($"<a class=\"account-item\" href=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", html);
-        Assert.Contains("</svg>Sign out</a>", html);
+        Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-sign-out\">", html);
+        Assert.Contains("</svg>Sign out</button></form>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
             Assert.All(Marks(json.RootElement).Values, mark => Assert.Equal((false, 0L), mark));
@@ -315,7 +332,7 @@ public sealed class TangentPageTests
         var readerHtml = await Html(browser.Client, "/t/" + Workshop);
         Assert.DoesNotContain("masthead-sign-in", readerHtml);
         Assert.Contains(" · Member</span>", WebUtility.HtmlDecode(readerHtml));
-        Assert.Contains($"<li><a class=\"account-item\" href=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
+        Assert.Contains($"<li><form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
         Assert.Contains("data-theme-choice=\"dark\"", readerHtml[..readerHtml.IndexOf("account-items", StringComparison.Ordinal)]);
         Assert.DoesNotContain("The studio", readerHtml);
         Assert.Contains("<span class=\"new-label new-beside\">New</span>", readerHtml);

@@ -82,7 +82,7 @@
             @if (Model.Reader is { } reader)
             {
                 <p class="first-run-onward">
-                    <a class="first-run-switch" href="@reader.SignOut">Use another account</a>
+                    <form method="post" action="@reader.SignOut"><button class="first-run-switch">Use another account</button></form>
                 </p>
             }
         }
