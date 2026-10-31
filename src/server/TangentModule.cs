@@ -69,16 +69,16 @@ public sealed class TangentModule : KoanModule
         // without a preference reads a page, and every other type keeps Koan's JSON.
         services.AddScoped<HtmlRenderer>();
         services.AddSingleton(new ResourceComponents()
-            .Add<Door, DoorView>(door => door.Name, Door.Version, DoorView.Frame)
+            .Add<Door, DoorView>(door => door.Name, Door.Version, DoorView.Frame, Door.Card)
             .Add<Problem, ProblemView>(problem => problem.Title)
             .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignInView.Frame)
-            .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame)
+            .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame, Tangents.TangentPage.Card)
             .Add<Tangents.TangentsPage, Tangents.TangentsView>(page => "Tangents · " + page.Place, frame: Tangents.TangentsView.Frame)
             .Add<Tangents.NewTangentPage, Tangents.NewTangentView>(page => "New Tangent · " + page.Place, frame: Tangents.NewTangentView.Frame)
             .Add<Tangents.TangentSettingsPage, Tangents.TangentSettingsView>(page => "Settings · " + page.Name, frame: Tangents.TangentSettingsView.Frame)
             .Add<Tangents.TangentClosed, Tangents.TangentClosedView>(page => "Saved · " + page.Name, frame: Tangents.TangentClosedView.Frame)
             .Add<Tangents.TangentAccessPage, Tangents.TangentAccessView>(page => "Access · " + page.Name, frame: Tangents.TangentAccessView.Frame)
-            .Add<Posts.TopicPage, Posts.TopicView>(page => page.Title + " · " + page.Tangent.Name, Posts.TopicPage.Version, Posts.TopicView.Frame)
+            .Add<Posts.TopicPage, Posts.TopicView>(page => page.Title + " · " + page.Tangent.Name, Posts.TopicPage.Version, Posts.TopicView.Frame, Posts.TopicPage.Card)
             .Add<Posts.NewTopicPage, Posts.NewTopicView>(page => (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Posts.NewTopicView.Frame)
             .Add<Posts.EditPage, Posts.EditView>(page => (!page.Root ? "Edit post · " : page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "Edit article · " : "Edit topic · ") + page.TopicTitle, frame: Posts.EditView.Frame)
             .Add<Posts.TakeOnATangentPage, Posts.TakeOnATangentView>(page => "Take this on a tangent · " + page.Origin.Topic, frame: Posts.TakeOnATangentView.Frame)
@@ -87,10 +87,13 @@ public sealed class TangentModule : KoanModule
             .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame)
             .Add<TangentSpaceSettingsPage, TangentSpaceSettingsView>(page => "Settings · " + page.Place, frame: TangentSpaceSettingsView.Frame)
             .Add<AdmissionSettingsPage, AdmissionSettingsView>(page => "Admission · " + page.Place, frame: AdmissionSettingsView.Frame)
+            .Add<AppearanceSettingsPage, AppearanceSettingsView>(page => "Appearance · " + page.Place, frame: AppearanceSettingsView.Frame)
             .Add<Participants.ApplicationsPage, Participants.ApplicationsView>(page => "Applications · " + page.Place, frame: Participants.ApplicationsView.Frame)
             .Add<Participants.PeoplePage, Participants.PeopleView>(page => "People · " + page.Place, frame: Participants.PeopleView.Frame)
             .Add<RolesPage, RolesView>(page => "Roles · " + page.Place, frame: RolesView.Frame)
+            .Add<Lifecycle.ExportSettingsPage, Lifecycle.ExportSettingsView>(page => "Export · " + page.Place, frame: Lifecycle.ExportSettingsView.Frame)
             .Add<NotificationsPage, NotificationsView>(page => "Notifications · " + page.Place, frame: NotificationsView.Frame)
+            .Add<Posts.SearchPage, Posts.SearchView>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchView.Frame)
             .Add<Delegates.Consent, Delegates.ConsentView>(consent => "Approve an agent · " + consent.Place, frame: Delegates.ConsentView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>

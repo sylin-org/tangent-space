@@ -1,17 +1,23 @@
 @using System.Globalization
 @using global::Tangent.Render
 @using global::Tangent.Tangents
-@* How an article opens, the same when it is read and while it is written: its cover, its title, then who wrote it and
-   when. While it is written the title and cover are the fields they will be read as, given by the form. *@
+@* How an article opens, the same when it is read and while it is written: its cover, the proprietor's article header
+   where they wrote one, its title, then who wrote it and when. While it is written the title and cover are the fields
+   they will be read as, given by the form. A page standing alone holds its cover alone, with no render beside it. *@
 <header class="article-head">
     @if (CoverSlot is not null)
     {
         @CoverSlot
     }
+    else if (Cover is { } alone && Standalone)
+    {
+        <figure class="article-figure"><img src="@alone" alt="" decoding="async"></figure>
+    }
     else if (Cover is { } cover)
     {
         <figure class="article-figure"><img src="@cover" srcset="@(cover + "/" + MediaRecipes.CardName + " " + MediaRecipes.CardWidth.ToString(CultureInfo.InvariantCulture) + "w, " + cover + " " + Media.LongestEdge.ToString(CultureInfo.InvariantCulture) + "w")" sizes="(max-width: 719px) 100vw, 680px" alt="" decoding="async"></figure>
     }
+    <Slot Name="article-header" Html="@Header" Prose="true" />
     @if (TitleSlot is not null)
     {
         @TitleSlot
@@ -58,6 +64,11 @@
 
     /// <summary>The pin or lock beside the title.</summary>
     [Parameter] public RenderFragment? Flags { get; set; }
+
+    /// <summary>The proprietor's article header, where they wrote one.</summary>
+    [Parameter] public string? Header { get; set; }
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
 
     /// <summary>The cover while it is written: the field, in the cover's place.</summary>
     [Parameter] public RenderFragment? CoverSlot { get; set; }

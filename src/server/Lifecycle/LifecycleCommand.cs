@@ -3,15 +3,17 @@ using Tangent.Space;
 namespace Tangent.Lifecycle;
 
 /// <summary>The executable's own lifecycle verbs, run instead of the Tangent Space when the first argument names one:
-/// <c>backup &lt;folder&gt;</c> and <c>restore [&lt;backup-folder&gt;] [--replace]</c>. Each reads the same
-/// configuration the Tangent Space reads (appsettings.json beside the executable, environment variables, and any
-/// remaining <c>--Section:Key=value</c> arguments) to find the data folder, and needs no Koan host.</summary>
+/// <c>backup &lt;folder&gt;</c>, <c>restore [&lt;backup-folder&gt;] [--replace]</c> and <c>archive &lt;folder&gt;</c>. Each reads
+/// the same configuration the Tangent Space reads (appsettings.json beside the executable, environment variables, and any
+/// remaining <c>--Section:Key=value</c> arguments) to find the data folder; only an archive, which reads the place, needs a
+/// Koan host, and one that listens nowhere.</summary>
 public sealed class LifecycleCommand
 {
     private const string Usage =
         "Tangent.Server backup <folder>                      back up the data folder into a new folder under <folder>\n" +
         "Tangent.Server restore <backup-folder> [--replace]  put a backup back into an empty or absent data folder\n" +
         "Tangent.Server restore --replace                    move the data folder aside; the next start begins anew\n" +
+        "Tangent.Server archive <folder>                     render every public page and feed into an empty or absent folder\n" +
         "--replace moves a non-empty data folder aside with a timestamp; nothing is deleted.";
 
     private LifecycleCommand(string verb, string? folder, bool replace, string[] configuration, bool understood)
@@ -25,10 +27,10 @@ public sealed class LifecycleCommand
 
     public string Verb { get; }
 
-    /// <summary>False when the arguments name more than one folder, or --replace for a backup.</summary>
+    /// <summary>False when the arguments name more than one folder, or --replace for anything but a restore.</summary>
     public bool Understood { get; }
 
-    /// <summary>The folder the verb names: where a backup goes, or the backup a restore puts back.</summary>
+    /// <summary>The folder the verb names: where a backup or an archive goes, or the backup a restore puts back.</summary>
     public string? Folder { get; }
 
     public bool Replace { get; }
@@ -41,7 +43,7 @@ public sealed class LifecycleCommand
     {
         if (args.Length == 0) return null;
         var verb = args[0].ToLowerInvariant();
-        if (verb is not ("backup" or "restore")) return null;
+        if (verb is not ("backup" or "restore" or "archive")) return null;
 
         // The folder and --replace in any order; every other --Key=value or --Key value is configuration, read as
         // the configuration's own command line reads it. More than one folder is not understood.
@@ -71,7 +73,7 @@ public sealed class LifecycleCommand
             }
         }
 
-        if (verb == "backup" && replace) understood = false;
+        if (verb != "restore" && replace) understood = false;
         return new LifecycleCommand(verb, understood ? folder : null, replace && understood, configuration.ToArray(), understood);
     }
 
@@ -111,6 +113,10 @@ public sealed class LifecycleCommand
                         ? $"The data folder {dataFolder} is empty; the next start begins a new Tangent Space."
                         : $"Restored {restored.Files} files from {Folder} into {dataFolder}");
                     return 0;
+                case "archive" when Folder is not null:
+                    var named = Archive.Take(builder, dataFolder, Folder).GetAwaiter().GetResult();
+                    Console.WriteLine($"Archived the public pages and feeds to {Folder}; they name the place at {named}.");
+                    return 0;
                 default:
                     Console.Error.WriteLine(Usage);
                     return 2;
@@ -119,6 +125,10 @@ public sealed class LifecycleCommand
         catch (LifecycleRefusal refusal)
         {
             return Fail(refusal.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            return Fail($"{Verb} stopped; it left nothing.");
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
         {

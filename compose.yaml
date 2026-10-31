@@ -10,6 +10,11 @@
 # Restore while it is stopped (--replace moves the current data folder aside inside the volume):
 #   docker compose stop tangent
 #   docker compose run --rm tangent restore /state/backups/<backup> --replace
+# Retire it while it is stopped: render the archive, then name it in TANGENT_ARCHIVE, or serve the folder from any static
+# file host. Named, the server answers its public URLs from it and takes no writes:
+#   docker compose stop tangent
+#   docker compose run --rm tangent archive /state/archive
+#   TANGENT_ARCHIVE=/state/archive docker compose up -d
 name: tangent-space
 services:
   tangent:
@@ -23,6 +28,7 @@ services:
       Koan__Web__ApplicationUrl: "${TANGENT_URL:-}"
       Koan__Web__TrustedProxies__0: "${TANGENT_PROXY:-127.0.0.1}"
       Tangent__DataFolder: "/state/data"
+      Tangent__Archive: "${TANGENT_ARCHIVE:-}"
     volumes:
       - state:/state
     restart: unless-stopped

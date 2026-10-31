@@ -1,0 +1,104 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* The place's settings, appearance: the sections of the settings in the rail, this one marked, and in one panel beside
+   them the choice of the place's accent, four cards, each with its colour in the reader's theme, a note that light or
+   dark stays each reader's own, and behind one quiet disclosure, open once any holds something or a refusal needs it, the
+   place's slots, each a field of its own HTML that says what it keeps. A reader who may not change them reads why above
+   the form, whose choices are disabled, whose fields are read-only and which has no button, and a visitor the way to
+   sign in; a refusal shows above the form. *@
+<div class="layout layout-settings">
+    <SettingsRail Sections="@Model.Sections" />
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="space-appearance-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="space-appearance-heading" class="sign-in-title">@TangentSpaceSettingsController.AppearanceSection</h1>
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="space-appearance-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else if (Model.Failure is { } failure)
+                {
+                    <p class="sign-in-failure" id="space-appearance-failure" role="alert">@failure</p>
+                }
+                <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+                    @if (Model.Change is { } change)
+                    {
+                        <FormTokenField Token="@change.Token" />
+                    }
+                    <fieldset class="post-form-choice">
+                        <legend class="field-label">The place's accent</legend>
+                        <div class="post-form-options">
+                            @foreach (var word in Model.Accents)
+                            {
+                                <label class="post-form-option">
+                                    <span class="accent-swatch" data-swatch="@word" aria-hidden="true"></span>
+                                    <span class="post-form-option-text">
+                                        <span class="post-form-option-name">@Name(word)</span>
+                                    </span>
+                                    <input type="radio" name="@TangentSpaceSettingsController.AccentField" value="@word"
+                                           checked="@(word == Model.Accent)" disabled="@(!Mutable)">
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                    <p class="post-form-note">Links, buttons and what is new take it on every page, for everyone. Light or dark is each reader's own, at the foot of any page.</p>
+                    <details class="post-form-more" open="@(Model.Failure is not null || Model.Slots != new Slots())">
+                        <summary class="sign-in-other-toggle">Your own HTML</summary>
+                        <div class="post-form-more-body">
+                            @SlotField(TangentSpaceSettingsController.HeadField, "Head", Model.Slots.Head, 5, Slots.HeadLimit,
+                                "In every page's head: meta tags and icon links.")
+                            @SlotField(TangentSpaceSettingsController.MastheadField, "Masthead", Model.Slots.Masthead, 2, Slots.MastheadLimit,
+                                "Beside the place's name on every page: links, images and a few words.")
+                            @SlotField(TangentSpaceSettingsController.DoorIntroField, "Door intro", Model.Slots.DoorIntro, 4, Slots.DoorIntroLimit,
+                                "Under the door's head: prose, links and images.")
+                            @SlotField(TangentSpaceSettingsController.ArticleHeaderField, "Article header", Model.Slots.ArticleHeader, 3, Slots.ArticleHeaderLimit,
+                                "Above every article's title: prose, links and images.")
+                            @SlotField(TangentSpaceSettingsController.FooterField, "Footer", Model.Slots.Footer, 2, Slots.FooterLimit,
+                                "In every page's footer: links, images and a few words.")
+                            <p class="post-form-note">Whatever else you write is taken out when you save: no scripts, no forms, no handlers, no CSS. The design's own classes work. An image or an icon comes from another site or from under /media/ here. The pages of an export and of the archive carry the same.</p>
+                        </div>
+                    </details>
+                    @if (Mutable)
+                    {
+                        <div class="post-form-actions">
+                            <a class="post-form-cancel" href="@Model.Door">Back to the door</a>
+                            <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Saving…">Save</button>
+                        </div>
+                    }
+                </form>
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public AppearanceSettingsPage Model { get; set; } = default!;
+
+    /// <summary>Whether the reader may change the accent and the slots here.</summary>
+    private bool Mutable => Model.Gate is null;
+
+    /// <summary>One slot's field: its source as it stands, and what it keeps and how much.</summary>
+    private RenderFragment SlotField(string field, string label, string value, int rows, int limit, string note) => @<div class="field">
+        <label class="field-label" for="@("space-appearance-" + field)">@label</label>
+        <textarea class="post-form-body post-form-short slot-source" id="@("space-appearance-" + field)" name="@field" rows="@rows" spellcheck="false"
+                  readonly="@(!Mutable)" aria-describedby="@("space-appearance-" + field + "-note")">@value</textarea>
+        <p class="post-form-note" id="@("space-appearance-" + field + "-note")">@note At most @limit.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) characters.</p>
+    </div>;
+
+    private static string Name(string word) => char.ToUpperInvariant(word[0]) + word[1..];
+
+    /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
+    /// a visitor signs in.</summary>
+    public static Frame Frame(AppearanceSettingsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Settings")], page.Who, page.SignIn);
+}

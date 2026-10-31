@@ -7,8 +7,8 @@ using Tangent.Writer;
 namespace Tangent.Offers;
 
 /// <summary>Where Offers of an address come from: Koan's record of the origins requests arrive on
-/// (<see cref="KoanWebOrigins"/>). When an origin first appears that the public reaches over https, it is offered only
-/// where nothing in memory already rules it out — no URL is configured, the place is set up, its address is local, no
+/// (<see cref="KoanWebOrigins"/>). When an origin first appears that the public reaches and Koan would take, it is offered
+/// only where nothing in memory already rules it out — no URL is configured, the place is set up, its address is local, no
 /// Offer of an address is open, and that origin was never offered — and then <see cref="MakeOffer"/> is handed to the
 /// writer only where its queue has room, never waiting, so a request that brought a new origin goes on at once and no
 /// stream of forged hosts piles onto the write path; the command judges the rest. What memory holds comes from the
@@ -68,10 +68,11 @@ public sealed class AddressOffers(KoanWebBaseUrl baseUrl, KoanWebOrigins origins
         origins.Appeared += (_, seen) => Appeared(seen);
     }
 
-    /// <summary>Whether Koan would take <paramref name="seen"/> as the place's address and the public reaches it: an
-    /// https origin of a public address.</summary>
-    public static bool Offerable(ObservedOrigin seen)
-        => seen.AddressClass == OriginAddressClass.Public && seen.Origin.StartsWith(Uri.UriSchemeHttps + "://", StringComparison.Ordinal);
+    /// <summary>Whether the public reaches <paramref name="seen"/> and Koan would take it as the place's address, so a
+    /// person is offered only what can be kept: an http origin of a public address is not, nor, while sign-in names the
+    /// place's client from its address, one on a port of its own.</summary>
+    public bool Offerable(ObservedOrigin seen)
+        => seen.AddressClass == OriginAddressClass.Public && baseUrl.WouldAccept(seen.Origin, out _);
 
     /// <summary>What Koan has seen of <paramref name="origin"/> since this process started, or null.</summary>
     public ObservedOrigin? Evidence(string origin)

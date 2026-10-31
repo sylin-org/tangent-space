@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Koan.Data.Core;
+using Koan.Identity.Roles;
+using Microsoft.Extensions.DependencyInjection;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Png.Chunks;
@@ -25,7 +27,7 @@ public sealed class ArticleMediaTests
 {
     private const string Secrets = "SecretCamera|Secret Artist|Secret-Byline|Secret-City|Secret-Xmp|Secret-Png-Text";
 
-    private static byte[] Jpeg(int size = 64, bool secrets = true, Color? colour = null)
+    internal static byte[] Jpeg(int size = 64, bool secrets = true, Color? colour = null)
     {
         using var image = new Image<Rgba32>(size, size, colour ?? Color.Teal);
         if (secrets)
@@ -54,7 +56,7 @@ public sealed class ArticleMediaTests
     }
 
     /// <summary>Brings an image in as the page does: a multipart form with the page's token, answered as JSON.</summary>
-    private static async Task<Answered> Bring(Browser browser, byte[] image, string tangent = Articles, string page = "/t/" + Articles + "/new")
+    internal static async Task<Answered> Bring(Browser browser, byte[] image, string tangent = Articles, string page = "/t/" + Articles + "/new")
     {
         var fields = new MultipartFormDataContent();
         foreach (var (name, value) in await browser.Token(page, Cancellation)) fields.Add(new StringContent(value), name);
@@ -71,7 +73,7 @@ public sealed class ArticleMediaTests
         return await response.Content.ReadAsByteArrayAsync(Cancellation);
     }
 
-    private static string IdOf(Answered brought) => brought.Json.GetProperty("id").GetString()!;
+    internal static string IdOf(Answered brought) => brought.Json.GetProperty("id").GetString()!;
 
     [Fact]
     public async Task An_image_comes_in_on_the_page_and_a_cover_leads_the_article_where_it_is_read_and_on_its_list()
@@ -298,6 +300,119 @@ public sealed class ArticleMediaTests
 
         var discussion = await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Wicks", "Cotton.", Ada, CoverId: cover), Cancellation);
         Assert.Equal(Post.CoverOnArticle, Assert.IsType<Outcome<Post>.Refused>(discussion).Reason);
+    }
+
+    [Fact]
+    public async Task An_articles_header_stands_once_in_its_head_between_its_cover_and_its_title()
+    {
+        const string header = "<p>From the long reads.</p>";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var cover = IdOf(await Bring(ada, Jpeg()));
+        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover), Cancellation)).Result;
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        space!.Slots.ArticleHeader = header;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+
+        var page = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(article))).Body;
+
+        var head = page.IndexOf("<header class=\"article-head\">", StringComparison.Ordinal);
+        var figure = page.IndexOf("class=\"article-figure\"", StringComparison.Ordinal);
+        var slot = page.IndexOf("slot-article-header", StringComparison.Ordinal);
+        var title = page.IndexOf("<h1 class=\"article-title\"", StringComparison.Ordinal);
+        Assert.True(head >= 0 && head < figure && figure < slot && slot < title, "The header is in the article's head, under its cover and over its title.");
+        Assert.Equal(slot, page.LastIndexOf("slot-article-header", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_public_articles_card_previews_its_cover_large_and_a_card_with_no_image_stays_small()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Overwrites.SetAudience(tangentSpace.Services.GetRequiredService<RoleCollection>(), Articles, Audience.Public, Cancellation);
+        await Given.AParticipant(tangentSpace, "did:plc:leo4writes", [Roles.Administrator], ct: Cancellation);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var leo = await SignedIn(tangentSpace, "did:plc:leo4writes");
+        var cover = IdOf(await Bring(ada, Jpeg()));
+        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover), Cancellation)).Result;
+        var bare = await Started(writer, Ada, "No cover here", "Words.", Articles);
+
+        var page = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(article))).Body;
+        Assert.Contains($"<meta property=\"og:image\" content=\"{BaseUrl}/media/{cover}/{MediaRecipes.CardName}\"", page);
+        Assert.Contains("<meta name=\"twitter:card\" content=\"summary_large_image\"", page);
+        Assert.Equal(HttpStatusCode.OK, (await Send(Agent(tangentSpace), HttpMethod.Get, $"/media/{cover}/{MediaRecipes.CardName}")).Status);
+
+        var plain = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(bare))).Body;
+        Assert.DoesNotContain("og:image", plain);
+        Assert.Contains("<meta name=\"twitter:card\" content=\"summary\"", plain);
+
+        // Where a visitor may not read, there is no card and so no cover in it, even for who may read there.
+        var hidden = IdOf(await Bring(leo, Jpeg(50), Studio, "/t/" + Studio + "/new"));
+        var inside = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Studio, "Inside", "Words.", "did:plc:leo4writes"), Cancellation)).Result;
+        var kept = (await Send(leo.Client, HttpMethod.Get, TopicPath(inside))).Body;
+        Assert.DoesNotContain("og:image", kept);
+        Assert.DoesNotContain("twitter:", kept);
+        Assert.DoesNotContain(hidden, kept);
+    }
+
+    [Fact]
+    public async Task A_feed_reader_with_no_account_fetches_an_articles_images_under_the_places_path()
+    {
+        const string place = "https://tangent.example/notes";
+        var settings = Settings();
+        settings["Koan:Web:ApplicationUrl"] = place;
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(settings, ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var cover = await Media.Keep(Jpeg(), Cancellation);
+        var inline = await Media.Keep(Jpeg(40), Cancellation);
+        foreach (var image in new[] { cover, inline }) Assert.IsType<Outcome<MediaUse>.Done>(await writer.Send(new BringMedia(image.Id, Ada), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline.Id + ")", Ada, CoverId: cover.Id), Cancellation));
+        using var reader = Agent(tangentSpace);
+
+        foreach (var feed in new[] { "/notes" + Feeds.ArticlesPath, "/notes/t/" + Articles + "/" + Feeds.TangentSegment })
+        {
+            var json = (await Send(reader, HttpMethod.Get, feed + Render.JsonFeed.Extension)).Body;
+            var item = System.Text.Json.JsonDocument.Parse(json).RootElement.GetProperty("items")[0];
+            Assert.Equal($"{place}/media/{cover.Id}", item.GetProperty("image").GetString());
+            Assert.Contains($"src=\"{place}/media/{inline.Id}\"", item.GetProperty("content_html").GetString());
+
+            var atom = (await Send(reader, HttpMethod.Get, feed + Render.AtomFeed.Extension)).Body;
+            Assert.Contains($"<media:thumbnail url=\"{place}/media/{cover.Id}\"", atom);
+            Assert.Contains($"src=\"{place}/media/{inline.Id}\"", atom);
+        }
+
+        foreach (var image in new[] { cover, inline })
+            Assert.Equal(HttpStatusCode.OK, (await Send(reader, HttpMethod.Get, "/notes/media/" + image.Id)).Status);
+
+        // An entry with no cover says nothing of one.
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Words alone", "Words.", Ada), Cancellation));
+        var newest = System.Text.Json.JsonDocument.Parse((await Send(reader, HttpMethod.Get, "/notes" + Feeds.ArticlesPath + Render.JsonFeed.Extension)).Body).RootElement.GetProperty("items")[0];
+        Assert.False(newest.TryGetProperty("image", out _));
+    }
+
+    [Fact]
+    public async Task What_a_body_and_a_slot_keep_of_an_image_here_is_one_rule_its_address_satisfies()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var reference = Media.Reference(IdOf(await Bring(ada, Jpeg())));
+        Assert.Equal(reference, Media.Reference(Media.IdIn(reference)!));
+
+        Assert.Contains($"<img src=\"{reference}\"", MarkdownHtml.Render("![A wick](" + reference + ")").Html());
+        Assert.Contains($"<img src=\"{reference}\"", new Slots().Written(null, null, null, $"<img src=\"{reference}\" alt=\"\">", null).ArticleHeader);
+    }
+
+    [Fact]
+    public async Task Llms_txt_says_how_a_picture_comes_into_an_article()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+
+        var text = await Agent(tangentSpace).GetStringAsync("/llms.txt", Cancellation);
+
+        foreach (var word in new[] { "`bring`", "`reference`", "`cover`", "![what it shows](reference)" }) Assert.Contains(word, text);
     }
 
     [Fact]

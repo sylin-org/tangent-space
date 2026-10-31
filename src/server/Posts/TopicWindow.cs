@@ -100,6 +100,11 @@ public static class TopicWindow
         ? new Window(replies, at, at - 1, boundary)
         : new Window(replies, replies[0].Sequence, replies[^1].Sequence, boundary);
 
+    /// <summary>The replies past the sequence <paramref name="after"/> through <paramref name="through"/>, oldest first: one
+    /// range of the window index, for a reader that walks the sequences itself.</summary>
+    public static Task<IReadOnlyList<Post>> Between(string topicId, long after, long through, CancellationToken ct)
+        => Newer(topicId, after, through, checked((int)(through - after)), ct);
+
     /// <summary>The replies after <paramref name="after"/> through <paramref name="boundary"/>, oldest first, at most
     /// <paramref name="take"/>.</summary>
     private static Task<IReadOnlyList<Post>> Newer(string topicId, long after, long boundary, int take, CancellationToken ct)

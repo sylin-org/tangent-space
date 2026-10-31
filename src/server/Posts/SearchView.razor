@@ -1,0 +1,81 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* A search of what the place has said, in one panel: the words searched for and, best first, each Post found in an Offer's
+   line: who wrote it by their mark and name, its Topic linked to the Post, its Tangent and when, and its words under
+   it, the matched words marked, first saying who else edited them where someone did. The words are typed into the
+   masthead's box, which holds them here. Words that can't be searched say why, none found reads as one sentence, and
+   the pages either side are a link away. *@
+<div class="layout">
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="search-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">In <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="search-heading" class="sign-in-title">@(Model.Text is { } text ? "Search: " + text : "Search")</h1>
+                @if (Model.Hits.Count == 0)
+                {
+                    <p class="post-form-note">@Empty()</p>
+                }
+                else
+                {
+                    <ul class="door-offers notifications search-hits">
+                        @foreach (var hit in Model.Hits)
+                        {
+                            <li class="door-offer notification" @key="hit.Id">
+                                <div class="notification-body">
+                                    <p class="door-offer-line notification-line">
+                                        @TopicRow.Mark(hit.Author, "face")
+                                        <span class="notification-text"><strong>@hit.Author.Name</strong> in <a class="notification-link" href="@hit.Address">@hit.Topic</a> <span class="topic-row-none">· @hit.Tangent · <time datetime="@hit.At.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@TopicRow.When(hit.At, Model.Day)</time></span></span>
+                                    </p>
+                                    @if (hit.Snippet.Count > 0 || hit.Edited is not null)
+                                    {
+                                        <p class="notification-opening">@if (hit.Edited is not null)
+                                            {
+                                                @TopicRow.Edited(hit.Edited)@(" ")
+                                            }@foreach (var run in hit.Snippet)
+                                            {
+                                                if (run.Marked)
+                                                {
+                                                    <mark class="search-mark">@run.Text</mark>
+                                                }
+                                                else
+                                                {
+                                                    @run.Text
+                                                }
+                                            }</p>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (Model.Previous is not null || Model.Next is not null)
+                {
+                    <nav class="topic-pages" aria-label="More of what was found">
+                        @if (Model.Previous is { } previous)
+                        {
+                            <a href="@previous">← Better matches</a>
+                        }
+                        @if (Model.Next is { } next)
+                        {
+                            <a class="topic-pages-next" href="@next">More →</a>
+                        }
+                    </nav>
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SearchPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and the search as crumbs, who reads or where a visitor
+    /// signs in, and the words, which the masthead's box holds.</summary>
+    public static Frame Frame(SearchPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Search")], page.Who, page.SignIn, Searched: page.Text);
+
+    /// <summary>What a page without a Post to show says: why the words can't be searched, that nothing here holds them, or
+    /// what the box is for.</summary>
+    private string Empty() => Model.Refused
+        ?? (Model.Text is null ? "Type the words you’re looking for in the box at the top of the page." : "Nothing you can read here holds those words.");
+}

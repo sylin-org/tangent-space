@@ -1,25 +1,49 @@
 @using System.Globalization
 @using System.Text.Json
-@* The page around one resource's component: the stylesheet and the two scripts every page loads, absolute from
-   the base URL. The theme script blocks in <head> so the saved appearance applies before the first paint; the
-   page script is a module, deferred by nature, that mounts the islands once the document is parsed. A resource
-   that names a frame is drawn inside it: the masthead with the place's mark and name and, for someone signed in, how
+@using Tangent.Space
+@* The page around one resource's component: the place's accent on <html>, and the stylesheet and the two scripts every page loads, absolute from
+   the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
+   page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
+   opens with no server and no script: the device decides its theme, and no island answers on it. A resource
+   that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
    many of their notifications they have not seen, linked to them and shown only while there are some, which the page's
    stream raises as new ones arrive, and their account opening in the page with their name, handle and role, their
    notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
-   in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. Nothing here is a dialog. *@
+   in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. A page a visitor may
+   read carries in its head the card a link to it previews. A page of the place's archive opens with the one line that says it is retired. The place's own
+   slots come through here: its head last in <head>, so what it sets wins, its masthead after the place's name and its footer first in the footer, each adding nothing while it is empty.
+   Nothing here is a dialog. *@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-accent="@Accent">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@Title</title>
-    <link rel="stylesheet" href="@(BaseUrl)/tangent.css">
-    <script src="@(BaseUrl)/theme.js"></script>
-    <script type="module" src="@(BaseUrl)/tangent.js"></script>
+    <link rel="stylesheet" href="@(BaseUrl + "/" + HtmlFormatter.Stylesheet)">
+    @if (!Standalone)
+    {
+        <script src="@(BaseUrl)/theme.js"></script>
+        <script type="module" src="@(BaseUrl)/tangent.js"></script>
+    }
+    @foreach (var feed in Frame?.Feeds ?? [])
+    {
+        <link rel="alternate" type="@feed.Type" title="@feed.Title" href="@feed.Address">
+    }
+    @if (Card is not null)
+    {
+        @((MarkupString)Card)
+    }
+    @if (Slots.Head.Length > 0)
+    {
+        @((MarkupString)Slots.Head)
+    }
 </head>
 <body>
+@if (Retired is { } retired)
+{
+    <p class="retired-line">@retired</p>
+}
 @if (Frame is { } frame)
 {
     <header class="masthead">
@@ -27,6 +51,14 @@
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
+        <Slot Name="masthead" Html="@Slots.Masthead" />
+        @if (frame.Searchable && !Standalone)
+        {
+            <form class="masthead-search" role="search" method="get" action="@frame.Search" data-island="search">
+                <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>
+                <input class="masthead-search-field" type="search" name="q" value="@frame.Searched" placeholder="Search" aria-label="Search this place" maxlength="200" autocomplete="off">
+            </form>
+        }
         <div class="masthead-actions">
             @if (frame.Who is { } who)
             {
@@ -68,7 +100,7 @@
                             {
                                 <li><a class="account-item" href="@settings">@Icon(SettingsIcon)Settings</a></li>
                             }
-                            <li><a class="account-item" href="@who.SignOut">@Icon(SignOutIcon)Sign out</a></li>
+                            <li><form method="post" action="@who.SignOut"><button class="account-item account-sign-out">@Icon(SignOutIcon)Sign out</button></form></li>
                         </ul>
                     </div>
                 </details>
@@ -136,22 +168,26 @@
             }
         </ol>
     </nav>
-    @ChildContent
+    <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
     <footer class="footer">
+        <Slot Name="footer" Html="@Slots.Footer" />
         <span class="footer-powered">Powered by Tangent Space</span>
-        <div class="footer-end appearance" data-island="appearance">
-            <span id="appearance-label">Appearance</span>
-            <div class="segmented" role="group" aria-labelledby="appearance-label">
-                <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
-                <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
-                <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        @if (!Standalone)
+        {
+            <div class="footer-end appearance" data-island="appearance">
+                <span id="appearance-label">Appearance</span>
+                <div class="segmented" role="group" aria-labelledby="appearance-label">
+                    <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+                    <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+                    <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+                </div>
             </div>
-        </div>
+        }
     </footer>
 }
 else
 {
-    @ChildContent
+    <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
 }
 </body>
 </html>
@@ -161,7 +197,21 @@ else
 
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
 
+    [Parameter, EditorRequired] public string Accent { get; set; } = "";
+
+    /// <summary>The place's own HTML, sanitized when it was written, so the same on the site, in an export and in the archive.</summary>
+    [Parameter, EditorRequired] public Slots Slots { get; set; } = new();
+
     [Parameter] public Frame? Frame { get; set; }
+
+    /// <summary>Whether the page opens with no server. The components inside it read the same, by this name.</summary>
+    [Parameter] public bool Standalone { get; set; }
+
+    /// <summary>The card's head block, already encoded (<see cref="Koan.Web.OpenGraph.IOpenGraphCardRenderer.RenderHead"/>).</summary>
+    [Parameter] public string? Card { get; set; }
+
+    /// <summary>The one line a page of the place's archive opens with.</summary>
+    [Parameter] public string? Retired { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 

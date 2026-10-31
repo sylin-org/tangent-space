@@ -169,6 +169,12 @@
   text-decoration: none;
 }
 
+button.first-run-switch {
+  width: 100%;
+  background: none;
+  cursor: pointer;
+}
+
 .first-run-switch:hover {
   background: var(--ts-hover);
 }

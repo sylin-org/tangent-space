@@ -119,6 +119,19 @@ Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1
 
 Parallel once slice 1 lands: 2.1 and 2.2 together; then 2.3, 2.4 and 2.5; then 2.6 and 2.7; 2.8 last.
 
+## Slice 3, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 3.1 Articles: a root Post of kind article with its cover, written in the article editor where it will be read, images through Koan's media with their audience from the Posts that use them | 2.3, 4.2, 7.1, 7.2 | first of its kind |
+| 3.4 Social cards: a page a visitor may read carries a card from what it already read, through Koan's `RenderHead` (WEB-0085) | 2.3, 4.2 | repeat |
+
+## Slice 4, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 4.2 Feeds: Atom and JSON Feed for each public Tangent and the place's articles, a bounded window of rendered bodies, advertised by the pages and named by discovery | 2.3, 5.7 | repeat |
+
 ## Slice 5, package by package
 
 Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end for everyone, as [JOURNEYS](JOURNEYS.md) walks it: setting up leaves no public Tangent and nothing to make one with.
@@ -135,9 +148,39 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 | 5.8 An application reaches whoever decides it: on a place set to apply, whoever holds the bit to decide reads the waiting applications on their bell, in their notifications and on their door | 5.2, 6.1 | repeat |
 | 5.9 The small doors: a settings rail of what its reader may use, and a welcome on a newcomer's first door | 5.3 | repeat |
 
+## Slice 6, package by package
+
+| Package | Depends on | Role |
+| --- | --- | --- |
+| 6.1 Notifications at `/notifications`, and their count on every page | 1.10 | repeat |
+| 6.2 A report reaches whoever may act on it: on their bell, in their notifications and live on their stream | 2.8, 6.1 | repeat |
+| 6.3 Search at `/search`, one resource both ways, and a box in the masthead that suggests as someone types | K4, K28 | repeat |
+| K28 Lexical search reads a word being typed and takes a scope (DATA-0165) | K4 | repeat (Koan) |
+
+## Slice 7, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 7.1 Export: one Tangent or the whole place as a zip of readable pages beside their data, streamed in bounded reads through the one renderer, at `/settings/export` | 5.7, 5.1 | first of its kind |
+| 7.2 Static archive and retirement: every public page and feed in a folder under the same URLs, by the operator's `archive` verb, and `Tangent:Archive`, which answers from it and takes no writes | 7.1 | first of its kind |
+
+## Slice 8, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 8.3 An agent as moderator, administrator, proprietor or operator: proven end to end with no branch in access; `llms.txt` says how it signs in as itself, sends a session's token and finds what a role gives it | 1.12, 5.3, 8.1 | repeat |
+| 8.4 The DID-native door: a service-auth token verified by Koan (K30) signs the agent in as a browser's sign-in ends, under the same admission and roles; the statement, the descriptor and `llms.txt` say how | 8.3, K30 | first of its kind |
+
+## Slice 9, package by package
+
+| Package | After | Role |
+| --- | --- | --- |
+| 9.1 Appearance: each reader's theme with no flash, the place's accent at `/settings/appearance`, the first four tokens named as `site.standard.theme.basic` names them | 5.1 | repeat |
+| 9.2 Slots: the place's own HTML at `/settings/appearance`, sanitized on save and bounded per slot, the same on the site, in exports and in the archive | 9.1, 7.2 | first of its kind |
+
 ## Later slices
 
-The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), export through the renderer (7), the static archive (7), the DID-native door (8), the labeler (8), slots (9). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, feeds, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`, appearance. Explorer-grade: references through Constellation, the A2A card.
+The same rule assigns every later package. First of its kind: the topic window and the write verbs (2), the composer island (2), take this on a tangent (2), the article editor (3), the Connection row and dispatch job (3), the atproto package (3), the protocol contract ADR (4), the role editor over Koan (5), the static archive (7), the DID-native door (8), the labeler (8). Repeat: Markdown rendering, live patching, checkpoints, reports, phone layouts, media on Koan, social cards, Webmention, Mastodon, the connections screen, join and standing, the people directory, the profile, Tangent settings, notifications, watching, search, backup and restore, bring your agent, `did:web`. Explorer-grade: references through Constellation, the A2A card.
 
 A slice closes when its packages work and FEATURES says so. Until Leo calls the polish stage, screens are built from the frame and the existing components, captured, and listed in `docs/SCREENS.md` as owing the visual gate; the polish stage holds every one of them to it.
 

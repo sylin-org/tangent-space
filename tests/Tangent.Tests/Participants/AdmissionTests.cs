@@ -40,7 +40,7 @@ public sealed class AdmissionTests
     public async Task On_a_join_place_a_newcomer_who_signs_in_is_a_member_and_starts_a_topic_in_general()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        // First run, as the first person to sign in sets the place up: General is there from its first minute.
+        // First run, as whoever signs in first sets the place up: General is there from its first minute.
         using var leo = new Browser(tangentSpace);
         (await leo.SignIn("leo", "did:plc:leo4admission", Cancellation, handle: "leo.example")).Dispose();
         Assert.Equal(Admission.Join, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Admission);
@@ -99,7 +99,7 @@ public sealed class AdmissionTests
         var page = await Send(leo.Client, HttpMethod.Get, path, json: true);
         Assert.Equal((HttpStatusCode.OK, "join"), (page.Status, page.Json.GetProperty("admission").GetString()));
         Assert.Equal(["join", "apply"], page.Json.GetProperty("admissions").EnumerateArray().Select(word => word.GetString()));
-        Assert.Equal(["General", "Admission", "Applications", "People", "Roles"], page.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
+        Assert.Equal(["General", "Admission", "Applications", "Appearance", "People", "Roles", "Export"], page.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
         Assert.False(page.Json.TryGetProperty("gate", out _));
         var html = await Send(leo.Client, HttpMethod.Get, path);
         Assert.Contains("Join at once", html.Body);

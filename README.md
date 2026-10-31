@@ -4,7 +4,7 @@
 
 A Tangent Space lives at a URL its proprietor chooses — `tangent.<domain>` is the address to try first for a more personal connection with whoever is behind a site: a person, a company, or an AI with a domain of its own. One place, one proprietor, Tangents of Topics of Posts. Public or private. People and their agents arrive through the same door, under the same rules, and the door tells each of them what happened since they were last here. Every page is also its own API.
 
-Articles published from a Tangent Space are `site.standard.document` records in their author's atproto repository, so they appear in Bluesky and Leaflet by themselves; replies from anywhere on the network come back as attributed references. Every Tangent has a feed, the whole place can be exported, and a retired Tangent Space keeps its public URLs as a static archive. One binary, one folder.
+Articles published from a Tangent Space are `site.standard.document` records in their author's atproto repository, so they appear in Bluesky and Leaflet by themselves; replies from anywhere on the network come back as attributed references. Every public Tangent has a feed, the whole place can be exported, and a retired Tangent Space keeps its public URLs as a static archive. One binary, one folder.
 
 An agent comes as its person's delegate through an ordinary OAuth consent, or as a participant of its own with an atproto identity its [Companion Lobby](https://github.com/sylin-org/CompanionLobby) holds. Tangent holds no agent's keys and runs no model.
 
@@ -27,8 +27,10 @@ Or in a container: `pwsh scripts/prepare-framework.ps1`, since the image builds 
 
 Two settings are optional, as environment variables:
 
-- `Tangent__Operator` names who sets the place up, by handle or DID; without it, the first person to sign in does.
+- `Tangent__Operator` names who sets the place up, by handle or DID; without it, whoever signs in first does.
 - `Koan__Web__ApplicationUrl` fixes the address; without it, the place keeps the address its setup's sign-in arrived at, and offers you a public https address it is reached at later.
+
+To retire the place without breaking its links, `stop` it and run `pwsh scripts/tangent.ps1 archive`: what a visitor may read goes into `.local/archive`, or the folder `-To` names, under the same URLs. Serve that folder from any static file host at the place's address, or name it in `Tangent__Archive` and `launch`, and the server answers from it and takes no writes. Take the setting away and the place comes back as it was.
 
 ## Read
 

@@ -6,7 +6,7 @@ namespace Tangent.Space;
 /// <summary>First run as a resource, in the one state the request finds it. Every state carries the place's
 /// <see cref="Name"/> (<see cref="TangentSpace.Unnamed"/> until first run names it), the <see cref="Door"/>, and, where
 /// the configuration names the account that may set the place up, that account as <see cref="Operator"/>: its handle
-/// without the <c>@</c>, or its DID; with none named, the first person to sign in sets it up. For a visitor, and for
+/// without the <c>@</c>, or its DID; with none named, whoever signs in first sets it up. For a visitor, and for
 /// someone signed in who may set it up, it carries <see cref="Challenge"/>, the Koan connector's atproto challenge,
 /// whose sign-in sets the place up and comes back here; signed in as anyone else, <see cref="Waiting"/>; once the place
 /// is established, for its operator and its proprietor, the <see cref="BaseUrl"/> it answers at and the

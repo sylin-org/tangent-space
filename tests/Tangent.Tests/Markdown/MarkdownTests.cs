@@ -74,6 +74,38 @@ public sealed class MarkdownTests
         Assert.Empty(figures[2].QuerySelectorAll("br"));
     }
 
+    [Theory]
+    [InlineData("/auth/logout")]
+    [InlineData("/notifications")]
+    [InlineData("/media")]
+    [InlineData("/media/")]
+    [InlineData("/mediafile")]
+    [InlineData("/media/../auth/logout")]
+    [InlineData("/media/%2e%2e/auth/logout")]
+    [InlineData("/media/%2E%2E%2Fauth/logout")]
+    [InlineData("/media%2f..%2fauth/logout")]
+    [InlineData("/media/%252e%252e/auth/logout")]
+    [InlineData("/media/%5c..%5cauth/logout")]
+    [InlineData("/auth/logout?x=/media/y")]
+    public void An_image_on_the_places_own_origin_anywhere_but_under_media_is_no_image(string address)
+    {
+        var html = MarkdownHtml.Render($"![a sketch]({address})").Html();
+
+        Assert.DoesNotContain("<img", html);
+        Assert.DoesNotContain("logout", html);
+        Assert.Contains("<a href=\"#\">a sketch</a>", html);
+
+        // Written as a reference it is judged the same.
+        Assert.DoesNotContain("<img", MarkdownHtml.Render($"![a sketch][one]\n\n[one]: {address}").Html());
+    }
+
+    [Theory]
+    [InlineData("/media/0123abcd")]
+    [InlineData("/media/sketch.png?v=2")]
+    [InlineData("https://cdn.example/auth/logout")]
+    public void An_image_under_media_or_on_another_host_stays(string address)
+        => Assert.Contains($"src=\"{address}\"", MarkdownHtml.Render($"![a sketch]({address})").Html());
+
     [Fact]
     public void Bodies_that_would_hold_too_many_elements_or_parse_slowly_are_refused_in_well_under_100_ms()
     {

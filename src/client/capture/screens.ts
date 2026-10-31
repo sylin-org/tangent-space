@@ -96,6 +96,7 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/',
     states: [
       { name: 'visitor', seed: 'door' },
+      { name: 'slots', seed: 'slots' },
       { name: 'signed-in-with-news', seed: 'door', signedIn: true },
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
       { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
@@ -189,6 +190,27 @@ export const screens: Readonly<Record<string, Screen>> = {
     states: [
       { name: 'proprietor', place: 'persona', signedIn: true },
       { name: 'apply', place: 'persona', seed: 'apply', signedIn: true },
+      { name: 'refused', signedIn: true },
+    ],
+  },
+  // The place's appearance, read by the persona, who set the place up and so holds ManageSpace: gold, the accent a place
+  // starts with, jade once the place says so, and slots, each written, with the frame around the form carrying them; and
+  // by the persona in a place someone else set up, refused above disabled choices.
+  'tangent-space-settings-appearance': {
+    path: '/settings/appearance',
+    states: [
+      { name: 'proprietor', place: 'persona', signedIn: true },
+      { name: 'jade', place: 'persona', seed: 'jade', signedIn: true },
+      { name: 'slots', place: 'persona', seed: 'slots', signedIn: true },
+      { name: 'refused', signedIn: true },
+    ],
+  },
+  // Export, read by the persona, who set the place up and so holds ManageSpace: the whole place and each Tangent with
+  // its download; and by the persona in a place someone else set up, refused with no download.
+  'tangent-space-settings-export': {
+    path: '/settings/export',
+    states: [
+      { name: 'proprietor', place: 'persona', signedIn: true },
       { name: 'refused', signedIn: true },
     ],
   },
@@ -544,6 +566,26 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'with-entries', seed: 'notifications', reseed: 'notifications-unseen', signedIn: true },
       { name: 'with-offer', seed: 'offer', reseed: 'notifications-unseen', place: 'persona', signedIn: true, settings: offerSettings },
       { name: 'count', seed: 'notifications', reseed: 'notifications-unseen', signedIn: true, path: '/' },
+    ],
+  },
+  // A search of the Topic seed's words: found, read by the persona and by a visitor; words nothing here holds; the page
+  // before anyone has searched, which points at the box; and the box's suggestions as someone types, on the door.
+  search: {
+    path: '/search',
+    states: [
+      { name: 'found', seed: 'topic', signedIn: true, query: { q: 'half' } },
+      { name: 'visitor', seed: 'topic', query: { q: 'half' } },
+      { name: 'nothing', seed: 'topic', signedIn: true, query: { q: 'porcelain' } },
+      { name: 'start', seed: 'topic', signedIn: true },
+      {
+        name: 'suggestions',
+        seed: 'topic',
+        signedIn: true,
+        path: '/',
+        fill: { '.masthead-search-field': 'hal' },
+        click: '.masthead-search-field',
+        waitFor: '.masthead-search-hit',
+      },
     ],
   },
   // The form that takes Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted and the

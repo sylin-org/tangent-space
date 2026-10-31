@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Web.OpenGraph;
 using Tangent.Posts;
 
 namespace Tangent.Tangents;
@@ -15,7 +16,7 @@ namespace Tangent.Tangents;
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
 /// its times are written for. <see cref="Settings"/> is where the Tangent's settings are changed, present only for a
 /// reader who may change them; <see cref="NewTangent"/> is where a Tangent is created, present only for a reader who
-/// may create one.</summary>
+/// may create one. <see cref="Feeds"/> are the Tangent's feeds, present only where a visitor may read it.</summary>
 public sealed partial record TangentPage(
     string Slug,
     string Name,
@@ -36,7 +37,8 @@ public sealed partial record TangentPage(
     TangentPage.Reader? Who,
     DateOnly Day,
     string? Settings = null,
-    string? NewTangent = null)
+    string? NewTangent = null,
+    IReadOnlyList<Render.FeedLink>? Feeds = null)
 {
     /// <summary>The most characters of a body the page carries as a Topic's <see cref="Topic.Opening"/> or a reply's
     /// <see cref="Latest.Line"/>.</summary>
@@ -118,13 +120,20 @@ public sealed partial record TangentPage(
     /// <summary>The opening words of a Post's body as plain text on one line, each mention of a participant among
     /// <paramref name="people"/> their current handle (<see cref="Mentions.PlainText"/>), cut at a word within
     /// <see cref="OpeningLimit"/> characters.</summary>
-    public static string Opening(Post post, IReadOnlyDictionary<string, Author> people)
+    public static string Opening(Post post, IReadOnlyDictionary<string, Author> people) => Opening(Mentions.PlainText(post, people));
+
+    /// <summary>The opening words of plain text, cut at a word within <see cref="OpeningLimit"/> characters.</summary>
+    public static string Opening(string text)
     {
-        var text = Mentions.PlainText(post, people);
         if (text.Length <= OpeningLimit) return text;
         var cut = text.LastIndexOf(' ', OpeningLimit);
         return text[..(cut > OpeningLimit / 2 ? cut : OpeningLimit)].TrimEnd(',', ';', ':', '.', ' ') + "…";
     }
+
+    /// <summary>What a link to the Tangent previews, where a visitor may read it, which is where it has <see cref="Feeds"/>:
+    /// its name, its description, its address and the place's name, all read for the page.</summary>
+    public static SocialCard? Card(TangentPage page)
+        => page.Feeds is null ? null : new SocialCard(page.Name, page.Description, Url: page.Address, SiteName: page.Place);
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();

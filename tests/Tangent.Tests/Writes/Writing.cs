@@ -157,6 +157,30 @@ internal static partial class Writing
             json: true, bearer: bearer);
     }
 
+    /// <summary>Makes the write a form in a page's JSON says how to make, as an agent signed in as itself does: with its
+    /// session and the form's token, as one JSON object with the token in the header, or as a form with it in the field
+    /// the token names. <paramref name="filled"/> names only fields the form has; every other field the page gives a value
+    /// goes as it gives it.</summary>
+    public static async Task<Answered> Follow(Browser session, JsonElement form, IReadOnlyDictionary<string, string> filled, bool json = true)
+    {
+        var names = FieldNames(form);
+        Assert.All(filled.Keys, name => Assert.Contains(name, names));
+        var fields = new Dictionary<string, string>();
+        foreach (var name in names)
+        {
+            if (filled.TryGetValue(name, out var mine)) fields[name] = mine;
+            else if (Valued(form, name) is { } given) fields[name] = given;
+        }
+
+        var action = form.GetProperty("action").GetString()!;
+        Assert.StartsWith(BaseUrl + "/", action);
+        var token = form.GetProperty("token");
+        var method = new HttpMethod(form.GetProperty("method").GetString()!);
+        if (json) return await Send(session.Client, method, action[BaseUrl.Length..], JsonBody(fields), json: true, token: token.GetProperty("value").GetString());
+        fields[token.GetProperty("field").GetString()!] = token.GetProperty("value").GetString()!;
+        return await Send(session.Client, method, action[BaseUrl.Length..], FormBody(fields));
+    }
+
     /// <summary>The TID the new-topic form at <paramref name="html"/> carries.</summary>
     public static string MintedId(string html) => MintedField().Match(html) is { Success: true } match
         ? match.Groups["id"].Value

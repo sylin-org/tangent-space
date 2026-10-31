@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Koan.Web.OpenGraph;
 using Tangent.Render;
 using Tangent.Tangents;
 
@@ -41,8 +42,20 @@ public sealed record Door(
 {
     public int Api => 1;
 
+    /// <summary>What a link to the door previews, where a visitor may read the place, which is where it has
+    /// <see cref="Feeds"/>: the place's name, its description and its address, all read for the page.</summary>
+    public static SocialCard? Card(Door door)
+        => door.Feeds is null ? null : new SocialCard(door.Name, door.Description, Url: door.Address, SiteName: door.Name);
+
     /// <summary>What the place is, in its proprietor's line; empty until they write one.</summary>
     public string Description { get; init; } = "";
+
+    /// <summary>The proprietor's own HTML that opens the door, sanitized when it was written: present only where they wrote
+    /// some.</summary>
+    public string? Intro { get; init; }
+
+    /// <summary>The place's articles feeds: present only where a visitor may read the place.</summary>
+    public IReadOnlyList<Render.FeedLink>? Feeds { get; init; }
 
     /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
     public IReadOnlyList<Offered>? Offers { get; init; }

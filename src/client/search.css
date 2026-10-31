@@ -1,0 +1,137 @@
+/* Search: the box in the masthead, its suggestions, and the words a search marks. */
+
+/* The box: a form between the place and the account, taking what the masthead leaves. */
+.masthead-search {
+  position: relative;
+  flex: 1 1 120px;
+  min-width: 0;
+  max-width: 360px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.masthead-search + .masthead-actions {
+  margin-left: 0;
+}
+
+.masthead-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--ts-text-3);
+  pointer-events: none;
+}
+
+.masthead-search-field {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px 0 32px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-pill);
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font: var(--ts-type-ui-small);
+}
+
+.masthead-search-field:focus {
+  border-color: var(--ts-accent);
+  outline: none;
+}
+
+/* The suggestions open in the page, under the box. Never a dialog. */
+.masthead-search-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(420px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-surface);
+  box-shadow: var(--ts-shadow-popover);
+}
+
+.masthead-search-panel[hidden] {
+  display: none;
+}
+
+.masthead-search-hit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ts-line);
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.masthead-search-hit:hover,
+.masthead-search-hit[aria-selected="true"] {
+  background: var(--ts-hover);
+}
+
+.masthead-search-topic {
+  overflow: hidden;
+  font: var(--ts-type-ui-small);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.masthead-search-where {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.masthead-search-words {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--ts-text-2);
+  font: var(--ts-type-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.masthead-search-all {
+  display: block;
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--ts-text-2);
+  font: var(--ts-type-meta);
+  overflow-wrap: anywhere;
+}
+
+a.masthead-search-all:hover {
+  background: var(--ts-hover);
+}
+
+/* The words a search matched, wherever its words are shown. */
+.search-mark {
+  border-radius: 2px;
+  background: var(--ts-accent-soft);
+  color: inherit;
+}
+
+/* The phone: the suggestions take the masthead's width, under it, whatever the box's. */
+@media (max-width: 719px) {
+  .masthead-search {
+    position: static;
+    margin-left: 8px;
+    flex-basis: 96px;
+  }
+
+  .masthead-search-icon {
+    display: none;
+  }
+
+  .masthead-search-field {
+    padding-left: 12px;
+  }
+
+  .masthead-search-panel {
+    top: calc(100% + 6px);
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+}

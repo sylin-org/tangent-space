@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Koan.Web.OpenGraph;
 using Tangent.Render;
 using Tangent.Tangents;
 
@@ -19,7 +20,9 @@ namespace Tangent.Posts;
 /// a reply it did not show, and <see cref="Watching"/> their watch flag on it with the form that sets it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for. <see cref="TakenFrom"/> is
-/// where a Topic taken on a tangent was taken from, as the reader may know it. <see cref="Cover"/> is the address of an
+/// where a Topic taken on a tangent was taken from, as the reader may know it. <see cref="Feeds"/> are its Tangent's
+/// feeds, present only where a visitor may read that Tangent. <see cref="ArticleHeader"/> is the proprietor's own HTML that
+/// heads an article, present only on an article and only where they wrote some. <see cref="Cover"/> is the address of an
 /// article's cover, while its root stands and has one; <see cref="ReadMinutes"/> what its body takes to read.</summary>
 public sealed record TopicPage(
     string Id,
@@ -50,9 +53,15 @@ public sealed record TopicPage(
     TopicPage.Reader? Who,
     DateOnly Day,
     TopicPage.Origin? TakenFrom = null,
+    IReadOnlyList<FeedLink>? Feeds = null,
+    string? ArticleHeader = null,
     string? Cover = null,
     int ReadMinutes = 1)
 {
+    /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="slots"/>.</summary>
+    public static string? HeaderOf(PostKind kind, Space.Slots slots)
+        => kind == PostKind.Article && slots.ArticleHeader.Length > 0 ? slots.ArticleHeader : null;
+
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
     /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is
     /// the Markdown as written, and <see cref="Mentions"/> are the participants it mentions as they are now, which the
@@ -119,6 +128,18 @@ public sealed record TopicPage(
     /// settings, for one who holds <c>ManageSpace</c>, and how many of their notifications they have not seen.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
         Events.Notifications.Unseen? Notifications = null);
+
+    /// <summary>What a link to the Topic, or to a Post in it, previews, where a visitor may read it, which is where it has
+    /// <see cref="Feeds"/>: its title, its root's opening with no one named, none where the root is removed, its address, and
+    /// the place's name, all read for the page. An article is said to be one, and its cover is the card's image, its
+    /// render for a list.</summary>
+    public static SocialCard? Card(TopicPage page) => page.Feeds is null ? null : new SocialCard(
+        page.Title,
+        page.Root.Body is { } body ? TangentPage.Opening(Mentions.Unnamed(page.Root.Id, page.Root.Version, body)) : null,
+        page.Cover is { } cover ? CardImage.Url(cover + "/" + MediaRecipes.CardName) : default,
+        Url: page.Address,
+        Type: page.Kind == PostWrites.Word(PostKind.Article) ? "article" : null,
+        SiteName: page.Place);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so the same window for
     /// a visitor on the same day answers the same tag, and a reply, an edit, a removal, a changed <c>can</c> or a new day

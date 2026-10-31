@@ -35,6 +35,9 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>The refusal an audience other than public or private meets.</summary>
     public const string AudienceRule = "The place is read by anyone or by its participants alone: choose public or private.";
 
+    /// <summary>The refusal an accent outside the four meets.</summary>
+    public const string AccentRule = "The place's accent is one of four: choose gold, jade, iris or copper.";
+
     /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
     public const string PlainName = "Tangent Space";
 
@@ -47,6 +50,19 @@ public sealed class TangentSpace : Entity<TangentSpace>
         if (label.Length == 0) return PlainName;
         var name = char.ToUpperInvariant(label[0]) + label[1..] + "'s " + PlainName;
         return name.Length <= NameLimit && !name.Any(char.IsControl) ? name : PlainName;
+    }
+
+    private static readonly object OnRequest = new();
+
+    /// <summary>The place as this request's page carries it: its accent, its slots and its version, and as
+    /// <see cref="Unestablished"/> before first run. One bounded read of the row by its key per request, however many
+    /// ask.</summary>
+    public static async ValueTask<TangentSpace> OfRequest(HttpContext http)
+    {
+        if (http.Items.TryGetValue(OnRequest, out var held)) return (TangentSpace)held!;
+        var space = await Get(SingleRow, http.RequestAborted) ?? Unestablished();
+        http.Items[OnRequest] = space;
+        return space;
     }
 
     public TangentSpace() => Id = SingleRow;
@@ -119,18 +135,20 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public Slots Slots { get; set; } = new();
 
-    /// <summary>Renames and describes the place, sets how a newcomer arrives and who reads it, a change to the row, or
-    /// refuses with <see cref="NameRule"/>, <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/> or
-    /// <see cref="AudienceRule"/>; the name and the description are kept trimmed. Answers whether anything changed.</summary>
-    public bool Change(string name, string description, Admission admission, Audience audience)
+    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it, its accent and its slots, a
+    /// change to the row, or refuses with <see cref="NameRule"/>, <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/>,
+    /// <see cref="AudienceRule"/> or <see cref="AccentRule"/>; the name and the description are kept trimmed. Answers
+    /// whether anything changed.</summary>
+    public bool Change(string name, string description, Admission admission, Audience audience, Accent accent, Slots slots)
     {
         var named = Named(name);
         var described = description.Trim();
         if (described.Length > DescriptionLimit) throw new Refusal(DescriptionRule);
         if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
         if (!Enum.IsDefined(audience)) throw new Refusal(AudienceRule);
-        if (Name == named && Description == described && Admission == admission && Audience == audience) return false;
-        (Name, Description, Admission, Audience) = (named, described, admission, audience);
+        if (!Enum.IsDefined(accent)) throw new Refusal(AccentRule);
+        if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Accent == accent && Slots == slots) return false;
+        (Name, Description, Admission, Audience, Appearance.Accent, Slots) = (named, described, admission, audience, accent, slots);
         Version = checked(Version + 1);
         return true;
     }

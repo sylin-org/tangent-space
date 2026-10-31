@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Builds, publishes, launches, stops, backs up and restores a Tangent Space.
+Builds, publishes, launches, stops, backs up, restores and archives a Tangent Space.
 
 .DESCRIPTION
 pwsh scripts/tangent.ps1 <verb> [options], from any directory.
@@ -33,20 +33,34 @@ pwsh scripts/tangent.ps1 <verb> [options], from any directory.
                              Space holds is refused.
   restore -Replace           A wipe is a restore of nothing: the data folder is moved aside with a
                              timestamp and the next launch begins a new Tangent Space.
+  archive [-To <folder>] [-Address <url>]
+                             Renders every public page and feed into an empty or absent folder
+                             (default .local/archive) under the same URLs, so any static file host
+                             serves it at the place's address: only what a visitor may read, with
+                             one line on each page saying the place is retired. Its feeds and links
+                             name the place's address, or the one given. A private place has nothing
+                             to archive, and a running Tangent Space is stopped first.
 
-Nothing here deletes a data folder. backup and restore run the executable's own verbs
-(`Tangent.Server backup <folder>`, `Tangent.Server restore <backup> [--replace]`), so they work
-wherever the executable runs, including inside the container compose.yaml starts.
+To retire a place: stop it, archive it, and either serve the folder from any static file host or
+name it in the setting Tangent:Archive (the environment's Tangent__Archive) and launch: the server
+then answers its public URLs from the folder and takes no writes. Taking the setting away brings the
+place back as it was.
+
+Nothing here deletes a data folder. backup, restore and archive run the executable's own verbs
+(`Tangent.Server backup <folder>`, `Tangent.Server restore <backup> [--replace]`,
+`Tangent.Server archive <folder>`), so they work wherever the executable runs, including inside the
+container compose.yaml starts.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('build', 'publish', 'launch', 'stop', 'backup', 'restore', 'help')]
+    [ValidateSet('build', 'publish', 'launch', 'stop', 'backup', 'restore', 'archive', 'help')]
     [string]$Verb = 'help',
     [ValidateRange(1, 65535)]
     [int]$Port = 5220,
     [string]$To,
     [string]$From,
+    [string]$Address,
     [switch]$Replace
 )
 $ErrorActionPreference = 'Stop'
@@ -220,6 +234,16 @@ switch ($Verb) {
         $arguments = @('restore')
         if ($From) { $arguments += Resolve-OperatorPath $From }
         if ($Replace) { $arguments += '--replace' }
+        Invoke-ServerVerb $arguments
+        exit $LASTEXITCODE
+    }
+    'archive' {
+        if (Get-LaunchedProcess) { throw 'The Tangent Space is running; stop it before archiving.' }
+        $destination = if ($To) { Resolve-OperatorPath $To } else { Join-Path $root '.local/archive' }
+        $arguments = @('archive', $destination)
+        if ($Address) { $arguments += "--Koan:Web:ApplicationUrl=$Address" }
+        # It reads the place as launch serves it, whose loopback address exists only in Development.
+        if (-not $env:ASPNETCORE_ENVIRONMENT -and -not $env:DOTNET_ENVIRONMENT) { $env:ASPNETCORE_ENVIRONMENT = 'Development' }
         Invoke-ServerVerb $arguments
         exit $LASTEXITCODE
     }

@@ -13,15 +13,33 @@ public sealed record DescriptorPerson(
 /// public client it presents with the Device flow.</summary>
 public sealed record DescriptorDelegated(string AuthorizationServer, string ClientId);
 
+/// <summary>How an agent with an atproto identity of its own proves itself: the door's statement, the address that takes a
+/// service-auth token, and the audience and method the token carries.</summary>
+public sealed record DescriptorProof(string Statement, string Exchange, string Audience, string Method);
+
+/// <summary>One feed's two formats, by address.</summary>
+public sealed record DescriptorFeed(string Atom, string Json)
+{
+    public static DescriptorFeed At(string address) => new(address + Render.AtomFeed.Extension, address + Render.JsonFeed.Extension);
+}
+
+/// <summary>Where a visitor follows the place: its articles, and any Tangent a visitor may read, whose slug stands in for
+/// <c>{tangent}</c>.</summary>
+public sealed record DescriptorFeeds(DescriptorFeed Articles, DescriptorFeed Tangent);
+
 /// <summary>What the Tangent Space says about itself at <c>tangent.json</c> under its base URL, as stable JSON:
-/// its name, its address, <c>api</c>, its audience, the delegated door, and absolute links to the door and to
-/// <c>llms.txt</c>; for a public place also its proprietor and operator. A private place states only what a visitor needs
+/// its name, its address, <c>api</c>, its audience, the delegated door and the proof door, and absolute links to the door and to
+/// <c>llms.txt</c>; for a public place also its proprietor, its operator and its feeds. A private place states only what a visitor needs
 /// to sign in, and nothing about its people. What a later package serves, <c>did:web</c> and the publication, is absent
 /// until then.</summary>
 public sealed record Descriptor(string Name, string Address, string Audience, DescriptorDelegated Delegated)
 {
     /// <summary>The stability promise: a client that reads 1 keeps working.</summary>
     public int Api => 1;
+
+    /// <summary>The proof door, where the place has an address of its own for a token to be addressed to.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DescriptorProof? Proof { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DescriptorPerson? Proprietor { get; init; }
@@ -30,18 +48,23 @@ public sealed record Descriptor(string Name, string Address, string Audience, De
     public DescriptorPerson? Operator { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DescriptorFeeds? Feeds { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Door { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Llms { get; init; }
 
     /// <summary>The descriptor of <paramref name="space"/> at <paramref name="baseUrl"/>, with the participants who are
-    /// its proprietor and operator where they are known.</summary>
-    public static Descriptor Of(TangentSpace space, string baseUrl, Participant? proprietor, Participant? operatorRow)
+    /// its proprietor and operator where they are known. <paramref name="addressed"/> says the base URL is one the place
+    /// configured or accepted, rather than this request's.</summary>
+    public static Descriptor Of(TangentSpace space, string baseUrl, Participant? proprietor, Participant? operatorRow, bool addressed)
     {
         var descriptor = new Descriptor(space.Name, baseUrl, space.Audience.ToString().ToLowerInvariant(),
             new DescriptorDelegated(DelegatedDoor.AuthorizationServer(baseUrl), DelegatedDoor.ClientId))
         {
+            Proof = addressed ? new DescriptorProof(baseUrl + ProofDoor.StatementPath, baseUrl + ProofDoor.ExchangePath, ProofDoor.Audience(baseUrl), ProofDoor.Method) : null,
             Door = baseUrl + "/",
             Llms = LlmsText.Address(baseUrl)
         };
@@ -50,7 +73,8 @@ public sealed record Descriptor(string Name, string Address, string Audience, De
             : descriptor with
             {
                 Proprietor = Person(space.ProprietorId, proprietor),
-                Operator = Person(space.OperatorId, operatorRow)
+                Operator = Person(space.OperatorId, operatorRow),
+                Feeds = new DescriptorFeeds(DescriptorFeed.At(Posts.Feeds.ArticlesAddress(baseUrl)), DescriptorFeed.At(Posts.Feeds.AnyTangentAddress(baseUrl)))
             };
     }
 

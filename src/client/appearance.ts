@@ -1,11 +1,9 @@
-// Appearance: System, Light (Paper) or Dark (Ink), chosen per browser, and the Tangent Space accent.
-// The tokens answer data-theme and data-accent on <html>; System leaves data-theme off so the device decides.
+// A reader's theme: System, Light (Paper) or Dark (Ink), chosen per browser, for a visitor and a participant alike.
+// The tokens answer data-theme on <html>; System leaves it off so the device decides.
 
 export type Theme = 'system' | 'light' | 'dark'
-export type Accent = 'gold' | 'jade' | 'iris' | 'copper'
 
 export const themes: readonly Theme[] = ['system', 'light', 'dark']
-export const accents: readonly Accent[] = ['gold', 'jade', 'iris', 'copper']
 
 export const storageKey = 'tangent:appearance'
 
@@ -35,9 +33,4 @@ export function selectTheme(theme: Theme): void {
   try {
     localStorage.setItem(storageKey, theme)
   } catch {}
-}
-
-// The server renders the Tangent Space's accent; this applies another one live, as a settings preview does.
-export function applyAccent(accent: Accent): void {
-  if (accents.includes(accent)) document.documentElement.dataset.accent = accent
 }

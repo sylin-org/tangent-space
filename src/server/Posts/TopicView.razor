@@ -3,7 +3,8 @@
 @* The Topic page: the rail with the way back to the Tangent and the replies this window holds; then the title with
    any pin or lock, when it started and how many replies it has, the root, and one window of replies in order, with
    the way to the older window above them and to the newer below, and where the reader replies or why they may not. A
-   Topic without replies says so in one sentence. Zeros are said in words. *@
+   Topic without replies says so in one sentence. Zeros are said in words. An article opens with its own head, which holds
+   the proprietor's article header, where they wrote one. *@
 <div class="layout layout-reading topic-layout">
     <aside class="rail" aria-label="In this Tangent">
         <h2 class="rail-heading">@Model.Tangent.Name</h2>
@@ -41,7 +42,7 @@
         @if (Article)
         {
             <article class="article">
-                <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Flags="@Flags()" />
+                <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Flags="@Flags()" Header="@Model.ArticleHeader" />
                 <TakenFrom Model="@Model.TakenFrom" />
                 <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" />
             </article>
@@ -102,7 +103,7 @@
     public static Frame Frame(TopicPage page)
     {
         var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.Notifications) : null;
-        return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn);
+        return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn, page.Feeds);
     }
 
     private bool Article => Model.Kind == "article";

@@ -75,9 +75,20 @@ public static partial class Mentions
     /// <summary>A Post's body as plain text on one line, each mention of a participant among <paramref name="people"/>
     /// <c>@</c> and their current handle, and every other mention its own words.</summary>
     public static string PlainText(Post post, IReadOnlyDictionary<string, TangentPage.Author> people)
-        => RenderedBodies.For(post).PlainText(target => Identity(target) is { } did && people.TryGetValue(did, out var person)
-            ? "@" + person.Handle
-            : null);
+        => RenderedBodies.For(post).PlainText(Words(people));
+
+    /// <summary>A stretch of a body cut anywhere as plain text on one line, read as <see cref="PlainText"/> reads a whole
+    /// one. Parsed each time, a stretch being small; one too intricate to parse stays as it is.</summary>
+    public static string PlainFragment(string markdown, IReadOnlyDictionary<string, TangentPage.Author> people)
+        => MarkdownHtml.Tractable(markdown) ? RenderedBodies.Render(markdown).PlainText(Words(people)) : markdown;
+
+    private static Func<string, string?> Words(IReadOnlyDictionary<string, TangentPage.Author> people)
+        => target => Identity(target) is { } did && people.TryGetValue(did, out var person) ? "@" + person.Handle : null;
+
+    /// <summary>A Post's body at a version as plain text on one line with its mentions left out, so it names no one, and
+    /// no punctuation stranded where one stood.</summary>
+    public static string Unnamed(string postId, long version, string body)
+        => Stranded().Replace(RenderedBodies.For(postId, version, body).PlainText(_ => ""), "");
 
     /// <summary>Appends, inside the running command, one <see cref="EventKind.Mention"/> per participant
     /// <paramref name="post"/> mentions that <paramref name="before"/> — the identities it mentioned before an edit,
@@ -192,6 +203,9 @@ public static partial class Mentions
         return !Rune.IsLetterOrDigit(rune) && Rune.GetUnicodeCategory(rune) is not
             (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark);
     }
+
+    [GeneratedRegex(@"^[\s,.;:!?]+|\s+(?=[,.;:!?])")]
+    private static partial Regex Stranded();
 
     [GeneratedRegex(@"^did:[a-z]+:[A-Za-z0-9._:%-]+$")]
     private static partial Regex Did();

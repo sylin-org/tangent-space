@@ -14,6 +14,12 @@ if (builder.Configuration["urls"] is null
 {
     builder.WebHost.UseUrls("http://localhost:5220");
 }
+if (Retirement.Compose(builder) is { } retired)
+{
+    await retired.RunAsync();
+    return 0;
+}
+
 builder.Services.AddKoan();
 var app = builder.Build();
 await app.RunAsync();

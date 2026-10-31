@@ -10,7 +10,7 @@ Status: `todo` · `doing` · `done`. Everything is `todo` on 28 October 2026.
 | --- | --- | --- |
 | 1 · SQLite posture (WAL, busy timeout, immediate write transactions) and a canonical base URL | `Koan.Data.Connector.Sqlite`, `Koan.Web` | slice 0; in the pin since Koan `7ba505e49` |
 | 2 · Scoped overwrites with deny, resolved in order, explained | `Koan.Identity` | slice 1; in the pin since Koan `943e6358a` (SEC-0021), Tangent resolving on it since package 1.10; members as rows and every bound on its reads since Koan `dae95ecea` (SEC-0030), package 5.7; roles in one order and who manages which since Koan `8c96c2e` (SEC-0031), package 5.1 |
-| 3 · atproto content: records, blobs, resolution, AppView reads; service-auth verification; `did:web` on the issuer keys | `Koan.Web.Auth.Connector.Atproto`, Trust, Auth.Server — names assigned by Koan | slice 3 and the bridge in slice 8 |
+| 3 · atproto content: records, blobs, resolution, AppView reads; service-auth verification; `did:web` on the issuer keys | `Koan.Web.Auth.Connector.Atproto`, Trust, Auth.Server — names assigned by Koan | slice 3 and slice 8; service-auth verification and sign-in in the pin since Koan `e1a153182` (SEC-0034) |
 | 4 · Lexical search over entity fields | `Koan.Data` | slice 6 |
 
 Built first in Tangent in Koan's shape, lifted into Koan when proven: the HTML projection, the durable journal with checkpoints, feeds, the static archive, the agent descriptor, Markdown rendering, a snapshot-on-save verb for the audit partition.
@@ -43,7 +43,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Nouns and tables: `TangentSpace`, `Tangent`, `Post` with the root as Topic, `Participant` facet, `Overwrite`, `Event`, `Checkpoint` | — | `Space`, `Tangent`, `Topic`, `Post`, `ActivityJournal`, `ReadPosition` (harvest) | `Sylin.Koan.Data.Core` | M | done |
 | atproto sign-in; the person reconciled from the DID; the participant facet; profile capture as a job; declared kind only | sign-in | `Identity/*` minus classification and the capture inference (harvest) | `Sylin.Koan.Web.Auth.Connector.Atproto`, `Sylin.Koan.Identity` | M | done |
 | Access: Koan roles seeded (`everyone`, member, moderator), overwrites, `Capabilities.For`, `can` on every resource, `gate` from the explainer | — | `TangentPermissions` catalog, `AccessEvaluator` reason table (harvest) | `Sylin.Koan.Identity`; brief 2 | M | done |
-| First run: the first person to sign in, or the one `Tangent:Operator` names, sets the place up by signing in, named from their handle, as its proprietor and operator, and lands on the site's pointer snippets | first-run | `OnboardingPanel`, `FirstArrival`, `ServerGovernance` (harvest) | — | S | done |
+| First run: whoever signs in first, or the one `Tangent:Operator` names, sets the place up by signing in, named from their handle, as its proprietor and operator, and lands on the site's pointer snippets | first-run | `OnboardingPanel`, `FirstArrival`, `ServerGovernance` (harvest) | — | S | done |
 | The address learned and offered: first run takes the origin its sign-in completes on as the place's address, kept on its row for Koan; a public origin the place is reached at while that address is local becomes an Offer to the operator, `offer.made` in the log and one line on their door, used or declined once; a configured URL wins and lapses what is open | door, first-run | new | `Sylin.Koan.Web` (WEB-0081: `IApplicationUrlStore`, `KoanWebOrigins`) | S | done |
 | The door as one resource: for a visitor, whose place this is, what is featured, what is alive; at my first door, a welcome, nothing counted as new and only what concerns me; signed in, since my checkpoints — replies to me, mentions, new per Tangent, new articles — who is around, what I can do | door signed-out, door signed-in | `ExperienceDigest`, `AttentionCompiler` (harvest); `SpaceHero`, `ContinueReading`, `ForumSidebar` (harvest) | — | L | done |
 | The Tangent page: topics with what is new marked, bounded | tangent | `TopicList`, `TopicRow`, `DirectorySummaries` (harvest) | — | S | done |
@@ -72,9 +72,9 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | An article is a root Post of kind article with a cover; a Tangent may default to articles | article, tangent (articles) | `TopicPresentation`, `ArticleCollection`, `ArticlePreview` (harvest) | — | M | done |
-| The article editor island: visual Markdown with source view and roundtrip check; cover and inline images | article editor | `MarkdownComposer`, `markdown-roundtrip.ts`, `CreationCoverPicker` (transplant) | — | S | done |
+| The article editor island: visual Markdown with source view and roundtrip check; cover and inline images | article editor | `MarkdownComposer`, `markdown-roundtrip.ts`, `CreationCoverPicker` (transplant) | — | S | doing |
 | Media on Koan: content-addressed, re-encoded derivatives, metadata stripped, audience from the referencing Post | — | `PostMediaService` audience rules (harvest) | `Sylin.Koan.Media.Core`, `Sylin.Koan.Media.Web`, `Sylin.Koan.Storage.Connector.Local` | S | done |
-| Social cards for articles and topics | — | — | `Sylin.Koan.Web.OpenGraph` | S | todo |
+| Social cards for articles, topics, Tangents and the door | — | — | `Sylin.Koan.Web.OpenGraph` | S | done |
 | Connections: the row per participant, the dispatch job as a log reader with a cursor, receipts by version, attention on repeated failure | settings connections | `BlueskyPublisher` receipt idea (harvest) | `Sylin.Koan.Jobs` | M | todo |
 | The atproto package: the Tangent Space as `site.standard.publication` under the proprietor's Connection; each public article as `site.standard.document` with the cover blob and a Bluesky post embedding it; `<link rel="site.standard.document">`; retract on removal or audience change | article | `BlueskyPublisher` mapping (harvest) | brief 3 | M | todo |
 
@@ -83,7 +83,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | The protocol contract recorded from code as ADR 0016: `IConnectionAdapter`, `IReferenceSource`, `IAsserter`; the three events as a filter over the log | — | new | — | S | todo |
-| Feeds as a Render output: Atom and JSON Feed per Tangent and for articles | — | new | lift later | S | todo |
+| Feeds as a Render output: Atom and JSON Feed per Tangent and for articles | — | new | lift later | S | done |
 | References on a Post: Constellation and Spacedust as an optional source; "elsewhere" on the topic page | topic | new | — | M | todo |
 | Webmention: send on `post.created`, receive at an endpoint; Bridgy Fed opt-in | topic | new | — | S | todo |
 | The Mastodon package: a status under the participant's own account; replies as references | — | new | — | M | todo |
@@ -113,15 +113,15 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | An application reaches whoever decides it: while it waits, everyone who holds `ManageStanding` when they read counts it among their notifications, on every page's masthead and live from their stream, finds who applied and when on `/notifications`, one click from the applications, and reads on their door how many wait; it is seen as every notification is, and a decision by any decider ends it for all; an arrival writes one row and one event however many may decide | notifications, door, every page's masthead | new | — | S | done |
 | A report reaches whoever may act on it: everyone who may view the moderators' Tangent when they read, someone given that later among them, counts each report someone else made among their notifications, on every page's masthead and live from their stream, and finds who reported a post by whom on `/notifications`, with the reason's first words, one click from the report; the author is named only to a reader who may view the reported Post; it is seen as every notification is; the reporter and the reported author read nothing of it; a report writes one event however many may read it | notifications, every page's masthead | new | — | S | done |
 | Watching: the flag on a checkpoint; one line on the door | door | `FollowButton` (harvest) | — | S | done |
-| Search across titles and bodies, bounded, with header suggestions | search | `SearchBox`, `SearchPage` (transplant) | brief 4 | S | todo |
+| Search across titles and bodies at `/search`, one resource both ways, a page at a time, only ever what the reader may view, each a line one click from the Post it found; a box in the masthead that works without JavaScript and suggests as someone types | search | `SearchBox`, `SearchPage` (harvest) | brief 4; `AsTyped`, `Within` (DATA-0165) | S | done |
 
 ### 7 · Self-reliance
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Export a Tangent or the Tangent Space as readable HTML with data and media, streamed, through the one renderer | settings export | new | lift later | M | todo |
+| Export a Tangent or the Tangent Space, as far as whoever holds `ManageSpace` may view it, as a zip of readable pages that open with no server beside their data as JSON, streamed in bounded reads through the one renderer, tombstones kept, at `/settings/export`; the images of the place its pages show come along for whatever its holder may view, in the same stream | settings export | new | lift later | M | done |
 | Backup and restore of the folder, verified by restoring | — | `scripts/server-lifecycle.ps1` (harvest) | — | S | done |
-| Static archive: every public page and feed rendered to a folder with the same URLs; retirement mode | — | new | lift later | M | todo |
+| Static archive: every public page and feed rendered to a folder with the same URLs, by the operator's `archive` verb, through the one renderer in bounded reads, with the images its public pages show at their addresses; retirement mode, `Tangent:Archive`, which answers from it and takes no writes | — | new | lift later | M | done |
 
 ### 8 · Agents
 
@@ -129,8 +129,8 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Agents write without guessing: every write a page offers its reader is a form in its JSON, the one its HTML holds — where it posts, its method, its fields with what each holds, and the TID minted for a new Post — present only where the reader may make it; Tangent's own writes take the fields as a form or as one JSON object; `llms.txt` says how an agent writes and what signing in makes of a newcomer by the place's own admission | — | new | lift later, with the HTML projection | S | done |
 | Bring your agent: one button that hands the address to a listening Companion Lobby, which registers as a loopback client and runs the code flow | bring your agent | `agent-entry.ts` (harvest) | `Sylin.Koan.Web.Auth.Server` | S | todo |
-| The DID-native door: an atproto service-auth token verified, exchanged for a bearer from Trust's issuer; revoke through the person's grants | — | `ServiceProofExchange` flow (harvest; verification is Koan's) | brief 3, `Sylin.Koan.Security.Trust` | S | todo |
-| An agent as moderator or proprietor | settings roles | — | — | S | todo |
+| The DID-native door: an atproto service-auth token verified, signing the agent in as a browser's sign-in ends, the same cookie session under the same admission and roles as anyone; the statement at `/.well-known/tangent-auth`, the descriptor and `llms.txt` say how | — | `ServiceProofExchange` flow (harvest; verification is Koan's) | `AtprotoServiceAuth` | S | done |
+| An agent as moderator, administrator, proprietor or operator: an ordinary participant with no branch in access, through the same pages and JSON forms; `llms.txt` says how it signs in as itself, sends a session's token and finds what a role gives it | settings roles | — | — | S | done |
 | The installation's identity: `did:web` on the issuer keys at `<base>/did.json`; an A2A agent card when the proprietor is an agent | — | new | brief 3 | S | todo |
 | Assertions: the Tangent Space as a labeler for member and role badges | — | new | — | M | todo |
 
@@ -138,8 +138,9 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Appearance: light, dark, system; accent; the published `site.standard.theme.basic` as the first four tokens | settings appearance | `AppearanceSwitch`, `TangentAccentPalette` (transplant) | — | S | todo |
-| Slots with sanitized HTML (head, masthead, door intro, article header, footer) and a bounded typed settings schema; identical in the site, the archive and exports | settings appearance | new | — | M | todo |
+| Appearance: light, dark, system, each reader's own with no flash of the other; the accent at `/settings/appearance` for whoever holds `ManageSpace`, `space.changed` on a change, on every page for every reader; the first four tokens named as `site.standard.theme.basic` names them | settings appearance | `AppearanceSwitch`, `TangentAccentPalette` (transplant) | — | S | done |
+| The published `site.standard.theme.basic`, from the first four tokens | — | new | — | S | todo |
+| Slots with sanitized HTML (head, masthead, door intro, article header, footer), each bounded, for whoever holds `ManageSpace`, `space.changed` on a change; identical in the site, the archive and exports. The article header renders in an article's own head, between its cover and its title (`TopicPage.ArticleHeader`, `ArticleHead`). The typed settings schema scored 3 and is in PROPOSALS | settings appearance | new | — | M | done |
 
 ## Screens
 

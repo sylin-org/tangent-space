@@ -66,6 +66,22 @@ public sealed class ShellTests
         Assert.DoesNotContain("<script", fragment);
     }
 
+    [Fact]
+    public async Task The_theme_script_blocks_in_the_head_so_the_first_paint_is_the_readers_theme()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Koan:Web:ApplicationUrl"] = BaseUrl }, ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
+
+        var html = await Read(tangentSpace, fragment: false);
+
+        // Neither deferred nor a module, and in the head: nothing of the body is parsed, so nothing paints, until it has run.
+        var theme = html.IndexOf($"<script src=\"{BaseUrl}/theme.js\"></script>", StringComparison.Ordinal);
+        Assert.InRange(theme, 0, html.IndexOf("</head>", StringComparison.Ordinal));
+        // No theme is the server's to say: a proxy may hold this page for every reader.
+        Assert.DoesNotContain("data-theme=", html[..html.IndexOf("<body>", StringComparison.Ordinal)]);
+    }
+
     private static async Task<string> Read(TangentSpaceFixture tangentSpace, bool fragment)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/");

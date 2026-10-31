@@ -1,0 +1,80 @@
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@using global::Tangent.Space
+@using global::Tangent.Tangents
+@* The place's settings, export: the sections of the settings in the rail, this one marked, and in one panel beside them
+   what a download holds, the whole Tangent Space with its one link, then each Tangent the reader may view with its own, a
+   page at a time, the others a link away. A reader who may not export reads why, and a visitor the way to sign in. *@
+<div class="layout layout-settings">
+    <SettingsRail Sections="@Model.Sections" />
+    <main>
+        <section class="sign-in-panel post-form-panel" aria-labelledby="export-heading">
+            <div class="sign-in-body">
+                <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
+                <h1 id="export-heading" class="sign-in-title">@TangentSpaceSettingsController.ExportSection</h1>
+                @if (Model.Gate is { } gate)
+                {
+                    <p class="sign-in-failure" id="export-failure" role="alert" data-gate="@gate">
+                        @if (Model.SignIn is { } signIn)
+                        {
+                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                        }
+                        else
+                        {
+                            @PostWrites.Sentence(gate)
+                        }
+                    </p>
+                }
+                else
+                {
+                    <p class="post-form-note">A zip of readable pages that open with no server, each beside its data as JSON. It holds everything you may read here, and removed posts stay as they stand.</p>
+                    <ul class="door-offers applications">
+                        @if (!Model.Continued && Model.Whole is { } whole)
+                        {
+                            <li class="door-offer">
+                                <p class="door-offer-line">The whole of @Model.Place</p>
+                                <div class="door-offer-answers">
+                                    <a class="tangent-new" href="@whole" download>Download</a>
+                                </div>
+                            </li>
+                        }
+                        @foreach (var tangent in Model.Tangents)
+                        {
+                            <li class="door-offer" @key="tangent.Slug">
+                                <p class="door-offer-line">
+                                    @tangent.Name
+                                    <span class="topic-row-none">· @TangentsView.Detail(tangent.Kind, tangent.TopicCount)</span>
+                                </p>
+                                <div class="door-offer-answers">
+                                    <a class="watch-button tangent-settings" href="@tangent.Address" download>Download</a>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                    @if (Model.Continued || Model.Next is not null)
+                    {
+                        <nav class="topic-pages" aria-label="More Tangents">
+                            @if (Model.Continued)
+                            {
+                                <a href="@Model.First">First Tangents</a>
+                            }
+                            @if (Model.Next is { } next)
+                            {
+                                <a class="topic-pages-next" href="@next">More Tangents →</a>
+                            }
+                        </nav>
+                    }
+                }
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ExportSettingsPage Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
+    /// a visitor signs in.</summary>
+    public static Frame Frame(ExportSettingsPage page)
+        => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Settings")], page.Who, page.SignIn);
+}

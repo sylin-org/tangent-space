@@ -296,7 +296,7 @@ public static class Backup
     /// <summary>Moves a folder, trying again for a moment when Windows still holds a file in it (an indexer or a virus
     /// scanner reading what was just written) or has not yet let go of the folder just deleted under the name it moves
     /// to; the last failure is the one thrown.</summary>
-    private static void Move(string from, string to)
+    internal static void Move(string from, string to)
     {
         for (var attempt = 1; ; attempt++)
         {
