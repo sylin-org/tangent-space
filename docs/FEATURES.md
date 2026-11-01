@@ -72,7 +72,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | An article is a root Post of kind article with a cover; a Tangent may default to articles | article, tangent (articles) | `TopicPresentation`, `ArticleCollection`, `ArticlePreview` (harvest) | — | M | done |
-| The article editor island: visual Markdown with source view and roundtrip check; cover and inline images | article editor | `MarkdownComposer`, `markdown-roundtrip.ts`, `CreationCoverPicker` (transplant) | — | S | doing |
+| The article editor island: visual Markdown with source view and roundtrip check; cover and inline images | article editor | `MarkdownComposer`, `markdown-roundtrip.ts`, `CreationCoverPicker` (transplant) | — | S | done |
 | Media on Koan: content-addressed, re-encoded derivatives, metadata stripped, audience from the referencing Post | — | `PostMediaService` audience rules (harvest) | `Sylin.Koan.Media.Core`, `Sylin.Koan.Media.Web`, `Sylin.Koan.Storage.Connector.Local` | S | done |
 | Social cards for articles, topics, Tangents and the door | — | — | `Sylin.Koan.Web.OpenGraph` | S | done |
 | Connections: the row per participant, the dispatch job as a log reader with a cursor, receipts by version, attention on repeated failure | settings connections | `BlueskyPublisher` receipt idea (harvest) | `Sylin.Koan.Jobs` | M | todo |
