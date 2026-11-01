@@ -3,6 +3,7 @@ using Koan.Web.Auth.Connector.Atproto.Protocol;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Tangent.Space;
 
 namespace Tangent.Participants;
@@ -12,15 +13,19 @@ namespace Tangent.Participants;
 /// ends the sign-in as a browser's ends: the same lifecycle, so the same admission, roles, first run and ban, and the same
 /// cookie session, ended the same ways. The token must be addressed to the address the place has configured or accepted,
 /// never one a request says, so a token addressed to another place signs no one in here, and a place with neither takes no
-/// token and says why. Its only credential is the header, which the resource edge is not to read as a bearer of this
+/// token and says why. A place nobody has set up takes no token either, or the first agent to connect would own it, unless
+/// the configuration names the account that may set it up, as it may name an agent. Its only credential is the header, which the resource edge is not to read as a bearer of this
 /// application's, and it reads no body.</summary>
 [AnswersBeforeFirstRun]
 [AnswersEveryVisitor]
 [ResourceServerExempt]
-public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl baseUrl, ILogger<ProofController> logger) : ControllerBase
+public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, ILogger<ProofController> logger) : ControllerBase
 {
     /// <summary>What a place with no address of its own says at this door.</summary>
     public const string NoAddress = "This Tangent Space has no address of its own yet, and a token is addressed to one, so it takes no token. Signing in through atproto gives it one, or its operator configures one.";
+
+    /// <summary>What a place nobody has set up says at this door, when the configuration names no account that may.</summary>
+    public const string NotSetUp = "This Tangent Space has not been set up yet, so it takes no token, or the first agent to come would own it. Someone sets it up by signing in here in a browser, or its operator names the account that may.";
 
     private const string BearerPrefix = "Bearer ";
 
@@ -29,9 +34,10 @@ public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl ba
     /// <summary>What the door takes, with every address and word a client needs to prove itself here and nowhere else.</summary>
     [HttpGet(ProofDoor.StatementPath)]
     [HttpHead(ProofDoor.StatementPath)]
-    public IActionResult Statement()
+    public async Task<IActionResult> Statement(CancellationToken ct)
     {
         if (baseUrl.Current is not { } place) return Unaddressed();
+        if (await WaitsForAPerson(ct)) return NotYetSetUp();
         return ServedFile.Answer(HttpContext, JsonSerializer.Serialize(new
         {
             canonicalOrigin = place,
@@ -53,6 +59,7 @@ public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl ba
     {
         Response.Headers.CacheControl = "no-store";
         if (baseUrl.Current is not { } place) return Unaddressed();
+        if (await WaitsForAPerson(ct)) return NotYetSetUp();
         var header = Request.Headers.Authorization;
         if (header.Count != 1 || !header[0]!.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
             return Answer(StatusCodes.Status401Unauthorized, new { error = "service_proof_required" });
@@ -66,6 +73,13 @@ public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl ba
         logger.LogInformation("{Participant} proved itself and signed in", proof.Did);
         return NoContent();
     }
+
+    /// <summary>Whether nobody has set the place up and the configuration names no account that may. One bounded read of the
+    /// row by its key.</summary>
+    private async Task<bool> WaitsForAPerson(CancellationToken ct)
+        => options.Value.NamedOperator() is null && await TangentSpace.Get(TangentSpace.SingleRow, ct) is null;
+
+    private ContentResult NotYetSetUp() => Answer(StatusCodes.Status503ServiceUnavailable, new { error = "exchange_not_set_up", message = NotSetUp });
 
     private ContentResult Unaddressed() => Answer(StatusCodes.Status503ServiceUnavailable, new { error = "exchange_unconfigured", message = NoAddress });
 

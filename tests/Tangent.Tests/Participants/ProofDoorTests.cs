@@ -226,10 +226,37 @@ public sealed class ProofDoorTests
     }
 
     [Fact]
-    public async Task An_agent_proving_itself_first_at_a_configured_address_sets_a_fresh_place_up_as_its_proprietor_and_operator()
+    public async Task A_place_nobody_has_set_up_takes_no_token_and_says_why_until_someone_signs_in_in_a_browser()
     {
         await using var directory = await AgentDirectory.Start(Scout);
         await using var tangentSpace = await Start(directory);
+        using var agent = Agent(tangentSpace);
+
+        var refused = await Send(agent, HttpMethod.Post, Exchange, json: true, bearer: Proof(Scout));
+        Assert.Equal((HttpStatusCode.ServiceUnavailable, "exchange_not_set_up", ProofController.NotSetUp),
+            (refused.Status, refused.Json.GetProperty("error").GetString(), refused.Json.GetProperty("message").GetString()));
+        var statement = await Send(agent, HttpMethod.Get, ProofDoor.StatementPath, json: true);
+        Assert.Equal((HttpStatusCode.ServiceUnavailable, "exchange_not_set_up"), (statement.Status, statement.Json.GetProperty("error").GetString()));
+        Assert.Null(await TangentSpace.Get(TangentSpace.SingleRow, Cancellation));
+        Assert.Null(await Participant.Get(Scout.Did, Cancellation));
+
+        using (var setter = new Browser(tangentSpace))
+            (await setter.SignIn("leo", "did:plc:leoleoleoleoleoleoleoleol", Cancellation, handle: "leo.example")).Dispose();
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        Assert.Equal("did:plc:leoleoleoleoleoleoleoleol", space?.OperatorId);
+
+        // The agent comes in now, as a member of a place someone else set up.
+        using var session = await SignedInByProof(tangentSpace, Scout);
+        Assert.Equal(Standing.Admitted, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
+        Assert.Equal("did:plc:leoleoleoleoleoleoleoleol", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
+    }
+
+    [Fact]
+    public async Task An_agent_the_configuration_names_proving_itself_sets_a_fresh_place_up_as_its_proprietor_and_operator()
+    {
+        await using var directory = await AgentDirectory.Start(Scout);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            directory.Settings(new Dictionary<string, string?>(Settings()) { [FirstRun.OperatorSetting] = Scout.Did }), ct: Cancellation, environment: "Development");
         using var agent = Agent(tangentSpace);
         Assert.Null(await TangentSpace.Get(TangentSpace.SingleRow, Cancellation));
         Assert.Equal(HttpStatusCode.OK, (await Send(agent, HttpMethod.Get, ProofDoor.StatementPath, json: true)).Status);
