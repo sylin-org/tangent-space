@@ -803,7 +803,7 @@ Koan evidence is from the pinned checkout (`.local/upstream/koan-framework/src`)
 | Snapshot write-once via absence guard + upsert | `Conversation/ConversationService.PostChanges.cs:101-107` (comment says the pinned Koan lacks a partitioned insert) | `Entity<T>.Insert(model, partition, ct)` (`Koan.Data.Core/Model/Entity.cs:239-243`), `ReplaceIf(model, guard, partition)`; the comment is stale |
 | Local/S3 storage dispatch, credential rows, naming | `Media/MediaStorage.cs:9-66` | `Koan.Storage`: `StorageEntity<T>` with `[StorageBinding]`, `IStorageService`, Local and S3 connectors |
 | Asset metadata (Sha256/Size/ContentType/Extension) | `Media/PostMediaAsset.cs` | `Koan.Media.Core.MediaEntity<T>`: `Store(bytes)` content-addressed, `Upload`, `OpenRead`, `Url` |
-| SkiaSharp orient/resize/WebP | `Media/MediaStorage.cs:67-93` | `Koan.Media.Core.MediaPipeline`: `AutoOrient`, `Resize`, `Strip`, WebP via ImageSharp |
+| SkiaSharp orient/resize/WebP | `Media/MediaStorage.cs:67-93` | `Koan.Media.Core.MediaPipeline`: `AutoOrient`, `Resize`, `Strip`, WebP via SkiaSharp |
 | Image sniffing, second copy | `Api/ArtworkController.ImageExtension` | `PostMediaService` already owns image validation |
 | Long-poll and hand-written SSE framing | `Conversation/ConversationService.Updates.cs`; `Activity/ActivityController.cs:136-163`; `Api/ProfileCacheController.cs:42-85` | `Koan.Web.Sse.Sse.Stream(IAsyncEnumerable<T>)` → `SseResult` (not referenced in the csproj); .NET 10 `TypedResults.ServerSentEvents(IAsyncEnumerable<SseItem<T>>)` |
 | Media ZIP export with manifest | `Media/MediaStorageController.cs:57-77` | Nothing: `Koan.Data.Backup` is shelved; export streams through the renderer and backup is the folder (ADR 0015) |

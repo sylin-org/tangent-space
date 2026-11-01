@@ -133,14 +133,15 @@ public sealed record TopicPage(
     /// <summary>What a link to the Topic, or to a Post in it, previews, where a visitor may read it, which is where it has
     /// <see cref="Feeds"/>: its title, its root's opening with no one named, none where the root is removed, its address, and
     /// the place's name, all read for the page. An article is said to be one, and its cover is the card's image, its
-    /// render for a list.</summary>
+    /// render for a list, which previews large.</summary>
     public static SocialCard? Card(TopicPage page) => page.Feeds is null ? null : new SocialCard(
         page.Title,
         page.Root.Body is { } body ? TangentPage.Opening(Mentions.Unnamed(page.Root.Id, page.Root.Version, body)) : null,
         page.Cover is { } cover ? CardImage.Url(cover + "/" + MediaRecipes.CardName) : default,
         Url: page.Address,
         Type: page.Kind == PostWrites.Word(PostKind.Article) ? "article" : null,
-        SiteName: page.Place);
+        SiteName: page.Place,
+        TwitterCard: page.Cover is null ? null : "summary_large_image");
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so the same window for
     /// a visitor on the same day answers the same tag, and a reply, an edit, a removal, a changed <c>can</c> or a new day

@@ -17,12 +17,14 @@ COPY global.json Directory.Build.props Directory.Build.targets ./
 COPY src ./src
 COPY .local/upstream/koan-framework ./.local/upstream/koan-framework
 COPY --from=client /work/src/server/wwwroot ./src/server/wwwroot
+# SkiaSharp's notices, which a publish leaves out, go in beside the binaries they cover.
 RUN dotnet publish src/server/Tangent.Server.csproj -c Release -r linux-x64 --self-contained true -o /publish \
         -p:SkipClientBuild=true \
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
         -p:DebugType=None -p:DebugSymbols=false -p:GenerateDocumentationFile=false \
         -p:AllowedReferenceRelatedFileExtensions=none \
         -p:IsTransformWebConfigDisabled=true -p:EnableSourceControlManagerQueries=false -p:EnableSourceLink=false \
+    && cp /root/.nuget/packages/skiasharp.nativeassets.linux.nodependencies/*/THIRD-PARTY-NOTICES.txt /publish/ \
     && mkdir -p /state
 
 # Chiseled: no shell, no package manager, and a non-root account by default.

@@ -4,13 +4,7 @@ using System.Text;
 using Koan.Data.Core;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Formats.Png.Chunks;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.Metadata.Profiles.Iptc;
-using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Space;
@@ -27,32 +21,103 @@ public sealed class ArticleMediaTests
 {
     private const string Secrets = "SecretCamera|Secret Artist|Secret-Byline|Secret-City|Secret-Xmp|Secret-Png-Text";
 
-    internal static byte[] Jpeg(int size = 64, bool secrets = true, Color? colour = null)
+    /// <summary>What marks metadata in an encoded file, whatever it says: an Exif, XMP or Photoshop (IPTC) segment, or a PNG's
+    /// text chunk.</summary>
+    private const string MetadataMarks = "Exif\0\0|http://ns\\.adobe\\.com/xap|Photoshop 3\\.0|tEXt|iTXt|zTXt";
+
+    private static SKBitmap Filled(int size, SKColor colour)
     {
-        using var image = new Image<Rgba32>(size, size, colour ?? Color.Teal);
-        if (secrets)
+        var image = new SKBitmap(new SKImageInfo(size, size, SKColorType.Rgba8888, SKAlphaType.Opaque));
+        image.Erase(colour);
+        return image;
+    }
+
+    /// <summary>A JPEG of a side of <paramref name="size"/>, with an Exif, an XMP and an IPTC segment planted after its start
+    /// where <paramref name="secrets"/> asks, as a camera or an editor writes them.</summary>
+    internal static byte[] Jpeg(int size = 64, bool secrets = true)
+    {
+        using var image = Filled(size, new SKColor(0, 128, 128));
+        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 90);
+        var jpeg = encoded.ToArray();
+        if (!secrets) return jpeg;
+        byte[] planted =
+        [
+            .. Segment(0xE1, [.. "Exif\0\0"u8, .. Tiff((0x010F, "SecretCamera"), (0x013B, "Secret Artist"))]),
+            .. Segment(0xE1, [.. "http://ns.adobe.com/xap/1.0/\0"u8, .. "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><a>Secret-Xmp</a></x:xmpmeta>"u8]),
+            .. Segment(0xED, [.. "Photoshop 3.0\08BIM"u8, 0x04, 0x04, 0, 0, .. Iptc((80, "Secret-Byline"), (90, "Secret-City"))])
+        ];
+        return [.. jpeg[..2], .. planted, .. jpeg[2..]];
+    }
+
+    private static byte[] Segment(byte marker, byte[] content)
+        => [0xFF, marker, (byte)((content.Length + 2) >> 8), (byte)(content.Length + 2), .. content];
+
+    /// <summary>A little-endian TIFF of ASCII entries in tag order, its strings after its one directory.</summary>
+    private static byte[] Tiff(params (ushort Tag, string Text)[] entries)
+    {
+        using var bytes = new MemoryStream();
+        using var writer = new BinaryWriter(bytes);
+        writer.Write("II*\0"u8);
+        writer.Write(8);
+        writer.Write((ushort)entries.Length);
+        var at = 8 + 2 + entries.Length * 12 + 4;
+        foreach (var (tag, text) in entries)
         {
-            image.Metadata.ExifProfile = new ExifProfile();
-            image.Metadata.ExifProfile.SetValue(ExifTag.Make, "SecretCamera");
-            image.Metadata.ExifProfile.SetValue(ExifTag.Artist, "Secret Artist");
-            image.Metadata.IptcProfile = new IptcProfile();
-            image.Metadata.IptcProfile.SetValue(IptcTag.Byline, "Secret-Byline");
-            image.Metadata.IptcProfile.SetValue(IptcTag.City, "Secret-City");
-            image.Metadata.XmpProfile = new XmpProfile(Encoding.UTF8.GetBytes("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><a>Secret-Xmp</a></x:xmpmeta>"));
+            writer.Write(tag);
+            writer.Write((ushort)2);
+            writer.Write(text.Length + 1);
+            writer.Write(at);
+            at += text.Length + 1;
         }
 
-        using var bytes = new MemoryStream();
-        image.SaveAsJpeg(bytes);
+        writer.Write(0);
+        foreach (var (_, text) in entries)
+        {
+            writer.Write(Encoding.ASCII.GetBytes(text));
+            writer.Write((byte)0);
+        }
+
         return bytes.ToArray();
     }
 
+    /// <summary>A Photoshop resource holding IPTC datasets of record 2.</summary>
+    private static byte[] Iptc(params (byte Dataset, string Text)[] sets)
+    {
+        byte[] data = [.. sets.SelectMany(set => (byte[])[0x1C, 2, set.Dataset, 0, (byte)set.Text.Length, .. Encoding.ASCII.GetBytes(set.Text)])];
+        byte[] length = [0, 0, (byte)(data.Length >> 8), (byte)data.Length];
+        return [.. length, .. data, .. data.Length % 2 == 1 ? new byte[] { 0 } : []];
+    }
+
+    /// <summary>A PNG with a text chunk planted after its header.</summary>
     private static byte[] PngWithText()
     {
-        using var image = new Image<Rgba32>(32, 32, Color.Coral);
-        image.Metadata.GetPngMetadata().TextData.Add(new PngTextData("Comment", "Secret-Png-Text", "", ""));
-        using var bytes = new MemoryStream();
-        image.SaveAsPng(bytes);
-        return bytes.ToArray();
+        using var image = Filled(32, new SKColor(255, 127, 80));
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        var png = encoded.ToArray();
+        byte[] named = [.. "tEXtComment\0Secret-Png-Text"u8];
+        byte[] length = [0, 0, 0, (byte)(named.Length - 4)];
+        var crc = Crc(named);
+        byte[] chunk = [.. length, .. named, (byte)(crc >> 24), (byte)(crc >> 16), (byte)(crc >> 8), (byte)crc];
+        const int afterHeader = 8 + 25;
+        return [.. png[..afterHeader], .. chunk, .. png[afterHeader..]];
+    }
+
+    private static uint Crc(byte[] bytes)
+    {
+        var crc = 0xFFFFFFFFu;
+        foreach (var value in bytes)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++) crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+        }
+
+        return ~crc;
+    }
+
+    private static int WidthOf(byte[] image)
+    {
+        using var codec = SKCodec.Create(new MemoryStream(image));
+        return codec.Info.Width;
     }
 
     /// <summary>Brings an image in as the page does: a multipart form with the page's token, answered as JSON.</summary>
@@ -110,7 +175,7 @@ public sealed class ArticleMediaTests
         var list = await Send(ada.Client, HttpMethod.Get, "/t/" + Articles);
         Assert.Contains("src=\"" + BaseUrl + reference + "/" + MediaRecipes.CardName + "\"", list.Body);
         var card = await Read(Agent(tangentSpace), reference + "/" + MediaRecipes.CardName);
-        Assert.Equal(64, Image.Identify(card).Width);
+        Assert.Equal(64, WidthOf(card));
     }
 
     [Fact]
@@ -219,14 +284,13 @@ public sealed class ArticleMediaTests
         foreach (var sent in new[] { Jpeg(), PngWithText() })
         {
             Assert.Matches(Secrets, Encoding.Latin1.GetString(sent));
+            Assert.Matches(MetadataMarks, Encoding.Latin1.GetString(sent));
+            using (var opened = SKBitmap.Decode(sent)) Assert.NotNull(opened);
             var brought = await Bring(ada, sent);
             Assert.Equal(HttpStatusCode.Created, brought.Status);
             var kept = await Read(ada.Client, "/media/" + IdOf(brought));
             Assert.DoesNotMatch(Secrets, Encoding.Latin1.GetString(kept));
-            var info = Image.Identify(kept);
-            Assert.Null(info.Metadata.ExifProfile);
-            Assert.Null(info.Metadata.IptcProfile);
-            Assert.Null(info.Metadata.XmpProfile);
+            Assert.DoesNotMatch(MetadataMarks, Encoding.Latin1.GetString(kept));
         }
 
         // The same picture brought by two people is one Media, which reaches each of them.
@@ -244,7 +308,7 @@ public sealed class ArticleMediaTests
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var large = await Bring(ada, Jpeg(Media.LongestEdge + 100, secrets: false));
-        Assert.Equal(Media.LongestEdge, Image.Identify(await Read(ada.Client, "/media/" + IdOf(large))).Width);
+        Assert.Equal(Media.LongestEdge, WidthOf(await Read(ada.Client, "/media/" + IdOf(large))));
 
         var svg = await Bring(ada, Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"><script>1</script></svg>"));
         Assert.Equal((HttpStatusCode.BadRequest, Media.NotAnImage), (svg.Status, svg.Json.GetProperty("detail").GetString()));
@@ -487,6 +551,21 @@ public sealed class ArticleMediaTests
 
         Assert.Contains($"src=\"{place}/media/{logo.Id}\"", (await Send(visitor, HttpMethod.Get, "/notes/")).Body);
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/notes/media/" + logo.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Only_the_render_the_place_names_answers_and_a_format_or_a_size_in_the_address_does_not()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var id = IdOf(await Bring(ada, Jpeg()));
+        await Started(writer, Ada, "Open", "![Open](/media/" + id + ")", Articles);
+        using var visitor = Agent(tangentSpace);
+
+        Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, $"/media/{id}/{MediaRecipes.CardName}")).Status);
+        foreach (var path in new[] { "png", "webp", "jpeg", "png?w=33" })
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, $"/media/{id}/{path}")).Status);
     }
 
     [Fact]

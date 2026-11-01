@@ -23,11 +23,6 @@ public sealed class HtmlFormatter : TextOutputFormatter
     /// <summary>The folder the stylesheet's fonts are in, beside it.</summary>
     public const string Fonts = "fonts";
 
-    /// <summary>What Koan writes for the place's <c>twitter:card</c>, and what a card with an image of its own says.</summary>
-    private const string SmallCard = "<meta name=\"twitter:card\" content=\"summary\" />";
-
-    private const string LargeCard = "<meta name=\"twitter:card\" content=\"summary_large_image\" />";
-
     /// <summary>The parameter every resource component declares for the value it renders.</summary>
     private const string ModelParameter = "Model";
 
@@ -55,7 +50,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
         var resource = _components.For(context.ObjectType!);
         var renderer = http.RequestServices.GetRequiredService<HtmlRenderer>();
         var fragment = IsFragment(http.Request);
-        var card = fragment || resource.Card?.Invoke(value) is not { } values ? null : Head(values, http.Request);
+        var card = fragment || resource.Card?.Invoke(value) is not { } values ? null : _cards.RenderHead(values, http.Request);
         var html = fragment
             ? await renderer.Dispatcher.InvokeAsync(async () =>
             {
@@ -64,13 +59,6 @@ public sealed class HtmlFormatter : TextOutputFormatter
             })
             : await WholeForRequest(http, renderer, resource, value, card);
         await http.Response.WriteAsync(html, selectedEncoding, http.RequestAborted);
-    }
-
-    /// <summary>The head block of a card, which previews large where it has an image.</summary>
-    private string Head(SocialCard values, HttpRequest request)
-    {
-        var head = _cards.RenderHead(values, request);
-        return head.Contains("og:image", StringComparison.Ordinal) ? head.Replace(SmallCard, LargeCard, StringComparison.Ordinal) : head;
     }
 
     private async Task<string> WholeForRequest(HttpContext http, HtmlRenderer renderer, ResourceComponent resource, object value, string? card)

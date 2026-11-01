@@ -2,8 +2,6 @@ using Koan.Data.Core;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -85,15 +83,13 @@ public sealed class ArticleSeedController(WriteLoop writer, RoleCollection roles
     /// <summary>A dark glazed bowl on a warm ground, a gold seam across it, seen from above; fixed by its arguments.</summary>
     private static byte[] Bowl(int width, int height, double centre, double middle, double reach)
     {
-        using var image = new Image<Rgb24>(width, height);
+        using var image = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(width, height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Opaque));
         var (cx, cy, radius) = (width * centre, height * middle, Math.Min(width, height) * reach * 1.25);
         var seam = Enumerable.Range(0, width).Select(x => cy + Math.Sin(x * 0.011) * radius * 0.18 + Math.Sin(x * 0.037 + 1.3) * radius * 0.06).ToArray();
-        image.ProcessPixelRows(rows =>
         {
-            for (var y = 0; y < rows.Height; y++)
+            for (var y = 0; y < height; y++)
             {
-                var row = rows.GetRowSpan(y);
-                for (var x = 0; x < row.Length; x++)
+                for (var x = 0; x < width; x++)
                 {
                     var (dx, dy) = (x - cx, y - cy);
                     var distance = Math.Sqrt(dx * dx + dy * dy) / radius;
@@ -121,13 +117,12 @@ public sealed class ArticleSeedController(WriteLoop writer, RoleCollection roles
                         }
                     }
 
-                    row[x] = new Rgb24(Byte(r), Byte(g), Byte(b));
+                    image.SetPixel(x, y, new SkiaSharp.SKColor(Byte(r), Byte(g), Byte(b)));
                 }
             }
-        });
-        using var bytes = new MemoryStream();
-        image.SaveAsJpeg(bytes);
-        return bytes.ToArray();
+        }
+        using var encoded = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 75);
+        return encoded.ToArray();
     }
 
     private static byte Byte(double value) => (byte)Math.Clamp(value * 255, 0, 255);
