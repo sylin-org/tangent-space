@@ -44,6 +44,8 @@ export interface State {
   reseed?: string
   /** Signed in as the capture persona through Koan's test connector before the page opens. */
   signedIn?: boolean
+  /** Companion Lobby answers on the browser's machine, as the capture states it; it is not the real one. */
+  lobby?: boolean
   /** A path under the base URL whose requests are cancelled: a click that would leave the page shows the moment
    *  before the answer, such as a form on its way, and a post an island sends by itself changes nothing. */
   cancel?: string
@@ -260,6 +262,15 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'code-error', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'ZZZZ-ZZZZ' } },
       { name: 'code-refused', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'CDFG-HJKM' } },
       { name: 'done', seed: 'consent', signedIn: true, settings: consentSettings, path: '/consent/done' },
+    ],
+  },
+  // The page with no Companion Lobby on the machine, which says how to get one, and with one answering, which offers
+  // the button.
+  'bring-your-agent': {
+    path: '/bring-your-agent',
+    states: [
+      { name: 'no-lobby', signedIn: true },
+      { name: 'lobby', signedIn: true, lobby: true },
     ],
   },
   // The form that starts a Topic in the discussions Tangent, the composer on it: empty for the persona, a member; her

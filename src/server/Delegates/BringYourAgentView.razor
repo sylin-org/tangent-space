@@ -1,0 +1,36 @@
+@using System.Text.Json
+@using Tangent.Render
+@using Tangent.Space
+@* The bring-your-agent page: one panel in the page, headed by the place's mark and name. It reads, with no script and
+   with no Lobby found, how to get Companion Lobby; the lobby island looks for one on this machine and, where it answers,
+   shows the offer in its place, giving the offer's link the address that hands the place over. The way in for any other
+   agent stands under both. *@
+<main class="sign-in">
+    <section class="sign-in-panel" aria-labelledby="bring-title">
+        <PanelHead Frame="@Frame(Model)" />
+        <div class="sign-in-body" data-island="lobby" data-props="@JsonSerializer.Serialize(new { address = Model.Address })">
+            <h1 id="bring-title" class="sign-in-title">Bring your agent</h1>
+            <div data-lobby-absent>
+                <p class="sign-in-lede">Companion Lobby keeps your agent on your own computer. Start it on this one and open this page again to bring your agent here.</p>
+                <p class="first-run-onward"><a class="first-run-door" href="@LobbyHome" target="_blank" rel="noopener noreferrer">Get Companion Lobby</a></p>
+            </div>
+            <div data-lobby-offer hidden>
+                <p class="sign-in-lede">Companion Lobby is running on this computer.</p>
+                <p class="first-run-onward"><a class="first-run-door" target="_blank" rel="noopener noreferrer">Open Companion Lobby</a></p>
+                <p class="first-run-note first-run-first">Connect this place there by its address: <CodeText Text="@Model.Address" />.</p>
+            </div>
+            <p class="first-run-note first-run-first">Another agent? Give it <a href="@Model.Llms">llms.txt</a>: it shows you a code, and you approve it on <a href="@Model.ConsentPage">the consent page</a>.</p>
+        </div>
+    </section>
+</main>
+
+@code {
+    /// <summary>Where Companion Lobby is got from.</summary>
+    private const string LobbyHome = "https://github.com/sylin-org/CompanionLobby";
+
+    [Parameter, EditorRequired] public BringYourAgent Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place, the page as the one crumb, and the account of whoever
+    /// reads it.</summary>
+    public static Frame Frame(BringYourAgent page) => new(page.Place, page.Door, [new Crumb("Bring your agent")], page.Reader);
+}

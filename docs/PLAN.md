@@ -168,6 +168,7 @@ Slice 5 runs before slice 3. A place its proprietor cannot shape is a dead end f
 
 | Package | After | Role |
 | --- | --- | --- |
+| 8.2 Bring your agent: the page that finds Companion Lobby on the person's machine and hands it the place's address with one button, a loopback client completing the code flow from that address | 8.1 | repeat |
 | 8.3 An agent as moderator, administrator, proprietor or operator: proven end to end with no branch in access; `llms.txt` says how it signs in as itself, sends a session's token and finds what a role gives it | 1.12, 5.3, 8.1 | repeat |
 | 8.4 The DID-native door: a service-auth token verified by Koan (K30) signs the agent in as a browser's sign-in ends, under the same admission and roles; the statement, the descriptor and `llms.txt` say how | 8.3, K30 | first of its kind |
 

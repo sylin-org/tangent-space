@@ -132,6 +132,78 @@ public sealed class DelegatedDoorTests
     }
 
     [Fact]
+    public async Task A_loopback_client_handed_only_the_address_finds_the_server_registers_completes_the_code_flow_and_reads_as_the_person()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await PrivatePlace(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+        const string redirect = "http://127.0.0.1:43123/callback";
+
+        // From the address: the place's own statement, its server's description, and each endpoint it names.
+        using var descriptor = await Json(tangentSpace.Client, "/tangent.json");
+        var address = descriptor.RootElement.GetProperty("address").GetString()!;
+        var server = descriptor.RootElement.GetProperty("delegated").GetProperty("authorizationServer").GetString()!;
+        using var metadata = await Json(tangentSpace.Client, new Uri(server).PathAndQuery);
+        string Endpoint(string name) => new Uri(metadata.RootElement.GetProperty(name).GetString()!).PathAndQuery;
+        Assert.Contains("authorization_code", Strings(metadata.RootElement.GetProperty("grant_types_supported")));
+
+        using var registered = await Json(tangentSpace.Client, Endpoint("registration_endpoint"),
+            JsonContent("{\"client_name\":\"Companion Lobby\",\"redirect_uris\":[\"" + redirect + "\"]}"), HttpStatusCode.Created);
+        var clientId = registered.RootElement.GetProperty("client_id").GetString()!;
+
+        var (verifier, challenge) = Pkce();
+        using var consent = await browser.Follow(HttpMethod.Get, Endpoint("authorization_endpoint") + "?response_type=code&client_id=" + clientId
+            + "&redirect_uri=" + Uri.EscapeDataString(redirect) + "&code_challenge=" + challenge + "&code_challenge_method=S256&resource="
+            + Uri.EscapeDataString(address) + "&state=handed", Cancellation);
+        var rid = consent.RequestMessage!.RequestUri!.Query.Split("rid=")[1];
+        Assert.Contains("<strong>Companion Lobby</strong> asks to act as you in Field notes.", await consent.Content.ReadAsStringAsync(Cancellation));
+
+        using var approved = await browser.Client.PostAsync("/oauth/request/" + rid + "/approve",
+            new FormUrlEncodedContent(await browser.Token("/consent?rid=" + rid, Cancellation)), Cancellation);
+        var back = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(approved.Headers.Location!.Query);
+        Assert.StartsWith(redirect + "?", approved.Headers.Location.ToString());
+        Assert.Equal("handed", back["state"].ToString());
+
+        using var granted = await Json(tangentSpace.Client, Endpoint("token_endpoint"), Form(("grant_type", "authorization_code"), ("code", back["code"].ToString()),
+            ("client_id", clientId), ("redirect_uri", redirect), ("code_verifier", verifier)));
+        var token = granted.RootElement.GetProperty("access_token").GetString()!;
+
+        using var asPerson = await Json(browser.Client, "/t/studio");
+        using var asAgent = await Json(tangentSpace.Client, "/t/studio", bearer: token);
+        Assert.Equal(Strings(asPerson.RootElement.GetProperty("can")), Strings(asAgent.RootElement.GetProperty("can")));
+        Assert.Contains("ManageTangent", Strings(asAgent.RootElement.GetProperty("can")));
+    }
+
+    [Fact]
+    public async Task The_bring_your_agent_page_is_a_signed_in_persons_and_holds_how_to_get_the_lobby_the_hidden_offer_and_the_way_in_for_any_other_agent()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
+        await Place(tangentSpace);
+
+        using var browser = new Browser(tangentSpace);
+        using (var visitor = await browser.Client.GetAsync(BringYourAgentController.Path, Cancellation))
+        {
+            Assert.Equal(HttpStatusCode.Redirect, visitor.StatusCode);
+            Assert.Equal(BaseUrl + "/sign-in?return=" + Uri.EscapeDataString(BringYourAgentController.Path), visitor.Headers.Location?.ToString());
+        }
+
+        (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
+        var page = await Html(browser, BringYourAgentController.Path);
+        Assert.Contains("<h1 id=\"bring-title\" class=\"sign-in-title\">Bring your agent</h1>", page);
+        Assert.Contains("data-island=\"lobby\"", page);
+        Assert.Contains(WebUtility.HtmlEncode(JsonSerializer.Serialize(new { address = BaseUrl })), page);
+        Assert.Contains("href=\"https://github.com/sylin-org/CompanionLobby\"", page);
+        Assert.Contains("<div data-lobby-offer hidden", page);
+        Assert.Contains($"href=\"{BaseUrl}/llms.txt\"", page);
+        Assert.Contains($"href=\"{BaseUrl}/consent\"", page);
+        Assert.Contains($"class=\"account-item\" href=\"{BaseUrl}{BringYourAgentController.Path}\"", await Html(browser, "/"));
+
+        using var json = await Json(browser.Client, BringYourAgentController.Path);
+        Assert.Equal(BaseUrl, json.RootElement.GetProperty("address").GetString());
+    }
+
+    [Fact]
     public async Task The_device_flow_takes_a_visitor_through_sign_in_and_the_code_to_an_approval_that_answers_the_client_an_access_token()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector(), ct: Cancellation);
