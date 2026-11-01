@@ -11,7 +11,7 @@ public static class Slug
 
     /// <summary>The segments under a Tangent's address that are its own pages, never a Topic's slug: where a Topic is
     /// started, the Tangent's settings, and where the reader watches it.</summary>
-    public static readonly IReadOnlySet<string> Reserved = new HashSet<string>(StringComparer.Ordinal) { "new", "settings", "watch" };
+    public static readonly IReadOnlySet<string> Reserved = new HashSet<string>(StringComparer.Ordinal) { "new", "settings", "watch", "media" };
 
     /// <summary>The slug a title or a name yields: letters and digits of any script, lowercased and stripped of their
     /// marks, every other run of characters one hyphen. A title with no letter or digit yields <paramref name="otherwise"/>.</summary>

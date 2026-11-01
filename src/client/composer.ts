@@ -10,6 +10,7 @@ export interface Draft {
   body: string
   title?: string
   parent?: string
+  cover?: string
   sent: boolean
 }
 
@@ -110,9 +111,10 @@ export function readDraft(key: string): Draft | null {
       typeof value.body === 'string' &&
       (value.title === undefined || typeof value.title === 'string') &&
       (value.parent === undefined || typeof value.parent === 'string') &&
+      (value.cover === undefined || typeof value.cover === 'string') &&
       typeof value.sent === 'boolean'
     )
-      return { id: value.id, body: value.body, title: value.title, parent: value.parent, sent: value.sent }
+      return { id: value.id, body: value.body, title: value.title, parent: value.parent, cover: value.cover, sent: value.sent }
   } catch {}
   try {
     storage?.removeItem(key)
@@ -125,7 +127,7 @@ export function readDraft(key: string): Draft | null {
 export function writeDraft(key: string, draft: Draft | null): void {
   const storage = store()
   try {
-    if (draft === null || (!draft.sent && draft.body === '' && !draft.title)) storage?.removeItem(key)
+    if (draft === null || (!draft.sent && draft.body === '' && !draft.title && !draft.cover)) storage?.removeItem(key)
     else storage?.setItem(key, JSON.stringify(draft))
   } catch {}
 }

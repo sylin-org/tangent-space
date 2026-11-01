@@ -45,10 +45,11 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         var outcome = await writer.Send(new StartTopic(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             found.Tangent.Id,
-            fields.GetValueOrDefault(PostWrites.TitleField) ?? "",
+            PostWrites.Title(fields) ?? "",
             await PostWrites.Body(fields, found.Capabilities.Holds(Bit.Topic), ct),
             personId ?? "",
-            kind), ct);
+            kind,
+            CoverId: fields.GetValueOrDefault(PostWrites.CoverField) is { Length: > 0 } cover ? cover : null), ct);
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var root }:
@@ -95,8 +96,9 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         if (found is null) return unseen!;
         var page = await Page(found, personId, ct) with
         {
-            Title = fields.GetValueOrDefault(PostWrites.TitleField),
-            Body = fields.GetValueOrDefault(PostWrites.BodyField)
+            Title = PostWrites.Title(fields),
+            Body = fields.GetValueOrDefault(PostWrites.BodyField),
+            CoverId = fields.GetValueOrDefault(PostWrites.CoverField) is { Length: > 0 } cover ? cover : null
         };
         if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Start = page.Start?.With(PostWrites.IdField, id) };
         return new ObjectResult(refusal(page)) { StatusCode = status };
@@ -122,7 +124,9 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
-            await PostWrites.Reader(personId, capabilities, baseAddress, here, ct));
+            await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
+            Bring: gate is null && row.DefaultKind == PostKind.Article ? PostWrites.MediaForm(address, FormToken.For(HttpContext)) : null,
+            Day: DateOnly.FromDateTime(DateTime.UtcNow));
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

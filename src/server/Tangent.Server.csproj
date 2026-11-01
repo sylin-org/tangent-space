@@ -26,6 +26,8 @@
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web.Sse/Koan.Web.Sse.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web.OpenGraph/Koan.Web.OpenGraph.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Communication/Koan.Communication.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Media.Web/Koan.Media.Web.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Storage/Local/Koan.Storage.Connector.Local.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- A body's Markdown to HTML (BSD-2-Clause) and the allow-list that HTML passes through (MIT, on AngleSharp). -->

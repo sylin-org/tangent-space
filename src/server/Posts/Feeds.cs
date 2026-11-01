@@ -13,7 +13,8 @@ namespace Tangent.Posts;
 /// <summary>What a feed reads: a bounded window of the newest Topics a visitor may read, of one Tangent or the place's
 /// articles, newest first and none removed, each root's body rendered as its page renders it. A feed always reads as a
 /// visitor, whoever asks, so it says the same to everyone and carries nothing a visitor could not read; deciding that a
-/// visitor may read it at all is the caller's. Reads only and takes no lock: at most <see cref="Feed.Limit"/> Posts, in one
+/// visitor may read it at all is the caller's. An image in a body and an article's cover are at their addresses under the
+/// base URL, which a reader with no account fetches as a visitor. Reads only and takes no lock: at most <see cref="Feed.Limit"/> Posts, in one
 /// query through <c>ix_post_started</c> or <c>ix_post_articles</c>, and everyone they name by key.</summary>
 public static class Feeds
 {
@@ -93,9 +94,10 @@ public static class Feeds
         return Feed.Window(roots.Select(root =>
         {
             var address = PostWrites.TopicAddress(baseUrl, root.TangentId, root.Slug ?? root.Id);
-            var html = Mentions.Html(root.Id, root.Version, root.Body, Mentions.Of(root, mentioned)) + EditedLine(root, people);
+            var html = Media.Placed(Mentions.Html(root.Id, root.Version, root.Body, Mentions.Of(root, mentioned)), baseUrl + "/") + EditedLine(root, people);
             var (author, profile) = Named(root.AuthorId, people, baseUrl);
-            return new Feed.Entry(address, root.Title ?? "", Feed.Absolute(html, origin, address), author, profile, root.CreatedAt, root.ChangedAt ?? root.CreatedAt);
+            return new Feed.Entry(address, root.Title ?? "", Feed.Absolute(html, origin, address), author, profile, root.CreatedAt, root.ChangedAt ?? root.CreatedAt,
+                root.CoverId is { } cover ? baseUrl + Media.Reference(cover) : null);
         }));
     }
 

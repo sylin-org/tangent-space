@@ -52,7 +52,8 @@ public sealed partial record TangentPage(
     /// or locked, its <see cref="Latest"/> reply and its most recent <see cref="People"/>, and, for a signed-in reader,
     /// whether it is <see cref="New"/> to them — its last sequence past their checkpoint for it, or no checkpoint at
     /// all — with <see cref="NewPosts"/>, how many of its Posts they have not seen. <see cref="Edited"/> says who other
-    /// than its author last edited its root, where someone did.</summary>
+    /// than its author last edited its root, where someone did. <see cref="Cover"/> is the address of an article's cover,
+    /// while its root stands and has one.</summary>
     public sealed record Topic(
         string Id,
         string Slug,
@@ -71,7 +72,8 @@ public sealed partial record TangentPage(
         IReadOnlyList<Author> People,
         bool New,
         long NewPosts,
-        Edited? Edited = null);
+        Edited? Edited = null,
+        string? Cover = null);
 
     /// <summary>A Topic's latest reply: its author, its first words, when it was written, whether it is new to the
     /// reader, and who other than its author last edited it, where someone did.</summary>

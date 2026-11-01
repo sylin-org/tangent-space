@@ -8,6 +8,10 @@ export const composing = {
   timeout: 20_000,
 }
 
+// What the composer dispatches on its form when its words or whether they may change have changed, for an island inside
+// the form that shows them another way.
+export const composerChanged = 'composer-changed'
+
 type Phase = 'ready' | 'sending' | 'checking' | 'missing' | 'uncertain' | 'refused' | 'posted'
 
 // The composer: a form that posts a reply or starts a Topic, and that never loses its words, never posts twice and
@@ -44,6 +48,7 @@ export const composer = defineComponent({
     const body = named<HTMLTextAreaElement>('body')
     const title = named<HTMLInputElement>('title')
     const parent = named<HTMLInputElement>('parent')
+    const cover = named<HTMLInputElement>('cover')
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')
     const label = button?.textContent ?? ''
     const replyingTo = form.querySelector<HTMLElement>('[data-reply-to]')
@@ -62,9 +67,11 @@ export const composer = defineComponent({
     let home = key()
     const current = (sent: boolean): Draft => ({
       id: id.value,
-      body: body.value,
+      // A body the article editor emptied keeps its words in the draft, so a slip never costs them.
+      body: body.value || body.dataset.heldWords || '',
       title: title ? title.value : undefined,
       parent: parent?.value || undefined,
+      cover: cover?.value || undefined,
       sent,
     })
     // The words are the person's to change only once nothing is on its way and nothing sent is unaccounted for.
@@ -83,12 +90,15 @@ export const composer = defineComponent({
       status.hidden = message === ''
       status.dataset.tone = next === 'refused' || next === 'missing' || next === 'uncertain' ? 'failure' : 'note'
       status.setAttribute('role', status.dataset.tone === 'failure' ? 'alert' : 'status')
+      form.dispatchEvent(new CustomEvent(composerChanged))
     }
 
     function apply(draft: Draft) {
       id!.value = draft.id
       body!.value = draft.body
       if (title) title.value = draft.title ?? ''
+      if (cover) cover.value = draft.cover ?? ''
+      form.dispatchEvent(new CustomEvent(composerChanged))
     }
 
     // Points a reply form at a Post, or at the Topic: the parent field and the line that names whom it answers.

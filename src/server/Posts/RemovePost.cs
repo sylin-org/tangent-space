@@ -33,8 +33,10 @@ public sealed record RemovePost(string PostId, string RemoverId, DateTimeOffset?
 
         var at = At ?? DateTimeOffset.UtcNow;
         await AuditPartition.Snapshot(post, post.Version, ct);
+        var used = post.UsedMedia();
         post.Remove(RemoverId, at);
         await post.Save(ct);
+        await MediaUse.Record(post, RemoverId, used, ct);
         await Event.Next(sequences, EventKind.PostRemoved, at,
             tangentId: post.TangentId, topicId: post.TopicId, postId: post.Id, actorId: RemoverId,
             targetId: RemoverId == post.AuthorId ? null : post.AuthorId, version: post.Version).Save(ct);

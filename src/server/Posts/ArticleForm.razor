@@ -1,0 +1,112 @@
+@using global::Tangent.Render
+@using global::Tangent.Tangents
+@* The form an article is written in, laid out as the article reads: the same column, the cover in its place, the title
+   in its place at its size, the byline, then the body in the article's type. It is an ordinary form: without script the
+   title and the body are plain fields that post, and the cover it holds stays. With script the article island turns the
+   body's field into the visual editor, which writes its Markdown back there, and brings a cover and images in the page. *@
+<div class="layout layout-reading topic-layout article-writing">
+    <aside class="rail" aria-label="In this Tangent">
+        <h2 class="rail-heading">@TangentName</h2>
+        <ul class="rail-views">
+            <li><a href="@TangentAddress">All articles</a></li>
+        </ul>
+    </aside>
+    <main class="topic-main">
+        <h1 class="visually-hidden">@Heading</h1>
+        @if (Failure is not null)
+        {
+            <p class="sign-in-failure" id="article-failure" role="alert" data-gate="@FailureGate">@Failure</p>
+        }
+        <form class="article-form" method="post" action="@Action" data-island="@Island" data-props="@IslandProps">
+            <FormTokenField Token="@Token" />
+            @Hidden
+            <input type="hidden" name="@PostWrites.CoverField" value="@CoverId">
+            <article class="article">
+                <ArticleHead Author="@Author" At="@At" Minutes="@Minutes" CoverSlot="@CoverField" TitleSlot="@TitleField" />
+                <div class="article-body-field" data-island="article" data-props="@EditorProps">
+                    <label class="field-label" for="@BodyId">Article</label>
+                    <textarea class="post-form-body article-source" id="@BodyId" name="@PostWrites.BodyField" rows="18" required placeholder="Write your article in Markdown."
+                              aria-invalid="@(BodyFailure is null ? "false" : "true")"
+                              aria-describedby="@(BodyFailure is null ? null : BodyId + "-failure")">@Body</textarea>
+                    @if (BodyFailure is not null)
+                    {
+                        <p class="field-failure" id="@(BodyId + "-failure")">@BodyFailure</p>
+                    }
+                </div>
+            </article>
+            @Below
+            <div class="post-form-actions article-form-actions">
+                @Actions
+            </div>
+        </form>
+        @After
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Heading { get; set; } = "";
+    [Parameter, EditorRequired] public string TangentName { get; set; } = "";
+    [Parameter, EditorRequired] public string TangentAddress { get; set; } = "";
+    [Parameter, EditorRequired] public string Action { get; set; } = "";
+    [Parameter, EditorRequired] public FormToken Token { get; set; } = default!;
+    [Parameter, EditorRequired] public TangentPage.Author Author { get; set; } = default!;
+    [Parameter, EditorRequired] public DateTimeOffset At { get; set; }
+
+    /// <summary>The base URL, ending in a slash, under which the form's images have their addresses.</summary>
+    [Parameter, EditorRequired] public string Door { get; set; } = "";
+
+    /// <summary>The ids of the title and body fields.</summary>
+    [Parameter, EditorRequired] public string TitleId { get; set; } = "";
+    [Parameter, EditorRequired] public string BodyId { get; set; } = "";
+
+    /// <summary>The island that sends the form, and its props.</summary>
+    [Parameter, EditorRequired] public string Island { get; set; } = "";
+    [Parameter] public string? IslandProps { get; set; }
+
+    /// <summary>Where an image is brought in, and whose drafts of what an edit keeps, where this is an edit.</summary>
+    [Parameter] public Form? Bring { get; set; }
+    [Parameter] public string? Participant { get; set; }
+    [Parameter] public string? EditScope { get; set; }
+
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Body { get; set; }
+    [Parameter] public string? CoverId { get; set; }
+    [Parameter] public int Minutes { get; set; } = 1;
+    [Parameter] public string? Failure { get; set; }
+    [Parameter] public string? FailureGate { get; set; }
+    [Parameter] public string? TitleFailure { get; set; }
+    [Parameter] public string? BodyFailure { get; set; }
+
+    /// <summary>The hidden fields of this form beside its token.</summary>
+    [Parameter] public RenderFragment? Hidden { get; set; }
+
+    /// <summary>What stands under the article inside the form, what its actions are, and what stands after the form.</summary>
+    [Parameter] public RenderFragment? Below { get; set; }
+    [Parameter, EditorRequired] public RenderFragment Actions { get; set; } = default!;
+    [Parameter] public RenderFragment? After { get; set; }
+
+    /// <summary>The address of the cover the form holds, where it holds one.</summary>
+    private string? CoverAddress => CoverId is { } cover ? Door + Media.Reference(cover).TrimStart('/') : null;
+
+    private string? EditorProps => Bring is { } bring
+        ? System.Text.Json.JsonSerializer.Serialize(new { door = Door, bring = bring.Action, token = Token.Field, participant = Participant, edit = EditScope })
+        : null;
+
+    private RenderFragment CoverField => @<div class="article-cover-field" data-article-cover>
+        @if (CoverAddress is { } cover)
+        {
+            <figure class="article-figure"><img src="@cover" alt=""></figure>
+        }
+    </div>;
+
+    private RenderFragment TitleField => @<div class="article-title-wrap">
+        <label class="visually-hidden" for="@TitleId">Title</label>
+        <textarea class="article-title article-title-field" id="@TitleId" name="@PostWrites.TitleField" rows="1" required maxlength="@Post.TitleLimit" placeholder="Title" autofocus="@(BodyFailure is null)"
+                  aria-invalid="@(TitleFailure is null ? "false" : "true")"
+                  aria-describedby="@(TitleFailure is null ? null : TitleId + "-failure")">@Title</textarea>
+        @if (TitleFailure is not null)
+        {
+            <p class="field-failure" id="@(TitleId + "-failure")">@TitleFailure</p>
+        }
+    </div>;
+}

@@ -32,6 +32,9 @@ public sealed class Post : Entity<Post>
     public const string TooManyMentions = "A Post's body mentions at most 32 identities.";
     public const string BodyNotJudged = "This body was not judged before it was sent; send it again.";
     public const string BodyTooIntricate = "A Post's body holds too many unclosed links, brackets or emphasis marks to render quickly.";
+    public const string TooManyImages = "A Post's body holds at most 64 images of this place.";
+    public const string NoCover = "This cover isn't an image you can use here.";
+    public const string CoverOnArticle = "Only an article has a cover.";
     public const string NeedsTitle = "A Topic's title holds at least one visible character.";
     public const string TitleTooLong = "A Topic's title holds at most 200 characters.";
     public const string NeedsTangent = "A Topic starts in a Tangent.";
@@ -56,6 +59,9 @@ public sealed class Post : Entity<Post>
     /// <summary>The root of the Topic; the root's own Id on a root.</summary>
     [Index(Name = "ix_post_windows", Order = 0)]
     public string TopicId { get; set; } = "";
+
+    /// <summary>The most images of this place one body names, each a row while the Post uses it (<see cref="MediaUse"/>).</summary>
+    public const int MediaLimit = 64;
 
     /// <summary>The Post this one replies to; null on a root.</summary>
     [Index(Name = "ix_post_topics", Order = 1)]
@@ -87,6 +93,10 @@ public sealed class Post : Entity<Post>
     /// <c>at://</c> and a DID (<see cref="Mentions"/>). Found by its words.</summary>
     [Lexical]
     public string Body { get; set; } = "";
+
+    /// <summary>The <see cref="Media"/> the body's images name, each once, in the order of their first image, at most
+    /// <see cref="MediaLimit"/>; empty on a tombstone.</summary>
+    public List<string> MediaIds { get; set; } = [];
 
     /// <summary>The DIDs the body mentions, each once, in the order of their first mention, at most
     /// <see cref="Mentions.Limit"/>; empty on a tombstone.</summary>
@@ -185,6 +195,7 @@ public sealed class Post : Entity<Post>
             Title = title.Trim(),
             Body = text,
             MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [],
+            MediaIds = text.Length > 0 ? [.. body.Media] : [],
             SentHash = body.SentHash,
             AuthorId = authorId,
             CreatedAt = at,
@@ -224,6 +235,7 @@ public sealed class Post : Entity<Post>
             ParentId = parentId,
             Body = body.Text,
             MentionedIds = [.. body.Mentioned],
+            MediaIds = [.. body.Media],
             SentHash = body.SentHash,
             Sequence = LastSequence,
             AuthorId = authorId,
@@ -231,14 +243,30 @@ public sealed class Post : Entity<Post>
         };
     }
 
-    /// <summary>Whether an edit with this body and title would leave the Post as it is: the same body, and on a root the
-    /// same title or none sent; a reply sent no title.</summary>
-    public bool Unchanged(string body, string? title) => Body == body && Titled(title);
+    /// <summary>Whether an edit with this body, title and cover would leave the Post as it is: the same body, on a root
+    /// the same title or none sent, and the same cover or none sent; a reply sent no title.</summary>
+    public bool Unchanged(string body, string? title, string? cover = null) => Body == body && Titled(title) && Covered(cover);
 
     /// <summary>Whether an edit made from <paramref name="version"/> with this body and title is the one that made the
     /// Post what it is, sent again: it took the Post from that version to this one with the same words sent, and on a
-    /// root the same title or none; a reply sent no title. Whoever its typed handles name now changes nothing.</summary>
-    public bool MadeBy(long version, PostBody body, string? title) => Version == version + 1 && SentHash == body.SentHash && Titled(title);
+    /// root the same title or none, and the same cover or none; a reply sent no title. Whoever its typed handles name now
+    /// changes nothing.</summary>
+    public bool MadeBy(long version, PostBody body, string? title, string? cover = null)
+        => Version == version + 1 && SentHash == body.SentHash && Titled(title) && Covered(cover);
+
+    /// <summary>Whether this cover is the one the Post has, an empty one meaning none; true where none was sent.</summary>
+    private bool Covered(string? cover) => cover is null || (cover.Length == 0 ? CoverId is null : CoverId == cover);
+
+    /// <summary>Every piece of <see cref="Media"/> the Post uses now: its cover and the images of its body.</summary>
+    public IReadOnlyList<string> UsedMedia() => CoverId is { } cover ? [.. MediaIds.Prepend(cover).Distinct(StringComparer.Ordinal)] : [.. MediaIds];
+
+    /// <summary>Gives an article <paramref name="cover"/>, or takes its cover away where that is empty, or a refusal: only
+    /// an article's root has one.</summary>
+    public void Cover(string cover)
+    {
+        if (cover.Length > 0 && (ParentId is not null || Kind != PostKind.Article)) throw new Refusal(CoverOnArticle);
+        CoverId = cover.Length > 0 ? cover : null;
+    }
 
     private bool Titled(string? title) => ParentId is null ? title is null || Title == title.Trim() : string.IsNullOrEmpty(title);
 
@@ -261,6 +289,7 @@ public sealed class Post : Entity<Post>
 
         Body = text;
         MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [];
+        MediaIds = text.Length > 0 ? [.. body.Media] : [];
         SentHash = body.SentHash;
         var someoneElse = editorId != AuthorId;
         EditedBy = someoneElse ? editorId : null;
@@ -282,6 +311,8 @@ public sealed class Post : Entity<Post>
         RemovedAt = at;
         Body = "";
         MentionedIds = [];
+        MediaIds = [];
+        CoverId = null;
         SentHash = "";
         EditedBy = null;
         EditedAt = null;

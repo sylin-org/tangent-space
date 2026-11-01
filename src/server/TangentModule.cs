@@ -3,12 +3,15 @@ using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
 using Koan.Identity.Roles;
+using Koan.Media.Web.Routing;
+using Koan.Storage.Connector.Local;
 using Koan.Web.Extensions;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Tangent.Access;
 using Tangent.Events;
@@ -43,6 +46,13 @@ public sealed class TangentModule : KoanModule
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((sqlite, tangent, environment) =>
                 sqlite.ConnectionString = "Data Source=" + tangent.Value.DatabasePath(environment.ContentRootPath));
 
+        // Koan's media and its renders live in the data folder, and its routes serve what reaches the reader.
+        services.AddOptions<LocalStorageOptions>()
+            .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((storage, tangent, environment) =>
+                storage.BasePath = tangent.Value.DataFolderPath(environment.ContentRootPath));
+        services.AddHttpContextAccessor();
+        services.Replace(ServiceDescriptor.Singleton<IMediaSource, Posts.GatedMedia>());
+
         // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
         services.AddHostedService<RunningMark>();
 
@@ -70,7 +80,7 @@ public sealed class TangentModule : KoanModule
             .Add<Tangents.TangentAccessPage, Tangents.TangentAccessView>(page => "Access · " + page.Name, frame: Tangents.TangentAccessView.Frame)
             .Add<Posts.TopicPage, Posts.TopicView>(page => page.Title + " · " + page.Tangent.Name, Posts.TopicPage.Version, Posts.TopicView.Frame, Posts.TopicPage.Card)
             .Add<Posts.NewTopicPage, Posts.NewTopicView>(page => (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Posts.NewTopicView.Frame)
-            .Add<Posts.EditPage, Posts.EditView>(page => (page.Root ? "Edit topic · " : "Edit post · ") + page.TopicTitle, frame: Posts.EditView.Frame)
+            .Add<Posts.EditPage, Posts.EditView>(page => (!page.Root ? "Edit post · " : page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "Edit article · " : "Edit topic · ") + page.TopicTitle, frame: Posts.EditView.Frame)
             .Add<Posts.TakeOnATangentPage, Posts.TakeOnATangentView>(page => "Take this on a tangent · " + page.Origin.Topic, frame: Posts.TakeOnATangentView.Frame)
             .Add<Posts.ReportPage, Posts.ReportView>(page => (page.Received ? "Report received · " : "Report · ") + page.Reported.Topic, frame: Posts.ReportView.Frame)
             .Add<Participants.ProfilePage, Participants.ProfileView>(page => page.Name + " · " + page.Place, Participants.ProfilePage.Version, Participants.ProfileView.Frame)

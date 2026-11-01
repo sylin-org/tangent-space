@@ -123,6 +123,7 @@ Parallel once slice 1 lands: 2.1 and 2.2 together; then 2.3, 2.4 and 2.5; then 2
 
 | Package | After | Role |
 | --- | --- | --- |
+| 3.1 Articles: a root Post of kind article with its cover, written in the article editor where it will be read, images through Koan's media with their audience from the Posts that use them | 2.3, 4.2, 7.1, 7.2 | first of its kind |
 | 3.4 Social cards: a page a visitor may read carries a card from what it already read, through Koan's `RenderHead` (WEB-0085) | 2.3, 4.2 | repeat |
 
 ## Slice 4, package by package

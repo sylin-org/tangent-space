@@ -64,7 +64,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
     private async Task<string> WholeForRequest(HttpContext http, HtmlRenderer renderer, ResourceComponent resource, object value, string? card)
     {
         var space = await TangentSpace.OfRequest(http);
-        return await Whole(renderer, resource, value, _baseUrl.Resolve(http), Appearance.Word(space.Appearance.Accent), space.Slots,
+        return await Whole(renderer, resource, value, _baseUrl.Resolve(http), Appearance.Word(space.Appearance.Accent), space.Slots.Placed(_baseUrl.Resolve(http) + "/"),
             resource.Frame?.Invoke(value), card: card);
     }
 

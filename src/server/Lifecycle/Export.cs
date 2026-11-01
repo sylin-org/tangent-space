@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Sorting;
+using Koan.Media.Web.Routing;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -26,7 +28,10 @@ namespace Tangent.Lifecycle;
 /// a Topic, each <see cref="WindowSize"/> sequences wide, so a Post's file follows from its sequence and a link to it
 /// needs nothing but the Post. Every link is relative, but one to what the zip does not hold: a mention's profile, a
 /// Topic in a Tangent this zip leaves out, or a body's root-relative target, each of which names the place. The place's
-/// stylesheet and fonts go in beside the pages; a Post's images stay the addresses its body names.
+/// stylesheet and fonts go in beside the pages, and each image of the place a page shows that reaches its reader goes under
+/// <c>media/</c> as the page is written, once, read from Koan's media as it goes (<see cref="Carried"/>): in a zip named for
+/// what it is, so its holder can open it, in an archive at the very address it has on the place. An image that does not
+/// reach them stays an address that shows them nothing.
 /// <para>A Tangent's Topics are walked by slug, which never changes, so one that gains a reply on the way is neither missed
 /// nor written twice, and whatever started past the moment the export began is neither written nor listed. A removed Post
 /// stays the tombstone a page shows, with no body in its page or its data, and nothing here reads a snapshot. Every read
@@ -39,6 +44,9 @@ public sealed class Export
 
     /// <summary>How the place's files name a first page.</summary>
     internal const string First = "index";
+
+    /// <summary>The folder a walk's images are in, at the root, as they are on the place.</summary>
+    internal const string MediaFolder = "media";
 
     private readonly IFileSink _files;
     private readonly string? _personId;
@@ -53,6 +61,12 @@ public sealed class Export
     private readonly JsonSerializerSettings _json;
     private readonly ILoggerFactory _logs;
     private readonly string? _retired;
+    private readonly Regex _shownImage;
+    private readonly MediaEntitySource<Media> _media = new();
+
+    /// <summary>What each image a page showed came to: its file from the root, or null where it does not reach the reader.
+    /// An Id apiece for what the walk has shown, so an image in many pages is read once.</summary>
+    private readonly Dictionary<string, string?> _carried = new(StringComparer.Ordinal);
 
     private Export(IFileSink files, string? personId, Tangents.Tangent? only, TangentSpace space, string baseAddress, IServiceProvider services, string? retired = null)
     {
@@ -68,6 +82,7 @@ public sealed class Export
         _json = services.GetRequiredService<IOptions<MvcNewtonsoftJsonOptions>>().Value.SerializerSettings;
         _logs = services.GetRequiredService<ILoggerFactory>();
         _retired = retired;
+        _shownImage = new Regex("(?<=\\s(?:src|href)=\")" + Regex.Escape(baseAddress) + "/media/(?<id>[0-9a-f-]{32,36})(?=\")", RegexOptions.CultureInvariant);
     }
 
     /// <summary>The walk an archive makes: every Tangent a visitor may view, onto <paramref name="files"/>, each page
@@ -194,7 +209,7 @@ public sealed class Export
             audience.ToString().ToLowerInvariant(),
             First + ".html",
             [],
-            topics.Select(root => TangentPageController.Topic(root, "", people, latest, unseen, signedIn: false)
+            topics.Select(root => TangentPageController.Topic(root, _base + "/t/" + Uri.EscapeDataString(tangent.Id), people, latest, unseen, signedIn: false)
                 with { Address = Uri.EscapeDataString(root.Slug ?? root.Id) + "/" + First + ".html" }).ToList(),
             more ? PagePath(page + 1) + ".html" : null,
             page > 1,
@@ -218,14 +233,16 @@ public sealed class Export
         {
             var replies = await TopicWindow.Between(root.Id, (window - 1) * WindowSize, window * WindowSize, ct);
             var path = window == 1 ? First : window.ToString(CultureInfo.InvariantCulture);
-            await Page(folder + "/" + path, await Window(tangent, root, replies, window, windows, takenFrom, ct), "../../..", null, ct);
+            var page = await Window(tangent, root, replies, window, windows, takenFrom, ct);
+            await Page(folder + "/" + path, page, "../../..", TopicView.Frame(page) with { Door = "../../../" + First + ".html" }, ct);
             if (!Retired) continue;
             if (window == 1) await Forward(folder + "/" + root.Id, "../" + First + ".html#" + root.Id, root.Title ?? "", ct);
             foreach (var reply in replies) await Forward(folder + "/" + reply.Id, "../" + path + ".html#" + reply.Id, root.Title ?? "", ct);
         }
     }
 
-    /// <summary>One window as its page shows it to no one in particular: nothing it offers, and nothing new.</summary>
+    /// <summary>One window as its page shows it to no one in particular: nothing it offers, and nothing new. Its images are
+    /// at the place's address, which <see cref="Page{TResource}"/> turns to the file of each it carries.</summary>
     private async Task<TopicPage> Window(Tangents.Tangent tangent, Post root, IReadOnlyList<Post> replies, long window, long windows,
         TopicPage.Origin? takenFrom, CancellationToken ct)
     {
@@ -258,13 +275,15 @@ public sealed class Export
             null,
             null,
             _space.Name,
-            "../../../" + First + ".html",
+            _base + "/",
             null,
             null,
             Undated,
             takenFrom,
             FeedsOf(tangent),
-            TopicPage.HeaderOf(root.Kind, _space.Slots));
+            TopicPage.HeaderOf(root.Kind, _space.Slots, _base + "/"),
+            root.CoverId is { } cover ? _base + Media.Reference(cover) : null,
+            TangentPage.ReadTime(root.Body));
     }
 
     private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, TangentPage.Author> people,
@@ -368,6 +387,42 @@ public sealed class Export
             "<body><p>" + WebUtility.HtmlEncode(_retired) + "</p><p><a href=\"" + to + "\">" + named + "</a></p></body></html>\n"), ct);
     }
 
+    /// <summary>A page with each image of the place it shows brought along and named by its file, <paramref name="up"/> being
+    /// the way from the page to the root.</summary>
+    private async Task<string> WithImages(string html, string up, CancellationToken ct)
+    {
+        var shown = _shownImage.Matches(html);
+        if (shown.Count == 0) return html;
+        foreach (var id in shown.Select(image => image.Groups["id"].Value).Distinct(StringComparer.Ordinal)) await Carried(id, ct);
+        return _shownImage.Replace(html, image => _carried[image.Groups["id"].Value] is { } file ? up + "/" + file : image.Value);
+    }
+
+    /// <summary>The image <paramref name="id"/>, where it reaches the reader, written beside the pages the first time a page
+    /// shows it.</summary>
+    private async Task Carried(string id, CancellationToken ct)
+    {
+        if (_carried.ContainsKey(id)) return;
+        string? file = null;
+        if (await MediaUse.Reaches(_personId, id, ct) && await _media.OpenAsync(id, ct) is { } image)
+        {
+            await using (image)
+            {
+                file = MediaFolder + "/" + id + (Retired ? "" : Extension(image.ContentType));
+                await _files.Copy(file, image.Bytes, ct);
+            }
+        }
+
+        _carried[id] = file;
+    }
+
+    private static string Extension(string contentType) => contentType switch
+    {
+        "image/png" => ".png",
+        "image/jpeg" => ".jpg",
+        "image/webp" => ".webp",
+        _ => ""
+    };
+
     /// <summary>One resource at <paramref name="path"/>: its page, <paramref name="up"/> being the way from there to the
     /// root, and in a zip its data beside it.</summary>
     internal async Task Page<TResource>(string path, TResource model, string up, Frame? frame, CancellationToken ct) where TResource : notnull
@@ -375,8 +430,8 @@ public sealed class Export
         var resource = _components.For(typeof(TResource));
         string html;
         await using (var renderer = new HtmlRenderer(_services, _logs))
-            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, _space.Slots, frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
-        await _files.Write(path + ".html", Encoding.UTF8.GetBytes(Render.Feed.Rooted(html, _origin)), ct);
+            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, _space.Slots.Placed(_base + "/"), frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
+        await _files.Write(path + ".html", Encoding.UTF8.GetBytes(await WithImages(Render.Feed.Rooted(html, _origin), up, ct)), ct);
         if (!Retired) await _files.Write(path + ".json", Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model, _json)), ct);
     }
 }

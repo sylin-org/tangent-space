@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Koan.Data.Core;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Tangent.Access;
+using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Writer;
 using Xunit;
@@ -24,9 +26,14 @@ public sealed class BackupTests(ITestOutputHelper output)
         // The place as first run leaves it, with its moderators' Tangent, so the restored start has nothing to create.
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await original.Services.GetRequiredService<WriteLoop>().Send(new CreateModeratorsTangent(), Cancellation));
         var row = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
-        var media = Path.Combine(original.DataFolder, "media", "cover.bin");
-        Directory.CreateDirectory(Path.GetDirectoryName(media)!);
-        await File.WriteAllBytesAsync(media, [1, 2, 3], Cancellation);
+        var writer = original.Services.GetRequiredService<WriteLoop>();
+        await Given.ATangent(original, "workshop", ct: Cancellation);
+        await Given.AParticipant(original, "did:plc:ada", [Roles.Member], ct: Cancellation);
+        var image = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
+        Assert.IsType<Outcome<MediaUse>.Done>(await writer.Send(new BringMedia(image.Id, "did:plc:ada"), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), "workshop", "A picture", "![It](/media/" + image.Id + ")", "did:plc:ada"), Cancellation));
+        var kept = await original.Client.GetByteArrayAsync("/media/" + image.Id, Cancellation);
+        var rendered = await original.Client.GetByteArrayAsync($"/media/{image.Id}/{MediaRecipes.CardName}", Cancellation);
 
         var backups = Path.Combine(original.Folder, "backups");
         await Server(0, "backup", backups, $"--Tangent:DataFolder={original.DataFolder}");
@@ -49,7 +56,11 @@ public sealed class BackupTests(ITestOutputHelper output)
         Assert.Equal(restoredFolder, restored.DataFolder);
         Assert.Equal("The workshop's place", read?.Name);
         Assert.Equal(row.Version, read?.Version);
-        Assert.Equal([1, 2, 3], await File.ReadAllBytesAsync(Path.Combine(restoredFolder, "media", "cover.bin"), Cancellation));
+
+        // The media came with it, in the data folder, and a visitor reads it as they did.
+        Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(restoredFolder, "media"), "*", SearchOption.AllDirectories));
+        Assert.Equal(kept, await restored.Client.GetByteArrayAsync("/media/" + image.Id, Cancellation));
+        Assert.Equal(rendered, await restored.Client.GetByteArrayAsync($"/media/{image.Id}/{MediaRecipes.CardName}", Cancellation));
     }
 
     [Fact]

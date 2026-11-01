@@ -45,7 +45,7 @@ public sealed class SlotsTests
 
     private static void AssertCarries(string page, bool door = false, bool article = false)
     {
-        Assert.Contains(Head, HeadOf(page));
+        Assert.Contains(Head.Replace("href=\"/media/", $"href=\"{BaseUrl}/media/"), HeadOf(page));
         Assert.Contains(Slot("masthead", Masthead), page);
         Assert.Contains(Slot("footer", Footer), page);
         if (door) Assert.Contains("Welcome</h2>", page);

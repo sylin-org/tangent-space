@@ -155,7 +155,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             space.Audience == Audience.Public && await Overwrites.AudienceOf(tangentRow.Id, ct) == Audience.Public
                 ? Feeds.TangentLinks(baseAddress, tangentRow.Id, tangentRow.Name, space.Name)
                 : null,
-            TopicPage.HeaderOf(root.Kind, space.Slots)));
+            TopicPage.HeaderOf(root.Kind, space.Slots, baseAddress + "/"),
+            root.CoverId is { } cover ? baseAddress + Media.Reference(cover) : null,
+            TangentPage.ReadTime(root.Body)));
     }
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is

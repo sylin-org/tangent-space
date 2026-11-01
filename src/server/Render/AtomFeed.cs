@@ -5,8 +5,9 @@ using System.Xml.Linq;
 
 namespace Tangent.Render;
 
-/// <summary>A <see cref="Feed"/> as an Atom document (RFC 4287). Each entry's HTML is its escaped content. A character XML
-/// cannot hold, which a title or a body may, is left out.</summary>
+/// <summary>A <see cref="Feed"/> as an Atom document (RFC 4287). Each entry's HTML is its escaped content, and the image that
+/// leads it is its Media RSS thumbnail, the element feed readers take a picture from. A character XML cannot hold, which a
+/// title or a body may, is left out.</summary>
 public static class AtomFeed
 {
     public const string MediaType = "application/atom+xml";
@@ -15,10 +16,13 @@ public static class AtomFeed
 
     private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
 
+    private static readonly XNamespace MediaRss = "http://search.yahoo.com/mrss/";
+
     public static string Of(Feed feed)
     {
         var address = feed.Address + Extension;
         var document = new XElement(Atom + "feed",
+            feed.Entries.Any(entry => entry.Image is not null) ? new XAttribute(XNamespace.Xmlns + "media", MediaRss) : null,
             Text("id", address),
             Text("title", feed.Title),
             feed.Description.Length > 0 ? Text("subtitle", feed.Description) : null,
@@ -38,6 +42,7 @@ public static class AtomFeed
             entry.AuthorAddress is { } author ? Text("uri", author) : null),
         Text("published", Stamp(entry.Published)),
         Text("updated", Stamp(entry.Updated)),
+        entry.Image is { } image ? new XElement(MediaRss + "thumbnail", new XAttribute("url", image)) : null,
         new XElement(Atom + "content", new XAttribute("type", "html"), Holdable(entry.Html)));
 
     private static XElement Text(string name, string value) => new(Atom + name, Holdable(value));

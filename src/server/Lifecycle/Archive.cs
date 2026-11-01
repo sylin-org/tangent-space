@@ -19,8 +19,9 @@ namespace Tangent.Lifecycle;
 /// continuations beside it as <c>page-{n}.html</c> or a Topic's windows as <c>{n}.html</c>, and each feed at its own address.
 /// A Post's address forwards to its window. Every page reads as a visitor reads it live: the door and the profiles are
 /// their own handlers' answers to a request with no reader, the rest <see cref="Export"/>'s walk with no reader, each read
-/// bounded. No page offers anything, and each opens with the line that says the place is retired. A private place has
-/// nothing to archive, and an applicant no page. What the folder holds is whole or absent (<see cref="FolderSink"/>).</summary>
+/// bounded. An image a page shows that reaches a visitor is at its own address too (<see cref="Export"/>), and a render of it
+/// is not, so a page names the image itself. No page offers anything, and each opens with the line that says the place is
+/// retired. A private place has nothing to archive, and an applicant no page. What the folder holds is whole or absent (<see cref="FolderSink"/>).</summary>
 public sealed class Archive
 {
     private readonly Export _export;

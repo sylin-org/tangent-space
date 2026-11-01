@@ -71,10 +71,10 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| An article is a root Post of kind article with a cover; a Tangent may default to articles | article, tangent (articles) | `TopicPresentation`, `ArticleCollection`, `ArticlePreview` (harvest) | — | M | todo |
-| The article editor island: visual Markdown with source view and roundtrip check; cover and inline images | article editor | `MarkdownComposer`, `markdown-roundtrip.ts`, `CreationCoverPicker` (transplant) | — | S | todo |
-| Media on Koan: content-addressed, re-encoded derivatives, metadata stripped, audience from the referencing Post | — | `PostMediaService` audience rules (harvest) | `Sylin.Koan.Media.Core`, `Sylin.Koan.Storage.Connector.Local` | S | todo |
-| Social cards for articles, topics, Tangents and the door; an article's cover waits on the article package, and goes in `TopicPage.Card`'s image with `TwitterCard` moving to `summary_large_image` | — | — | `Sylin.Koan.Web.OpenGraph` | S | done |
+| An article is a root Post of kind article with a cover; a Tangent may default to articles | article, tangent (articles) | `TopicPresentation`, `ArticleCollection`, `ArticlePreview` (harvest) | — | M | done |
+| The article editor island: visual Markdown with source view and roundtrip check; cover and inline images | article editor | `MarkdownComposer`, `markdown-roundtrip.ts`, `CreationCoverPicker` (transplant) | — | S | doing |
+| Media on Koan: content-addressed, re-encoded derivatives, metadata stripped, audience from the referencing Post | — | `PostMediaService` audience rules (harvest) | `Sylin.Koan.Media.Core`, `Sylin.Koan.Media.Web`, `Sylin.Koan.Storage.Connector.Local` | S | done |
+| Social cards for articles, topics, Tangents and the door | — | — | `Sylin.Koan.Web.OpenGraph` | S | done |
 | Connections: the row per participant, the dispatch job as a log reader with a cursor, receipts by version, attention on repeated failure | settings connections | `BlueskyPublisher` receipt idea (harvest) | `Sylin.Koan.Jobs` | M | todo |
 | The atproto package: the Tangent Space as `site.standard.publication` under the proprietor's Connection; each public article as `site.standard.document` with the cover blob and a Bluesky post embedding it; `<link rel="site.standard.document">`; retract on removal or audience change | article | `BlueskyPublisher` mapping (harvest) | brief 3 | M | todo |
 
@@ -119,9 +119,9 @@ A person or an agent arrives and knows where they are, who they are here, what h
 
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
-| Export a Tangent or the Tangent Space, as far as whoever holds `ManageSpace` may view it, as a zip of readable pages that open with no server beside their data as JSON, streamed in bounded reads through the one renderer, tombstones kept, at `/settings/export`; a Post's images stay the addresses its body names | settings export | new | lift later | M | done |
+| Export a Tangent or the Tangent Space, as far as whoever holds `ManageSpace` may view it, as a zip of readable pages that open with no server beside their data as JSON, streamed in bounded reads through the one renderer, tombstones kept, at `/settings/export`; the images of the place its pages show come along for whatever its holder may view, in the same stream | settings export | new | lift later | M | done |
 | Backup and restore of the folder, verified by restoring | — | `scripts/server-lifecycle.ps1` (harvest) | — | S | done |
-| Static archive: every public page and feed rendered to a folder with the same URLs, by the operator's `archive` verb, through the one renderer in bounded reads; retirement mode, `Tangent:Archive`, which answers from it and takes no writes | — | new | lift later | M | done |
+| Static archive: every public page and feed rendered to a folder with the same URLs, by the operator's `archive` verb, through the one renderer in bounded reads, with the images its public pages show at their addresses; retirement mode, `Tangent:Archive`, which answers from it and takes no writes | — | new | lift later | M | done |
 
 ### 8 · Agents
 
@@ -140,7 +140,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | --- | --- | --- | --- | --- | --- |
 | Appearance: light, dark, system, each reader's own with no flash of the other; the accent at `/settings/appearance` for whoever holds `ManageSpace`, `space.changed` on a change, on every page for every reader; the first four tokens named as `site.standard.theme.basic` names them | settings appearance | `AppearanceSwitch`, `TangentAccentPalette` (transplant) | — | S | done |
 | The published `site.standard.theme.basic`, from the first four tokens | — | new | — | S | todo |
-| Slots with sanitized HTML (head, masthead, door intro, article header, footer), each bounded, for whoever holds `ManageSpace`, `space.changed` on a change; identical in the site, the archive and exports. The article header renders above the title on an article's Topic page (`TopicPage.ArticleHeader`), the seam the article's own page takes over in 3.1. The typed settings schema scored 3 and is in PROPOSALS | settings appearance | new | — | M | done |
+| Slots with sanitized HTML (head, masthead, door intro, article header, footer), each bounded, for whoever holds `ManageSpace`, `space.changed` on a change; identical in the site, the archive and exports. The article header renders in an article's own head, between its cover and its title (`TopicPage.ArticleHeader`, `ArticleHead`). The typed settings schema scored 3 and is in PROPOSALS | settings appearance | new | — | M | done |
 
 ## Screens
 

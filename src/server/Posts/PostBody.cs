@@ -12,8 +12,9 @@ namespace Tangent.Posts;
 /// parses.</summary>
 public sealed class PostBody
 {
-    private PostBody(string text, string sent, IReadOnlyList<string> mentioned, string? refusal)
+    private PostBody(string text, string sent, IReadOnlyList<string> mentioned, string? refusal, IReadOnlyList<string>? media = null)
     {
+        Media = media ?? [];
         Text = text;
         Sent = sent;
         SentHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sent)));
@@ -34,6 +35,9 @@ public sealed class PostBody
 
     /// <summary>The DIDs the body mentions, each once, in the order of their first mention.</summary>
     public IReadOnlyList<string> Mentioned { get; }
+
+    /// <summary>The <see cref="Posts.Media"/> the body's images name, each once, in the order of their first image.</summary>
+    public IReadOnlyList<string> Media { get; }
 
     /// <summary>Why the body may not be written, by what its parse found; null when nothing did. The rules a glance
     /// decides — empty, a NUL, too many bytes — are <see cref="Post.CheckBody"/>'s, and a body they refuse is not
@@ -74,7 +78,9 @@ public sealed class PostBody
 
         var mentioned = rendered.Held.Select(Mentions.Identity).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         if (!rendered.Fits) return new PostBody(text, sent, mentioned, Post.BodyRendersTooLong);
-        return new PostBody(text, sent, mentioned, mentioned.Count > Mentions.Limit ? Post.TooManyMentions : null);
+        var media = rendered.Images.Select(Posts.Media.IdIn).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        return new PostBody(text, sent, mentioned,
+            mentioned.Count > Mentions.Limit ? Post.TooManyMentions : media.Count > Post.MediaLimit ? Post.TooManyImages : null, media);
     }
 
     /// <summary>Whether a body as sent passes the rules a glance decides (<see cref="Post.CheckBody"/>): not empty, no

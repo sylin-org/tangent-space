@@ -22,7 +22,9 @@ namespace Tangent.Posts;
 /// origin is refused with <see cref="Capabilities.Removed"/>; the root carries the origin, may start without a body of
 /// the author's own (<see cref="Post.RootBody"/>), and its <see cref="EventKind.PostCreated"/> targets the origin's
 /// author unless they take their own Post on a tangent, so the author of what a Topic answers hears of it as the author
-/// of what a reply answers does, wherever they may view the new Topic's Tangent.</summary>
+/// of what a reply answers does, wherever they may view the new Topic's Tangent. An article may name its
+/// <see cref="CoverId"/>, an image its author may see, or is refused with <see cref="Post.NoCover"/>; what the root uses
+/// is recorded in the same commit (<see cref="MediaUse.Record"/>).</summary>
 public sealed record StartTopic(
     string Id,
     string TangentId,
@@ -31,7 +33,8 @@ public sealed record StartTopic(
     string AuthorId,
     PostKind? Kind = null,
     DateTimeOffset? At = null,
-    string? OriginId = null) : ICommand<Post>
+    string? OriginId = null,
+    string? CoverId = null) : ICommand<Post>
 {
     /// <summary>How many numbered suffixes are tried before the Post's own Id becomes the suffix.</summary>
     public const int SuffixBound = 50;
@@ -64,7 +67,14 @@ public sealed record StartTopic(
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);
         var root = Post.Root(Id, TangentId, Title, await UniqueSlug(TangentId, Title, Id, ct), kind, Body, AuthorId, at, origin?.Id);
+        if (CoverId is not null)
+        {
+            if (!await MediaUse.Reaches(AuthorId, CoverId, ct)) return new Outcome<Post>.Refused(Post.NoCover);
+            root.Cover(CoverId);
+        }
+
         await root.Save(ct);
+        await MediaUse.Record(root, AuthorId, [], ct);
         tangent.TopicStarted();
         await tangent.Save(ct);
         await Event.Next(sequences, EventKind.PostCreated, at,
@@ -79,7 +89,7 @@ public sealed record StartTopic(
     private bool Same(Post existing, PostKind kind) =>
         existing.ParentId is null && existing.TangentId == TangentId && existing.Title == Title.Trim()
         && existing.Kind == kind && existing.SentHash == Body.SentHash && existing.AuthorId == AuthorId
-        && existing.OriginId == OriginId;
+        && existing.OriginId == OriginId && existing.CoverId == CoverId;
 
     /// <summary>The slug of <paramref name="title"/> for a Topic whose root is <paramref name="id"/>, or the first numbered
     /// suffix of it that no Topic in <paramref name="tangentId"/> holds; each try is one counted query. Past the bound, the

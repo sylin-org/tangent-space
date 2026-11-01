@@ -245,7 +245,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
         {
             Description = space.Description,
-            Intro = space.Slots.DoorIntro.Length > 0 ? space.Slots.DoorIntro : null,
+            Intro = space.Slots.DoorIntro.Length > 0 ? Media.Placed(space.Slots.DoorIntro, baseAddress + "/") : null,
             Feeds = space.Audience == Audience.Public ? Feeds.ArticlesLinks(baseAddress, space.Name) : null,
             Offers = offered,
             Applications = waiting.Count == 0

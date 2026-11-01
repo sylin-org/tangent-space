@@ -1,12 +1,13 @@
 using Koan.Data.Core;
 using Tangent.Access;
 using Tangent.Events;
+using Tangent.Posts;
 using Tangent.Writer;
 
 namespace Tangent.Space;
 
 /// <summary>Renames and describes the place and sets its admission, its audience, its accent and its slots, each slot
-/// sanitized and bounded as it is written (<see cref="Slots.Written"/>, <see cref="TangentSpace.Change"/>), and appends <see cref="EventKind.SpaceChanged"/>. A field left null stays as it is. The place exists for the actor, who holds
+/// sanitized and bounded as it is written (<see cref="Slots.Written"/>, <see cref="TangentSpace.Change"/>) with the images they name in step (<see cref="MediaUse.Record(Slots, Slots, string, CancellationToken)"/>), and appends <see cref="EventKind.SpaceChanged"/>. A field left null stays as it is. The place exists for the actor, who holds
 /// <see cref="Bit.View"/> on it, or the command answers that no place is here; the actor holds
 /// <see cref="Bit.ManageSpace"/>, or is refused with the gate word. A command that changes nothing writes
 /// nothing.</summary>
@@ -34,10 +35,12 @@ public sealed record ChangeTangentSpace(
         if (!capabilities.Exists) return new Outcome<TangentSpace>.Refused(NoPlace);
         if (capabilities.Gate(Bit.ManageSpace) is { } gate) return new Outcome<TangentSpace>.Refused(gate);
 
+        var before = space.Slots;
         if (!space.Change(Name ?? space.Name, Description ?? space.Description, Admission ?? space.Admission, Audience ?? space.Audience, Accent ?? space.Appearance.Accent,
                 space.Slots.Written(Head, Masthead, DoorIntro, ArticleHeader, Footer)))
             return new Outcome<TangentSpace>.Done(space);
         await space.Save(ct);
+        await MediaUse.Record(before, space.Slots, ActorId, ct);
         await Event.Next(sequences, EventKind.SpaceChanged, At ?? DateTimeOffset.UtcNow, actorId: ActorId).Save(ct);
         return new Outcome<TangentSpace>.Done(space);
     }

@@ -19,8 +19,8 @@ public sealed partial record Feed(string Title, string Description, string Home,
     public const int EntryWeight = 1024;
 
     /// <summary>One entry: where it reads, its title, its HTML, who wrote it and where they are, when it was published and
-    /// when its words last changed.</summary>
-    public sealed record Entry(string Address, string Title, string Html, string Author, string? AuthorAddress, DateTimeOffset Published, DateTimeOffset Updated);
+    /// when its words last changed, and the address of the image that leads it, where one does.</summary>
+    public sealed record Entry(string Address, string Title, string Html, string Author, string? AuthorAddress, DateTimeOffset Published, DateTimeOffset Updated, string? Image = null);
 
     /// <summary>When the feed last changed: its newest entry's change, so an unchanged feed writes out the same bytes. A
     /// feed with no entries says the epoch.</summary>

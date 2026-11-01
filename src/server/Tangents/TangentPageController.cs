@@ -138,7 +138,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Select(id => Person(people, id)).ToList(),
             unseen > 0,
             unseen,
-            TangentPage.EditedOf(root, people));
+            TangentPage.EditedOf(root, people),
+            root.CoverId is { } cover ? tangentAddress[..tangentAddress.LastIndexOf("/t/", StringComparison.Ordinal)] + Media.Reference(cover) : null);
     }
 
     private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)

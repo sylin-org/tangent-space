@@ -271,6 +271,93 @@ public sealed partial class ExportTests
         Assert.Contains("href=\"https://tangent.example/notes/about\"", zip["t/workshop/beside-a-path/index.html"]);
     }
 
+    [Fact]
+    public async Task An_articles_pictures_come_along_for_whatever_its_reader_may_view_and_its_page_stands_alone()
+    {
+        const string keeper = "role:keeper";
+        const string Keeping = "did:plc:keeper4export";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await roles.Define(keeper, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Keeping, [Roles.Member, keeper], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var keeping = await SignedIn(tangentSpace, Keeping);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var cover = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(ada, ArticleMediaTests.Jpeg(60)));
+        var inline = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(ada, ArticleMediaTests.Jpeg(61)));
+        var hidden = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62), Studio, "/t/" + Studio + "/new"));
+        await Started(writer, Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
+        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns",
+            "![Lit](/media/" + inline + ")\n\nAnd ![Lit again](/media/" + inline + ")\n\n![Not mine](/media/" + hidden + ")", Ada, CoverId: cover), Cancellation)).Result;
+        var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
+        space!.Slots.ArticleHeader = "<p>From the long reads.</p>";
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+
+        using var answer = await keeping.Client.GetAsync(Path + ".zip", Cancellation);
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        var bytes = await answer.Content.ReadAsByteArrayAsync(Cancellation);
+        var zip = await Unzipped(new HttpResponseMessage { Content = new ByteArrayContent(bytes) });
+        AssertOpensAlone(zip);
+
+        // Each picture is in it once, as its reader reads it live, and what does not reach them is not.
+        using var entries = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        foreach (var id in new[] { cover, inline })
+        {
+            using var held = new MemoryStream();
+            await using (var entry = entries.GetEntry($"media/{id}.jpg")!.Open()) await entry.CopyToAsync(held, Cancellation);
+            Assert.Equal(await keeping.Client.GetByteArrayAsync("/media/" + id, Cancellation), held.ToArray());
+        }
+
+        Assert.DoesNotContain(zip.Keys, name => name.Contains(hidden, StringComparison.Ordinal));
+
+        // The article opens as its live page does, naming its pictures by their files, a cover with no render beside it.
+        var page = zip[$"t/{Articles}/{article.Slug}/index.html"];
+        Assert.Contains($"<figure class=\"article-figure\"><img src=\"../../../media/{cover}.jpg\"", page);
+        Assert.Contains($"src=\"../../../media/{inline}.jpg\"", page);
+        Assert.Contains($"src=\"{BaseUrl}/media/{hidden}\"", page);
+        Assert.DoesNotContain("srcset", page);
+        Assert.Contains("<h1 class=\"article-title\">Lanterns", page);
+        Assert.Contains("article-byline", page);
+        Assert.Contains("slot-article-header", page);
+        foreach (var offer in new[] { "article-form", "article-source", "ProseMirror", "site-search" }) Assert.DoesNotContain(offer, page);
+
+        // Its Tangent lists it with its cover, which has no render here to read.
+        Assert.Contains($"src=\"../../media/{cover}.jpg\"", zip[$"t/{Articles}/index.html"]);
+        Assert.DoesNotContain("/" + MediaRecipes.CardName, zip[$"t/{Articles}/index.html"]);
+
+        // Its data says what its live JSON says.
+        var data = JsonDocument.Parse(zip[$"t/{Articles}/{article.Slug}/index.json"]).RootElement;
+        Assert.Equal(BaseUrl + "/media/" + cover, data.GetProperty("cover").GetString());
+
+        // Whoever may view that picture takes it along.
+        Assert.Contains($"media/{hidden}.jpg", (await Downloaded(leo, Path + ".zip")).Keys);
+    }
+
+    [Fact]
+    public async Task An_image_a_slot_names_comes_along_for_a_holder_who_did_not_bring_it()
+    {
+        const string keeper = "role:keeper";
+        const string Keeping = "did:plc:keeper4export";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await roles.Define(keeper, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Keeping, [Roles.Member, keeper], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var keeping = await SignedIn(tangentSpace, Keeping);
+        var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo, Masthead: $"<img src=\"/media/{logo}\" alt=\"\">"), Cancellation));
+
+        var zip = await Downloaded(keeping, Path + ".zip");
+
+        Assert.Contains($"media/{logo}.jpg", zip.Keys);
+        Assert.Contains($"src=\"./media/{logo}.jpg\"", zip["index.html"]);
+        AssertOpensAlone(zip);
+    }
+
     private static async Task<Post> Taken(WriteLoop writer, Post origin, string tangent, string title)
         => Assert.IsType<Outcome<Post>.Done>(await writer.Send(
             new StartTopic(Tids.Mint(), tangent, title, "", Leo, OriginId: origin.Id), Cancellation)).Result;

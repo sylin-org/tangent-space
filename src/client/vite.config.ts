@@ -21,6 +21,7 @@ export default defineConfig({
       output: {
         format: 'es',
         entryFileNames: 'tangent.js',
+        chunkFileNames: '[name]-[hash].js',
         assetFileNames: (asset) =>
           asset.names.some((name) => name.endsWith('.css')) ? 'tangent.css' : 'fonts/[name]-[hash][extname]',
       },

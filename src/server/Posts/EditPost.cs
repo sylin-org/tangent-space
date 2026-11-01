@@ -18,14 +18,17 @@ namespace Tangent.Posts;
 /// (<see cref="Mentions.Notify"/>); the body is judged where the command is built (<see cref="PostBody"/>), never in
 /// the writer. Safe to repeat: when the Post already says what the command says, at any version, or this edit made it
 /// what it is and is sent again — from the version before, with the same words sent, whoever their typed handles name
-/// now (<see cref="Post.MadeBy"/>) — it answers with the Post and writes nothing.</summary>
+/// now (<see cref="Post.MadeBy"/>) — it answers with the Post and writes nothing. An article's edit may name its
+/// <see cref="CoverId"/>: an image the editor may see, or is refused with <see cref="Post.NoCover"/>; empty, it takes the
+/// cover away; none, it stays. What the Post uses moves with it in the same commit (<see cref="MediaUse.Record"/>).</summary>
 public sealed record EditPost(
     string PostId,
     long Version,
     PostBody Body,
     string? Title,
     string EditorId,
-    DateTimeOffset? At = null) : ICommand<Post>
+    DateTimeOffset? At = null,
+    string? CoverId = null) : ICommand<Post>
 {
     public const string NoPost = "No Post has this Id.";
 
@@ -41,14 +44,18 @@ public sealed record EditPost(
         if (!capabilities.Holds(Bit.EditOwn) && !capabilities.Holds(Bit.Moderate))
             return new Outcome<Post>.Refused(capabilities.Gate(Bit.EditOwn)!);
 
-        if (post.Unchanged(Body.Text, Title) || post.MadeBy(Version, Body, Title)) return new Outcome<Post>.Done(post);
+        if (post.Unchanged(Body.Text, Title, CoverId) || post.MadeBy(Version, Body, Title, CoverId)) return new Outcome<Post>.Done(post);
         if (post.Version != Version) return new Outcome<Post>.Conflict(Stale(post.Version));
 
+        if (CoverId is { Length: > 0 } && CoverId != post.CoverId && !await MediaUse.Reaches(EditorId, CoverId, ct)) return new Outcome<Post>.Refused(Post.NoCover);
         var at = At ?? DateTimeOffset.UtcNow;
         await AuditPartition.Snapshot(post, post.Version, ct);
         var before = post.MentionedIds.ToList();
+        var used = post.UsedMedia();
         post.Edit(Body, Title, EditorId, at);
+        if (CoverId is not null) post.Cover(CoverId);
         await post.Save(ct);
+        await MediaUse.Record(post, EditorId, used, ct);
         await Event.Next(sequences, EventKind.PostEdited, at,
             tangentId: post.TangentId, topicId: post.TopicId, postId: post.Id, actorId: EditorId,
             targetId: EditorId == post.AuthorId ? null : post.AuthorId, version: post.Version).Save(ct);

@@ -51,7 +51,31 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Media.Abstractions",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Media.Core",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Media.Web",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Security.Trust",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Storage",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Storage.Abstractions",
+      "version": "1.0"
+    },
+    {
+      "id": "Koan.Storage.Connector.Local",
       "version": "1.0"
     },
     {
@@ -102,7 +126,15 @@
     },
     {
       "kind": "project",
+      "id": "Koan.Media.Web"
+    },
+    {
+      "kind": "project",
       "id": "Koan.Security.Trust"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Storage.Connector.Local"
     },
     {
       "kind": "project",

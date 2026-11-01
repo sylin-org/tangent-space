@@ -216,6 +216,90 @@ public sealed partial class ArchiveTests
     }
 
     [Fact]
+    public async Task A_retired_places_public_articles_keep_their_pictures_at_their_addresses_and_nothing_a_visitor_may_not_read_comes_along()
+    {
+        const string Leo = "did:plc:leo4archive";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Someone(tangentSpace, Ida, IdaHandle);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var visitor = Agent(tangentSpace);
+        var cover = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
+        var inline = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(61)));
+        var hidden = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62), Studio, "/t/" + Studio + "/new"));
+        var unused = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(63)));
+        await Started(writer, Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
+        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline + ")", Leo, CoverId: cover), Cancellation)).Result;
+        var live = new Dictionary<string, byte[]>();
+        foreach (var id in new[] { cover, inline }) live[id] = await visitor.GetByteArrayAsync("/media/" + id, Cancellation);
+
+        var folder = Path.Combine(tangentSpace.Folder, "archive");
+        await Archive.Write(folder, tangentSpace.Services, Cancellation);
+
+        foreach (var (id, bytes) in live) Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(folder, "media", id), Cancellation));
+        foreach (var absent in new[] { hidden, unused }) Assert.False(File.Exists(Path.Combine(folder, "media", absent)));
+
+        var page = await Read(folder, "t", Articles, article.Slug!, "index.html");
+        Assert.Contains($"<img src=\"../../../media/{cover}\"", page);
+        Assert.Contains($"src=\"../../../media/{inline}\"", page);
+        Assert.DoesNotContain("srcset", page);
+        Assert.Contains("<h1 class=\"article-title\">Lanterns", page);
+        var list = await Read(folder, "t", Articles, "index.html");
+        Assert.Contains($"src=\"../../media/{cover}\"", list);
+        Assert.DoesNotContain("/" + MediaRecipes.CardName, list);
+        await AssertStandsAlone(folder);
+
+        // A feed reader finds the same addresses in the folder.
+        var feed = await Read(folder, "articles.json");
+        foreach (var id in new[] { cover, inline }) Assert.Contains($"{BaseUrl}/media/{id}", feed);
+
+        // A server named to the archive answers each at its address, as what it is.
+        await tangentSpace.StopAsync(Cancellation);
+        await using var retired = await Retired(folder);
+        using var client = Client(retired);
+        var image = await Send(client, HttpMethod.Get, "/media/" + cover);
+        Assert.Equal((HttpStatusCode.OK, "image/jpeg"), (image.Status, image.MediaType));
+        Assert.Equal(live[cover], await client.GetByteArrayAsync("/media/" + cover, Cancellation));
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(client, HttpMethod.Get, "/media/" + hidden)).Status);
+    }
+
+    [Fact]
+    public async Task An_image_a_slot_names_is_in_the_archive_at_its_address_and_one_named_no_more_is_not()
+    {
+        const string Leo = "did:plc:leo4archive";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        var writer = await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var visitor = Agent(tangentSpace);
+        var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
+        var icon = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(61)));
+        var gone = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62)));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo, Footer: $"<img src=\"/media/{gone}\" alt=\"\">"), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo,
+            Masthead: $"<img src=\"/media/{logo}\" alt=\"\">", Head: $"<link rel=\"icon\" href=\"/media/{icon}\">", Footer: ""), Cancellation));
+        var bytes = await visitor.GetByteArrayAsync("/media/" + logo, Cancellation);
+
+        var folder = Path.Combine(tangentSpace.Folder, "archive");
+        await Archive.Write(folder, tangentSpace.Services, Cancellation);
+
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(folder, "media", logo), Cancellation));
+        Assert.True(File.Exists(Path.Combine(folder, "media", icon)));
+        Assert.False(File.Exists(Path.Combine(folder, "media", gone)));
+        var door = await Read(folder, "index.html");
+        Assert.Contains($"src=\"./media/{logo}\"", door);
+        Assert.Contains($"href=\"./media/{icon}\"", door);
+        Assert.Contains($"src=\"../../media/{logo}\"", await Read(folder, "t", Workshop, "index.html"));
+        await AssertStandsAlone(folder);
+
+        await tangentSpace.StopAsync(Cancellation);
+        await using var retired = await Retired(folder);
+        using var client = Client(retired);
+        Assert.Equal(HttpStatusCode.OK, (await Send(client, HttpMethod.Get, "/media/" + logo)).Status);
+    }
+
+    [Fact]
     public void No_archive_named_is_no_retirement_and_one_that_is_not_there_is_no_start()
     {
         var unnamed = WebApplication.CreateBuilder();

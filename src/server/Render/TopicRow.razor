@@ -1,23 +1,35 @@
 @using System.Globalization
+@using Tangent.Posts
 @using Tangent.Tangents
 @* One Topic in a Tangent's list. In a discussions Tangent it is a row of the table: a dot when it is new to the
    reader, its title with any pin or lock, who started it and its opening words, who else edited a Post beside its author where someone did, its latest reply on the page's colour
    with "New" when the reader has not seen it, the faces of its recent authors, its replies with how many Posts are
    new, and when it last gained a Post and from whom. In an articles Tangent it is an article: the lead, first on the
-   first page, with its cover, date and read time, opening, author and latest-reply strip; the rest as rows. An
-   article without a cover image leads with the Tangent's own: its tile and name on the image band over its edge,
-   never the title again. Zeros are said in words, and how many replies are new is said the same way beside every
+   first page, with its cover, date and read time, opening, author and latest-reply strip; the rest as rows, each with
+   its cover where it has one, its render for a list, or on a page standing alone the cover itself. An article without a cover image leads with the Tangent's own: its tile and name on the
+   image band over its edge, never the title again. Zeros are said in words, and how many replies are new is said the same way beside every
    count. *@
 @if (Article)
 {
     <article class="@ArticleClass()">
         @if (Lead)
         {
-            <a class="article-cover tone-@TangentTile.Tone" href="@Model.Address" tabindex="-1" aria-hidden="true">
-                <TangentTile Tile="@TangentTile" Size="cover" />
-                <span class="article-cover-tangent">@TangentName</span>
-                <span class="article-cover-edge"></span>
-            </a>
+            if (Model.Cover is { } lead)
+            {
+                <a class="article-cover article-cover-image" href="@Model.Address" tabindex="-1" aria-hidden="true"><img src="@Shown(lead)" alt="" loading="lazy" decoding="async"></a>
+            }
+            else
+            {
+                <a class="article-cover tone-@TangentTile.Tone" href="@Model.Address" tabindex="-1" aria-hidden="true">
+                    <TangentTile Tile="@TangentTile" Size="cover" />
+                    <span class="article-cover-tangent">@TangentName</span>
+                    <span class="article-cover-edge"></span>
+                </a>
+            }
+        }
+        else if (Model.Cover is { } thumbnail)
+        {
+            <a class="article-card-cover" href="@Model.Address" tabindex="-1" aria-hidden="true"><img src="@Shown(thumbnail)" alt="" loading="lazy" decoding="async"></a>
         }
         <div class="article-card-text">
             <p class="article-card-date">
@@ -125,6 +137,10 @@ else
 
     [Parameter] public Tile TangentTile { get; set; } = new("amber", "T");
 
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+
+    private string Shown(string cover) => Standalone ? cover : cover + "/" + MediaRecipes.CardName;
+
     /// <summary>How many faces a row shows.</summary>
     private const int FaceLimit = 3;
 
@@ -159,7 +175,7 @@ else
 
     private string Replies() => Count(Model.ReplyCount, "reply", "replies", "No replies yet");
 
-    private string ArticleClass() => (Lead ? "article-card article-lead" : "article-card") + (Model.New ? " is-new" : "");
+    private string ArticleClass() => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + (Model.New ? " is-new" : "");
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
