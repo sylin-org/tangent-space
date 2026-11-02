@@ -20,7 +20,7 @@ Built from the frame and the shared components, captured, and scored last as bel
 | article-editor | never | — | templated from the article's own head and type, the toolbar from the frame's quiet buttons; captured as empty, writing, her article with its cover, heading, list, quote and image in their places, and source |
 | article | never | — | templated from the frame's reading layout, the design reference's article type, its replies as a Topic's; captured as read and visitor |
 | new-topic | never | — | templated from the sign-in panel's form styles; captured as empty, restored, refused and visitor |
-| edit | never | — | templated from the new-topic form; captured as form, refused, remove confirmation and not yours |
+| edit | never | — | templated from the new-topic form; captured as form, refused, not accepted, the refusal a value that cannot bind reads, in the place's frame, remove confirmation and not yours |
 | take-this-on-a-tangent | never | — | templated from the new-topic form; captured as form, refused and visitor; the topic screen adds taken-origin, taken-from and taken-from-unseen |
 | new-tangent | never | — | templated from the new-topic form, the description, kind and audience behind one quiet disclosure; captured as empty and refused |
 | tangent-settings-details | never | — | templated from the new-topic form, a line under the audience leading to the access; captured as administrator, as a holder of `ManageTangent` alone, who reads nothing of where it stands, for the moderators' Tangent, whose audience and place are fixed, and closed, the saved page a change that closes the Tangent to its sender lands on |

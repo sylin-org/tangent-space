@@ -105,7 +105,7 @@ public sealed class AddressTests
         var answered = await Send(ada.Client, HttpMethod.Post, PostPath(root, root) + "/remove", FormBody(fields), json: true);
 
         // A body past the limit is refused where it is read, before the action.
-        Assert.Equal((HttpStatusCode.BadRequest, "Not accepted"), (answered.Status, answered.Title));
+        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "Too large"), (answered.Status, answered.Title));
         Assert.False((await Post.Get(root.Id, Cancellation))?.Removed);
         Assert.Empty(await Events.Event.Query(e => e.Kind == Events.EventKind.PostRemoved, Cancellation));
     }

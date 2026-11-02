@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
@@ -12,18 +13,17 @@ using Tangent.Space;
 namespace Tangent.Access;
 
 /// <summary>What creating a role sends, as a form or one JSON object: <see cref="Permissions"/> as a form's checkboxes
-/// send them, one to a value, or in one value separated by spaces. It has no default, or an empty list would read as left
-/// out, as ASP.NET binds a constructor's parameter that has one.</summary>
+/// send them, one to a value, or in one value separated by spaces.</summary>
 public sealed record CreateRoleInput(
-    [Description(Holds.RoleName)] string? Name,
-    [Description(Holds.RolePermissions)] string[]? Permissions);
+    [Description(Holds.RoleName)] string? Name = null,
+    [Description(Holds.RolePermissions)] string[]? Permissions = null);
 
 /// <summary>What changing a role sends, as a form or one JSON object.</summary>
 public sealed record ChangeRoleInput(
-    [Description(Holds.ChangedRole)] string? Role,
-    [Description(Holds.ChangedRoleName)] string? Name,
-    [Description(Holds.RolePermissions)] string[]? Permissions,
-    [Description(Holds.RoleMove)] string? Move);
+    [Description(Holds.ChangedRole)] string? Role = null,
+    [Description(Holds.ChangedRoleName)] string? Name = null,
+    [Description(Holds.RolePermissions)] string[]? Permissions = null,
+    [Description(Holds.RoleMove)] string? Move = null);
 
 /// <summary>What deleting a role sends, as a form or one JSON object.</summary>
 public sealed record DeleteRoleInput([Description(Holds.DeletedRole)] string? Role = null);
@@ -68,16 +68,21 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     public static string Word(RoleMove move) => move.ToString().ToLowerInvariant();
 
+    /// <summary>The page a <c>page</c> parameter names, from 1: one that is no such number reads the first, since it is all a
+    /// hand-edited address could want.</summary>
+    public static int Numbered(string? page)
+        => int.TryParse(page, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number > 0 ? number : 1;
+
     [HttpGet(Path)]
     [Tool(Name = "read_roles")]
     [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles.")]
-    public async Task<IActionResult> Get([FromQuery(Name = PageQuery), Description(Holds.Number)] int? page, CancellationToken ct)
+    public async Task<IActionResult> Get([FromQuery(Name = PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        var read = await Page(place, personId, Math.Max(page ?? 1, 1), ct);
+        var read = await Page(place, personId, Numbered(page), ct);
         return read.Gate is { } gate ? new ObjectResult(read) { StatusCode = PostWrites.Status(gate) } : Ok(read);
     }
 

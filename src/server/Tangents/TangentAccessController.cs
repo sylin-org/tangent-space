@@ -46,13 +46,13 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_access")]
     [Description("Read which roles read and post in a Tangent, a page at a time, for whoever may change it.")]
-    public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = RolesController.PageQuery), Description(Holds.Number)] int? page, CancellationToken ct)
+    public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = RolesController.PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
-        var read = await Page(found, personId, Math.Max(page ?? 1, 1), ct);
+        var read = await Page(found, personId, RolesController.Numbered(page), ct);
         return read.Gate is { } gate ? new ObjectResult(read) { StatusCode = PostWrites.Status(gate) } : Ok(read);
     }
 
