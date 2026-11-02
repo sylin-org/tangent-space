@@ -293,16 +293,31 @@ public static class PostWrites
     };
 
     /// <summary>The problem a refusal answers as, by its kind: absent <c>404</c> in one sentence; gated <c>401</c> to sign
-    /// in and <c>403</c> otherwise, with its word as <c>gate</c>, the sentence of a rule that has no word, and its next step
-    /// as <c>next</c>; conflict <c>409</c>; anything else <c>400</c>.</summary>
-    public static IActionResult Refused(HttpContext http, Reason reason) => (reason.Kind switch
+    /// in and <c>403</c> otherwise, with its heading, its word as <c>gate</c>, the sentence of a rule that has no word, and
+    /// its next step as <c>next</c>; conflict <c>409</c>; anything else <c>400</c>. Where a gate means something more
+    /// specific at this address, <paramref name="saying"/> and <paramref name="heading"/> say it.</summary>
+    public static IActionResult Refused(HttpContext http, Reason reason, string? saying = null, string? heading = null) => (reason.Kind switch
     {
         ReasonKind.Absent => new Problem(StatusCodes.Status404NotFound, "Not found", reason.Said, Capabilities.Absent.Text),
-        ReasonKind.Gated => new Problem(Status(reason), reason == Capabilities.SignIn ? "Sign in first" : "Not open to you", reason.Text,
+        ReasonKind.Gated => new Problem(Status(reason), heading ?? Heading(reason), saying ?? reason.Text,
             reason.Word ?? reason.Text, reason.Next is { } next ? Next(http, next) : null),
-        ReasonKind.Conflict => new Problem(StatusCodes.Status409Conflict, "Already written", reason.Text),
+        ReasonKind.Conflict => new Problem(StatusCodes.Status409Conflict, "Nothing changed", reason.Text),
         _ => new Problem(StatusCodes.Status400BadRequest, "Not written", reason.Text)
     }).ToResult();
+
+    /// <summary>What a person reads above a gate's sentence.</summary>
+    private static string Heading(Reason gate) => Headings.GetValueOrDefault(gate) ?? (gate.Word is null ? "Not yours to change" : "Not open to you");
+
+    private static readonly IReadOnlyDictionary<Reason, string> Headings = new Dictionary<Reason, string>
+    {
+        [Capabilities.SignIn] = "Sign in first",
+        [Capabilities.Apply] = "Waiting to be admitted",
+        [Capabilities.Declined] = "Not admitted",
+        [Capabilities.TimedOut] = "Timed out",
+        [Capabilities.Locked] = "Locked",
+        [Capabilities.Removed] = "Removed",
+        [Capabilities.NotYours] = "Not yours"
+    };
 
     /// <summary>The status a refusal answers with, by its kind.</summary>
     public static int Status(Reason reason) => reason.Kind switch

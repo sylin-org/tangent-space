@@ -35,7 +35,7 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
         var personId = PostWrites.PersonId(User);
         var rows = await Capabilities.LoadRows(personId, null, ct);
         var place = rows.For(null);
-        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
 
         var baseAddress = baseUrl.Resolve(HttpContext);
         var text = string.IsNullOrWhiteSpace(q) ? null : q.Trim();

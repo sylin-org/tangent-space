@@ -80,7 +80,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
             return unsent ? new Problem(StatusCodes.Status503ServiceUnavailable, "Not sent", reason.Text).ToResult() : PostWrites.Refused(HttpContext, reason);
 
         return await Again(found, personId, fields, unsent ? StatusCodes.Status503ServiceUnavailable : PostWrites.Status(reason), keepId: reason.Kind != ReasonKind.Conflict,
-            page => reason == ReportPost.NeedsReason ? page with { BodyFailure = reason.Text }
+            page => reason == ReportPost.NeedsReason || PostWrites.Concerning(reason) == PostWrites.About.Body ? page with { BodyFailure = reason.Text }
                 : reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Report = null }
                 : page with { Failure = reason.Text }, ct);
     }

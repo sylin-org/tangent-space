@@ -61,9 +61,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var inTangent = await Tangents.Tangent.Get(tangent, ct);
         var rows = await Capabilities.LoadRows(personId, inTangent?.Id, ct);
         var place = rows.For(null);
-        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
-        if (inTangent is not { } tangentRow) return DoorController.Gated(Capabilities.Absent);
-        if (!Slug.IsValid(topic)) return DoorController.Gated(Capabilities.Absent);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (inTangent is not { } tangentRow) return DoorController.Gated(HttpContext, Capabilities.Absent);
+        if (!Slug.IsValid(topic)) return DoorController.Gated(HttpContext, Capabilities.Absent);
         if (await TopicWindow.Topic(tangentRow.Id, topic, ct) is not { } root)
         {
             // A segment no Topic's slug names, in a TID's shape, is the TID of a Topic's root: it answers a redirect to
@@ -71,13 +71,13 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             // A slug is read first, so a slug that looks like a TID names its own Topic.
             if (postId is null && Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentRow.Id)
                 return Redirect(BaseAddress() + "/t/" + Uri.EscapeDataString(tangentRow.Id) + "/" + Uri.EscapeDataString(started.Slug ?? started.Id));
-            return DoorController.Gated(Capabilities.Absent);
+            return DoorController.Gated(HttpContext, Capabilities.Absent);
         }
 
         Post? anchor = null;
         if (postId is not null)
         {
-            if (!Tid.IsValid(postId) || await Post.Get(postId, ct) is not { } found || found.TopicId != root.Id) return DoorController.Gated(Capabilities.Absent);
+            if (!Tid.IsValid(postId) || await Post.Get(postId, ct) is not { } found || found.TopicId != root.Id) return DoorController.Gated(HttpContext, Capabilities.Absent);
             anchor = found;
         }
 

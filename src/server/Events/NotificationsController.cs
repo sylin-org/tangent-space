@@ -36,10 +36,9 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
         if (personId is null)
-            return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Notifications are a signed-in participant's.",
-                Capabilities.SignIn.Word).ToResult();
+            return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Notifications are a signed-in participant's.");
 
         Notifications.Cursor? cursor = null;
         if (after is not null && (cursor = Notifications.Cursor.Open(after, protection)) is null)

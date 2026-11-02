@@ -7,6 +7,7 @@ using Koan.Core.Observability.Probes;
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Tangent.Lifecycle;
@@ -170,8 +171,47 @@ public sealed class PostSearchTests
         Assert.Equal([reply.Id], (await Found("annealing")).Select(hit => hit.Post.Id));
     }
 
-    /// <summary>The first search of a host just started: the driver answers SQLITE_SCHEMA from the index's constructor
-    /// while the store's schema is still moving as the host settles, which a moment later it no longer is.</summary>
+    [Fact]
+    public async Task An_index_that_cannot_be_rebuilt_says_so_and_is_rebuilt_once_it_can_be()
+    {
+        var log = new Captured();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(
+            new Dictionary<string, string?> { ["Koan:Data:Sqlite:BusyTimeout"] = "00:00:01" },
+            services => services.AddSingleton<ILoggerProvider>(log),
+            Cancellation);
+        await Writing(tangentSpace);
+        var lantern = await Topic("Copper lanterns", "How the glass is cut.");
+        EmptyTheIndex(tangentSpace.DatabasePath);
+
+        using var holder = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = tangentSpace.DatabasePath, Pooling = false }.ToString());
+        holder.Open();
+        using (var begin = holder.CreateCommand())
+        {
+            begin.CommandText = "BEGIN IMMEDIATE";
+            begin.ExecuteNonQuery();
+        }
+
+        var index = new PostIndex(tangentSpace.Services.GetRequiredService<ILogger<PostIndex>>(), tangentSpace.Services.GetRequiredService<IConfiguration>());
+        var running = index.ExecuteCore(Cancellation);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (!log.Messages.Any(message => message.Contains("could not be brought up to date")) && DateTime.UtcNow < deadline)
+            await Task.Delay(50, Cancellation);
+        Assert.Contains(log.Messages, message => message.Contains("could not be brought up to date"));
+        using (var commit = holder.CreateCommand())
+        {
+            commit.CommandText = "COMMIT";
+            commit.ExecuteNonQuery();
+        }
+
+        await running.WaitAsync(TimeSpan.FromSeconds(30), Cancellation);
+        Assert.Contains(log.Messages, message => message.Contains("The Post index was rebuilt and covers 1 Posts"));
+        Assert.Equal([lantern.Id], (await Found("lanterns")).Select(hit => hit.Post.Id));
+    }
+
+    /// <summary>The first search of a host just started. Koan's services provision their tables in the background as a host
+    /// starts, and a connection's first use of a virtual table fails with SQLite's error 17 when another connection commits
+    /// a schema change meanwhile. Koan's search does not retry it, so a person's first search in those moments can answer
+    /// 500; this waits it out, and tolerates that error alone.</summary>
     private static async Task<IReadOnlyList<PostSearch.Hit>> FoundOnceSettled(string text)
     {
         for (var attempt = 0; ; attempt++)

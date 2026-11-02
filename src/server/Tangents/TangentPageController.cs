@@ -40,8 +40,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         // A missing Tangent's overwrites are not read, so an address no Tangent has takes no place in Koan's cache.
         var found = await Tangent.Get(tangent, ct);
         var capabilities = await Capabilities.Load(personId, found?.Id, null, ct);
-        if (!capabilities.Exists) return DoorController.Gated(capabilities.Gate(Bit.View) ?? Capabilities.Absent);
-        if (found is not { } row) return DoorController.Gated(Capabilities.Absent);
+        if (!capabilities.Exists) return DoorController.Gated(HttpContext, capabilities.Gate(Bit.View) ?? Capabilities.Absent);
+        if (found is not { } row) return DoorController.Gated(HttpContext, Capabilities.Absent);
 
         TopicList.Cursor? cursor = null;
         if (after is not null && (cursor = TopicList.Cursor.Parse(after)) is null)

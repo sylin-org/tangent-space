@@ -234,6 +234,9 @@ public sealed partial class ReportTests
         var empty = await Form(ada, action, action, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "   " });
         Assert.Equal(HttpStatusCode.BadRequest, empty.Status);
         Assert.Contains("id=\"report-body-failure\">" + ReportPost.NeedsReason + "</p>", empty.Body);
+        var tooLong = await Form(ada, action, action, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = new string('a', Post.BodyLimit + 1) });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.Status);
+        Assert.Contains("id=\"report-body-failure\">" + Post.BodyTooLong + "</p>", WebUtility.HtmlDecode(tooLong.Body));
         Assert.Equal(afterFirst, await Counted());
     }
 

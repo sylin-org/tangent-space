@@ -49,7 +49,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var personId = PostWrites.PersonId(User);
         var rows = await Capabilities.LoadRows(personId, null, ct);
         var place = rows.For(null);
-        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
         if (await Holder(handle, ct) is not { } subject) return PostWrites.Absent();
 
         RecentPosts.Cursor? cursor = null;
@@ -146,8 +146,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             return new Problem(StatusCodes.Status403Forbidden, "Only the person revokes",
                 "A request made with a bearer token can’t revoke an agent; the person signs in and revokes it on their profile.").ToResult();
         if (PostWrites.PersonId(User) is not { } personId)
-            return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Revoking an agent needs the person who approved it, signed in.",
-                Capabilities.SignIn.Word).ToResult();
+            return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Revoking an agent needs the person who approved it, signed in.");
         if (!await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         if (await Holder(handle, ct) is not { } subject || subject.Id != personId) return PostWrites.Absent();
 

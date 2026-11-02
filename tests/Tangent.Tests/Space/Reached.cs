@@ -47,10 +47,8 @@ public static class Reached
         return body;
     }
 
-    /// <summary>Waits for everything sent so far to run: one command of its own, behind them at the store's
-    /// turn.</summary>
-    public static async Task Settled(TangentSpaceFixture tangentSpace, CancellationToken ct)
-        => Assert.IsType<Outcome<bool>.Done>(await new Settle().Send(ct));
+    /// <summary>Waits for everything sent so far to run, tries among it.</summary>
+    public static async Task Settled(TangentSpaceFixture tangentSpace, CancellationToken ct) => Assert.True(await tangentSpace.Settled(ct));
 
     /// <summary>The place's row, set up by <paramref name="operatorId"/>, with <paramref name="address"/> as its address.</summary>
     public static async Task<TangentSpace> APlace(TangentSpaceFixture tangentSpace, string operatorId, string? address, CancellationToken ct)
@@ -60,8 +58,4 @@ public static class Reached
         return space;
     }
 
-    private sealed record Settle : ICommand<bool>
-    {
-        public Task<Outcome<bool>> Run(CancellationToken ct) => Task.FromResult<Outcome<bool>>(new Outcome<bool>.Done(true));
-    }
 }

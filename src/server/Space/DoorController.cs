@@ -70,7 +70,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     {
         var personId = PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         var reader = personId is null ? null : await Participant.Get(personId, ct);
@@ -294,8 +294,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
-            return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Marking the door seen needs a signed-in participant.",
-                Capabilities.SignIn.Word).ToResult();
+            return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Marking the door seen needs a signed-in participant.");
         if (!await FormToken.Validate(HttpContext))
             return new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was marked seen.").ToResult();
@@ -320,12 +319,12 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
     /// <summary>What a reader without <see cref="Bit.View"/> on the place receives: a missing resource's answer where
     /// the place is absent to them; otherwise the one step that stands between them and reading.</summary>
-    internal static IActionResult Gated(Reason gate) => (gate.Kind == ReasonKind.Absent
-        ? new Problem(StatusCodes.Status404NotFound, "Not found", gate.Said, Capabilities.Absent.Text)
-        : gate == Capabilities.SignIn ? new Problem(StatusCodes.Status401Unauthorized, "Sign in to read", "This Tangent Space is read by its participants.", gate.Word)
-        : gate == Capabilities.Apply ? new Problem(StatusCodes.Status403Forbidden, "Waiting to be admitted", "Your application is waiting: you can read here once someone admits you.", gate.Word)
-        : gate == Capabilities.Declined ? new Problem(StatusCodes.Status403Forbidden, "Not admitted", "Your application was declined, so this Tangent Space is not open to you.", gate.Word)
-        : new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent Space is not open to you.", gate.Word)).ToResult();
+    internal static IActionResult Gated(HttpContext http, Reason gate) =>
+        gate.Kind == ReasonKind.Absent ? PostWrites.Refused(http, gate)
+        : gate == Capabilities.SignIn ? PostWrites.Refused(http, gate, "This Tangent Space is read by its participants.", "Sign in to read")
+        : gate == Capabilities.Apply ? PostWrites.Refused(http, gate, "Your application is waiting: you can read here once someone admits you.")
+        : gate == Capabilities.Declined ? PostWrites.Refused(http, gate, "Your application was declined, so this Tangent Space is not open to you.")
+        : PostWrites.Refused(http, gate, "This Tangent Space is not open to you.", "Not readable");
 
     /// <summary>One group of new Posts: how many, whether that is a lower bound, and the newest few.</summary>
     private Door.Group Group(IReadOnlyList<Event> events, bool atLeast, IReadOnlyDictionary<string, Post> posts,

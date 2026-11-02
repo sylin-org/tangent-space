@@ -1,12 +1,8 @@
-<main>
+<main data-gate="@Model.Gate">
     <h1>@Model.Title</h1>
     @if (Model.Detail is { } detail)
     {
         <p>@detail</p>
-    }
-    @if (Model.Gate is { } gate)
-    {
-        <p data-gate="@gate">@gate</p>
     }
     @if (Model.Next is { } next)
     {

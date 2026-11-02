@@ -85,8 +85,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
-            return (new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Deciding an offer needs its decider signed in.",
-                Capabilities.SignIn.Word).ToResult(), null, null);
+            return (PostWrites.Refused(HttpContext, Capabilities.SignIn, "Deciding an offer needs its decider signed in."), null, null);
         if (!await FormToken.Validate(HttpContext))
             return (new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was decided.").ToResult(), null, null);
@@ -111,7 +110,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 
-    private static IActionResult Absent() => DoorController.Gated(Capabilities.Absent);
+    private static IActionResult Absent() => PostWrites.Absent();
 
     private static IActionResult NoLongerOpen()
         => new Problem(StatusCodes.Status409Conflict, "No longer open", Offer.NotOpen.Text).ToResult();

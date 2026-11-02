@@ -94,10 +94,30 @@ public sealed class RefusalTests
         var onForm = await Form(ada, "/t/" + Workshop + "/new", TopicPath(locked), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still?" });
 
         Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Locked.Word), (asJson.Status, asJson.MediaType, asJson.Gate));
+        Assert.Equal("Locked", asJson.Title);
         Assert.Equal(("text/html", HttpStatusCode.Forbidden), (onForm.MediaType, onForm.Status));
         Assert.Contains("data-gate=\"locked\"", onForm.Body);
         Assert.Contains("This topic is locked, so no one replies in it.", onForm.Body);
+        Assert.Contains("<h1>Locked</h1>", onForm.Body);
+        Assert.DoesNotContain(">locked<", onForm.Body);
         Assert.Equal(before, await Counted());
+    }
+
+    [Fact]
+    public async Task A_visitor_asked_to_sign_in_is_told_where_and_a_person_reads_no_gate_word()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var visitor = Agent(tangentSpace);
+
+        var asJson = await Send(visitor, HttpMethod.Get, Events.Notifications.Path, json: true);
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Gate));
+        Assert.Equal(BaseUrl + "/sign-in?return=%2Fnotifications", asJson.Json.GetProperty("next").GetString());
+
+        var asPage = await Send(visitor, HttpMethod.Get, Events.Notifications.Path);
+        Assert.Equal(HttpStatusCode.Unauthorized, asPage.Status);
+        Assert.Contains("<a href=\"" + BaseUrl + "/sign-in?return=%2Fnotifications\">Sign in</a>", asPage.Body);
+        Assert.DoesNotContain(">" + Capabilities.SignIn.Word + "<", asPage.Body);
     }
 
     [Fact]
