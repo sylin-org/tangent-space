@@ -123,7 +123,7 @@ Leo's direction of 1 November 2026: this is the moment to align whatever is poor
 
 Scored below 5 and left as they are, with the reasoning in ARCH-0142:
 
-- **`AllowMutations` on `[McpEntity]` (3).** It filters tools out of the registry, so it decides exposure, not access.
+- **`AllowMutations` on Koan's entity tool attribute (3).** It filters tools out of the registry, so it decides exposure, not access.
 - **`IActionResult` in the endpoint service's results (3).** It is the hook surface's public short circuit, and reading the status back is tested and correct.
 - **`[Pagination]` and `AllowRawQuery` reaching REST alone (4).** `[Pagination]` only narrows a bound the global limit still enforces, and raw queries stay off MCP on purpose.
 - **Background services reporting healthy (2).** The only subclass in Koan is the health scheduler, for which running is the truth.
@@ -180,9 +180,9 @@ A person grants a Connection's write permission when they first choose to publis
 | 2 | **A light acknowledgement:** reacting to a Post without writing one, for every participant; its verb goes into LANGUAGE first | Tangent | — |
 | 3 | **Your blocks come with you:** perhaps something each person turns on | Tangent | — |
 
-Below the line, in [PROPOSALS](PROPOSALS.md): a Tangent as a Bluesky feed, labeler signals for moderators, publishing the place's theme, reputation between places, and WebMCP for now.
+Below the line, in [PROPOSALS](PROPOSALS.md): a Tangent as a Bluesky feed, labeler signals for moderators, publishing the place's theme, reputation between places, and tools in the browser for now.
 
-## WebMCP
+## Tools in the browser
 
 A page registers tools with `document.modelContext`, and the agent in the reader's browser calls them in the open tab, in the reader's session. As of 1 November 2026 it is a draft report of a W3C incubation group, not on the standards track, and an origin trial in Chrome from version 149, off by default. Its entry point has already moved once. Its declarative form API is still being explored: the explainer says it is not in the specification, though Chrome's page describes annotating forms.
 
