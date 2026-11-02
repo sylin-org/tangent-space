@@ -18,6 +18,7 @@
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Atproto/Koan.Web.Auth.Connector.Atproto.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Web.Auth.Server/Koan.Web.Auth.Server.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Security.Trust/Koan.Security.Trust.csproj" />
+    <ProjectReference Include="$(KoanSourceRoot)/src/Koan.Mcp/Koan.Mcp.csproj" />
     <!-- Koan's sign-in simulator, only in the host the visual capture builds for itself into
          .local/capture-host with -p:TangentCaptureHost=true; no other build sets the property, so the server's
          own build and publish never carry it. -->

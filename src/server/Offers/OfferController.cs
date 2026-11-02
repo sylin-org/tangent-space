@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Security.Claims;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -8,6 +10,9 @@ using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent.Offers;
+
+/// <summary>What answering an Offer sends, as a form or one JSON object.</summary>
+public sealed record OfferInput([Description(Holds.Offer)] string? Offer = null);
 
 /// <summary>An Offer's two answers, each a form its decider posts from the door, carrying the Offer in
 /// <see cref="Field"/>, under <see cref="FormToken.Validate"/>. <b>Use it</b> uses the address (<see cref="PlaceAddress.Use"/>)
@@ -32,12 +37,14 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     /// <summary>The form that declines the Offer <paramref name="offer"/>, under <paramref name="baseAddress"/>.</summary>
     public static Form DeclineForm(string baseAddress, string offer, FormToken token) => Form.Posting(baseAddress + DeclinePath, token, Named(offer));
 
-    private static Form.Field Named(string offer) => new(Field, "The Offer's Id.", offer);
+    private static Form.Field Named(string offer) => new(Field, Holds.Offer, offer);
 
     [HttpPost(UsePath)]
-    public async Task<IActionResult> Use(CancellationToken ct)
+    [Tool(Name = "use_offer")]
+    [Description("Use what an open Offer proposes, for the one who decides it: an origin the place is reached at becomes its address, and whoever is signed in signs in again there.")]
+    public async Task<IActionResult> Use(OfferInput input, CancellationToken ct)
     {
-        var (refusal, personId, row) = await Posted(ct);
+        var (refusal, personId, row) = await Posted(input, ct);
         if (refusal is not null) return refusal;
         if (row!.State == OfferState.Accepted) return Landed();
         if (row.State != OfferState.Open || baseUrl.IsConfigured) return NoLongerOpen();
@@ -57,9 +64,11 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     }
 
     [HttpPost(DeclinePath)]
-    public async Task<IActionResult> Decline(CancellationToken ct)
+    [Tool(Name = "decline_offer")]
+    [Description("Decline an open Offer, for the one who decides it; the place never offers it again.")]
+    public async Task<IActionResult> Decline(OfferInput input, CancellationToken ct)
     {
-        var (refusal, personId, row) = await Posted(ct);
+        var (refusal, personId, row) = await Posted(input, ct);
         if (refusal is not null) return refusal;
         if (row!.State == OfferState.Declined) return Door();
         if (row.State != OfferState.Open) return NoLongerOpen();
@@ -81,7 +90,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
 
     /// <summary>What every answer asks first: a signed-in poster, the form's token, and the Offer its <see cref="Field"/>
     /// names, sent as a form or a JSON object, that exists for them, which only the place's operator has.</summary>
-    private async Task<(IActionResult? Refusal, string? PersonId, Offer? Row)> Posted(CancellationToken ct)
+    private async Task<(IActionResult? Refusal, string? PersonId, Offer? Row)> Posted(OfferInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
@@ -89,8 +98,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
         if (!await FormToken.Validate(HttpContext))
             return (new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was decided.").ToResult(), null, null);
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return (PostWrites.Unreadable(), null, null);
-        if (fields.GetValueOrDefault(Field) is not { Length: > 0 } offer || await Offer.Get(offer, ct) is not { } row
+        if (input.Offer is not { Length: > 0 } offer || await Offer.Get(offer, ct) is not { } row
             || (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.OperatorId != personId)
             return (Absent(), null, null);
         return (null, personId, row);

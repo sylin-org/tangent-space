@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -22,9 +24,10 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
     /// <summary>The most Tangents one page lists.</summary>
     public const int PageSize = 50;
 
-    [HttpGet(Route)]
-    [HttpHead(Route)]
-    public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
+    [AcceptVerbs("GET", "HEAD", Route = Route)]
+    [Tool(Name = "read_tangents")]
+    [Description("List the Tangents you may read, a page at a time.")]
+    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);

@@ -148,4 +148,4 @@ The visual loop runs on each, at 1440, 1024 and 390, in light and dark: door sig
 
 ## Not built
 
-Several Tangent Spaces per installation. Stewardship tiers. Moderation cases with testimony and escalation. Classification presets and inferred classification. A database chooser and a storage panel. Feed import. Atmospheres and ASCII scenes. An operations catalog, MCP server or model-facing envelope. A client router or store library. A table of credentials or of media. A shared worker for the stream.
+Several Tangent Spaces per installation. Stewardship tiers. Moderation cases with testimony and escalation. Classification presets and inferred classification. A database chooser and a storage panel. Feed import. Atmospheres and ASCII scenes. An operations catalog or model-facing envelope of its own: a tool is a route. A client router or store library. A table of credentials or of media. A shared worker for the stream.

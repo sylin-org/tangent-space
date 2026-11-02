@@ -167,7 +167,7 @@ public sealed class PostSearchTests
 
         Assert.Contains(log.Messages, message => message.Contains("covers 0 of 2 Posts; rebuilding it"));
         Assert.Contains(log.Messages, message => message.Contains("The Post index was rebuilt and covers 2 Posts"));
-        Assert.Equal([lantern.Id], (await FoundOnceSettled("lanterns")).Select(hit => hit.Post.Id));
+        Assert.Equal([lantern.Id], (await Found("lanterns")).Select(hit => hit.Post.Id));
         Assert.Equal([reply.Id], (await Found("annealing")).Select(hit => hit.Post.Id));
     }
 
@@ -206,25 +206,6 @@ public sealed class PostSearchTests
         await running.WaitAsync(TimeSpan.FromSeconds(30), Cancellation);
         Assert.Contains(log.Messages, message => message.Contains("The Post index was rebuilt and covers 1 Posts"));
         Assert.Equal([lantern.Id], (await Found("lanterns")).Select(hit => hit.Post.Id));
-    }
-
-    /// <summary>The first search of a host just started. Koan's services provision their tables in the background as a host
-    /// starts, and a connection's first use of a virtual table fails with SQLite's error 17 when another connection commits
-    /// a schema change meanwhile. Koan's search does not retry it, so a person's first search in those moments can answer
-    /// 500; this waits it out, and tolerates that error alone.</summary>
-    private static async Task<IReadOnlyList<PostSearch.Hit>> FoundOnceSettled(string text)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                return await Found(text);
-            }
-            catch (SqliteException schema) when (schema.SqliteErrorCode == 17 && attempt < 20)
-            {
-                await Task.Delay(100, Cancellation);
-            }
-        }
     }
 
     /// <summary>Leaves the copy's index holding none of its Posts, as an index that is not current does. The copy keeps

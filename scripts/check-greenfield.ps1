@@ -8,7 +8,6 @@ $ErrorActionPreference = 'Stop'
 
 $rule = 'greenfield'
 $patterns = @(
-    [pscustomobject]@{ Label = 'inbound MCP transport'; Pattern = '\bMcp[A-Z]\w*|\bTangentSpace\.Mcp\b' }
     [pscustomobject]@{ Label = 'browser WebMCP'; Pattern = '(?i:\bwebmcp\b)' }
     # A note states the rule, not the plan that produced it.
     [pscustomobject]@{ Label = 'plan code'; Pattern = '\((W\d-[A-D]\d?|C[1-9]|P\d)\)|\b(W\d-[A-D]\d?|C[1-9])\b' }

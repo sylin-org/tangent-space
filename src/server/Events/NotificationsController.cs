@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -31,7 +33,9 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
     public const string After = "after";
 
     [HttpGet(Notifications.Path)]
-    public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
+    [Tool(Name = "read_notifications")]
+    [Description("Read what is for you, newest first, a page at a time: replies to you, mentions of you, and what a role of yours decides.")]
+    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);

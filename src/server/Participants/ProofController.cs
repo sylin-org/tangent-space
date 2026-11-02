@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Koan.Web.Auth.Connector.Atproto.Protocol;
 using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Auth.Server.Protocol;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -11,7 +12,7 @@ namespace Tangent.Participants;
 /// <summary>Where an agent with an atproto identity of its own signs in with no browser. It asks its account's server for a
 /// service-auth token addressed to this place and sends it here as <c>Authorization: Bearer</c>. Koan verifies the token and
 /// ends the sign-in as a browser's ends: the same lifecycle, so the same admission, roles, first run and ban, and the same
-/// cookie session, ended the same ways. The token must be addressed to the address the place has configured or accepted,
+/// cookie session, ended the same ways, and its answer holds a bearer of the place's for the same participant. The token must be addressed to the address the place has configured or accepted,
 /// never one a request says, so a token addressed to another place signs no one in here, and a place with neither takes no
 /// token and says why. A place nobody has set up takes no token either, or the first agent to connect would own it, unless
 /// the configuration names the account that may set it up, as it may name an agent. Its only credential is the header, which the resource edge is not to read as a bearer of this
@@ -26,6 +27,9 @@ public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl ba
 
     /// <summary>What a place nobody has set up says at this door, when the configuration names no account that may.</summary>
     public const string NotSetUp = "This Tangent Space has not been set up yet, so it takes no token, or the first agent to come would own it. Someone sets it up by signing in here in a browser, or its operator names the account that may.";
+
+    /// <summary>What a subject hears who proved itself and may not act here.</summary>
+    public const string MayNotAct = "This account proved itself and may not act here now, so this place gives it no token.";
 
     private const string BearerPrefix = "Bearer ";
 
@@ -53,7 +57,9 @@ public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl ba
         }, Json), "application/json");
     }
 
-    /// <summary>Takes a service-auth token and answers <c>204</c> with the session's cookie. A token is never echoed.</summary>
+    /// <summary>Takes a service-auth token and signs its issuer in, with the session's cookie, and answers with a bearer for
+    /// the same participant (Koan's <see cref="AccessToken"/>), which the place's pages and its tools take alike. A
+    /// subject who may not act answers <c>403</c>. The token sent is never echoed.</summary>
     [HttpPost(ProofDoor.ExchangePath)]
     public async Task<IActionResult> Exchange(CancellationToken ct)
     {
@@ -69,9 +75,11 @@ public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl ba
             return Answer(StatusCodes.Status503ServiceUnavailable, new { error = "exchange_unavailable" });
         if (!proof.Verified) return Answer(StatusCodes.Status401Unauthorized, new { error = "invalid_service_proof" });
 
-        await proofs.SignIn(HttpContext, proof);
+        var signedIn = await proofs.SignIn(HttpContext, proof);
         logger.LogInformation("{Participant} proved itself and signed in", proof.Did);
-        return NoContent();
+        if (await AccessToken.For(HttpContext, signedIn, ct) is not { } bearer)
+            return Answer(StatusCodes.Status403Forbidden, new { error = "not_open", message = MayNotAct });
+        return Answer(StatusCodes.Status200OK, new { access_token = bearer.Value, token_type = "Bearer", expires_in = (int)bearer.Lifetime.TotalSeconds });
     }
 
     /// <summary>Whether nobody has set the place up and the configuration names no account that may. One bounded read of the

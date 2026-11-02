@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -9,10 +11,18 @@ using Tangent.Tangents;
 
 namespace Tangent.Posts;
 
+/// <summary>What taking a Post on a tangent sends, as a form or one JSON object: <see cref="Tangent"/> is the Tangent the
+/// new Topic starts in, so the route calls the Tangent it comes from something else.</summary>
+public sealed record TakeInput(
+    [Description(Holds.TakeTangent)] string? Tangent = null,
+    [Description(Holds.TakeTitle)] string? Title = null,
+    [Description(Holds.TakeBody)] string? Body = null,
+    [Description(Holds.Id)] string? Id = null);
+
 /// <summary>Where a Post is taken on a tangent: <c>/t/{tangent}/{topic}/{post}/tangent</c>, beside its edit, named by the
 /// verb's last word. Its <c>GET</c> is the form, one resource both ways (<see cref="TakeOnATangentPage"/>), with a TID
-/// minted into it. Its <c>POST</c> takes <c>tangent</c>, <c>title</c>, <c>body</c> and <c>id</c>, as a form or a JSON
-/// object, and sends <see cref="StartTopic"/> with the Post as its origin: a form is sent on to the new Topic's address,
+/// minted into it. Its <c>POST</c> takes <see cref="TakeInput"/> and sends <see cref="StartTopic"/> with the Post as its
+/// origin: a form is sent on to the new Topic's address,
 /// a JSON request reads its root (<c>201</c>); a refusal reads the form again with the reason inline, or a problem with
 /// the gate; the same id with other words is a conflict. Both resolve the address as the Topic page does
 /// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Post the reader may not view and one no row
@@ -24,6 +34,9 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     public const string Segment = "tangent";
 
     public const string Route = "/t/{tangent}/{topic}/{post}/" + Segment;
+
+    /// <summary>The same address as a write takes it, whose <see cref="TakeInput.Tangent"/> names where the Topic starts.</summary>
+    private const string TakenFrom = "/t/{from}/{topic}/{post}/" + Segment;
 
     /// <summary>The field that names the Tangent chosen, by slug.</summary>
     public const string TangentField = "tangent";
@@ -37,13 +50,12 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     /// <summary>The form that takes a Post on a tangent at <paramref name="action"/>: a TID minted for the new Topic, the
     /// Tangent it starts in, <paramref name="chosen"/> as the page chose it, its title, and the taker's own words.</summary>
     public static Form TakeForm(string action, string? chosen, FormToken token) => Form.Posting(action, token,
-        Form.Minted(PostWrites.IdField, "Topic", Tid.Mint(DateTimeOffset.UtcNow)),
+        Form.Minted(PostWrites.IdField, Tid.Mint(DateTimeOffset.UtcNow)),
         new Form.Field(TangentField,
-            "The slug of the Tangent the new Topic starts in, one of the Tangents this form lists on any of its pages; its value is the one the page chose.",
+            Holds.TakeTangent + " One of the Tangents this form lists on any of its pages; its value is the one the page chose.",
             chosen),
-        new Form.Field(PostWrites.TitleField, PostWrites.TitleHolds("The new Topic's title")),
-        new Form.Field(PostWrites.BodyField,
-            PostWrites.BodyHolds("The taker's own words above the Post taken on a tangent") + " It may be empty."));
+        new Form.Field(PostWrites.TitleField, Holds.TakeTitle),
+        new Form.Field(PostWrites.BodyField, Holds.TakeBody));
 
     [HttpGet(Route)]
     public async Task<IActionResult> Get([FromRoute] string tangent, [FromRoute] string topic, [FromRoute] string post,
@@ -60,27 +72,31 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
         return Ok(await Page(found, personId, null, cursor, ct));
     }
 
-    [HttpPost(Route)]
+    [HttpPost(TakenFrom)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public async Task<IActionResult> Take([FromRoute] string tangent, [FromRoute] string topic, [FromRoute] string post, CancellationToken ct)
+    [Tool(Name = "take_on_a_tangent")]
+    [Description("Make a Post the start of a new Topic in a Tangent you choose, linked to where it came from.")]
+    public async Task<IActionResult> Take([FromRoute, Description(Holds.TakeFrom)] string from, [FromRoute, Description(Holds.Topic)] string topic,
+        [FromRoute, Description(Holds.Post)] string post, TakeInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, from, topic, post, ct);
         if (found is null) return unseen!;
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
-        var chosen = fields.GetValueOrDefault(TangentField) ?? "";
+        var chosen = input.Tangent ?? "";
         // The chosen Tangent's row before its overwrites; one no row has is refused as one absent to the reader is.
         if ((Slug.IsValid(chosen) ? await Tangents.Tangent.Get(chosen, ct) : null) is not { } into)
-            return await Refused(found, personId, fields, StartTopic.NoTangent, ct);
+            return await Refused(found, personId, input, StartTopic.NoTangent, ct);
         var mayStart = (await Capabilities.Load(personId, into.Id, null, ct)).Holds(Bit.Topic);
+        var title = input.Title ?? "";
+        var body = await PostWrites.Body(input.Body, mayStart);
         var outcome = await new StartTopic(
-            fields.GetValueOrDefault(PostWrites.IdField) ?? "",
+            await PostWrites.IdFor(HttpContext, input.Id, personId, body, into.Id, title, found.Post!.Id),
             into.Id,
-            fields.GetValueOrDefault(PostWrites.TitleField) ?? "",
-            await PostWrites.Body(fields, mayStart),
+            title,
+            body,
             personId ?? "",
             OriginId: found.Post!.Id).Send();
         switch (outcome)
@@ -89,10 +105,10 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
                 return await PostWrites.Written(HttpContext, root, root, PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, root.Id),
                     personId, created: true, ct);
             case Outcome<Post>.Refused { Reason: var reason } when reason != StartTopic.NoOrigin && reason.Kind != ReasonKind.Conflict:
-                return await Refused(found, personId, fields, reason, ct);
+                return await Refused(found, personId, input, reason, ct);
             case Outcome<Post>.Refused { Reason: { Kind: ReasonKind.Conflict } reason }:
                 if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
-                return await Again(found, personId, fields, StatusCodes.Status409Conflict, keepId: false, page => page with
+                return await Again(found, personId, input, StatusCodes.Status409Conflict, keepId: false, page => page with
                 {
                     Failure = "This form was already sent with other words, so nothing was posted. Send it again to post these words as well."
                 }, ct);
@@ -104,17 +120,16 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     /// <summary>A refusal: for a JSON request, the problem its reason answers as — a Tangent chosen that the reader may
     /// not start a Topic in, said without saying whether it exists; for a form, the form again with the reason where it
     /// belongs.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
-        CancellationToken ct)
+    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, TakeInput input, Reason reason, CancellationToken ct)
     {
         if (reason == StartTopic.NoTangent)
         {
             if (PostWrites.WantsJson(Request)) return new Problem(StatusCodes.Status400BadRequest, "Not written", reason.Text).ToResult();
-            return await Again(found, personId, fields, StatusCodes.Status400BadRequest, keepId: true, page => page with { ChoiceFailure = ChooseListed }, ct);
+            return await Again(found, personId, input, StatusCodes.Status400BadRequest, keepId: true, page => page with { ChoiceFailure = ChooseListed }, ct);
         }
 
         if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
-        return await Again(found, personId, fields, PostWrites.Status(reason), keepId: true, page => PostWrites.Concerning(reason) switch
+        return await Again(found, personId, input, PostWrites.Status(reason), keepId: true, page => PostWrites.Concerning(reason) switch
         {
             PostWrites.About.Title => page with { TitleFailure = reason.Text },
             PostWrites.About.Body => page with { BodyFailure = reason.Text },
@@ -125,17 +140,13 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
 
     /// <summary>The form again, read afresh, keeping the choice and the words that were sent, and the Id when it is a TID
     /// and <paramref name="keepId"/>; otherwise a new one is minted, so sending again starts a Topic of its own.</summary>
-    private async Task<IActionResult> Again(PostWrites.Located sent, string? personId, IReadOnlyDictionary<string, string> fields, int status,
+    private async Task<IActionResult> Again(PostWrites.Located sent, string? personId, TakeInput input, int status,
         bool keepId, Func<TakeOnATangentPage, TakeOnATangentPage> refusal, CancellationToken ct)
     {
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
         if (found is null) return unseen!;
-        var page = await Page(found, personId, fields.GetValueOrDefault(TangentField), null, ct) with
-        {
-            Title = fields.GetValueOrDefault(PostWrites.TitleField),
-            Body = fields.GetValueOrDefault(PostWrites.BodyField)
-        };
-        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Take = page.Take?.With(PostWrites.IdField, id) };
+        var page = await Page(found, personId, input.Tangent, null, ct) with { Title = input.Title, Body = input.Body };
+        if (keepId && Tid.IsValid(input.Id)) page = page with { Take = page.Take?.With(PostWrites.IdField, input.Id) };
         return new ObjectResult(refusal(page)) { StatusCode = status };
     }
 

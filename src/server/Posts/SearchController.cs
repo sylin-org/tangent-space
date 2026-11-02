@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Globalization;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -29,7 +31,10 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
     public const int PageSize = 20;
 
     [HttpGet(SearchPage.Path)]
-    public async Task<IActionResult> Get([FromQuery(Name = Words)] string? q, [FromQuery(Name = Number)] string? page, CancellationToken ct)
+    [Tool(Name = "search")]
+    [Description("Find the Posts you may read that hold these words, best first, a page at a time.")]
+    public async Task<IActionResult> Get([FromQuery(Name = Words), Description(Holds.Words)] string? q, [FromQuery(Name = Number), Description(Holds.Number)] string? page,
+        CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);

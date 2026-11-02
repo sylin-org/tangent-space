@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -7,6 +9,24 @@ using Tangent.Posts;
 using Tangent.Render;
 
 namespace Tangent.Space;
+
+/// <summary>What changing the place's name, description and audience sends, as a form or one JSON object.</summary>
+public sealed record ChangeSpaceInput(
+    [Description(Holds.PlaceName)] string? Name = null,
+    [Description(Holds.PlaceDescription)] string? Description = null,
+    [Description(Holds.PlaceAudience)] string? Audience = null);
+
+/// <summary>What setting how a newcomer arrives sends, as a form or one JSON object.</summary>
+public sealed record ChangeAdmissionInput([Description(Holds.Admission)] string? Admission = null);
+
+/// <summary>What setting the place's accent and slots sends, as a form or one JSON object.</summary>
+public sealed record ChangeAppearanceInput(
+    [Description(Holds.Accent)] string? Accent = null,
+    [Description(Holds.HeadSlot)] string? Head = null,
+    [Description(Holds.MastheadSlot)] string? Masthead = null,
+    [Description(Holds.DoorIntroSlot)] string? DoorIntro = null,
+    [Description(Holds.ArticleHeaderSlot)] string? ArticleHeader = null,
+    [Description(Holds.FooterSlot)] string? Footer = null);
 
 /// <summary>The place's settings, in sections shown one at a time, each listed in the rail for whoever may use it
 /// (<see cref="Sections"/>). <c>/settings</c> is general, which names and describes the place; <c>/settings/admission</c> sets how a newcomer
@@ -40,23 +60,22 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     /// <summary>The form that changes the place's name, description and audience, under <paramref name="baseAddress"/>.</summary>
     private static Form GeneralForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + Path, token,
-        new Form.Field(NameField, $"The place's name, 1 to {TangentSpace.NameLimit} characters on one line; left out, it stays."),
-        new Form.Field(DescriptionField, $"The line under its name on the door, at most {TangentSpace.DescriptionLimit} characters; left out, it stays."),
-        new Form.Field(AudienceField, "public, where anyone reads the place, or private, where its participants alone do and a visitor finds the sign-in; left out, it stays."));
+        new Form.Field(NameField, Holds.PlaceName),
+        new Form.Field(DescriptionField, Holds.PlaceDescription),
+        new Form.Field(AudienceField, Holds.PlaceAudience));
 
     /// <summary>The form that sets how a newcomer arrives, under <paramref name="baseAddress"/>.</summary>
     private static Form AdmissionForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + AdmissionPath, token,
-        new Form.Field(AdmissionField,
-            "join, where a newcomer who signs in is admitted at once, or apply, where they wait to be admitted; everyone already here stays as they are."));
+        new Form.Field(AdmissionField, Holds.Admission));
 
     /// <summary>The form that sets the place's accent and its slots, under <paramref name="baseAddress"/>.</summary>
     private static Form AppearanceForm(string baseAddress, FormToken token) => Form.Posting(baseAddress + AppearancePath, token,
-        new Form.Field(AccentField, "gold, jade, iris or copper: the colour links, buttons and what is new take on every page, for every reader; left out, it stays."),
-        new Form.Field(HeadField, $"HTML for every page's head, sanitized to meta and icon links, at most {Slots.HeadLimit} characters; left out, it stays."),
-        new Form.Field(MastheadField, $"HTML beside the place's name on every page, sanitized to a line of links, images and words, at most {Slots.MastheadLimit} characters; left out, it stays."),
-        new Form.Field(DoorIntroField, $"HTML under the door's head, sanitized to prose, at most {Slots.DoorIntroLimit} characters; left out, it stays."),
-        new Form.Field(ArticleHeaderField, $"HTML above every article's title, sanitized to prose, at most {Slots.ArticleHeaderLimit} characters; left out, it stays."),
-        new Form.Field(FooterField, $"HTML in every page's footer, sanitized to a line of links, images and words, at most {Slots.FooterLimit} characters; left out, it stays."));
+        new Form.Field(AccentField, Holds.Accent),
+        new Form.Field(HeadField, Holds.HeadSlot),
+        new Form.Field(MastheadField, Holds.MastheadSlot),
+        new Form.Field(DoorIntroField, Holds.DoorIntroSlot),
+        new Form.Field(ArticleHeaderField, Holds.ArticleHeaderSlot),
+        new Form.Field(FooterField, Holds.FooterSlot));
 
     /// <summary>The section that names and describes the place.</summary>
     public const string General = "General";
@@ -134,6 +153,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     public static string Word(Admission admission) => admission.ToString().ToLowerInvariant();
 
     [HttpGet(Path)]
+    [Tool(Name = "read_settings")]
+    [Description("Read the place's name, description and audience, with the sections of its settings you may use.")]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -145,36 +166,38 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     [HttpPost(Path)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public async Task<IActionResult> Change(CancellationToken ct)
+    [Tool(Name = "change_settings")]
+    [Description("Change the place's name, description or audience, for whoever holds ManageSpace.")]
+    public async Task<IActionResult> Change(ChangeSpaceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         Audience? audience = null;
-        if (fields.GetValueOrDefault(AudienceField) is { } sent)
+        if (input.Audience is { } sent)
         {
-            if (!Audiences.Contains(sent, StringComparer.Ordinal)) return await Refused(personId, fields, TangentSpace.AudienceRule, ct);
+            if (!Audiences.Contains(sent, StringComparer.Ordinal)) return await Refused(personId, input, TangentSpace.AudienceRule, ct);
             audience = Enum.Parse<Audience>(sent, ignoreCase: true);
         }
 
-        var outcome = await new ChangeTangentSpace(personId ?? "", fields.GetValueOrDefault(NameField),
-            fields.GetValueOrDefault(DescriptionField), Audience: audience).Send();
+        var outcome = await new ChangeTangentSpace(personId ?? "", input.Name, input.Description, Audience: audience).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
                 return await Written(space, personId, BaseAddress() + "/", ct);
             case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
-                return await Refused(personId, fields, reason, ct);
+                return await Refused(personId, input, reason, ct);
             default:
                 return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     [HttpGet(AdmissionPath)]
+    [Tool(Name = "read_admission")]
+    [Description("Read how a newcomer arrives here.")]
     public async Task<IActionResult> GetAdmission(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -186,17 +209,18 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     [HttpPost(AdmissionPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public async Task<IActionResult> ChangeAdmission(CancellationToken ct)
+    [Tool(Name = "change_admission")]
+    [Description("Set how a newcomer arrives, for whoever holds ManageSpace.")]
+    public async Task<IActionResult> ChangeAdmission(ChangeAdmissionInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         Admission? admission = null;
-        var sent = fields.GetValueOrDefault(AdmissionField);
+        var sent = input.Admission;
         if (sent is not null)
         {
             if (!Admissions.Contains(sent, StringComparer.Ordinal)) return await AdmissionRefused(personId, sent, TangentSpace.AdmissionRule, ct);
@@ -248,6 +272,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     }
 
     [HttpGet(AppearancePath)]
+    [Tool(Name = "read_appearance")]
+    [Description("Read the place's accent and slots.")]
     public async Task<IActionResult> GetAppearance(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -259,34 +285,31 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     [HttpPost(AppearancePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public async Task<IActionResult> ChangeAppearance(CancellationToken ct)
+    [Tool(Name = "change_appearance")]
+    [Description("Set the place's accent and slots, for whoever holds ManageSpace.")]
+    public async Task<IActionResult> ChangeAppearance(ChangeAppearanceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         Accent? accent = null;
-        if (fields.GetValueOrDefault(AccentField) is { } sent)
+        if (input.Accent is { } sent)
         {
-            if (!Appearance.Accents.Contains(sent, StringComparer.Ordinal)) return await AppearanceRefused(personId, fields, TangentSpace.AccentRule, ct);
+            if (!Appearance.Accents.Contains(sent, StringComparer.Ordinal)) return await AppearanceRefused(personId, input, TangentSpace.AccentRule, ct);
             accent = Enum.Parse<Accent>(sent, ignoreCase: true);
         }
 
-        var outcome = await new ChangeTangentSpace(personId ?? "", Accent: accent,
-            Head: fields.GetValueOrDefault(HeadField),
-            Masthead: fields.GetValueOrDefault(MastheadField),
-            DoorIntro: fields.GetValueOrDefault(DoorIntroField),
-            ArticleHeader: fields.GetValueOrDefault(ArticleHeaderField),
-            Footer: fields.GetValueOrDefault(FooterField)).Send();
+        var outcome = await new ChangeTangentSpace(personId ?? "", Accent: accent, Head: input.Head, Masthead: input.Masthead, DoorIntro: input.DoorIntro,
+            ArticleHeader: input.ArticleHeader, Footer: input.Footer).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
                 return await Written(space, personId, BaseAddress() + AppearancePath, ct);
             case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
-                return await AppearanceRefused(personId, fields, reason, ct);
+                return await AppearanceRefused(personId, input, reason, ct);
             default:
                 return PostWrites.Answer(HttpContext, outcome);
         }
@@ -295,23 +318,23 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     /// <summary>A refused appearance: for a JSON request, the problem its reason answers as; for a form, the form again, read
     /// afresh, with the accent sent chosen where it is one of the choices, the slots as they were sent, and the reason above
     /// the form.</summary>
-    private async Task<IActionResult> AppearanceRefused(string? personId, IReadOnlyDictionary<string, string> fields, Reason reason, CancellationToken ct)
+    private async Task<IActionResult> AppearanceRefused(string? personId, ChangeAppearanceInput input, Reason reason, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await AppearancePage(place, personId, ct);
-        if (fields.GetValueOrDefault(AccentField) is { } sent && Appearance.Accents.Contains(sent, StringComparer.Ordinal)) page = page with { Accent = sent };
+        if (input.Accent is { } sent && Appearance.Accents.Contains(sent, StringComparer.Ordinal)) page = page with { Accent = sent };
         page = page with
         {
             Slots = page.Slots with
             {
-                Head = fields.GetValueOrDefault(HeadField) ?? page.Slots.Head,
-                Masthead = fields.GetValueOrDefault(MastheadField) ?? page.Slots.Masthead,
-                DoorIntro = fields.GetValueOrDefault(DoorIntroField) ?? page.Slots.DoorIntro,
-                ArticleHeader = fields.GetValueOrDefault(ArticleHeaderField) ?? page.Slots.ArticleHeader,
-                Footer = fields.GetValueOrDefault(FooterField) ?? page.Slots.Footer
+                Head = input.Head ?? page.Slots.Head,
+                Masthead = input.Masthead ?? page.Slots.Masthead,
+                DoorIntro = input.DoorIntro ?? page.Slots.DoorIntro,
+                ArticleHeader = input.ArticleHeader ?? page.Slots.ArticleHeader,
+                Footer = input.Footer ?? page.Slots.Footer
             }
         };
         page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : page with { Failure = reason.Text };
@@ -358,7 +381,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again, read afresh,
     /// keeping what was sent, with the reason where it belongs.</summary>
-    private async Task<IActionResult> Refused(string? personId, IReadOnlyDictionary<string, string> fields, Reason reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(string? personId, ChangeSpaceInput input, Reason reason, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
@@ -367,9 +390,9 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         var page = await Page(place, personId, ct);
         page = page with
         {
-            Name = fields.GetValueOrDefault(NameField) ?? page.Name,
-            Description = fields.GetValueOrDefault(DescriptionField) ?? page.Description,
-            Audience = fields.GetValueOrDefault(AudienceField) is { } audience && Audiences.Contains(audience, StringComparer.Ordinal) ? audience : page.Audience
+            Name = input.Name ?? page.Name,
+            Description = input.Description ?? page.Description,
+            Audience = input.Audience is { } audience && Audiences.Contains(audience, StringComparer.Ordinal) ? audience : page.Audience
         };
         page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : reason.Text switch
         {

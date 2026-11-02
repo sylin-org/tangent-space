@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -6,6 +8,10 @@ using Tangent.Access;
 using Tangent.Render;
 
 namespace Tangent.Posts;
+
+/// <summary>What bringing an image in sends as one JSON object; a multipart form carries the image as a file of the same
+/// name.</summary>
+public sealed record BringInput([Description(Holds.BroughtImage)] string? File = null);
 
 /// <summary>Where an image comes into a Tangent for someone writing there: <c>POST /t/{tangent}/media</c>, for whoever
 /// may start a Topic or reply there. It takes <c>file</c>, the image as a file of a multipart form or its bytes in
@@ -28,26 +34,19 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
     [HttpPost("/t/{tangent}/" + Segment)]
     [RequestSizeLimit(RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = RequestLimit, ValueLengthLimit = RequestLimit)]
-    public async Task<IActionResult> Bring(string tangent, CancellationToken ct)
+    [Tool(Name = "bring_in")]
+    [Description("Bring an image into a Tangent, for a Post to show or an article to lead with.")]
+    public async Task<IActionResult> Bring([FromRoute, Description(Holds.Tangent)] string tangent, BringInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        byte[]? sent;
-        try
-        {
-            if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-            var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-            if (found is null) return unseen!;
-            var here = found.Capabilities;
-            if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return PostWrites.Refused(HttpContext, here.Gate(Bit.Topic) ?? Capabilities.SignIn);
-            sent = await Sent(ct);
-        }
-        catch (BadHttpRequestException)
-        {
-            return NotKept(Media.TooLarge);
-        }
+        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
+        if (found is null) return unseen!;
+        var here = found.Capabilities;
+        if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return PostWrites.Refused(HttpContext, here.Gate(Bit.Topic) ?? Capabilities.SignIn);
 
-        if (sent is null) return NotKept(NoFile);
+        if (await Sent(input, ct) is not { } sent) return NotKept(NoFile);
         Media media;
         try
         {
@@ -67,7 +66,7 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
         });
     }
 
-    private async Task<byte[]?> Sent(CancellationToken ct)
+    private async Task<byte[]?> Sent(BringInput input, CancellationToken ct)
     {
         if (Request.HasFormContentType)
         {
@@ -78,7 +77,7 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
             return bytes.ToArray();
         }
 
-        if (await PostWrites.Fields(Request, ct) is not { } fields || fields.GetValueOrDefault(FileField) is not { Length: > 0 } text) return null;
+        if (input.File is not { Length: > 0 } text) return null;
         try
         {
             return Convert.FromBase64String(text);

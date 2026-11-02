@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Participants;
@@ -8,6 +10,22 @@ using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent.Access;
+
+/// <summary>What creating a role sends, as a form or one JSON object: <see cref="Permissions"/> as a form's checkboxes
+/// send them, one to a value, or in one value separated by spaces.</summary>
+public sealed record CreateRoleInput(
+    [Description(Holds.RoleName)] string? Name = null,
+    [Description(Holds.RolePermissions)] string[]? Permissions = null);
+
+/// <summary>What changing a role sends, as a form or one JSON object.</summary>
+public sealed record ChangeRoleInput(
+    [Description(Holds.ChangedRole)] string? Role = null,
+    [Description(Holds.ChangedRoleName)] string? Name = null,
+    [Description(Holds.RolePermissions)] string[]? Permissions = null,
+    [Description(Holds.RoleMove)] string? Move = null);
+
+/// <summary>What deleting a role sends, as a form or one JSON object.</summary>
+public sealed record DeleteRoleInput([Description(Holds.DeletedRole)] string? Role = null);
 
 /// <summary>The place's roles, a section of its settings at <c>/settings/roles</c>, for whoever holds
 /// <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one page of the roles in Koan's order (<see cref="RolesPage"/>), the
@@ -50,7 +68,9 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     public static string Word(RoleMove move) => move.ToString().ToLowerInvariant();
 
     [HttpGet(Path)]
-    public async Task<IActionResult> Get([FromQuery(Name = PageQuery)] int? page, CancellationToken ct)
+    [Tool(Name = "read_roles")]
+    [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles.")]
+    public async Task<IActionResult> Get([FromQuery(Name = PageQuery), Description(Holds.Number)] int? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
@@ -62,53 +82,59 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     [HttpPost(Path)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> Create(CancellationToken ct) => Write(fields =>
-        Granted(fields, out var bits) is { } refused
+    [Tool(Name = "create_role")]
+    [Description("Create a role by naming it and choosing what it grants, for whoever holds ManageRoles.")]
+    public Task<IActionResult> Create(CreateRoleInput input, CancellationToken ct) => Write(input.Name, input.Permissions,
+        Granted(input.Permissions, out var bits) is { } refused
             ? refused
-            : new CreateRole(PostWrites.PersonId(User) ?? "", fields.GetValueOrDefault(NameField) ?? "", bits ?? Bit.None), created: true, ct);
+            : new CreateRole(PostWrites.PersonId(User) ?? "", input.Name ?? "", bits ?? Bit.None), created: true, ct);
 
     [HttpPost(ChangePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> Change(CancellationToken ct) => Write(fields =>
+    [Tool(Name = "change_role")]
+    [Description("Rename a role, change what it grants or move it one place, for whoever holds ManageRoles and manages the role.")]
+    public Task<IActionResult> Change(ChangeRoleInput input, CancellationToken ct) => Write(input.Name, input.Permissions, Revising(input), created: false, ct);
+
+    private object Revising(ChangeRoleInput input)
     {
-        if (Granted(fields, out var bits) is { } refused) return refused;
-        var move = Tangents.TangentWrites.Choice(fields, MoveField, Moves, out var moveValid);
+        if (Granted(input.Permissions, out var bits) is { } refused) return refused;
+        var move = Tangents.TangentWrites.Choice(input.Move, Moves, out var moveValid);
         if (!moveValid) return MoveRule;
-        if (Roles.KeyOf(fields.GetValueOrDefault(RoleField)) is not { } key) return RoleSettings.NoRole;
-        return new ReviseRole(PostWrites.PersonId(User) ?? "", key, fields.GetValueOrDefault(NameField), bits,
-            move is { } chosen ? Enum.GetValues<RoleMove>()[chosen] : null);
-    }, created: false, ct);
+        if (Roles.KeyOf(input.Role) is not { } key) return RoleSettings.NoRole;
+        return new ReviseRole(PostWrites.PersonId(User) ?? "", key, input.Name, bits, move is { } chosen ? Enum.GetValues<RoleMove>()[chosen] : null);
+    }
 
     [HttpPost(DeletePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> Delete(CancellationToken ct) => Write(fields =>
-        Roles.KeyOf(fields.GetValueOrDefault(RoleField)) is { } key
+    [Tool(Name = "delete_role")]
+    [Description("Delete a role the place created, for whoever holds ManageRoles, manages it and holds what it grants.")]
+    public Task<IActionResult> Delete(DeleteRoleInput input, CancellationToken ct) => Write(null, null,
+        Roles.KeyOf(input.Role) is { } key
             ? new DeleteRole(PostWrites.PersonId(User) ?? "", key)
             : RoleSettings.NoRole, created: false, ct);
 
-    /// <summary>The bits <c>permissions</c> names, in <paramref name="bits"/>, null where it was not sent; the refusal
+    /// <summary>The bits <paramref name="sent"/> names, in <paramref name="bits"/>, null where nothing was sent; the refusal
     /// where a word names no bit, null otherwise.</summary>
-    private static string? Granted(IReadOnlyDictionary<string, string> fields, out Bit? bits)
+    private static string? Granted(string[]? sent, out Bit? bits)
     {
         bits = null;
-        if (fields.GetValueOrDefault(PermissionsField) is not { } sent) return null;
-        bits = RoleSettings.Parse(sent);
+        if (sent is null) return null;
+        bits = RoleSettings.Parse(string.Join(' ', sent.Where(word => !string.IsNullOrEmpty(word))));
         return bits is null ? RoleSettings.PermissionsRule : null;
     }
 
-    /// <summary>One change: the form's token, the place, the fields; the command <paramref name="command"/> builds from
-    /// them, or the refusal it names for what was sent; then the command's outcome.</summary>
-    private async Task<IActionResult> Write(Func<IReadOnlyDictionary<string, string>, object> command, bool created, CancellationToken ct)
+    /// <summary>One change: the form's token, the place; then <paramref name="built"/>, the command to send or the refusal
+    /// of what was sent, whose name and permissions a form keeps; then the command's outcome.</summary>
+    private async Task<IActionResult> Write(string? name, string[]? permissions, object built, bool created, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
-        var built = command(fields);
-        if (built is string unsent) return await Refused(personId, fields, unsent, created, ct);
+        if (built is string or Reason)
+            return await Refused(personId, name, permissions, built is Reason reasoned ? reasoned : (Reason)(string)built, created, ct);
         var sent = (ICommand<Role>)built;
         var outcome = await sent.Send();
         switch (outcome)
@@ -130,7 +156,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
                     ContentTypes = { "application/json" }
                 };
             case Outcome<Role>.Refused { Reason: var reason }:
-                return await Refused(personId, fields, reason, created, ct);
+                return await Refused(personId, name, permissions, reason, created, ct);
             default:
                 return PostWrites.Answer(HttpContext, outcome);
         }
@@ -138,8 +164,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
     /// with the reason above the list, keeping a new role's name and permissions as they were sent.</summary>
-    private async Task<IActionResult> Refused(string? personId, IReadOnlyDictionary<string, string> fields, Reason reason, bool created,
-        CancellationToken ct)
+    private async Task<IActionResult> Refused(string? personId, string? name, string[]? permissions, Reason reason, bool created, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
@@ -153,8 +178,8 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
             {
                 page = page with
                 {
-                    Name = fields.GetValueOrDefault(NameField) ?? "",
-                    Chosen = (fields.GetValueOrDefault(PermissionsField) ?? "").Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
+                    Name = name ?? "",
+                    Chosen = (permissions ?? []).OfType<string>().SelectMany(word => word.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)).ToList()
                 };
             }
         }
@@ -207,18 +232,17 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     /// <summary>The forms that shape the roles, under <paramref name="baseAddress"/>.</summary>
     private static RoleForms Forms(string baseAddress, FormToken token)
     {
-        var permissions = "The bits it grants, by name, separated by spaces, among those whose held is true; sent empty, none.";
         return new RoleForms(
             Form.Posting(baseAddress + Path, token,
-                new Form.Field(NameField, $"The role's name, 1 to {RoleSettings.NameLimit} characters; its word derives from it and never changes."),
-                new Form.Field(PermissionsField, permissions + " Left out, none.")),
+                new Form.Field(NameField, Holds.RoleName),
+                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, none.")),
             Form.Posting(baseAddress + ChangePath, token,
-                new Form.Field(RoleField, "The word of a role listed here with change in its can."),
-                new Form.Field(NameField, $"Its name, 1 to {RoleSettings.NameLimit} characters; left out, it stays."),
-                new Form.Field(PermissionsField, permissions + " Left out, they stay."),
-                new Form.Field(MoveField, "higher or lower, one place, where its can holds that word; left out, it stays.")),
+                new Form.Field(RoleField, Holds.ChangedRole),
+                new Form.Field(NameField, Holds.ChangedRoleName),
+                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, they stay."),
+                new Form.Field(MoveField, Holds.RoleMove)),
             Form.Posting(baseAddress + DeletePath, token,
-                new Form.Field(RoleField, "The word of a role listed here with delete in its can.")));
+                new Form.Field(RoleField, Holds.DeletedRole)));
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

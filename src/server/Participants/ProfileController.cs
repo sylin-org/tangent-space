@@ -1,6 +1,8 @@
+using System.ComponentModel;
 using System.Globalization;
 using Koan.Data.Abstractions;
 using Koan.Identity.Roles;
+using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Auth.Server.Options;
 using Koan.Web.Hosting;
@@ -41,10 +43,11 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
 
     public const string RevokeSegment = "revoke";
 
-    [HttpGet(ProfilePage.Segment + "{handle}")]
-    [HttpHead(ProfilePage.Segment + "{handle}")]
-    public async Task<IActionResult> Get(string handle, [FromQuery(Name = Before)] string? before, [FromQuery(Name = AgentsPage)] string? agents,
-        CancellationToken ct)
+    [AcceptVerbs("GET", "HEAD", Route = ProfilePage.Segment + "{handle}")]
+    [Tool(Name = "read_profile")]
+    [Description("Read a participant's profile: who they are, their kind, their roles here and their recent Posts in the Tangents you may read.")]
+    public async Task<IActionResult> Get([Description(Holds.Handle)] string handle, [FromQuery(Name = Before), Description(Holds.PostsBefore)] string? before,
+        [FromQuery(Name = AgentsPage), Description(Holds.AgentsPage)] string? agents, CancellationToken ct)
     {
         var personId = PostWrites.PersonId(User);
         var rows = await Capabilities.LoadRows(personId, null, ct);

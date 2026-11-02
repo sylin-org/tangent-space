@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -7,6 +9,14 @@ using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent.Tangents;
+
+/// <summary>What changing a Tangent's settings sends, as a form or one JSON object.</summary>
+public sealed record ChangeTangentInput(
+    [Description(Holds.ChangedTangentName)] string? Name = null,
+    [Description(Holds.ChangedTangentDescription)] string? Description = null,
+    [Description(Holds.ChangedTangentKind)] string? Kind = null,
+    [Description(Holds.ChangedTangentAudience)] string? Audience = null,
+    [Description(Holds.TangentMove)] string? Move = null);
 
 /// <summary>A Tangent's settings: <c>/t/{tangent}/settings</c>. Its <c>GET</c> is the form, one resource both ways
 /// (<see cref="TangentSettingsPage"/>). Its <c>POST</c> takes <c>name</c>, <c>description</c>, <c>kind</c>,
@@ -22,7 +32,9 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
 
     [HttpGet(Route)]
-    public async Task<IActionResult> Get(string tangent, CancellationToken ct)
+    [Tool(Name = "read_tangent_settings")]
+    [Description("Read a Tangent's name, description, default kind and audience, for whoever may change them.")]
+    public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
@@ -33,27 +45,28 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public async Task<IActionResult> Change(string tangent, CancellationToken ct)
+    [Tool(Name = "change_tangent")]
+    [Description("Change a Tangent's name, description, default kind or audience, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace.")]
+    public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
-        var kind = TangentWrites.Choice(fields, TangentWrites.KindField, TangentWrites.Kinds, out var kindValid);
-        if (!kindValid) return await Refused(found, personId, fields, TangentWrites.KindRule, ct);
-        var audience = TangentWrites.Choice(fields, TangentWrites.AudienceField, TangentWrites.Audiences, out var audienceValid);
-        if (!audienceValid) return await Refused(found, personId, fields, TangentWrites.AudienceRule, ct);
-        var move = TangentWrites.Choice(fields, TangentWrites.MoveField, TangentWrites.Moves, out var moveValid);
-        if (!moveValid) return await Refused(found, personId, fields, TangentWrites.MoveRule, ct);
+        var kind = TangentWrites.Choice(input.Kind, TangentWrites.Kinds, out var kindValid);
+        if (!kindValid) return await Refused(found, personId, input, TangentWrites.KindRule, ct);
+        var audience = TangentWrites.Choice(input.Audience, TangentWrites.Audiences, out var audienceValid);
+        if (!audienceValid) return await Refused(found, personId, input, TangentWrites.AudienceRule, ct);
+        var move = TangentWrites.Choice(input.Move, TangentWrites.Moves, out var moveValid);
+        if (!moveValid) return await Refused(found, personId, input, TangentWrites.MoveRule, ct);
 
         var outcome = await new ChangeTangent(
             found.Tangent.Id,
             personId ?? "",
-            fields.GetValueOrDefault(TangentWrites.NameField),
-            fields.GetValueOrDefault(TangentWrites.DescriptionField),
+            input.Name,
+            input.Description,
             kind is { } chosenKind ? Enum.GetValues<PostKind>()[chosenKind] : null,
             audience is { } chosenAudience ? Enum.GetValues<Audience>()[chosenAudience] : null,
             move is { } chosenMove ? Enum.GetValues<Move>()[chosenMove] : null).Send();
@@ -65,7 +78,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
                 return await TangentWrites.Written(HttpContext, changed, BaseAddress(), personId, created: false,
                     move is null ? address : address + "/" + TangentWrites.SettingsSegment, ct);
             case Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
-                return await Refused(found, personId, fields, reason, ct);
+                return await Refused(found, personId, input, reason, ct);
             default:
                 return PostWrites.Answer(HttpContext, outcome);
         }
@@ -84,8 +97,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again, read afresh,
     /// keeping what was sent, with the reason where it belongs.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
-        CancellationToken ct)
+    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, ChangeTangentInput input, Reason reason, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
         var (again, unseen) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
@@ -93,10 +105,10 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
         var page = await Page(again, personId, ct);
         page = page with
         {
-            Name = fields.GetValueOrDefault(TangentWrites.NameField) ?? page.Name,
-            Description = fields.GetValueOrDefault(TangentWrites.DescriptionField) ?? page.Description,
-            Kind = TangentWrites.Choice(fields, TangentWrites.KindField, TangentWrites.Kinds, out _) is { } kind ? TangentWrites.Kinds[kind] : page.Kind,
-            Audience = TangentWrites.Choice(fields, TangentWrites.AudienceField, TangentWrites.Audiences, out _) is { } audience
+            Name = input.Name ?? page.Name,
+            Description = input.Description ?? page.Description,
+            Kind = TangentWrites.Choice(input.Kind, TangentWrites.Kinds, out _) is { } kind ? TangentWrites.Kinds[kind] : page.Kind,
+            Audience = TangentWrites.Choice(input.Audience, TangentWrites.Audiences, out _) is { } audience
                 ? TangentWrites.Audiences[audience]
                 : page.Audience
         };

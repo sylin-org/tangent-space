@@ -35,7 +35,7 @@ public sealed class ProofDoorTests
     {
         var session = new Browser(tangentSpace);
         var answer = await Send(session.Client, HttpMethod.Post, Exchange, json: true, bearer: Proof(account));
-        Assert.True(answer.Status == HttpStatusCode.NoContent, answer.Body);
+        Assert.True(answer.Status == HttpStatusCode.OK, answer.Body);
         return session;
     }
 
@@ -57,7 +57,7 @@ public sealed class ProofDoorTests
         // The token alone signs in; a body says nothing and is not read, however large.
         using var session = new Browser(tangentSpace);
         var proved = await Send(session.Client, HttpMethod.Post, Exchange, new StringContent(new string(' ', 9000), Encoding.UTF8, "application/json"), json: true, bearer: Proof(Scout));
-        Assert.True(proved.Status == HttpStatusCode.NoContent, proved.Body);
+        Assert.True(proved.Status == HttpStatusCode.OK, proved.Body);
 
         // It arrived as anyone does: a participant on its verified handle, in the member role, with a session of its own.
         var participant = await Participant.Get(Scout.Did, Cancellation);
@@ -116,6 +116,52 @@ public sealed class ProofDoorTests
         using var again = await SignedInByProof(tangentSpace, Scout);
         Assert.Equal(Capabilities.Absent.Text, (await Send(again.Client, HttpMethod.Get, "/", json: true)).Gate);
         Assert.Equal(Standing.Banned, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
+    }
+
+    [Fact]
+    public async Task The_answer_holds_a_bearer_good_at_the_edge_and_on_a_page_as_the_same_participant_and_its_cookie_stands()
+    {
+        await using var directory = await AgentDirectory.Start(Scout);
+        await using var tangentSpace = await Start(directory);
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        using var session = new Browser(tangentSpace);
+        var proved = await Send(session.Client, HttpMethod.Post, Exchange, json: true, bearer: Proof(Scout));
+
+        Assert.Equal(HttpStatusCode.OK, proved.Status);
+        var bearer = proved.Json.GetProperty("access_token").GetString()!;
+        Assert.Equal("Bearer", proved.Json.GetProperty("token_type").GetString());
+        Assert.True(proved.Json.GetProperty("expires_in").GetInt32() > 0);
+
+        using var bare = Agent(tangentSpace);
+        var page = await Send(bare, HttpMethod.Get, "/", json: true, bearer: bearer);
+        Assert.Equal((HttpStatusCode.OK, Scout.Did), (page.Status, page.Json.GetProperty("who").GetProperty("id").GetString()));
+        Assert.Equal(Scout.Did, (await Read(session, "/")).GetProperty("who").GetProperty("id").GetString());
+
+        using var tools = await Tools.ToolClient.Connect(tangentSpace, bearer);
+        var door = await tools.Call("arrive");
+        Assert.Equal((200, Scout.Did), (door.Status, door.Structured!.Value.GetProperty("who").GetProperty("id").GetString()));
+        var reply = await tools.Call("reply", new { tangent = Workshop, topic = root.Slug, body = "Whoever is first home." });
+        Assert.Equal((201, Scout.Did), (reply.Status, reply.Structured!.Value.GetProperty("authorId").GetString()));
+    }
+
+    [Fact]
+    public async Task A_subject_who_may_not_act_is_told_so_and_never_sent_elsewhere()
+    {
+        await using var directory = await AgentDirectory.Start(Scout);
+        await using var tangentSpace = await Start(directory);
+        await Place(tangentSpace);
+        using (await SignedInByProof(tangentSpace, Scout)) { }
+        using (var scope = tangentSpace.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<Koan.Identity.Management.IdentityLifecycleService>().SuspendAsync([Scout.Did], Cancellation);
+
+        using var agent = Agent(tangentSpace);
+        var refused = await Send(agent, HttpMethod.Post, Exchange, json: true, bearer: Proof(Scout));
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
+        Assert.Null(refused.Location);
+        Assert.False(refused.Json.TryGetProperty("access_token", out _));
+        Assert.Equal(ProofController.MayNotAct, refused.Json.GetProperty("message").GetString());
     }
 
     [Theory]
@@ -179,7 +225,7 @@ public sealed class ProofDoorTests
         Assert.Null(await Participant.Get(Scout.Did, Cancellation));
 
         var proved = await At(agent, Exchange, "evil.example", Proof(Scout));
-        Assert.True(proved.Status == HttpStatusCode.NoContent, proved.Body);
+        Assert.True(proved.Status == HttpStatusCode.OK, proved.Body);
         var statement = await At(agent, ProofDoor.StatementPath, "evil.example");
         Assert.Equal(Addressed, statement.Json.GetProperty("serviceProof").GetProperty("audience").GetString());
     }
@@ -207,7 +253,7 @@ public sealed class ProofDoorTests
         Assert.NotNull(await TangentSpace.Get(TangentSpace.SingleRow, Cancellation));
         var place = Assert.IsType<string>(baseUrl.Current);
         var proved = await Send(agent, HttpMethod.Post, Exchange, json: true, bearer: Scout.Token(ProofDoor.Audience(place), ProofDoor.Method));
-        Assert.True(proved.Status == HttpStatusCode.NoContent, proved.Body);
+        Assert.True(proved.Status == HttpStatusCode.OK, proved.Body);
     }
 
     [Fact]

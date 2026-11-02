@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Security.Claims;
-using System.Text.Json;
 using Koan.Data.Abstractions.Failures;
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
@@ -13,12 +12,13 @@ using Tangent.Render;
 
 namespace Tangent.Posts;
 
-/// <summary>What the write routes of a Post share. A write comes as a form a page posted or as JSON an agent sent, to
-/// the same address, and is answered in kind: a form is sent on to the Post's address (<c>303</c>) or, refused, reads
-/// its page again with the reason inline; a JSON request reads the Post with its <c>can</c>, or a problem carrying
-/// the gate. Refusals answer by their kind, in one place (<see cref="Refused"/>). A request a session or a bearer authenticated answers to <see cref="FormToken.Validate"/> before anything
-/// else is read of it; one that authenticates nobody holds no credential a form could borrow, and its command refuses
-/// it on its own terms.</summary>
+/// <summary>What the write routes of a Post share. A write comes as a form a page posted, as JSON an agent sent or as a
+/// tool's call, to the same address and the same typed input, and is answered in kind: a form is sent on to the Post's
+/// address (<c>303</c>) or, refused, reads its page again with the reason inline; a JSON request reads the Post with its
+/// <c>can</c>, or a problem carrying the gate. Refusals answer by their kind, in one place (<see cref="Refused"/>). A
+/// request a session or a bearer authenticated answers to <see cref="FormToken.Validate"/> before its address is resolved;
+/// one that authenticates nobody holds no credential a form could borrow, and its command refuses it on its own
+/// terms.</summary>
 public static class PostWrites
 {
     /// <summary>The most bytes a write request's body holds: a body at its limit, escaped as a form escapes it.</summary>
@@ -49,7 +49,7 @@ public static class PostWrites
     }
 
     /// <summary>A title as a form sent it: on one line, since an article's title field wraps as the title does.</summary>
-    public static string? Title(IReadOnlyDictionary<string, string> fields) => fields.GetValueOrDefault(TitleField)?.ReplaceLineEndings(" ");
+    public static string? Title(string? sent) => sent?.ReplaceLineEndings(" ");
 
     public static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
@@ -62,45 +62,6 @@ public static class PostWrites
         return accept.Any(type => string.Equals(type.MediaType.Value, "application/json", StringComparison.OrdinalIgnoreCase)
                                   || string.Equals(type.Suffix.Value, "json", StringComparison.OrdinalIgnoreCase))
                && !accept.Any(type => string.Equals(type.MediaType.Value, "text/html", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>The fields a write sent, by name: a form's, or the string, number and true or false members of a JSON
-    /// object, each as its text; a form field sent more than once, as checkboxes of one name are, and a JSON array of
-    /// strings hold their values joined by single spaces, the empty ones left out. An empty set for a body of neither kind,
-    /// and null for a JSON body that is not one object.</summary>
-    public static async Task<IReadOnlyDictionary<string, string>?> Fields(HttpRequest request, CancellationToken ct)
-    {
-        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (request.HasFormContentType)
-        {
-            foreach (var (name, values) in await request.ReadFormAsync(ct))
-            {
-                if (values.Count > 1) fields[name] = string.Join(' ', values.Where(value => !string.IsNullOrEmpty(value)));
-                else if (values.FirstOrDefault() is { } value) fields[name] = value;
-            }
-
-            return fields;
-        }
-
-        if (!request.HasJsonContentType()) return fields;
-        try
-        {
-            using var json = await JsonDocument.ParseAsync(request.Body, new JsonDocumentOptions { MaxDepth = 8 }, ct);
-            if (json.RootElement.ValueKind != JsonValueKind.Object) return null;
-            foreach (var member in json.RootElement.EnumerateObject())
-            {
-                if (member.Value.ValueKind == JsonValueKind.String) fields[member.Name] = member.Value.GetString()!;
-                else if (member.Value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False) fields[member.Name] = member.Value.GetRawText();
-                else if (member.Value.ValueKind == JsonValueKind.Array && member.Value.EnumerateArray().All(item => item.ValueKind == JsonValueKind.String))
-                    fields[member.Name] = string.Join(' ', member.Value.EnumerateArray().Select(item => item.GetString()).Where(value => !string.IsNullOrEmpty(value)));
-            }
-
-            return fields;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     /// <summary>A write route's address as it stands for the reader: its Tangent, the rows what the reader holds there is
@@ -138,16 +99,11 @@ public static class PostWrites
         return (new Located(row, rows, root, named), null);
     }
 
-    /// <summary>The version an edit names, or null when the field is not a whole number.</summary>
-    public static long? Version(IReadOnlyDictionary<string, string> fields)
-        => long.TryParse(fields.GetValueOrDefault(VersionField), NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : null;
-
     /// <summary>The kind a start names: null for none, the kind for one of its words, and false in <paramref name="valid"/>
     /// for anything else.</summary>
-    public static PostKind? Kind(IReadOnlyDictionary<string, string> fields, out bool valid)
+    public static PostKind? Kind(string? word, out bool valid)
     {
         valid = true;
-        var word = fields.GetValueOrDefault(KindField);
         if (string.IsNullOrEmpty(word)) return null;
         foreach (var kind in Enum.GetValues<PostKind>())
         {
@@ -164,18 +120,40 @@ public static class PostWrites
     /// participant here their mention, and judged (<see cref="PostBody.Written"/>) only where the person holds the verb
     /// the command needs here, so a request its gate will refuse never pays for a parse or a read; left unjudged
     /// otherwise.</summary>
-    public static async Task<PostBody> Body(IReadOnlyDictionary<string, string> fields, bool mayWrite)
+    public static async Task<PostBody> Body(string? sent, bool mayWrite)
     {
-        var text = fields.GetValueOrDefault(BodyField) ?? "";
+        var text = sent ?? "";
         return mayWrite ? await PostBody.Written(text, CancellationToken.None) : PostBody.Unjudged(text);
+    }
+
+    /// <summary>The Id a write that makes a Post goes by: the one it sent; else the one its sender's words name
+    /// (<see cref="Tid.Derived"/>), from who sent them, where they go (<paramref name="where"/>) and the words themselves.
+    /// The words name it for a retry window and the window before, so a retry whose answer was lost finds the Post it
+    /// wrote whichever window it falls in; later, the same words name a new one. An Id already holding anything else, the
+    /// same Post edited or removed since among it, is no retry of it, and a TID is minted instead. A Topic's order is its
+    /// sequence, which the command takes in its hold, so the time an Id reads says nothing of where the Post stands. One
+    /// keyed read of each window's Id.</summary>
+    public static async Task<string> IdFor(HttpContext http, string? sent, string? personId, PostBody body, params string?[] where)
+    {
+        if (sent is { Length: > 0 }) return sent;
+        var now = http.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow();
+        var words = string.Join('\0', [personId, .. where, body.SentHash]);
+        foreach (var at in new[] { now, now - Tid.RetryWindow })
+        {
+            var id = Tid.Derived(words, at);
+            if (await Post.Get(id, http.RequestAborted) is { } row)
+                return row.AuthorId == personId && row.SentHash == body.SentHash ? id : Tid.Mint(now);
+        }
+
+        return Tid.Derived(words, now);
     }
 
     /// <summary>The form that replies in the Topic at <paramref name="topicAddress"/>: a TID minted for it, the body, and
     /// the Post it answers, <paramref name="parent"/>, or the Topic where none is named.</summary>
     public static Form ReplyForm(string topicAddress, string? parent, FormToken token) => Form.Posting(topicAddress, token,
-        Form.Minted(IdField, "reply", Tid.Mint(DateTimeOffset.UtcNow)),
-        new Form.Field(BodyField, BodyHolds("The reply")),
-        new Form.Field(ParentField, "The Id of the Post of this Topic the reply answers; empty, it answers the Topic.", parent ?? ""));
+        Form.Minted(IdField, Tid.Mint(DateTimeOffset.UtcNow)),
+        new Form.Field(BodyField, Holds.ReplyBody),
+        new Form.Field(ParentField, Holds.Parent, parent ?? ""));
 
     /// <summary>The form that starts a Topic at <paramref name="action"/>, a Tangent's, whose default kind is
     /// <paramref name="kind"/>: a TID minted for it, the title, the body and the kind.</summary>
@@ -183,36 +161,29 @@ public static class PostWrites
     {
         Form.Field[] fields =
         [
-            Form.Minted(IdField, "Topic", Tid.Mint(DateTimeOffset.UtcNow)),
-            new Form.Field(TitleField, TitleHolds("The Topic's title")),
-            new Form.Field(BodyField, BodyHolds("Its opening Post")),
-            new Form.Field(KindField, $"{Word(PostKind.Topic)} or {Word(PostKind.Article)}; left out, the Tangent's default, {Word(kind)}.")
+            Form.Minted(IdField, Tid.Mint(DateTimeOffset.UtcNow)),
+            new Form.Field(TitleField, Holds.TopicTitle),
+            new Form.Field(BodyField, Holds.TopicBody),
+            new Form.Field(KindField, $"{Holds.Kind} Here, {Word(kind)}.")
         ];
-        return Form.Posting(action, token, kind == PostKind.Article ? [.. fields, new Form.Field(CoverField, CoverHolds)] : fields);
+        return Form.Posting(action, token, kind == PostKind.Article ? [.. fields, new Form.Field(CoverField, Holds.Cover)] : fields);
     }
-
-    /// <summary>What a new article's cover field holds.</summary>
-    public const string CoverHolds = "The Id of the image that leads the article, as the form that brings an image answers it; left out, the article has none.";
 
     /// <summary>The form that brings an image in for someone writing at <paramref name="tangentAddress"/>.</summary>
     public static Form MediaForm(string tangentAddress, FormToken token) => Form.Posting(tangentAddress + "/" + NewMediaController.Segment, token,
-        new Form.Field(NewMediaController.FileField, "A PNG, JPEG or WebP image, at most 20 MiB: a file of a multipart form, or its bytes in base64 in one JSON object. The answer's id is a cover's value, and its reference is what a body's Markdown names it by: ![what it shows](reference)."));
+        new Form.Field(NewMediaController.FileField, Holds.BroughtImage));
 
     /// <summary>The form that edits a Post at <paramref name="action"/> from the <paramref name="version"/> its editor read:
     /// the version, the title on a Topic's <paramref name="root"/>, and the body, which may be empty on a root taken on a
     /// tangent.</summary>
     public static Form EditForm(string action, long version, bool root, bool bodyOptional, FormToken token, string? cover = null, bool article = false)
     {
-        var body = new Form.Field(BodyField, BodyHolds("The Post's words, which replace what it says now")
-                                             + (bodyOptional ? " Empty, the Post it was taken on a tangent from speaks for it." : ""));
-        var from = new Form.Field(VersionField,
-            "The version of the Post the edit was made from: one made from another changes nothing and answers with the Post as it stands.",
-            version.ToString(CultureInfo.InvariantCulture));
+        var body = new Form.Field(BodyField, Holds.EditBody + (bodyOptional ? Holds.EditBodyOptional : ""));
+        var from = new Form.Field(VersionField, Holds.EditVersion, version.ToString(CultureInfo.InvariantCulture));
         if (article)
-            return Form.Posting(action, token, from, new Form.Field(TitleField, TitleHolds("The Topic's title") + " Left out, it stays."), body,
-                new Form.Field(CoverField, "The Id of the image that leads the article, as the form that brings an image answers it; empty, it has none; left out, it stays.", cover ?? ""));
+            return Form.Posting(action, token, from, new Form.Field(TitleField, Holds.EditTitle), body, new Form.Field(CoverField, Holds.EditCover, cover ?? ""));
         return root
-            ? Form.Posting(action, token, from, new Form.Field(TitleField, TitleHolds("The Topic's title") + " Left out, it stays."), body)
+            ? Form.Posting(action, token, from, new Form.Field(TitleField, Holds.EditTitle), body)
             : Form.Posting(action, token, from, body);
     }
 
@@ -222,15 +193,8 @@ public static class PostWrites
     /// <summary>The form that reports a Post at <paramref name="action"/>, with the TID <paramref name="minted"/> for it, and
     /// the reason.</summary>
     public static Form ReportForm(string action, string minted, FormToken token) => Form.Posting(action, token,
-        Form.Minted(IdField, "report", minted),
-        new Form.Field(BodyField, "The reason, in a sentence or two of Markdown; only the moderators read it."));
-
-    /// <summary>What a body field holds: <paramref name="what"/>, written as a Post's body is.</summary>
-    public static string BodyHolds(string what)
-        => what + ", in Markdown, at most 64 KiB; an @ and the handle of a participant here, typed in it, mentions them.";
-
-    /// <summary>What a title field holds: <paramref name="what"/>, within a title's bounds.</summary>
-    public static string TitleHolds(string what) => what + ", at most " + Post.TitleLimit.ToString(CultureInfo.InvariantCulture) + " characters.";
+        Form.Minted(IdField, minted),
+        new Form.Field(BodyField, Holds.Reason));
 
     public static string TangentAddress(string baseUrl, string tangent) => baseUrl + "/t/" + Uri.EscapeDataString(tangent);
 
@@ -279,12 +243,8 @@ public static class PostWrites
         => new Problem(StatusCodes.Status400BadRequest, "Open the form again",
             "This form’s token is missing or has expired, so nothing was written.").ToResult();
 
-    public static IActionResult Unreadable()
-        => new Problem(StatusCodes.Status400BadRequest, "Not a form or a JSON object",
-            "A write sends its fields as a form, or as one JSON object.").ToResult();
-
-    /// <summary>The one answer to a command that is not done, as a page or as JSON by the request's <c>Accept</c>, which is
-    /// why it is not Koan's <c>Answer</c>, which answers JSON alone.</summary>
+    /// <summary>The one answer to a command that is not done, as a page or as JSON by the request's <c>Accept</c>, through
+    /// the shell and in the words of <see cref="Refused"/>.</summary>
     public static IActionResult Answer<T>(HttpContext http, Outcome<T> outcome) => outcome switch
     {
         Outcome<T>.Refused { Reason: var reason } => Refused(http, reason),
@@ -305,19 +265,8 @@ public static class PostWrites
         _ => new Problem(StatusCodes.Status400BadRequest, "Not written", reason.Text)
     }).ToResult();
 
-    /// <summary>What a person reads above a gate's sentence.</summary>
-    private static string Heading(Reason gate) => Headings.GetValueOrDefault(gate) ?? (gate.Word is null ? "Not yours to change" : "Not open to you");
-
-    private static readonly IReadOnlyDictionary<Reason, string> Headings = new Dictionary<Reason, string>
-    {
-        [Capabilities.SignIn] = "Sign in first",
-        [Capabilities.Apply] = "Waiting to be admitted",
-        [Capabilities.Declined] = "Not admitted",
-        [Capabilities.TimedOut] = "Timed out",
-        [Capabilities.Locked] = "Locked",
-        [Capabilities.Removed] = "Removed",
-        [Capabilities.NotYours] = "Not yours"
-    };
+    /// <summary>What a person reads above a gate's sentence: its own heading, where it declares one.</summary>
+    private static string Heading(Reason gate) => gate.Heading ?? (gate.Word is null ? "Not yours to change" : "Not open to you");
 
     /// <summary>The status a refusal answers with, by its kind.</summary>
     public static int Status(Reason reason) => reason.Kind switch
