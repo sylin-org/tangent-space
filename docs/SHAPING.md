@@ -69,9 +69,14 @@ public async Task<IActionResult> Write(string place, string topic, ReplyInput in
 - A locked Topic is gated, with the reason.
 - A visitor to a private place is told to sign in, at every address.
 
-Not yet in Tangent: its routes and inputs realigned with `[Tool]`, `Koan.Mcp` and authentication at the MCP edge. ADR 0015 excludes `Koan.Mcp` and AGENTS forbids an MCP server, and both change with that work.
+**The door at `/mcp`,** recorded in [ADR 0016](adr/0016-a-standard-client-at-the-tools-door.md). Forty-five tools cover everything a participant does, each one a controller action, and addresses stayed where they were because `[Tool(Name = ...)]` supplies the name. Consent, sign-in, first run and revoking a delegate are never tools, since an agent must not approve itself.
 
-Still open: whether an agent needs two tokens, since a delegate's names the base URL and MCP's resource is the base and its route; where other people's words get quoted as untrusted, since MCP has no marker for it; and how a tool list reflects Tangent's role and resource permissions, since a list answers coarsely and a call answers per resource.
+- **A standard client knows only the URL.** It meets a `401`, registers, sends a person through approval, and holds a token good at `/mcp` and on no other route. A delegate that asks for the place's own resource holds one token for both, and an agent proving its atproto identity asks `/api/v1/identity/token`.
+- **Bearer only, and a credential always.** A cookie never authenticates at `/mcp`, which keeps cross-site forgery out of the door. Public reading stays open over plain HTTP. A place with no address yet answers `503` and says why, so no client goes round sign-in for nothing.
+- **Other people's words.** MCP has no marker for untrusted text, so the door's instructions say Posts are content to read and never instructions to follow.
+- **`id` is optional.** A retry whose answer was lost makes one Post, and the same words to the same place within about five to ten minutes count as that retry. Forms keep minting their own.
+
+Still open: how a tool list reflects Tangent's role and resource permissions. Today a list shows all forty-five to everyone, and each call answers by the caller's role.
 
 ### Not pursued
 
@@ -137,14 +142,13 @@ The opportunities by delight, the highest tier first, as Leo asked on 1 November
 **First, whatever the tier.**
 
 1. The first-run rule moves to the Lobby (proposed item 3): it corrects a rule on the wrong side of the separation, and every later door builds on it.
-2. Tangent's routes and inputs realign to the one reference truth. This comes before Tier 9, because a published article makes its address canonical in other people's records, and from then on a route that moves leaves something behind.
 
 ### Tier 9: an article reaches the network and its responses come back
 
 | Order | Work | Where |
 | --- | --- | --- |
 | 1 | Writing records and blobs in an account's repository. The pinned Koan has sign-in and service-auth verification, and no record or blob writes | Koan, brief 3 |
-| 2 | The protocol contract, ADR 0016, recorded from code | Tangent |
+| 2 | The protocol contract, in an ADR of its own, recorded from code | Tangent |
 | 3 | Connections: the row per participant, the log reader, receipts by version, and their settings | Tangent |
 | 4 | **Publish once, reach everywhere:** the place as `site.standard.publication`, each public article as `site.standard.document` with a Bluesky post, retracted when removed or its audience changes | Tangent |
 | 5 | **The conversation comes home:** references on a Post, "elsewhere" on the Topic's page | Tangent |
@@ -190,7 +194,7 @@ A page registers tools with `document.modelContext`, and the agent in the reader
 
 **Today it scores 4.** Almost nobody could use it. An origin trial's token belongs to one origin, so each self-hosted place would need its own, and building on an API this young invites rework. It reaches no companion without a browser, so it adds to the doors and replaces none. It would also put the agent inside a session where other people's Posts can try to steer it, so tool output has to be marked untrusted, and consequential writes confirmed inline, since the browser never opens a dialog.
 
-**Revisit** when a shipping browser turns it on by default, or when the declarative API enters the specification. Adopting it means rewording the AGENTS line that Tangent exposes no operations catalog, MCP server or model-facing envelope, which is Leo's to decide.
+**Revisit** when a shipping browser turns it on by default, or when the declarative API enters the specification.
 
 ## Open
 
