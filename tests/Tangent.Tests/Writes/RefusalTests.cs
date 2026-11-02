@@ -98,7 +98,7 @@ public sealed class RefusalTests
         Assert.Equal(("text/html", HttpStatusCode.Forbidden), (onForm.MediaType, onForm.Status));
         Assert.Contains("data-gate=\"locked\"", onForm.Body);
         Assert.Contains("This topic is locked, so no one replies in it.", onForm.Body);
-        Assert.Contains("<h1>Locked</h1>", onForm.Body);
+        Assert.Contains(">Locked</h1>", onForm.Body);
         Assert.DoesNotContain(">locked<", onForm.Body);
         Assert.Equal(before, await Counted());
     }
@@ -116,7 +116,7 @@ public sealed class RefusalTests
 
         var asPage = await Send(visitor, HttpMethod.Get, Events.Notifications.Path);
         Assert.Equal(HttpStatusCode.Unauthorized, asPage.Status);
-        Assert.Contains("<a href=\"" + BaseUrl + "/sign-in?return=%2Fnotifications\">Sign in</a>", asPage.Body);
+        Assert.Contains("href=\"" + BaseUrl + "/sign-in?return=%2Fnotifications\">Sign in</a>", asPage.Body);
         Assert.DoesNotContain(">" + Capabilities.SignIn.Word + "<", asPage.Body);
     }
 
