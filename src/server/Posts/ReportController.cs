@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -8,8 +10,13 @@ using Tangent.Tangents;
 
 namespace Tangent.Posts;
 
+/// <summary>What a report sends, as a form or one JSON object.</summary>
+public sealed record ReportInput(
+    [Description(Holds.Reason)] string? Body = null,
+    [Description(Holds.Id)] string? Id = null);
+
 /// <summary>Where a Post is reported: <c>/t/{tangent}/{topic}/{post}/report</c>, beside its edit. Its <c>POST</c> takes
-/// <c>body</c>, the reason, and <c>id</c>, as a form or a JSON object, and sends <see cref="ReportPost"/>: a form is sent
+/// <see cref="ReportInput"/> and sends <see cref="ReportPost"/>: a form is sent
 /// on to this address with <c>received</c> naming the report, and a JSON request reads that the report was received;
 /// neither is told where the report is. A refusal reads the form again with the reason inline, or a problem with the gate.
 /// The same id from the same reporter about the same Post reads that the report was received, whatever became of it. Its <c>GET</c> is the form, one resource both ways
@@ -42,21 +49,20 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public async Task<IActionResult> Report([FromRoute] string tangent, [FromRoute] string topic, [FromRoute] string post, CancellationToken ct)
+    [Tool(Name = "report")]
+    [Description("Tell the moderators about someone else's Post, in a sentence or two.")]
+    public async Task<IActionResult> Report([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        [FromRoute, Description(Holds.Post)] string post, ReportInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var mayReport = found.Rows.Participant is not null && !found.Post!.Removed;
-        var outcome = await new ReportPost(
-            fields.GetValueOrDefault(PostWrites.IdField) ?? "",
-            found.Post!.Id,
-            await PostWrites.Body(fields, mayReport),
-            personId ?? "").Send();
+        var body = await PostWrites.Body(input.Body, mayReport);
+        var outcome = await new ReportPost(await PostWrites.IdFor(HttpContext, input.Id, personId, body, found.Post!.Id), found.Post!.Id, body, personId ?? "").Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var report }:
@@ -64,7 +70,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
                 Response.Headers.Location = Address(found) + "/" + Segment + "?" + ReceivedParameter + "=" + Uri.EscapeDataString(report.Id);
                 return StatusCode(StatusCodes.Status303SeeOther);
             case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
-                return await Refused(found, personId, fields, reason, ct);
+                return await Refused(found, personId, input, reason, ct);
             default:
                 return PostWrites.Answer(HttpContext, outcome);
         }
@@ -72,14 +78,13 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again with the
     /// reason where it belongs, and a new Id where the sent one is another's.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
-        CancellationToken ct)
+    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, ReportInput input, Reason reason, CancellationToken ct)
     {
         var unsent = reason == ReportPost.NoModerators;
         if (PostWrites.WantsJson(Request))
             return unsent ? new Problem(StatusCodes.Status503ServiceUnavailable, "Not sent", reason.Text).ToResult() : PostWrites.Refused(HttpContext, reason);
 
-        return await Again(found, personId, fields, unsent ? StatusCodes.Status503ServiceUnavailable : PostWrites.Status(reason), keepId: reason.Kind != ReasonKind.Conflict,
+        return await Again(found, personId, input, unsent ? StatusCodes.Status503ServiceUnavailable : PostWrites.Status(reason), keepId: reason.Kind != ReasonKind.Conflict,
             page => reason == ReportPost.NeedsReason || PostWrites.Concerning(reason) == PostWrites.About.Body ? page with { BodyFailure = reason.Text }
                 : reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Report = null }
                 : page with { Failure = reason.Text }, ct);
@@ -87,13 +92,13 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     /// <summary>The form again, read afresh, keeping the reason that was sent, and the Id when it is a TID and
     /// <paramref name="keepId"/>; otherwise a new one is minted, so sending again is a report of its own.</summary>
-    private async Task<IActionResult> Again(PostWrites.Located sent, string? personId, IReadOnlyDictionary<string, string> fields, int status,
+    private async Task<IActionResult> Again(PostWrites.Located sent, string? personId, ReportInput input, int status,
         bool keepId, Func<ReportPage, ReportPage> refusal, CancellationToken ct)
     {
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
         if (found is null) return unseen!;
-        var page = await Page(found, personId, received: false, ct) with { Body = fields.GetValueOrDefault(PostWrites.BodyField) };
-        if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Report = page.Report?.With(PostWrites.IdField, id) };
+        var page = await Page(found, personId, received: false, ct) with { Body = input.Body };
+        if (keepId && Tid.IsValid(input.Id)) page = page with { Report = page.Report?.With(PostWrites.IdField, input.Id) };
         return new ObjectResult(refusal(page)) { StatusCode = status };
     }
 

@@ -48,10 +48,10 @@ public static class TangentWrites
     /// <summary>The form that creates a Tangent at <paramref name="action"/>: its name, and what else stands at its default
     /// until it is sent.</summary>
     public static Form CreateForm(string action, FormToken token) => Form.Posting(action, token,
-        new Form.Field(NameField, $"The Tangent's name, 1 to {Tangent.NameLimit} characters; its address derives from it and never changes."),
-        new Form.Field(DescriptionField, $"What it is for, at most {Tangent.DescriptionLimit} characters; left out, none."),
-        new Form.Field(KindField, "The kind a Topic started there takes: topic or article; left out, topic."),
-        new Form.Field(AudienceField, "Who reads it: public, everyone who reads the place, where members post, or private; left out, public."));
+        new Form.Field(NameField, Holds.TangentName),
+        new Form.Field(DescriptionField, Holds.TangentDescription),
+        new Form.Field(KindField, Holds.TangentKind),
+        new Form.Field(AudienceField, Holds.TangentAudience));
 
     /// <summary>The form that changes a Tangent's settings at <paramref name="action"/>, each field left as it is when not
     /// sent: its audience only where it is not <paramref name="fixedAudience"/>, its place among the Tangents only where
@@ -60,12 +60,12 @@ public static class TangentWrites
     {
         List<Form.Field> fields =
         [
-            new(NameField, $"The Tangent's name, 1 to {Tangent.NameLimit} characters; left out, it stays. Its address never changes."),
-            new(DescriptionField, $"What it is for, at most {Tangent.DescriptionLimit} characters; left out, it stays."),
-            new(KindField, "The kind a Topic started there takes: topic or article; left out, it stays.")
+            new(NameField, Holds.ChangedTangentName),
+            new(DescriptionField, Holds.ChangedTangentDescription),
+            new(KindField, Holds.ChangedTangentKind)
         ];
-        if (!fixedAudience) fields.Add(new(AudienceField, "Who reads it: public or private; left out, it stays."));
-        if (movable && !fixedAudience) fields.Add(new(MoveField, "earlier or later, to move it one place among the Tangents; sent alone, it changes nothing else."));
+        if (!fixedAudience) fields.Add(new(AudienceField, Holds.ChangedTangentAudience));
+        if (movable && !fixedAudience) fields.Add(new(MoveField, Holds.TangentMove));
         return new Form(action, HttpMethods.Post, fields, token);
     }
 
@@ -82,10 +82,9 @@ public static class TangentWrites
 
     /// <summary>The word a field names among <paramref name="words"/>, by its place there; null for none, and false in
     /// <paramref name="valid"/> for a word that is not one of them.</summary>
-    public static int? Choice(IReadOnlyDictionary<string, string> fields, string field, IReadOnlyList<string> words, out bool valid)
+    public static int? Choice(string? word, IReadOnlyList<string> words, out bool valid)
     {
         valid = true;
-        var word = fields.GetValueOrDefault(field);
         if (string.IsNullOrEmpty(word)) return null;
         for (var index = 0; index < words.Count; index++)
         {

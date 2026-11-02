@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Security.Claims;
+using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -33,7 +35,9 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
 
     [HttpGet("/t/{tangent}")]
     [HttpHead("/t/{tangent}")]
-    public async Task<IActionResult> Get(string tangent, [FromQuery(Name = After)] string? after, CancellationToken ct)
+    [Tool(Name = "read_tangent")]
+    [Description("Read a Tangent: its Topics a page at a time, what is new to you marked.")]
+    public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
         // The Tangent's row is read before its overwrites: a Tangent found here committed after its audience was written.

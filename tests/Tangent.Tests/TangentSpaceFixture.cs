@@ -1,4 +1,3 @@
-using System.Reflection;
 using Koan.Core;
 using Koan.Core.Hosting.App;
 using Koan.Data.Core.Commands;
@@ -165,14 +164,14 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
 
     /// <summary>Waits for everything sent so far to have run. A try starts beside its sender and reaches the store's turn
     /// when the thread pool gets to it, so no command sent now is sure to stand behind it; Koan counts a try from the moment
-    /// it is made until its hold begins, and Koan keeps that count to itself (<see cref="Tries"/>). Once it reads zero every
+    /// it is made until its hold begins (<see cref="CommandExtensions.TriesWaiting"/>). Once it reads zero every
     /// try has its turn or has been told it never ran, and one command behind them answers once they have run. The count is
     /// the process's, so another Tangent Space's tries can lengthen this wait; it ends within the store's busy timeout, and
     /// answers false where it did not.</summary>
     public async Task<bool> Settled(CancellationToken ct = default)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        while ((int)Tries.GetValue(null)! > 0)
+        while (CommandExtensions.TriesWaiting > 0)
         {
             if (clock.Elapsed > TimeSpan.FromSeconds(30)) return false;
             await Task.Delay(5, ct);
@@ -180,10 +179,6 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
 
         using (AppHost.PushScope(Services)) return await new Settle().Send(ct) is Outcome<bool>.Done;
     }
-
-    /// <summary>How many tries of the process wait for their hold.</summary>
-    private static readonly FieldInfo Tries = typeof(CommandExtensions).GetField("_trying", BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new InvalidOperationException("Koan no longer counts tries where this fixture reads them.");
 
     /// <summary>Writes nothing, behind everything sent so far at the store's turn.</summary>
     private sealed record Settle : ICommand<bool>

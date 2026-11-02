@@ -19,23 +19,23 @@ namespace Tangent.Access;
 /// few small rows; nothing stores it.</summary>
 public sealed class Capabilities
 {
-    public static readonly Reason SignIn = Reason.Gated("sign-in", "Sign in to write here.", next: SignInController.Path);
-    public static readonly Reason Apply = Reason.Gated("apply", "Your application is waiting: you can write here once someone admits you.");
+    public static readonly Reason SignIn = Reason.Gated("sign-in", "Sign in to write here.", next: SignInController.Path, heading: "Sign in first");
+    public static readonly Reason Apply = Reason.Gated("apply", "Your application is waiting: you can write here once someone admits you.", heading: "Waiting to be admitted");
 
     /// <summary>The participant's application was declined: they read what a visitor reads, and nothing more.</summary>
-    public static readonly Reason Declined = Reason.Gated("declined", "Your application was declined, so you read here and don’t write.");
-    public static readonly Reason TimedOut = Reason.Gated("timed-out", "You’re timed out: you can read and report here, and post again once it ends.");
+    public static readonly Reason Declined = Reason.Gated("declined", "Your application was declined, so you read here and don’t write.", heading: "Not admitted");
+    public static readonly Reason TimedOut = Reason.Gated("timed-out", "You’re timed out: you can read and report here, and post again once it ends.", heading: "Timed out");
 
     /// <summary>The resource does not exist for this reader: banned, or without <see cref="Bit.View"/> where they
     /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource. Its text
     /// is the word <c>gate</c> carries on the wire; what it says is <see cref="Reason.Said"/>.</summary>
     public static readonly Reason Absent = Reason.Absent("absent");
-    public static readonly Reason Locked = Reason.Gated("locked", "This topic is locked, so no one replies in it.");
-    public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.");
+    public static readonly Reason Locked = Reason.Gated("locked", "This topic is locked, so no one replies in it.", heading: "Locked");
+    public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.", heading: "Removed");
 
     /// <summary>The reason <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> are missing on a Post that is
     /// not the participant's own, or where no Post is in question.</summary>
-    public static readonly Reason NotYours = Reason.Gated("not yours", "Only its author, or a moderator, can change this post.");
+    public static readonly Reason NotYours = Reason.Gated("not yours", "Only its author, or a moderator, can change this post.", heading: "Not yours");
 
     /// <summary>What a gate says that a role or an overwrite decided.</summary>
     private const string NotOpen = "This isn’t open to you here.";

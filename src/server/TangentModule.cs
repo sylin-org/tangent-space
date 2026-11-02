@@ -94,10 +94,12 @@ public sealed class TangentModule : KoanModule
             .Add<Delegates.Consent, Delegates.ConsentView>(consent => "Approve an agent · " + consent.Place, frame: Delegates.ConsentView.Frame)
             .Add<Delegates.BringYourAgent, Delegates.BringYourAgentView>(page => "Bring your agent · " + page.Place, frame: Delegates.BringYourAgentView.Frame));
         services.AddSingleton<HtmlFormatter>();
+        services.AddSingleton<Koan.Web.Controllers.IProblemView, ProblemFrame>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
         {
             mvc.OutputFormatters.Insert(0, html);
             mvc.RespectBrowserAcceptHeader = true;
+            mvc.ModelMetadataDetailsProviders.Add(new SentAsSent());
             mvc.Filters.Add<ETagFilter>();
             mvc.Filters.Add<FirstRunGate>();
             mvc.Filters.Add<PrivatePlaceGate>();

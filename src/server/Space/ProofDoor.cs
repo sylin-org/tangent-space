@@ -12,6 +12,9 @@ public static class ProofDoor
     /// <summary>Where a token signs its issuer in, under the base URL.</summary>
     public const string ExchangePath = "/api/v1/identity/exchange";
 
+    /// <summary>Where the same token signs its issuer in and answers a bearer, under the base URL.</summary>
+    public const string TokenPath = "/api/v1/identity/token";
+
     /// <summary>The method a token is bound to: its <c>lxm</c>.</summary>
     public const string Method = "org.sylin.tangent.exchangeIdentity";
 

@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +11,29 @@ using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent.Participants;
+
+/// <summary>What timing someone out sends, as a form or one JSON object.</summary>
+public sealed record TimeOutInput(
+    [Description(Holds.Participant)] string? Participant = null,
+    [Description(Holds.TimeOutFor)] string? For = null,
+    [Description(Holds.Back)] string? Back = null);
+
+/// <summary>What changing someone's standing sends, as a form or one JSON object.</summary>
+public sealed record StandingInput(
+    [Description(Holds.Participant)] string? Participant = null,
+    [Description(Holds.Back)] string? Back = null);
+
+/// <summary>What giving someone a role sends, as a form or one JSON object.</summary>
+public sealed record GiveRoleInput(
+    [Description(Holds.Participant)] string? Participant = null,
+    [Description(Holds.GivenRole)] string? Role = null,
+    [Description(Holds.Back)] string? Back = null);
+
+/// <summary>What taking a role from someone sends, as a form or one JSON object.</summary>
+public sealed record TakeRoleInput(
+    [Description(Holds.Participant)] string? Participant = null,
+    [Description(Holds.TakenRole)] string? Role = null,
+    [Description(Holds.Back)] string? Back = null);
 
 /// <summary>The place's people, a section of its settings at <c>/settings/people</c>, for whoever holds
 /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one bounded page of them
@@ -57,7 +82,9 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     public const string HandleQuery = "handle";
 
     [HttpGet(Path)]
-    public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, [FromQuery(Name = HandleQuery)] string? handle,
+    [Tool(Name = "read_people")]
+    [Description("Find the participants admitted here, a page at a time, with what you may change of each, for whoever holds ManageStanding or ManageRoles.")]
+    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
         CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -76,50 +103,57 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     [HttpPost(TimeOutPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> PostTimeOut(CancellationToken ct) => Change((fields, actor, participant) =>
-        People.Length(fields.GetValueOrDefault(ForField)) is { } length
+    [Tool(Name = "time_out")]
+    [Description("Time a participant out for an hour, a day or a week, for whoever holds ManageStanding: they read and report, and post nothing.")]
+    public Task<IActionResult> PostTimeOut(TimeOutInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
+        People.Length(input.For) is { } length
             ? new TimeOut(actor, participant, DateTimeOffset.UtcNow + length)
             : null, People.NotADuration, ct);
 
     [HttpPost(BanPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> PostBan(CancellationToken ct) => Change((_, actor, participant) => new Ban(actor, participant), "", ct);
+    [Tool(Name = "ban")]
+    [Description("Ban a participant, for whoever holds ManageStanding: the place no longer exists for them.")]
+    public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), "", ct);
 
     [HttpPost(LiftPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> PostLift(CancellationToken ct) => Change((_, actor, participant) => new Lift(actor, participant), "", ct);
+    [Tool(Name = "lift")]
+    [Description("Lift a participant's timeout or ban, for whoever holds ManageStanding.")]
+    public Task<IActionResult> PostLift(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Lift(actor, participant), "", ct);
 
     [HttpPost(GivePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> PostGive(CancellationToken ct) => Change((fields, actor, participant) =>
-        Roles.KeyOf(fields.GetValueOrDefault(RoleField)) is { } role ? new ChangeRole(actor, participant, role, Give: true) : null,
+    [Tool(Name = "give_role")]
+    [Description("Give a participant a role, for whoever holds ManageRoles and manages the role.")]
+    public Task<IActionResult> PostGive(GiveRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
+        Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: true) : null,
         People.NotARole, ct);
 
     [HttpPost(TakePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> PostTake(CancellationToken ct) => Change((fields, actor, participant) =>
-        Roles.KeyOf(fields.GetValueOrDefault(RoleField)) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
+    [Tool(Name = "take_role")]
+    [Description("Take a role from a participant, for whoever holds ManageRoles and manages the role.")]
+    public Task<IActionResult> PostTake(TakeRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
+        Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
         People.NotARole, ct);
 
-    /// <summary>One change: the form's token, the place, the fields; the command <paramref name="command"/> builds from
-    /// them, or <paramref name="unsent"/> where what was sent names none; then the command's outcome.</summary>
-    private async Task<IActionResult> Change(Func<IReadOnlyDictionary<string, string>, string, string, ICommand<Participant>?> command,
-        Reason unsent, CancellationToken ct)
+    /// <summary>One change: the form's token, the place; the command <paramref name="command"/> builds for who sent it and
+    /// whom it names, or <paramref name="unsent"/> where what was sent names none; then the command's outcome.</summary>
+    private async Task<IActionResult> Change(string? named, string? back, Func<string, string, ICommand<Participant>?> command, Reason unsent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
-        var participantId = fields.GetValueOrDefault(ParticipantField) ?? "";
-        if (command(fields, personId ?? "", participantId) is not { } sent) return await Refused(personId, unsent, ct);
+        if (command(personId ?? "", named ?? "") is not { } sent) return await Refused(personId, unsent, ct);
         var outcome = await sent.Send();
         switch (outcome)
         {
             case Outcome<Participant>.Done { Result: var participant }:
-                return await Changed(participant, personId, fields, ct);
+                return await Changed(participant, personId, back, ct);
             case Outcome<Participant>.Refused { Reason: var reason }:
                 return await Refused(personId, reason, ct);
             default:
@@ -129,12 +163,11 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     /// <summary>A change that committed, or found nothing to change: a form is sent back where it came from; a JSON
     /// request reads the participant as the people now list them for the reader.</summary>
-    private async Task<IActionResult> Changed(Participant participant, string? personId, IReadOnlyDictionary<string, string> fields,
-        CancellationToken ct)
+    private async Task<IActionResult> Changed(Participant participant, string? personId, string? sentBack, CancellationToken ct)
     {
         if (!PostWrites.WantsJson(Request))
         {
-            var back = Back(fields.GetValueOrDefault(BackField));
+            var back = Back(sentBack);
             Response.Headers.Location = BaseAddress() + back[(baseUrl.PathBase.Value?.Length ?? 0)..];
             return StatusCode(StatusCodes.Status303SeeOther);
         }
@@ -206,14 +239,14 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         [
             new Form.Field(ParticipantField, $"The id of a participant listed here with {whose}."),
             .. more,
-            new Form.Field(BackField, "The page a form sent from a page returns to; a JSON request reads the participant as the people list them instead.", back)
+            new Form.Field(BackField, Holds.Back, back)
         ]);
         return new PeopleForms(
             standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Words(durations) + ".")) : null,
             standing ? Changing(BanPath, "ban in their can") : null,
             standing ? Changing(LiftPath, "lift in their can") : null,
-            roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, "The role to give, by its word, one in their give.")) : null,
-            roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, "The role to take, by its word, one in their take.")) : null,
+            roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, Holds.GivenRole)) : null,
+            roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, Holds.TakenRole)) : null,
             durations);
     }
 

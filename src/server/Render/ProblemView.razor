@@ -1,15 +1,27 @@
-<main data-gate="@Model.Gate">
-    <h1>@Model.Title</h1>
-    @if (Model.Detail is { } detail)
-    {
-        <p>@detail</p>
-    }
-    @if (Model.Next is { } next)
-    {
-        <p><a href="@next">Sign in</a></p>
-    }
+@* A refusal as a person reads it: one panel in the place's frame, its heading, its sentence and, where a gate has one, its
+   next step. The frame's masthead is the way back to the door. *@
+<main class="sign-in post-form" data-gate="@Model.Gate">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="problem-heading">
+        <div class="sign-in-body">
+            <h1 id="problem-heading" class="sign-in-title">@Model.Title</h1>
+            @if (Model.Detail is { } detail)
+            {
+                <p class="sign-in-lede">@detail</p>
+            }
+            @if (Model.Next is { } next)
+            {
+                <div class="post-form-actions post-form-closed">
+                    <a class="sign-in-submit post-form-submit" href="@next">Sign in</a>
+                </div>
+            }
+        </div>
+    </section>
 </main>
 
 @code {
     [Parameter, EditorRequired] public Problem Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around a refusal: the place at <paramref name="door"/>, the refusal as the one crumb,
+    /// and for a visitor the way to sign in. Who is signed in is not read again for it, so their account does not show.</summary>
+    public static Frame Frame(Problem problem, string place, string door, string? signIn) => new(place, door, [new Crumb(problem.Title)], SignIn: signIn);
 }

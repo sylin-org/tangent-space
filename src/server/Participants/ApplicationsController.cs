@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -7,6 +9,9 @@ using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent.Participants;
+
+/// <summary>What deciding an application sends, as a form or one JSON object.</summary>
+public sealed record DecideInput([Description(Holds.Applicant)] string? Participant = null);
 
 /// <summary>The place's applications, a section of its settings at <c>/settings/applications</c>, for whoever holds
 /// <see cref="Bit.ManageStanding"/>. Its <c>GET</c> is one bounded page of them (<see cref="Applications.Read"/>), one
@@ -33,10 +38,12 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
 
     /// <summary>The form that decides an application at <paramref name="action"/>: admit or decline, by the applicant's id.</summary>
     private static Form Deciding(string action, FormToken token) => Form.Posting(action, token,
-        new Form.Field(ParticipantField, "The id of an applicant this page lists."));
+        new Form.Field(ParticipantField, Holds.Applicant));
 
     [HttpGet(Path)]
-    public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
+    [Tool(Name = "read_applications")]
+    [Description("Read who waits to be admitted and who was declined, a page at a time, for whoever holds ManageStanding.")]
+    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
@@ -54,22 +61,25 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
 
     [HttpPost(AdmitPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> Admit(CancellationToken ct) => Decide(true, ct);
+    [Tool(Name = "admit")]
+    [Description("Admit an applicant, who becomes a member, for whoever holds ManageStanding.")]
+    public Task<IActionResult> Admit(DecideInput input, CancellationToken ct) => Decide(input, true, ct);
 
     [HttpPost(DeclinePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    public Task<IActionResult> Decline(CancellationToken ct) => Decide(false, ct);
+    [Tool(Name = "decline")]
+    [Description("Decline an applicant, who goes on reading what a visitor reads, for whoever holds ManageStanding.")]
+    public Task<IActionResult> Decline(DecideInput input, CancellationToken ct) => Decide(input, false, ct);
 
-    private async Task<IActionResult> Decide(bool admitting, CancellationToken ct)
+    private async Task<IActionResult> Decide(DecideInput input, bool admitting, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
-        var applicantId = fields.GetValueOrDefault(ParticipantField) ?? "";
+        var applicantId = input.Participant ?? "";
         ICommand<Participant> command = admitting
             ? new Participants.Admit(personId ?? "", applicantId)
             : new Participants.Decline(personId ?? "", applicantId);

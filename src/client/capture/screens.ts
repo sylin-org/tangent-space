@@ -363,12 +363,13 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // The form that edits the persona's own Topic: as it opens; sent with a body of nothing but spaces, refused under
-  // the body; with the removal opened, confirmed in the page; and Leo's reply in the same Topic, which is not hers.
+  // the body; sent with a value that cannot bind, refused in the place's frame; with the removal opened, confirmed in the page; and Leo's reply in the same Topic, which is not hers.
   edit: {
     path: '/t/discussions/what-should-an-introduction-say/3mwgqaw5is227/edit',
     states: [
       { name: 'form', seed: 'write', signedIn: true },
       { name: 'refused', seed: 'write', signedIn: true, fill: { '#edit-body': '   ' }, click: '.post-form-submit' },
+      { name: 'not-accepted', seed: 'write', signedIn: true, values: { 'input[name="version"]': 'not-a-number' }, click: '.post-form-submit' },
       { name: 'remove-confirmation', seed: 'write', signedIn: true, click: '.post-remove-toggle' },
       { name: 'not-yours', seed: 'write', signedIn: true, path: '/t/discussions/what-should-an-introduction-say/3mwnstt4b222d/edit' },
     ],

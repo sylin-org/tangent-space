@@ -51,6 +51,10 @@
       "version": "1.0"
     },
     {
+      "id": "Koan.Mcp",
+      "version": "1.0"
+    },
+    {
       "id": "Koan.Media.Abstractions",
       "version": "1.0"
     },
@@ -123,6 +127,10 @@
     {
       "kind": "project",
       "id": "Koan.Jobs"
+    },
+    {
+      "kind": "project",
+      "id": "Koan.Mcp"
     },
     {
       "kind": "project",

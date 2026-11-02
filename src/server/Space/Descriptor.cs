@@ -14,8 +14,13 @@ public sealed record DescriptorPerson(
 public sealed record DescriptorDelegated(string AuthorizationServer, string ClientId);
 
 /// <summary>How an agent with an atproto identity of its own proves itself: the door's statement, the address that takes a
-/// service-auth token, and the audience and method the token carries.</summary>
-public sealed record DescriptorProof(string Statement, string Exchange, string Audience, string Method);
+/// service-auth token for a session, the one that takes it for a bearer as well, and the audience and method the token
+/// carries.</summary>
+public sealed record DescriptorProof(string Statement, string Exchange, string Token, string Audience, string Method);
+
+/// <summary>Where a standard MCP client takes part: the address, what describes it as a protected resource, and how a
+/// client signs in to it.</summary>
+public sealed record DescriptorTools(string Address, string Description, string SignIn);
 
 /// <summary>One feed's two formats, by address.</summary>
 public sealed record DescriptorFeed(string Atom, string Json)
@@ -28,7 +33,7 @@ public sealed record DescriptorFeed(string Atom, string Json)
 public sealed record DescriptorFeeds(DescriptorFeed Articles, DescriptorFeed Tangent);
 
 /// <summary>What the Tangent Space says about itself at <c>tangent.json</c> under its base URL, as stable JSON:
-/// its name, its address, <c>api</c>, its audience, the delegated door and the proof door, and absolute links to the door and to
+/// its name, its address, <c>api</c>, its audience, the delegated door, and, where it has an address of its own, the proof door and where its tools answer, and absolute links to the door and to
 /// <c>llms.txt</c>; for a public place also its proprietor, its operator and its feeds. A private place states only what a visitor needs
 /// to sign in, and nothing about its people. What a later package serves, <c>did:web</c> and the publication, is absent
 /// until then.</summary>
@@ -36,6 +41,10 @@ public sealed record Descriptor(string Name, string Address, string Audience, De
 {
     /// <summary>The stability promise: a client that reads 1 keeps working.</summary>
     public int Api => 1;
+
+    /// <summary>Where a standard MCP client takes part, where the place has an address of its own for a token to be for.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DescriptorTools? Tools { get; init; }
 
     /// <summary>The proof door, where the place has an address of its own for a token to be addressed to.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -64,7 +73,8 @@ public sealed record Descriptor(string Name, string Address, string Audience, De
         var descriptor = new Descriptor(space.Name, baseUrl, space.Audience.ToString().ToLowerInvariant(),
             new DescriptorDelegated(DelegatedDoor.AuthorizationServer(baseUrl), DelegatedDoor.ClientId))
         {
-            Proof = addressed ? new DescriptorProof(baseUrl + ProofDoor.StatementPath, baseUrl + ProofDoor.ExchangePath, ProofDoor.Audience(baseUrl), ProofDoor.Method) : null,
+            Proof = addressed ? new DescriptorProof(baseUrl + ProofDoor.StatementPath, baseUrl + ProofDoor.ExchangePath, baseUrl + ProofDoor.TokenPath, ProofDoor.Audience(baseUrl), ProofDoor.Method) : null,
+            Tools = addressed ? new DescriptorTools(ToolDoor.Address(baseUrl), ToolDoor.Description(baseUrl), ToolDoor.SigningIn) : null,
             Door = baseUrl + "/",
             Llms = LlmsText.Address(baseUrl)
         };

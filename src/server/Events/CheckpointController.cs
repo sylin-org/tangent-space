@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Globalization;
 using Koan.Data.Core.Commands;
+using Koan.Web.Attributes;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -7,6 +9,12 @@ using Tangent.Posts;
 using Tangent.Render;
 
 namespace Tangent.Events;
+
+/// <summary>What moving a checkpoint on a Topic sends, as a form or one JSON object.</summary>
+public sealed record SeenInput([Description(Holds.TopicThrough)] long? Through = null);
+
+/// <summary>What setting a watch flag sends, as a form or one JSON object.</summary>
+public sealed record WatchInput([Description(Holds.Watch)] bool? Watch = null);
 
 /// <summary>Where a participant's checkpoints on a Topic and a Tangent move, beside their pages:
 /// <c>POST /t/{tangent}/{topic}/seen</c> takes <c>through</c>, the sequence the Topic page showed, and sends
@@ -35,17 +43,17 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
     /// <summary>The form that moves the reader's checkpoint on the Topic at <paramref name="topicAddress"/> through
     /// <paramref name="through"/>, the sequence its page showed.</summary>
     public static Form SeenForm(string topicAddress, long through, FormToken token) => Form.Posting(topicAddress + "/" + SeenSegment, token,
-        new Form.Field(ThroughField,
-            "The sequence of this Topic the reader has seen through: the last the page shows, or any other of the Topic. The checkpoint never moves back.",
-            through.ToString(CultureInfo.InvariantCulture)));
+        new Form.Field(ThroughField, Holds.TopicThrough, through.ToString(CultureInfo.InvariantCulture)));
 
     /// <summary>The reader's watch flag on the Tangent or Topic at <paramref name="address"/>, <paramref name="watch"/>,
     /// with the form that sets it, carrying the opposite.</summary>
     public static Watching WatchingOf(string address, bool watch, FormToken token) => new(watch, Form.Posting(address + "/" + WatchSegment, token,
-        new Form.Field(WatchField, "true to watch it, false to stop; the value given is the opposite of where the flag stands.", watch ? "false" : "true")));
+        new Form.Field(WatchField, Holds.Watch + " The value given is the opposite of where the flag stands.", watch ? "false" : "true")));
 
     [HttpPost("/t/{tangent}/{topic}/" + SeenSegment)]
-    public async Task<IActionResult> Seen(string tangent, string topic, CancellationToken ct)
+    [Tool(Name = "caught_up_in_topic")]
+    [Description("Say you have seen a Topic through a sequence, so what is new there starts after it.")]
+    public async Task<IActionResult> Seen([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic, SeenInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
@@ -53,8 +61,7 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
         if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
-        if (!long.TryParse(fields.GetValueOrDefault(ThroughField), NumberStyles.None, CultureInfo.InvariantCulture, out var through))
+        if (input.Through is not (>= 0 and var through))
             return NotASequence($"The {ThroughField} field carries the sequence the Topic page names as shown through.");
 
         var root = found.Root!;
@@ -68,12 +75,17 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
     }
 
     [HttpPost("/t/{tangent}/{topic}/" + WatchSegment)]
-    public Task<IActionResult> WatchTopic(string tangent, string topic, CancellationToken ct) => Flag(tangent, topic, ct);
+    [Tool(Name = "watch_topic")]
+    [Description("Ask for attention on what is new in a Topic, or stop.")]
+    public Task<IActionResult> WatchTopic([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic, WatchInput input, CancellationToken ct)
+        => Flag(tangent, topic, input, ct);
 
     [HttpPost("/t/{tangent}/" + WatchSegment)]
-    public Task<IActionResult> WatchTangent(string tangent, CancellationToken ct) => Flag(tangent, null, ct);
+    [Tool(Name = "watch_tangent")]
+    [Description("Ask for attention on what is new in a Tangent, or stop.")]
+    public Task<IActionResult> WatchTangent([FromRoute, Description(Holds.Tangent)] string tangent, WatchInput input, CancellationToken ct) => Flag(tangent, null, input, ct);
 
-    private async Task<IActionResult> Flag(string tangent, string? topic, CancellationToken ct)
+    private async Task<IActionResult> Flag(string tangent, string? topic, WatchInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
@@ -81,8 +93,7 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
         if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
-        if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
-        if (!bool.TryParse(fields.GetValueOrDefault(WatchField), out var watch))
+        if (input.Watch is not { } watch)
             return new Problem(StatusCodes.Status400BadRequest, "Not a watch flag", $"The {WatchField} field is true or false.").ToResult();
 
         var (scope, address) = found.Root is { } root

@@ -23,8 +23,6 @@ public sealed record Form(string Action, string Method, IReadOnlyList<Form.Field
     public Form With(string name, string? value)
         => this with { Fields = Fields.Select(field => field.Name == name ? field with { Value = value } : field).ToList() };
 
-    /// <summary>The field that carries a new Post's TID, with the one minted for this form as its value: the
-    /// <paramref name="noun"/>'s Id, which its sender mints, so sending the same TID again never writes a second one.</summary>
-    public static Field Minted(string name, string noun, string minted)
-        => new(name, $"The {noun}'s Id: a TID, atproto's timestamp identifier, which its sender mints. This one was minted for this form; the same TID sent again never makes a second {noun}, and each other {noun} takes one of its own.", minted);
+    /// <summary>The field that carries a new Post's TID, with the one minted for this form as its value.</summary>
+    public static Field Minted(string name, string minted) => new(name, Holds.Id + " This one was minted for this form.", minted);
 }

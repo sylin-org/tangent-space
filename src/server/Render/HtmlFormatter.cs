@@ -64,8 +64,11 @@ public sealed class HtmlFormatter : TextOutputFormatter
     private async Task<string> WholeForRequest(HttpContext http, HtmlRenderer renderer, ResourceComponent resource, object value, string? card)
     {
         var space = await TangentSpace.OfRequest(http);
-        return await Whole(renderer, resource, value, _baseUrl.Resolve(http), Appearance.Word(space.Appearance.Accent), space.Slots.Placed(_baseUrl.Resolve(http) + "/"),
-            resource.Frame?.Invoke(value), card: card);
+        var address = _baseUrl.Resolve(http);
+        var frame = value is Problem problem
+            ? ProblemView.Frame(problem, space.Name, address + "/", http.User.Identity?.IsAuthenticated == true ? null : address + Participants.SignInController.Path)
+            : resource.Frame?.Invoke(value);
+        return await Whole(renderer, resource, value, address, Appearance.Word(space.Appearance.Accent), space.Slots.Placed(address + "/"), frame, card: card);
     }
 
     /// <summary>A resource as a whole page: its component in the shell and the <paramref name="frame"/> around it, its files
